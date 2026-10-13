@@ -21,6 +21,8 @@ in the proposal, §5.
 | `ga-e18-unprotected-versions.sh` | E18 offline in-place saves against `annex.thin`, failed uploads, reconnection, re-thinning (ADR 0041, issue #3) | **yes** |
 | `ga-e12-e13-p2p-boundary.py` | E12 and E13 over git-annex's generic P2P transport (a lab network): `remotedaemon` only fetches; pushed refs; remote `REMOVE`; append-only `git-annex-shell`; pigeon's filter with random read sizes; copy counts from `.gitattributes`, the branch and the command line; the hooks git-annex installs (ADR 0043, issue #9); about 90 seconds | **yes** |
 | `ga-e19-install-races.py` | E19 install racing application saves and `kill -9`, thin and not thin, with a fuzzing writer (ADR 0040, issue #1); Linux, about 3 minutes | **yes** |
+| `ga-e20-filesystem-objects.py` | E20 the file-system objects a shared folder may hold: regular files and the execute bit, empty directories, symlinks, hard links under `annex.thin`, xattrs, FIFOs and sockets, nested repositories, unreadable paths, in-tree `.gitignore` and `.gitattributes`, files rewritten during add, awkward names (ADR 0044, issue #14); Linux and macOS, run by the `lab` workflow; about 20 seconds | **yes** |
 
-The lab joins CI once its scripts assert, as E12/E13, E14, E15, E15b, E18 and E19
-do (ADR 0026). Pending: E11 native Windows.
+The lab joins CI once its scripts assert, as E12/E13, E14, E15, E15b, E18, E19 and
+E20 do (ADR 0026); the `lab` workflow runs E20 on Linux and macOS so far. Pending:
+E11 native Windows.

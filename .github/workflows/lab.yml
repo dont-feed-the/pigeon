@@ -1,0 +1,60 @@
+# Lab experiments that assert, run against real git and git-annex on Linux and
+# macOS (ADR 0026). For now E20, the file-system objects of issue #14. Linux
+# uses git-annex's standalone build, pinned by checksum, so a new upstream
+# release fails here until the pin is moved deliberately (spec 14 §14.3);
+# macOS uses Homebrew's current git-annex, whose version the log records.
+name: lab
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lab-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GIT_ANNEX_VERSION: "10.20261006"
+  GIT_ANNEX_SHA256: 88ea73c9bb8fb751916e0e4a0a8f489a7476f9b9e861fd2cce2601a77f4f409d
+  HOMEBREW_NO_AUTO_UPDATE: "1"
+  HOMEBREW_NO_INSTALL_CLEANUP: "1"
+
+jobs:
+  e20:
+    name: E20 file-system objects (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: cached git-annex build (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/git-annex-dist
+          key: git-annex-standalone-${{ env.GIT_ANNEX_SHA256 }}
+      - name: git-annex, standalone build at the pinned checksum (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p ~/.cache/git-annex-dist
+          t=~/.cache/git-annex-dist/git-annex-standalone-amd64.tar.gz
+          [ -f "$t" ] || curl -fsSL -o "$t" \
+            https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
+          echo "$GIT_ANNEX_SHA256  $t" | sha256sum -c - || {
+            echo "::error::upstream moved past git-annex $GIT_ANNEX_VERSION; move the pin deliberately"
+            rm -f "$t"; exit 1; }
+          tar -C ~ -xzf "$t"
+          echo ~/git-annex.linux >> "$GITHUB_PATH"
+      - name: git-annex from Homebrew (macOS)
+        if: runner.os == 'macOS'
+        run: brew install git-annex
+      - name: versions
+        run: git annex version && git --version && python3 --version && uname -a
+      - name: E20, file-system objects
+        run: python3 lab/git-annex/ga-e20-filesystem-objects.py
