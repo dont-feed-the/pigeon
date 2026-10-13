@@ -14,9 +14,9 @@
   pigeon left there. A path whose file differs from the index (`git status`) is
   either a new save (capture's job) or a divergence (§7.6).
 - pigeon never replaces, moves aside or removes content a person saved, unless
-  the person asks (ADR 0034). Install proves a file is pigeon's own before
-  touching it; where POSIX gives no atomic check, it moves the file aside and
-  keeps it until it is sure (§7.5).
+  the person asks (ADR 0034). Install moves a file away from its name only to
+  prove it is pigeon's own, and a save that races it wins the name (§7.5,
+  ADR 0040).
 - Every step is crash-recoverable: a crash at any instant leaves each path at its
   old or its new content, and the next start resumes (ADR 0036 journal).
 
@@ -88,67 +88,102 @@ misnamed) on disk, `main` still has it, and install leaves the path alone.
 Held changes are *local* with reason `held` ([06 §6.4](06-status.md)) and a
 *Needs you* item until decided.
 
-## 7.5 Install
+## 7.5 Install (ADR 0040)
 
 Install runs when `main` moves (a merge from the accept loop, a decision, a
 restore) and when a folder is kept again ([08 §8.5](08-custody-loops.md)). It
-moves each **clean** path *p* (file equal to its index entry) of a kept folder
-from its index version to `current(p)`. Hidden folders change in the index only
-(sparse checkout, E15). A path that is not clean is skipped: capture handles it
-first, then it may become a divergence (§7.6).
+moves each **clean** path *p* of a kept folder from its index version to
+`current(p)`. A path is clean when git reports no change after
+`update-index --refresh` and its index entry is not racily clean (its mtime is
+older than the index file's). Hidden folders change in the index only (sparse
+checkout, E15). A path that is not clean is skipped: capture handles it first,
+then it may become a divergence (§7.6). Capture and install of one repository
+never run at the same time.
 
-For each path, in this order:
+A path is deferred with reason `in-use` (06 §6.4) while an application lock file
+sits next to it (`~$name`, `.~lock.name#`, `.#name`, `.name.swp`) or the writer
+scan of step 5 finds a writer. It is retried when the lock file goes and at every
+scan.
+
+For each path, in this order (a batch shares its fsyncs and its one writer scan):
 
 1. **Content.** `git annex get --key` brings and verifies the new key. If no peer
    has it yet, the path waits; the status says "receiving".
-2. **Journal.** Append `{path, old_key, new_key, tmp, aside}` to
-   `.git/pigeon/install.ndjson` and fsync ([11](11-local-state.md)).
-3. **New file.** Write the new content at a temporary name in the same folder
-   (a hard link to the object on thin laptops, else a copy), set its mode,
-   fsync it.
-4. **Move aside.** `rename(p, aside)`, with *aside* under `.git/pigeon/aside/`
-   on the same file system. Atomic: from here pigeon owns the old inode.
-5. **Check.** If the aside's `stat` differs from the index entry, a person saved
-   *p* in between: put it back with `renameat2(RENAME_NOREPLACE)` (Linux) or
-   `renamex_np(RENAME_EXCL)` (macOS), drop the temporary file, and stop for this
-   path; capture takes over. If *p* was meanwhile recreated, the aside is
-   captured as a recovered version in the divergence table, never deleted.
-6. **Rename in.** `renameat2(tmp, p, RENAME_NOREPLACE)` (or `RENAME_EXCL`). If an
-   application created *p* since step 4, the call fails: the application's file
-   stays, the temporary file is dropped, and *p* becomes a divergence.
-7. **Index.** Update *p*'s index entry to the new pointer and stat
-   (`update-index`, then `git annex restage` per batch), fsync the folder.
-8. **Done.** Append the completion to the journal. The aside is kept for one hour
-   (default **[no ADR]**); if its `stat` is unchanged then, it is unlinked;
-   if an application wrote to it through a handle it still held, it is captured
-   as a recovered version.
+2. **New file.** Write the new content at `.git/pigeon/stage/<seq>` (a hard link
+   to the object on thin laptops, else a copy), set the mode of the index entry,
+   fsync it. No temporary name ever appears in the folder.
+3. **Journal.** Append `begin` with the path, both keys, the index entry's
+   `(dev, ino, size, mtime)`, the temporary file and its inode, and the aside, to
+   `.git/pigeon/install.ndjson`; fsync ([11](11-local-state.md)).
+4. **Move aside.** `rename(p, aside)`, with *aside* =
+   `.git/pigeon/aside/<seq>` on the same file system. No name now leads to the
+   old file. If *p* is gone, the person deleted it: `skip`.
+5. **Writer scan.** No process holds the aside open for writing or maps it
+   shared and writable (Linux `/proc/*/fd`, `fdinfo` and `maps`; macOS
+   `libproc`). It runs before the check, so no write slips in after it.
+6. **Check.** The aside's `(dev, ino, size, mtime)` equal the journalled ones,
+   and its link count is 1 (2 on thin laptops).
+   - If step 5 or 6 fails, a person saved or is saving *p*. The aside goes back
+     with `renameat2(RENAME_NOREPLACE)` (Linux) or `renamex_np(RENAME_EXCL)`
+     (macOS), the temporary file is dropped, and the entry ends `skip`;
+     capture takes over.
+   - If *p* was recreated meanwhile, the aside is captured as a recovered
+     version (§7.6), never deleted: `recovered`.
+7. **Rename in.** `renameat2(tmp, p, RENAME_NOREPLACE)` (or `RENAME_EXCL`). If an
+   application created *p* since step 4, the call fails. The application's
+   file stays, the temporary file is dropped, and the entry ends `raced`. The
+   save is captured with the version pigeon last installed as its base, so it
+   is a concurrent edit (§7.6). Then fsync both directories.
+8. **Index.** `update-index --cacheinfo` with the new pointer and no stat data,
+   then `update-index --refresh` (`git annex restage` per batch). git records
+   the stat only if the file's content is the new key. A save landing after
+   step 7 therefore shows as modified and is captured; pigeon never writes stat
+   data itself (E19).
+9. **Done.** Append `done`. The aside is kept until the first full scan at least
+   10 minutes later (default, ADR 0040). It is unlinked then (`released`) only
+   if no process writes it and its content still hashes to the old key.
+   Otherwise it is captured as a recovered version.
 
-A deletion is the same without steps 1, 3 and 6. When every entry is done, the
-journal is truncated.
+A deletion is the same without steps 1, 2 and 7. When every entry has ended and
+its aside is released, the journal is truncated.
 
-**Recovery at start.** For each begun entry: if *p* holds the new key, mark it
-done; else if *p* is missing and the aside exists, put the aside back
-(`NOREPLACE`); else drop the temporary file. Each path ends at its old or its new
-content (INV-Journal), and replaying twice equals replaying once (a law,
-ADR 0036).
+**Recovery at start**, before any capture, for each `begin` without an end:
 
-INV-NoOverwrite: no step writes a name that holds content pigeon has not
-proven to be its own. The remaining window, an application writing through a
-handle opened before step 4, is covered by keeping the aside (step 8).
+- *p* has the temporary inode: step 7 happened, so the check had passed. Redo
+  step 8, then `done`.
+- *p* is absent and the aside exists: put the aside back (`NOREPLACE`), then
+  `skip`.
+- *p* is another file and the aside exists: hash the aside. If it is the old
+  key, `raced`; otherwise it is a recovered version.
+- Neither exists: `skip`.
+
+Then drop every unreferenced file of `stage/`. Each path ends at its old
+content, the new one, or the person's (INV-Journal). Replaying twice equals
+replaying once (a law, ADR 0036).
+
+INV-NoOverwrite: pigeon never renames over a name, and moves a file away from
+its name only to prove it is its own. If the proof fails, the file returns
+within milliseconds, or is captured. A write through a handle opened before
+step 4 that escapes the scan lands in the kept aside and is captured at step 9.
+Such writers are a process of another user, an `open` in flight across the
+rename, or a mapping macOS cannot see. Its content is kept, but not at its name
+(ADR 0040). The name is absent between steps 4 and 7: E19 measured a median of
+0.55 ms and a maximum of 6.6 ms.
 
 ## 7.6 Divergences and conflicts (ADRs 0034, 0035)
 
 A **divergence** is a path whose file differs from the catalogue's version and
 from what pigeon last installed there, because the person saved it. The
 **divergence table** (`.git/pigeon/conflicts.json`, ADR 0036) keeps, per path:
-its kind, the person's key and proposal chain, the catalogue key it diverged
-from, the key pigeon last installed, its state and since when.
+its kind, the person's key, the `stat` of their file when that key was captured,
+and their proposal chain; the catalogue key it diverged from, the key pigeon last
+installed, its state and since when.
 
 | Kind | Starts when | State |
 |---|---|---|
 | `suggestion` | capture made a proposal for the path | *waiting* ("Your suggestion, waiting for Paul") |
-| `concurrent` | a merge gave the path to another person's version ([05 §5.3](05-catalogue-and-names.md)) | *conflict* |
-| `recovered` | install found content it could not prove was its own (§7.5) | *conflict* |
+| `concurrent` | a merge gave the path to another person's version ([05 §5.3](05-catalogue-and-names.md)), or a save won the name during an install (§7.5 step 7) | *conflict* |
+| `recovered` | install moved aside content that was not its own and could not put it back, or a kept aside changed (§7.5 steps 6 and 9) | *conflict* |
 
 Transitions:
 
@@ -171,9 +206,16 @@ Resolutions (`pigeon resolve PATH …`, or the buttons of ux.md §8.8):
 | Choice | Effect |
 |---|---|
 | *Take the group's version* (`--take-group`) | install writes `current(p)` over the file, because the person asked; a pending proposal is withdrawn ([04 §4.5](04-roster-and-authority.md)); the person's version stays in its history |
-| *Keep mine as a copy* (`--keep-copy DEST`) | the file is copied to DEST, in a folder the person may change, and captured there; then as above |
+| *Keep mine as a copy* (`--keep-copy DEST`) | the person's captured key is copied to DEST (never the live file), in a folder the person may change, and captured there; then as above |
 | *Suggest again* (`--suggest-again`) | a new proposal from the person's file on top of the current `main`; state *waiting* |
 | *Keep mine*, *Keep Paul's*, *Keep both* (concurrent edits) | the signed changes of [05 §5.3](05-catalogue-and-names.md) |
+
+**A save after the choice** (ADR 0040). *Take the group's version* runs install
+(§7.5) with one change: the check of step 6 compares the file with the person's
+key and `stat` in the divergence table, which capture has already committed,
+instead of what pigeon last installed. A save made after the person chose fails
+the check. Nothing is replaced, the save extends their proposal, and they are
+told once: "You saved *tarte.docx* again after choosing; nothing was replaced."
 
 **Seeing the group's version** (ADR 0035): *Open Paul's version* or
 `pigeon view PATH --group` writes a read-only copy in pigeon's cache directory,
@@ -187,7 +229,10 @@ accepted catalogue.
 
 The capture and install protocol gets its TLA+ specification
 ([13 §13.2](13-verification.md)): actions `Save` (a person or application, at any
-time, including through an old handle), `Scan`, `Capture`, `InstallStep` (one per
-step of §7.5), `Crash`, `Recover`, `Decide`, `Resolve`. Invariants: INV-Capture,
-INV-NoOverwrite (no behaviour installs over a diverging path, ADR 0034),
-INV-Journal. Every fault-injection run is trace-validated against it (ADR 0008).
+time: in place, by atomic replace, by creating or deleting the name, and through a
+handle or mapping opened earlier), `Scan`, `Capture`, `InstallStep` (one per step
+of §7.5, the writer scan included), `Crash`, `Recover`, `Release`, `Decide`,
+`Resolve`. Invariants: INV-Capture, INV-NoOverwrite (no behaviour renames over a
+name or installs over a diverging path, ADR 0034), INV-Journal, and NoLoss (every
+saved content is at its name, kept aside or captured, ADR 0040). E19 runs the
+same steps against git-annex with an adversary at each boundary. Every fault-injection run is trace-validated against it (ADR 0008).

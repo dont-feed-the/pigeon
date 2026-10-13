@@ -17,7 +17,8 @@ in the proposal, §5.
 | `ga-e10-partial-custodians.sh`, `ga-e10c-partial-history.sh` | E10 partial custodians | no, prints |
 | `ga-e15-sparse-folders.sh` | E15 freeing space per folder with sparse checkout (ADR 0031) | **yes**, exits non-zero on failure |
 | `ga-e15b-pointer-free-transitions.sh` | E15b no pointer file during freeing and keeping, observed continuously, with `kill -9` trials (ADR 0039, issue #2) | **yes** |
+| `ga-e19-install-races.py` | E19 install racing application saves and `kill -9`, thin and not thin, with a fuzzing writer (ADR 0040, issue #1); Linux, about 3 minutes | **yes** |
 
-The lab joins CI once its scripts assert, as E15 and E15b do (ADR 0026).
+The lab joins CI once its scripts assert, as E15, E15b and E19 do (ADR 0026).
 Pending: E11 native Windows, E12 `remotedaemon` only fetches, E13
 `ServeAppendOnly` over P2P, E14 purge by metadata.

@@ -94,6 +94,7 @@ state, so that the headline can say why and what happens next (ADR 0027):
 | `paused(by)` | "Sharing is paused until 18:00." / "Waiting for a non-metered network." / "Waiting: this computer's disk is busy." (ADR 0037) |
 | `group-unreachable(since)` | "pigeon can't reach the group since 14:10." |
 | `held(cause)` | "You deleted 1,204 files in *Photos*: delete them for everyone, or bring them back?" |
+| `in-use(path)` | "*tarte.docx* is open in another application; pigeon will update it when it is closed." ([07 §7.5](07-capture-and-install.md), ADR 0040) |
 | `settings-check` | "Checking the group's settings; freeing space waits until it is done." ([03 §3.5](03-repository-and-roles.md)) |
 
 The custodians that *would* hold a key are those that `sizebalanced` assigns it

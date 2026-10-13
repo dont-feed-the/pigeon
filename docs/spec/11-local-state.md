@@ -96,20 +96,26 @@ repository and git never shares it (ADR 0036).
 | `conflicts.json` | a divergence starts, changes or ends ([07 §7.6](07-capture-and-install.md)) | the divergence table | no: "what pigeon last installed" is known only here |
 | `clock.json` | at most every second, and at exit | the Lamport clock of trace events (ADR 0008) | no, but losing it only weakens trace ordering |
 | `invitations.json` | an invitation is created, used, cancelled or expires ([09 §9.6](09-network-and-joining.md)) | the hash of each secret, purpose, expiry, used flag | no |
-| `aside/` | install step 4 | files moved aside, kept one hour | no ([07 §7.5](07-capture-and-install.md)) **[no ADR: location]** |
+| `aside/` | install step 4 | files moved aside, kept until the first full scan 10 minutes after `done` | no ([07 §7.5](07-capture-and-install.md), ADR 0040) |
+| `stage/` | install step 2; keeping a folder (ADR 0039) | new files before they enter the folder | yes: unreferenced files are deleted at start |
+| `recovered/` | install steps 6 and 9 | moved-aside content that was not pigeon's, until captured as a recovered version | no ([07 §7.6](07-capture-and-install.md)) |
 
 ### `install.ndjson`
 
 One JSON object per line, appended and fsynced before the step it announces:
 
 ```json
-{"format":1,"seq":41,"op":"begin","path":"Photos/a.jpg","old_key":"SHA256E-s…","new_key":"SHA256E-s…","tmp":"Photos/.pigeon-tmp-41","aside":".git/pigeon/aside/41"}
+{"format":1,"seq":41,"op":"begin","path":"Photos/a.jpg","mode":"100644","old_key":"SHA256E-s…","old":[66311,4224493,2097152,1791922902880098214],"new_key":"SHA256E-s…","tmp":".git/pigeon/stage/41","tmp_ino":4224517,"aside":".git/pigeon/aside/41"}
 {"format":1,"seq":41,"op":"done"}
+{"format":1,"seq":41,"op":"released"}
 ```
 
-- At start, `pigeond` replays every `begin` without `done` with the recovery
-  rule of [07 §7.5](07-capture-and-install.md); when every entry is done, it
-  truncates the file (rename of an empty file over it).
+- `old` is the index entry's `(dev, ino, size, mtime in ns)` that step 6 checks.
+  An entry ends with one of `done`, `skip`, `raced` or `recovered`; `released`
+  records the removal of its aside (ADR 0040).
+- At start, `pigeond` replays every `begin` without an end with the recovery
+  rule of [07 §7.5](07-capture-and-install.md); when every entry has ended and
+  its aside is released, it truncates the file (rename of an empty file over it).
 - A torn last line (a crash during the append) is ignored: its step had not
   started. Every other malformed line stops install with a Problem.
 
@@ -124,6 +130,7 @@ One JSON object per line, appended and fsynced before the step it announces:
       "since": "2026-10-13T14:02:11+02:00",
       "state": "waiting",
       "mine": "SHA256E-s…",
+      "mine_stat": [66311, 4224610, 18432, 1791922931000000000],
       "proposal": "<commit id of the latest proposal of the chain>",
       "group": "SHA256E-s…",
       "installed": "SHA256E-s…",
@@ -133,7 +140,9 @@ One JSON object per line, appended and fsynced before the step it announces:
 }
 ```
 
-`installed` is the key pigeon last wrote at the path; `told` records that the
+`installed` is the key pigeon last wrote at the path; `mine_stat` is the
+`(dev, ino, size, mtime)` of the person's file when `mine` was captured, which
+*Take the group's version* checks (ADR 0040); `told` records that the
 person was told once (ADR 0034). The table is small (one entry per diverging
 path) and rewritten whole.
 

@@ -14,6 +14,7 @@
 | ADR 0037: background work stays out of the way | Proposed; [15](15-resource-use.md) details it | Guillaume |
 | ADR 0038: deciders sign decisions on suggestions | Proposed, for issue #7; [04 §4.3, §4.5](04-roster-and-authority.md) apply it | Guillaume |
 | ADR 0039: freeing and keeping never show a pointer | Proposed, for issue #2; [08 §8.5](08-custody-loops.md) applies it, E15b asserts it | Guillaume |
+| ADR 0040: install proves its own file; racing saves win | Proposed, for issue #1; [07 §7.5](07-capture-and-install.md) applies it, E19 asserts it | Guillaume |
 | TLC with the `Json` module for trace validation | ADR 0026 foresees a new ADR pinning it by SHA-256 ([13 §13.3](13-verification.md)) | before the first `*Trace.tla` |
 
 ## 16.2 Where this specification departs from a source
@@ -143,6 +144,11 @@ them all.
   (ADR 0003); **per-file freeing** (ADR 0031); **native Windows** (ADR 0005, E11);
   **macOS backup machines** and **NAS packages** (ADR 0032).
 - **Thresholds** of [06 §6.7](06-status.md), to be tuned by the usability test.
+- **Saves from stale memory** (ADR 0040). An application that still holds a
+  file's old content in memory and saves after an install replaces the new
+  version, which then lives on only in the history. Lock files cover office
+  suites and editors. Should a save within seconds of an install count as
+  concurrent? The **writer scan on macOS** (`libproc`) also awaits E19 on a Mac.
 
 ## 16.5 Review issues
 
@@ -153,7 +159,7 @@ experiments stay listed in [13](13-verification.md) and in the prototype (#17).
 
 | Issue | Topic | Where | State |
 |---|---|---|---|
-| #1 | install racing application saves | [07 §7.5](07-capture-and-install.md) | journal and aside specified; ADR to come |
+| #1 | install racing application saves | [07 §7.5](07-capture-and-install.md), [07 §7.6](07-capture-and-install.md) | ADR 0040 (Proposed), E19 asserts; `CaptureInstall` model to come (#10) |
 | #2 | pointer files during free and keep | [08 §8.5](08-custody-loops.md) | ADR 0039 (Proposed), E15b asserts |
 | #3 | `annex.thin` and unprotected versions | [02](02-guarantees.md), [03 §3.4](03-repository-and-roles.md) | open: needs a decision |
 | #4 | reference-aware purge | [08 §8.6](08-custody-loops.md) | open |

@@ -39,7 +39,10 @@ partition V may survive but be out of reach.
 **P2 Capture, and no overwrite.** A captured version is never overwritten.
 pigeon never replaces, moves aside or removes content that a person saved,
 unless that person asks (ADR 0034). Installing incoming content is
-crash-recoverable and skips every path whose file diverges. Writes made between
+crash-recoverable and skips every path whose file diverges. Install moves a file
+away from its name only to prove it is pigeon's own, a save that races it wins
+the name, and a write that escapes the proof is kept as a recovered version
+(ADR 0040). Writes made between
 two captures are protected on a best-effort basis only.
 
 **P3 Reversible deletion.** Unlinking, including a mass deletion, never
@@ -92,8 +95,8 @@ test (ADR 0012), "lab" a git-annex experiment.
 | INV-Settings | drops are suspended while git-annex's shared settings disagree with the roster | P1 | [03 §3.5](03-repository-and-roles.md) | law; lab |
 | INV-History | custodians want every version not purged, not only the current tree | P1, P3 | [03 §3.4](03-repository-and-roles.md) | E9, E10c |
 | INV-Capture | every saved file reaches a signed commit (accepted or proposal) before any install touches its path | P2 | [07 §7.3](07-capture-and-install.md) | model (planned); fault injection |
-| INV-NoOverwrite | install never writes over a path whose file differs from what pigeon last installed there | P2 | [07 §7.5](07-capture-and-install.md) | model (planned); fault injection |
-| INV-Journal | after a crash at any point, replaying the install journal leaves every path at its old or its new content | P2 | [07 §7.5](07-capture-and-install.md), [11](11-local-state.md) | law (replay idempotent); kill -9 schedules |
+| INV-NoOverwrite | install never renames over a name, and replaces a file only after proving it is what pigeon last installed and that nobody writes it | P2 | [07 §7.5](07-capture-and-install.md) | E19 (asserting); model (planned) |
+| INV-Journal | after a crash at any point, replaying the install journal leaves every path at its old content, its new content or the person's | P2 | [07 §7.5](07-capture-and-install.md), [11](11-local-state.md) | law (replay idempotent); E19 `kill -9` at every step (asserting) |
 | INV-Unlink | an unlink changes no preferred content of custodians | P3 | [03 §3.4](03-repository-and-roles.md), ADR 0018 | E2, E4 |
 | INV-Purge | a key is dropped by a purge only if an accepted purge decision names it, its retention has ended, and no current version uses it | P3 | [08 §8.6](08-custody-loops.md) | law; E14 |
 | INV-Valid | a commit is accepted iff it is valid under the rosters of its parents and all its ancestors are accepted | P4 | [04 §4.4](04-roster-and-authority.md) | laws (homomorphism, determinism) |
