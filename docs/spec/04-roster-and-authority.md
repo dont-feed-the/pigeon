@@ -74,8 +74,9 @@ person, device names and person IDs are unique, `k ≥ 1`, every owner and stewa
 is a person, `min_sites ≥ 1`, and only custodians have `domain` or `site`,
 each a non-empty label. Every laptop and custodian has an `annex_uuid`, a recovery device
 has none, and an `annex_uuid` belongs to one device only: it is never given to
-another device, even after its own was removed (ADR 0046). A commit that
-leaves an invalid roster is invalid.
+another device, even after its own was removed (ADR 0046). A device ID that
+was removed is never added again (ADR 0051). A commit that leaves an invalid
+roster is invalid.
 
 ## 4.3 Folder rules
 
@@ -117,7 +118,8 @@ admin; its commits are never a Force (§4.6, ADR 0047).
 
 All functions below are pure and live in the core (ADR 0012).
 
-- `R(p)` is the roster in the tree of commit *p*.
+- `R(p)` is the roster in force for the children of commit *p*: the fold of
+  §4.8, which the tree of *p* holds as `.pigeon/roster.toml` (ADR 0051).
 - `signer(c)` is the device whose key made the SSHSIG signature (namespace
   `git`) in the `gpgsig` header of *c*, verified by pigeon with the `ssh-key`
   crate (ADR 0007); `person(c)` is that device's person. Unsigned commits are
@@ -128,7 +130,8 @@ For a commit *c* other than the genesis, let **A(c)** be its parents that are
 accepted and **X(c)** the others. *c* is **accepted** if and only if:
 
 1. A(c) is not empty;
-2. `signer(c)` is a device of `R(p)` for every *p* in A(c);
+2. `signer(c)` is a device of `R(p)` for every *p* in A(c), or, when Δ = ∅
+   (rule 3), for some *p* in A(c) (ADR 0051);
 3. with base `B = merge(tree(p) for p in A(c))` and `Δ = diff(B, tree(c))`, every
    change of Δ is allowed for `person(c)` under `R(p)` for every *p* in A(c)
    (§4.3), or *c* is a valid Force (§4.6);
@@ -153,7 +156,11 @@ makes is well formed, so only a faulty or hostile device can write one.
 
 Consequences, each a law with a property test (ADR 0012):
 
-- A clean merge of accepted heads has Δ = ∅, so any member's device may sign it.
+- A clean merge of accepted heads has Δ = ∅, so a device of the roster of any
+  of its parents may sign it, even one that another parent's roster removed:
+  the merge changes nothing, and its roster, the fold, removes that device.
+  Requiring the signer in every parent's roster leaves two branches that
+  removed each other's devices with no one to merge them (`Roster_every`).
 - **Adoption:** a decision merge has an accepted parent and a proposal parent in
   X(c); its Δ is the proposal's change, valid when the decider may make it. The
   proposal stays outside the catalogue; its content enters through the decision.
@@ -239,12 +246,9 @@ This specification follows ux.md, the later decision **[no ADR]**.
   laptop is captured like any file and, from a non-admin, becomes a proposal.
 - **Devices** (ADR 0017): adding a device of person P, or removing one, is
   allowed to an admin or to a device of P. Adding a person needs an admin.
-- **Concurrent roster changes** merge like any file. Two edits of the same TOML
-  table are a conflict that the merge cannot keep as two files; the merge then
-  keeps the side of the commit that sorts first ([05 §5.3](05-catalogue-and-names.md))
-  and the device that merges proposes the other side to the admins **[no ADR]**.
-  Per ADR 0009, a merge commit that changes `roster.toml` relative to its base
-  needs an admin signature valid under both parents' rosters.
+- **Concurrent roster changes** may fork, and are never merged as a file:
+  the roster of a merge is the fold of §4.8 (ADR 0051), which replaces ADR
+  0009's rule that such a merge needs an admin valid under both parents.
 - **Removing an admin** is allowed to another admin; the last admin cannot be
   removed (§4.2).
 - A custodian's `maxsize`, `domain` and `site` may be changed by an admin or
@@ -252,3 +256,45 @@ This specification follows ux.md, the later decision **[no ADR]**.
 - A roster change that changes K, a device's role or `maxsize` re-applies
   git-annex settings ([03 §3.5](03-repository-and-roles.md)). `domain`,
   `site` and `min_sites` are pigeon's alone: git-annex does not see them.
+
+## 4.8 Roster forks: the fold (ADR 0051)
+
+Roster changes need no online authority, so two branches can change the
+roster concurrently. Their merge needs no admin: a device of either side may
+sign it, and it recomputes the roster.
+
+- **Change.** Each accepted commit *c* carries δ(c), the difference between
+  the fold of its accepted parents and the `roster.toml` of its tree. A clean
+  merge has none; a decision merge carries the change it adopts (§4.5). Its
+  edits are `set` a field (from the value its author saw to a new one),
+  `add` an entry, `remove device` D, and `remove person` P (with P's devices
+  and P's steward roles). δ(c) is judged once, by §4.4, under its parents'
+  rosters.
+- **Canonical order.** The accepted commits that are *c* or its ancestors,
+  topologically, and among those whose ancestors are all placed, the smallest
+  (recorded author time, device ID, commit ID) first: the order of
+  representatives of [05 §5.2](05-catalogue-and-names.md).
+- **Fold.** R(c) applies the changes in that order, from the genesis roster.
+  A change applies as a whole when every `set` finds the value its author saw
+  or already the new one, every `add` finds its entry absent or equal, and
+  the result is valid (§4.2). Otherwise it is **skipped**, except for its
+  device removals, which always apply (a `remove person` removes the devices
+  the person has at that point). A removal of what is gone is a no-op.
+- **Skipped changes** are listed with their reason, a pure function of the
+  history. The admins and the author see *Needs you*: "Alice and Bob gave up
+  their admin role at the same time. One admin must remain: Bob stays
+  admin." *Apply again* writes a new change, judged under today's roster.
+
+For a linear history the fold is the same as applying each commit in turn,
+and the change of *c* always applies in R(c), so the tree of every accepted
+commit holds R(c). Laws: R(c) depends only on the set of *c*'s accepted
+ancestors, not on the order of merges or deliveries; every R(c) has an admin;
+a removed device never returns; a change applies at most once. An
+implementation folds from genesis (or caches by canonical prefix): replaying
+the other side's changes onto one's own roster depends on who merges
+(`Roster_rebase`). Removing a device always takes effect; removing a person
+is best effort across forks, since of two concurrent removals that would
+leave no admin the later is skipped (`Roster_person`). The `Roster`
+model ([13 §13.2](13-verification.md)) checks the concurrent
+self-retirement, a key rotation during a concurrent removal, and the orders
+of merges, and shows ADR 0009's rule deadlocking.

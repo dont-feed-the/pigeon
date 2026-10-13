@@ -23,6 +23,7 @@
 | ADR 0048: versioned formats and rules; *unknown* is never guessed | Proposed, for issue #15; [04 §4.2, §4.4](04-roster-and-authority.md), [06 §6.3](06-status.md), [09 §9.3](09-network-and-joining.md), [14 §14.3](14-platforms-and-packaging.md) apply it; fixtures and the compatibility law in [13](13-verification.md) | Guillaume |
 | ADR 0049: copies count once per failure domain | Proposed, for issue #12; [02 §2.1–2.2](02-guarantees.md), [04 §4.2](04-roster-and-authority.md), [06 §6.2–6.3](06-status.md), [08 §8.3](08-custody-loops.md) apply it, E22 asserts it | Guillaume |
 | ADR 0050: capacity budgeted, space reserved, fewest copies first | Proposed, for issue #13; [08 §8.4, §8.9](08-custody-loops.md), [15 §15.2](15-resource-use.md), [03 §3.4](03-repository-and-roles.md) apply it, E22 asserts it | Guillaume |
+| ADR 0051: the roster is a fold of its changes; forks merge without an admin | Proposed, for issue #6; [04 §4.4, §4.7, §4.8](04-roster-and-authority.md), [05 §5.2](05-catalogue-and-names.md) apply it, the `Roster` model checks it | Guillaume |
 | TLC with the `Json` module for trace validation | ADR 0026 foresees a new ADR pinning it by SHA-256 ([13 §13.3](13-verification.md)) | before the first `*Trace.tla` |
 
 ## 16.2 Where this specification departs from a source
@@ -36,6 +37,7 @@
 | Custody mechanism | proposal: pigeon's own custody tokens (`CustodyTokens`) | git-annex's verified, lock-based drop (ADR 0001; [13 §13.2](13-verification.md)) | the token models stay as evidence about hand-offs and their counterexamples |
 | Unauthorised edits | proposal: restored automatically from the catalogue | kept as the person's divergence and suggestion ([07 §7.6](07-capture-and-install.md)) | ADR 0034 |
 | Go criteria | proposal §7 includes Windows | Windows criteria move to v1.1 ([13 §13.11](13-verification.md)) | ADR 0005 |
+| Merging the roster | ADR 0009: a merge of roster changes needs an admin valid under both parents | the roster of a merge is the fold of its changes; no signer needed ([04 §4.8](04-roster-and-authority.md)) | ADR 0051 (Proposed), issue #6: concurrent self-retirements leave no such admin |
 | Order of work | ADR 0037: protect, downloads, then repair | protect and repair are one class, fewest copies first, before downloads ([15 §15.2](15-resource-use.md)) | ADR 0050 (Proposed), issue #13: a custodian must not spend its last space on a new key while an old one has a single copy |
 | Counting copies | ADRs 0002, 0003: K distinct custodians | K distinct failure domains ([06 §6.2](06-status.md)) | ADR 0049 (Proposed), issue #12 |
 
@@ -187,7 +189,7 @@ experiments stay listed in [13](13-verification.md) and in the prototype (#17).
 | #3 | `annex.thin` and unprotected versions | [07 §7.8](07-capture-and-install.md), [06 §6.2](06-status.md), [03 §3.4](03-repository-and-roles.md) | ADR 0041 (Proposed), E18 asserts; copy-on-write measurement to come |
 | #4 | reference-aware purge | [08 §8.6](08-custody-loops.md), [05 §5.1](05-catalogue-and-names.md) | ADR 0042 (Proposed); E14 asserts the three cases; purge laws (hegel-rust) to come |
 | #5 | purge against concurrent restores and returning peers | [08 §8.6](08-custody-loops.md), [06 §6.3](06-status.md) | ADR 0042 (Proposed); the `Purge` model checks it; E14 asserts a restore against the seals and a returning laptop |
-| #6 | roster forks with disjoint admin sets | [04 §4.7](04-roster-and-authority.md) | open |
+| #6 | roster forks with disjoint admin sets | [04 §4.4, §4.7, §4.8](04-roster-and-authority.md), [05 §5.2](05-catalogue-and-names.md) | ADR 0051 (Proposed); the `Roster` model checks it |
 | #7 | decisions by non-admin owners and stewards | [04 §4.3, §4.5](04-roster-and-authority.md) | ADR 0038 (Proposed) |
 | #8 | catalogue merge algorithm and its laws | [05 §5.2](05-catalogue-and-names.md) | specified; ADR to come |
 | #9 | git-annex cannot bypass pigeon | [03 §3.5–3.8](03-repository-and-roles.md), [09 §9.4](09-network-and-joining.md) | ADR 0043 (Proposed); E12 and E13 assert |

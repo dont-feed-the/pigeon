@@ -61,10 +61,11 @@ commit that this device lacks; otherwise it records the tip as equivalent
 **[no ADR]**. Devices' `main` branches may therefore differ by merge commits only,
 which changes nothing in the logical catalogue (P5).
 
-**Roster conflicts.** `.pigeon/roster.toml` cannot be kept as two files. When its
-heads disagree, the merge keeps the key of the first representative, and the
-merging device turns the other side into a proposal to the admins
-([04 §4.7](04-roster-and-authority.md)) **[no ADR]**.
+**The roster.** `.pigeon/roster.toml` is not merged by heads. Its value in a
+merged tree is the fold of the roster changes of the accepted history
+([04 §4.8](04-roster-and-authority.md), ADR 0051): concurrent changes that
+conflict are skipped and shown to the admins, and device removals always
+apply.
 
 ## 5.3 Conflict names
 

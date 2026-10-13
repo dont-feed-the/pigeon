@@ -63,3 +63,4 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0048](0048-unknown-formats-and-rules-are-never-guessed.md) | Replicated formats and rules are versioned; what a device does not understand, it never guesses | Proposed |
 | [0049](0049-copies-count-once-per-failure-domain.md) | Copies count once per failure domain: shared disks, machines and declared domains | Proposed |
 | [0050](0050-capacity-is-budgeted-reserved-and-admitted.md) | Capacity is budgeted, real free space is reserved, and endangered content goes first | Proposed |
+| [0051](0051-the-roster-is-a-fold-of-its-changes.md) | The roster is a fold of its changes in a canonical order; roster forks merge without an admin | Proposed |
