@@ -1,6 +1,7 @@
 # 0030. Files you may not change are read-only on your disk
 
-- **Status:** Proposed, 13 October 2026, by the agent in the UX study.
+- **Status:** Rejected, 13 October 2026, by Guillaume (UX question 2), in
+  favour of ADR 0033. Proposed the same day by the agent in the UX study.
 
 ## Context
 

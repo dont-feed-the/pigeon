@@ -3,7 +3,7 @@
 > Status: proposal for discussion, 13 October 2026. Guillaume asked for a careful study of the
 > command line and the web interface, so that they suit people who are not technical.
 > Mockups: [`mockups/`](mockups/) (static HTML, open `mockups/index.html`).
-> Decisions proposed by this study are ADRs 0027–0031 (status *Proposed* until the group decides).
+> Decisions from this study: ADRs 0027–0031 and 0033 (see their status in the ADR index).
 
 ## 1. Who uses pigeon
 
@@ -144,7 +144,7 @@ Rules:
 | **Status icon** in the menu bar or tray (ADR 0029) | everyone | the headline colour at a glance; menu with the headline, "Open pigeon", "Open my folder", "Pause" |
 | **Notifications** | everyone | only level 1, a long level 2, and suggestions waiting for you |
 | **Web interface** on this computer (`pigeon open`, or the icon) | everyone | status, files and versions, deleted files, suggestions, people and machines, settings |
-| **The folder** in Finder or the file manager | everyone | the actual work; files of folders you can't change are read-only (ADR 0030) |
+| **The folder** in Finder or the file manager | everyone | the actual work; edits to folders you can't change become suggestions (ADR 0033) |
 | **CLI** `pigeon` | Paul, Inès, scripts | everything, with the same words; `--json` for scripts |
 
 ## 6. The web interface
@@ -192,7 +192,6 @@ Output follows the same headline-then-detail pattern; colour only on a terminal,
 | `pigeon history PATH` | versions of a file | file page |
 | `pigeon restore PATH [--version N \| --at TIME]` | restores a version, or a deleted file | file page, Deleted files |
 | `pigeon deleted [PATH]` | lists deleted files that can be restored | Files → Deleted files |
-| `pigeon suggest PATH` | an editable copy of a file you may not change, sent as a suggestion when done | file page → Suggest a change |
 | `pigeon suggestions` · `pigeon accept ID` · `pigeon decline ID [--note TEXT]` | the suggestion inbox | Suggestions |
 | `pigeon people` · `pigeon machines` | members, computers, backup machines | People & machines |
 | `pigeon remove-computer NAME` | removes a lost or retired computer | People → I lost a computer |
@@ -286,13 +285,13 @@ she answers, the deletion stays on her computer only.
 09:12, Paul", … → *Restore this version*. The restored version becomes the current one, and
 the newer one remains in the timeline.
 
-**8.8 Someone else's folder (ADR 0030).** Files in a folder she may not change are read-only
-on Martine's disk, so her application says so when she saves, as for any read-only file. In
-pigeon, *Suggest a change* on that file opens an editable copy in her own folder; when she
-is done, *Send suggestion* sends it to the owner. If an edit still slips through (a rule that
-changed while she was offline), pigeon keeps it as her suggestion, puts the accepted version
-back, and tells her: "Your change to *tarte.docx* was sent to Paul as a suggestion, because
-the folder is Paul's. Your version is safe in *Suggestions → Yours*."
+**8.8 Someone else's folder (ADR 0033).** Files in a folder she may not change stay
+editable, and the Files page says so beforehand: "Paul's folder: your changes become
+suggestions to Paul". When Martine saves *tarte.docx* there, pigeon keeps her version as her
+suggestion and, once the file has been quiet for a minute, puts Paul's version back and tells
+her once: "Your change to *tarte.docx* was sent to Paul as a suggestion, because the folder is
+Paul's. Your version is in *Suggestions → Yours*." Saving again before that only updates the
+same suggestion.
 
 **8.9 Edited at the same time.** Both versions are kept. The other one is named
 `budget (Paul, 13 Oct 14:02).xlsx`, so that it still opens in the same application. Home
