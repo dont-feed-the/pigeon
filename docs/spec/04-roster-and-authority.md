@@ -117,6 +117,14 @@ accepted and **X(c)** the others. *c* is **accepted** if and only if:
    (§4.3), or *c* is a valid Force (§4.6);
 4. if Δ changes the roster, the new roster is valid (§4.2).
 5. every path that Δ adds is portable ([05 §5.4](05-catalogue-and-names.md)).
+6. `tree(c)` is **well formed** (ADR 0044): only folders and files of mode
+   100644 or 100755; outside `.pigeon/` and the root `.gitattributes`, each
+   file is a git-annex pointer to a `SHA256E` key with its size; inside them,
+   a plain blob ([07 §7.9](07-capture-and-install.md)).
+
+A commit that breaks rule 6 is **malformed**: it is neither accepted nor kept as
+a proposal, and its keys are not references (ADR 0042). Every tree capture
+makes is well formed, so only a faulty or hostile device can write one.
 
 Consequences, each a law with a property test (ADR 0012):
 
@@ -192,7 +200,7 @@ Force is the admin override (ux.md §2.2): a commit that §4.4 would reject only
 because of folder rules, accepted because it carries the trailer
 `Pigeon-Force: <reason>` and its signer is an admin under the rosters of its
 accepted parents. Force never waives rule 2 (signature), rule 4 (roster
-validity) or the `.pigeon/` table. The CLI asks before forcing and the web
+validity), rule 6 (well-formed tree) or the `.pigeon/` table. The CLI asks before forcing and the web
 interface says exactly what changes (ux.md §3, principle 5). A forced commit is
 shown in the file's history as "admin override by Roy".
 

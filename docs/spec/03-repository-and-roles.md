@@ -45,9 +45,20 @@ value, to a descendant of it.
 
 Every file of the shared folder is annexed (key backend `SHA256E`), dotfiles
 included (`annex.dotfiles=true`); pigeon's own files are plain git blobs, so the
-commit signature covers them (ADR 0009). Empty folders, symbolic links,
-permissions other than the executable bit, and extended attributes are not
-versioned in v1 **[no ADR]** ([16](16-open-questions.md)).
+commit signature covers them (ADR 0009). Only regular files and their
+execute bit are shared; links, nested repositories, empty folders, other
+permissions and extended attributes are not, and pigeon lists what it leaves
+out ([07 §7.9](07-capture-and-install.md), ADR 0044).
+
+`.git/info/attributes`, which git ranks above every in-tree `.gitattributes`,
+is written by pigeon on every device, so that a nested `.gitattributes` copied
+into the folder changes nothing (ADR 0045):
+
+```gitattributes
+* filter=annex annex.largefiles=anything annex.backend=SHA256E -text -eol -ident -working-tree-encoding
+/.gitattributes annex.largefiles=nothing
+/.pigeon/** annex.largefiles=nothing
+```
 
 ## 3.4 Configuration by role
 
@@ -61,6 +72,8 @@ versioned in v1 **[no ADR]** ([16](16-open-questions.md)).
 | `annex.synccontent` | `false` | pigeon alone moves content |
 | `annex.resolvemerge` | `false` | pigeon merges, with its own conflict names ([05](05-catalogue-and-names.md)) |
 | `annex.dotfiles` | `true` | every file is annexed |
+| `annex.backend` | `SHA256E` | verifiable keys only (rule 6, ADR 0044) |
+| `core.attributesFile`, `core.excludesFile` | an empty file of pigeon's | the person's git attributes and excludes do not apply (ADR 0045) |
 | `annex.jobs` | `1` | background work stays light (ADR 0037) |
 | trust | `untrust` | its copies never count toward K |
 | groups | `laptop` | for diagnostics |
@@ -102,7 +115,10 @@ After every merge of the git-annex branch and every change of `main`, `pigeond`:
 3. if they differ, **suspends every drop on this device** (evict, purge,
    rebalancing) and re-applies the expected settings **[no ADR: re-apply]**.
    The same holds if pigeon's `pre-receive` hook is missing or `core.hooksPath`
-   is set (ADR 0043), and then serving peers is suspended too;
+   is set (ADR 0043), and then serving peers is suspended too; and if
+   `.git/info/attributes`, `annex.backend`, `core.attributesFile` or
+   `core.excludesFile` differ from §3.3–3.4, or `.git/config` has an
+   `include` (ADR 0045), and then capture is suspended too;
 4. resumes drops only when a fresh read matches.
 
 Drops stay suspended while two devices with different rosters disagree; this
@@ -139,6 +155,13 @@ Every other device of the roster is a git remote of this repository:
 
 ## 3.7 Driving git and git-annex
 
+**Environment** (ADR 0045). Every git and git-annex process starts without any
+inherited `GIT_*` variable, with `GIT_CONFIG_NOSYSTEM=1`,
+`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_ATTR_NOSYSTEM=1` and
+`GIT_TERMINAL_PROMPT=0`. git then reads only the repository's `.git/config`,
+which pigeon writes. E20 showed a person's `~/.gitconfig` changing what
+capture makes: `WORM` keys, plain blobs, silently excluded files.
+
 `pigeond` keeps, per repository, one `git cat-file --batch` process and
 long-lived `git annex … --batch --json` processes for the commands it issues
 often (`add`, `whereis`, `matchexpression`, `get`, `copy`, `drop`); it parses their
@@ -147,10 +170,10 @@ command, exit status and end of stderr (ADR 0023).
 
 | Allowed | Used for |
 |---|---|
-| `git cat-file --batch`, `rev-list`, `for-each-ref`, `status --porcelain=v2 -z` | reading commits, trees, refs and changes |
+| `git cat-file --batch`, `rev-list`, `for-each-ref`, `status --porcelain=v2 -z -uall --ignored=traditional` | reading commits, trees, refs and changes |
 | `commit-tree -S`, `update-ref`, `merge-tree --write-tree`, `read-tree`, `update-index`, `write-tree` | writing commits and merges without touching the working tree |
 | `git fetch <remote>`, `sparse-checkout` | exchanging history; folders kept |
-| `git annex add`, `calckey`, `reinject` | capture |
+| `git annex add --no-check-gitignore`, `calckey`, `reinject` | capture (only regular files, checked with `lstat`, ADR 0044) |
 | `git annex get --key`, `copy --to <custodian> --key` | transfers, key by key in pigeon's priority order (ADRs 0037, 0042) |
 | `git annex drop --key --numcopies K --mincopies K` (local only, verified; the explicit counts outweigh `.gitattributes` and the branch, ADR 0043), `drop --key --force` (purge and Drop only) | freeing space, rebalancing, purge |
 | `git annex whereis`, `find`, `info`, `matchexpression --key`, `fsck --incremental --time-limit` | observations, wanted keys, scrubs |

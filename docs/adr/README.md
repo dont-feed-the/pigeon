@@ -56,3 +56,5 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0041](0041-captured-versions-stay-immutable-until-protected.md) | A captured version stays immutable on its laptop until it is protected; thin only after | Proposed |
 | [0042](0042-purge-releases-references-and-completes-after-every-seal.md) | A purge releases the references its deciders saw; content goes only when no other reference holds it and every custodian has sealed | Proposed |
 | [0043](0043-every-device-serves-peers-through-a-filter.md) | Every device serves peers through pigeond's filter: pull only, append-only on custodians, drops with explicit copy counts | Proposed |
+| [0044](0044-share-regular-files-and-say-what-is-not-shared.md) | pigeon shares regular files and their executable bit, and says what it does not share | Proposed |
+| [0045](0045-git-reads-only-the-configuration-pigeon-writes.md) | git and git-annex read only the configuration pigeon writes | Proposed |

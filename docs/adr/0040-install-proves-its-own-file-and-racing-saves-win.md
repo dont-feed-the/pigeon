@@ -35,7 +35,9 @@ Options were:
   Linux, `/proc/*/fd` with the access mode in `fdinfo`, and `/proc/*/maps`;
   on macOS, `libproc` (`proc_pidinfo`, `proc_pidfdinfo`). Its `(dev, ino,
   size, mtime)` must equal the index entry, and its link count must be the
-  expected one (1, or 2 on thin laptops). The scan comes first, so no write
+  expected one: 1, or 2 when it is the object's inode on a thin laptop. A
+  higher count is a person's hard link; ADR 0044 (Proposed) lets the proof
+  pass and releases such an aside without hashing. The scan comes first, so no write
   can slip between the check and the next step.
 - **A racing save wins.** If the proof fails, the file goes back to *p* with
   `RENAME_NOREPLACE` (Linux `renameat2`, macOS `renamex_np(RENAME_EXCL)`),

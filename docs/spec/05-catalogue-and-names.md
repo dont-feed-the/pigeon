@@ -40,6 +40,13 @@ already known to custodians, unless a purge erased it ([08 §8.6](08-custody-loo
    ordered by (recorded author time, device ID, commit ID). The first keeps *p*;
    each other key goes to its **conflict name** (§5.3).
 
+**Packages** (ADR 0044, [07 §7.9](07-capture-and-install.md)). The merge treats
+a package as one path, whose value is its whole subtree. A change of any file
+inside is a change of the package. Concurrent edits keep each side whole: the
+first representative keeps the package's name, and each other side goes to
+the package's conflict name. A modification survives a concurrent deletion of
+the whole package. No merged package mixes files of two saves.
+
 Because the result depends only on the set of accepted commits, `merge` is
 commutative, associative and idempotent, and conflict names do not depend on
 arrival order (laws of ADR 0012). Time only orders; a wrong clock changes which
@@ -74,6 +81,8 @@ dir/stem (Person, 2026-10-13 14h02).ext
   representative order.
 - The extension is kept, so the file still opens in the same application
   (ux.md §8.9). A name without extension gets the suffix at its end.
+- A package gets the suffix on its folder: `Rapport (Paul, 2026-10-13
+  14h02).pages/`, with every file inside under it (ADR 0044).
 
 ux.md §8.9 shows `budget (Paul, 13 Oct 14:02).xlsx`. A colon is not portable and
 an English month would make names depend on the device's language, which breaks
@@ -97,6 +106,7 @@ Every path of the catalogue must be **portable**, so that Linux, macOS and later
 Windows can all hold it under the same name (ADR 0005). `portable(path)` is a pure
 function of the core; a path is portable if every component:
 
+- is valid **UTF-8** (Linux allows any bytes; ADR 0044);
 - is in Unicode **NFC** (`core.precomposeunicode=true` on macOS);
 - does not collide, by Unicode full case folding, with a sibling of the
   catalogue;
@@ -113,6 +123,12 @@ shared because of its name", with a suggested portable name and a button to
 rename it (the person asks, so ADR 0034 allows it) **[no ADR: hold back]**.
 **At acceptance** a commit that introduces a non-portable path is invalid (rule 5
 of the authority rule, added to [04 §4.4](04-roster-and-authority.md)).
+
+The Unicode tables for NFC and case folding are pinned in the core. Changing
+them changes which commits are valid, so it is a format change (issue #15,
+ADR 0044). Because the catalogue only ever holds portable names, every
+supported platform can write every name, and v1 needs no mapping between a
+stored name and a name on disk.
 
 Laws (ADR 0012): normalisation is idempotent; `portable` accepts every conflict
 name that §5.3 generates; the suggested name is portable and differs from every

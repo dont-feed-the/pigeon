@@ -29,11 +29,19 @@
   minutes (hot files, ADR 0037).
 - A full scan (`git status --porcelain=v2 -z`) runs at start, every 10 minutes,
   and at once on a watcher overflow; it is the truth.
-- Files matching the **default ignore list** are never captured: `.DS_Store`,
-  `._*`, `Thumbs.db`, `desktop.ini`, `~$*` and `.~lock.*#` (office lock files),
-  `*.swp`, `*.part`, `*.crdownload`, and pigeon's own temporary names
-  **[no ADR: list]**. A per-group `.pigeon/ignore` is an open question
-  ([16](16-open-questions.md)).
+- Names matching the **ignore list** are never captured (ADR 0044). The list
+  is fixed in the core and matched on each path component: `.DS_Store`, `._*`,
+  `Icon\r`, `.localized`, `.Spotlight-V100`, `.Trashes`, `.fseventsd`,
+  `.TemporaryItems`, `.DocumentRevisions-V100`, `.Trash-*`, `Thumbs.db`,
+  `desktop.ini`, `~$*`, `.~lock.*#` and `~*.tmp` (office files), `*.swp`,
+  `.goutputstream-*`, `*.part`, `*.crdownload`, and pigeon's own temporary
+  names. It applies to names not in the catalogue, as in git: a catalogue path
+  is captured and installed whatever its name, and an ignored name is never
+  captured as a deletion. In-tree `.gitignore` files and the person's git
+  excludes have no effect (ADR 0045). A per-group `.pigeon/ignore` is an open
+  question ([16](16-open-questions.md)).
+- A **package** (§7.9) is quiet when none of its files has changed for the
+  quiet period; its changes are captured together.
 
 ## 7.3 Capture
 
@@ -44,19 +52,31 @@ One capture **batch** handles the stable dirty paths of one repository:
    (drive unplugged, folder moved or deleted), capture and install stop, and the
    headline says "Needs you: pigeon can't find your folder *Famille Geiger*".
    Nothing is ever captured as a deletion because the root vanished.
-2. **Changes.** `git status` lists the batch's added, modified, deleted and
-   renamed paths. Paths of the install journal whose content is the one being
-   installed, held paths (§7.4) and ignored paths are skipped.
+2. **Changes.** `git status --porcelain=v2 -z -uall --ignored=traditional`
+   lists the batch's added, modified, deleted and renamed paths, including
+   those an in-tree `.gitignore` names (ADR 0045). Paths of the install journal
+   whose content is the one being installed, held paths (§7.4) and ignored
+   paths are skipped. Capture takes paths from this listing only, never from
+   watcher events, since `git annex add` stages any path it is given, a file
+   of a nested repository included (E20). Each remaining path is checked with `lstat`: only regular
+   files go on; the other kinds are *not shared* (§7.9), and pigeon never
+   follows a link.
 3. **Mass-deletion guard.** If the deletions of the batch, with those already
    held, exceed 100 files or remove a whole top-level folder, all of them are
-   **held** (§7.4). The rest of the batch goes on.
+   **held** (§7.4). A package counts as one file. The rest of the batch goes
+   on.
 4. **Names.** A path whose name is not portable is held
    ([05 §5.4](05-catalogue-and-names.md)).
 5. **Classify** every change with the authority rule under the roster of `main`
    ([04 §4.3](04-roster-and-authority.md)): *allowed*; *not allowed*, grouped by
    set of deciders; or *diverging* (the path is in the divergence table, §7.6).
 6. **Ingest** the content of added and modified files with `git -c annex.thin=false
-   annex add` (batch). The object is a copy (copy-on-write where the file system
+   annex add --no-check-gitignore` (batch). A file that changes while it is
+   added is refused by git-annex and retried after its next quiet period
+   (ADR 0044, E20). `git annex add` stages every file as 100644, so capture
+   then sets the execute bit of each added path, and of each path whose only
+   change is its mode, with `git update-index --chmod=+x|-x` from its `lstat`
+   (E20, ADR 0044). The object is a copy (copy-on-write where the file system
    can), so a later in-place save cannot destroy the captured version (§7.8,
    ADR 0041). Re-adding content already in the annex is cheap, so a batch
    interrupted here is simply redone. Content beyond the pending budget waits
@@ -87,6 +107,8 @@ misnamed) on disk, `main` still has it, and install leaves the path alone.
 | | *Bring them back* | install restores them from `main` (the person asked) |
 | name not portable | *Rename to the suggested name* | pigeon renames the file (the person asked); capture adds it |
 | | rename it themselves | an ordinary capture |
+| a shared file became a link or a repository (§7.9) | *Delete it for everyone* | the deletion is captured |
+| | *Bring it back* | pigeon renames the link or folder to a free name beside it, then install restores the file from `main` (the person asked) |
 
 Held changes are *local* with reason `held` ([06 §6.4](06-status.md)) and a
 *Needs you* item until decided.
@@ -101,7 +123,9 @@ moves each **clean** path *p* of a kept folder from its index version to
 older than the index file's). Hidden folders change in the index only (sparse
 checkout, E15). A path that is not clean is skipped: capture handles it first,
 then it may become a divergence (§7.6). Capture and install of one repository
-never run at the same time.
+never run at the same time. The paths of a package (§7.9) are installed in one
+batch, and only once all of them are clean and none is in use; otherwise the
+whole package waits. A reader may see a mix of versions while the batch runs.
 
 A path is deferred with reason `in-use` (06 §6.4) while an application lock file
 sits next to it (`~$name`, `.~lock.name#`, `.#name`, `.name.swp`) or the writer
@@ -112,9 +136,13 @@ For each path, in this order (a batch shares its fsyncs and its one writer scan)
 
 1. **Content.** `git annex get --key` brings and verifies the new key. If no peer
    has it yet, the path waits; the status says "receiving".
-2. **New file.** Write the new content at `.git/pigeon/stage/<seq>` (a hard link
-   to the object on thin laptops, else a copy), set the mode of the index entry,
-   fsync it. No temporary name ever appears in the folder.
+2. **New file.** Write the new content at `.git/pigeon/stage/<seq>`, set the
+   mode of the index entry, fsync it. On thin laptops it is a hard link to the
+   object if the object has no other name; otherwise, and on laptops that are
+   not thin, it is a copy (a reflink where the file system can). An object is
+   thus linked to at most one path, as git-annex does
+   (`Annex/Content/LowLevel.hs`, `linkOrCopy'`; ADR 0044). No temporary name
+   ever appears in the folder.
 3. **Journal.** Append `begin` with the path, both keys, the index entry's
    `(dev, ino, size, mtime)`, the temporary file and its inode, and the aside, to
    `.git/pigeon/install.ndjson`; fsync ([11](11-local-state.md)).
@@ -124,8 +152,10 @@ For each path, in this order (a batch shares its fsyncs and its one writer scan)
 5. **Writer scan.** No process holds the aside open for writing or maps it
    shared and writable (Linux `/proc/*/fd`, `fdinfo` and `maps`; macOS
    `libproc`). It runs before the check, so no write slips in after it.
-6. **Check.** The aside's `(dev, ino, size, mtime)` equal the journalled ones,
-   and its link count is 1 (2 on thin laptops).
+6. **Check.** The aside's `(dev, ino, size, mtime)` equal the journalled ones.
+   Its link count is 1, or 2 if it is the object's inode. A higher count
+   means a person's hard link: the check still passes, and the aside is marked
+   *linked* (ADR 0044).
    - If step 5 or 6 fails, a person saved or is saving *p*. The aside goes back
      with `renameat2(RENAME_NOREPLACE)` (Linux) or `renamex_np(RENAME_EXCL)`
      (macOS), the temporary file is dropped, and the entry ends `skip`;
@@ -144,8 +174,9 @@ For each path, in this order (a batch shares its fsyncs and its one writer scan)
    data itself (E19).
 9. **Done.** Append `done`. The aside is kept until the first full scan at least
    10 minutes later (default, ADR 0040). It is unlinked then (`released`) only
-   if no process writes it and its content still hashes to the old key.
-   Otherwise it is captured as a recovered version.
+   if no process writes it and its content still hashes to the old key, or, for
+   a *linked* aside, at once without hashing: its content lives on under its
+   other name. Otherwise it is captured as a recovered version.
 
 A deletion is the same without steps 1, 2 and 7. When every entry has ended and
 its aside is released, the journal is truncated.
@@ -268,3 +299,43 @@ suggestions alike. The unprotected versions this laptop captured form its
 Content received from others is installed by hard link (thin): an in-place
 save may destroy that local copy, which never counts toward K, while its origin
 keeps an immutable one.
+
+## 7.9 What the folder may hold (ADRs 0044, 0045)
+
+pigeon shares **regular files**, by their bytes and the owner's execute bit.
+Folders exist through their files. The rest is listed here, so that nobody
+takes an incomplete capture for a safe one.
+
+| Object | What pigeon does |
+|---|---|
+| regular file | shared: content (`SHA256E`) and execute bit; installed with mode 0644 or 0755 under the umask, at the time of the install |
+| other mode bits, owner, times, ACLs, extended attributes, resource forks, Finder tags | not shared, and not kept by an install, which writes a new file |
+| hard links | each name shared as its own file; an install of either name breaks the link, and the other name keeps its content (§7.5 step 6) |
+| empty folder | not shared, not listed; install removes a folder it emptied, with `rmdir`, which fails harmlessly if a person added something |
+| symbolic link | *not shared* (`link`), never followed; listed, notified once |
+| folder holding `.git` | *not shared* (`repository`), with everything in it; listed, notified once |
+| live library: `.photoslibrary`, `.musiclibrary`, `.tvlibrary`, `.imovielibrary`, `.fcpbundle`, `.sparsebundle` | *not shared* (`library`); listed, notified once |
+| file or folder pigeon may not read | *not shared* (`unreadable`) until readable: neither captured nor installed, never a deletion; listed, notified once |
+| FIFO, socket, device | not shared, not listed: they hold no data (`git status` does not show them) |
+| ignored name (§7.2) | not captured, not listed |
+| non-portable name | held, *Needs you* ([05 §5.4](05-catalogue-and-names.md)) |
+| package: `.app`, `.band`, `.bundle`, `.framework`, `.key`, `.logicx`, `.numbers`, `.pages`, `.playground`, `.rtfd`, `.scriv`, `.textbundle`, `.xcodeproj`, `.xcworkspace` | shared as one document: captured together when quiet (§7.2), merged as one path ([05 §5.2](05-catalogue-and-names.md)), installed in one batch (§7.5); one divergence entry |
+
+`package(p)`, the outermost folder above *p* with one of these extensions,
+compared case-insensitively, is a pure function of the name, so every platform
+agrees. Outside packages, files saved together share a commit only if they
+settle in one capture batch; no other multi-file consistency is promised.
+
+*Not shared* items appear in the folder view ("2 items not shared") and in
+`pigeon status --not-shared`. A *Safe* headline then adds "2 items of your
+folder aren't shared" ([06 §6.5](06-status.md)).
+
+The accept rule refuses trees that hold anything else. Rule 6 of
+[04 §4.4](04-roster-and-authority.md) allows only folders and files of mode
+100644 or 100755. Outside `.pigeon/` and the root `.gitattributes`, each file
+must be a pointer to a `SHA256E` key; inside them, a plain blob.
+
+git and git-annex run with pigeon's configuration only (ADR 0045,
+[03 §3.7](03-repository-and-roles.md)). The person's global settings, in-tree
+`.gitattributes` and in-tree `.gitignore` files cannot change keys, trees or
+listings.

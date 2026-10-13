@@ -114,7 +114,8 @@ capture resumes.
    are present, F stays hidden and its row says how many files are still being
    received (all or nothing per folder).
 2. **Stage** the complete files under `.git/pigeon/stage/F`, with the modes of
-   their index entries (a hard link to the object on thin laptops, else a copy).
+   their index entries (on thin laptops a hard link to the object if it has no
+   other name, else a copy; at most one path per object, ADR 0044).
 3. **Move in** the staged folder with one `rename` that refuses to replace
    (`RENAME_NOREPLACE`, `RENAME_EXCL`). If F exists on disk (the person made a
    folder of that name meanwhile), install the files one by one instead

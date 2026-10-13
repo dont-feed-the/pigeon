@@ -126,7 +126,7 @@ The headline reduces every item to one of five levels (ADR 0027, ux.md §4):
 | **Not safe yet** | some version is *local* or *published* for longer than the grace period (default 10 minutes) |
 | **Not checked recently** | pigeon cannot confirm: no custodian heard of within `stale_after` |
 | **Working** | something is being captured, sent or received, all of it younger than the grace period |
-| **Safe** | every version is *protected*, observed within `stale_after` |
+| **Safe** | every version is *protected*, observed within `stale_after`; if some items of the folder are not shared, a second sentence says so: "2 items of your folder aren't shared" (ADR 0044) |
 
 **Precedence:** Needs you, then Not safe yet, then Not checked recently, then
 Working, then Safe; the first that applies wins. ADR 0027 lists the levels as
@@ -149,6 +149,11 @@ is commutative, associative and idempotent; adding an item never lowers the leve
 
 ## 6.6 Folders, files and times
 
+- Items pigeon does not share (links, nested repositories, live libraries,
+  unreadable paths; [07 §7.9](07-capture-and-install.md)) have no state: they
+  are never *protected*. The folder row adds "2 items not shared", the
+  *Not shared* list and `pigeon status --not-shared` name them, and one
+  notification tells of each when it first appears (ADR 0044).
 - A folder row aggregates its files: "All safe", "3 not safe yet", "Not checked
   since …"; a folder not kept on this computer shows its state all the same.
 - A file's page shows, per version, who, when and the state; *Details* lists

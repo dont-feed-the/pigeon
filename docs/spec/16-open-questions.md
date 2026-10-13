@@ -16,6 +16,8 @@
 | ADR 0041: captured versions stay immutable until protected | Proposed, for issue #3; [07 §7.8](07-capture-and-install.md) applies it, E18 asserts it | Guillaume |
 | ADR 0042: purge releases references, completes after every seal | Proposed, for issues #4 and #5; [08 §8.6](08-custody-loops.md) applies it, the `Purge` model checks it | Guillaume |
 | ADR 0043: every device serves through a filter; pull only; explicit copy counts | Proposed, for issue #9; [09 §9.4](09-network-and-joining.md), [03 §3.8](03-repository-and-roles.md) apply it, E12 and E13 assert it | Guillaume |
+| ADR 0044: regular files and the execute bit are shared; the rest is listed | Proposed, for issue #14; [07 §7.9](07-capture-and-install.md), [04 §4.4](04-roster-and-authority.md) rule 6, [05 §5.2–5.4](05-catalogue-and-names.md) apply it, E20 asserts it | Guillaume |
+| ADR 0045: git and git-annex read only pigeon's configuration | Proposed, for issue #14; [03 §3.3–3.7](03-repository-and-roles.md) apply it, E20 asserts it | Guillaume |
 | TLC with the `Json` module for trace validation | ADR 0026 foresees a new ADR pinning it by SHA-256 ([13 §13.3](13-verification.md)) | before the first `*Trace.tla` |
 
 ## 16.2 Where this specification departs from a source
@@ -42,8 +44,6 @@ them all.
 
 - Custodians hold a **bare** repository at `/var/lib/pigeon/<group-id>.git` (§3.1).
 - Refs `refs/pigeon/peers/<device>/main` and `refs/pigeon/status/<device>` (§3.2).
-- Empty folders, symbolic links, permissions other than the executable bit
-  and extended attributes are not versioned in v1 (§3.3).
 - The settings check suspends drops and re-applies the expected settings (§3.5).
 - Remote names `pigeon-` + 12 hex digits of the device ID (§3.6).
 
@@ -77,7 +77,6 @@ them all.
 
 ### E. Capture, install and custody loops ([07](07-capture-and-install.md), [08](08-custody-loops.md))
 
-- The default ignore list (§7.2).
 - The aside kept one hour under `.git/pigeon/aside/` (§7.5, [11 §11.3](11-local-state.md)).
 - A save of a diverging path becomes a proposal of its own (§7.6).
 - Fetching every 5 minutes besides change notices (§8.1).
@@ -129,7 +128,9 @@ them all.
   stewards ([04 §4.3](04-roster-and-authority.md)). Should the author of a
   path's only version be allowed to modify it until someone else changes it?
 - **A per-group `.pigeon/ignore`** besides the default list ([07 §7.2](07-capture-and-install.md)).
-- **Empty folders, symbolic links, extended attributes** in a later version.
+- **Links, empty folders, extended attributes, live libraries** in a later
+  version (ADR 0044 leaves them out and lists them); a **package list**
+  maintained from macOS's own type declarations rather than fixed in the core.
 - **Names:** hold non-portable names (this specification) or map them
   on Windows only, as Samba's `catia` module does ([05 §5.4](05-catalogue-and-names.md)).
 - **K per folder** (more copies for photos than for downloads); the roster
@@ -177,7 +178,7 @@ experiments stay listed in [13](13-verification.md) and in the prototype (#17).
 | #11 | recovery onto fresh machines | — | open |
 | #12 | independent failure domains | — | open |
 | #13 | capacity admission and repair priority | [08 §8.9](08-custody-loops.md), [15 §15.2](15-resource-use.md) | open |
-| #14 | file-system object model | [03 §3.3](03-repository-and-roles.md), [14 §14.2](14-platforms-and-packaging.md) | open |
+| #14 | file-system object model | [07 §7.9](07-capture-and-install.md), [04 §4.4](04-roster-and-authority.md), [05 §5.2–5.4](05-catalogue-and-names.md), [03 §3.3–3.7](03-repository-and-roles.md), [14 §14.2](14-platforms-and-packaging.md) | ADRs 0044 and 0045 (Proposed); E20 asserts on Linux and macOS |
 | #15 | replicated-format compatibility | — | open |
 | #16 | one authoritative specification | this specification; [README](README.md) precedence | done |
 | #17 | minimal end-to-end prototype | — | after the design issues |

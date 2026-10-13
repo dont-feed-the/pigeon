@@ -32,7 +32,11 @@ which install needs ([07 §7.5](07-capture-and-install.md)).
 | ext4, btrfs, xfs (Linux); APFS (macOS) | FAT, exFAT, NTFS through FUSE, network file systems (NFS, SMB), FUSE in general, HFS+ |
 
 **[no ADR: list]**. A case-insensitive APFS volume (the macOS default) is
-supported because names are case-folded for collisions at capture. A backup
+supported because names are case-folded for collisions at capture. What the
+folder may hold, whatever the file system, is in [07 §7.9](07-capture-and-install.md)
+(ADR 0044). On APFS, extended attributes, resource forks and Finder tags are
+not shared. On every file system, links are not followed and hard links are
+not kept. A backup
 machine may use any local Linux file system git-annex supports (ext4, xfs,
 btrfs, ZFS), since its repository is bare and no person edits it.
 
@@ -47,8 +51,10 @@ btrfs, ZFS), since its repository is bare and no person edits it.
   brings a recent git.
 - **Checks at start.** `pigeond` runs `git annex version` and `git --version`
   and refuses to run below the minimum versions CI tests, with
-  `git-annex-too-old` ([10 §10.6](10-interfaces.md)). Until CI tests older
-  ones, the minimum git-annex is **10.20261006**.
+  `git-annex-too-old` ([10 §10.6](10-interfaces.md)). The minimum is the
+  oldest version CI tests on each platform **[no ADR: per platform]**: on
+  Linux the pinned standalone build, **10.20261006**; on macOS the version
+  Homebrew provides, which was **10.20260901** when E20 ran in `lab.yml`.
 - **Upgrades are deliberate.** The standalone build publishes "current" only;
   CI records the version it tested, the installer verifies the version it
   fetched, and a new git-annex is supported once the contract tests pass on

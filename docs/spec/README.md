@@ -1,7 +1,7 @@
 # pigeon v2 — specification
 
 > **Status:** version 1 of the specification, 13 October 2026. It assembles the
-> decisions recorded in [ADRs 0001–0043](../adr/README.md), the guarantees P1–P6 of the
+> decisions recorded in [ADRs 0001–0045](../adr/README.md), the guarantees P1–P6 of the
 > [proposal](../design/proposal/proposal.pdf), the [UX study](../design/ux.md), the
 > [TLA+ models](../../models/tla/) and the [git-annex experiments](../../lab/git-annex/).
 > It supersedes [spec draft 0](../design/spec-draft-0.md) and [draft 1](../design/spec-draft-1.md),
@@ -136,3 +136,5 @@ or a collaborative editor), nor real-time sync of hot files (proposal §1).
 | 0041 captured versions immutable until protected (Proposed) | [07](07-capture-and-install.md), [03](03-repository-and-roles.md), [06](06-status.md) |
 | 0042 purge by references and seals (Proposed) | [08](08-custody-loops.md), [05](05-catalogue-and-names.md), [06](06-status.md), [03](03-repository-and-roles.md) |
 | 0043 serving through a filter, pull only (Proposed) | [09](09-network-and-joining.md), [03](03-repository-and-roles.md), [08](08-custody-loops.md) |
+| 0044 regular files shared, the rest listed (Proposed) | [07](07-capture-and-install.md), [04](04-roster-and-authority.md), [05](05-catalogue-and-names.md), [06](06-status.md), [03](03-repository-and-roles.md), [14](14-platforms-and-packaging.md) |
+| 0045 git reads only pigeon's configuration (Proposed) | [03](03-repository-and-roles.md), [07](07-capture-and-install.md) |

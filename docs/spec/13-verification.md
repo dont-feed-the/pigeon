@@ -102,6 +102,7 @@ and each law is a `hegeltest` property (pinned to 0.49, a dev-dependency).
 | append-only filter | never forwards a removal; forwards allowed messages unchanged; keeps `DATA` framing | [09 §9.4](09-network-and-joining.md) |
 | trace merge | Lamport merge associative and commutative; per-device order kept | [12 §12.3](12-observability.md) |
 | work queue | order is a total preorder of the classes of ADR 0037; capture never starves | [15 §15.2](15-resource-use.md) |
+| trees and names | every tree capture makes is well formed (rule 6); `package(p)` depends only on *p*'s name and is stable when other paths change; merging a package never mixes files of two sides; `ignored` is a pure function of the name | [07 §7.9](07-capture-and-install.md), [05 §5.2](05-catalogue-and-names.md) |
 | encodings | `parse(print(x)) = x` for roster TOML, NDJSON, git objects; our parser agrees with git | everywhere |
 
 Example tests remain for regressions found by properties (with the shrunk
@@ -153,6 +154,7 @@ supported only once they pass ([14 §14.3](14-platforms-and-packaging.md)).
 | E14 | purge by references with git and git-annex, two laptops and two bare custodians: two paths sharing a key, current content sharing a key with purged history and a suggestion sharing a key with accepted content keep their key (the suggestion through the seals' `held`); a restore that reached one custodian before its seal holds the purge back at the other until it merges that `main` (trusting the seals alone would release it); per-key transfers never fetch a released key although git-annex's own `wanted` still matches it; `drop --force --key` leaves no copy; a returning laptop drops its covered copy and its offline re-add comes back to both custodians; `matchexpression --key` agrees with git-annex's choices (`balanced` with `satisfy`, 11 keys split between the two; `sizebalanced` with `find --want-get`, which lists nothing in a bare repository); `get --auto --all` and `drop --auto --key` are refused and `satisfy --all` drops from a remote (asserts) | ADR 0042, [08 §8.6](08-custody-loops.md) |
 | E12 | `remotedaemon` over git-annex's generic P2P transport (a lab network): on a change notice it fetches by the remote's refspecs and never moves `main`, `HEAD`, the index or the working tree; by default a peer pushes any ref into a custodian, `main` included, and into a laptop except its checked-out branch; a `pre-receive` hook refuses (asserts) | ADR 0043, [03 §3.6, §3.8](03-repository-and-roles.md) |
 | E13 | `remotedaemon` serves `REMOVE` even with `GIT_ANNEX_SHELL_APPENDONLY`; append-only `git-annex-shell p2pstdio` refuses it but relays no git; pigeon's filter before `remotedaemon`, with random read sizes, passes reads, stores, fetches and change notices, refuses `REMOVE` on the custodian and any push, caps `VERSION`, closes on unknown or malformed input, passes payloads holding protocol lines intact; explicit `--numcopies` outweighs `.gitattributes` and a lowered branch setting, which `drop --key` otherwise obeys (asserts; 30 checks, about 90 s) | ADR 0043, [09 §9.4](09-network-and-joining.md) |
+| E20 | what the folder may hold, on Linux and macOS (`lab.yml`, 53 checks each): links, nested repositories, FIFOs and sockets are never staged when capture takes paths from `git status` and checks `lstat` first, yet `git annex add` stages a link or a nested repository's file it is given; `git annex add` stages an executable file as 100644 and ignores a mode-only change, and `update-index --chmod` restores the bit; extended attributes do not travel; a thin object is hard-linked to one path only, and `fsck` does not notice an object changed through that link; unreadable paths are not reported deleted; a file rewritten while it is added never yields an object that mismatches its key; a person's `~/.gitconfig` (`annex.backend=WORM`, `annex.largefiles=nothing`, `core.excludesFile`) changes keys, tree and listing unless git runs isolated; `--ignored=traditional -uall` lists the files of ignored folders; `.git/info/attributes` overrides nested `.gitattributes`; `add --batch` fails on a name that is not UTF-8 (asserts) | ADRs 0044, 0045, [07 §7.9](07-capture-and-install.md), [03 §3.7](03-repository-and-roles.md) |
 
 **Pending:** E11 native Windows (v1.1). **New:** E16 `annex.bwlimit` over the P2P
 transport; E17 the HDD video-editing acceptance test ([15 §15.8](15-resource-use.md)).
@@ -168,6 +170,9 @@ asserts its results, as E15 does (ADR 0026).
   `unwrap_used` and `expect_used` denied, ADR 0023), tests with the fast
   property and fault sets, the Fluent completeness test (ADR 0028), the
   licence check (`cargo deny`, ADR 0019), E15 and every asserting experiment.
+- `lab` on every push: E20 on Linux and macOS, with the git-annex each
+  installer uses (the standalone build, Homebrew); the other asserting
+  experiments join it (issue #10).
 - `models-full` when a model or the runner changes, weekly, and by hand: every
   configuration, the full fault-injection set with trace validation, E17 on a
   self-hosted runner with an HDD **[no ADR: runner]**.
@@ -191,11 +196,11 @@ are specified here but not built; the gaps are tracked as GitHub issues
 | Guarantee | Now | Planned | Gaps (issues) |
 |---|---|---|---|
 | P1 Survival | E1, E5, E8, E9, E10 (lab, printing); E13 (asserting: pigeon's filter refuses remote `REMOVE`); `CustodyNaive`, `CustodyTokens` (evidence about hand-offs in general and about the earlier token protocol, not about git-annex) | `AnnexDrop`, `Repair` models; fault injection; asserting E9, E10 | failure domains (#12); capacity admission (#13); recovery on fresh machines (#11) |
-| P2 Capture, no overwrite | E15b (asserting: no pointer during free and keep); E18 (asserting: offline in-place saves keep every version); E19 (asserting: racing saves and `kill -9` during install) | `CaptureInstall` model; install journal laws (hegel-rust); E19 on macOS | copy-on-write cost of pending history on APFS and btrfs (E18 there); file-system scope (#14); saves from stale memory (16 §16.4) |
+| P2 Capture, no overwrite | E20 (asserting, Linux and macOS: what capture stages and what it never reads); E15b (asserting: no pointer during free and keep); E18 (asserting: offline in-place saves keep every version); E19 (asserting: racing saves and `kill -9` during install) | `CaptureInstall` model; install journal laws (hegel-rust); E19 on macOS | copy-on-write cost of pending history on APFS and btrfs (E18 there); saves from stale memory (16 §16.4) |
 | P3 Reversible deletion | E2, E4 (lab, printing); `Purge` model (seals against restores, cancels, partitions, restarts and a returning laptop; ADR 0042); E14 (asserting: shared keys, a restore against the seals, per-key transfers, the forced drop, a returning laptop's new generation) | purge laws (hegel-rust); `Purge` trace validation | a custodian clock that jumps forward by more than the waiting period; erased names stay in history (16 §16.4) |
 | P4 Authority | E7 (lab, printing); E12 (asserting: no pushed ref, `remotedaemon` only fetches) | `Authority` model; acceptance laws; decision-rights tests (ADR 0038) | roster forks (#6); format compatibility (#15) |
 | P5 Convergence | E3 (lab, printing) | merge and name laws; three-way permutations | the merge algorithm (#8) |
-| P6 Honest status | — | observation and headline laws; usability test | — |
+| P6 Honest status | E20 (asserting: the kinds pigeon lists as not shared) | observation and headline laws; usability test | — |
 
 ## 13.11 Going on: technical and human criteria
 
