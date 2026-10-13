@@ -1,7 +1,8 @@
 # 0033. Files you may not change stay editable; a saved edit becomes your suggestion
 
-- **Status:** Accepted, 13 October 2026, by Guillaume (UX question 2), who
-  preferred it to read-only files (ADR 0030, rejected).
+- **Status:** Superseded by 0034 (the accepted version is never put back
+  over the person's file). Accepted on 13 October 2026 by Guillaume (UX
+  question 2), who preferred it to read-only files (ADR 0030, rejected).
 
 ## Context
 

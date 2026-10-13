@@ -3,7 +3,7 @@
 > Status: proposal for discussion, 13 October 2026. Guillaume asked for a careful study of the
 > command line and the web interface, so that they suit people who are not technical.
 > Mockups: [`mockups/`](mockups/) (static HTML, open `mockups/index.html`).
-> Decisions from this study: ADRs 0027–0031 and 0033 (see their status in the ADR index).
+> Decisions from this study: ADRs 0027–0031, 0033 and 0034 (see their status in the ADR index).
 
 ## 1. Who uses pigeon
 
@@ -91,7 +91,7 @@ branch, remote, key, hash, numcopies, trust, wanted, sync, pointer file, ref.
 ## 3. Principles
 
 1. **Answer "are my files safe?" first, everywhere.** One headline sentence on the home page,
-   in `pigeon status`, in the tray menu and in every notification.
+   in `pigeon status`, in every notification, and in the status icon from v1.1.
 2. **Honest, with a time.** "Safe" means observed: K verified copies at the last check, and the
    check time is shown ("checked 4 min ago"). When pigeon cannot know, it says so and says
    since when (P6). It never rounds "probably" up to "safe".
@@ -114,6 +114,8 @@ branch, remote, key, hash, numcopies, trust, wanted, sync, pointer file, ref.
    one catalogue (ADR 0028); no operation exists in only one (ADR 0021).
 10. **Accessible.** WCAG 2.2 level AA for the web interface; the CLI never conveys meaning by
     colour alone and works with `NO_COLOR` and screen readers.
+11. **Never overwrite what a person saved** (ADR 0034). When their file differs from the
+    group's, pigeon shows the conflict and lets them choose.
 
 ## 4. The status model
 
@@ -141,9 +143,9 @@ Rules:
 
 | Surface | For whom | Role |
 |---|---|---|
-| **Status icon** in the menu bar or tray (ADR 0029) | everyone | the headline colour at a glance; menu with the headline, "Open pigeon", "Open my folder", "Pause" |
+| **Status icon** in the menu bar or tray, from v1.1 (ADR 0029) | everyone | the headline colour at a glance; menu with the headline, "Open pigeon", "Open my folder", "Pause" |
 | **Notifications** | everyone | only level 1, a long level 2, and suggestions waiting for you |
-| **Web interface** on this computer (`pigeon open`, or the icon) | everyone | status, files and versions, deleted files, suggestions, people and machines, settings |
+| **Web interface** on this computer (the "pigeon" launcher, a notification, or `pigeon open`) | everyone | status, files and versions, deleted files, suggestions, people and machines, settings |
 | **The folder** in Finder or the file manager | everyone | the actual work; edits to folders you can't change become suggestions (ADR 0033) |
 | **CLI** `pigeon` | Paul, Inès, scripts | everything, with the same words; `--json` for scripts |
 
@@ -196,7 +198,7 @@ Output follows the same headline-then-detail pattern; colour only on a terminal,
 | `pigeon people` · `pigeon machines` | members, computers, backup machines | People & machines |
 | `pigeon remove-computer NAME` | removes a lost or retired computer | People → I lost a computer |
 | `pigeon erase PATH` | asks an admin decision to erase forever, after the waiting period | file page → Erase forever |
-| `pigeon pause [DURATION]` · `pigeon resume` | stops and restarts sharing | tray, Settings |
+| `pigeon pause [DURATION]` · `pigeon resume` | stops and restarts sharing | Settings |
 | `pigeon doctor [--details]` | checks the installation and explains what is wrong | Settings → Advanced |
 
 Examples of output (English; the French catalogue says the same):
@@ -259,11 +261,12 @@ check over the phone. She picks her folder and which shared folders to keep on t
 (the size of each is shown against her free space). Done in four steps; the first files
 appear while she reads a one-screen tour of the three states.
 
-**8.3 Daily life.** Nothing to do. The tray icon is green. Saving a file makes it blue for a
-moment, then green again.
+**8.3 Daily life.** Nothing to do, and pigeon stays silent. Opening it from the launcher shows
+"Everything is safe". (From v1.1, the status icon is green; saving a file turns it blue for a
+moment.)
 
-**8.4 Not safe yet.** The icon turns amber after 10 minutes; a notification comes only after
-24 h. Clicking it shows the headline and the list; the sentence says what pigeon waits for
+**8.4 Not safe yet.** The headline turns amber after 10 minutes; a notification comes only
+after 24 h. Clicking it shows the headline and the list; the sentence says what pigeon waits for
 ("Paul's NAS offline since Monday") and that Paul has been told. Admins and the owner of the
 missing backup machine get the "Needs you" version after 7 days.
 
@@ -285,13 +288,14 @@ she answers, the deletion stays on her computer only.
 09:12, Paul", … → *Restore this version*. The restored version becomes the current one, and
 the newer one remains in the timeline.
 
-**8.8 Someone else's folder (ADR 0033).** Files in a folder she may not change stay
+**8.8 Someone else's folder (ADRs 0033, 0034).** Files in a folder she may not change stay
 editable, and the Files page says so beforehand: "Paul's folder: your changes become
-suggestions to Paul". When Martine saves *tarte.docx* there, pigeon keeps her version as her
-suggestion and, once the file has been quiet for a minute, puts Paul's version back and tells
-her once: "Your change to *tarte.docx* was sent to Paul as a suggestion, because the folder is
-Paul's. Your version is in *Suggestions → Yours*." Saving again before that only updates the
-same suggestion.
+suggestions to Paul". When Martine saves *tarte.docx* there, her file stays as she saved it;
+pigeon sends her version to Paul as a suggestion and the file reads "Your suggestion, waiting
+for Paul". If Paul accepts, her version becomes the group's. If he declines, or changes the
+file meanwhile, pigeon tells her once that her version differs from the group's, and she
+chooses: *Take the group's version*, *Keep mine as a copy*, or *Suggest again*. pigeon never
+overwrites her file by itself.
 
 **8.9 Edited at the same time.** Both versions are kept. The other one is named
 `budget (Paul, 13 Oct 14:02).xlsx`, so that it still opens in the same application. Home
@@ -332,7 +336,7 @@ feasibility study (proposal §7).
 | Need | Choice | Why |
 |---|---|---|
 | Message catalogue, French and English | `fluent-bundle` 0.16 + `fluent-langneg` 0.14 (Project Fluent, Mozilla) | plural and gender rules per language, translators edit `.ftl` files, shared by CLI and web (ADR 0028) |
-| Tray icon | `tray-icon` 0.26 in a small `pigeon-tray` process | Linux, macOS and later Windows; a client of `pigeond` like the CLI (ADR 0029) |
+| Tray icon (v1.1) | `tray-icon` 0.26 in a small `pigeon-tray` process | Linux, macOS and later Windows; a client of `pigeond` like the CLI (ADR 0029) |
 | Notifications | `notify-rust` 4.18 | D-Bus on Linux, Notification Center on macOS |
 | Terminal colour | `anstream` 1.0 / `anstyle` (clap's own) | honours `NO_COLOR`, `CLICOLOR`, non-terminals |
 | Times and time zones | `jiff` 0.2 | local time zones and spans done right; relative times rendered by Fluent messages |
