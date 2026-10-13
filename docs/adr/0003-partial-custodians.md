@@ -1,7 +1,8 @@
 # 0003. Custodians may be partial
 
-- **Status:** Proposed, 12 October 2026, in answer to Laurent; included in
-  the proposal of 12 October 2026, not yet explicitly accepted.
+- **Status:** Accepted, 13 October 2026, by Guillaume (tooling interview:
+  git-annex's `sizebalanced` with capacity warnings; a pigeon planner only if
+  needed later). Proposed on 12 October 2026 in answer to Laurent.
 
 ## Context
 
@@ -24,3 +25,6 @@ unprotected, and cannot be evicted from laptops.
   history); a custodian is useful only up to one copy of everything.
 - Keep about 25 % headroom, because placement is heuristic and `maxsize`
   is advisory. A pigeon placement planner is a possible later replacement.
+- pigeon warns, in the words of ADR 0027, when custody capacity falls below
+  K × (collection + retained history) plus the headroom, and says how many
+  GB are missing and on which machines.
