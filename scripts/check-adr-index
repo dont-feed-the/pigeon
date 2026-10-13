@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""Fail when docs/adr/README.md and the ADR files disagree.
+
+Each ADR is a file NNNN-slug.md whose first line is "# NNNN. Title" and which
+holds a "- **Status:** ..." line. Numbers run from 0001 without gaps. The
+index has one row per ADR, linking to the file, with a title that starts with the
+ADR's title and the same first word of status (Proposed, Accepted, Rejected, Superseded).
+"""
+
+import re
+import sys
+from pathlib import Path
+
+ADR = Path(__file__).resolve().parent.parent / "docs" / "adr"
+STATUSES = {"Proposed", "Accepted", "Rejected", "Superseded"}
+ROW = re.compile(r"^\| \[(\d{4})\]\(([^)]+)\) \| (.+?) \| (.+?) \|$")
+
+
+def adr_files():
+    """Map each ADR number to (file name, title, status word), or report."""
+    found, problems = {}, []
+    for path in sorted(ADR.glob("[0-9]*.md")):
+        name = path.name
+        if not re.fullmatch(r"\d{4}-[a-z0-9.-]+\.md", name):
+            problems.append(f"{name}: name is not NNNN-slug.md")
+            continue
+        lines = path.read_text().splitlines()
+        heading = re.fullmatch(r"# (\d{4})\. (.+)", lines[0]) if lines else None
+        if not heading or heading.group(1) != name[:4]:
+            problems.append(f"{name}: first line is not '# {name[:4]}. Title'")
+            continue
+        status = next((line for line in lines if line.startswith("- **Status:**")), "")
+        word = re.match(r"- \*\*Status:\*\* (\w+)", status)
+        if not word or word.group(1) not in STATUSES:
+            problems.append(f"{name}: no '- **Status:** <{'|'.join(sorted(STATUSES))}>' line")
+            continue
+        if name[:4] in found:
+            problems.append(f"{name}: number {name[:4]} is used twice")
+        found[name[:4]] = (name, heading.group(2), word.group(1))
+    expected = [f"{n:04d}" for n in range(1, len(found) + 1)]
+    if sorted(found) != expected:
+        problems.append(f"numbers are not 0001..{len(found):04d} without gaps")
+    return found, problems
+
+
+def main():
+    found, problems = adr_files()
+    rows = {}
+    for line in (ADR / "README.md").read_text().splitlines():
+        row = ROW.match(line)
+        if row:
+            number, link, title, status = row.groups()
+            if number in rows:
+                problems.append(f"README.md: {number} is listed twice")
+            rows[number] = (link, title, status.split()[0])
+    for number, (name, title, status) in found.items():
+        if number not in rows:
+            problems.append(f"README.md: {name} is not listed")
+            continue
+        link, listed_title, listed_status = rows[number]
+        if link != name:
+            problems.append(f"README.md: {number} links to {link}, not {name}")
+        if not listed_title.startswith(title):
+            problems.append(f"README.md: {number} title does not start with the title of {name}")
+        if listed_status != status:
+            problems.append(f"README.md: {number} status {listed_status}, file says {status}")
+    for number in rows.keys() - found.keys():
+        problems.append(f"README.md: {number} has no file")
+    for problem in problems:
+        print(problem, file=sys.stderr)
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

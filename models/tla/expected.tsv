@@ -1,0 +1,15 @@
+# Expected TLC verdict of each model configuration, checked by scripts/run-tlc.
+# Columns (tab-separated): config, module, set, verdict.
+#   set     fast = every push; full = scheduled or manual run only.
+#   verdict pass | deadlock | violation:<Invariant>
+# The violations and the deadlock are negative tests: they show that the
+# naive designs fail, so a model edit that hides the failure is caught.
+Naive_FALSE	CustodyNaive	fast	violation:NoLoss
+Naive_TRUE	CustodyNaive	fast	deadlock
+T_idem	CustodyTokens	fast	violation:TokensNeverLost
+T_nononce	CustodyTokens	fast	violation:TokensNeverLost
+T_nonce	CustodyTokens	fast	pass
+T_n42o3	CustodyTokens	fast	pass
+T_n31o5	CustodyTokens	fast	pass
+T_n32o5	CustodyTokens	fast	pass
+T_n42o4	CustodyTokens	full	pass

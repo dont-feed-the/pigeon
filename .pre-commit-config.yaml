@@ -1,0 +1,15 @@
+# Local hooks, the same checks as the CI job "repository rules".
+repos:
+  - repo: local
+    hooks:
+      - id: check-file-length-and-header
+        name: check file length and header
+        entry: scripts/check-file-length-and-header
+        language: script
+        types: [text]
+      - id: check-adr-index
+        name: check ADR index
+        entry: scripts/check-adr-index
+        language: script
+        files: ^docs/adr/
+        pass_filenames: false

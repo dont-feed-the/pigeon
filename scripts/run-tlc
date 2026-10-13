@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+"""Run the TLA+ models and compare each TLC verdict with the expected one.
+
+The expectations live in models/tla/expected.tsv. The TLC jar is pinned by
+version and SHA-256, downloaded once into a cache directory, and refused when
+its hash differs. Usage: scripts/run-tlc [--full] [config ...]; with no
+configuration named, the fast set runs, or every row with --full.
+"""
+
+import argparse
+import hashlib
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+from pathlib import Path
+
+TLC_VERSION = "1.7.4"
+TLC_URL = f"https://github.com/tlaplus/tlaplus/releases/download/v{TLC_VERSION}/tla2tools.jar"
+TLC_SHA256 = "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88"
+MODELS = Path(__file__).resolve().parent.parent / "models" / "tla"
+
+
+def sha256(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def tlc_jar():
+    """Return the path of the pinned jar, downloading it when absent."""
+    cache = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "pigeon"
+    jar = cache / f"tla2tools-{TLC_VERSION}.jar"
+    if not jar.exists():
+        cache.mkdir(parents=True, exist_ok=True)
+        partial = jar.with_suffix(".part")
+        urllib.request.urlretrieve(TLC_URL, partial)
+        partial.rename(jar)
+    if sha256(jar) != TLC_SHA256:
+        sys.exit(f"{jar}: SHA-256 differs from the pinned {TLC_SHA256}; delete it and retry")
+    return jar
+
+
+def expectations():
+    """Yield (config, module, set, verdict) rows of expected.tsv."""
+    for line in (MODELS / "expected.tsv").read_text().splitlines():
+        if line.strip() and not line.startswith("#"):
+            yield tuple(line.split("\t"))
+
+
+def verdict(output):
+    """Name the outcome of one TLC run from its output."""
+    if "Model checking completed. No error has been found." in output:
+        return "pass"
+    if "Error: Deadlock reached." in output:
+        return "deadlock"
+    found = re.search(r"Error: Invariant (\w+) is violated", output)
+    if found:
+        return f"violation:{found.group(1)}"
+    if "Temporal properties were violated" in output:
+        return "violation:temporal"
+    return "error"
+
+
+def run(jar, config, module, java, workers, heap):
+    with tempfile.TemporaryDirectory() as metadir:
+        memory = [f"-Xmx{heap}"] if heap else []
+        command = [java, *memory, "-XX:+UseParallelGC", "-cp", str(jar), "tlc2.TLC",
+                   "-workers", workers, "-metadir", metadir,
+                   "-config", f"{config}.cfg", module]
+        done = subprocess.run(command, cwd=MODELS, capture_output=True, text=True)
+    return verdict(done.stdout + done.stderr), done.stdout + done.stderr
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--full", action="store_true", help="include the slow rows")
+    parser.add_argument("configs", nargs="*", help="only these configurations")
+    parser.add_argument("--java", default=os.environ.get("JAVA", "java"))
+    parser.add_argument("--workers", default="auto")
+    parser.add_argument("--heap", help="maximum Java heap, such as 3g; TLC spills to disk beyond it")
+    arguments = parser.parse_args()
+    jar = tlc_jar()
+    failures = 0
+    for config, module, group, expected in expectations():
+        if arguments.configs and config not in arguments.configs:
+            continue
+        if not arguments.configs and not arguments.full and group != "fast":
+            continue
+        start = time.monotonic()
+        got, output = run(jar, config, module, arguments.java, arguments.workers, arguments.heap)
+        seconds = time.monotonic() - start
+        status = "ok" if got == expected else "FAIL"
+        print(f"{status:4} {config:12} expected {expected:26} got {got:26} {seconds:6.1f} s", flush=True)
+        if got != expected:
+            failures += 1
+            print(output[-4000:], file=sys.stderr)
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
