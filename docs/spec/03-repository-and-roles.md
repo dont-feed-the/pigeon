@@ -3,7 +3,7 @@
 > Mission: say what git and git-annex hold on each device, how each role is
 > configured, and which git and git-annex commands pigeon may and may not run.
 > git-annex is the engine (ADR 0001); pigeon reaches it through its CLI
-> (ADR 0004, Proposed) and reaches git through the git CLI only (ADR 0010).
+> (ADR 0004) and reaches git through the git CLI only (ADR 0010).
 
 ## 3.1 One repository per group and device
 

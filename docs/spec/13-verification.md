@@ -13,9 +13,9 @@
 | Trace validation (§13.3) | that real runs are behaviours of those models | ADR 0008 |
 | Laws (§13.4) | the pure core, for all generated inputs | ADR 0012 |
 | Stateful tests and fault injection (§13.5) | the shell with real git and git-annex, under faults | ADR 0012 |
-| Contract tests (§13.6) | that git and git-annex behave and print as pigeon assumes | ADR 0004 (Proposed), ADR 0020 |
+| Contract tests (§13.6) | that git and git-annex behave and print as pigeon assumes | ADR 0004, ADR 0020 |
 | The lab (§13.7) | git-annex's own behaviour on which the design rests | ADR 0001 |
-| Budgets (§13.9) | that background work stays out of the way | ADR 0037 (Proposed) |
+| Budgets (§13.9) | that background work stays out of the way | ADR 0037 |
 | Usability test (§13.10) | that people understand the states | ux.md §9 |
 
 ## 13.2 TLA+ models

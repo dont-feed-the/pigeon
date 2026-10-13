@@ -3,7 +3,7 @@
 > Mission: specify how `pigeond` keeps its background work out of the way of
 > the person using the computer (CPU, disk, memory and network), with
 > sensible defaults, adaptive behaviour, priorities and settings that nobody
-> has to touch (ADR 0037, Proposed). The reference case is Guillaume's: a large
+> has to touch (ADR 0037). The reference case is Guillaume's: a large
 > folder on a hard disk is being synced while a video is edited from files
 > of that folder, without pausing or configuring pigeon.
 

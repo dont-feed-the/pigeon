@@ -76,7 +76,7 @@ is the bug:
 2. **This specification**: the current, normative contract that assembles them.
    A detail it adds is marked **[no ADR]** until an ADR records it.
 3. **Proposed ADRs**: pending decisions. Where this specification assumes one, it
-   says so (for example ADR 0004, ADR 0037).
+   says so (for example ADR 0040, ADR 0041).
 4. **The UX study** ([ux.md](../design/ux.md)) and the mockups: words, journeys and
    screens. This specification follows them, except where
    [16 §16.2](16-open-questions.md) says why not.
@@ -112,7 +112,7 @@ or a collaborative editor), nor real-time sync of hot files (proposal §1).
 |---|---|
 | 0001 engine | everywhere; [03](03-repository-and-roles.md) |
 | 0002 copy classes, 0003 partial custodians | [03](03-repository-and-roles.md), [06](06-status.md), [08](08-custody-loops.md) |
-| 0004 Rust over the git-annex CLI (Proposed) | [03](03-repository-and-roles.md), [14](14-platforms-and-packaging.md) |
+| 0004 Rust over the git-annex CLI | [03](03-repository-and-roles.md), [14](14-platforms-and-packaging.md) |
 | 0005 platforms, 0032 backup machines on Linux | [14](14-platforms-and-packaging.md) |
 | 0006 iroh helper, 0016 relays, 0017 joining | [09](09-network-and-joining.md) |
 | 0007 device keys | [04](04-roster-and-authority.md), [09](09-network-and-joining.md) |
@@ -129,7 +129,7 @@ or a collaborative editor), nor real-time sync of hot files (proposal §1).
 | 0030 (Rejected), 0033 (Superseded), 0034, 0035 | [07](07-capture-and-install.md), [10](10-interfaces.md) |
 | 0031 free per folder | [08](08-custody-loops.md) |
 | 0036 local state | [11](11-local-state.md) |
-| 0037 background work (Proposed) | [15](15-resource-use.md) |
+| 0037 background work | [15](15-resource-use.md) |
 | 0038 decisions on suggestions (Proposed) | [04](04-roster-and-authority.md) |
 | 0039 pointer-free freeing and keeping (Proposed) | [08](08-custody-loops.md) |
 | 0040 install proves its own file, racing saves win (Proposed) | [07](07-capture-and-install.md), [11](11-local-state.md) |

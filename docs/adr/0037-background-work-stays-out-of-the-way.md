@@ -1,6 +1,7 @@
 # 0037. Background work stays out of the way: low priority, adaptive limits, priorities, settings
 
-- **Status:** Proposed, 13 October 2026, by the agent, for a requirement from
+- **Status:** Accepted, 13 October 2026, by Guillaume (chat: "I accept …
+  ADR 37"); proposed the same day by the agent, for a requirement from
   Guillaume (chat: "having pigeon running in the background should not impede
   computer use … CPU, IO and network usage, with sensible default, adaptive
   behavior, customization capabilities, prioritization capabilities"), and

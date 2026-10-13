@@ -10,8 +10,6 @@
 
 | Item | State | Who |
 |---|---|---|
-| ADR 0004: Rust, driving the git-annex CLI | Proposed; the specification assumes it ([03 §3.7](03-repository-and-roles.md), [14](14-platforms-and-packaging.md)) | Guillaume or Mario |
-| ADR 0037: background work stays out of the way | Proposed; [15](15-resource-use.md) details it | Guillaume |
 | ADR 0038: deciders sign decisions on suggestions | Proposed, for issue #7; [04 §4.3, §4.5](04-roster-and-authority.md) apply it | Guillaume |
 | ADR 0039: freeing and keeping never show a pointer | Proposed, for issue #2; [08 §8.5](08-custody-loops.md) applies it, E15b asserts it | Guillaume |
 | ADR 0040: install proves its own file; racing saves win | Proposed, for issue #1; [07 §7.5](07-capture-and-install.md) applies it, E19 asserts it | Guillaume |
@@ -115,7 +113,7 @@ them all.
   layout (§14.6); the crates `hmac`, `sha2`, `data-encoding`, `qrcode`,
   `rustix` (§14.7); edition 2024 and the pinned toolchain (§14.8).
 
-### I. Resource use ([15](15-resource-use.md)), once ADR 0037 is accepted
+### I. Resource use ([15](15-resource-use.md)), within ADR 0037
 
 - The shaper's constants (§15.3); history exchange on metered networks (§15.3).
 - Disk-busy thresholds and back-off timings (§15.4).

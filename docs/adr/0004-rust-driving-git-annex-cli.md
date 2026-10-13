@@ -1,7 +1,7 @@
 # 0004. pigeon is written in Rust and drives git-annex as a subprocess
 
-- **Status:** Proposed, 13 October 2026, discussed with Mario in chat
-  (Rust or Haskell). To be confirmed during the tooling interview.
+- **Status:** Accepted, 13 October 2026, by Guillaume (chat: "I accept ADR 4");
+  proposed the same day, discussed with Mario in chat (Rust or Haskell).
 
 ## Context
 

@@ -16,7 +16,7 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0001](0001-git-annex-as-engine.md) | pigeon v1 is a policy and UX layer over git-annex | Accepted |
 | [0002](0002-copy-classes-and-custodians.md) | Copy classes: untrusted thin laptops, semitrusted custodians, K custody copies | Accepted |
 | [0003](0003-partial-custodians.md) | Custodians may be partial (`sizebalanced` + `maxsize`) | Accepted |
-| [0004](0004-rust-driving-git-annex-cli.md) | pigeon is written in Rust and drives git-annex as a subprocess | Proposed |
+| [0004](0004-rust-driving-git-annex-cli.md) | pigeon is written in Rust and drives git-annex as a subprocess | Accepted |
 | [0005](0005-platforms-v1.md) | v1 targets Linux and macOS; native Windows in v1.1 | Accepted |
 | [0006](0006-iroh-transport-helper.md) | Transport: our own `git-annex-p2p-iroh` helper in Rust | Accepted |
 | [0007](0007-device-keys.md) | One ed25519 key per device: iroh identity and git signing key | Accepted |
@@ -49,7 +49,7 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0034](0034-never-overwrite-what-a-person-saved.md) | pigeon never overwrites what a person saved; a diverging file is a conflict they resolve | Accepted |
 | [0035](0035-group-version-shown-only-in-pigeon.md) | During a conflict, the group's version is shown only in pigeon | Accepted |
 | [0036](0036-local-state-in-plain-files.md) | `pigeond` keeps its local state in plain files | Accepted |
-| [0037](0037-background-work-stays-out-of-the-way.md) | Background work stays out of the way: low priority, adaptive limits, priorities, settings | Proposed |
+| [0037](0037-background-work-stays-out-of-the-way.md) | Background work stays out of the way: low priority, adaptive limits, priorities, settings | Accepted |
 | [0038](0038-deciders-sign-decisions-on-suggestions.md) | Deciders sign decisions on suggestions; authors withdraw their own | Proposed |
 | [0039](0039-freeing-and-keeping-never-show-a-pointer.md) | Freeing and keeping a folder never show a pointer file: hide before dropping, stage before showing | Proposed |
 | [0040](0040-install-proves-its-own-file-and-racing-saves-win.md) | Install proves a file is its own before replacing it, and a racing save always wins | Proposed |
