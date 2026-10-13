@@ -8,7 +8,9 @@
 
 - A version V is **protected** when at least K distinct custodians hold copies of
   its key that were verified when placed and, since, by every scrub that covered
-  them (ADR 0002).
+  them (ADR 0002), each on its disk, and each of them also holds the commit
+  that introduced V (ADR 0046). Those custodians then hold everything needed
+  to recover V on a fresh machine ([09 §9.9](09-network-and-joining.md)).
 - A **repair epoch** for V starts when V has fewer than K verified custody copies
   after having had K, and ends when it has K again.
 - A version is **captured** when pigeon has added its content to the local annex
@@ -34,7 +36,10 @@
 **P1 Survival.** If V is protected and F holds, no sequence of syncs, evictions,
 laptop edits, crashes or partitions destroys V. Only a purge whose retention
 period has ended, or a Drop, can. *Survival is not reachability:* during a
-partition V may survive but be out of reach.
+partition V may survive but be out of reach. Nor does survival need any
+laptop: after the loss of every laptop and of pigeon's local state, a fresh
+machine recovers V, its name and its history from the custodians alone
+(ADRs 0046, 0047, [09 §9.9](09-network-and-joining.md)).
 
 **P2 Capture, and no overwrite.** A captured version is never overwritten: its
 laptop keeps it as an immutable copy until it is protected (ADR 0041).
@@ -94,6 +99,7 @@ test (ADR 0012), "lab" a git-annex experiment.
 | Id | Invariant | Carries | Enforced in | Checked by |
 |---|---|---|---|---|
 | INV-K | a custodian's copy is dropped only by its own `pigeond`, and only if K other verified custody copies exist, or by a purge after retention | P1 | [08 §8.4–8.6](08-custody-loops.md), ADR 0014 | E1, E5, E9, E13; model (planned) |
+| INV-Named | a custodian counts toward K for a version only if it also has the commit that introduced it, and only for copies synced to its disk | P1, P6 | [06 §6.2](06-status.md), [09 §9.4](09-network-and-joining.md), ADR 0046 | E21 (asserting); status and filter laws |
 | INV-NoCount | a laptop copy never counts toward K | P1 | [03 §3.3](03-repository-and-roles.md) (`untrust`) | E8, E9 |
 | INV-Settings | drops are suspended while git-annex's shared settings disagree with the roster | P1 | [03 §3.5](03-repository-and-roles.md) | law; lab |
 | INV-History | custodians want every version not purged, not only the current tree | P1, P3 | [03 §3.4](03-repository-and-roles.md) | E9, E10c |

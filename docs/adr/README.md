@@ -58,3 +58,5 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0043](0043-every-device-serves-peers-through-a-filter.md) | Every device serves peers through pigeond's filter: pull only, append-only on custodians, drops with explicit copy counts | Proposed |
 | [0044](0044-share-regular-files-and-say-what-is-not-shared.md) | pigeon shares regular files and their executable bit, and says what it does not share | Proposed |
 | [0045](0045-git-reads-only-the-configuration-pigeon-writes.md) | git and git-annex read only the configuration pigeon writes | Proposed |
+| [0046](0046-protected-means-content-and-history-on-disk.md) | Protected means K custodians hold the content and the commit that names it, on disk | Proposed |
+| [0047](0047-recover-from-custodians-sheets-refound-export.md) | A group is recovered from its custodians: rejoin, recovery sheets, refounding, and export without pigeon | Proposed |

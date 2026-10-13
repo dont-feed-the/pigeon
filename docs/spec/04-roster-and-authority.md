@@ -48,6 +48,11 @@ role = "custodian"
 annex_uuid = "…"
 maxsize = "4 TB"                    # capacity for sizebalanced (ADR 0003)
 
+[devices."9c04…"]
+person = "paul"
+name = "Paul's recovery sheet"
+role = "recovery"                   # a key on paper: no annex_uuid, never online (ADR 0047)
+
 [[folders]]
 path = "Paul"                       # a top-level folder, or a deeper one
 rule = "owned"
@@ -62,7 +67,10 @@ stewards = ["roy"]
 Validity of a roster (checked on every commit that changes it): it parses, its
 `format` is known, at least one admin remains, every device names an existing
 person, device names and person IDs are unique, `k ≥ 1`, every owner and steward
-is a person. A commit that leaves an invalid roster is invalid.
+is a person. Every laptop and custodian has an `annex_uuid`, a recovery device
+has none, and an `annex_uuid` belongs to one device only: it is never given to
+another device, even after its own was removed (ADR 0046). A commit that
+leaves an invalid roster is invalid.
 
 ## 4.3 Folder rules
 
@@ -84,6 +92,7 @@ For a person *u* and a change of one path, under roster R:
 | Path under `.pigeon/` | Who may add or change it |
 |---|---|
 | `roster.toml`, device entries of person P | an admin, or a device of P (ADR 0017) |
+| anything, from a device with `role = "recovery"` | only device entries of its own person (ADR 0047) |
 | `roster.toml`, anything else | an admin |
 | `decisions/<commit>.toml` with `verdict = "rejected"` | a decider of that proposal commit (§4.5, ADR 0038) |
 | `decisions/<commit>.toml` with `verdict = "withdrawn"` | a device of the proposal's author (ADR 0038) |
@@ -95,6 +104,9 @@ ADR 0009 says only admins change `.pigeon/`; ADR 0017 refined it for device
 entries and ADR 0038 (Proposed) for decisions on suggestions, so that an owner or
 steward who is not an admin can decide in their scope and nothing else. Each row
 is checked under the roster at the commit's parents, like every rule of §4.4.
+A device with `role = "recovery"` may add or remove devices of its own person
+and nothing else, in `.pigeon/` or outside it, even when that person is an
+admin; its commits are never a Force (§4.6, ADR 0047).
 
 ## 4.4 The authority rule
 

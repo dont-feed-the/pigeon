@@ -12,7 +12,7 @@ which it was true.
 
 | Observation | Source | Time |
 |---|---|---|
-| `has_commit(d, c)`: device *d* has commit *c* | `refs/pigeon/peers/<d>/main`, or *d*'s status report (§6.3) | when fetched, or the report's `at` |
+| `has_commit(d, c)`: device *d* has commit *c* | *c* is, or precedes, the `main` or a `proposals` tip of *d*'s status report (§6.3), or a ref *d* advertised to this device's own fetch | the report's `at`, or when fetched |
 | `holds(c, k)`: custodian *c* holds key *k* | git-annex location log (`whereis --json`), merged from every peer | the log entry's timestamp |
 | `verified(c, k)` | content is verified on arrival (`annex.verify=true`); a scrub that finds it bad moves it out and logs it absent | the last completed scrub pass in *c*'s report |
 | `heard(d)`: last news from device *d* | a connection, a fetch of *d*'s refs, or a newer report of *d* relayed by anyone | the latest of these |
@@ -25,9 +25,12 @@ observation: a join-semilattice (ADR 0012).
 
 For a version with key *k*, introduced by commit *c*, on this device, at time *now*:
 
-1. Let **H** be the custodians *x* of the roster with `holds(x, k)` that were
-   heard of within `offline_after` (default 24 hours **[no ADR]**): a custodian
-   silent for longer no longer counts, and its silence becomes the reason.
+1. Let **H** be the custodians *x* of the roster with `holds(x, k)` and
+   `has_commit(x, c)` that were heard of within `offline_after` (default 24
+   hours **[no ADR]**) and do not report `checking`. A custodian silent for
+   longer no longer counts, and its silence becomes the reason. Content
+   without the commit that names it is not protected: lost with the laptop,
+   it would be a key without a name (ADR 0046).
 2. If |H| ≥ K: the version is **protected**, *observed at* T, the K-th most recent
    `heard(x)` in H ("Safe. Checked 3 hours ago").
 3. If this device has heard of no custodian within `stale_after` (default 1 hour
@@ -64,6 +67,8 @@ format = 1
 device = "b71e…"
 at = 2026-10-13T12:02:00Z          # RFC 3339, UTC
 main = "<commit id of its main>"
+proposals = ["<commit id>"]         # tips of the proposal chains it keeps outside main (ADR 0046)
+checking = false                    # custodians: true while a restored repository is re-checked (ADR 0046)
 versions = { pigeon = "1.0.0", git_annex = "10.20261006", git = "2.55.0" }
 
 [disk]                              # bytes

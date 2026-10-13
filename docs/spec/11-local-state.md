@@ -100,6 +100,7 @@ repository and git never shares it (ADR 0036).
 | `aside/` | install step 4 | files moved aside, kept until the first full scan 10 minutes after `done` | no ([07 §7.5](07-capture-and-install.md), ADR 0040) |
 | `stage/` | install step 2; keeping a folder (ADR 0039) | new files before they enter the folder | yes: unreferenced files are deleted at start |
 | `recovered/` | install steps 6 and 9 | moved-aside content that was not pigeon's, until captured as a recovered version | no ([07 §7.6](07-capture-and-install.md)) |
+| `RECOVERY.txt` (custodians, in the repository directory) | the roster changes | the group's name, the other custodians, and the git and git-annex commands that read the files without pigeon ([09 §9.9](09-network-and-joining.md), ADR 0047) | yes: written again from the roster |
 
 ### `install.ndjson`
 

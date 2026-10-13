@@ -18,6 +18,8 @@
 | ADR 0043: every device serves through a filter; pull only; explicit copy counts | Proposed, for issue #9; [09 §9.4](09-network-and-joining.md), [03 §3.8](03-repository-and-roles.md) apply it, E12 and E13 assert it | Guillaume |
 | ADR 0044: regular files and the execute bit are shared; the rest is listed | Proposed, for issue #14; [07 §7.9](07-capture-and-install.md), [04 §4.4](04-roster-and-authority.md) rule 6, [05 §5.2–5.4](05-catalogue-and-names.md) apply it, E20 asserts it | Guillaume |
 | ADR 0045: git and git-annex read only pigeon's configuration | Proposed, for issue #14; [03 §3.3–3.7](03-repository-and-roles.md) apply it, E20 asserts it | Guillaume |
+| ADR 0046: protected needs the commit and the disk | Proposed, for issue #11; [06 §6.2–6.3](06-status.md), [09 §9.4](09-network-and-joining.md), [03 §3.4](03-repository-and-roles.md), [04 §4.2](04-roster-and-authority.md) apply it, E21 asserts it | Guillaume |
+| ADR 0047: recovery by rejoin, recovery sheets, refounding, export | Proposed, for issue #11; [09 §9.9](09-network-and-joining.md), [04 §4.3](04-roster-and-authority.md), [10 §10.1](10-interfaces.md) apply it, E21 asserts it | Guillaume |
 | TLC with the `Json` module for trace validation | ADR 0026 foresees a new ADR pinning it by SHA-256 ([13 §13.3](13-verification.md)) | before the first `*Trace.tla` |
 
 ## 16.2 Where this specification departs from a source
@@ -135,6 +137,11 @@ them all.
   on Windows only, as Samba's `catia` module does ([05 §5.4](05-catalogue-and-names.md)).
 - **K per folder** (more copies for photos than for downloads); the roster
   has one `k` today.
+- **Recovery** ([09 §9.9](09-network-and-joining.md), ADR 0047): split a
+  recovery sheet among several admins (Shamir shares) rather than one sheet per
+  admin; let refounding require the surviving custodians' owners rather than
+  anyone who holds a repository; test ADR 0046's sync points under power loss
+  with a fault-injecting block device, which the lab cannot do unprivileged.
 - **Privacy across groups:** one device key per device makes the same device
   recognisable in two groups ([09 §9.1](09-network-and-joining.md)); a key per
   group would hide it at the cost of one endpoint per group.
@@ -175,7 +182,7 @@ experiments stay listed in [13](13-verification.md) and in the prototype (#17).
 | #8 | catalogue merge algorithm and its laws | [05 §5.2](05-catalogue-and-names.md) | specified; ADR to come |
 | #9 | git-annex cannot bypass pigeon | [03 §3.5–3.8](03-repository-and-roles.md), [09 §9.4](09-network-and-joining.md) | ADR 0043 (Proposed); E12 and E13 assert |
 | #10 | models and coverage | [13 §13.2, §13.10](13-verification.md) | coverage map and liveness assumptions written |
-| #11 | recovery onto fresh machines | — | open |
+| #11 | recovery onto fresh machines | [09 §9.9](09-network-and-joining.md), [06 §6.2–6.3](06-status.md), [02 §2.1](02-guarantees.md), [04 §4.2–4.3](04-roster-and-authority.md), [09 §9.4](09-network-and-joining.md) | ADRs 0046 and 0047 (Proposed); E21 is the disaster drill |
 | #12 | independent failure domains | — | open |
 | #13 | capacity admission and repair priority | [08 §8.9](08-custody-loops.md), [15 §15.2](15-resource-use.md) | open |
 | #14 | file-system object model | [07 §7.9](07-capture-and-install.md), [04 §4.4](04-roster-and-authority.md), [05 §5.2–5.4](05-catalogue-and-names.md), [03 §3.3–3.7](03-repository-and-roles.md), [14 §14.2](14-platforms-and-packaging.md) | ADRs 0044 and 0045 (Proposed); E20 asserts on Linux and macOS |

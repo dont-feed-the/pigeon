@@ -28,6 +28,7 @@ pass the same experiments before release ([16](16-open-questions.md)).
 | `refs/pigeon/proposals/<device-id>/<commit>` | proposals, one ref per proposal commit (ADR 0009) | the proposing device; replicated by fetch |
 | `refs/pigeon/peers/<device-id>/main` | the last `main` fetched from each peer, before validation **[no ADR]** | `git fetch` |
 | `refs/remotes/<remote>/git-annex` | the peer's git-annex branch, merged by `git annex merge` | `git fetch` |
+| `refs/pigeon/archive/<group-id>/main` | the history of the group this one was refounded from, read-only (ADR 0047) | the refounding device; replicated by fetch |
 | `refs/pigeon/status/<device-id>` | the latest signed status report of each device ([06 §6.3](06-status.md)) **[no ADR]** | its device; replicated by fetch |
 
 `main` only moves forward: every update is an `update-ref` with the expected old
@@ -82,6 +83,7 @@ into the folder changes nothing (ADR 0045):
 | `core.fsmonitor` | `true` on macOS | faster scans (ADR 0013) |
 | `core.precomposeunicode` | `true` on macOS | NFC names ([05 §5.4](05-catalogue-and-names.md)) |
 | `gpg.format`, `user.signingkey` | `ssh`, the device key file | signed commits (ADR 0007) |
+| `core.fsync`, `core.fsyncMethod` | `objects,reference`, `fsync` | commits and refs reach the disk; git's default skips loose objects and refs (ADR 0046) |
 
 ### Custodian (ADRs 0002, 0003, 0014, 0018, 0042)
 
@@ -93,6 +95,7 @@ into the folder changes nothing (ADR 0045):
 | `wanted` | `sizebalanced=custodian:K` | partial custodians balanced by capacity; `pigeond` applies it key by key to `keys()`, so to the whole history (E9) and never to released keys (ADR 0042, [08 §8.3](08-custody-loops.md)) |
 | `maxsize` | from the roster entry of the device | capacity for `sizebalanced` (ADR 0003) |
 | `annex.jobs` | `cpus` | a dedicated machine |
+| `core.fsync`, `core.fsyncMethod` | `objects,reference`, `fsync`; objects synced by `pigeond` before any positive answer ([09 §9.4](09-network-and-joining.md)) | what counts toward K is on disk; git-annex itself never syncs (ADR 0046) |
 | serving | append-only: no remote `REMOVE` (ADR 0014) | [09 §9.4](09-network-and-joining.md) |
 
 ### Group-wide (git-annex branch)
@@ -116,8 +119,8 @@ After every merge of the git-annex branch and every change of `main`, `pigeond`:
    rebalancing) and re-applies the expected settings **[no ADR: re-apply]**.
    The same holds if pigeon's `pre-receive` hook is missing or `core.hooksPath`
    is set (ADR 0043), and then serving peers is suspended too; and if
-   `.git/info/attributes`, `annex.backend`, `core.attributesFile` or
-   `core.excludesFile` differ from §3.3–3.4, or `.git/config` has an
+   `.git/info/attributes`, `annex.backend`, `core.attributesFile`,
+   `core.excludesFile` or `core.fsync` differ from §3.3–3.4, or `.git/config` has an
    `include` (ADR 0045), and then capture is suspended too;
 4. resumes drops only when a fresh read matches.
 

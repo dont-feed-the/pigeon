@@ -32,6 +32,9 @@ is either a result, a stream of progress events then a result, or a `Problem`
 | `Conflicts` · `Resolve {path, choice}` | `pigeon conflicts` · `pigeon resolve PATH --take-group \| --keep-copy DEST \| --suggest-again` | Suggestions → Yours, Home | [07 §7.6](07-capture-and-install.md) |
 | `People` · `Machines` | `pigeon people` · `pigeon machines` | People & machines | [04 §4.2](04-roster-and-authority.md) |
 | `RemoveDevice {name}` · `Leave` | `pigeon remove-computer NAME` · `pigeon leave` | *I lost a computer* · Settings | [09 §9.7](09-network-and-joining.md) |
+| `RecoverySheet` · `Recover {sheet, folder, from?}` | `pigeon recovery-sheet` · `pigeon recover SHEET [FOLDER] [--from DEVICE]` | People → *Print a recovery sheet* · Welcome → *Recover a group* | [09 §9.9](09-network-and-joining.md) |
+| `Refound {repository?}` | `pigeon refound [REPOSITORY]` | — (CLI only) | [09 §9.9](09-network-and-joining.md) |
+| — | `pigeon export --to DIR [--at DATE\|COMMIT] [--deleted] [REPOSITORY…]` | — (without `pigeond`) | [09 §9.9](09-network-and-joining.md) |
 | `Purge {path}` · `CancelPurge {id}` | `pigeon erase PATH` · `pigeon erase --cancel ID` | *Erase forever* | [08 §8.6](08-custody-loops.md) |
 | `Held` · `ReleaseHeld {id, choice}` | `pigeon held` · `pigeon held ID --share \| --bring-back \| --rename` | Home → Needs you | [07 §7.4](07-capture-and-install.md) |
 | `Pause {duration?}` · `Resume` | `pigeon pause [DURATION]` · `pigeon resume` | Settings | [15](15-resource-use.md) |
@@ -66,7 +69,7 @@ is either a result, a stream of progress events then a result, or a `Problem`
   stdout; problems as JSON on stderr. Scripts depend on `--json` and problem
   codes, never on wording.
 - **Questions.** Dangerous operations ask before acting: `erase`, `accept
-  --override`, `free --without-checking`, `remove-computer`, `leave`, a held
+  --override`, `refound`, `recover`, `free --without-checking`, `remove-computer`, `leave`, a held
   mass deletion. Without a terminal they need `--yes`; `--no-input` never asks
   and fails with `needs-confirmation` instead.
 - **Exit codes:** 0 success; 1 failure, with a `Problem`; 2 usage error.
@@ -74,7 +77,10 @@ is either a result, a stream of progress events then a result, or a `Problem`
   level from `--json` (`"level": "needs-you" | "not-safe" | "not-checked" |
   "working" | "safe"`).
 - The CLI holds no logic: it parses, sends a request, renders the response.
-  Without `pigeond` it says so and how to start it (`pigeon doctor`).
+  Without `pigeond` it says so and how to start it (`pigeon doctor`). The one
+  exception is `pigeon export`, which reads repositories itself, read-only,
+  through the same core code, so that files can be read when `pigeond`
+  cannot run (ADR 0047).
 
 ## 10.3 The web interface (ADR 0021, ux.md §6)
 

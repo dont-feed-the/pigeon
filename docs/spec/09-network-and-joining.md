@@ -2,8 +2,9 @@
 
 > Mission: specify how devices find, authenticate and talk to each other: the
 > device key, the iroh transport helper, the `pigeond` endpoint and its local
-> socket, append-only serving on custodians, relays, invitations, and removing a
-> computer. Everything that crosses the network crosses it here.
+> socket, append-only serving on custodians, relays, invitations, removing a
+> computer, and recovering a group. Everything that crosses the network
+> crosses it here.
 
 ## 9.1 The device key (ADR 0007)
 
@@ -109,6 +110,12 @@ every device:
   git-annex's default, since their copies never count (ADRs 0002, 0014);
 - a `CONNECT` to anything but `git-upload-pack` is answered with `ERROR`, and the
   session closes: no device accepts a push;
+- on custodians, the `SUCCESS` that answers `PUT`, `CHECKPRESENT` or
+  `LOCKCONTENT` for a key waits until `pigeond` has synced that object and its
+  directories to disk (`git annex contentlocation`, then `fsync`, or
+  `F_FULLFSYNC` on macOS), since git-annex never syncs. While a restored
+  repository is being re-checked (`checking`, [06 §6.3](06-status.md)),
+  `LOCKCONTENT` is answered `FAILURE` (ADR 0046);
 - an unknown message, a malformed `DATA` length or a line over 4096 bytes closes
   the session. A length is checked before anything is forwarded, and a payload
   passes by length, never parsed. The server's output is parsed only for its
@@ -117,7 +124,8 @@ every device:
 Every repository also has pigeon's `pre-receive` hook, which refuses every
 push for any transport (ADR 0043). The filter is a pure state machine with
 property tests (ADR 0012). It never forwards a removal on a custodian, it
-forwards every allowed message unchanged, and it never loses its place across
+forwards every allowed message unchanged, no positive answer for a key leaves
+it before that key's sync has completed, and it never loses its place across
 `DATA` boundaries, whatever the read sizes. E13 checks it against git-annex.
 
 ## 9.5 Relays and discovery (ADR 0016)
@@ -170,7 +178,8 @@ someone*) creates a one-time invitation:
 
 1. The new device decodes the invitation, generates its key if it has none
    (§9.1), creates its repository (`git init`, `git annex init`) to obtain its
-   git-annex UUID, and connects to the inviter on `pigeon/join/1`. The inviter
+   git-annex UUID (a repository already in FOLDER, such as a custodian's
+   surviving disk, gets a new UUID first, §9.9), and connects to the inviter on `pigeon/join/1`. The inviter
    must be online; while it is not, the CLI and web say "Waiting for Paul's
    computer…" and retry until the invitation expires.
 2. It sends `Join {invitation_hash, proof, device_name, role, annex_uuid,
@@ -241,3 +250,63 @@ any git-annex byte **[no ADR: format]**:
   or a refusal, then the stream carries git-annex's protocol unchanged.
 - The header is never passed to git-annex; the append-only filter (§9.4) starts
   after it.
+
+## 9.9 Recovering a group (ADRs 0046, 0047)
+
+Once its versions are protected, everything a group needs is on its
+custodians: content, `main` and proposals (ADR 0046). The git-annex branch,
+status reports and every device's local state are rebuilt or not needed. What
+recovery takes in addition is authority, a key that can sign a roster commit:
+
+| What survives | Recovery |
+|---|---|
+| a device of person P, such as P's custodian | P's new machine joins by an invitation from it (§9.6); `pigeon invite` runs on the custodian, directly or over ssh |
+| a device of an admin | the admin invites new devices of anyone |
+| an admin's recovery sheet | `pigeon recover SHEET` on a fresh machine (below) |
+| no key of an admin, no sheet | `pigeon refound` (below), or `pigeon export` to read the files |
+
+After each case the new machine fetches from the custodians and validates the
+history from the genesis, as on a join. Its person then removes the lost
+devices (§9.7).
+
+- **Recovery sheets.** `pigeon recovery-sheet` (admins; People → *Print a
+  recovery sheet*) adds a device of the admin with `role = "recovery"` and
+  prints its key: base32 with a checksum and a QR code, with the group's name
+  and ID and the device IDs of the custodians. No computer keeps the key.
+  `pigeon recover SHEET [FOLDER] [--from DEVICE]` runs `pigeond` with the
+  sheet's key as its node ID. Custodians admit it on `pigeon/annex/1` for git
+  only, since a recovery device has no content. It validates `main` from the
+  genesis named on the sheet, generates the machine's own key, and signs with
+  the sheet's key a roster commit adding the machine as a device of the
+  admin ([04 §4.3](04-roster-and-authority.md)). It stays reachable until a
+  custodian has fetched that commit, then continues under its own key. It
+  offers to remove the used sheet and the lost devices, and to print a new
+  sheet. The People page recommends a sheet, or a second device, while an
+  admin has a single device that can sign.
+- **Refounding.** `pigeon refound [REPOSITORY]`, on any device that holds a
+  repository of the group, signs a new genesis. Its tree is the last accepted
+  tree, its roster names the refounder as the only admin, and it carries the
+  trailer `Pigeon-Refound: <old group id> <old main>`. The old history is kept
+  as `refs/pigeon/archive/<old group id>/main`; it replicates, and its keys
+  stay in `keys()`. Other members join only by an invitation from the new
+  group, which says who refounded it and when. An existing folder joins in
+  place, and its objects are reused by key.
+- **Export without pigeon.** `pigeon export --to DIR [--at DATE|COMMIT]
+  [--deleted] [REPOSITORY…]` runs without `pigeond`, network or key
+  ([10 §10.2](10-interfaces.md)). It reads one or more local repositories,
+  checks each object's SHA-256, and writes plain files with a `MANIFEST.tsv`
+  (path, size, SHA-256, commit, author, date), listing what it could not find.
+  Each custodian also keeps `RECOVERY.txt` next to its repository
+  ([11 §11.3](11-local-state.md)): the group's name, the other custodians,
+  and the git and git-annex commands that read the files without pigeon, as
+  E21 runs them (`git clone`, `git annex init`, `git remote add` and `git
+  fetch` per other custodian, `git annex get .`, and `get --all` for the
+  history).
+- **Replacing a custodian.** The failed one is removed (§9.7), and its
+  replacement joins as a new device. A surviving disk is reused under a new
+  UUID (`git config --unset annex.uuid`, then `git annex init`), and its
+  copies count only after a hashing `git annex fsck --all` (E21).
+  A custodian that finds its repository older than its own last status report,
+  as relayed by peers (restored from a backup, rolled back), reports
+  `checking` and is not counted until the same fsck has corrected its location
+  log (ADR 0046).

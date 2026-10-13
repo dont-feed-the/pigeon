@@ -59,7 +59,8 @@ order-independent; the accepted set is a join (ADR 0012).
   expression matches (`git annex matchexpression --key`), `git annex get
   --key`. pigeon chooses every transfer key by key (ADR 0042): git-annex
   refuses `get --auto` and `drop --auto` with `--all` or `--key`, and
-  `satisfy --all` would drop content from peers.
+  `satisfy --all` would drop content from peers. After each batch it syncs
+  what arrived to disk (ADR 0046): git-annex never does.
 - Both directions run, so protection proceeds whichever side reaches the other.
   git-annex verifies content on arrival; the location log records it.
 - A laptop then drops what it does not want (old versions, folders not kept)
@@ -80,7 +81,11 @@ custodians' `sizebalanced` share then includes it, and their per-key downloads
 key has K copies again; its progress (keys and GB left) is in the status
 ("repairing", ux.md §8.11). A custodian that stops being heard of is not
 removed automatically: after 7 days its owner and the admins see *Needs you*
-([06 §6.5](06-status.md)), and they decide.
+([06 §6.5](06-status.md)), and they decide. A replacement joins as a new
+device; a surviving disk is reused under a new UUID and counts only after a
+hashing `git annex fsck --all`, and a repository restored from a backup is
+not counted until the same check ends ([09 §9.9](09-network-and-joining.md),
+ADR 0046).
 
 ## 8.5 Freeing and keeping a folder (ADRs 0031, 0039)
 
