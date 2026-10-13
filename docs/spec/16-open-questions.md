@@ -13,6 +13,7 @@
 | ADR 0004: Rust, driving the git-annex CLI | Proposed; the specification assumes it ([03 §3.7](03-repository-and-roles.md), [14](14-platforms-and-packaging.md)) | Guillaume or Mario |
 | ADR 0037: background work stays out of the way | Proposed; [15](15-resource-use.md) details it | Guillaume |
 | ADR 0038: deciders sign decisions on suggestions | Proposed, for issue #7; [04 §4.3, §4.5](04-roster-and-authority.md) apply it | Guillaume |
+| ADR 0039: freeing and keeping never show a pointer | Proposed, for issue #2; [08 §8.5](08-custody-loops.md) applies it, E15b asserts it | Guillaume |
 | TLC with the `Json` module for trace validation | ADR 0026 foresees a new ADR pinning it by SHA-256 ([13 §13.3](13-verification.md)) | before the first `*Trace.tla` |
 
 ## 16.2 Where this specification departs from a source
@@ -78,7 +79,6 @@ them all.
 - The aside kept one hour under `.git/pigeon/aside/` (§7.5, [11 §11.3](11-local-state.md)).
 - A save of a diverging path becomes a proposal of its own (§7.6).
 - Fetching every 5 minutes besides change notices (§8.1).
-- Freeing a folder waits until all its files are protected (§8.5).
 - The Drop command `free --without-checking` and its record (§8.7).
 - A full scrub pass every 30 days (§8.8).
 
@@ -154,7 +154,7 @@ experiments stay listed in [13](13-verification.md) and in the prototype (#17).
 | Issue | Topic | Where | State |
 |---|---|---|---|
 | #1 | install racing application saves | [07 §7.5](07-capture-and-install.md) | journal and aside specified; ADR to come |
-| #2 | pointer files during free and keep | [08 §8.5](08-custody-loops.md) | order to be fixed; E15 to extend |
+| #2 | pointer files during free and keep | [08 §8.5](08-custody-loops.md) | ADR 0039 (Proposed), E15b asserts |
 | #3 | `annex.thin` and unprotected versions | [02](02-guarantees.md), [03 §3.4](03-repository-and-roles.md) | open: needs a decision |
 | #4 | reference-aware purge | [08 §8.6](08-custody-loops.md) | open |
 | #5 | purge against concurrent restores and returning peers | [08 §8.6](08-custody-loops.md) | open |

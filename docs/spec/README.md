@@ -131,3 +131,4 @@ or a collaborative editor), nor real-time sync of hot files (proposal §1).
 | 0036 local state | [11](11-local-state.md) |
 | 0037 background work (Proposed) | [15](15-resource-use.md) |
 | 0038 decisions on suggestions (Proposed) | [04](04-roster-and-authority.md) |
+| 0039 pointer-free freeing and keeping (Proposed) | [08](08-custody-loops.md) |

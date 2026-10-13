@@ -75,29 +75,54 @@ key has K copies again; its progress (keys and GB left) is in the status
 removed automatically: after 7 days its owner and the admins see *Needs you*
 ([06 §6.5](06-status.md)), and they decide.
 
-## 8.5 Freeing and keeping a folder (ADR 0031)
+## 8.5 Freeing and keeping a folder (ADRs 0031, 0039)
 
-Per top-level folder F, on a laptop:
+Per top-level folder F, on a laptop. A file of F is always complete or absent,
+never a pointer file, including after a crash at any instant (ADR 0039,
+experiment E15b). Freeing and keeping hold F's lock: capture does not scan F
+during a transition. The target is recorded first, in this device's `wanted`
+expression ([03 §3.4](03-repository-and-roles.md)), and both sequences are
+idempotent, so a restart reruns the transition toward the target before
+capture resumes.
 
 **Free F** (*Keep on this computer* switched off, `pigeon free F`):
-1. Remove F from this device's `wanted` ([03 §3.4](03-repository-and-roles.md)).
-2. Wait until every current file of F is *protected*; meanwhile F stays on disk
-   and its row says "6 files are not safe yet; their space is freed once they
-   are" **[no ADR: wait for all]**.
-3. Drop the content of F with a verified `git annex drop` while F is still
-   checked out, then hide F with `git sparse-checkout` (E15), at once, so that
-   pointer files are never left in view.
-4. F stays listed in pigeon's Files page and in `pigeon status` with the space
+1. Remove F from this device's `wanted`.
+2. Refuse while F has an unresolved divergence ([07 §7.6](07-capture-and-install.md)):
+   "Resolve the conflict on *tarte.docx* first".
+3. **Hide** the files of F whose versions are *protected*, with
+   `git sparse-checkout` non-cone patterns that exclude F and re-include its
+   files not protected yet. Each file goes from complete to absent. A file that
+   git leaves in place (it differs from the index: someone saved it) is
+   captured like any save, and freeing resumes after.
+4. **Drop** the keys of the hidden files with a verified `git annex drop --key`,
+   except keys that a kept path still uses.
+5. Files not protected yet keep their space and stay visible; the row says "6
+   files are not safe yet; their space is freed once they are" (ux.md §8.5).
+   When one becomes protected, steps 3 and 4 run for it.
+6. F stays listed in pigeon's Files page and in `pigeon status`, with the space
    freed. Undo: `pigeon keep F`.
 
 **Keep F** (switched on, `pigeon keep F`):
-1. Add F to `wanted`; `git annex get --key` every current key of F first.
-2. Show F (`git sparse-checkout add`), then `git annex smudge --update` and
-   `git annex restage`, so files appear complete, never as pointers (E15).
+1. Add F to `wanted`; `git annex get --key` every current key of F. Until all
+   are present, F stays hidden and its row says how many files are still being
+   received (all or nothing per folder).
+2. **Stage** the complete files under `.git/pigeon/stage/F`, with the modes of
+   their index entries (a hard link to the object on thin laptops, else a copy).
+3. **Move in** the staged folder with one `rename` that refuses to replace
+   (`RENAME_NOREPLACE`, `RENAME_EXCL`). If F exists on disk (the person made a
+   folder of that name meanwhile), install the files one by one instead
+   ([07 §7.5](07-capture-and-install.md)); colliding files become divergences.
+4. **Unhide without a checkout:** update the sparse patterns, clear the
+   skip-worktree bits of F's index entries (`git update-index
+   --no-skip-worktree`, then `--refresh`), and run `git annex restage`.
 
-Kept folders are recorded by git's own sparse-checkout file and the device's
-`wanted` expression; `pigeond` restores both at start (ADR 0031). Path commands
-skip hidden folders (E15), so pigeon handles hidden folders by key.
+Hidden files are never read as deletions: `git status` skips skip-worktree
+entries, and the staging directory is inside `.git`. Kept folders are recorded
+by git's own sparse-checkout file and the device's `wanted` expression;
+`pigeond` restores both at start (ADR 0031). Path commands skip hidden folders
+(E15), so pigeon handles hidden folders by key. A stale `index.lock` left by a
+killed git process of `pigeond` is removed at start, since `pigeond` is the
+only writer of the repository.
 
 ## 8.6 Purge: erase forever (ADR 0018)
 

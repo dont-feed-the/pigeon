@@ -51,3 +51,4 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0036](0036-local-state-in-plain-files.md) | `pigeond` keeps its local state in plain files | Accepted |
 | [0037](0037-background-work-stays-out-of-the-way.md) | Background work stays out of the way: low priority, adaptive limits, priorities, settings | Proposed |
 | [0038](0038-deciders-sign-decisions-on-suggestions.md) | Deciders sign decisions on suggestions; authors withdraw their own | Proposed |
+| [0039](0039-freeing-and-keeping-never-show-a-pointer.md) | Freeing and keeping a folder never show a pointer file: hide before dropping, stage before showing | Proposed |

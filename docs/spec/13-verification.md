@@ -144,6 +144,7 @@ supported only once they pass ([14 §14.3](14-platforms-and-packaging.md)).
 | E9 | roles: untrusted laptop, two custodians, K = 2; `--all` needed for history | [03](03-repository-and-roles.md), [08](08-custody-loops.md) |
 | E10 | partial custodians: `sizebalanced` is heuristic (6/10 where 8/10 fit); repair within capacity | ADR 0003, [08 §8.9](08-custody-loops.md) |
 | E15 | freeing per folder: sparse checkout, drop and get by key, `smudge --update` (asserts) | ADR 0031, [08 §8.5](08-custody-loops.md) |
+| E15b | ADR 0031's order shows pointer files (44 887 and 1 306 observations for 100 files); hiding before dropping and staging before showing show none, also under `kill -9` (asserts) | ADR 0039, [08 §8.5](08-custody-loops.md) |
 
 **Pending:** E11 native Windows (v1.1); E12 `remotedaemon` only fetches,
 never merges; E13 `ServeAppendOnly` over P2P (ADR 0014); E14 purge by metadata
@@ -184,7 +185,7 @@ are specified here but not built; the gaps are tracked as GitHub issues
 | Guarantee | Now | Planned | Gaps (issues) |
 |---|---|---|---|
 | P1 Survival | E1, E5, E8, E9, E10 (lab, printing); `CustodyNaive`, `CustodyTokens` (evidence about hand-offs in general and about the earlier token protocol, not about git-annex) | `AnnexDrop`, `Repair` models; fault injection; E13; asserting E9, E10 | append-only serving unproven (#9); failure domains (#12); capacity admission (#13); recovery on fresh machines (#11) |
-| P2 Capture, no overwrite | — | `CaptureInstall` model; install journal laws; save-pattern and race schedules | install racing saves (#1); `annex.thin` and unprotected versions (#3); pointer files during free/keep (#2); file-system scope (#14) |
+| P2 Capture, no overwrite | E15b (asserting: no pointer during free and keep) | `CaptureInstall` model; install journal laws; save-pattern and race schedules | install racing saves (#1); `annex.thin` and unprotected versions (#3); file-system scope (#14) |
 | P3 Reversible deletion | E2, E4 (lab, printing) | `Purge` model; E14; purge laws | reference-aware purge (#4); concurrent restore and returning peers (#5) |
 | P4 Authority | E7 (lab, printing) | `Authority` model; acceptance laws; decision-rights tests (ADR 0038) | roster forks (#6); format compatibility (#15) |
 | P5 Convergence | E3 (lab, printing) | merge and name laws; three-way permutations | the merge algorithm (#8) |
