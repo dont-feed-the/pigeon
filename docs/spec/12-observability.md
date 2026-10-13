@@ -111,7 +111,7 @@ specifications ([13 §13.3](13-verification.md)).
 | `CaptureInstall` | `Save` (inferred from the scan), `Capture`, `InstallStep`, `Crash`, `Recover`, `Decide`, `Resolve` |
 | `Authority` | `Receive`, `Validate`, `Merge`, `Propose`, `Adopt`, `Reject` |
 | `Evict` | `FreeFolder`, `KeepFolder`, `DropVerified` (lock, check, drop) |
-| `Purge` | `Request`, `Cancel`, `Release`, `DropReleased` |
+| `Purge` | `Request`, `Cancel`, `Restore`, `Seal`, `Release`, `DropReleased`, `Refetch` |
 | `Repair` | `MarkDead`, `Want`, `Get`, `ScrubFail` |
 | `CustodyTokens` (existing) | the hand-off events of the existing model |
 

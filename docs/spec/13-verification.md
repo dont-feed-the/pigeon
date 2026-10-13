@@ -31,6 +31,10 @@
 | `T_nonce` | `CustodyTokens` | `pass` | nonces make the hand-off safe |
 | `T_n42o3`, `T_n31o5`, `T_n32o5` | `CustodyTokens` | `pass` (fast set) | N, K and offers varied |
 | `T_n42o4` | `CustodyTokens` | `pass` (full set) | N = 4, K = 2, 4 offers |
+| `Purge_full` | `Purge` | `pass` (fast set) | ADR 0042: a restore or cancel that reaches any custodian before its seal keeps the content (KeepWins); nothing is dropped before the waiting period (WaitingPeriod); a dropped copy returns only for an uncovered reference (NoResurrection); 2 custodians (one holds the key), 2 laptops (one offline with a copy), restarts, any message order |
+| `Purge_full3` | `Purge` | `pass` (full set) | 3 custodians, 2 of them holding the key, and the deciding laptop with a copy: 12.4 million states, 2 minutes |
+| `Purge_seals` | `Purge` | `violation:KeepWins` | accepting every seal without merging the sealers' `main` loses a cancel |
+| `Purge_none` | `Purge` | `violation:KeepWins` | dropping when one's own waiting period ends (ADR 0018's first mechanism) loses a restore that reached another custodian |
 
 The violations and the deadlock are negative tests: a model edit that hides
 the failure is caught (ADR 0026). These models argue why custody hand-off
@@ -46,7 +50,6 @@ tokens; the planned `AnnexDrop` model below states what pigeon relies on.
 | `Authority` ([04](04-roster-and-authority.md)) | `Receive`, `Validate`, `Merge`, `Propose`, `Adopt`, `Reject`, roster changes | INV-Valid, INV-Merge: devices with the same commits have the same catalogue | connected devices converge |
 | `AnnexDrop` | lock, check, drop, location-log updates, stale logs, `dead`, partitions | no key below K custody copies except by purge or Drop (INV-K) | — (a model of git-annex, checked against E1, E5) |
 | `Evict` ([08 §8.5](08-custody-loops.md)) | free, keep, verified drop, sparse hide and show | a laptop drops only protected keys; a kept folder never shows pointers | a freed folder's space is freed once its files are protected |
-| `Purge` ([08 §8.6](08-custody-loops.md)) | request, cancel, retention passes, release, drop | INV-Purge: no current version is released; nothing is released before `retention_end` | released keys are dropped everywhere |
 | `Repair` ([08 §8.4](08-custody-loops.md)) | custodian loss, `dead`, want, get, scrub failure | no protected version is lost while one custody copy remains | K copies are restored when capacity allows |
 
 Bounds start at N ≤ 4 devices, K ≤ 2, a few paths and keys, as now
@@ -92,7 +95,7 @@ and each law is a `hegeltest` property (pinned to 0.49, a dev-dependency).
 | portable names | normalisation idempotent; injective within a folder; portable names unchanged | [05 §5.4](05-catalogue-and-names.md) |
 | custody observations | latest-observation join per (custodian, key); *protected* monotone in presence observations | [06 §6.1](06-status.md) |
 | headline | a pure function of the states; precedence total; never *Safe* while a version is not protected | [06 §6.5](06-status.md) |
-| released keys | grow-only; eligibility monotone in time; never a current version | [08 §8.6](08-custody-loops.md) |
+| released keys | isolation: releasing one reference never releases a key another holds, and an uncovered reference removes its key; seal safety; monotone in the seals; independent of arrival order; never a current version | [08 §8.6](08-custody-loops.md), ADR 0042 |
 | settings | expected git-annex settings are a function of the roster; applying twice changes nothing | [03 §3.5](03-repository-and-roles.md) |
 | install journal | replay idempotent; each path ends old or new | [11 §11.5](11-local-state.md) |
 | local files | round trip; newer formats refused | [11 §11.5](11-local-state.md) |
@@ -149,8 +152,9 @@ supported only once they pass ([14 §14.3](14-platforms-and-packaging.md)).
 | E19 | install against an application acting at every boundary (in place, atomic replace, create, delete, old handle, shared mapping), thin and not thin, 21 `kill -9` points recovered twice, a fuzzing writer: no save lost, the index never calls a changed file clean, recovery idempotent; without the writer scan 9 of 49 writes reach the aside (asserts) | ADR 0040, [07 §7.5](07-capture-and-install.md) |
 
 **Pending:** E11 native Windows (v1.1); E12 `remotedaemon` only fetches,
-never merges; E13 `ServeAppendOnly` over P2P (ADR 0014); E14 purge by metadata
-stops re-fetching (ADR 0018). **New:** E16 `annex.bwlimit` over the P2P
+never merges; E13 `ServeAppendOnly` over P2P (ADR 0014); E14 purge with git-annex:
+per-key transfers skip released keys, the forced drop, a new generation uploaded
+again, `matchexpression --key` agreeing with `wanted` for `sizebalanced` (ADR 0042). **New:** E16 `annex.bwlimit` over the P2P
 transport; E17 the HDD video-editing acceptance test ([15 §15.8](15-resource-use.md)).
 E9 and E10 must be rerun with bare custodian repositories
 ([03](03-repository-and-roles.md)). Each experiment joins CI once its script
@@ -188,7 +192,7 @@ are specified here but not built; the gaps are tracked as GitHub issues
 |---|---|---|---|
 | P1 Survival | E1, E5, E8, E9, E10 (lab, printing); `CustodyNaive`, `CustodyTokens` (evidence about hand-offs in general and about the earlier token protocol, not about git-annex) | `AnnexDrop`, `Repair` models; fault injection; E13; asserting E9, E10 | append-only serving unproven (#9); failure domains (#12); capacity admission (#13); recovery on fresh machines (#11) |
 | P2 Capture, no overwrite | E15b (asserting: no pointer during free and keep); E18 (asserting: offline in-place saves keep every version); E19 (asserting: racing saves and `kill -9` during install) | `CaptureInstall` model; install journal laws (hegel-rust); E19 on macOS | copy-on-write cost of pending history on APFS and btrfs (E18 there); file-system scope (#14); saves from stale memory (16 §16.4) |
-| P3 Reversible deletion | E2, E4 (lab, printing) | `Purge` model; E14; purge laws | reference-aware purge (#4); concurrent restore and returning peers (#5) |
+| P3 Reversible deletion | E2, E4 (lab, printing); `Purge` model (seals against restores, cancels, partitions, restarts and a returning laptop; ADR 0042) | E14; purge laws (hegel-rust); `Purge` trace validation | a custodian clock that jumps forward by more than the waiting period; erased names stay in history (16 §16.4) |
 | P4 Authority | E7 (lab, printing) | `Authority` model; acceptance laws; decision-rights tests (ADR 0038) | roster forks (#6); format compatibility (#15) |
 | P5 Convergence | E3 (lab, printing) | merge and name laws; three-way permutations | the merge algorithm (#8) |
 | P6 Honest status | — | observation and headline laws; usability test | — |

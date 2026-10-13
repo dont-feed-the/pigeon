@@ -49,7 +49,9 @@ two captures are protected on a best-effort basis only.
 **P3 Reversible deletion.** Unlinking, including a mass deletion, never
 releases protection. Until purge, every deleted protected version can be
 restored. A device returning from offline cannot resurrect a deleted file or
-bypass a purge decision.
+bypass a purge decision: what a purge covers stays released, and a version
+the purge never covered, such as one saved offline meanwhile, is kept and shown
+to its deciders (ADR 0042).
 
 **P4 Authority.** The accepted catalogue is the set of commits valid under the
 roster in force at their parents. Validation is deterministic, so all devices
@@ -99,7 +101,7 @@ test (ADR 0012), "lab" a git-annex experiment.
 | INV-NoOverwrite | install never renames over a name, and replaces a file only after proving it is what pigeon last installed and that nobody writes it | P2 | [07 §7.5](07-capture-and-install.md) | E19 (asserting); model (planned) |
 | INV-Journal | after a crash at any point, replaying the install journal leaves every path at its old content, its new content or the person's | P2 | [07 §7.5](07-capture-and-install.md), [11](11-local-state.md) | law (replay idempotent); E19 `kill -9` at every step (asserting) |
 | INV-Unlink | an unlink changes no preferred content of custodians | P3 | [03 §3.4](03-repository-and-roles.md), ADR 0018 | E2, E4 |
-| INV-Purge | a key is dropped by a purge only if an accepted purge decision names it, its retention has ended, and no current version uses it | P3 | [08 §8.6](08-custody-loops.md) | law; E14 |
+| INV-Purge | a key is dropped by a purge only if every reference of it known to a custodian when it sealed is covered by an active purge decision, every custodian not `dead` has sealed it, and no current version uses it | P3 | [08 §8.6](08-custody-loops.md), ADR 0042 | `Purge` model (KeepWins, WaitingPeriod, NoResurrection); purge laws; E14 |
 | INV-Valid | a commit is accepted iff it is valid under the rosters of its parents and all its ancestors are accepted | P4 | [04 §4.4](04-roster-and-authority.md) | laws (homomorphism, determinism) |
 | INV-Merge | the tree of a merge is a function of its parents' trees only | P5 | [05 §5.2](05-catalogue-and-names.md) | laws (commutative, associative, idempotent) |
 | INV-Names | portable names are injective within a folder and stable for non-colliding files | P5 | [05 §5.4](05-catalogue-and-names.md) | laws |

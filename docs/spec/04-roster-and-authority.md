@@ -87,7 +87,7 @@ For a person *u* and a change of one path, under roster R:
 | `roster.toml`, anything else | an admin |
 | `decisions/<commit>.toml` with `verdict = "rejected"` | a decider of that proposal commit (§4.5, ADR 0038) |
 | `decisions/<commit>.toml` with `verdict = "withdrawn"` | a device of the proposal's author (ADR 0038) |
-| `decisions/purge-<id>.toml` | an admin (ADR 0018, ux.md §7 `pigeon erase`) |
+| `decisions/purge-<id>.toml` | an admin (ADRs 0018, 0042, ux.md §7 `pigeon erase`) |
 | `records/drop-<id>.toml` | any member, about their own device ([08 §8.7](08-custody-loops.md)) **[no ADR]** |
 | anything else | an admin |
 

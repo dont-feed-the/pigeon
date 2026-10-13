@@ -37,7 +37,7 @@ For a version with key *k*, introduced by commit *c*, on this device, at time *n
    **published**, with its reason (§6.4).
 5. Else, if this device holds *k*: **local**.
 6. Else: **missing**, with reason `content-missing`: no device is known to hold
-   the content.
+   the content; or `erased`, when a purge released it ([08 §8.6](08-custody-loops.md)).
 
 These states apply to suggestions as to accepted versions: a proposal commit
 is *c*. A version is called safe only when *protected*. On the laptop that
@@ -75,6 +75,11 @@ maxsize = 2_000_000_000_000
 last_pass_completed = 2026-10-12T05:40:00Z
 keys_failed = 0
 
+[[purge]]                           # custodians only: seals (ADR 0042)
+decision = "purge-7f3a"
+main = "<commit id of its main when it sealed>"
+held = []                           # covered keys it keeps for a reference outside main
+
 [queue]
 bytes_to_send = 0
 bytes_to_receive = 0
@@ -103,6 +108,7 @@ state, so that the headline can say why and what happens next (ADR 0027):
 | `held(cause)` | "You deleted 1,204 files in *Photos*: delete them for everyone, or bring them back?" |
 | `history-full(bytes)` | "This computer keeps 18 GB of changes that no backup machine has yet; new changes wait until some are sent." ([07 §7.8](07-capture-and-install.md), ADR 0041) |
 | `content-missing` | "This version of *budget.xlsx* is lost: no computer has its content any more." |
+| `erased(decision)` | "This version of *scan-12.pdf* was erased on 12 November 2026 (Roy's decision)." (ADR 0042) |
 | `in-use(path)` | "*tarte.docx* is open in another application; pigeon will update it when it is closed." ([07 §7.5](07-capture-and-install.md), ADR 0040) |
 | `settings-check` | "Checking the group's settings; freeing space waits until it is done." ([03 §3.5](03-repository-and-roles.md)) |
 
@@ -116,7 +122,7 @@ The headline reduces every item to one of five levels (ADR 0027, ux.md §4):
 
 | Level | Shown when |
 |---|---|
-| **Needs you** | an item only a person can fix: disk full; a backup machine not heard of for more than 7 days (for admins and its owner); a held mass deletion; a held non-portable name; a conflict waiting for this person (ADR 0034); a suggestion waiting for this person's decision for more than 3 days; this computer removed from the group; custody capacity short (ADR 0003, for admins and custodian owners) |
+| **Needs you** | an item only a person can fix: disk full; a backup machine not heard of for more than 7 days (for admins and its owner); a held mass deletion; a held non-portable name; a conflict waiting for this person (ADR 0034); a suggestion waiting for this person's decision for more than 3 days; this computer removed from the group; custody capacity short (ADR 0003, for admins and custodian owners); erased content came back (for the deciders, ADR 0042) |
 | **Not safe yet** | some version is *local* or *published* for longer than the grace period (default 10 minutes) |
 | **Not checked recently** | pigeon cannot confirm: no custodian heard of within `stale_after` |
 | **Working** | something is being captured, sent or received, all of it younger than the grace period |

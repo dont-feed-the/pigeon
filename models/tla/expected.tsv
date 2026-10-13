@@ -13,3 +13,7 @@ T_n42o3	CustodyTokens	fast	pass
 T_n31o5	CustodyTokens	fast	pass
 T_n32o5	CustodyTokens	fast	pass
 T_n42o4	CustodyTokens	full	pass
+Purge_full	Purge	fast	pass
+Purge_seals	Purge	fast	violation:KeepWins
+Purge_none	Purge	fast	violation:KeepWins
+Purge_full3	Purge	full	pass

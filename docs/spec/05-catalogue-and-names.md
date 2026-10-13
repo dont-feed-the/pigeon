@@ -15,7 +15,7 @@ The **logical catalogue** is a pure function of the set of accepted commits
 | `versions(p)` | the accepted changes of *p*: commit, key or deletion, person, device, recorded time |
 | `deleted()` | the paths whose last change is a deletion, with their last key (Deleted files, ux.md §6) |
 | `proposals()` | the proposals and their states ([04 §4.5](04-roster-and-authority.md)) |
-| `keys()` | every key referenced by an accepted commit and not purged: what custodians keep ([08](08-custody-loops.md)) |
+| `keys()` | every key that an accepted or proposal commit introduces at a path (a *reference*) and that no purge released: what custodians keep ([08 §8.6](08-custody-loops.md), ADR 0042) |
 
 A **change** of *p* is an accepted commit whose tree differs at *p* from the
 tree of at least one of its parents. The changes of *p* form a DAG through the
@@ -25,7 +25,7 @@ commit graph; its maximal elements are the **heads** of *p*.
 that sets *p* to the old key; it is checked by the authority rule like any change
 (restoring a deleted file of an add-only folder is an *add*; restoring in
 someone else's folder is a proposal). Nothing is re-transferred: the key is
-already known to custodians.
+already known to custodians, unless a purge erased it ([08 §8.6](08-custody-loops.md)).
 
 ## 5.2 The deterministic merge
 

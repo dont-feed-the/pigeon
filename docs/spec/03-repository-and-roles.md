@@ -70,14 +70,14 @@ versioned in v1 **[no ADR]** ([16](16-open-questions.md)).
 | `core.precomposeunicode` | `true` on macOS | NFC names ([05 §5.4](05-catalogue-and-names.md)) |
 | `gpg.format`, `user.signingkey` | `ssh`, the device key file | signed commits (ADR 0007) |
 
-### Custodian (ADRs 0002, 0003, 0014, 0018)
+### Custodian (ADRs 0002, 0003, 0014, 0018, 0042)
 
 | Setting | Value | Why |
 |---|---|---|
 | repository | bare ([§3.1](#31-one-repository-per-group-and-device)) | never exposed to applications |
 | trust | `semitrust` (git-annex's default), never `trust` | every drop verifies it |
 | groups | `custodian` | `sizebalanced` and status count this group |
-| `wanted` | `sizebalanced=custodian:K and not metadata=pigeon-released=*` | partial custodians balanced by capacity; whole history (with `--all`, E9); released keys excluded after retention (E14) |
+| `wanted` | `sizebalanced=custodian:K` | partial custodians balanced by capacity; `pigeond` applies it key by key to `keys()`, so to the whole history (E9) and never to released keys (ADR 0042, [08 §8.3](08-custody-loops.md)) |
 | `maxsize` | from the roster entry of the device | capacity for `sizebalanced` (ADR 0003) |
 | `annex.jobs` | `cpus` | a dedicated machine |
 | serving | append-only: no remote `REMOVE` (ADR 0014) | [09 §9.4](09-network-and-joining.md) |
@@ -135,7 +135,7 @@ Every other device of the roster is a git remote of this repository:
 
 `pigeond` keeps, per repository, one `git cat-file --batch` process and
 long-lived `git annex … --batch --json` processes for the commands it issues
-often (`add`, `whereis`, `metadata`, `get`, `copy`, `drop`); it parses their
+often (`add`, `whereis`, `matchexpression`, `get`, `copy`, `drop`); it parses their
 JSON with serde (ADR 0004). Each call has a timeout; a failure keeps the
 command, exit status and end of stderr (ADR 0023).
 
@@ -145,16 +145,17 @@ command, exit status and end of stderr (ADR 0023).
 | `commit-tree -S`, `update-ref`, `merge-tree --write-tree`, `read-tree`, `update-index`, `write-tree` | writing commits and merges without touching the working tree |
 | `git fetch <remote>`, `sparse-checkout` | exchanging history; folders kept |
 | `git annex add`, `calckey`, `reinject` | capture |
-| `git annex get`, `copy --to` (`--key`, `--auto`, `--all`) | transfers, in pigeon's priority order (ADR 0037) |
-| `git annex drop` (local only, verified), `drop --key --force` (purge and Drop only) | freeing space, rebalancing, purge |
-| `git annex whereis`, `find`, `info`, `metadata`, `fsck --incremental --time-limit` | observations, scrubs |
+| `git annex get --key`, `copy --to <custodian> --key` | transfers, key by key in pigeon's priority order (ADRs 0037, 0042) |
+| `git annex drop --key` (local only, verified), `drop --key --force` (purge and Drop only) | freeing space, rebalancing, purge |
+| `git annex whereis`, `find`, `info`, `matchexpression --key`, `fsck --incremental --time-limit` | observations, wanted keys, scrubs |
 | `git annex numcopies`, `mincopies`, `trust`, `untrust`, `semitrust`, `group`, `wanted`, `maxsize`, `dead` | settings ([§3.5](#35-settings-follow-the-roster-or-drops-stop)) |
 | `git annex merge`, `smudge --update`, `restage`, `remotedaemon`, `version` | branch merge, sparse folders (E15), notifications, checks |
 
 **Never run:** `git annex sync`, `assist` and `assistant` (they commit and
-merge on their own, E9); `git annex move`, `drop --from`, `--rebalance` run
-against a remote, `dropunused` (they drop from peers or outside a purge,
-ADR 0014); `git merge`, `checkout`, `pull`, `reset --hard` on the working tree
+merge on their own, E9); `git annex move`, `drop --from`, `satisfy`,
+`--rebalance` run against a remote, `dropunused` (they drop from peers or
+outside a purge, ADRs 0014, 0042); `get --auto`, `drop --auto` (refused with
+`--all` and `--key`, so pigeon chooses keys itself); `git merge`, `checkout`, `pull`, `reset --hard` on the working tree
 (install is pigeon's, [07](07-capture-and-install.md)); `git push`.
 
 The output of every command pigeon parses is covered by **JSON contract

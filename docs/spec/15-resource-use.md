@@ -38,7 +38,7 @@ issues transfers one key at a time from batch `get` and `copy` processes
 | 4. download | content of kept folders, install ([07 §7.5](07-capture-and-install.md)) | folder priority (`high`, `normal`, `low`), then recently changed first |
 | 5. repair | restoring K copies ([08 §8.4](08-custody-loops.md)) | fewest copies first |
 | 6. scrub | `fsck --incremental --time-limit` slices ([08 §8.8](08-custody-loops.md)) | git-annex's incremental order |
-| 7. rebalance | `drop --auto --all` on custodians ([08 §8.10](08-custody-loops.md)) | — |
+| 7. rebalance | verified `drop --key` of keys a custodian no longer wants ([08 §8.10](08-custody-loops.md)) | — |
 
 - A higher class preempts a lower one between keys; a transfer in progress
   is paused, not abandoned, when a higher class needs the same resource.

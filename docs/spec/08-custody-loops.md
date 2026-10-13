@@ -15,7 +15,7 @@
 | repair | custodians | a key below K: a custodian removed, a scrub failure |
 | free and keep | laptops | the person's choice per folder |
 | scrub | custodians | the nightly window (ADR 0037) |
-| purge | custodians, then laptops | a purge decision whose retention has ended |
+| purge | custodians, then laptops | a purge decision sealed by every custodian (§8.6) |
 | settings check | every device | every merge ([03 §3.5](03-repository-and-roles.md)) |
 
 All work goes through one queue, ordered by the priorities of ADR 0037
@@ -51,11 +51,15 @@ order-independent; the accepted set is a join (ADR 0012).
 ## 8.3 Placement: from published to protected
 
 - A **laptop** uploads, with `git annex copy --to <custodian> --key`, every key
-  that custodian wants (its `sizebalanced` share, [03 §3.4](03-repository-and-roles.md))
+  of `keys()` ([05 §5.1](05-catalogue-and-names.md)) that custodian wants (its `sizebalanced` share, [03 §3.4](03-repository-and-roles.md))
   and does not hold yet, in queue order: fewest custody copies first, then
   newest, then smallest (ADR 0037).
-- A **custodian** downloads what it wants from any peer that has it,
-  `git annex get --auto --all`, history included (E9: `--all`).
+- A **custodian** downloads what it wants from any peer that has it: for each
+  key of `keys()` that it lacks, history included (E9), and that its `wanted`
+  expression matches (`git annex matchexpression --key`), `git annex get
+  --key`. pigeon chooses every transfer key by key (ADR 0042): git-annex
+  refuses `get --auto` and `drop --auto` with `--all` or `--key`, and
+  `satisfy --all` would drop content from peers.
 - Both directions run, so protection proceeds whichever side reaches the other.
   git-annex verifies content on arrival; the location log records it.
 - A laptop then drops what it does not want (old versions, folders not kept)
@@ -71,8 +75,8 @@ order-independent; the accepted set is a join (ADR 0012).
 A key falls below K custody copies when a custodian is removed from the roster
 (marked `dead`, [03 §3.4](03-repository-and-roles.md)), when a scrub finds it
 bad, or when a custodian's disk dies and its operator removes it. The other
-custodians' `sizebalanced` share then includes it, and their `get --auto --all`
-restores K within their capacity (E9, E10). A **repair epoch** lasts until every
+custodians' `sizebalanced` share then includes it, and their per-key downloads
+(§8.3) restore K within their capacity (E9, E10). A **repair epoch** lasts until every
 key has K copies again; its progress (keys and GB left) is in the status
 ("repairing", ux.md §8.11). A custodian that stops being heard of is not
 removed automatically: after 7 days its owner and the admins see *Needs you*
@@ -127,36 +131,85 @@ by git's own sparse-checkout file and the device's `wanted` expression;
 killed git process of `pigeond` is removed at start, since `pigeond` is the
 only writer of the repository.
 
-## 8.6 Purge: erase forever (ADR 0018)
+## 8.6 Purge: erase forever (ADRs 0018, 0042)
+
+A purge releases **references**, not keys (ADR 0042). A reference of key *k* is
+a pair (*c*, *p*): an accepted or proposal commit *c* whose tree has *k* at *p*
+while none of its parents does (an add, edit, restore, rename or conflict
+copy). A key is dropped only once every reference to it is released, so
+identical files in two folders, an accepted version and a suggestion that
+share a key never lose each other's content.
 
 1. **Request.** `pigeon erase PATH` (any member) writes
-   `.pigeon/decisions/purge-<id>.toml`. From an admin it is a decision; from
-   anyone else it is a proposal to the admins ([04 §4.3](04-roster-and-authority.md)).
+   `.pigeon/decisions/purge-<id>.toml`, in a commit that also deletes PATH if
+   it is current. From an admin it is a decision; from anyone else it is a
+   proposal to the admins ([04 §4.3](04-roster-and-authority.md)).
 
    ```toml
    format = 1
    kind = "purge"
-   paths = ["Photos/old-scans/"]     # every version of these paths
-   keys = ["SHA256E-s1048576--…"]    # the keys released, computed when requested
+   paths = ["Photos/old-scans/"]       # every version of these paths …
+   base = "<commit id>"                # … in this main and its ancestors: what the decider saw
+   keys = []                           # optional: only these versions
+   proposals = []                      # optional: suggestions erased too
    requested_by = "ines"
-   retention_end = 2026-11-12T00:00:00Z  # ≥ commit time + retention_days
+   retention_end = 2026-11-12T00:00:00Z  # ≥ the commit's recorded time + retention_days
    ```
 
-2. **Waiting period.** Until `retention_end`, anyone can still restore; the
-   CLI and web say so ("Until 12 November 2026 anyone can still restore them",
-   ux.md §7). An admin cancels a purge by deleting its decision file.
-3. **Release.** When its own clock passes `retention_end`, a custodian's
-   `pigeond` sets `pigeon-released=<id>` on each released key that no current
-   version uses (INV-Purge), which removes it from custodians' `wanted`
-   ([03 §3.4](03-repository-and-roles.md)). Setting it twice is harmless.
-4. **Drop.** Each custodian drops the released keys it holds, locally, with
-   `git annex drop --key --force`: the only forced drop pigeon performs outside
-   Drop, recorded in the log and as a trace event. Remote `REMOVE` stays refused
-   (ADR 0014). Laptops drop their copies with an ordinary drop.
+   The decision **covers** (*c*, *p*) when *p* is under one of `paths`, *c* is
+   `base` or an ancestor of it, and *k* is in `keys` if they are given; a
+   suggestion's references are covered only if `proposals` names it. A
+   `retention_end` earlier than the commit's recorded time plus
+   `retention_days` makes the commit invalid (P4). Before asking, the CLI and
+   web list what is covered, and what shares a key but stays ("*IMG_0042.jpg*
+   in *Photos/2019* has the same content and is kept").
+2. **Waiting period.** While the decision file is in `main`, anyone can restore
+   a covered version, and an admin cancels the purge by deleting the file. A
+   restore is a new reference, which the decision does not cover. The CLI and
+   web say: "Until 12 November 2026 anyone can still restore them; erasing
+   finishes after that, once every backup machine has confirmed" (ux.md §7).
+   A restore or cancel that reaches **any** backup machine before that machine
+   seals keeps the content, in every order of messages, across partitions
+   and restarts. A machine never seals sooner than `retention_days` after it
+   received the decision, whatever the clocks.
+3. **Seal.** A custodian seals the decision when, on its own clock,
+   `retention_end` has passed and `retention_days` have elapsed since it first
+   received the decision (`purges.toml`, [11 §11.3](11-local-state.md)). Its
+   status reports then carry the seal ([06 §6.3](06-status.md)): the decision,
+   its `main` at that moment, and `held`, the covered keys it keeps for a
+   reference outside `main` (a suggestion).
+4. **Release.** A device holds *k* as **released** when all of these hold:
+   - every reference of *k* that it knows is covered by an active decision;
+   - every custodian of the roster not marked `dead` has sealed that
+     decision, and the device's `main` contains each seal's `main`;
+   - no seal holds *k*;
+   - *k* is not in the current tree.
 
-E14 must confirm that the metadata stops custodians that have not dropped yet
-from re-fetching released keys; otherwise `pigeond` filters its transfers with
-its own list of released keys (ADR 0018).
+   This is a pure function of `main`, the known proposals and the seals. It is
+   recomputed at each merge and never stored (INV-Purge), and pigeon writes no
+   git-annex metadata for it.
+5. **Drop.** Each device drops the released keys it holds, locally, with
+   `git annex drop --force --key`. This is the only forced drop pigeon performs
+   outside Drop, and it is recorded in the log and as a trace event.
+   Custodians drop first. Laptops drop when they learn of it, including on
+   their return from offline. Remote `REMOVE` stays refused (ADR 0014).
+   Released keys are never transferred again (§8.3).
+6. **New references.** A reference that no decision covers keeps its key like
+   any version. Examples: a version saved offline before the decision
+   arrived, a copy in another folder, a restore after the seals. If the
+   content was dropped, a device that still has it uploads it again. This is
+   a new retention generation, which only a new purge releases. If no device
+   has it, the version is *missing* with reason `erased`
+   ([06 §6.4](06-status.md)). The deciders see *Needs you* ("Erased content
+   came back: Martine's laptop had *scan-12.pdf*") and can erase it again.
+
+A purge completes only when every custodian not marked `dead` has sealed. An
+unreachable custodian holds it back, and the purge says so ("Erasing waits for
+Paul's NAS"). Erasing releases pigeon's custody of the content. It does not
+reach copies made outside pigeon, or devices that never return. The names,
+authors and times of the erased versions stay in the signed history.
+`pigeon erase` says both before asking. The `Purge` model checks this
+protocol ([13 §13.2](13-verification.md)); E14 is to test it with git-annex.
 
 ## 8.7 Drop: remove without checking
 
@@ -188,8 +241,9 @@ failures go into the custodian's status report ([06 §6.3](06-status.md)).
 
 ## 8.10 Rebalancing
 
-Custodians run `git annex drop --auto --all` locally at the lowest priority: it
-drops what they no longer want after the shares moved (a custodian joined or
-changed `maxsize`), verified against K other custody copies (ADR 0014). pigeon
+At the lowest priority, a custodian drops each key it holds that its `wanted`
+expression no longer matches after the shares moved (a custodian joined or
+changed `maxsize`), with a verified `git annex drop --key`: git-annex checks K
+other custody copies first (ADR 0014). pigeon
 never runs `--rebalance` against a remote. A placement planner may replace
 `sizebalanced` later (ADR 0003).

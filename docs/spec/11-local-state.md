@@ -94,6 +94,7 @@ repository and git never shares it (ADR 0036).
 |---|---|---|---|
 | `install.ndjson` | each install step ([07 §7.5](07-capture-and-install.md)) | the install journal | no: it is the crash record |
 | `conflicts.json` | a divergence starts, changes or ends ([07 §7.6](07-capture-and-install.md)) | the divergence table | no: "what pigeon last installed" is known only here |
+| `purges.toml` | a custodian first merges a purge decision, or seals it ([08 §8.6](08-custody-loops.md)) | when it received each active decision, and its seals | yes, conservatively: a lost file restarts each waiting period (ADR 0042) |
 | `clock.json` | at most every second, and at exit | the Lamport clock of trace events (ADR 0008) | no, but losing it only weakens trace ordering |
 | `invitations.json` | an invitation is created, used, cancelled or expires ([09 §9.6](09-network-and-joining.md)) | the hash of each secret, purpose, expiry, used flag | no |
 | `aside/` | install step 4 | files moved aside, kept until the first full scan 10 minutes after `done` | no ([07 §7.5](07-capture-and-install.md), ADR 0040) |

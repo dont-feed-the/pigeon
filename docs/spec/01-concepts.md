@@ -78,7 +78,7 @@ has observed ([06](06-status.md)):
 |---|---|---|---|
 | **unlink** | deleting a path: a new commit without the file | none: custodians keep every version (ADR 0018) | delete (can be undone) |
 | **evict** | removing this device's working copy of protected versions | none: allowed only for protected versions (ADR 0031) | free up space on this computer |
-| **release** | a **purge**: a signed decision that releases versions; custodians drop them after the **retention period** | the released versions are gone after it | erase forever; waiting period |
+| **release** | a **purge**: a signed decision that releases the **references** it covers; a key goes once no other reference holds it and every custodian has **sealed** the decision after the **retention period** (ADR 0042) | the covered versions are gone from every device of the group; copies outside it and names in history stay | erase forever; waiting period |
 
 ## 1.7 The two escapes
 
@@ -100,6 +100,8 @@ Every unsafe action is one of two primitives, both signed, flagged and recorded
 | **core** | the pure functions of pigeon (authority, catalogue, names, states, headline), with laws (ADR 0012) |
 | **shell** | the code that performs I/O: git, git-annex, the file system, the network, behind traits (ADR 0012) |
 | **loop** | one of the protocols `pigeond` runs: capture, accept, place and repair, free and keep, purge, install |
+| **reference** | a path at which a commit introduces a key: an add, edit, restore, rename or conflict copy; a purge releases references, not keys (ADR 0042) |
+| **seal** | a custodian's statement, in its status report, that a purge's waiting period has ended for it, with the `main` it had then (ADR 0042) |
 
 ## 1.9 Words people never see
 

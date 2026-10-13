@@ -22,4 +22,5 @@ in the proposal, §5.
 
 The lab joins CI once its scripts assert, as E15, E15b, E18 and E19 do (ADR 0026).
 Pending: E11 native Windows, E12 `remotedaemon` only fetches, E13
-`ServeAppendOnly` over P2P, E14 purge by metadata.
+`ServeAppendOnly` over P2P, E14 purge with git-annex (per-key transfers, forced
+drop, a new generation; ADR 0042).

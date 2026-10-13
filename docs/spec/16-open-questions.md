@@ -14,6 +14,7 @@
 | ADR 0039: freeing and keeping never show a pointer | Proposed, for issue #2; [08 §8.5](08-custody-loops.md) applies it, E15b asserts it | Guillaume |
 | ADR 0040: install proves its own file; racing saves win | Proposed, for issue #1; [07 §7.5](07-capture-and-install.md) applies it, E19 asserts it | Guillaume |
 | ADR 0041: captured versions stay immutable until protected | Proposed, for issue #3; [07 §7.8](07-capture-and-install.md) applies it, E18 asserts it | Guillaume |
+| ADR 0042: purge releases references, completes after every seal | Proposed, for issues #4 and #5; [08 §8.6](08-custody-loops.md) applies it, the `Purge` model checks it | Guillaume |
 | TLC with the `Json` module for trace validation | ADR 0026 foresees a new ADR pinning it by SHA-256 ([13 §13.3](13-verification.md)) | before the first `*Trace.tla` |
 
 ## 16.2 Where this specification departs from a source
@@ -149,6 +150,9 @@ them all.
   version, which then lives on only in the history. Lock files cover office
   suites and editors. Should a save within seconds of an install count as
   concurrent? The **writer scan on macOS** (`libproc`) also awaits E19 on a Mac.
+- **Erased names.** A purge erases content, but the names, authors and times of
+  the erased versions stay in the signed history (ADR 0042). Removing a name
+  would need a new history signed again by the admins. Is that ever needed?
 
 ## 16.5 Review issues
 
@@ -162,8 +166,8 @@ experiments stay listed in [13](13-verification.md) and in the prototype (#17).
 | #1 | install racing application saves | [07 §7.5](07-capture-and-install.md), [07 §7.6](07-capture-and-install.md) | ADR 0040 (Proposed), E19 asserts; `CaptureInstall` model to come (#10) |
 | #2 | pointer files during free and keep | [08 §8.5](08-custody-loops.md) | ADR 0039 (Proposed), E15b asserts |
 | #3 | `annex.thin` and unprotected versions | [07 §7.8](07-capture-and-install.md), [06 §6.2](06-status.md), [03 §3.4](03-repository-and-roles.md) | ADR 0041 (Proposed), E18 asserts; copy-on-write measurement to come |
-| #4 | reference-aware purge | [08 §8.6](08-custody-loops.md) | open |
-| #5 | purge against concurrent restores and returning peers | [08 §8.6](08-custody-loops.md) | open |
+| #4 | reference-aware purge | [08 §8.6](08-custody-loops.md), [05 §5.1](05-catalogue-and-names.md) | ADR 0042 (Proposed); purge laws (hegel-rust) and E14 to come |
+| #5 | purge against concurrent restores and returning peers | [08 §8.6](08-custody-loops.md), [06 §6.3](06-status.md) | ADR 0042 (Proposed); the `Purge` model checks it |
 | #6 | roster forks with disjoint admin sets | [04 §4.7](04-roster-and-authority.md) | open |
 | #7 | decisions by non-admin owners and stewards | [04 §4.3, §4.5](04-roster-and-authority.md) | ADR 0038 (Proposed) |
 | #8 | catalogue merge algorithm and its laws | [05 §5.2](05-catalogue-and-names.md) | specified; ADR to come |

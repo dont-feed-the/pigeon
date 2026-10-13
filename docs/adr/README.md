@@ -54,3 +54,4 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0039](0039-freeing-and-keeping-never-show-a-pointer.md) | Freeing and keeping a folder never show a pointer file: hide before dropping, stage before showing | Proposed |
 | [0040](0040-install-proves-its-own-file-and-racing-saves-win.md) | Install proves a file is its own before replacing it, and a racing save always wins | Proposed |
 | [0041](0041-captured-versions-stay-immutable-until-protected.md) | A captured version stays immutable on its laptop until it is protected; thin only after | Proposed |
+| [0042](0042-purge-releases-references-and-completes-after-every-seal.md) | A purge releases the references its deciders saw; content goes only when no other reference holds it and every custodian has sealed | Proposed |
