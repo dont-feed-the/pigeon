@@ -3,7 +3,7 @@
 > Status: proposal for discussion, 13 October 2026. Guillaume asked for a careful study of the
 > command line and the web interface, so that they suit people who are not technical.
 > Mockups: [`mockups/`](mockups/) (static HTML, open `mockups/index.html`).
-> Decisions from this study: ADRs 0027–0031, 0033 and 0034 (see their status in the ADR index).
+> Decisions from this study: ADRs 0027–0031 and 0033–0035 (see their status in the ADR index).
 
 ## 1. Who uses pigeon
 
@@ -192,9 +192,11 @@ Output follows the same headline-then-detail pattern; colour only on a terminal,
 | `pigeon join INVITATION [FOLDER]` | joins a group | Welcome → Join |
 | `pigeon keep PATH` · `pigeon free PATH` | keep a folder on this computer · free up its space | Files → switch |
 | `pigeon history PATH` | versions of a file | file page |
+| `pigeon view PATH [--version N \| --group]` | opens a read-only copy of a version, outside the folder | file page → Open a copy |
 | `pigeon restore PATH [--version N \| --at TIME]` | restores a version, or a deleted file | file page, Deleted files |
 | `pigeon deleted [PATH]` | lists deleted files that can be restored | Files → Deleted files |
 | `pigeon suggestions` · `pigeon accept ID` · `pigeon decline ID [--note TEXT]` | the suggestion inbox | Suggestions |
+| `pigeon conflicts` · `pigeon resolve PATH --take-group \| --keep-copy DEST \| --suggest-again` | your files that differ from the group's, and their resolution | Suggestions → Yours |
 | `pigeon people` · `pigeon machines` | members, computers, backup machines | People & machines |
 | `pigeon remove-computer NAME` | removes a lost or retired computer | People → I lost a computer |
 | `pigeon erase PATH` | asks an admin decision to erase forever, after the waiting period | file page → Erase forever |
@@ -294,8 +296,9 @@ suggestions to Paul". When Martine saves *tarte.docx* there, her file stays as s
 pigeon sends her version to Paul as a suggestion and the file reads "Your suggestion, waiting
 for Paul". If Paul accepts, her version becomes the group's. If he declines, or changes the
 file meanwhile, pigeon tells her once that her version differs from the group's, and she
-chooses: *Take the group's version*, *Keep mine as a copy*, or *Suggest again*. pigeon never
-overwrites her file by itself.
+chooses: *Take the group's version*, *Keep mine as a copy*, or *Suggest again*. *Open Paul's
+version* shows the group's version as a read-only copy outside her folder (ADR 0035). pigeon
+never overwrites her file by itself.
 
 **8.9 Edited at the same time.** Both versions are kept. The other one is named
 `budget (Paul, 13 Oct 14:02).xlsx`, so that it still opens in the same application. Home
