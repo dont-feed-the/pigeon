@@ -43,7 +43,7 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0028](0028-messages-with-fluent.md) | Messages come from one Fluent catalogue, in French and English | Proposed |
 | [0029](0029-status-icon-and-calm-notifications.md) | Calm notifications and a launcher in v1; the status icon waits for v1.1 | Accepted |
 | [0030](0030-read-only-files-you-may-not-change.md) | Files you may not change are read-only on your disk | Rejected |
-| [0031](0031-free-up-space-per-folder.md) | Space is freed per folder, with git sparse checkout | Proposed |
+| [0031](0031-free-up-space-per-folder.md) | Space is freed per folder, with git sparse checkout | Accepted |
 | [0032](0032-backup-machines-on-linux.md) | Backup machines run Linux only in v1 | Accepted |
 | [0033](0033-editable-files-edits-become-suggestions.md) | Files you may not change stay editable; a saved edit becomes your suggestion | Superseded by 0034 |
 | [0034](0034-never-overwrite-what-a-person-saved.md) | pigeon never overwrites what a person saved; a diverging file is a conflict they resolve | Accepted |

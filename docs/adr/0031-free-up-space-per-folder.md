@@ -1,7 +1,8 @@
 # 0031. Space is freed per folder, with git sparse checkout
 
-- **Status:** Proposed, 13 October 2026, by the agent in the UX study, on the
-  evidence of experiment E15 (`lab/git-annex/ga-e15-sparse-folders.sh`).
+- **Status:** Accepted, 13 October 2026, by Guillaume (UX question 5).
+  Proposed by the agent in the UX study, on the evidence of experiment E15
+  (`lab/git-annex/ga-e15-sparse-folders.sh`).
 
 ## Context
 
