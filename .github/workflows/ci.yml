@@ -1,0 +1,43 @@
+# Checks of every push and pull request: repository rules, then the fast set
+# of TLA+ models with their expected verdicts (ADR 0026).
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository:
+    name: repository rules
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: files under 1000 lines, source files with a header
+        run: scripts/check-file-length-and-header
+      - name: ADR index matches the ADR files
+        run: scripts/check-adr-index
+
+  models:
+    name: TLA+ models (fast set)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pigeon
+          key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
+      - name: every configuration gives its expected verdict
+        run: scripts/run-tlc

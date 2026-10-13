@@ -1,0 +1,40 @@
+# The full set of TLA+ models, slow rows included (ADR 0026). Runs when a
+# model or the runner changes, weekly, and by hand. GitHub runs `schedule`
+# and `workflow_dispatch` only from the default branch, so until v2 is the
+# default branch only the `push` trigger fires.
+name: models-full
+
+on:
+  push:
+    paths:
+      - "models/tla/**"
+      - "scripts/run-tlc"
+      - ".github/workflows/models-full.yml"
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: models-full-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  models:
+    name: TLA+ models (full set)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pigeon
+          key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
+      - name: every configuration gives its expected verdict
+        run: scripts/run-tlc --full
