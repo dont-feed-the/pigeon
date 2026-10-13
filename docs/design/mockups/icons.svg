@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <!-- State icons of the mockups; each pairs with a word, never alone. -->
+  <symbol id="safe" viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z" fill="currentColor"/><path d="m8 12 3 3 5-6" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="wait" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M12 6v6l4 2" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></symbol>
+  <symbol id="local" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="1.5" fill="currentColor"/><path d="M2 18h20l-1.5 2h-17z" fill="currentColor"/></symbol>
+  <symbol id="unknown" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2.5"/><path d="M9.5 9.5a2.6 2.6 0 1 1 3.6 2.4c-.8.4-1.1.9-1.1 1.8M12 17h.01" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="act" viewBox="0 0 24 24"><path d="M12 2 1.5 21h21z" fill="currentColor"/><path d="M12 9v5M12 17.5h.01" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></symbol>
+  <symbol id="work" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M20 3v5h-5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="pigeon" viewBox="0 0 24 24"><path d="M3 14c2-6 7-9 12-8l3-2 1 3c1.5 1 2 2.5 2 4-3 0-4 2-6 4-3 3-8 4-12 3l3-2c-1.5 0-2.5-.5-3-2z" fill="#1a5fb4"/><circle cx="16.5" cy="7.5" r="1" fill="#fff"/></symbol>
+</svg>

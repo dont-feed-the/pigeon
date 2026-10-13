@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<!-- pigeon v2 mockup: Settings. Static HTML for the usability study (docs/design/ux.md). -->
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings — pigeon</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header class="bar">
+  <span class="brand"><svg width="26" height="26" aria-hidden="true"><use href="icons.svg#pigeon"/></svg>pigeon</span>
+  <nav aria-label="Sections">
+    <a href="home.html">Home</a>
+    <a href="files.html">Files</a>
+    <a href="suggestions.html">Suggestions<span class="badge" aria-label="1 waiting">1</span></a>
+    <a href="people.html">People &amp; machines</a>
+    <a href="settings.html" aria-current="page">Settings</a>
+  </nav>
+  <span class="who">Famille Geiger · Martine's laptop</span>
+</header>
+<main>
+<h1>Settings</h1>
+<div class="card">
+<p><b>Language</b>: <select><option>Français</option><option selected>English</option></select></p>
+<p><b>Tell me</b> when files stay not safe for more than <select><option>1 hour</option><option selected>1 day</option><option>3 days</option></select>, and when something needs me.</p>
+<p><b>Pause sharing</b>: <a class="btn" href="settings.html">for 1 hour</a> <a class="btn" href="settings.html">until tomorrow</a> <span class="sub">your changes stay on this computer meanwhile</span></p>
+<p><b>This computer</b>: Martine's laptop · folder <b>~/Famille Geiger</b> <a href="settings.html">change</a></p>
+</div>
+<details class="card" style="margin-top:18px"><summary><b>Advanced</b></summary>
+<p>Connection: online, through the internet relay (no direct connection to Paul's NAS).</p>
+<p><a class="btn" href="settings.html">Run a diagnosis</a> <a class="btn" href="settings.html">Show the logs</a> <a class="btn" href="settings.html">Activity dashboard</a></p>
+<p class="sub">A diagnosis checks the installation and explains what is wrong, with a code to give to Paul if you need help.</p></details>
+<p class="mock-note">Mockup for the usability study, not the product. <a href="index.html">All mockups</a></p>
+</main>
+</body>
+</html>

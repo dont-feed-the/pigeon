@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<!-- pigeon v2 mockup: A file's versions. Static HTML for the usability study (docs/design/ux.md). -->
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A file's versions — pigeon</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header class="bar">
+  <span class="brand"><svg width="26" height="26" aria-hidden="true"><use href="icons.svg#pigeon"/></svg>pigeon</span>
+  <nav aria-label="Sections">
+    <a href="home.html">Home</a>
+    <a href="files.html" aria-current="page">Files</a>
+    <a href="suggestions.html">Suggestions<span class="badge" aria-label="1 waiting">1</span></a>
+    <a href="people.html">People &amp; machines</a>
+    <a href="settings.html">Settings</a>
+  </nav>
+  <span class="who">Famille Geiger · Martine's laptop</span>
+</header>
+<main>
+<p class="sub" style="margin:0"><a href="files.html">Files</a> › Budget</p>
+<h1>budget-2026.xlsx</h1>
+<p><span class="state st-safe"><svg aria-hidden="true"><use href="icons.svg#safe"/></svg>Safe</span> <span class="sub">2 safe copies · checked 4 minutes ago</span></p>
+<h2>Versions</h2>
+<ol class="timeline">
+  <li><b>Today 14:05 · you</b> — current version, 84 KB <span class="state st-safe"><svg aria-hidden="true"><use href="icons.svg#safe"/></svg>Safe</span></li>
+  <li><b>Today 09:12 · Paul</b> — 81 KB <span class="state st-safe"><svg aria-hidden="true"><use href="icons.svg#safe"/></svg>Safe</span> <a class="btn" href="file.html">Restore this version</a> <a class="btn" href="file.html">Open a copy</a></li>
+  <li><b>2 October · you</b> — 80 KB <span class="state st-safe"><svg aria-hidden="true"><use href="icons.svg#safe"/></svg>Safe</span> <a class="btn" href="file.html">Restore this version</a> <a class="btn" href="file.html">Open a copy</a></li>
+  <li><b>14 September · Mario</b> — created, 52 KB <span class="state st-safe"><svg aria-hidden="true"><use href="icons.svg#safe"/></svg>Safe</span> <a class="btn" href="file.html">Restore this version</a></li>
+</ol>
+<p class="note">Restoring makes that version the current one. Nothing is lost: today's version stays in this list.</p>
+<details class="card" style="margin-top:18px"><summary><b>Details</b>: where the copies are</summary>
+<table class="list" style="margin-top:12px"><thead><tr><th>Version</th><th>Mario's desktop</th><th>Paul's NAS</th><th>This computer</th></tr></thead><tbody>
+<tr><td>Today 14:05</td><td>checked 4 min ago</td><td>checked 1 h ago</td><td>working copy</td></tr>
+<tr><td>Today 09:12</td><td>checked this morning</td><td>checked 1 h ago</td><td>—</td></tr>
+<tr><td>2 October</td><td>checked Sunday</td><td>checked Sunday</td><td>—</td></tr>
+</tbody></table>
+<p class="sub">Copies on computers like this one do not count as safe copies: you can edit them at any time.</p></details>
+<h2>Other actions</h2>
+<p><a class="btn" href="files.html">Show in my folder</a> <a class="btn danger" href="file.html">Erase forever…</a> <span class="sub">needs an admin's approval and a 30-day waiting period</span></p>
+<p class="mock-note">Mockup for the usability study, not the product. <a href="index.html">All mockups</a></p>
+</main>
+</body>
+</html>

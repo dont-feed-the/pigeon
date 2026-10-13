@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<!-- pigeon v2 mockups: the index of the static pages for the usability study (docs/design/ux.md). -->
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pigeon v2 — mockups</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header class="bar"><span class="brand"><svg width="26" height="26" aria-hidden="true"><use href="icons.svg#pigeon"/></svg>pigeon v2 · mockups</span>
+<span class="who">for the usability study · 13 October 2026</span></header>
+<main>
+<h1>What Martine sees</h1>
+<p>Martine is not technical. Every page answers, in order: <b>are my files safe?</b> If not, <b>why, and what happens next?</b> <b>Must I do something?</b> (usually not).</p>
+<h2>The four words</h2>
+<p><span class="state st-local"><svg aria-hidden="true"><use href="icons.svg#local"/></svg>Only on this computer</span> <span class="state st-wait"><svg aria-hidden="true"><use href="icons.svg#wait"/></svg>Shared, not safe yet</span> <span class="state st-safe"><svg aria-hidden="true"><use href="icons.svg#safe"/></svg>Safe</span> <span class="state st-unknown"><svg aria-hidden="true"><use href="icons.svg#unknown"/></svg>Not checked since Monday 18:02</span></p>
+<p class="sub">Always icon + word + colour. Internally, and in <code>--json</code>: local, published, protected, uncertain.</p>
+<h2>The status icon (menu bar or tray)</h2>
+<div class="card" style="max-width:420px;padding:0;overflow:hidden">
+  <div style="background:#2b3036;color:#fff;padding:6px 12px;display:flex;justify-content:flex-end;gap:14px;font-size:14px"><span style="color:#7bd88f">● pigeon</span><span>Wi-Fi</span><span>14:12</span></div>
+  <div style="padding:12px 16px">
+    <p style="margin:0;font-weight:700;color:var(--safe)">✓ Everything is safe.</p>
+    <p class="sub" style="margin:0 0 10px">Checked 4 minutes ago</p>
+    <p style="margin:4px 0">Open pigeon</p><p style="margin:4px 0">Open my folder</p><p style="margin:4px 0">Pause sharing…</p>
+  </div>
+</div>
+<p class="sub">The dot is green (safe), blue (working), amber (not safe yet), red (needs you) or grey (not checked recently).</p>
+<h2>Pages</h2>
+<table class="list"><thead><tr><th>Page</th><th>Shows</th></tr></thead><tbody>
+<tr><td><a href="home.html">Home: everything safe</a></td><td>the normal day</td></tr>
+<tr><td><a href="home-not-safe.html">Home: not safe yet</a></td><td>a backup machine is offline; nothing to do</td></tr>
+<tr><td><a href="home-needs-you.html">Home: needs you</a></td><td>a mass deletion held back until she confirms</td></tr>
+<tr><td><a href="home-offline.html">Home: not checked recently</a></td><td>honest status when this computer is offline</td></tr>
+<tr><td><a href="files.html">Files</a></td><td>folders, who may change them, keep on this computer or free up space, two versions kept</td></tr>
+<tr><td><a href="file.html">A file's versions</a></td><td>timeline, restore, where the copies are</td></tr>
+<tr><td><a href="deleted.html">Deleted files</a></td><td>restore; erase forever after a waiting period</td></tr>
+<tr><td><a href="suggestions.html">Suggestions</a></td><td>a change to her folder, waiting for her decision</td></tr>
+<tr><td><a href="people.html">People &amp; machines</a></td><td>backup machines with space and checks; members and their computers</td></tr>
+<tr><td><a href="join.html">Join a group</a></td><td>checking the three words with the person who invited her</td></tr>
+<tr><td><a href="settings.html">Settings</a></td><td>language, notifications, pause, advanced</td></tr>
+</tbody></table>
+<p class="mock-note">Static mockups, not the product: buttons only navigate. See docs/design/ux.md.</p>
+</main></body></html>

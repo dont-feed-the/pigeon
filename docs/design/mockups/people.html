@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<!-- pigeon v2 mockup: People and machines. Static HTML for the usability study (docs/design/ux.md). -->
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>People and machines — pigeon</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header class="bar">
+  <span class="brand"><svg width="26" height="26" aria-hidden="true"><use href="icons.svg#pigeon"/></svg>pigeon</span>
+  <nav aria-label="Sections">
+    <a href="home.html">Home</a>
+    <a href="files.html">Files</a>
+    <a href="suggestions.html">Suggestions<span class="badge" aria-label="1 waiting">1</span></a>
+    <a href="people.html" aria-current="page">People &amp; machines</a>
+    <a href="settings.html">Settings</a>
+  </nav>
+  <span class="who">Famille Geiger · Martine's laptop</span>
+</header>
+<main>
+<h1>People &amp; machines</h1>
+<h2>Backup machines</h2>
+<p class="sub" style="margin-top:0">The group keeps <b>2 safe copies</b> of every version, each on a different backup machine.</p>
+<table class="list"><thead><tr><th>Machine</th><th>State</th><th>Space</th><th>Last check</th></tr></thead><tbody>
+<tr><td><b>Mario's desktop</b><div class="sub">looked after by Mario</div></td><td><span class="state st-safe"><svg aria-hidden="true"><use href="icons.svg#safe"/></svg>Online</span></td><td style="min-width:220px"><div class="bar-space" role="img" aria-label="412 GB used of 1 TB"><span style="width:41%;background:#1b7f3b"></span></div><div class="sub">412 GB used · 588 GB free</div></td><td>4 min ago: all intact</td></tr>
+<tr><td><b>Paul's NAS</b><div class="sub">looked after by Paul</div></td><td><span class="state st-wait"><svg aria-hidden="true"><use href="icons.svg#wait"/></svg>Offline since Monday 18:02</span></td><td><div class="bar-space" role="img" aria-label="409 GB used of 500 GB"><span style="width:82%;background:#9a5b00"></span></div><div class="sub">409 GB used · 91 GB free · <b>full in about 3 months</b></div></td><td>Monday: all intact</td></tr>
+</tbody></table>
+<p><a class="btn" href="people.html">Add a backup machine</a></p>
+<h2>Members</h2>
+<table class="list"><thead><tr><th>Person</th><th>Role</th><th>Computers</th></tr></thead><tbody>
+<tr><td><b>Martine</b> (you)</td><td>member</td><td>Martine's laptop · this computer</td></tr>
+<tr><td><b>Paul</b></td><td>admin</td><td>Paul's laptop · seen 10 min ago<br>Paul's NAS · offline since Monday</td></tr>
+<tr><td><b>Mario</b></td><td>admin</td><td>Mario's desktop · online<br>Mario's laptop · seen yesterday</td></tr>
+<tr><td><b>Laurent</b></td><td>member</td><td>Laurent's laptop · seen 2 h ago</td></tr>
+</tbody></table>
+<p style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><a class="btn danger" href="people.html">I lost a computer…</a><span class="sub">To invite someone, ask Paul or Mario: they are the admins.</span></p>
+<p class="mock-note">Mockup for the usability study, not the product. <a href="index.html">All mockups</a></p>
+</main>
+</body>
+</html>

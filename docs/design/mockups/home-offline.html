@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<!-- pigeon v2 mockup: Home, not checked recently. Static HTML for the usability study (docs/design/ux.md). -->
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home, not checked recently — pigeon</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header class="bar">
+  <span class="brand"><svg width="26" height="26" aria-hidden="true"><use href="icons.svg#pigeon"/></svg>pigeon</span>
+  <nav aria-label="Sections">
+    <a href="home.html" aria-current="page">Home</a>
+    <a href="files.html">Files</a>
+    <a href="suggestions.html">Suggestions<span class="badge" aria-label="1 waiting">1</span></a>
+    <a href="people.html">People &amp; machines</a>
+    <a href="settings.html">Settings</a>
+  </nav>
+  <span class="who">Famille Geiger · Martine's laptop</span>
+</header>
+<main>
+<section class="headline lv-unknown" aria-live="polite"><svg aria-hidden="true"><use href="icons.svg#unknown"/></svg>
+  <div><p class="what">Last confirmed safe yesterday at 18:00.</p>
+  <p class="why">Pigeon can't reach the group right now: this computer seems to be offline. Changes you made since then are only on this computer.</p>
+  <p class="when">Pigeon will check again as soon as you are back online. <a href="settings.html">Check the connection</a></p></div></section>
+<h2>Only on this computer</h2>
+<table class="list"><thead><tr><th>File</th><th>State</th><th>Changed</th></tr></thead><tbody>
+<tr><td>Lettres/assurance.docx</td><td><span class="state st-local"><svg aria-hidden="true"><use href="icons.svg#local"/></svg>Only on this computer</span></td><td>today 09:40</td></tr>
+<tr><td>Photos/2026-10-13/IMG_2210.jpg</td><td><span class="state st-local"><svg aria-hidden="true"><use href="icons.svg#local"/></svg>Only on this computer</span></td><td>today 10:02</td></tr>
+</tbody></table>
+<h2>Recent activity</h2>
+<div class="card"><ul class="activity">
+  <li><b>Paul</b> added 12 photos to <a href="files.html">Photos/Vacances 2026</a> <span class="sub">· 25 min ago</span></li>
+  <li><b>You</b> changed <a href="file.html">Budget/budget-2026.xlsx</a> <span class="sub">· today 14:05</span></li>
+  <li><b>Mario's desktop</b> finished its weekly check: every copy it holds is intact <span class="sub">· this morning</span></li>
+  <li><b>Laurent</b> joined the group <span class="sub">· yesterday</span></li>
+</ul></div>
+<h2>This computer</h2>
+<div class="card"><p style="margin:0 0 8px">Pigeon uses <b>18.4 GB</b> of your 256 GB disk, for 2 of the 4 shared folders. <a href="files.html">Choose what to keep on this computer</a></p>
+<div class="bar-space" role="img" aria-label="18.4 GB used by pigeon, 96 GB free"><span style="width:7%;background:#1a5fb4"></span><span style="width:55%;background:#9aa5b1"></span></div>
+<p class="sub" style="margin:6px 0 0">Blue: pigeon · grey: your other files · 96 GB free</p></div>
+<p class="mock-note">Mockup for the usability study, not the product. <a href="index.html">All mockups</a></p>
+</main>
+</body>
+</html>

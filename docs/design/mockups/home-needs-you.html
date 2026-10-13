@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<!-- pigeon v2 mockup: Home, needs you. Static HTML for the usability study (docs/design/ux.md). -->
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home, needs you — pigeon</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header class="bar">
+  <span class="brand"><svg width="26" height="26" aria-hidden="true"><use href="icons.svg#pigeon"/></svg>pigeon</span>
+  <nav aria-label="Sections">
+    <a href="home.html" aria-current="page">Home</a>
+    <a href="files.html">Files</a>
+    <a href="suggestions.html">Suggestions<span class="badge" aria-label="1 waiting">1</span></a>
+    <a href="people.html">People &amp; machines</a>
+    <a href="settings.html">Settings</a>
+  </nav>
+  <span class="who">Famille Geiger · Martine's laptop</span>
+</header>
+<main>
+<section class="headline lv-act" aria-live="polite"><svg aria-hidden="true"><use href="icons.svg#act"/></svg>
+  <div><p class="what">You deleted 1,204 files in <i>Photos</i>.</p>
+  <p class="why">Was that on purpose? Until you answer, they are deleted on this computer only; the rest of the group still has them.</p>
+  <p style="margin:14px 0 0;display:flex;gap:10px;flex-wrap:wrap"><a class="btn" href="home.html">Bring them back</a> <a class="btn danger" href="deleted.html">Delete them for everyone</a></p>
+  <p class="when">Even if you delete them for everyone, you can restore them later from <a href="deleted.html">Deleted files</a>.</p></div></section>
+<h2>Recent activity</h2>
+<div class="card"><ul class="activity">
+  <li><b>Paul</b> added 12 photos to <a href="files.html">Photos/Vacances 2026</a> <span class="sub">· 25 min ago</span></li>
+  <li><b>You</b> changed <a href="file.html">Budget/budget-2026.xlsx</a> <span class="sub">· today 14:05</span></li>
+  <li><b>Mario's desktop</b> finished its weekly check: every copy it holds is intact <span class="sub">· this morning</span></li>
+  <li><b>Laurent</b> joined the group <span class="sub">· yesterday</span></li>
+</ul></div>
+<h2>This computer</h2>
+<div class="card"><p style="margin:0 0 8px">Pigeon uses <b>18.4 GB</b> of your 256 GB disk, for 2 of the 4 shared folders. <a href="files.html">Choose what to keep on this computer</a></p>
+<div class="bar-space" role="img" aria-label="18.4 GB used by pigeon, 96 GB free"><span style="width:7%;background:#1a5fb4"></span><span style="width:55%;background:#9aa5b1"></span></div>
+<p class="sub" style="margin:6px 0 0">Blue: pigeon · grey: your other files · 96 GB free</p></div>
+<p class="mock-note">Mockup for the usability study, not the product. <a href="index.html">All mockups</a></p>
+</main>
+</body>
+</html>

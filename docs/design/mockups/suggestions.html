@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<!-- pigeon v2 mockup: Suggestions. Static HTML for the usability study (docs/design/ux.md). -->
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suggestions — pigeon</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header class="bar">
+  <span class="brand"><svg width="26" height="26" aria-hidden="true"><use href="icons.svg#pigeon"/></svg>pigeon</span>
+  <nav aria-label="Sections">
+    <a href="home.html">Home</a>
+    <a href="files.html">Files</a>
+    <a href="suggestions.html" aria-current="page">Suggestions<span class="badge" aria-label="1 waiting">1</span></a>
+    <a href="people.html">People &amp; machines</a>
+    <a href="settings.html">Settings</a>
+  </nav>
+  <span class="who">Famille Geiger · Martine's laptop</span>
+</header>
+<main>
+<h1>Suggestions</h1>
+<div class="tabs"><a href="suggestions.html" aria-current="page">For you to decide (1)</a><a href="suggestions.html">Yours (1)</a></div>
+<div class="card">
+  <p style="margin:0"><b>Paul</b> suggests a change to <a href="file.html">Lettres/lettre-mairie.docx</a>, in your folder <span class="sub">· yesterday 20:14</span></p>
+  <p class="sub" style="margin:4px 0 12px">Only you can change this folder, so Paul's change waits for your decision. His version is safe either way.</p>
+  <table class="list"><thead><tr><th>Your version (12 Oct)</th><th>Paul's suggestion</th></tr></thead><tbody>
+  <tr><td>Madame, Monsieur,</td><td>Madame, Monsieur,</td></tr>
+  <tr><td style="background:#fde8e6"><del>Je vous écris au sujet du permis.</del></td><td style="background:#e6f4ea"><ins>Je vous écris au sujet du permis de construire n° 2026-114.</ins></td></tr>
+  <tr><td>Veuillez agréer…</td><td>Veuillez agréer…</td></tr>
+  </tbody></table>
+  <p style="margin:14px 0 0;display:flex;gap:10px;flex-wrap:wrap"><a class="btn primary" href="suggestions.html">Accept</a><a class="btn" href="suggestions.html">Decline…</a><a class="btn" href="file.html">Open both</a></p>
+  <p class="sub" style="margin:8px 0 0">Accepting makes Paul's version the current one; yours stays in the file's versions. You can add a note when you decline.</p>
+</div>
+<h2>Yours</h2>
+<div class="card"><p style="margin:0">You suggested a change to <b>Recettes de Paul/tarte-aux-pommes.docx</b> <span class="sub">· today 10:31</span></p>
+<p class="sub" style="margin:4px 0 0">Waiting for Paul. Your version is safe; you will be told when he decides.</p></div>
+<p class="mock-note">Mockup for the usability study, not the product. <a href="index.html">All mockups</a></p>
+</main>
+</body>
+</html>

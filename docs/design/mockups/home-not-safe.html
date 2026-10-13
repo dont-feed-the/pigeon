@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<!-- pigeon v2 mockup: Home, not safe yet. Static HTML for the usability study (docs/design/ux.md). -->
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home, not safe yet — pigeon</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header class="bar">
+  <span class="brand"><svg width="26" height="26" aria-hidden="true"><use href="icons.svg#pigeon"/></svg>pigeon</span>
+  <nav aria-label="Sections">
+    <a href="home.html" aria-current="page">Home</a>
+    <a href="files.html">Files</a>
+    <a href="suggestions.html">Suggestions<span class="badge" aria-label="1 waiting">1</span></a>
+    <a href="people.html">People &amp; machines</a>
+    <a href="settings.html">Settings</a>
+  </nav>
+  <span class="who">Famille Geiger · Martine's laptop</span>
+</header>
+<main>
+<section class="headline lv-wait" aria-live="polite"><svg aria-hidden="true"><use href="icons.svg#wait"/></svg>
+  <div><p class="what">3 files are not safe yet.</p>
+  <p class="why">They are shared, but only Mario's desktop holds them; the group keeps 2 safe copies. Paul's NAS has been offline since Monday 18:02.</p>
+  <p class="when"><b>Nothing to do:</b> they will be safe when Paul's NAS is back. Paul has been told.</p></div></section>
+<h2>Not safe yet</h2>
+<table class="list"><thead><tr><th>File</th><th>State</th><th>Safe copies</th></tr></thead><tbody>
+<tr><td>Photos/2026-10-12/IMG_2201.jpg</td><td><span class="state st-wait"><svg aria-hidden="true"><use href="icons.svg#wait"/></svg>Shared, not safe yet</span></td><td>1 of 2</td></tr>
+<tr><td>Photos/2026-10-12/IMG_2202.jpg</td><td><span class="state st-wait"><svg aria-hidden="true"><use href="icons.svg#wait"/></svg>Shared, not safe yet</span></td><td>1 of 2</td></tr>
+<tr><td>Photos/2026-10-12/IMG_2203.jpg</td><td><span class="state st-wait"><svg aria-hidden="true"><use href="icons.svg#wait"/></svg>Shared, not safe yet</span></td><td>1 of 2</td></tr>
+</tbody></table>
+<p><a href="people.html">See the backup machines</a></p>
+<h2>Recent activity</h2>
+<div class="card"><ul class="activity">
+  <li><b>Paul</b> added 12 photos to <a href="files.html">Photos/Vacances 2026</a> <span class="sub">· 25 min ago</span></li>
+  <li><b>You</b> changed <a href="file.html">Budget/budget-2026.xlsx</a> <span class="sub">· today 14:05</span></li>
+  <li><b>Mario's desktop</b> finished its weekly check: every copy it holds is intact <span class="sub">· this morning</span></li>
+  <li><b>Laurent</b> joined the group <span class="sub">· yesterday</span></li>
+</ul></div>
+<h2>This computer</h2>
+<div class="card"><p style="margin:0 0 8px">Pigeon uses <b>18.4 GB</b> of your 256 GB disk, for 2 of the 4 shared folders. <a href="files.html">Choose what to keep on this computer</a></p>
+<div class="bar-space" role="img" aria-label="18.4 GB used by pigeon, 96 GB free"><span style="width:7%;background:#1a5fb4"></span><span style="width:55%;background:#9aa5b1"></span></div>
+<p class="sub" style="margin:6px 0 0">Blue: pigeon · grey: your other files · 96 GB free</p></div>
+<p class="mock-note">Mockup for the usability study, not the product. <a href="index.html">All mockups</a></p>
+</main>
+</body>
+</html>

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<!-- pigeon v2 mockup: Files. Static HTML for the usability study (docs/design/ux.md). -->
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Files — pigeon</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header class="bar">
+  <span class="brand"><svg width="26" height="26" aria-hidden="true"><use href="icons.svg#pigeon"/></svg>pigeon</span>
+  <nav aria-label="Sections">
+    <a href="home.html">Home</a>
+    <a href="files.html" aria-current="page">Files</a>
+    <a href="suggestions.html">Suggestions<span class="badge" aria-label="1 waiting">1</span></a>
+    <a href="people.html">People &amp; machines</a>
+    <a href="settings.html">Settings</a>
+  </nav>
+  <span class="who">Famille Geiger · Martine's laptop</span>
+</header>
+<main>
+<h1>Files</h1>
+<div class="tabs"><a href="files.html" aria-current="page">Shared folders</a><a href="deleted.html">Deleted files</a></div>
+<p class="sub" style="margin-top:0">Your folder: <b>~/Famille Geiger</b>. Folders not kept on this computer stay here, safe on the backup machines; switch them on to get them back.</p>
+<table class="list"><thead><tr><th>Folder</th><th>Who can change it</th><th>State</th><th>Size</th><th>On this computer</th></tr></thead><tbody>
+<tr><td><b>Photos</b><div class="sub">8,912 files</div></td><td>Everyone can add; Paul decides changes</td><td><span class="state st-wait"><svg aria-hidden="true"><use href="icons.svg#wait"/></svg>3 not safe yet</span></td><td class="nowrap">16.2 GB</td><td><span class="switch on" role="switch" aria-checked="true"><span class="track"></span>Kept on this computer</span></td></tr>
+<tr><td><b>Budget</b><div class="sub">48 files</div></td><td>Everyone</td><td><span class="state st-safe"><svg aria-hidden="true"><use href="icons.svg#safe"/></svg>Safe</span></td><td class="nowrap">12 MB</td><td><span class="switch on" role="switch" aria-checked="true"><span class="track"></span>Kept on this computer</span></td></tr>
+<tr><td><b>Recettes de Paul</b><div class="sub">112 files · read-only for you</div></td><td>Paul's folder: only Paul can change it</td><td><span class="state st-safe"><svg aria-hidden="true"><use href="icons.svg#safe"/></svg>Safe</span></td><td class="nowrap">240 MB</td><td><span class="switch on" role="switch" aria-checked="true"><span class="track"></span>Kept on this computer</span></td></tr>
+<tr><td><b>Photos 2019</b><div class="sub">2,316 files</div></td><td>Everyone can add; Paul decides changes</td><td><span class="state st-safe"><svg aria-hidden="true"><use href="icons.svg#safe"/></svg>Safe</span></td><td class="nowrap">14.2 GB</td><td><span class="switch" role="switch" aria-checked="false"><span class="track"></span>Not on this computer</span></td></tr>
+<tr><td><b>Vidéos</b><div class="sub">310 files</div></td><td>Everyone</td><td><span class="state st-safe"><svg aria-hidden="true"><use href="icons.svg#safe"/></svg>Safe</span></td><td class="nowrap">96 GB</td><td><span class="switch" role="switch" aria-checked="false"><span class="track"></span>Not on this computer</span><div class="sub">needs 96 GB, you have 81 GB free</div></td></tr>
+</tbody></table>
+<div class="note" style="margin-top:18px"><b>Freeing up space never deletes anything.</b> When you switch a folder off, pigeon removes it from this computer only once its files are safe on the backup machines. Switch it on again to get it back, complete.</div>
+<h2>Budget</h2>
+<table class="list"><thead><tr><th>File</th><th>State</th><th>Changed</th><th></th></tr></thead><tbody>
+<tr><td><a href="file.html">budget-2026.xlsx</a></td><td><span class="state st-safe"><svg aria-hidden="true"><use href="icons.svg#safe"/></svg>Safe</span></td><td>today 14:05, you</td><td><a class="btn" href="file.html">Versions</a></td></tr>
+<tr><td>budget-2026 (Paul, 13 Oct 14:02).xlsx<div class="sub">Paul and you edited it at the same time; both versions are kept</div></td><td><span class="state st-safe"><svg aria-hidden="true"><use href="icons.svg#safe"/></svg>Safe</span></td><td>today 14:02, Paul</td><td><a class="btn" href="file.html">Compare</a></td></tr>
+<tr><td>impots-2025.pdf</td><td><span class="state st-safe"><svg aria-hidden="true"><use href="icons.svg#safe"/></svg>Safe</span></td><td>12 May, Mario</td><td><a class="btn" href="file.html">Versions</a></td></tr>
+</tbody></table>
+<p class="mock-note">Mockup for the usability study, not the product. <a href="index.html">All mockups</a></p>
+</main>
+</body>
+</html>
