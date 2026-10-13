@@ -44,3 +44,4 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0029](0029-status-icon-and-calm-notifications.md) | A status icon in the menu bar or tray, and calm notifications | Proposed |
 | [0030](0030-read-only-files-you-may-not-change.md) | Files you may not change are read-only on your disk | Proposed |
 | [0031](0031-free-up-space-per-folder.md) | Space is freed per folder, with git sparse checkout | Proposed |
+| [0032](0032-backup-machines-on-linux.md) | Backup machines run Linux only in v1 | Accepted |

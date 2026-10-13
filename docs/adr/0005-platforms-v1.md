@@ -1,6 +1,7 @@
 # 0005. v1 targets Linux and macOS; native Windows in v1.1
 
 - **Status:** Accepted, 13 October 2026, by Guillaume (tooling interview, Q1).
+  For backup machines, narrowed to Linux by ADR 0032.
 
 ## Context
 
