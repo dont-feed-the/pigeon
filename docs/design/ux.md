@@ -1,9 +1,10 @@
 # pigeon v2 — user experience study
 
-> Status: proposal for discussion, 13 October 2026. Guillaume asked for a careful study of the
-> command line and the web interface, so that they suit people who are not technical.
-> Mockups: [`mockups/`](mockups/) (static HTML, open `mockups/index.html`).
-> Decisions from this study: ADRs 0027–0031 and 0033–0035 (see their status in the ADR index).
+> Status: decided on 13 October 2026; the usability test (§9) may still change it. Guillaume
+> asked for this study, so that the command line and the web interface suit people who are not
+> technical, and answered its six questions. Decisions: ADRs 0027–0031 and 0033–0035 (see
+> their status in the ADR index). Mockups: [`mockups/`](mockups/) (static HTML, open
+> `mockups/index.html`).
 
 ## 1. Who uses pigeon
 

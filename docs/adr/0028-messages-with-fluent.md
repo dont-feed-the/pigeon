@@ -1,6 +1,7 @@
 # 0028. Messages come from one Fluent catalogue, in French and English
 
-- **Status:** Proposed, 13 October 2026, by the agent in the UX study.
+- **Status:** Accepted, 13 October 2026, by Guillaume (UX question 6).
+  Proposed by the agent in the UX study.
 
 ## Context
 
