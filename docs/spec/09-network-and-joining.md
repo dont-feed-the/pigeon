@@ -86,30 +86,39 @@ the internal API ([10 §10.1](10-interfaces.md)); the helper uses three more:
 client checks the peer credentials of the socket (`SO_PEERCRED`,
 `getpeereid`) are the same user.
 
-## 9.4 Append-only serving on custodians (ADR 0014)
+## 9.4 Serving peers: pull only, append-only on custodians (ADRs 0014, 0043)
 
-A custodian serves its peers in **append-only** mode: they may read, check
-presence, lock and store content; they may not remove it.
+git-annex cannot serve a P2P network append-only. `remotedaemon` serves it
+read-write whatever the environment (E13; `serveAuthed ServeReadWrite` in
+its source). `git-annex-shell p2pstdio` is append-only but relays no git. And
+by default any peer can push refs over P2P, a custodian's `main` included
+(E12). So `pigeond`, which relays every incoming stream (§9.3), passes each
+session to the device's `remotedaemon` socket through a **filter**, on
+every device:
 
-1. **Preferred mechanism.** If experiment E13 shows that git-annex can serve a
-   P2P network in `ServeAppendOnly` mode (the mode `git-annex-shell` uses with
-   `GIT_ANNEX_SHELL_APPENDONLY`), `pigeond` starts the custodian's
-   remotedaemon that way.
-2. **Otherwise, a filter.** `pigeond` relays every incoming stream (§9.3), so it
-   filters the P2P protocol between the peer and git-annex's socket:
-   - an allow-list of messages; `REMOVE` (and any other message that deletes
-     content) is answered with `FAILURE` without reaching git-annex;
-   - an unknown message closes the connection;
-   - the `VERSION` exchange is capped to the highest protocol version the
-     filter understands;
-   - `DATA n` payloads are passed through by length, never parsed.
-3. A refused `REMOVE` is logged at `error` with the peer's device ID: pigeon
-   never sends one, so it signals a bug or a modified client.
+- the client's messages must be on an allow-list for protocol versions 0 to 4:
+  `AUTH`, `VERSION`, `BYPASS`, `CHECKPRESENT`, `LOCKCONTENT`, `UNLOCKCONTENT`,
+  `GET`, `PUT`, `DATA`, `VALID`, `INVALID`, `DATA-PRESENT`, `SUCCESS`,
+  `FAILURE`, `GETTIMESTAMP`, `NOTIFYCHANGE`, `CONNECT git-upload-pack`,
+  `CONNECTDONE`, `ERROR`;
+- `VERSION n` is forwarded as `VERSION min(n, 4)`, the highest version the filter
+  knows;
+- on custodians, `REMOVE` and `REMOVE-BEFORE` are answered `FAILURE` without
+  reaching git-annex, and logged at `error` with the peer's device ID: pigeon
+  never sends one, so it signals a bug or a modified client. Laptops keep
+  git-annex's default, since their copies never count (ADRs 0002, 0014);
+- a `CONNECT` to anything but `git-upload-pack` is answered with `ERROR`, and the
+  session closes: no device accepts a push;
+- an unknown message, a malformed `DATA` length or a line over 4096 bytes closes
+  the session. A length is checked before anything is forwarded, and a payload
+  passes by length, never parsed. The server's output is parsed only for its
+  framing, so that the filter's own replies fall between frames.
 
-Laptops serve with git-annex's default permissions (ADR 0014): their copies
-never count (ADR 0002). The filter is a pure state machine over framed messages,
-with property tests (ADR 0012): it never forwards a removal, it forwards every
-allowed message unchanged, and it never desynchronises on `DATA` boundaries.
+Every repository also has pigeon's `pre-receive` hook, which refuses every
+push for any transport (ADR 0043). The filter is a pure state machine with
+property tests (ADR 0012). It never forwards a removal on a custodian, it
+forwards every allowed message unchanged, and it never loses its place across
+`DATA` boundaries, whatever the read sizes. E13 checks it against git-annex.
 
 ## 9.5 Relays and discovery (ADR 0016)
 

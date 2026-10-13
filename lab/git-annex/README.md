@@ -19,8 +19,8 @@ in the proposal, §5.
 | `ga-e15-sparse-folders.sh` | E15 freeing space per folder with sparse checkout (ADR 0031) | **yes**, exits non-zero on failure |
 | `ga-e15b-pointer-free-transitions.sh` | E15b no pointer file during freeing and keeping, observed continuously, with `kill -9` trials (ADR 0039, issue #2) | **yes** |
 | `ga-e18-unprotected-versions.sh` | E18 offline in-place saves against `annex.thin`, failed uploads, reconnection, re-thinning (ADR 0041, issue #3) | **yes** |
+| `ga-e12-e13-p2p-boundary.py` | E12 and E13 over git-annex's generic P2P transport (a lab network): `remotedaemon` only fetches; pushed refs; remote `REMOVE`; append-only `git-annex-shell`; pigeon's filter with random read sizes; copy counts from `.gitattributes`, the branch and the command line; the hooks git-annex installs (ADR 0043, issue #9); about 90 seconds | **yes** |
 | `ga-e19-install-races.py` | E19 install racing application saves and `kill -9`, thin and not thin, with a fuzzing writer (ADR 0040, issue #1); Linux, about 3 minutes | **yes** |
 
-The lab joins CI once its scripts assert, as E14, E15, E15b, E18 and E19 do (ADR 0026).
-Pending: E11 native Windows, E12 `remotedaemon` only fetches, E13
-`ServeAppendOnly` over P2P.
+The lab joins CI once its scripts assert, as E12/E13, E14, E15, E15b, E18 and E19
+do (ADR 0026). Pending: E11 native Windows.

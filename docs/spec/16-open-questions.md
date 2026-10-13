@@ -15,6 +15,7 @@
 | ADR 0040: install proves its own file; racing saves win | Proposed, for issue #1; [07 §7.5](07-capture-and-install.md) applies it, E19 asserts it | Guillaume |
 | ADR 0041: captured versions stay immutable until protected | Proposed, for issue #3; [07 §7.8](07-capture-and-install.md) applies it, E18 asserts it | Guillaume |
 | ADR 0042: purge releases references, completes after every seal | Proposed, for issues #4 and #5; [08 §8.6](08-custody-loops.md) applies it, the `Purge` model checks it | Guillaume |
+| ADR 0043: every device serves through a filter; pull only; explicit copy counts | Proposed, for issue #9; [09 §9.4](09-network-and-joining.md), [03 §3.8](03-repository-and-roles.md) apply it, E12 and E13 assert it | Guillaume |
 | TLC with the `Json` module for trace validation | ADR 0026 foresees a new ADR pinning it by SHA-256 ([13 §13.3](13-verification.md)) | before the first `*Trace.tla` |
 
 ## 16.2 Where this specification departs from a source
@@ -171,7 +172,7 @@ experiments stay listed in [13](13-verification.md) and in the prototype (#17).
 | #6 | roster forks with disjoint admin sets | [04 §4.7](04-roster-and-authority.md) | open |
 | #7 | decisions by non-admin owners and stewards | [04 §4.3, §4.5](04-roster-and-authority.md) | ADR 0038 (Proposed) |
 | #8 | catalogue merge algorithm and its laws | [05 §5.2](05-catalogue-and-names.md) | specified; ADR to come |
-| #9 | git-annex cannot bypass pigeon | [03 §3.7](03-repository-and-roles.md), [09 §9.4](09-network-and-joining.md) | E12, E13 to run |
+| #9 | git-annex cannot bypass pigeon | [03 §3.5–3.8](03-repository-and-roles.md), [09 §9.4](09-network-and-joining.md) | ADR 0043 (Proposed); E12 and E13 assert |
 | #10 | models and coverage | [13 §13.2, §13.10](13-verification.md) | coverage map and liveness assumptions written |
 | #11 | recovery onto fresh machines | — | open |
 | #12 | independent failure domains | — | open |
