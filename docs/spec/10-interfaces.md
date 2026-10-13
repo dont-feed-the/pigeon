@@ -170,7 +170,8 @@ An error that reaches a person is a **Problem**:
 Problem codes this specification uses include: `invite-expired`,
 `invite-used`, `invite-unknown`, `invite-not-allowed`, `inviter-offline`,
 `not-in-group`, `not-allowed` (a request the roster does not allow),
-`needs-confirmation`, `backup-machine-needs-linux` (§10.7), `disk-full`,
+`needs-confirmation`, `backup-machine-needs-linux` (§10.7), `disk-full`
+(ADR 0050), `same-domain`, `independence-unknown`, `repository-lost` (ADR 0049),
 `daemon-not-running`, `version-mismatch`, `git-annex-too-old`,
 `git-annex-untested`, `update-needed`, `pigeon-too-old`, `peer-too-old`,
 `peer-too-new` (ADR 0048),
@@ -185,8 +186,10 @@ Problem codes this specification uses include: `invite-expired`,
   supervised; git ≥ 2.38 and git-annex ≥ the minimum version
   ([14](14-platforms-and-packaging.md)); `ssh-keygen` present; the key file
   mode; the working tree's file system ([14 §14.2](14-platforms-and-packaging.md));
-  free disk space against `annex.diskreserve`; the settings check; reachability
-  of the relay and of each peer; clock skew against peers above 5 minutes
+  free disk space against `annex.diskreserve`; on backup machines, the failure
+  domain: which other backup machines share its disk or machine, and whether
+  it runs in a virtual machine or container with no declared `domain`
+  (ADR 0049); the settings check; reachability of the relay and of each peer; clock skew against peers above 5 minutes
   **[no ADR: skew threshold]**. `--details` adds versions, paths and the last
   errors.
 - Every request that changes the catalogue checks the roster first and fails

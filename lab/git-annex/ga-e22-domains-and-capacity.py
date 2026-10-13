@@ -4,8 +4,8 @@
 A laptop L (numcopies = mincopies = 2, untrusted) and bare custodians. Asserts:
 1a. storage fingerprints (mountinfo, lsblk, /dev/disk/by-uuid, the mount source;
     diskutil on macOS) and host fingerprints (machine-id, IOPlatformUUID), hashed
-    with the group ID, agree for two custodians on one volume; 1b. they differ on
-    a fresh tmpfs and loop mount (sudo, Linux) or a disk image (macOS);
+    with the group ID, agree for two custodians on one volume; 1b. a tmpfs differs,
+    a loop mount (sudo, Linux) or disk image (macOS) follows its file to C1's disk;
 2. git-annex counts two UUIDs on one disk, even one hard-linked inode, as two
    copies: the verified drop succeeds; only a `clone --shared` is untrusted;
 3. annex.diskreserve refuses a get and an incoming copy, over a local path and
@@ -15,7 +15,8 @@ A laptop L (numcopies = mincopies = 2, untrusted) and bare custodians. Asserts:
 5. a full disk (a tmpfs with sudo on Linux, a disk image on macOS): ENOSPC fails a
    get and a fetch, claims nothing, git fsck passes, and once space is freed git
    annex fsck passes and the retries succeed; 6. a custodian killed or deleted
-   while receiving never counts the key in flight; the verified drop refuses.
+   while receiving never counts the key in flight; the verified drop refuses;
+7. a drop ignoring all but one remote per domain refuses, then succeeds.
 Prints PASS, FAIL or SKIP per check; exits non-zero on failure. Environment: LAB.
 Sources cited: ~/src/git-annex-10.20261006.
 """
@@ -205,6 +206,11 @@ def storage_linux(path):
     sysdev = f'/sys/dev/block/{devno}'
     if not dev and os.path.exists(sysdev):
         dev = '/dev/' + os.path.basename(os.path.realpath(sysdev))
+    loop = re.fullmatch(r'/dev/(loop\d+)', os.path.realpath(dev)) if dev else None
+    bf = loop and f'/sys/block/{loop.group(1)}/loop/backing_file'
+    if bf and os.path.exists(bf):                   # an image file: the storage that holds the file
+        m, raw = storage_linux(open(bf).read().strip().removesuffix(' (deleted)'))
+        return f'{bf}, then {m}', raw
     if dev and shutil.which('lsblk'):
         r = sh('lsblk', '-s', '-n', '-P', '-o', 'NAME,TYPE,WWN,SERIAL', dev, check=False)
         rows = [dict(re.findall(r'(\w+)="([^"]*)"', l)) for l in r.stdout.splitlines()]
@@ -224,6 +230,11 @@ def storage_mac(path):
     """(method, raw ID): the APFS physical stores of path's volume, else its whole disk (diskutil)."""
     dev = sh('df', '-P', path).stdout.splitlines()[-1].split()[0]
     info = plistlib.loads(sh('diskutil', 'info', '-plist', dev).stdout.encode())
+    whole = '/dev/' + info.get('ParentWholeDisk', '')
+    for im in plistlib.loads(sh('hdiutil', 'info', '-plist').stdout.encode()).get('images', []):
+        if any(e.get('dev-entry') == whole for e in im.get('system-entities', [])):
+            m, raw = storage_mac(im['image-path'])  # a disk image: the storage that holds its file
+            return f'hdiutil info: {whole} is {os.path.basename(im["image-path"])}, then {m}', raw
     stores = [s['APFSPhysicalStore'] for s in info.get('APFSPhysicalStores', []) if 'APFSPhysicalStore' in s]
     if stores:
         ids = []
@@ -364,14 +375,18 @@ def e1_e2(lab):
             C = make_custodian(os.path.join(mnt, 'C'), 'C-' + label.replace(' ', '-'))
             m, s = storage_raw(C.root)
             note(f'{label}: `{m}`: {s!r}')
-            check(fingerprint('storage', s) not in (fs, *seen), f'{label} has the storage fingerprint of C1')
+            if label == 'tmpfs':
+                check(fingerprint('storage', s) not in (fs, *seen), 'the tmpfs has the storage fingerprint of C1')
+            else:                                   # its image file lies on C1's disk
+                check(fingerprint('storage', s) == fs, f'the {label} on C1\'s disk has another storage fingerprint')
             check(fingerprint('host', host_raw()[1]) == fh, f'{label} has another host fingerprint')
             seen.append(fingerprint('storage', s))
         if 'tmpfs' in fresh and (shm := mount_of('/dev/shm')) and shm[2] == 'tmpfs':
             t = mount_of(fresh['tmpfs'])
             note(f'the mount source alone collides: {t[2]} "{t[1]}" ({t[3]}) and /dev/shm {shm[2]} "{shm[1]}" '
                  f'({shm[3]}); the device number tells them apart until a remount')
-        result('1b', f'fresh {" and ".join(fresh)}: other storage fingerprints, the same host', before)
+        result('1b', 'the same host; ' + ('a tmpfs has another storage fingerprint, ' if 'tmpfs' in fresh else '')
+               + f'a {"loop mount" if SUDO else "disk image"} of a file on C1\'s disk has C1\'s', before)
 
     # ---- E22.2
     before = len(FAILS)
@@ -649,6 +664,30 @@ def e6(lab):
               'drop refuses every key', before)
 
 
+# ---- E22.7: pigeon's drop, one remote per failure domain (ADR 0049, spec 08 §8.3)
+def e7(lab):
+    """C1 and C2 share a domain, C4 stands for another. pigeond ignores every remote but one per
+    domain for the drop: Annex/NumCopies.hs verifiableCopies asks only remotes not ignored."""
+    before = len(FAILS)
+    L = make_laptop(os.path.join(lab, 'L7'), 'L7')
+    C1, C2, C4 = (make_custodian(os.path.join(lab, n), n) for n in ('C1', 'C2', 'C4'))
+    for C in (C1, C2, C4):
+        L.link(C)
+    k = L.add({'c.bin': os.urandom(200 * KB)})['c.bin']
+    for C in (C1, C2):
+        L.run('annex', 'copy', '-q', '--to', C.name, '--key', k)
+    ign = ('-c', 'remote.C2.annex-ignore=true')
+    d = L.r(*ign, 'annex', 'drop', '--key', k)
+    check(d.returncode != 0 and L.present(k), 'the drop with C2 ignored succeeds on C1 alone')
+    note(f'drop with remote.C2.annex-ignore=true, C1 and C2 in one domain: '
+         f'"{said(d, "Could only verify", "Unable to lock down")}"')
+    L.run('annex', 'copy', '-q', '--to', 'C4', '--key', k)
+    d = L.r(*ign, 'annex', 'drop', '--key', k)
+    check(d.returncode == 0 and not L.present(k), f'the drop with C2 ignored refuses C1 and C4: {said(d, "lock")}')
+    result(7, 'K = 2 with C1 and C2 in one domain: the drop that ignores C2 refuses; once C4, in another '
+              'domain, holds the key, the same drop succeeds', before)
+
+
 def main():
     global SUDO
     t_start = time.time()
@@ -657,7 +696,7 @@ def main():
     unmount_all(lab)
     wipe(lab)
     try:
-        for n, f in (('1', e1_e2), ('3', e3), ('4', e4), ('5', e5), ('6', e6)):
+        for n, f in (('1', e1_e2), ('3', e3), ('4', e4), ('5', e5), ('6', e6), ('7', e7)):
             t = time.time()
             try:
                 f(os.path.join(lab, f'e{n}'))

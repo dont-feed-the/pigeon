@@ -1,7 +1,7 @@
 # pigeon v2 — specification
 
 > **Status:** version 1 of the specification, 13 October 2026. It assembles the
-> decisions recorded in [ADRs 0001–0048](../adr/README.md), the guarantees P1–P6 of the
+> decisions recorded in [ADRs 0001–0050](../adr/README.md), the guarantees P1–P6 of the
 > [proposal](../design/proposal/proposal.pdf), the [UX study](../design/ux.md), the
 > [TLA+ models](../../models/tla/) and the [git-annex experiments](../../lab/git-annex/).
 > It supersedes [spec draft 0](../design/spec-draft-0.md) and [draft 1](../design/spec-draft-1.md),
@@ -141,3 +141,5 @@ or a collaborative editor), nor real-time sync of hot files (proposal §1).
 | 0046 protected needs the commit and the disk (Proposed) | [06](06-status.md), [02](02-guarantees.md), [03](03-repository-and-roles.md), [04](04-roster-and-authority.md), [08](08-custody-loops.md), [09](09-network-and-joining.md) |
 | 0047 recovery: rejoin, sheets, refounding, export (Proposed) | [09](09-network-and-joining.md), [04](04-roster-and-authority.md), [10](10-interfaces.md), [11](11-local-state.md), [03](03-repository-and-roles.md) |
 | 0048 versioned formats and rules, unknown never guessed (Proposed) | [04](04-roster-and-authority.md), [06](06-status.md), [08](08-custody-loops.md), [09](09-network-and-joining.md), [10](10-interfaces.md), [13](13-verification.md), [14](14-platforms-and-packaging.md) |
+| 0049 copies count once per failure domain (Proposed) | [02](02-guarantees.md), [04](04-roster-and-authority.md), [06](06-status.md), [08](08-custody-loops.md), [10](10-interfaces.md), [13](13-verification.md) |
+| 0050 capacity budgeted, space reserved, fewest copies first (Proposed) | [03](03-repository-and-roles.md), [06](06-status.md), [07](07-capture-and-install.md), [08](08-custody-loops.md), [09](09-network-and-joining.md), [15](15-resource-use.md) |

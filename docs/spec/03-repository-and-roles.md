@@ -76,6 +76,7 @@ into the folder changes nothing (ADR 0045):
 | `annex.backend` | `SHA256E` | verifiable keys only (rule 6, ADR 0044) |
 | `core.attributesFile`, `core.excludesFile` | an empty file of pigeon's | the person's git attributes and excludes do not apply (ADR 0045) |
 | `annex.jobs` | `1` | background work stays light (ADR 0037) |
+| `annex.diskreserve` | max(1 GB, 1 % of the file system) | git-annex refuses downloads that would cross it; capture does too (ADR 0050) |
 | trust | `untrust` | its copies never count toward K |
 | groups | `laptop` | for diagnostics |
 | `wanted` | `include=<folder>/* or …` over the top-level folders kept on this device | selective sync ([08 §8.5](08-custody-loops.md)) |
@@ -93,7 +94,8 @@ into the folder changes nothing (ADR 0045):
 | trust | `semitrust` (git-annex's default), never `trust` | every drop verifies it |
 | groups | `custodian` | `sizebalanced` and status count this group |
 | `wanted` | `sizebalanced=custodian:K` | partial custodians balanced by capacity; `pigeond` applies it key by key to `keys()`, so to the whole history (E9) and never to released keys (ADR 0042, [08 §8.3](08-custody-loops.md)) |
-| `maxsize` | from the roster entry of the device | capacity for `sizebalanced` (ADR 0003) |
+| `maxsize` | from the roster entry of the device | capacity for `sizebalanced` (ADR 0003); a share, never read as free space (ADR 0050) |
+| `annex.diskreserve` | max(5 GB, 2 % of the file system) | room for git, the git-annex journal and databases, and a recovery `fsck`; git-annex refuses downloads and incoming copies that would cross it (ADR 0050, E22) |
 | `annex.jobs` | `cpus` | a dedicated machine |
 | `core.fsync`, `core.fsyncMethod` | `objects,reference`, `fsync`; objects synced by `pigeond` before any positive answer ([09 §9.4](09-network-and-joining.md)) | what counts toward K is on disk; git-annex itself never syncs (ADR 0046) |
 | serving | append-only: no remote `REMOVE` (ADR 0014) | [09 §9.4](09-network-and-joining.md) |

@@ -27,17 +27,23 @@ For a version with key *k*, introduced by commit *c*, on this device, at time *n
 
 1. Let **H** be the custodians *x* of the roster with `holds(x, k)` and
    `has_commit(x, c)` that were heard of within `offline_after` (default 24
-   hours **[no ADR]**) and do not report `checking`. A custodian silent for
+   hours **[no ADR]**) and do not report `checking` or a lost repository
+   (ADR 0049). A custodian silent for
    longer no longer counts, and its silence becomes the reason. Content
    without the commit that names it is not protected: lost with the laptop,
    it would be a key without a name (ADR 0046).
-2. If |H| ≥ K: the version is **protected**, *observed at* T, the K-th most recent
-   `heard(x)` in H ("Safe. Checked 3 hours ago").
+2. Let **D** be the failure domains of the members of H (ADR 0049): custodians
+   whose `storage` fingerprints intersect, whose `host` is equal, or whose
+   roster `domain` is equal are one domain (connected components). If |D| ≥ K
+   and the members of H span at least `min_sites` declared sites: the version
+   is **protected**, *observed at* T, the K-th most recent among each domain's
+   latest `heard(x)` ("Safe. Checked 3 hours ago").
 3. If this device has heard of no custodian within `stale_after` (default 1 hour
    **[no ADR]**), a version that would be protected is **uncertain**, "not checked
    since T": pigeon cannot reach the group, so it cannot confirm.
 4. Else, if some other device has *c* (`has_commit`) or some custodian holds *k*:
-   **published**, with its reason (§6.4).
+   **published**, with its reason (§6.4); `same-domain` or `same-site` when
+   |H| ≥ K but D or the sites fall short.
 5. Else, if this device holds *k*: **local**.
 6. Else: **missing**, with reason `content-missing`: no device is known to hold
    the content; or `erased`, when a purge released it ([08 §8.6](08-custody-loops.md)).
@@ -53,7 +59,9 @@ Laptops are untrusted (ADR 0002), so they never enter H.
 
 Laws: the state is monotone in presence observations (more observations never
 lower it, except through time: staleness); the state of a version depends only on
-its key's observations and the commit's spread, not on paths.
+its key's observations, the commit's spread and the domains, not on paths. A
+fingerprint or a declaration can only merge domains, so it never raises a
+state; with one custodian per domain, the state is that of ADR 0002 (ADR 0049).
 
 ## 6.3 Status reports **[no ADR]**
 
@@ -75,6 +83,14 @@ versions = { pigeon = "1.0.0", git_annex = "10.20261006", git = "2.55.0" }
 used = 812_000_000_000
 free = 1_100_000_000_000
 maxsize = 2_000_000_000_000
+reserve = 22_000_000_000            # annex.diskreserve (ADR 0050)
+full = false                        # true while writes are paused by ENOSPC (ADR 0050)
+
+[custody]                           # custodians only: failure domain (ADR 0049)
+storage = ["<hash>"]                # the disks or network share under the repository; [] if unknown
+host = "<hash>"                     # /etc/machine-id; "" if unknown
+virtual = ""                        # systemd-detect-virt: "", "kvm", "docker", …
+repository = "ok"                   # "lost": its repository, UUID or storage is gone; counts for nothing
 
 [scrub]                             # custodians only
 last_pass_completed = 2026-10-12T05:40:00Z
@@ -89,7 +105,20 @@ held = []                           # covered keys it keeps for a reference outs
 bytes_to_send = 0
 bytes_to_receive = 0
 paused = ""                         # "", "person", "battery", "metered", "disk-busy" (ADR 0037)
+admits = "all"                      # custodians: "endangered" while they keep room for repair (ADR 0050)
 ```
+
+The `[custody]` values are the first 16 bytes of SHA-256 over `pigeon-domain`,
+the group ID and the identifier found, recomputed at start and every hour: the
+WWN, else the serial, of each whole disk under the repository's file system
+(`lsblk -s`, a loop device followed to its backing file), the server and
+export of a network share, `/etc/machine-id` (ADR 0049, E22). They show
+which custodians share hardware, not serial numbers, and differ between groups.
+A value not found stays empty, never guessed, and gives the notice
+`independence-unknown`; a repository on `tmpfs` or `ramfs` is refused. Before
+each report and each served session the custodian checks that its repository
+is still there with its UUID and storage; if not, it reports
+`repository = "lost"` and stops serving.
 
 A device publishes when its state changes and at least every 10 minutes while
 it runs. A report is accepted only if its signer is the device it names, listed
@@ -108,7 +137,11 @@ state, so that the headline can say why and what happens next (ADR 0027):
 |---|---|
 | `sending(eta)` | "Sending 12 photos to the group… (2 min left)" |
 | `custodian-offline(names, since)` | "Paul's NAS has been offline since Monday 18:02; they will be safe when it is back." |
-| `no-capacity(missing_bytes, machines)` | "The backup machines are full: 40 GB are missing on Paul's NAS or a new machine." (ADR 0003) |
+| `no-capacity(missing_bytes, machines, who)` | "The backup machines are full: 40 GB are missing. Paul can free space on Paul's NAS, or an admin can add a backup machine." (ADRs 0003, 0050) |
+| `same-domain(names)` | "Paul's NAS and Paul's old PC are on one machine; they count as one backup." (ADR 0049) |
+| `same-site(site)` | "Both copies are at Paul's home; the group asks for copies in 2 places." (ADR 0049) |
+| `repository-lost(device)` | "Paul's NAS no longer finds its backup folder; it counts for nothing until it is set up again." (ADR 0049) |
+| `disk-full(device)` | "Paul's NAS is full; it waits until 3 GB are freed." (ADR 0050) |
 | `too-few-custodians(have, k)` | "The group keeps 2 safe copies but has only 1 backup machine." |
 | `paused(by)` | "Sharing is paused until 18:00." / "Waiting for a non-metered network." / "Waiting: this computer's disk is busy." (ADR 0037) |
 | `group-unreachable(since)` | "pigeon can't reach the group since 14:10." |
@@ -129,7 +162,7 @@ The headline reduces every item to one of five levels (ADR 0027, ux.md §4):
 
 | Level | Shown when |
 |---|---|
-| **Needs you** | an item only a person can fix: disk full; a backup machine not heard of for more than 7 days (for admins and its owner); a held mass deletion; a held non-portable name; a conflict waiting for this person (ADR 0034); a suggestion waiting for this person's decision for more than 3 days; this computer removed from the group; custody capacity short (ADR 0003, for admins and custodian owners); erased content came back (for the deciders, ADR 0042) |
+| **Needs you** | an item only a person can fix: disk full; a backup machine not heard of for more than 7 days (for admins and its owner); a held mass deletion; a held non-portable name; a conflict waiting for this person (ADR 0034); a suggestion waiting for this person's decision for more than 3 days; this computer removed from the group; custody capacity short (ADRs 0003, 0050, for admins and custodian owners); two backup machines in one failure domain, or one whose repository is lost (ADR 0049, for admins and their owners); erased content came back (for the deciders, ADR 0042) |
 | **Not safe yet** | some version is *local* or *published* for longer than the grace period (default 10 minutes) |
 | **Not checked recently** | pigeon cannot confirm: no custodian heard of within `stale_after` |
 | **Working** | something is being captured, sent or received, all of it younger than the grace period |

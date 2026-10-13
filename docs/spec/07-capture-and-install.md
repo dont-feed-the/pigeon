@@ -280,7 +280,8 @@ suggestions alike. The unprotected versions this laptop captured form its
 
 - **Budget.** Pending history may use up to `pending_max`, 10 % of the file
   system by default (ADR 0041), and capture never goes below
-  `annex.diskreserve`. Beyond either, capture of new content pauses with reason
+  `annex.diskreserve`, max(1 GB, 1 %) on laptops (ADR 0050), which pigeon
+  checks itself because `git annex add` does not. Beyond either, capture of new content pauses with reason
   `history-full` ([06 §6.4](06-status.md)). The files stay as saved, and
   deletions and renames are still captured.
 - **Once protected**, the laptop drops the old versions it holds by key

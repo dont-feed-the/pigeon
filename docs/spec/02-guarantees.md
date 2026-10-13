@@ -6,13 +6,17 @@
 
 ## 2.1 Definitions
 
-- A version V is **protected** when at least K distinct custodians hold copies of
-  its key that were verified when placed and, since, by every scrub that covered
-  them (ADR 0002), each on its disk, and each of them also holds the commit
-  that introduced V (ADR 0046). Those custodians then hold everything needed
+- A version V is **protected** when custodians in at least K distinct failure
+  domains hold copies of its key that were verified when placed and, since, by
+  every scrub that covered them (ADR 0002), each on its disk, and each of them
+  also holds the commit that introduced V (ADR 0046). A **failure domain** is
+  a set of custodians that share a disk, a machine or a declared `domain`
+  (ADR 0049); with `min_sites` ≥ 2, the copies also span that many declared
+  sites. Those custodians then hold everything needed
   to recover V on a fresh machine ([09 §9.9](09-network-and-joining.md)).
-- A **repair epoch** for V starts when V has fewer than K verified custody copies
-  after having had K, and ends when it has K again.
+- A **repair epoch** for V starts when V's verified custody copies span fewer
+  than K failure domains after having spanned K, and ends when they span K
+  again.
 - A version is **captured** when pigeon has added its content to the local annex
   and recorded it in a signed commit, accepted or proposal ([07](07-capture-and-install.md)).
 - A **saved file** is the content a person or their application left at a path
@@ -20,8 +24,11 @@
 
 ## 2.2 Assumptions
 
-- **F (failures):** within any repair epoch of V, fewer than K of the custodians
-  that hold V lose or corrupt it.
+- **F (failures):** within any repair epoch of V, fewer than K of the failure
+  domains that hold V lose or corrupt it. Custodians are independent only as
+  far as pigeon can see or the group declares (ADR 0049): a fire, flood or
+  theft that takes a whole place is inside F only if the group declares
+  sites and sets `min_sites` ≥ 2.
 - **Members** are honest but fallible: they make mistakes, run old versions,
   delete by accident, but they do not attack the group. **Keys** are not stolen.
 - **Networks** partition, reorder, duplicate and drop messages; **devices** crash
@@ -85,8 +92,13 @@ what happens next (ADR 0027).
 - History beyond a purge's retention period.
 - Writes between two captures (P2), and an application's unsaved data.
 - Protection without custodial capacity: a group with no custodian, or with less
-  capacity than K × (collection + retained history), gets no protection for the
-  versions that do not fit, and is told so (ADR 0003).
+  capacity than K × (collection + retained history + suggestions not erased),
+  gets no protection for the versions that do not fit, and is told how much is
+  missing and who can act (ADRs 0003, 0050).
+- Independence pigeon cannot see: virtual machines on one host with virtual
+  disks, or machines in one place, count as separate failure domains unless
+  the roster declares a `domain` or `site` (ADR 0049). pigeon never infers
+  places from the number of machines.
 - Malicious members, stolen keys, a stolen unlocked laptop before an admin
   removes it (ADR 0007).
 - Confidentiality from the group's own members: every member can read every
@@ -101,9 +113,10 @@ test (ADR 0012), "lab" a git-annex experiment.
 
 | Id | Invariant | Carries | Enforced in | Checked by |
 |---|---|---|---|---|
-| INV-K | a custodian's copy is dropped only by its own `pigeond`, and only if K other verified custody copies exist, or by a purge after retention | P1 | [08 §8.4–8.6](08-custody-loops.md), ADR 0014 | E1, E5, E9, E13; model (planned) |
+| INV-K | a custodian's copy is dropped only by its own `pigeond`, and only if K other verified custody copies exist in K failure domains, or by a purge after retention | P1 | [08 §8.4–8.6](08-custody-loops.md), ADR 0014 | E1, E5, E9, E13; model (planned) |
 | INV-Named | a custodian counts toward K for a version only if it also has the commit that introduced it, and only for copies synced to its disk | P1, P6 | [06 §6.2](06-status.md), [09 §9.4](09-network-and-joining.md), ADR 0046 | E21 (asserting); status and filter laws |
 | INV-NoCount | a laptop copy never counts toward K | P1 | [03 §3.3](03-repository-and-roles.md) (`untrust`) | E8, E9 |
+| INV-Domain | copies count once per failure domain: a version is protected only if its counted custodians span K domains (and `min_sites` sites), and every verified drop lets git-annex lock only one copy per domain | P1, P6 | [06 §6.2](06-status.md), [08 §8.3, §8.10](08-custody-loops.md), ADR 0049 | E22; status and drop-choice laws |
 | INV-Settings | drops are suspended while git-annex's shared settings disagree with the roster | P1 | [03 §3.5](03-repository-and-roles.md) | law; lab |
 | INV-History | custodians want every version not purged, not only the current tree | P1, P3 | [03 §3.4](03-repository-and-roles.md) | E9, E10c |
 | INV-Capture | every saved file reaches a signed commit (accepted or proposal) before any install touches its path | P2 | [07 §7.3](07-capture-and-install.md) | model (planned); fault injection |

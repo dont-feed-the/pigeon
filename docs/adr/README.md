@@ -61,3 +61,5 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0046](0046-protected-means-content-and-history-on-disk.md) | Protected means K custodians hold the content and the commit that names it, on disk | Proposed |
 | [0047](0047-recover-from-custodians-sheets-refound-export.md) | A group is recovered from its custodians: rejoin, recovery sheets, refounding, and export without pigeon | Proposed |
 | [0048](0048-unknown-formats-and-rules-are-never-guessed.md) | Replicated formats and rules are versioned; what a device does not understand, it never guesses | Proposed |
+| [0049](0049-copies-count-once-per-failure-domain.md) | Copies count once per failure domain: shared disks, machines and declared domains | Proposed |
+| [0050](0050-capacity-is-budgeted-reserved-and-admitted.md) | Capacity is budgeted, real free space is reserved, and endangered content goes first | Proposed |

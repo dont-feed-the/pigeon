@@ -54,21 +54,35 @@ order-independent; the accepted set is a join (ADR 0012).
 
 - A **laptop** uploads, with `git annex copy --to <custodian> --key`, every key
   of `keys()` ([05 §5.1](05-catalogue-and-names.md)) that custodian wants (its `sizebalanced` share, [03 §3.4](03-repository-and-roles.md))
-  and does not hold yet, in queue order: fewest custody copies first, then
-  newest, then smallest (ADR 0037).
+  and does not hold yet, in the queue order of the protect class
+  ([15 §15.2](15-resource-use.md), ADR 0050).
 - A **custodian** downloads what it wants from any peer that has it: for each
   key of `keys()` that it lacks, history included (E9), and that its `wanted`
-  expression matches (`git annex matchexpression --key`), `git annex get
-  --key`. pigeon chooses every transfer key by key (ADR 0042): git-annex
+  expression matches (`git annex matchexpression --key`) or domain repair
+  gives it (below), `git annex get --key`. pigeon chooses every transfer key by key (ADR 0042): git-annex
   refuses `get --auto` and `drop --auto` with `--all` or `--key`, and
   `satisfy --all` would drop content from peers. After each batch it syncs
   what arrived to disk (ADR 0046): git-annex never does.
 - Both directions run, so protection proceeds whichever side reaches the other.
   git-annex verifies content on arrival; the location log records it.
 - A laptop then drops what it does not want (old versions, folders not kept)
-  with `git annex drop --key --numcopies K --mincopies K` for each such key
-  it holds (ADR 0043). This is a verified drop: git-annex locks and checks K custody copies on custodians first (E1,
-  E5), and the laptop's own copy never counts (ADR 0002). git-annex refuses
+  with a verified drop for each such key it holds (ADR 0043): git-annex locks
+  and checks K custody copies on custodians first (E1, E5), and the laptop's
+  own copy never counts (ADR 0002).
+- **Every verified drop locks one copy per failure domain** (ADR 0049).
+  `pigeond` chooses K custodians holding the key, in K domains and spanning
+  `min_sites` declared sites, reachable ones first, and runs
+  `git -c remote.<other>.annex-ignore=true … annex drop --key <key>
+  --numcopies K --mincopies K`, ignoring every other remote. git-annex
+  verifies only remotes that are not ignored (`verifiableCopies` in
+  `Annex/NumCopies.hs`), so its K locks fall in K domains (E22). Without such
+  a choice, the drop waits.
+- **Domain repair.** `sizebalanced` knows nothing of domains. When the
+  custodians that hold or want a key span d < K domains, the custodians of the
+  other domains with room for it (free space above `annex.diskreserve`, within
+  `maxsize`) rank themselves by SHA-256 of the key and their device ID; the
+  best-ranked custodian of each of the first K − d domains wants the key too
+  (ADR 0049). Every custodian computes the same choice. git-annex refuses
   `--auto` with `--all` (E18). The laptop also re-thins the current files it
   captured ([07 §7.8](07-capture-and-install.md), ADR 0041). This keeps laptops
   at about one copy of what they keep.
@@ -78,8 +92,14 @@ order-independent; the accepted set is a join (ADR 0012).
 A key falls below K custody copies when a custodian is removed from the roster
 (marked `dead`, [03 §3.4](03-repository-and-roles.md)), when a scrub finds it
 bad, or when a custodian's disk dies and its operator removes it. The other
-custodians' `sizebalanced` share then includes it, and their per-key downloads
-(§8.3) restore K within their capacity (E9, E10). A **repair epoch** lasts until every
+custodians' `sizebalanced` share and domain repair then include it, and their
+per-key downloads (§8.3) restore K domains within their capacity (E9, E10),
+before any new key (ADR 0050, [15 §15.2](15-resource-use.md)). While a key is
+in a repair epoch it is **endangered**: a custodian whose free space above its
+reserve is smaller than the endangered keys it wants defers its own downloads
+of other keys and reports `admits = "endangered"` ([06 §6.3](06-status.md)),
+so laptops send it nothing else and new captures do not take the space a
+repair needs. A **repair epoch** lasts until every
 key has K copies again; its progress (keys and GB left) is in the status
 ("repairing", ux.md §8.11). A custodian that stops being heard of is not
 removed automatically: after 7 days its owner and the admins see *Needs you*
@@ -236,22 +256,55 @@ every 30 days by default **[no ADR]**. Bad content is moved out and logged
 absent by git-annex, which starts repair (§8.4). The last completed pass and the
 failures go into the custodian's status report ([06 §6.3](06-status.md)).
 
-## 8.9 Capacity (ADR 0003)
+## 8.9 Capacity (ADRs 0003, 0050)
 
-- **Need:** K × (the size of `keys()`: current versions, history and proposals
-  not purged).
+- **Need,** in parts, each K × the size of its distinct keys: *current*
+  versions; *history* not purged; *suggestions*, open, declined or withdrawn,
+  until erased; and the copies *domain repair* adds (ADR 0049). Each custodian
+  also needs its git repository and git-annex branch, transfers in progress
+  and its reserve; a laptop, what it keeps, its pending history and its
+  install asides ([07 §7.8](07-capture-and-install.md)).
 - **Capacity:** the sum over custodians of min(`maxsize`, one copy of
   everything), since a custodian is useful only up to one copy.
+- **Reserve.** pigeon sets `annex.diskreserve` to max(1 GB, 1 %) of the file
+  system on laptops and max(5 GB, 2 %) on custodians. git-annex refuses a
+  download or an incoming copy that would cross it (`checkDiskSpace` in
+  `Annex/Content/LowLevel.hs`, E22), and capture refuses to cross it.
+  `maxsize` is a share for `sizebalanced`, advisory, never read as free space;
+  at joining it is the free space minus 10 %, at most the free space minus the
+  reserve ([09 §9.6](09-network-and-joining.md)).
+- **Disk full.** A write that fails with `ENOSPC` or `EDQUOT` pauses every
+  writer on that file system (capture, downloads, installs, merges); serving
+  and status reports go on. *Needs you*: "This computer's disk is full: free
+  3 GB to go on" (`disk-full`). Work resumes when the free space exceeds the
+  reserve by 1 GB, checked every minute; a restart replays the install
+  journal and retries the failed batch. E22 shows that a get failing with
+  `ENOSPC` logs nothing and keeps no object (its partial in `annex/tmp` is
+  resumed), that a `git fetch` fails and leaves `main` whole, and that both
+  succeed when retried. `git annex fsck` fails on a full disk, so scrubbing
+  waits for the reserve. `pigeond` never parses git-annex's error messages to
+  tell why a transfer failed (a copy refused by the receiver's reserve reads
+  "transfer already in progress"); the receiver's status report says why.
+- **Admission.** New content waits in view, never silently. A laptop captures
+  within `pending_max` and the reserve, then waits with `history-full`
+  (ADR 0041). A key that no custodian can take stays *published* with
+  `no-capacity(missing_bytes, machines, who)`. The admins and the owners of
+  the full custodians see *Needs you*: how many GB are missing, who can free
+  space where, and how much declined suggestions take ("erasing them frees
+  24 GB of backup space").
 - pigeon warns admins and custodian owners when capacity < need × 1.25 (the
-  25 % headroom, because `sizebalanced` is heuristic, E10), saying how many GB
-  are missing and on which machines. Versions that do not fit stay *published*
-  with reason `no-capacity`.
+  25 % headroom, because `sizebalanced` is heuristic, E10).
+- `pigeon status --capacity` and the web's *Space* page show the parts of the
+  need, each custodian's offered, used and free space, and the declined
+  suggestions by size and age. An admin erases these with `pigeon erase
+  --suggestion ID` (§8.6); nothing expires by itself.
 
 ## 8.10 Rebalancing
 
 At the lowest priority, a custodian drops each key it holds that its `wanted`
 expression no longer matches after the shares moved (a custodian joined or
-changed `maxsize`), with a verified `git annex drop --key`: git-annex checks K
-other custody copies first (ADR 0014). pigeon
+changed `maxsize`), and that domain repair does not give it, with a verified
+drop (§8.3): git-annex checks K other custody copies in K domains first
+(ADRs 0014, 0049). pigeon
 never runs `--rebalance` against a remote. A placement planner may replace
 `sizebalanced` later (ADR 0003).

@@ -196,8 +196,9 @@ someone*) creates a one-time invitation:
    marks it used, and signs a roster commit that adds the device (and the
    person, for `new-person`) under the authority rule
    ([04 §4.7](04-roster-and-authority.md)). A custodian's `maxsize` is its
-   reported free space minus 10 %, which an admin can change later
-   **[no ADR: default maxsize]**.
+   reported free space minus 10 %, and at most that free space minus
+   `annex.diskreserve`, which an admin or its owner can change later
+   (ADR 0050).
 4. The inviter answers `Welcome {commit}`, or a refusal whose code becomes a
    Problem ([10 §10.6](10-interfaces.md)): `P-INVITE-EXPIRED`, `P-INVITE-USED`,
    `invite-unknown`, `invite-not-allowed`.

@@ -34,17 +34,19 @@ issues transfers one key at a time from batch `get` and `copy` processes
 |---|---|---|
 | 1. capture | hashing and committing what people saved ([07 §7.3](07-capture-and-install.md)) | oldest change first |
 | 2. history | fetch, validate, merge, status reports ([08 §8.2](08-custody-loops.md)) | most recent notice first |
-| 3. protect | uploads that bring a version toward *protected* ([08 §8.3](08-custody-loops.md)) | fewest custody copies, then newest, then smallest |
+| 3. protect | uploads and downloads that bring a version toward *protected*, and repair ([08 §8.3, §8.4](08-custody-loops.md), ADR 0050) | fewest failure domains holding a custody copy first (a laptop copy counts for ordering only), then endangered keys, then newest, then smallest |
 | 4. download | content of kept folders, install ([07 §7.5](07-capture-and-install.md)) | folder priority (`high`, `normal`, `low`), then recently changed first |
-| 5. repair | restoring K copies ([08 §8.4](08-custody-loops.md)) | fewest copies first |
-| 6. scrub | `fsck --incremental --time-limit` slices ([08 §8.8](08-custody-loops.md)) | git-annex's incremental order |
-| 7. rebalance | verified `drop --key` of keys a custodian no longer wants ([08 §8.10](08-custody-loops.md)) | — |
+| 5. scrub | `fsck --incremental --time-limit` slices ([08 §8.8](08-custody-loops.md)) | git-annex's incremental order |
+| 6. rebalance | verified `drop --key` of keys a custodian no longer wants ([08 §8.10](08-custody-loops.md)) | — |
 
 - A higher class preempts a lower one between keys; a transfer in progress
   is paused, not abandoned, when a higher class needs the same resource.
 - The order is a pure function in `pigeon-core` with laws: it is a total
   preorder; class 1 always runs within its floor (§15.4); a key's position
-  never depends on arrival order of equal items.
+  never depends on arrival order of equal items; a key held in fewer failure
+  domains never waits behind one held in more (ADR 0050). Repair is no longer
+  a class below downloads: a custodian spends its last space on the keys with
+  the fewest copies.
 - Folder priority is a per-device setting (`[groups.priority]`,
   [11 §11.2](11-local-state.md)).
 
@@ -52,7 +54,9 @@ issues transfers one key at a time from batch `get` and `copy` processes
 
 **Adaptive shaper.** Every byte between devices goes through `pigeond`'s stream
 relay ([09 §9.3](09-network-and-joining.md)), so `pigeond` shapes it itself,
-whether or not `annex.bwlimit` applies over the P2P transport (E16). The shaper
+whether or not `annex.bwlimit` applies over the P2P transport (E16), and
+although `annex-bwlimit-download` is never read in git-annex 10.20261006
+(E22). The shaper
 is delay-based, in the spirit of LEDBAT (RFC 6817):
 
 - It samples the round-trip time of its QUIC paths (from iroh's path
@@ -107,6 +111,11 @@ slow pigeon) **[no ADR: thresholds]**.
   status says `paused(disk-busy)`: "Waiting: this computer's disk is busy."
 - `annex.stalldetection` is set above the longest pause, so that git-annex
   does not abandon a paused transfer (E17 checks it).
+
+**Space.** Real free space is kept by `annex.diskreserve`; a write that
+fails with `ENOSPC` pauses every writer on that file system until the reserve
+is back plus 1 GB, and shows *Needs you* (`disk-full`;
+[08 §8.9](08-custody-loops.md), ADR 0050).
 
 **Page cache.** pigeon's own reads use `posix_fadvise(POSIX_FADV_DONTNEED)`
 after use on Linux and `F_NOCACHE` on macOS. git-annex's reads cannot be
