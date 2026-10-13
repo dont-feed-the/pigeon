@@ -7,8 +7,9 @@ which already knows how to store versions, count copies and refuse unsafe
 deletions. pigeon adds the parts people see: who belongs to the group, which
 machines keep the safe copies, and a status everybody can read.
 
-> **Status:** design phase. This branch holds the decisions, the models and
-> the experiments; there is no code yet. pigeon 0.9 lives on `main` and
+> **Status:** design phase. This branch holds the decisions, the
+> [specification](docs/spec/README.md), the models and the experiments; there
+> is no code yet. pigeon 0.9 lives on `main` and
 > under the tag `v0.9.0`; v2 does not reuse it (ADR 0015).
 
 ## The promise in one picture
@@ -22,16 +23,18 @@ A version of a file goes through three states, and pigeon always says which:
 | protected | at least K custodian machines hold a verified copy |
 
 Deleting is reversible until an explicit, signed purge. The full list of
-guarantees (P1–P6) is in the [proposal](docs/design/proposal/proposal.pdf).
+guarantees (P1–P6) is in the [proposal](docs/design/proposal/proposal.pdf) and in
+[docs/spec/02-guarantees.md](docs/spec/02-guarantees.md).
 
 ## Where things are
 
 | Path | What it holds |
 |---|---|
+| [`docs/spec/`](docs/spec/) | the specification of v2, one mission per file, built from the ADRs |
 | [`docs/adr/`](docs/adr/) | architecture decision records, one per choice, with an index |
-| [`docs/design/`](docs/design/) | proposal, review of the drafts, git-annex study, related work, spec drafts |
+| [`docs/design/`](docs/design/) | proposal, UX study and mockups, review of the drafts, git-annex study, related work, superseded spec drafts |
 | [`models/tla/`](models/tla/) | TLA+ models of custody and their expected TLC verdicts |
-| [`lab/git-annex/`](lab/git-annex/) | shell experiments E1–E10 on git-annex behaviour |
+| [`lab/git-annex/`](lab/git-annex/) | shell experiments E1–E10 and E15 on git-annex behaviour |
 | [`scripts/`](scripts/) | the checks that CI runs |
 
 ## Checking the repository

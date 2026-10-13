@@ -1,5 +1,7 @@
 # pigeon — specification (draft 1)
 
+> **Superseded** by [docs/spec/](../spec/README.md) on 13 October 2026. Kept for the record.
+
 > Status: draft for discussion. `TBD` = undecided, `v2` = later (v1 must not block it).
 > Draft 1 rewrites draft 0 ([spec-draft-0.md](spec-draft-0.md)) for a higher power-to-complexity ratio:
 > the special cases of draft 0 (conflicts, tombstones, moves, proposals, force-confirm,

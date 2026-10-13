@@ -1,5 +1,7 @@
 # pigeon — specification (skeleton, draft 0)
 
+> **Superseded** by [docs/spec/](../spec/README.md) on 13 October 2026. Kept for the record.
+
 > Status: draft for discussion. Edit freely. `TBD` = undecided, `v2` = later, but v1 must not block it.
 > Wire protocol: language-neutral (CBOR or Protobuf, TBD), documented here. Implementation language chosen *after* the spec (Rust favoured: iroh/libp2p, mDNS, chunking).
 
