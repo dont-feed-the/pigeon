@@ -99,6 +99,7 @@ and each law is a `hegeltest` property (pinned to 0.49, a dev-dependency).
 | settings | expected git-annex settings are a function of the roster; applying twice changes nothing | [03 §3.5](03-repository-and-roles.md) |
 | install journal | replay idempotent; each path ends old or new | [11 §11.5](11-local-state.md) |
 | local files | round trip; newer formats refused | [11 §11.5](11-local-state.md) |
+| compatibility | an older release's verdict is the newer one's or *unknown*; an unknown field or `format` is never ignored; an unreadable status report never raises a state (ADR 0048) | [04 §4.4](04-roster-and-authority.md), [06 §6.3](06-status.md) |
 | append-only filter | never forwards a removal; forwards allowed messages unchanged; keeps `DATA` framing; no positive answer for a key before its sync (ADR 0046) | [09 §9.4](09-network-and-joining.md) |
 | trace merge | Lamport merge associative and commutative; per-device order kept | [12 §12.3](12-observability.md) |
 | work queue | order is a total preorder of the classes of ADR 0037; capture never starves | [15 §15.2](15-resource-use.md) |
@@ -136,6 +137,14 @@ that run it against the minimum supported git (2.38) and git-annex
 parses, the exit status, and the behaviour pigeon relies on (for example that
 `drop` refuses without K live custody copies). A new git-annex version is
 supported only once they pass ([14 §14.3](14-platforms-and-packaging.md)).
+A subset runs on each device as the contract self-test when it first meets a
+new version (ADR 0048).
+
+**Format fixtures** (ADR 0048). `fixtures/formats/` holds golden documents and
+small signed histories for every supported (`format`, `rules`) pair, each with
+its expected verdicts, and fixtures of the next format that the current
+release must judge *unknown*. Every release runs them. Two releases built
+from two commits, in one group, are a prototype test (#17).
 
 ## 13.7 The lab (`lab/git-annex/`)
 

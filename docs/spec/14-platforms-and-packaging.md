@@ -55,6 +55,13 @@ btrfs, ZFS), since its repository is bare and no person edits it.
   oldest version CI tests on each platform **[no ADR: per platform]**: on
   Linux the pinned standalone build, **10.20261006**; on macOS the version
   Homebrew provides, which was **10.20260901** when E20 ran in `lab.yml`.
+- **Untested versions** (ADR 0048). A git or git-annex newer than the newest
+  CI tested is *untested*. The first time `pigeond` starts with a version it has
+  not run before, it runs the contract self-test: a subset of the contract
+  tests ([13 §13.6](13-verification.md)) on a scratch repository, under 30
+  seconds, at idle priority. If a check fails, it keeps capturing and serving
+  but suspends every drop, and shows *Needs you* (`git-annex-untested`) until
+  a version passes.
 - **Upgrades are deliberate.** The standalone build publishes "current" only;
   CI records the version it tested, the installer verifies the version it
   fetched, and a new git-annex is supported once the contract tests pass on

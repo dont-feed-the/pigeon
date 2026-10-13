@@ -93,7 +93,9 @@ paused = ""                         # "", "person", "battery", "metered", "disk-
 
 A device publishes when its state changes and at least every 10 minutes while
 it runs. A report is accepted only if its signer is the device it names, listed
-in the roster of this device's `main`, and if its `at` is later than the last
+in the roster of this device's `main`, if its `format` and every field are
+known (a report this release cannot read is ignored, which errs toward
+keeping, ADR 0048), and if its `at` is later than the last
 accepted report of that device; reports are relayed by every peer, so news of a
 custodian reaches a laptop through any device.
 

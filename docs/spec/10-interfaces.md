@@ -172,6 +172,8 @@ Problem codes this specification uses include: `invite-expired`,
 `not-in-group`, `not-allowed` (a request the roster does not allow),
 `needs-confirmation`, `backup-machine-needs-linux` (§10.7), `disk-full`,
 `daemon-not-running`, `version-mismatch`, `git-annex-too-old`,
+`git-annex-untested`, `update-needed`, `pigeon-too-old`, `peer-too-old`,
+`peer-too-new` (ADR 0048),
 `settings-check` ([03 §3.5](03-repository-and-roles.md)).
 
 ## 10.7 Checks before acting

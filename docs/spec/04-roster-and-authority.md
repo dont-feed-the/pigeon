@@ -22,6 +22,7 @@ comes from the ADRs cited.
 
 ```toml
 format = 1
+rules = 1                           # the rule set the group runs; never decreases (ADR 0048)
 group = "Famille Geiger"            # display name
 k = 2                               # custody copies (ADR 0002)
 retention_days = 30                 # waiting period before a purge (ADR 0018)
@@ -64,8 +65,8 @@ rule = "add-only"
 stewards = ["roy"]
 ```
 
-Validity of a roster (checked on every commit that changes it): it parses, its
-`format` is known, at least one admin remains, every device names an existing
+Validity of a roster (checked on every commit that changes it): it parses,
+`rules` is not lower than at the parents, at least one admin remains, every device names an existing
 person, device names and person IDs are unique, `k ≥ 1`, every owner and steward
 is a person. Every laptop and custodian has an `annex_uuid`, a recovery device
 has none, and an `annex_uuid` belongs to one device only: it is never given to
@@ -135,7 +136,15 @@ accepted and **X(c)** the others. *c* is **accepted** if and only if:
    a plain blob ([07 §7.9](07-capture-and-install.md)).
 
 A commit that breaks rule 6 is **malformed**: it is neither accepted nor kept as
-a proposal, and its keys are not references (ADR 0042). Every tree capture
+a proposal, and its keys are not references (ADR 0042).
+
+A commit is **unknown** to a release when the roster at one of its parents has a
+`rules` it does not support, or when a `.pigeon/` document of its tree has a
+`format`, or a field, that release does not know: every schema is closed
+(ADR 0048). An unknown commit and its descendants are neither accepted nor
+proposals; they stay as fetched and are judged again after an upgrade.
+Compatibility law: the verdict of an older release is that of a newer one, or
+*unknown*. Every tree capture
 makes is well formed, so only a faulty or hostile device can write one.
 
 Consequences, each a law with a property test (ADR 0012):

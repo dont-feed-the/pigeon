@@ -62,6 +62,11 @@ punching, relays). It speaks these ALPN protocols **[no ADR: names]**:
 | `pigeon/telemetry/1` | OTLP from devices of the group to its telemetry device (ADR 0025) | devices of the roster, on the telemetry device only |
 | `pigeon/debug/1` | `pigeon debug bundle` requests ([12](12-observability.md)) | devices of the roster |
 
+- **Versions** (ADR 0048). A device offers every version of each ALPN it
+  supports. A peer with none in common is refused with a reason, shown on both
+  sides as `peer-too-old` or `peer-too-new` with the release to install. The
+  stream header (§9.8) and invitations (`pgn1-`, §9.6) are versioned the
+  same way.
 - **Admission.** For `pigeon/annex/1`, `pigeon/telemetry/1` and `pigeon/debug/1`,
   `pigeond` accepts a connection only if the peer's authenticated node ID is a
   device of the roster of the current `main` of the group named in the stream

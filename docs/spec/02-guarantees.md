@@ -60,7 +60,10 @@ to its deciders (ADR 0042).
 
 **P4 Authority.** The accepted catalogue is the set of commits valid under the
 roster in force at their parents. Validation is deterministic, so all devices
-accept the same catalogue from the same commits. Commits mixing authorities are
+accept the same catalogue from the same commits. A release that does not know
+the group's `rules` or a document's `format` judges the commits concerned
+*unknown* and waits: it never accepts what a newer release rejects
+(ADR 0048). Commits mixing authorities are
 split at capture or rejected at acceptance, and merges are checked against their
 parents.
 

@@ -35,7 +35,9 @@ For each reachable peer *d*:
    the authority rule ([04 §4.4](04-roster-and-authority.md)). Verdicts are
    memoised in memory only (rebuildable, ADR 0036). Each rejected commit that
    has no rejected ancestor is kept as
-   `refs/pigeon/proposals/<signer>/<commit>`.
+   `refs/pigeon/proposals/<signer>/<commit>`. An *unknown* commit (ADR 0048)
+   stops validation of that branch: it stays in `refs/pigeon/peers/<d>/main`,
+   and the headline says *Needs you*: update pigeon (`update-needed`).
 5. **Merge** the maximal accepted commits into `main`: fast-forward if possible,
    else a signed merge commit ([05 §5.2](05-catalogue-and-names.md)), only if
    they bring an accepted non-merge commit this device lacks.

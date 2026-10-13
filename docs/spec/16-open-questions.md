@@ -20,6 +20,7 @@
 | ADR 0045: git and git-annex read only pigeon's configuration | Proposed, for issue #14; [03 §3.3–3.7](03-repository-and-roles.md) apply it, E20 asserts it | Guillaume |
 | ADR 0046: protected needs the commit and the disk | Proposed, for issue #11; [06 §6.2–6.3](06-status.md), [09 §9.4](09-network-and-joining.md), [03 §3.4](03-repository-and-roles.md), [04 §4.2](04-roster-and-authority.md) apply it, E21 asserts it | Guillaume |
 | ADR 0047: recovery by rejoin, recovery sheets, refounding, export | Proposed, for issue #11; [09 §9.9](09-network-and-joining.md), [04 §4.3](04-roster-and-authority.md), [10 §10.1](10-interfaces.md) apply it, E21 asserts it | Guillaume |
+| ADR 0048: versioned formats and rules; *unknown* is never guessed | Proposed, for issue #15; [04 §4.2, §4.4](04-roster-and-authority.md), [06 §6.3](06-status.md), [09 §9.3](09-network-and-joining.md), [14 §14.3](14-platforms-and-packaging.md) apply it; fixtures and the compatibility law in [13](13-verification.md) | Guillaume |
 | TLC with the `Json` module for trace validation | ADR 0026 foresees a new ADR pinning it by SHA-256 ([13 §13.3](13-verification.md)) | before the first `*Trace.tla` |
 
 ## 16.2 Where this specification departs from a source
@@ -186,6 +187,6 @@ experiments stay listed in [13](13-verification.md) and in the prototype (#17).
 | #12 | independent failure domains | — | open |
 | #13 | capacity admission and repair priority | [08 §8.9](08-custody-loops.md), [15 §15.2](15-resource-use.md) | open |
 | #14 | file-system object model | [07 §7.9](07-capture-and-install.md), [04 §4.4](04-roster-and-authority.md), [05 §5.2–5.4](05-catalogue-and-names.md), [03 §3.3–3.7](03-repository-and-roles.md), [14 §14.2](14-platforms-and-packaging.md) | ADRs 0044 and 0045 (Proposed); E20 asserts on Linux and macOS |
-| #15 | replicated-format compatibility | — | open |
+| #15 | replicated-format compatibility | [04 §4.2, §4.4](04-roster-and-authority.md), [06 §6.3](06-status.md), [08 §8.2](08-custody-loops.md), [09 §9.3](09-network-and-joining.md), [14 §14.3](14-platforms-and-packaging.md), [13 §13.4, §13.6](13-verification.md) | ADR 0048 (Proposed); fixtures and mixed releases with the prototype (#17) |
 | #16 | one authoritative specification | this specification; [README](README.md) precedence | done |
 | #17 | minimal end-to-end prototype | — | after the design issues |

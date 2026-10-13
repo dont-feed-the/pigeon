@@ -60,3 +60,4 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0045](0045-git-reads-only-the-configuration-pigeon-writes.md) | git and git-annex read only the configuration pigeon writes | Proposed |
 | [0046](0046-protected-means-content-and-history-on-disk.md) | Protected means K custodians hold the content and the commit that names it, on disk | Proposed |
 | [0047](0047-recover-from-custodians-sheets-refound-export.md) | A group is recovered from its custodians: rejoin, recovery sheets, refounding, and export without pigeon | Proposed |
+| [0048](0048-unknown-formats-and-rules-are-never-guessed.md) | Replicated formats and rules are versioned; what a device does not understand, it never guesses | Proposed |
