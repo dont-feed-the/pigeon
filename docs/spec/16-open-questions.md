@@ -12,6 +12,7 @@
 |---|---|---|
 | ADR 0004: Rust, driving the git-annex CLI | Proposed; the specification assumes it ([03 §3.7](03-repository-and-roles.md), [14](14-platforms-and-packaging.md)) | Guillaume or Mario |
 | ADR 0037: background work stays out of the way | Proposed; [15](15-resource-use.md) details it | Guillaume |
+| ADR 0038: deciders sign decisions on suggestions | Proposed, for issue #7; [04 §4.3, §4.5](04-roster-and-authority.md) apply it | Guillaume |
 | TLC with the `Json` module for trace validation | ADR 0026 foresees a new ADR pinning it by SHA-256 ([13 §13.3](13-verification.md)) | before the first `*Trace.tla` |
 
 ## 16.2 Where this specification departs from a source
@@ -22,7 +23,9 @@
 | Conflict names | ux.md §8.9: `budget (Paul, 13 Oct 14:02).xlsx` | `budget (Paul, 2026-10-13 14h02).xlsx` ([05 §5.3](05-catalogue-and-names.md)) | `:` is not portable (Windows, macOS Finder); an English month makes names depend on the device's language (P5) |
 | Headline order | ADR 0027, "worst first": Needs you, Not safe yet, Working, Safe, Not checked recently | Needs you > Not safe yet > Not checked recently > Working > Safe ([06 §6.5](06-status.md)) | *Not checked recently* must never read better than what it hides |
 | Json module | ADR 0008: present in our `tla2tools.jar` | absent from the pinned TLC 1.7.4 ([13 §13.3](13-verification.md)) | checked on the jar; ADR 0026 already expects a re-pin |
-| Go criteria | proposal §7 includes Windows | Windows criteria move to v1.1 ([13 §13.10](13-verification.md)) | ADR 0005 |
+| Custody mechanism | proposal: pigeon's own custody tokens (`CustodyTokens`) | git-annex's verified, lock-based drop (ADR 0001; [13 §13.2](13-verification.md)) | the token models stay as evidence about hand-offs and their counterexamples |
+| Unauthorised edits | proposal: restored automatically from the catalogue | kept as the person's divergence and suggestion ([07 §7.6](07-capture-and-install.md)) | ADR 0034 |
+| Go criteria | proposal §7 includes Windows | Windows criteria move to v1.1 ([13 §13.11](13-verification.md)) | ADR 0005 |
 
 Accepted ADRs are not rewritten; each line above becomes either an ADR that
 confirms this specification or a correction of this specification.
@@ -46,10 +49,10 @@ them all.
 - The field names of `roster.toml` (§4.2).
 - The longest-prefix folder rule, and add-only with the admins as stewards
   where no rule applies (§4.3).
-- The `.pigeon/` table: rejections by deciders, withdrawals by the author,
-  Drop records by any member about their own device (§4.3).
+- Drop records by any member about their own device (§4.3); decisions on
+  suggestions are now ADR 0038 (Proposed).
 - The proposal shape: one per capture batch and set of deciders, chained per
-  path (§4.5); adoption wins over a concurrent rejection (§4.5).
+  path (§4.5).
 - Force for admins only (§4.6, and §16.2).
 - Concurrent edits of one roster table: the first side wins, the other becomes
   a proposal to the admins (§4.7).
@@ -140,3 +143,30 @@ them all.
   (ADR 0003); **per-file freeing** (ADR 0031); **native Windows** (ADR 0005, E11);
   **macOS backup machines** and **NAS packages** (ADR 0032).
 - **Thresholds** of [06 §6.7](06-status.md), to be tuned by the usability test.
+
+## 16.5 Review issues
+
+Guillaume's design review of commit `bb4fe07` opened issues #1–#17 on
+GitHub. Each is closed once its resolution is in this specification, with an
+ADR for every choice it needs; acceptance criteria that need code or
+experiments stay listed in [13](13-verification.md) and in the prototype (#17).
+
+| Issue | Topic | Where | State |
+|---|---|---|---|
+| #1 | install racing application saves | [07 §7.5](07-capture-and-install.md) | journal and aside specified; ADR to come |
+| #2 | pointer files during free and keep | [08 §8.5](08-custody-loops.md) | order to be fixed; E15 to extend |
+| #3 | `annex.thin` and unprotected versions | [02](02-guarantees.md), [03 §3.4](03-repository-and-roles.md) | open: needs a decision |
+| #4 | reference-aware purge | [08 §8.6](08-custody-loops.md) | open |
+| #5 | purge against concurrent restores and returning peers | [08 §8.6](08-custody-loops.md) | open |
+| #6 | roster forks with disjoint admin sets | [04 §4.7](04-roster-and-authority.md) | open |
+| #7 | decisions by non-admin owners and stewards | [04 §4.3, §4.5](04-roster-and-authority.md) | ADR 0038 (Proposed) |
+| #8 | catalogue merge algorithm and its laws | [05 §5.2](05-catalogue-and-names.md) | specified; ADR to come |
+| #9 | git-annex cannot bypass pigeon | [03 §3.7](03-repository-and-roles.md), [09 §9.4](09-network-and-joining.md) | E12, E13 to run |
+| #10 | models and coverage | [13 §13.2, §13.10](13-verification.md) | coverage map and liveness assumptions written |
+| #11 | recovery onto fresh machines | — | open |
+| #12 | independent failure domains | — | open |
+| #13 | capacity admission and repair priority | [08 §8.9](08-custody-loops.md), [15 §15.2](15-resource-use.md) | open |
+| #14 | file-system object model | [03 §3.3](03-repository-and-roles.md), [14 §14.2](14-platforms-and-packaging.md) | open |
+| #15 | replicated-format compatibility | — | open |
+| #16 | one authoritative specification | this specification; [README](README.md) precedence | done |
+| #17 | minimal end-to-end prototype | — | after the design issues |

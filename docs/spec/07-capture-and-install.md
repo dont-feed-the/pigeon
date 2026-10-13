@@ -163,7 +163,8 @@ Transitions:
   captured and replicated without changing the catalogue **[no ADR]**.
 - While a path diverges, install never writes it, and newer accepted versions
   of it are not installed on this disk. A divergence changes no safety state:
-  the person's version is safe as a proposal's content (ADR 0034).
+  the person's version is kept as a proposal's content and has that version's
+  state, *protected* only once K custodians hold it (ADR 0034, [06 §6.2](06-status.md)).
 
 Resolutions (`pigeon resolve PATH …`, or the buttons of ux.md §8.8):
 

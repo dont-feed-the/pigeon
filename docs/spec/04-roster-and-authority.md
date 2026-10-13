@@ -79,21 +79,22 @@ For a person *u* and a change of one path, under roster R:
 | modify, delete | *u* = P | *u* ∈ S (the admins if S is empty) |
 | rename | a delete and an add: both must be allowed | same |
 
-`.pigeon/` follows its own table (ADRs 0009, 0017):
+`.pigeon/` follows its own table (ADRs 0009, 0017, 0018, 0038):
 
 | Path under `.pigeon/` | Who may add or change it |
 |---|---|
 | `roster.toml`, device entries of person P | an admin, or a device of P (ADR 0017) |
 | `roster.toml`, anything else | an admin |
-| `decisions/<commit>.toml` with `verdict = "rejected"` | a person who may decide every change of that proposal **[no ADR]** |
-| `decisions/<commit>.toml` with `verdict = "withdrawn"` | the proposal's author **[no ADR]** |
+| `decisions/<commit>.toml` with `verdict = "rejected"` | a decider of that proposal commit (§4.5, ADR 0038) |
+| `decisions/<commit>.toml` with `verdict = "withdrawn"` | a device of the proposal's author (ADR 0038) |
 | `decisions/purge-<id>.toml` | an admin (ADR 0018, ux.md §7 `pigeon erase`) |
 | `records/drop-<id>.toml` | any member, about their own device ([08 §8.7](08-custody-loops.md)) **[no ADR]** |
 | anything else | an admin |
 
-ADR 0009 says only admins change `.pigeon/`; ADR 0017 already refined it for
-device entries, and decisions by stewards need the same refinement. Until an ADR
-records it, the table above is a proposal ([16](16-open-questions.md)).
+ADR 0009 says only admins change `.pigeon/`; ADR 0017 refined it for device
+entries and ADR 0038 (Proposed) for decisions on suggestions, so that an owner or
+steward who is not an admin can decide in their scope and nothing else. Each row
+is checked under the roster at the commit's parents, like every rule of §4.4.
 
 ## 4.4 The authority rule
 
@@ -143,8 +144,14 @@ peer's history (a commit rejected here). Each is kept as
   a pending proposal of this device makes a new proposal whose parent is that
   proposal, so the chain keeps every captured save (P2) and people see one
   suggestion that was updated (ADR 0034) **[no ADR: shape]**.
-- **Deciders.** The persons allowed to make every change of the proposal (§4.3).
-  A proposal touching folders with different deciders is split at capture.
+- **Deciders** (ADR 0038). The persons allowed to make every change of the
+  proposal's diff under the roster at its parents (§4.3); if nobody may make
+  them all, the admins. Capture splits a proposal per set of deciders, so only a
+  proposal found in a peer's history can fall to the admins this way.
+- **Revisions.** A decision names one proposal commit and applies to that
+  revision only. A later revision of the same chain is pending until decided
+  itself; adopting a revision adopts its ancestors in the chain, and rejecting
+  one leaves its later revisions pending.
 - **State,** computed from the accepted catalogue, never stored:
 
 | State | When |
@@ -169,10 +176,15 @@ note = "On garde la recette de Mamie."
 
 - Accept and reject are symmetric and both signed. Concurrent decisions on one
   proposal resolve deterministically: an accepted commit adopting it wins over a
-  rejection, because content is never thrown away silently **[no ADR]**.
+  rejection, because content is never thrown away silently (ADR 0038).
+- The proposal commit stays the author's signed **submission**; the adoption
+  merge, signed by a decider, is the **authorised change**. Validation never
+  accepts the submission itself, so its signer's rights never widen.
 - Proposals and their content replicate like everything else, so the deciders
   have them before they decide, and custodians keep their content like any
-  version (ADR 0034: the person's version is safe as the suggestion's content).
+  version. A suggestion's content has the state of any version: *local*, then
+  *published*, and *protected* (shown *Safe*) only once K custodians hold
+  verified copies (ADR 0034, [06 §6.2](06-status.md)).
 
 ## 4.6 Force
 

@@ -66,6 +66,31 @@ Each file has one mission. Read them in order the first time.
 - Thresholds written as "default *x*" are settings with tested defaults; the
   usability test may change them (ux.md §11).
 
+## Precedence of documents
+
+When two documents disagree, the one higher in this list wins, and the lower one
+is the bug:
+
+1. **Accepted ADRs** ([docs/adr/](../adr/README.md)): the decisions. They are
+   never rewritten; a change of mind is a new ADR.
+2. **This specification**: the current, normative contract that assembles them.
+   A detail it adds is marked **[no ADR]** until an ADR records it.
+3. **Proposed ADRs**: pending decisions. Where this specification assumes one, it
+   says so (for example ADR 0004, ADR 0037).
+4. **The UX study** ([ux.md](../design/ux.md)) and the mockups: words, journeys and
+   screens. This specification follows them, except where
+   [16 §16.2](16-open-questions.md) says why not.
+5. **The proposal** ([proposal.pdf](../design/proposal/proposal.pdf)): the origin
+   of P1–P6, restated normatively in [02](02-guarantees.md). Its mechanisms that
+   later decisions replaced (custody tokens, a Windows week in the feasibility
+   study, restoring unauthorised edits automatically) are historical.
+6. **Superseded drafts** ([spec draft 0](../design/spec-draft-0.md),
+   [draft 1](../design/spec-draft-1.md)) and the [review](../design/REVIEW.md) of them:
+   history only.
+
+Known gaps are tracked as GitHub issues; [16 §16.5](16-open-questions.md) maps
+each to the parts of this specification it concerns and to its state.
+
 ## Scope of v1
 
 In scope: Linux and macOS for people's computers, Linux for backup machines
@@ -105,3 +130,4 @@ or a collaborative editor), nor real-time sync of hot files (proposal §1).
 | 0031 free per folder | [08](08-custody-loops.md) |
 | 0036 local state | [11](11-local-state.md) |
 | 0037 background work (Proposed) | [15](15-resource-use.md) |
+| 0038 decisions on suggestions (Proposed) | [04](04-roster-and-authority.md) |

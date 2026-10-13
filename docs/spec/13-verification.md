@@ -53,6 +53,15 @@ Bounds start at N ≤ 4 devices, K ≤ 2, a few paths and keys, as now
 (ADR 0008); larger bounds run in the full set. Each model has a negative
 configuration that removes one safeguard and must fail.
 
+**Safety and liveness are stated apart.** Safety properties (the invariants of
+[02 §2.5](02-guarantees.md)) must hold in every behaviour, without fairness.
+Liveness properties hold only under explicit assumptions, written as fairness
+conditions in each model: every pair of devices that stays online is eventually
+connected; a custodian that is not removed is eventually online; capacity is at
+least K × the content wanted ([08 §8.9](08-custody-loops.md)); a person
+eventually answers what *Needs you*. A liveness failure without these
+assumptions is expected and is not a bug.
+
 ## 13.3 Trace validation (ADR 0008)
 
 - Each model has a trace module `*Trace.tla` that reads the merged NDJSON
@@ -165,7 +174,23 @@ CI measures `pigeond` on a reference tree: idle CPU below 1 % of one core over
 10 minutes, bounded memory, and the throughput and latency budgets of E17
 ([15 §15.8](15-resource-use.md)). A regression fails the build.
 
-## 13.10 Going on: technical and human criteria
+## 13.10 Coverage map: from guarantees to evidence
+
+What carries each guarantee today, and what is still missing. "Planned" items
+are specified here but not built; the gaps are tracked as GitHub issues
+([16 §16.5](16-open-questions.md)). Passing CI today is evidence only for the
+"now" column.
+
+| Guarantee | Now | Planned | Gaps (issues) |
+|---|---|---|---|
+| P1 Survival | E1, E5, E8, E9, E10 (lab, printing); `CustodyNaive`, `CustodyTokens` (evidence about hand-offs in general and about the earlier token protocol, not about git-annex) | `AnnexDrop`, `Repair` models; fault injection; E13; asserting E9, E10 | append-only serving unproven (#9); failure domains (#12); capacity admission (#13); recovery on fresh machines (#11) |
+| P2 Capture, no overwrite | — | `CaptureInstall` model; install journal laws; save-pattern and race schedules | install racing saves (#1); `annex.thin` and unprotected versions (#3); pointer files during free/keep (#2); file-system scope (#14) |
+| P3 Reversible deletion | E2, E4 (lab, printing) | `Purge` model; E14; purge laws | reference-aware purge (#4); concurrent restore and returning peers (#5) |
+| P4 Authority | E7 (lab, printing) | `Authority` model; acceptance laws; decision-rights tests (ADR 0038) | roster forks (#6); format compatibility (#15) |
+| P5 Convergence | E3 (lab, printing) | merge and name laws; three-way permutations | the merge algorithm (#8) |
+| P6 Honest status | — | observation and headline laws; usability test | — |
+
+## 13.11 Going on: technical and human criteria
 
 **Go** for v1 if all hold (proposal §7, restricted to the v1 platforms of
 ADR 0005): zero loss of protected versions in every fault schedule and in
