@@ -1,8 +1,9 @@
 # Lab experiments that assert, run against real git and git-annex on Linux and
-# macOS (ADR 0026). For now E20, the file-system objects of issue #14. Linux
-# uses git-annex's standalone build, pinned by checksum, so a new upstream
-# release fails here until the pin is moved deliberately (spec 14 §14.3);
-# macOS uses Homebrew's current git-annex, whose version the log records.
+# macOS (ADR 0026). For now E20, the file-system objects of issue #14, and
+# E21, the disaster drill of issue #11. Linux uses git-annex's standalone
+# build, pinned by checksum, so a new upstream release fails here until the
+# pin is moved deliberately (spec 14 §14.3); macOS uses Homebrew's current
+# git-annex, whose version the log records.
 name: lab
 
 on:
@@ -24,7 +25,7 @@ env:
 
 jobs:
   e20:
-    name: E20 file-system objects (${{ matrix.os }})
+    name: E20 file-system objects and E21 disaster drill (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -58,3 +59,8 @@ jobs:
         run: git annex version && git --version && python3 --version && uname -a
       - name: E20, file-system objects
         run: python3 lab/git-annex/ga-e20-filesystem-objects.py
+      - name: strace, to count git-annex's fsync calls in E21 (Linux)
+        if: runner.os == 'Linux'
+        run: command -v strace || { sudo apt-get update -qq && sudo apt-get install -y -qq strace; }
+      - name: E21, disaster drill
+        run: python3 lab/git-annex/ga-e21-disaster-drill.py
