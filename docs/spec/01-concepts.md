@@ -22,7 +22,7 @@ belong to **devices** (ADR 0007).
 
 | Role | What it does | Counts toward K | People see |
 |---|---|---|---|
-| **laptop** | a person's computer: holds editable *working copies* of the folders the person keeps, at about one copy of disk space (thin) | no | computer |
+| **laptop** | a person's computer: holds editable *working copies* of the folders the person keeps, at about one copy of disk space once protected, plus its pending history (ADR 0041) | no | computer |
 | **custodian** | a machine dedicated to storage, Linux only in v1, holding read-only *custody copies* of what its capacity allows, history included (ADRs 0002, 0003, 0032) | yes | backup machine |
 
 "Laptop" means any person's computer, desktop included. A device has exactly

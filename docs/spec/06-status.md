@@ -35,7 +35,14 @@ For a version with key *k*, introduced by commit *c*, on this device, at time *n
    since T": pigeon cannot reach the group, so it cannot confirm.
 4. Else, if some other device has *c* (`has_commit`) or some custodian holds *k*:
    **published**, with its reason (§6.4).
-5. Else: **local**.
+5. Else, if this device holds *k*: **local**.
+6. Else: **missing**, with reason `content-missing`: no device is known to hold
+   the content.
+
+These states apply to suggestions as to accepted versions: a proposal commit
+is *c*. A version is called safe only when *protected*. On the laptop that
+captured it, a version stays an immutable copy until then
+([07 §7.8](07-capture-and-install.md), ADR 0041).
 
 A version under capture (not yet in a commit) counts as *local*; a held-back
 change (mass deletion, non-portable name) counts as *local* with its reason.
@@ -94,6 +101,8 @@ state, so that the headline can say why and what happens next (ADR 0027):
 | `paused(by)` | "Sharing is paused until 18:00." / "Waiting for a non-metered network." / "Waiting: this computer's disk is busy." (ADR 0037) |
 | `group-unreachable(since)` | "pigeon can't reach the group since 14:10." |
 | `held(cause)` | "You deleted 1,204 files in *Photos*: delete them for everyone, or bring them back?" |
+| `history-full(bytes)` | "This computer keeps 18 GB of changes that no backup machine has yet; new changes wait until some are sent." ([07 §7.8](07-capture-and-install.md), ADR 0041) |
+| `content-missing` | "This version of *budget.xlsx* is lost: no computer has its content any more." |
 | `in-use(path)` | "*tarte.docx* is open in another application; pigeon will update it when it is closed." ([07 §7.5](07-capture-and-install.md), ADR 0040) |
 | `settings-check` | "Checking the group's settings; freeing space waits until it is done." ([03 §3.5](03-repository-and-roles.md)) |
 

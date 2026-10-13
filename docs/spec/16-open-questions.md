@@ -15,6 +15,7 @@
 | ADR 0038: deciders sign decisions on suggestions | Proposed, for issue #7; [04 §4.3, §4.5](04-roster-and-authority.md) apply it | Guillaume |
 | ADR 0039: freeing and keeping never show a pointer | Proposed, for issue #2; [08 §8.5](08-custody-loops.md) applies it, E15b asserts it | Guillaume |
 | ADR 0040: install proves its own file; racing saves win | Proposed, for issue #1; [07 §7.5](07-capture-and-install.md) applies it, E19 asserts it | Guillaume |
+| ADR 0041: captured versions stay immutable until protected | Proposed, for issue #3; [07 §7.8](07-capture-and-install.md) applies it, E18 asserts it | Guillaume |
 | TLC with the `Json` module for trace validation | ADR 0026 foresees a new ADR pinning it by SHA-256 ([13 §13.3](13-verification.md)) | before the first `*Trace.tla` |
 
 ## 16.2 Where this specification departs from a source
@@ -143,7 +144,8 @@ them all.
 - **Short invitation codes** with a PAKE (ADR 0017); a **placement planner**
   (ADR 0003); **per-file freeing** (ADR 0031); **native Windows** (ADR 0005, E11);
   **macOS backup machines** and **NAS packages** (ADR 0032).
-- **Thresholds** of [06 §6.7](06-status.md), to be tuned by the usability test.
+- **Thresholds** of [06 §6.7](06-status.md), to be tuned by the usability test,
+  and `pending_max` (ADR 0041).
 - **Saves from stale memory** (ADR 0040). An application that still holds a
   file's old content in memory and saves after an install replaces the new
   version, which then lives on only in the history. Lock files cover office
@@ -161,7 +163,7 @@ experiments stay listed in [13](13-verification.md) and in the prototype (#17).
 |---|---|---|---|
 | #1 | install racing application saves | [07 §7.5](07-capture-and-install.md), [07 §7.6](07-capture-and-install.md) | ADR 0040 (Proposed), E19 asserts; `CaptureInstall` model to come (#10) |
 | #2 | pointer files during free and keep | [08 §8.5](08-custody-loops.md) | ADR 0039 (Proposed), E15b asserts |
-| #3 | `annex.thin` and unprotected versions | [02](02-guarantees.md), [03 §3.4](03-repository-and-roles.md) | open: needs a decision |
+| #3 | `annex.thin` and unprotected versions | [07 §7.8](07-capture-and-install.md), [06 §6.2](06-status.md), [03 §3.4](03-repository-and-roles.md) | ADR 0041 (Proposed), E18 asserts; copy-on-write measurement to come |
 | #4 | reference-aware purge | [08 §8.6](08-custody-loops.md) | open |
 | #5 | purge against concurrent restores and returning peers | [08 §8.6](08-custody-loops.md) | open |
 | #6 | roster forks with disjoint admin sets | [04 §4.7](04-roster-and-authority.md) | open |

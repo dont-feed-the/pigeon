@@ -36,7 +36,8 @@ laptop edits, crashes or partitions destroys V. Only a purge whose retention
 period has ended, or a Drop, can. *Survival is not reachability:* during a
 partition V may survive but be out of reach.
 
-**P2 Capture, and no overwrite.** A captured version is never overwritten.
+**P2 Capture, and no overwrite.** A captured version is never overwritten: its
+laptop keeps it as an immutable copy until it is protected (ADR 0041).
 pigeon never replaces, moves aside or removes content that a person saved,
 unless that person asks (ADR 0034). Installing incoming content is
 crash-recoverable and skips every path whose file diverges. Install moves a file

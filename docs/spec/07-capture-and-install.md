@@ -55,9 +55,12 @@ One capture **batch** handles the stable dirty paths of one repository:
 5. **Classify** every change with the authority rule under the roster of `main`
    ([04 §4.3](04-roster-and-authority.md)): *allowed*; *not allowed*, grouped by
    set of deciders; or *diverging* (the path is in the divergence table, §7.6).
-6. **Ingest** the content of added and modified files (`git annex add`, batch;
-   thin hard links on laptops). Re-adding content already in the annex is cheap,
-   so a batch interrupted here is simply redone.
+6. **Ingest** the content of added and modified files with `git -c annex.thin=false
+   annex add` (batch). The object is a copy (copy-on-write where the file system
+   can), so a later in-place save cannot destroy the captured version (§7.8,
+   ADR 0041). Re-adding content already in the annex is cheap, so a batch
+   interrupted here is simply redone. Content beyond the pending budget waits
+   (§7.8).
 7. **Commit.** Allowed changes: one commit, parent `main`, signed, then
    `update-ref main` from the expected old value; the index then matches.
    Not allowed: one proposal per set of deciders, parent `main` (or the pending
@@ -236,3 +239,32 @@ of §7.5, the writer scan included), `Crash`, `Recover`, `Release`, `Decide`,
 name or installs over a diverging path, ADR 0034), INV-Journal, and NoLoss (every
 saved content is at its name, kept aside or captured, ADR 0040). E19 runs the
 same steps against git-annex with an adversary at each boundary. Every fault-injection run is trace-validated against it (ADR 0008).
+
+## 7.8 Pending history and disk use (ADR 0041)
+
+A version captured on a laptop is kept there as an immutable copy until it is
+*protected* ([06 §6.2](06-status.md)). This holds for accepted versions and
+suggestions alike. The unprotected versions this laptop captured form its
+**pending history**.
+
+- **Budget.** Pending history may use up to `pending_max`, 10 % of the file
+  system by default (ADR 0041), and capture never goes below
+  `annex.diskreserve`. Beyond either, capture of new content pauses with reason
+  `history-full` ([06 §6.4](06-status.md)). The files stay as saved, and
+  deletions and renames are still captured.
+- **Once protected**, the laptop drops the old versions it holds by key
+  (`git annex drop --key`, verified; [08 §8.3](08-custody-loops.md)). If the
+  file system has no copy-on-write and the file is still the protected
+  version, the laptop re-thins it: an install (§7.5) of the same key, with the
+  object as the new file.
+- **Disk use** of a laptop:
+  - one copy of what it keeps, once protected (E18: 5.2 MB for a 4 MB file);
+  - plus the pending history (E18 on ext4: five offline versions of 4 MB took
+    25 MB; on APFS and btrfs only the changed blocks, to be measured);
+  - plus the kept asides of install (about 10 minutes, ADR 0040) and metadata.
+
+  "About one copy" is the steady state while custodians are reachable.
+
+Content received from others is installed by hard link (thin): an in-place
+save may destroy that local copy, which never counts toward K, while its origin
+keeps an immutable one.

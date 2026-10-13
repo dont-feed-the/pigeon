@@ -133,3 +133,4 @@ or a collaborative editor), nor real-time sync of hot files (proposal §1).
 | 0038 decisions on suggestions (Proposed) | [04](04-roster-and-authority.md) |
 | 0039 pointer-free freeing and keeping (Proposed) | [08](08-custody-loops.md) |
 | 0040 install proves its own file, racing saves win (Proposed) | [07](07-capture-and-install.md), [11](11-local-state.md) |
+| 0041 captured versions immutable until protected (Proposed) | [07](07-capture-and-install.md), [03](03-repository-and-roles.md), [06](06-status.md) |

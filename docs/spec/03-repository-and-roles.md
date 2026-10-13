@@ -56,7 +56,7 @@ versioned in v1 **[no ADR]** ([16](16-open-questions.md)).
 | Setting | Value | Why |
 |---|---|---|
 | `annex.addunlocked` | `true` | files are normal, editable files |
-| `annex.thin` | `true` | about one copy of disk space (E8) |
+| `annex.thin` | `true`; capture adds with `-c annex.thin=false` | received files cost one copy (E8); a captured version stays an immutable copy until protected, then is re-thinned (E18, ADR 0041) |
 | `annex.autocommit` | `false` | pigeon alone commits (E9 pitfall) |
 | `annex.synccontent` | `false` | pigeon alone moves content |
 | `annex.resolvemerge` | `false` | pigeon merges, with its own conflict names ([05](05-catalogue-and-names.md)) |

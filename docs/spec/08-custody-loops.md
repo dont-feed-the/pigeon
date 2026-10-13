@@ -59,9 +59,12 @@ order-independent; the accepted set is a join (ADR 0012).
 - Both directions run, so protection proceeds whichever side reaches the other.
   git-annex verifies content on arrival; the location log records it.
 - A laptop then drops what it does not want (old versions, folders not kept)
-  with `git annex drop --auto`, a verified drop: git-annex locks and checks K
-  custody copies on custodians first (E1, E5), and the laptop's own copy never
-  counts (ADR 0002). This keeps laptops at about one copy of what they keep.
+  with `git annex drop --key` for each such key it holds. This is a verified
+  drop: git-annex locks and checks K custody copies on custodians first (E1,
+  E5), and the laptop's own copy never counts (ADR 0002). git-annex refuses
+  `--auto` with `--all` (E18). The laptop also re-thins the current files it
+  captured ([07 §7.8](07-capture-and-install.md), ADR 0041). This keeps laptops
+  at about one copy of what they keep.
 
 ## 8.4 Repair
 
