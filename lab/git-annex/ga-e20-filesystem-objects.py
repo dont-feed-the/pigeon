@@ -436,7 +436,8 @@ def c8_unreadable():
         deleted = [p for k, f, p in entries if k in '12' and 'D' in f[0]]
         check(not deleted, f'unreadable paths are never reported deleted: {entries}')
         t = [f[0] for k, f, p in entries if p == b't.txt']
-        check(t == ['.M'], f'a tracked file at mode 000 shows as modified, not deleted: {t}')
+        check(t in ([], ['.M']), 'a tracked file at mode 000 shows as unchanged (its stat still matches '
+              f'the index) or modified (git could not read it), never deleted: {t}')
         check(not [p for k, f, p in entries if p.startswith(b'td/') or p.startswith(b'ud/')],
               'a tracked or untracked directory at mode 000 lists nothing')
         check('Permission denied' in err, f'git warns on stderr: {err.strip()!r}')
