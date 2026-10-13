@@ -48,3 +48,4 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0033](0033-editable-files-edits-become-suggestions.md) | Files you may not change stay editable; a saved edit becomes your suggestion | Superseded by 0034 |
 | [0034](0034-never-overwrite-what-a-person-saved.md) | pigeon never overwrites what a person saved; a diverging file is a conflict they resolve | Accepted |
 | [0035](0035-group-version-shown-only-in-pigeon.md) | During a conflict, the group's version is shown only in pigeon | Accepted |
+| [0036](0036-local-state-in-plain-files.md) | `pigeond` keeps its local state in plain files | Accepted |
