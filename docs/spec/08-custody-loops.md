@@ -209,7 +209,7 @@ Paul's NAS"). Erasing releases pigeon's custody of the content. It does not
 reach copies made outside pigeon, or devices that never return. The names,
 authors and times of the erased versions stay in the signed history.
 `pigeon erase` says both before asking. The `Purge` model checks this
-protocol ([13 §13.2](13-verification.md)); E14 is to test it with git-annex.
+protocol ([13 §13.2](13-verification.md)); E14 asserts it with git-annex.
 
 ## 8.7 Drop: remove without checking
 

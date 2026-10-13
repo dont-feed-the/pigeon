@@ -124,7 +124,17 @@ spec 08 assumed.
   this protocol. Two negative configurations lose a cancel or a restore:
   dropping when one's own period ends, and accepting a seal without merging
   the sealer's `main`.
-- E14 becomes a lab test of the mechanism with git-annex: per-key
-  transfers, the forced drop, and a new generation re-uploaded.
+- E14 asserts the mechanism with git and git-annex 10.20261006:
+  - issue #4's three cases keep their key, the suggestion through `held`;
+  - a restore that reached one custodian before its seal holds the purge
+    back at another until it merges that `main`; trusting the seals alone
+    would release the restored key;
+  - per-key transfers never fetch a released key, although git-annex's own
+    `wanted` still matches it; after `drop --force --key` no copy is left;
+  - a returning laptop drops its covered copy, and its offline re-add comes
+    back to both custodians;
+  - `matchexpression --key` agrees with git-annex's own choices (`balanced`
+    with `satisfy`, `sizebalanced` with `find --want-get`, which lists
+    nothing in a bare repository).
 - If accepted: ADR 0018's status gains "mechanism replaced by ADR 0042",
   and ADR 0012's gains "purge laws replaced by ADR 0042".

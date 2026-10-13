@@ -15,12 +15,12 @@ in the proposal, §5.
 | `ga-e8-thin.sh` | E8 thin laptops | no, prints |
 | `ga-e9-custody.sh` | E9 roles: untrusted laptops, custodians, K = 2 | no, prints |
 | `ga-e10-partial-custodians.sh`, `ga-e10c-partial-history.sh` | E10 partial custodians | no, prints |
+| `ga-e14-purge.py` | E14 purge by references and seals: shared keys, a restore against the seals, per-key transfers, the forced drop, a returning laptop and a new generation; git-annex contract checks (ADR 0042, issues #4 and #5); about 25 seconds | **yes** |
 | `ga-e15-sparse-folders.sh` | E15 freeing space per folder with sparse checkout (ADR 0031) | **yes**, exits non-zero on failure |
 | `ga-e15b-pointer-free-transitions.sh` | E15b no pointer file during freeing and keeping, observed continuously, with `kill -9` trials (ADR 0039, issue #2) | **yes** |
 | `ga-e18-unprotected-versions.sh` | E18 offline in-place saves against `annex.thin`, failed uploads, reconnection, re-thinning (ADR 0041, issue #3) | **yes** |
 | `ga-e19-install-races.py` | E19 install racing application saves and `kill -9`, thin and not thin, with a fuzzing writer (ADR 0040, issue #1); Linux, about 3 minutes | **yes** |
 
-The lab joins CI once its scripts assert, as E15, E15b, E18 and E19 do (ADR 0026).
+The lab joins CI once its scripts assert, as E14, E15, E15b, E18 and E19 do (ADR 0026).
 Pending: E11 native Windows, E12 `remotedaemon` only fetches, E13
-`ServeAppendOnly` over P2P, E14 purge with git-annex (per-key transfers, forced
-drop, a new generation; ADR 0042).
+`ServeAppendOnly` over P2P.
