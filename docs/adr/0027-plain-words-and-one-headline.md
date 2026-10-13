@@ -1,8 +1,9 @@
 # 0027. People see plain words and one headline status
 
-- **Status:** Proposed, 13 October 2026, by the agent in the UX study
-  ([`docs/design/ux.md`](../design/ux.md)) that Guillaume asked for. To be
-  confirmed by the group and by the usability test.
+- **Status:** Accepted, 13 October 2026, by Guillaume (UX question 1: plain
+  words). Proposed by the agent in the UX study
+  ([`docs/design/ux.md`](../design/ux.md)). The usability test may still
+  lead to a superseding ADR.
 
 ## Context
 
@@ -35,6 +36,6 @@ never need.
 - The status computation must produce, besides the per-version state, the
   reason and the next step ("waiting for Paul's NAS, offline since Monday"),
   so the daemon tracks why each version is not yet protected.
-- The usability test compares these words with the original ones; the words
-  are frozen only after it.
+- The usability test still compares these words with the original ones; if
+  people understand the original ones better, a new ADR supersedes this one.
 - Thresholds (10 minutes, 24 hours, 7 days) are settings with tested defaults.

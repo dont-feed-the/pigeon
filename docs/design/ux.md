@@ -51,8 +51,8 @@ names in the code, the spec and `--json`. People see plain phrases instead (ADR 
 | uncertain (P6) | **Not checked since …** | **Pas vérifié depuis …** | question mark | grey outline |
 
 Why not the original words: in everyday English and French, *published* suggests "made
-public", and *protected* suggests a password. *Safe* answers question 1 directly. The usability
-test (section 9) compares both vocabularies before the words are frozen.
+public", and *protected* suggests a password. *Safe* answers question 1 directly. Guillaume
+chose the plain words (ADR 0027); the usability test (section 9) still compares both.
 
 The state is always shown with an icon **and** a word **and** a colour, never by colour alone.
 
