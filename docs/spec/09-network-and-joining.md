@@ -22,7 +22,8 @@
 - pigeon verifies signatures itself (SSHSIG, namespace `git`) against the
   roster at the commit's parents ([04 §4.4](04-roster-and-authority.md)).
 - The key is not encrypted at rest: `pigeond` must start unattended. A stolen
-  unlocked laptop can sign until it is removed (§9.7); that is outside the
+  unlocked laptop can sign until it is removed; after that, what it signs
+  counts on no device that has the removal (§9.7). That is outside the
   guarantees (keys are not stolen, [02 §2.2](02-guarantees.md)).
 
 ## 9.2 The transport helper `git-annex-p2p-iroh` (ADR 0006)
@@ -251,13 +252,16 @@ from the roster.
   [03 §3.5](03-repository-and-roles.md)). If it was a custodian, its copies
   stop counting and repair starts ([08 §8.4](08-custody-loops.md)); the CLI
   says beforehand how many files will have fewer safe copies until then.
-- Commits the removed device signed before its removal stay valid (the rule
-  judges a commit by the roster at its parents). A removed device could still
-  sign commits on an old parent; `pigeond` therefore never merges into `main`
-  a commit signed by a device absent from the roster of its current `main`,
-  and keeps it as a proposal for the admins **[no ADR: merge policy]**. Keys
-  are assumed not stolen ([02](02-guarantees.md)); this narrows the damage when
-  they are.
+- Commits the removed device signed that the removal had seen stay valid and
+  count. Those it had not seen, signed before or after it on any parent, are
+  **revoked** wherever the removal arrives, as are the keys they added and
+  what those keys sign (04 §4.4, ADR 0062). They count in no catalogue and
+  no roster; their changes are shown as suggestions of the device's person
+  ("3 changes from *Martine's old laptop* arrived after it was removed").
+  `pigeond` merges every accepted commit; revocation, not the merge, keeps
+  them out. *I lost a computer* lists the devices the lost one added and
+  offers to remove them with it. Keys are assumed not stolen
+  ([02](02-guarantees.md)); this bounds the damage when they are.
 - Removal cannot unshare what the device already fetched (ADR 0017).
 - A device removes itself with `pigeon leave` **[no ADR]**: it signs its own
   removal, then deletes its key and, if asked, its copy of the folder.

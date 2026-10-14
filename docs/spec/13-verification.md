@@ -78,6 +78,22 @@
 | `Roster_rebase` | `Roster` | `violation:Agreement` | replaying the other side's changes onto one's own roster depends on who merges: two merges of the same commits disagree |
 | `Roster_table` | `Roster` | `violation:AdminRemains` | merging `roster.toml` per TOML table, a clean merge of the concurrent self-retirements leaves no admin |
 | `Roster_adr0009` | `Roster` | `violation:MergeAlwaysPossible` | ADR 0009's rule (a merge of concurrent roster changes signed by an admin under both parents) leaves the concurrent self-retirements unmergeable: no person is admin on both sides |
+| `Authority_decide` | `Authority` | `pass` (fast set) | issue #10: suggestions made, revised, adopted, rejected and withdrawn between the honest admin a and owner b, who also moves b's folder. Every decider can adopt; every decision is a decider's or the author's; every version entered through an allowed commit; an honest tree is the catalogue of its history; quiet devices agree (ADR 0063): 34 245 states, 20 829 distinct, 7 s |
+| `Authority_faulty` | `Authority` | `pass` (fast set) | the same against a faulty member who signs any change, merge or decision on any parent: 370 794 states, 150 479 distinct, 55 s |
+| `Authority_revoke` | `Authority` | `pass` (fast set) | c's laptop, once removed, signs on old parents and adds a key for c. Nothing it signed unseen, and no key it added, counts on any device (ADR 0062): 547 210 states, 188 525 distinct, 66 s |
+| `Authority_live` | `Authority` | `pass` (fast set) | `Converge` under fairness of fetches and merges, with the removed laptop signing on old parents: 938 states, 399 distinct, 11 s |
+| `Authority_decide4`, `Authority_faulty2`, `Authority_revoke2` | `Authority` | `pass` (full set) | four changes; two faulty commits, with transfers; saves and the removed laptop's merges: 1 178 047, 1 360 807 and 1 645 961 distinct states, 10, 7 and 6 minutes |
+| `Authority_proposal` | `Authority` | `violation:DecidersCanAdopt` | deciders under the roster at the proposal's parents (ADR 0038's words). a suggests a change in b's folder, then gives the folder to himself. b still decides, but rule 3 rejects b's adoption (3 states) |
+| `Authority_mixed` | `Authority` | `violation:DecidersCanAdopt` | the proposal's own diff under today's roster. a adds the root file; c suggests adding it and a file in F. b decides, but adopting keeps both versions of the root file, which modifies it, and only the admins may |
+| `Authority_noforce` | `Authority` | `violation:DecidersCanAdopt` | a suggestion that nobody may make falls to the admins, whose adoption folder rules reject without Force |
+| `Authority_fakeadopt` | `Authority` | `violation:AdoptionHoldsContent` | without rule 7, c's clean merge of `main` with a's suggestion marks it accepted with none of its content |
+| `Authority_base` | `Authority` | `violation:AuthorisedContent` | proposals counted in a merge's base, without rule 7: a suggestion's content enters with no decider |
+| `Authority_first` | `Authority` | `violation:AuthorisedContent` | rule 3 checked against the first accepted parent only: c's merge changes F, which only one parent's roster lets c change |
+| `Authority_anyone` | `Authority` | `violation:DecisionsByDeciders` | any member may write a decision: c rejects a's suggestion, which only b may decide |
+| `Authority_none` | `Authority` | `violation:RemovedSilenced` | no revocation (04 §4.4 and ADR 0051 alone). After a removes c's laptop, the laptop changes the root file on the genesis, and a's device merges it (5 states) |
+| `Authority_tip` | `Authority` | `violation:RemovedSilenced` | 09 §9.7's policy, no merge of a head signed outside `main`'s roster. The removed laptop signs the merge of its change with the removal itself, and b's device, which has not yet seen the removal, fast-forwards to it (6 states) |
+| `Authority_tipquiet`, `Authority_tiplive` | `Authority` | `violation:ConvergedWhenQuiet`, `violation:temporal` | the same policy leaves an accepted commit out of every `main` for good |
+| `Authority_contentonly` | `Authority` | `violation:RemovalRevokesAdded` | revoking the content but not the keys: the key that the removed laptop added for c stays in the roster |
 | `TraceSample_good` | `TraceSample` | `trace:accepted` (fast set) | the pattern of every trace module (ADR 0053) on a toy save-then-capture spec: a log whose values carry quotes, backslashes, nested tuples and records is explained line by line, and its `ASSUME`s check that TLC reads back what the NDJSON held |
 | `TraceSample_bad` | `TraceSample` | `trace:rejected:2` | a capture of a path never saved: no behaviour explains line 2, and the verdict names it |
 | `CaptureInstall_own` | `CaptureInstall` | `pass` (fast set) | issue #1, ADRs 0040 and 0055: capture and install of one path while a person writes in place, writes through a handle opened earlier, replaces atomically, creates and deletes at any instant, also while `pigeond` is down; the group changes or deletes the path; one crash. Nothing saved is lost (NoLoss); when idle, the path holds what the index says or the person's content (Journal); the index never calls a changed file clean (IndexHonest); what install moves away was captured (CaptureFirst), is the file it expected, and is written by nobody afterwards (NoOverwrite); a deletion the person made stays (DeletionKept); under fairness every save is captured (SavesCaptured) and the path ends at `current(p)` with no divergence and no kept aside (Converges). Own folder, two person actions: 122 560 states, 61 698 distinct, 9 s on 1 worker |
@@ -186,13 +202,52 @@ replaced; ADR 0061 fixes all three. Not modelled: install's own steps (the
 custodians per domain (`AnnexDrop`, `Repair`), and a writer that escapes the
 scan.
 
+**`Authority`** ([04 §4.3–4.5](04-roster-and-authority.md),
+[09 §9.7](09-network-and-joining.md)) models acceptance with three persons:
+the admin a, b who owns a folder F, and the member c. There are two paths: a
+file in F, and a file at the root (add-only, the admins are its stewards).
+The devices of a and b are honest `pigeond`s: they capture, revise, adopt,
+reject and withdraw suggestions, give F to someone else, remove c's devices,
+fetch and merge. c's devices belong to an attacker who signs any change,
+merge or decision on any parent it knows, and may add a key for c. That is a
+faulty member, or c's stolen laptop once a has removed it.
+
+The verdict of each commit is computed by the rules of 04 §4.4 (1–4 and 7)
+when the commit is written. A path's value is the set of versions that the
+newest changes of that path wrote: a conflict keeps several. This is the
+abstraction of the catalogue that `models/catalogue` checks in full
+(ADR 0052). Increasing commit ids give the canonical order; `Roster` checks
+the fold's order and its edits.
+
+The model found two things:
+
+- **A removed device keeps signing.** On an old parent, the removed laptop's
+  commits are valid. 09 §9.7's policy of not merging them lets them in
+  through a device that has not yet seen the removal (`Authority_tip`). It
+  also keeps accepted commits out of `main` (`Authority_tipquiet`). ADR 0062
+  revokes them instead.
+- **Deciders who cannot decide.** ADR 0038 judges deciders on the
+  proposal's parents, or on its own diff, so some deciders cannot adopt
+  (`Authority_proposal`, `Authority_mixed`). Admins cannot adopt without
+  Force (`Authority_noforce`). And a merge that adopts nothing marks a
+  proposal accepted (`Authority_fakeadopt`). ADR 0063 judges deciders at the
+  decision and adds rule 7.
+
+Convergence is checked in two ways. `ConvergedWhenQuiet` is a safety
+property: every behaviour is finite, so under fairness each one ends where
+no honest device can fetch or merge, and there the trees must be the
+catalogue of all known commits. It holds in every design configuration.
+`Converge` is the temporal property; TLC checks it only in the small
+`Authority_live`, since fairness over these actions is slow to check.
+
+Not modelled: several devices per person, persons joining or leaving,
+key rotation, rules 5 and 6 (names, well-formed trees), Drop, and the
+contents of a conflict copy.
+
 ### Planned, before or with the code (ADR 0008)
 
-| Model | Actions | Safety | Liveness (under fairness) |
-|---|---|---|---|
-| `Authority` ([04](04-roster-and-authority.md)) | `Receive`, `Validate`, `Merge`, `Propose`, `Adopt`, `Reject`, roster changes | INV-Valid, INV-Merge: devices with the same commits have the same catalogue | connected devices converge |
-
-Bounds start at N ≤ 4 devices, K ≤ 2, a few paths and keys, as now
+None remain: `Authority`, `Evict` and `Repair`, the last three planned for
+issue #10, are in the table above. Bounds start at N ≤ 4 devices, K ≤ 2, a few paths and keys, as now
 (ADR 0008); larger bounds run in the full set. Each model has a negative
 configuration that removes one safeguard and must fail.
 
@@ -382,7 +437,7 @@ are specified here but not built; the gaps are tracked as GitHub issues
 | P1 Survival | E1, E5, E8, E9, E10 (lab, printing); E13 (asserting: pigeon's filter refuses remote `REMOVE`); E21 (asserting: recovery from custodians alone); E22 (asserting: one copy per failure domain, the reserve, disk full); E23 (asserting: over P2P git-annex's verified drop counts a copy locked for removal, two concurrent drops lose the key, pigeon's probe keeps it); `AnnexDrop` model (git-annex's verified drop: safe over a local path or behind the probe, not over P2P; ADR 0054); `Repair` model (placement, repair and rebalancing against lost disks, removals, rotten and restored copies, crashes; a rotten copy proving a drop and a full custodian stalling domain repair, ADR 0059); `Evict` model (a laptop drops only keys K custodians hold, verified when the drop runs; ADR 0061); `CustodyNaive`, `CustodyTokens` (evidence about hand-offs in general and about the earlier token protocol, not about git-annex) | failure-domain and capacity laws; the filter's hash law (ADR 0059); fault injection; asserting E9, E10 | independence pigeon cannot see (virtual machines, places not declared; ADR 0049); power loss on a custodian (outside the lab; ADR 0046 rests on the git and git-annex sources) |
 | P2 Capture, no overwrite | E20 (asserting, Linux and macOS: what capture stages and what it never reads); E15b (asserting: no pointer during free and keep); E24 (asserting, Linux and macOS: git's hide loses a write through an earlier handle, a drop turns other files of its key into pointers; ADR 0061); E18 (asserting: offline in-place saves keep every version); E19 (asserting, Linux and macOS: racing saves and `kill -9` during install); `CaptureInstall` model (racing saves, escaping writers, crashes during install and recovery, resolutions; ADR 0055); `Evict` model (free and keep against saves through earlier handles, group changes, lost copies, crashes and switches: no save lost, no pointer shown, nothing captured that the person did not write; ADR 0061) | install journal laws (hegel-rust), checked against the model | copy-on-write cost of pending history on APFS and btrfs (E18 there); saves from stale memory, and on macOS saves made only through a shared mapping until they are synced (16 §16.4) |
 | P3 Reversible deletion | E2, E4 (lab, printing); `Purge` model (seals against restores, cancels, partitions, restarts and a returning laptop; ADR 0042); E14 (asserting: shared keys, a restore against the seals, per-key transfers, the forced drop, a returning laptop's new generation) | purge laws (hegel-rust); `Purge` trace validation | a custodian clock that jumps forward by more than the waiting period; erased names stay in history (16 §16.4) |
-| P4 Authority | E7 (lab, printing); E12 (asserting: no pushed ref, `remotedaemon` only fetches); `Roster` model (roster forks, ADR 0051) | `Authority` model; roster fold laws; acceptance laws; decision-rights tests (ADR 0038) | format compatibility (#15) |
+| P4 Authority | E7 (lab, printing); E12 (asserting: no pushed ref, `remotedaemon` only fetches); `Roster` model (roster forks, ADR 0051); `Authority` model (acceptance, proposals and decisions against a faulty member, a removed laptop signing on old parents; ADRs 0062, 0063) | roster fold laws; acceptance and revocation laws; decision-rights tests (ADR 0038); `Authority` trace validation | format compatibility (#15) |
 | P5 Convergence | E3 (lab, printing); `models/catalogue` (every schedule of three devices over eleven cases; the rule before ADR 0052 fails as expected) | merge and name laws (hegel-rust), checked against the reference model | ADR 0052 is Proposed (#8); rename tracking (16 §16.4) |
 | P6 Honest status | E20 (asserting: the kinds pigeon lists as not shared); E21 (asserting: content without its commit is not protected); E22 (asserting: two repositories on one disk are two copies to git-annex, so pigeon counts domains) | observation, domain and headline laws; usability test | — |
 

@@ -1,7 +1,7 @@
 # pigeon v2 — specification
 
 > **Status:** version 1 of the specification, 13 October 2026. It assembles the
-> decisions recorded in [ADRs 0001–0061](../adr/README.md), the guarantees P1–P6 of the
+> decisions recorded in [ADRs 0001–0063](../adr/README.md), the guarantees P1–P6 of the
 > [proposal](../design/proposal/proposal.pdf), the [UX study](../design/ux.md), the
 > [TLA+ models](../../models/tla/), the [catalogue model](../../models/catalogue/catalogue.py)
 > and the [git-annex experiments](../../lab/git-annex/).
@@ -153,3 +153,5 @@ or a collaborative editor), nor real-time sync of hot files (proposal §1).
 | 0057 the first milestone is a safety slice: one laptop, two custodians, no proposals or purge (Proposed) | [13](13-verification.md), [16](16-open-questions.md) |
 | 0059 a custodian's drop counts only copies hashed for it; repair counts only members that can take a key (Proposed) | [02](02-guarantees.md), [08](08-custody-loops.md), [09](09-network-and-joining.md), [13](13-verification.md) |
 | 0061 freeing hides a file as an install of its absence; no drop takes a key a kept path uses (Proposed) | [07](07-capture-and-install.md), [08](08-custody-loops.md), [12](12-observability.md), [13](13-verification.md) |
+| 0062 a removal revokes what the removed device signed that the removal had not seen (Proposed) | [02](02-guarantees.md), [04](04-roster-and-authority.md), [05](05-catalogue-and-names.md), [09](09-network-and-joining.md), [13](13-verification.md) |
+| 0063 a decision is a merge by a decider of the main it is made on (Proposed) | [02](02-guarantees.md), [04](04-roster-and-authority.md), [13](13-verification.md) |

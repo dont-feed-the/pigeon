@@ -74,3 +74,5 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0059](0059-a-custodians-drop-counts-only-hashed-copies.md) | A custodian's drop counts only copies hashed for it, and repair counts only members that can take a key | Proposed |
 | [0060](0060-the-platform-layer-uses-rustix-and-libproc.md) | The platform layer uses rustix, with libproc on macOS; the lab seams are a self-kill and a file | Proposed |
 | [0061](0061-freeing-hides-as-an-install-and-guards-every-drop.md) | Freeing hides a file as an install of its absence, and no drop takes a key that a kept path uses | Proposed |
+| [0062](0062-a-removal-revokes-what-it-had-not-seen.md) | A removal revokes what the removed device signed that the removal had not seen | Proposed |
+| [0063](0063-a-decision-is-a-merge-by-a-decider-of-its-main.md) | A decision is a merge by a decider of the main it is made on | Proposed |

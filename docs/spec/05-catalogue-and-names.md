@@ -48,7 +48,9 @@ already known to custodians, unless a purge erased it ([08 §8.6](08-custody-loo
 ## 5.2 The deterministic merge (ADR 0052)
 
 `catalogue(S)`, for an ancestor-closed set S of accepted commits, is built
-from **events**: the contributions of S and the conflict events they froze.
+from **events**: the contributions of S that are not revoked
+([04 §4.4](04-roster-and-authority.md), ADR 0062) and the conflict events
+they froze.
 
 1. **Order.** A contribution comes after its ancestors and after the conflict
    events it froze; a conflict event comes after the heads it froze.
