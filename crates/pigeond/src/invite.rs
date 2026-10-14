@@ -168,6 +168,9 @@ pub async fn welcome(d: &Daemon, device: &str, join: Join) -> JoinAnswer {
     let refused = |code: &str| JoinAnswer::Refused {
         code: code.to_owned(),
     };
+    if let Some(new) = join.new_device.clone() {
+        return crate::recovery::welcome(d, device, &new, &join).await;
+    }
     for g in d.groups() {
         let _busy = g.busy.lock().await;
         let mut records = load(&g);
@@ -301,6 +304,7 @@ pub async fn join(d: &Daemon, code: &str, folder: Option<String>) -> Result<Stri
         annex_uuid: uuid,
         capacity: None,
         addresses: d.addresses().iter().map(ToString::to_string).collect(),
+        new_device: None,
     };
     let addresses: Vec<std::net::SocketAddr> = inv
         .addresses
@@ -340,13 +344,31 @@ pub async fn join(d: &Daemon, code: &str, folder: Option<String>) -> Result<Stri
 /// Fetches `main` from the inviter, checks that its root is the group's
 /// genesis and that it holds the welcome commit, and takes it.
 async fn first_fetch(g: &Group, inv: &Invitation, commit: &str, me: &str) -> Result<(), String> {
-    let spec = format!("+refs/heads/*:refs/pigeon/peers/{}/*", inv.inviter);
+    let theirs = fetch_welcome(g, &inv.inviter, &inv.group, commit, me).await?;
+    g.git
+        .update_ref("refs/heads/main", &theirs, None)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Fetches `main` from `inviter` for a new device `me`, checks that its
+/// root is `group`'s genesis, that it holds the welcome `commit` and that
+/// that commit's roster has `me`, merges the git-annex branch, and answers
+/// the inviter's `main`.
+pub async fn fetch_welcome(
+    g: &Group,
+    inviter: &str,
+    group: &str,
+    commit: &str,
+    me: &str,
+) -> Result<String, String> {
+    let spec = crate::settings::peer_refspec(inviter);
     let args = [
         "fetch",
         "-q",
         "--no-tags",
         "--no-write-fetch-head",
-        inv.inviter.as_str(),
+        inviter,
         spec.as_str(),
     ];
     // The inviter may still be busy with the welcome's round: retry for a
@@ -368,11 +390,10 @@ async fn first_fetch(g: &Group, inv: &Invitation, commit: &str, me: &str) -> Res
     }
     let theirs = g
         .git
-        .rev(&format!("refs/pigeon/peers/{}/main", inv.inviter))
+        .rev(&format!("refs/pigeon/peers/{inviter}/main"))
         .await
         .ok_or("inviter-offline")?;
-    if g.git.root(&theirs).await.as_deref() != Some(inv.group.as_str())
-        || !g.git.contains(&theirs, commit).await
+    if g.git.root(&theirs).await.as_deref() != Some(group) || !g.git.contains(&theirs, commit).await
     {
         return Err("invite-unknown".into());
     }
@@ -385,15 +406,12 @@ async fn first_fetch(g: &Group, inv: &Invitation, commit: &str, me: &str) -> Res
     }
     if let Some(ga) = g
         .git
-        .rev(&format!("refs/pigeon/peers/{}/git-annex", inv.inviter))
+        .rev(&format!("refs/pigeon/peers/{inviter}/git-annex"))
         .await
     {
-        let name = format!("refs/remotes/{}/git-annex", inv.inviter);
+        let name = format!("refs/remotes/{inviter}/git-annex");
         let _ = g.git.run(&["update-ref", &name, &ga]).await;
         let _ = g.git.run(&["annex", "merge"]).await;
     }
-    g.git
-        .update_ref("refs/heads/main", &theirs, None)
-        .await
-        .map_err(|e| e.to_string())
+    Ok(theirs)
 }

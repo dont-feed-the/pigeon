@@ -21,6 +21,7 @@ pub mod invite;
 pub mod journal_file;
 pub mod logs;
 pub mod net;
+pub mod recovery;
 pub mod repair;
 pub mod restore;
 pub mod roster_file;

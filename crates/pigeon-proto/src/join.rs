@@ -4,7 +4,8 @@
 //! The new device proves that it holds the invitation's secret with an HMAC
 //! bound to both device IDs, which the QUIC handshake authenticated. The
 //! slice adds the direct addresses of the new device, which the inviter
-//! writes to its peers' list (13 §13.12).
+//! writes to its peers' list (13 §13.12). A recovery device joins a new
+//! machine of its person the same way, with no invitation (09 §9.9).
 
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +33,12 @@ pub struct Join {
     /// Its direct addresses.
     #[serde(default)]
     pub addresses: Vec<String>,
+    /// Set when a recovery device sends the join (09 §9.9, ADR 0047): the
+    /// device ID of the new machine it adds for its person. The invitation
+    /// fields are then empty: the recovery device's own key, which the
+    /// QUIC handshake authenticated, is the authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub new_device: Option<String>,
 }
 
 /// The inviter's answer.

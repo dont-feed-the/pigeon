@@ -1,6 +1,7 @@
-//! Commits that `pigeond` writes itself on a laptop: the genesis and roster
-//! changes (04 §4.2). Each file is written to the folder and to the index,
-//! then the index is committed on `main` with the expected old value.
+//! Commits that `pigeond` writes itself: the genesis and roster changes
+//! (04 §4.2). Each file is written to the folder, if there is one, and to
+//! the index, then the index is committed on `main` with the expected old
+//! value; a custodian's index is loaded from `main` first.
 
 use std::path::Path;
 
@@ -54,6 +55,16 @@ pub async fn commit_roster(
     doc.roster.validate().map_err(|e| format!("{e:?}"))?;
     let text = roster_file::render(doc)?;
     let parent = g.git.rev("refs/heads/main").await;
+    // A bare repository's index holds only what pigeond last staged there:
+    // load `main`'s tree first, or the commit would drop every other file.
+    if g.worktree.is_none()
+        && let Some(p) = &parent
+    {
+        g.git
+            .run(&["read-tree", p.as_str()])
+            .await
+            .map_err(|e| e.to_string())?;
+    }
     stage_file(
         &g.git,
         g.worktree.as_deref(),

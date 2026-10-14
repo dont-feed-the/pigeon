@@ -153,8 +153,12 @@ async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             crate::restore::restore(d, Path::new(&path), version).await
         }
         Request::Restore { .. } => not_in_this_build("restore"),
-        Request::RecoverySheet => not_in_this_build("recovery-sheet"),
-        Request::Recover { .. } => not_in_this_build("recover"),
+        Request::RecoverySheet => crate::recovery::sheet(d).await,
+        Request::Recover {
+            sheet,
+            folder,
+            from,
+        } => crate::recovery::recover(d, &sheet, folder, from).await,
         Request::Hello { .. }
         | Request::Address { .. }
         | Request::Connect { .. }
