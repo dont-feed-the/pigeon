@@ -30,6 +30,8 @@ Roster_clock	Roster	full	pass
 Roster_fold3	Roster	full	pass
 TraceSample_good	TraceSample	fast	trace:accepted
 TraceSample_bad	TraceSample	fast	trace:rejected:2
+RosterTrace_good	RosterTrace	fast	trace:accepted
+RosterTrace_bad	RosterTrace	fast	trace:rejected:7
 AnnexDrop_design	AnnexDrop	fast	pass
 AnnexDrop_disk	AnnexDrop	fast	pass
 AnnexDrop_ranked	AnnexDrop	fast	pass

@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""Check runs of pigeon's own code against the TLA+ models (ADR 0008, 13 §13.3).
+
+`cargo test` writes NDJSON traces of pigeon-core's simulated runs (feature
+`tla-trace`); each becomes a TLA+ module through scripts/trace-to-tla, and TLC
+checks it with its *Trace.tla specification: every run must be accepted. A
+mutant of each run, with one logged roster changed, must be rejected, so a
+check that accepts everything fails. Usage: scripts/check-code-traces
+[--seeds N] [--fixtures]. With --fixtures, the committed sample logs of
+models/tla (RosterTrace_good and _bad) are rewritten from seed 1 and their
+modules regenerated, for scripts/run-tlc.
+"""
+
+import argparse
+import importlib.machinery
+import importlib.util
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+ROOT = Path(__file__).resolve().parent.parent
+MODELS = ROOT / "models" / "tla"
+# spec, cargo test target, file prefix, good and bad log modules.
+SPECS = [("RosterTrace", "roster_trace", "roster", ("RosterCodeLog", "CodeLog"), ("RosterCodeBadLog", "BadLog"))]
+
+
+def load(name):
+    loader = importlib.machinery.SourceFileLoader(name.replace("-", "_"), str(ROOT / "scripts" / name))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def mutant(lines):
+    """The same run with the roster of its last checked step altered (a
+    fast-forward writes no roster)."""
+    events = [json.loads(line) for line in lines]
+    last = [e for e in events if not e["vars"].get("ff", False)][-1]["vars"]["ros"]
+    last["dev"][0] = 2 if last["dev"][0] != 2 else 1
+    return [json.dumps(e, separators=(",", ":")) for e in events]
+
+
+def traces(target, seeds, out):
+    env = dict(os.environ, PIGEON_TRACE_DIR=str(out), PIGEON_TRACE_SEEDS=str(seeds))
+    subprocess.run(["cargo", "test", "--locked", "-q", "-p", "pigeon-core", "--features", "tla-trace",
+                    "--test", target], cwd=ROOT, env=env, check=True)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seeds", type=int, default=20)
+    parser.add_argument("--fixtures", action="store_true")
+    parser.add_argument("--java", default=os.environ.get("JAVA", "java"))
+    args = parser.parse_args()
+    tla, tlc = load("trace-to-tla"), load("run-tlc")
+    jar = tlc.tlc_jar()
+    failures = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        for spec, target, prefix, good, bad in SPECS:
+            traces(target, 1 if args.fixtures else args.seeds, tmp / "logs")
+            work = tmp / "models"
+            shutil.copytree(MODELS, work, dirs_exist_ok=True)
+            tlc.MODELS = work
+            for log in sorted((tmp / "logs").glob(f"{prefix}-*.ndjson")):
+                lines = log.read_text().splitlines()
+                for lines_of, (module, name), cfg, want in [
+                    (lines, good, f"{spec}_good", "trace:accepted"),
+                    (mutant(lines), bad, f"{spec}_bad", "trace:rejected"),
+                ]:
+                    (work / f"{module}.tla").write_text(tla.convert(lines_of, module, name))
+                    if args.fixtures:
+                        (MODELS / f"{cfg}.ndjson").write_text("\n".join(lines_of) + "\n")
+                        (MODELS / f"{module}.tla").write_text(tla.convert(lines_of, module, name))
+                for cfg, want in [(f"{spec}_good", "trace:accepted"), (f"{spec}_bad", "trace:rejected")]:
+                    got, output = tlc.run(jar, cfg, spec, args.java, "1", None)
+                    ok = got.startswith(want)
+                    print(f"{'ok' if ok else 'FAIL':4} {log.name} {cfg}: {got}", flush=True)
+                    if not ok:
+                        failures += 1
+                        print(output[-3000:], file=sys.stderr)
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -34,7 +34,7 @@ issues transfers one key at a time from batch `get` and `copy` processes
 |---|---|---|
 | 1. capture | hashing and committing what people saved ([07 §7.3](07-capture-and-install.md)) | oldest change first |
 | 2. history | fetch, validate, merge, status reports ([08 §8.2](08-custody-loops.md)) | most recent notice first |
-| 3. protect | uploads and downloads that bring a version toward *protected*, and repair ([08 §8.3, §8.4](08-custody-loops.md), ADR 0050) | fewest failure domains holding a custody copy first (a laptop copy counts for ordering only), then endangered keys, then newest, then smallest |
+| 3. protect | uploads and downloads that bring a version toward *protected*, and repair ([08 §8.3, §8.4](08-custody-loops.md), ADR 0050) | fewest failure domains holding a custody copy first (a laptop copy counts for ordering only: fewer laptop copies first among equal domains, ADR 0064), then endangered keys, then newest, then smallest |
 | 4. download | content of kept folders, install ([07 §7.5](07-capture-and-install.md)) | folder priority (`high`, `normal`, `low`), then recently changed first |
 | 5. scrub | `fsck --incremental --time-limit` slices ([08 §8.8](08-custody-loops.md)) | git-annex's incremental order |
 | 6. rebalance | verified `drop --key` of keys a custodian no longer wants ([08 §8.10](08-custody-loops.md)) | — |
@@ -42,7 +42,8 @@ issues transfers one key at a time from batch `get` and `copy` processes
 - A higher class preempts a lower one between keys; a transfer in progress
   is paused, not abandoned, when a higher class needs the same resource.
 - The order is a pure function in `pigeon-core` with laws: it is a total
-  preorder; class 1 always runs within its floor (§15.4); a key's position
+  preorder, made total by breaking every tie on the remaining fields (the
+  key, the path, the peer; ADR 0064); class 1 always runs within its floor (§15.4); a key's position
   never depends on arrival order of equal items; a key held in fewer failure
   domains never waits behind one held in more (ADR 0050). Repair is no longer
   a class below downloads: a custodian spends its last space on the keys with

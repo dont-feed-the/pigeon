@@ -76,3 +76,5 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0061](0061-freeing-hides-as-an-install-and-guards-every-drop.md) | Freeing hides a file as an install of its absence, and no drop takes a key that a kept path uses | Proposed |
 | [0062](0062-a-removal-revokes-what-it-had-not-seen.md) | A removal revokes what the removed device signed that the removal had not seen | Proposed |
 | [0063](0063-a-decision-is-a-merge-by-a-decider-of-its-main.md) | A decision is a merge by a decider of the main it is made on | Proposed |
+| [0064](0064-pigeon-core-fixes-the-readings-its-laws-need.md) | pigeon-core's first algebras fix the readings of the spec that their laws need | Proposed |
+| [0065](0065-runs-of-the-core-are-checked-by-tlc.md) | Runs of pigeon-core are checked by TLC before the drivers exist | Proposed |

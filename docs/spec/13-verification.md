@@ -96,6 +96,8 @@
 | `Authority_contentonly` | `Authority` | `violation:RemovalRevokesAdded` | revoking the content but not the keys: the key that the removed laptop added for c stays in the roster |
 | `TraceSample_good` | `TraceSample` | `trace:accepted` (fast set) | the pattern of every trace module (ADR 0053) on a toy save-then-capture spec: a log whose values carry quotes, backslashes, nested tuples and records is explained line by line, and its `ASSUME`s check that TLC reads back what the NDJSON held |
 | `TraceSample_bad` | `TraceSample` | `trace:rejected:2` | a capture of a path never saved: no behaviour explains line 2, and the verdict names it |
+| `RosterTrace_good` | `RosterTrace` | `trace:accepted` (fast set) | a run of pigeon-core's roster fold, written by `crates/pigeon-core/tests/roster_trace.rs` (seed 1): each logged change is one of `Roster`'s `Ops`, and each roster the code computed, at commits and merges, is the model's (ADR 0065) |
+| `RosterTrace_bad` | `RosterTrace` | `trace:rejected:7` | the same run with the roster of its last checked step altered: the verdict names line 7 |
 | `CaptureInstall_own` | `CaptureInstall` | `pass` (fast set) | issue #1, ADRs 0040 and 0055: capture and install of one path while a person writes in place, writes through a handle opened earlier, replaces atomically, creates and deletes at any instant, also while `pigeond` is down; the group changes or deletes the path; one crash. Nothing saved is lost (NoLoss); when idle, the path holds what the index says or the person's content (Journal); the index never calls a changed file clean (IndexHonest); what install moves away was captured (CaptureFirst), is the file it expected, and is written by nobody afterwards (NoOverwrite); a deletion the person made stays (DeletionKept); under fairness every save is captured (SavesCaptured) and the path ends at `current(p)` with no divergence and no kept aside (Converges). Own folder, two person actions: 122 560 states, 61 698 distinct, 9 s on 1 worker |
 | `CaptureInstall_other` | `CaptureInstall` | `pass` (fast set) | the same in another person's folder: saves become suggestions, which are accepted or rejected, then resolved (*Take the group's version*, *Suggest again*), also while new saves race the choice: 1 240 787 states, 612 281 distinct, 6 s |
 | `CaptureInstall_crash2` | `CaptureInstall` | `pass` (fast set) | two crashes, one during recovery: a second replay decides as the first (ADR 0036's law): 360 940 states, 171 214 distinct, 4 s |
@@ -280,6 +282,15 @@ assumptions is expected and is not a bug.
   and since every step consumes one line, the depth of its search is the
   first line that no behaviour explains: `trace:rejected:N`, which fails the
   build with that line. `TraceSample` checks the pipeline in CI (13 §13.2).
+- **Runs of the code** (ADR 0065). Before the drivers exist, a test runs
+  pigeon-core's own functions inside a simulated environment that takes the
+  model's steps (`crates/pigeon-core/tests/common/roster_sim.rs` for
+  `Roster`), logs each step with what the code computed, and
+  `scripts/check-code-traces` hands every log to TLC: 20 random runs in `ci`,
+  200 in `models-full`. A mutant of each run, one logged roster altered,
+  must be rejected, so a check that accepts everything fails. A mutation of
+  the canonical order (signer before time) passes every hegel law of the
+  fold and is caught here.
 - Every fault-injection run in CI is trace-validated; a mismatch fails the
   build and reports the first log line no behaviour of the model explains.
 - Trace validation shows that observed runs conform; it is not a proof of
@@ -519,3 +530,20 @@ content kept (§13.11). The peak is reported with its causes.
 exercises as *established* (with its scenarios and traces), *conditional*
 (with the assumption it rests on) or *untested*. Evidence from pigeon's own
 code enters the "now" column of §13.10 only through this ledger.
+
+## 13.13 The laws in code (ADRs 0012, 0064)
+
+`pigeon-core` states each law in the documentation of its module and checks
+it with a `hegeltest` property in `crates/pigeon-core/tests/` (at least 1000
+cases each; a law that needs a rare input gets a targeted generator and an
+example test). The laws of §13.4 not listed here wait for their module.
+
+| Law | Module | Test | Model mirrored |
+|---|---|---|---|
+| domains partition the custodians, ignore input order, join custodians that share a fact; a new fact only merges; no shared fact, one domain each | `domain` | `tests/domain.rs` | — |
+| more presence observations never lower a state; a new fact never raises one; custodian order is irrelevant; one custodian per domain is ADR 0002's rule; a new holder never lowers a state | `state` | `tests/state.rs` | — |
+| the join is a semilattice with *Safe* as identity and *Needs you* absorbing; the headline of a union is the join; adding an item never lowers it; a version only this computer holds is *Not safe yet* after the grace period, even unreachable | `headline` | `tests/headline.rs` | — |
+| the queue order is total; a higher class goes first; arrival order is irrelevant; a key in fewer failure domains never waits behind one in more | `queue` | `tests/queue.rs` | — |
+| recovery ends every entry and a second does nothing; a crash during recovery ends as one recovery; a person's save is never lost; a deletion after install stays; without a person, the path ends old or new and the index agrees (INV-Journal); pigeon never renames over a name | `journal` | `tests/journal.rs` | `CaptureInstall` (`NoLoss`, `Journal`, `NoOverwrite`, `DeletionKept`) |
+| every tree is the fold of its history; the fold depends only on the set of changes; every fold is valid and removals win; skips need concurrency; a linear history skips nothing; the canonical order is topological; pigeon-core lets a device sign every change of the model's `Ops` | `roster` | `tests/roster.rs` | `Roster` (`TreeIsFold`, `Agreement`, `AdminRemains`, `RemovalWins`, `SkipsNeedConcurrency`), and `RosterTrace` on runs |
+| a trace line parses back to its event; the Lamport clock orders a receive after its send; every action name is an operator of its `.tla` | `trace` | `tests/trace.rs`, `tests/roster_trace.rs` | every `*Trace.tla` |

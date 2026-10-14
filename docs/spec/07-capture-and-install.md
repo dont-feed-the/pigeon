@@ -186,8 +186,11 @@ For each path, in this order (a batch shares its fsyncs and its one writer scan)
    a *linked* aside, at once without hashing: its content lives on under its
    other name. Otherwise it is captured as a recovered version.
 
-A deletion is the same without steps 1, 2 and 7. When every entry has ended and
-its aside is released, the journal is truncated.
+A deletion is the same without steps 1, 2 and 7. A released aside is
+journalled `released`. When every entry has ended and its aside is released,
+the journal is truncated. A staged file that no entry names (a crash between
+steps 2 and 3) is removed at recovery: no name in the folder leads to it
+(ADR 0064).
 
 **Recovery at start**, before any capture, for each `begin` without an end
 (ADR 0055). An entry with `proved` rolls forward; any other rolls back.

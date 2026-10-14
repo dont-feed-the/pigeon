@@ -1,7 +1,7 @@
 # Checks of every push and pull request: repository rules, the fast set of
 # TLA+ models with their expected verdicts (ADR 0026), the catalogue model on
-# every schedule of its cases (ADR 0052), and the Rust workspace on Linux and
-# macOS (ADR 0058).
+# every schedule of its cases (ADR 0052), the Rust workspace on Linux and
+# macOS (ADR 0058), and runs of pigeon-core checked by TLC (ADRs 0008, 0064).
 name: ci
 
 on:
@@ -120,3 +120,35 @@ jobs:
           command: check
       - name: pigeon-core depends on no crate that does I/O (14 §14.6)
         run: scripts/check-core-deps
+      - name: pigeon-core with its trace events (feature tla-trace, 12 §12.3)
+        run: |
+          cargo clippy -p pigeon-core --all-targets --features tla-trace --locked -- -D warnings
+          cargo test -p pigeon-core --features tla-trace --locked
+
+  code-traces:
+    name: runs of pigeon-core checked by TLC
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pigeon
+          key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: rust-traces-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: rust-traces-
+      - name: the pinned toolchain (rust-toolchain.toml)
+        run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
+      - name: every run is accepted by its model, every mutant rejected (13 §13.3)
+        run: scripts/check-code-traces --seeds 20

@@ -8,7 +8,15 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[features]
+# Trace events for checking runs against TLA+ (12 §12.3, ADR 0008).
+tla-trace = []
+
 [dependencies]
+
+[dev-dependencies]
+hegeltest.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

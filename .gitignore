@@ -1,3 +1,4 @@
 /target
 states/
 *.out
+.hegel/

@@ -34,7 +34,12 @@ For a version with key *k*, introduced by commit *c*, on this device, at time *n
    it would be a key without a name (ADR 0046).
 2. Let **D** be the failure domains of the members of H (ADR 0049): custodians
    whose `storage` fingerprints intersect, whose `host` is equal, or whose
-   roster `domain` is equal are one domain (connected components). If |D| ≥ K
+   roster `domain` is equal are one domain (connected components). The
+   components are taken over every custodian of the roster, and D is the set
+   of those holding a member of H: a custodian that shares hardware with two
+   others joins their domains whether or not it holds the key, so a new copy
+   never lowers the state (ADR 0064). With `min_sites` = 1 sites ask nothing;
+   above it only declared sites count (ADR 0064). If |D| ≥ K
    and the members of H span at least `min_sites` declared sites: the version
    is **protected**, *observed at* T, the K-th most recent among each domain's
    latest `heard(x)` ("Safe. Checked 3 hours ago").
@@ -169,7 +174,10 @@ The headline reduces every item to one of five levels (ADR 0027, ux.md §4):
 | **Safe** | every version is *protected*, observed within `stale_after`; if some items of the folder are not shared, a second sentence says so: "2 items of your folder aren't shared" (ADR 0044) |
 
 **Precedence:** Needs you, then Not safe yet, then Not checked recently, then
-Working, then Safe; the first that applies wins. ADR 0027 lists the levels as
+Working, then Safe; the first that applies wins. A *protected* version whose
+time T is older than `stale_after` counts as *Not checked recently*; a
+*missing* version (`content-missing`) as *Not safe yet* after the grace
+period; an *erased* one not at all: it was released on purpose (ADR 0064). ADR 0027 lists the levels as
 Needs you, Not safe yet, Working, Safe, Not checked recently; this specification
 reads *Not checked recently* as the honest form of *Working* or *Safe* when
 pigeon cannot confirm, never as better than them **[no ADR]**. A version known to

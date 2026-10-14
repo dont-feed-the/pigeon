@@ -311,9 +311,13 @@ sign it, and it recomputes the roster.
   or already the new one, every `add` finds its entry absent or equal, and
   the result is valid (§4.2). Otherwise it is **skipped**, except for its
   device removals, which always apply (a `remove person` removes the devices
-  the person has at that point). A removal of what is gone is a no-op.
-  The change of a revoked commit (§4.4, ADR 0062) is skipped the same way:
-  only its device removals apply.
+  the person has at that point). The device removals of a skipped change are
+  its `remove device` edits; a skipped `remove person` removes nothing, as in
+  the `Roster` model (`Removals = "always"`, ADR 0064). A removal of what is
+  gone is a no-op. The change of a revoked commit (§4.4, ADR 0062) is skipped
+  the same way: only its device removals apply. The fold also carries the
+  devices ever removed, with their `annex_uuid`, so that neither returns
+  (§4.2).
 - **Skipped changes** are listed with their reason, a pure function of the
   history. The admins and the author see *Needs you*: "Alice and Bob gave up
   their admin role at the same time. One admin must remain: Bob stays
