@@ -324,9 +324,13 @@ impl Roster {
         true
     }
 
+    /// A removal is recorded even when the device is absent, its addition
+    /// skipped or not yet folded, so that it is never added afterwards.
     fn remove_device(&mut self, id: &DeviceId) {
-        if let Some(d) = self.devices.remove(id) {
-            self.removed.insert(id.clone(), d.annex_uuid);
+        let uuid = self.devices.remove(id).and_then(|d| d.annex_uuid);
+        let slot = self.removed.entry(id.clone()).or_insert(None);
+        if uuid.is_some() {
+            *slot = uuid;
         }
     }
 

@@ -314,7 +314,9 @@ sign it, and it recomputes the roster.
   the person has at that point). The device removals of a skipped change are
   its `remove device` edits; a skipped `remove person` removes nothing, as in
   the `Roster` model (`Removals = "always"`, ADR 0064). A removal of what is
-  gone is a no-op. The change of a revoked commit (§4.4, ADR 0062) is skipped
+  gone is a no-op. A removal of a device the roster does not hold, its
+  addition skipped or not yet folded, still records it as removed, so that
+  a later addition of it is skipped. The change of a revoked commit (§4.4, ADR 0062) is skipped
   the same way: only its device removals apply. The fold also carries the
   devices ever removed, with their `annex_uuid`, so that neither returns
   (§4.2).

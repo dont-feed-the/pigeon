@@ -3,7 +3,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod common;
 
-use common::roster_sim::{NP, Sim, did, pid};
+use common::roster_sim::{NP, Sim, device, did, genesis, pid};
 use common::{index, int};
 use hegel::TestCase;
 use pigeon_core::roster::{Edit, Field, Value, apply, may_sign};
@@ -58,6 +58,7 @@ fn every_fold_is_valid_and_removals_win(tc: TestCase) {
             for e in &s.history.commits[&x].change {
                 if let Edit::RemoveDevice(d) = e {
                     assert!(!r.devices.contains_key(d), "{d:?} came back in {c}");
+                    assert!(r.removed.contains_key(d), "{d:?} not kept out in {c}");
                 }
             }
         }
@@ -125,4 +126,21 @@ fn a_member_who_is_no_admin_signs_only_their_devices() {
         !may_sign(r, &did(1), &[Edit::RemovePerson(pid(1))]),
         "nobody removes their own person"
     );
+}
+
+/// Seed 69 of the trace check: a rotation that adds device 5 is skipped, the
+/// removal of device 5 still applies, and a later addition of it must fail
+/// (Roster.tla's "rem" always records the device as gone).
+#[test]
+fn removing_an_absent_device_keeps_it_out() {
+    let five = did(5);
+    let removed = apply(&genesis(), &[Edit::RemoveDevice(five.clone())]);
+    assert_eq!(removed.skipped, None);
+    assert!(removed.roster.removed.contains_key(&five));
+    let added = apply(
+        &removed.roster,
+        &[Edit::AddDevice(five.clone(), device(5, 1))],
+    );
+    assert!(added.skipped.is_some());
+    assert!(!added.roster.devices.contains_key(&five));
 }

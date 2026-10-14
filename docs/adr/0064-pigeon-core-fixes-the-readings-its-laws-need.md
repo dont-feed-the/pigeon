@@ -50,7 +50,11 @@ its own law fails.
 6. **Roster fold** (04 §4.8). The device removals of a skipped change are
    its `remove device` edits; a skipped `remove person` removes nothing, as
    the `Roster` model's `Removals = "always"`. The fold carries the devices
-   ever removed with their `annex_uuid`. `may_sign`: an admin signs any
+   ever removed with their `annex_uuid`, and a `remove device` of a device
+   the roster does not hold still records it (without one), as the model's
+   `rem` puts it in `gone`: otherwise a concurrent addition, folded later,
+   brings it back. The 200-run trace check found this (ADR 0065); the
+   example `removing_an_absent_device_keeps_it_out` keeps it. `may_sign`: an admin signs any
    change; a device of person P adds and removes P's devices and sets their
    capacity, domain and site; a recovery device only adds and removes its
    person's devices; nobody removes their own person. A clean merge may be
