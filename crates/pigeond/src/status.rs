@@ -3,7 +3,9 @@
 //!
 //! A custodian *holds* a version if git-annex's location log says so, and
 //! *has the commit* if its fetched `main` names the same key at the same
-//! path. It is heard of when a fetch from it last succeeded (13 §13.12).
+//! path. It is heard of when a fetch from it last succeeded (13 §13.12),
+//! and its repository is lost while it answers but serves the group no
+//! more: it then counts for nothing, and the headline says *Needs you*.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -82,7 +84,10 @@ pub async fn observe(g: &Group, me: &str, prefix: &str) -> Vec<Observed> {
     let saved = g.git.commit_time(&main).await.unwrap_or(0);
     let now = crate::util::now();
     let s = settings(g);
-    let heard = g.lock().heard.clone();
+    let (heard, lost) = {
+        let k = g.lock();
+        (k.heard.clone(), k.lost.clone())
+    };
     let mut peer_keys: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
     let mut custodians: Vec<(String, String)> = Vec::new();
     if let Some(doc) = &doc {
@@ -116,7 +121,7 @@ pub async fn observe(g: &Group, me: &str, prefix: &str) -> Vec<Observed> {
                     holds: have.contains(uuid),
                     has_commit: named(id),
                     checking: false,
-                    repository_lost: false,
+                    repository_lost: lost.contains(id),
                 })
                 .collect(),
             other_device_has_commit: peer_keys.keys().any(|id| named(id)),
@@ -207,7 +212,8 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
     let files = Arg::Number(i64::try_from(unsafe_files).unwrap_or(i64::MAX));
     let last = g.lock().heard.values().max().copied().unwrap_or(now);
     let full = disk_full(g);
-    let level = if full { Level::NeedsYou } else { level };
+    let lost = !g.lock().lost.is_empty();
+    let level = if full || lost { Level::NeedsYou } else { level };
     let headline = match level {
         _ if full => msg("headline-disk-full", &[]),
         Level::Safe => msg("headline-safe", &[("ago", Arg::Text(rfc3339(last)))]),

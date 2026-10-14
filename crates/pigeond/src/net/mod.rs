@@ -216,6 +216,8 @@ pub struct NetConfig {
 pub struct Node {
     endpoint: Endpoint,
     connections: Arc<tokio::sync::Mutex<HashMap<PublicKey, Slot>>>,
+    /// The last refusal of each peer, by group, until a stream is admitted.
+    refused: Arc<Mutex<HashMap<(PublicKey, String), Refusal>>>,
 }
 
 impl Node {
@@ -239,6 +241,7 @@ impl Node {
         Ok(Node {
             endpoint,
             connections: Arc::default(),
+            refused: Arc::default(),
         })
     }
 
@@ -277,8 +280,16 @@ impl Node {
             tries += 1;
             let connection = self.connection(key, addresses.clone()).await?;
             match tokio::time::timeout(CONNECT_TIMEOUT, Self::admit(&connection, group)).await {
-                Ok(Ok(pair)) => return Ok(pair),
-                Ok(Err(e @ NetError::Refused(_))) => return Err(e),
+                Ok(Ok(pair)) => {
+                    self.note(key, group, None);
+                    return Ok(pair);
+                }
+                Ok(Err(e @ NetError::Refused(_))) => {
+                    if let NetError::Refused(r) = &e {
+                        self.note(key, group, *r);
+                    }
+                    return Err(e);
+                }
                 Ok(Err(e)) if tries > 1 => return Err(e),
                 Err(_) if tries > 1 => {
                     return Err(NetError::Connect("peer-unreachable: no answer".into()));
@@ -289,6 +300,22 @@ impl Node {
                 }
             }
         }
+    }
+
+    fn note(&self, key: PublicKey, group: &str, refusal: Option<Refusal>) {
+        let mut r = self.refused.lock().unwrap_or_else(|p| p.into_inner());
+        match refusal {
+            Some(why) => r.insert((key, group.to_owned()), why),
+            None => r.remove(&(key, group.to_owned())),
+        };
+    }
+
+    /// Why `device` last refused a stream for `group`, unless it admitted
+    /// one since.
+    pub fn refusal(&self, device: &str, group: &str) -> Option<Refusal> {
+        let key = parse_device_id(device)?;
+        let r = self.refused.lock().unwrap_or_else(|p| p.into_inner());
+        r.get(&(key, group.to_owned())).copied()
     }
 
     /// Opens a stream on `connection` and has its header accepted.

@@ -44,6 +44,9 @@ pub struct Known {
     pub not_shared: Vec<(String, String)>,
     /// Peers whose last fetch failed: place sends them nothing this round.
     pub unreachable: BTreeSet<String>,
+    /// Custodians that answer but serve this group no more: their
+    /// repository is gone, so they count for nothing (06 §6.3, S7).
+    pub lost: BTreeSet<String>,
 }
 
 /// How long remotedaemon's fetch of a notice may last before it is

@@ -16,6 +16,7 @@ use std::time::Duration;
 use pigeon_core::filter::Role;
 use pigeon_core::roster::{DeviceId, Role as DeviceRole};
 use pigeon_git::GitEnv;
+use pigeon_proto::stream::Refusal;
 use pigeon_sys::paths::Dirs;
 
 use crate::config::{self, Config, GroupEntry};
@@ -140,11 +141,30 @@ impl Daemon {
             }
         }
         crate::custody::accept(g, &self.device, &self.tracer).await;
+        self.note_lost(g);
         crate::custody::place(g, &self.device).await;
         if g.role == Role::Laptop {
             crate::thin::rethin(g, &self.device, &self.tracer).await;
         }
         crate::repair::repair(g, &self.device).await;
+    }
+}
+
+impl Daemon {
+    /// Marks lost each peer of `g` whose last fetch failed because it
+    /// answers but serves the group no more (`UnknownGroup`); one that
+    /// serves it again is lost no more.
+    fn note_lost(&self, g: &Group) {
+        let unreachable = g.lock().unreachable.clone();
+        let lost = unreachable
+            .into_iter()
+            .filter(|p| self.node.refusal(p, &g.id) == Some(Refusal::UnknownGroup))
+            .collect::<std::collections::BTreeSet<_>>();
+        let mut k = g.lock();
+        if k.lost != lost {
+            tracing::warn!(group = %g.id, lost = ?lost, "repository-lost");
+        }
+        k.lost = lost;
     }
 }
 
