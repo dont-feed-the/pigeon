@@ -4,7 +4,7 @@
 //! modes: `address` prints this device's ID; `<device>` relays git-annex's
 //! P2P protocol on stdin and stdout to that peer; `<device> <socket>` serves
 //! incoming peers on remotedaemon's unix socket. The helper is a thin
-//! client of `pigeond` over the local socket (ADRs 0006, 0011, 0059): it
+//! client of `pigeond` over the local socket (ADRs 0006, 0011, 0066): it
 //! names its repository by path, and `pigeond` does the rest. It fails
 //! at once, with a problem code on stderr, when `pigeond` cannot help.
 

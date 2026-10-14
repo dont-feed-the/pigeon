@@ -120,19 +120,19 @@ pub enum Request {
     },
     /// The helper's `address` mode: this device's address for git-annex.
     Address {
-        /// The repository the helper runs for (ADR 0059).
+        /// The repository the helper runs for (ADR 0066).
         repository: String,
     },
     /// The helper's connect mode: a stream to `device` for this repository.
     Connect {
-        /// The repository the helper runs for (ADR 0059).
+        /// The repository the helper runs for (ADR 0066).
         repository: String,
         /// The peer's device ID, 64 hex digits.
         device: String,
     },
     /// The helper's listen mode: serve incoming peers on git-annex's socket.
     Listen {
-        /// The repository the helper runs for (ADR 0059).
+        /// The repository the helper runs for (ADR 0066).
         repository: String,
         /// remotedaemon's unix socket.
         socket: String,

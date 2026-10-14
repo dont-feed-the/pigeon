@@ -1,7 +1,12 @@
 //! Laws of the P2P filter (09 §9.4; ADRs 0012, 0043, 0054), as hegel-rust
 //! property tests. Each law's statement is in its doc comment; the
 //! reference framing in this file is written independently of the filter's.
-#![allow(clippy::unwrap_used, clippy::panic, reason = "tests")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "tests"
+)]
 
 use hegel::TestCase;
 use hegel::generators as gs;
@@ -12,6 +17,7 @@ fn config(role: Role) -> Config {
         role,
         auth_token: None,
         peer_uuid: None,
+        peer_custodian: false,
     }
 }
 
@@ -103,7 +109,7 @@ fn collect(actions: Vec<Action>, out: &mut Outputs) {
             Action::ToClient(b) => out.to_client.extend(b),
             Action::Refused { rule, line } => out.refused.push((rule, line)),
             Action::Close(why) => out.closed = Some(why),
-            Action::Sync { .. } => {}
+            Action::Sync { .. } | Action::Repair { .. } => {}
         }
     }
 }
@@ -239,15 +245,17 @@ enum Request {
 }
 
 /// A custodian session against a model of git-annex that answers at
-/// random, with syncs that complete at random times.
+/// random, with syncs that complete at random times and hashes that match
+/// at random.
 struct Session<'a> {
     tc: &'a TestCase,
     filter: Filter,
     to_server: Vec<u8>,
     to_client: Vec<u8>,
     pending: Vec<u64>,
-    completed: Vec<u64>,
-    tickets: Vec<(u64, String)>,
+    tickets: Vec<(u64, String, bool)>,
+    outcomes: Vec<(u64, bool)>,
+    repairs: Vec<String>,
     closed: bool,
 }
 
@@ -257,10 +265,11 @@ impl Session<'_> {
             match a {
                 Action::ToServer(b) => self.to_server.extend(b),
                 Action::ToClient(b) => self.to_client.extend(b),
-                Action::Sync { ticket, key } => {
+                Action::Sync { ticket, key, hash } => {
                     self.pending.push(ticket);
-                    self.tickets.push((ticket, key));
+                    self.tickets.push((ticket, key, hash));
                 }
+                Action::Repair { key } => self.repairs.push(key),
                 Action::Refused { .. } => {}
                 Action::Close(_) => self.closed = true,
             }
@@ -282,13 +291,21 @@ impl Session<'_> {
         }
     }
 
+    /// Completes the oldest pending sync; a hash, if asked for, matches or
+    /// not at random.
+    fn complete(&mut self) {
+        let t = self.pending.remove(0);
+        let hash = self.tickets.iter().any(|(u, _, h)| *u == t && *h);
+        let matched = !hash || self.tc.draw(gs::booleans());
+        self.outcomes.push((t, matched));
+        let a = self.filter.synced(t, matched);
+        self.apply(a);
+    }
+
     /// Completes some pending syncs, chosen at random.
     fn maybe_sync(&mut self) {
         while !self.pending.is_empty() && self.tc.draw(gs::booleans()) {
-            let t = self.pending.remove(0);
-            self.completed.push(t);
-            let a = self.filter.synced(t);
-            self.apply(a);
+            self.complete();
         }
     }
 
@@ -309,41 +326,52 @@ impl Session<'_> {
                 !self.pending.is_empty() && !self.closed,
                 "no answer and nothing pending"
             );
-            let t = self.pending.remove(0);
-            self.completed.push(t);
-            let a = self.filter.synced(t);
-            self.apply(a);
+            self.complete();
         }
     }
 
-    /// A positive answer for `key` reaches the client: its sync is done.
-    fn assert_synced(&self, key: &str, since: usize) {
-        let synced = self.tickets[since..]
-            .iter()
-            .any(|(t, k)| k == key && self.completed.contains(t));
-        assert!(synced, "a positive answer for {key} before its sync");
+    /// The one sync asked for since `since`, for `key`: it has completed,
+    /// so a positive answer may leave; its hash flag and outcome.
+    fn sync_since(&self, key: &str, since: usize) -> (bool, bool) {
+        assert_eq!(
+            self.tickets.len(),
+            since + 1,
+            "one sync per positive answer"
+        );
+        let (t, k, hash) = &self.tickets[since];
+        assert_eq!(k, key);
+        let outcome = self.outcomes.iter().find(|(u, _)| u == t);
+        let (_, matched) = outcome.expect("the answer left before its sync");
+        (*hash, *matched)
     }
 }
 
-/// Laws *sync before success* and *probe*: on a custodian, whatever
-/// git-annex answers and whenever syncs complete, (1) a `SUCCESS` or
-/// `ALREADY-HAVE` for a key reaches the client only after a sync of that key
-/// asked for after git-annex's answer; (2) `CHECKPRESENT k` reaches
-/// git-annex as `LOCKCONTENT k`, is `SUCCESS` only if that lock was granted,
-/// and the lock is released at once; (3) while checking, no lock or probe
-/// reaches git-annex and both answer `FAILURE`; (4) every request is
-/// answered once its syncs complete; (5) no removal reaches git-annex.
+/// Laws *sync before success*, *probe* and *hash* (ADRs 0054, 0059): on a
+/// custodian, whatever git-annex answers and whenever syncs complete,
+/// (1) a `SUCCESS` or `ALREADY-HAVE` for a key reaches the client only after
+/// a sync of that key asked for after git-annex's answer; (2) `CHECKPRESENT
+/// k` reaches git-annex as `LOCKCONTENT k`, is `SUCCESS` only if that lock
+/// was granted, and the lock is released before the answer; (3) a lock or
+/// probe for another custodian is `SUCCESS` only if the object's hash
+/// matched, and a mismatch releases the lock and asks for a repair; a
+/// laptop's is never hashed; (4) while checking, no lock or probe reaches
+/// git-annex and both answer `FAILURE`; (5) every request is answered once
+/// its syncs complete; (6) no removal reaches git-annex.
 #[hegel::test]
 fn custodian_answers_only_after_sync(tc: TestCase) {
     let checking = tc.draw(gs::booleans());
+    let peer_custodian = tc.draw(gs::booleans());
+    let mut config = config(Role::Custodian);
+    config.peer_custodian = peer_custodian;
     let mut s = Session {
         tc: &tc,
-        filter: Filter::new(config(Role::Custodian), checking),
+        filter: Filter::new(config, checking),
         to_server: Vec::new(),
         to_client: Vec::new(),
         pending: Vec::new(),
-        completed: Vec::new(),
         tickets: Vec::new(),
+        outcomes: Vec::new(),
+        repairs: Vec::new(),
         closed: false,
     };
     s.client(b"VERSION 4\n");
@@ -360,14 +388,12 @@ fn custodian_answers_only_after_sync(tc: TestCase) {
             _ => Request::Remove(k),
         };
         let since = s.tickets.len();
+        let repairs = s.repairs.len();
         let yes = tc.draw(gs::booleans());
         match &request {
             Request::CheckPresent(k) | Request::Lock(k) => {
-                let name = if matches!(request, Request::Lock(_)) {
-                    "LOCKCONTENT"
-                } else {
-                    "CHECKPRESENT"
-                };
+                let lock = matches!(request, Request::Lock(_));
+                let name = if lock { "LOCKCONTENT" } else { "CHECKPRESENT" };
                 s.client(format!("{name} {k}\n").as_bytes());
                 let got = s.server_lines();
                 if checking {
@@ -378,21 +404,24 @@ fn custodian_answers_only_after_sync(tc: TestCase) {
                 assert_eq!(got, vec![format!("LOCKCONTENT {k}").into_bytes()]);
                 s.server(if yes { b"SUCCESS\n" } else { b"FAILURE\n" });
                 let answer = s.answer();
-                assert_eq!(
-                    answer,
-                    if yes {
-                        b"SUCCESS".to_vec()
-                    } else {
-                        b"FAILURE".to_vec()
-                    }
-                );
-                if yes {
-                    s.assert_synced(k, since);
-                    if matches!(request, Request::Lock(_)) {
+                if !yes {
+                    assert_eq!(answer, b"FAILURE");
+                    assert!(s.server_lines().is_empty());
+                    continue;
+                }
+                let (hash, matched) = s.sync_since(k, since);
+                assert_eq!(hash, peer_custodian, "hashed exactly for custodians");
+                if matched {
+                    assert_eq!(answer, b"SUCCESS");
+                    if lock {
+                        assert!(s.server_lines().is_empty(), "the client holds the lock");
                         s.client(b"UNLOCKCONTENT\n");
                     }
-                    assert_eq!(s.server_lines(), vec![b"UNLOCKCONTENT".to_vec()]);
+                } else {
+                    assert_eq!(answer, b"FAILURE");
+                    assert_eq!(&s.repairs[repairs..], std::slice::from_ref(k));
                 }
+                assert_eq!(s.server_lines(), vec![b"UNLOCKCONTENT".to_vec()]);
             }
             Request::Put(k) => {
                 s.client(format!("PUT f {k}\n").as_bytes());
@@ -400,7 +429,7 @@ fn custodian_answers_only_after_sync(tc: TestCase) {
                 if tc.draw(gs::booleans()) {
                     s.server(b"ALREADY-HAVE\n");
                     assert_eq!(s.answer(), b"ALREADY-HAVE");
-                    s.assert_synced(k, since);
+                    assert_eq!(s.sync_since(k, since), (false, true));
                     continue;
                 }
                 s.server(b"PUT-FROM 0\n");
@@ -422,7 +451,7 @@ fn custodian_answers_only_after_sync(tc: TestCase) {
                     }
                 );
                 if yes {
-                    s.assert_synced(k, since);
+                    assert_eq!(s.sync_since(k, since), (false, true));
                 }
             }
             Request::Get(k) => {
@@ -473,6 +502,7 @@ fn auth_is_rewritten_and_checked(tc: TestCase) {
             role: Role::Custodian,
             auth_token: Some("local".into()),
             peer_uuid: Some("u1".into()),
+            peer_custodian: true,
         },
         false,
     );

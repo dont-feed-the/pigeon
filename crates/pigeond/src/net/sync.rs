@@ -2,22 +2,33 @@
 //!
 //! git-annex never syncs, so the filter holds a custodian's positive answer
 //! for a key until its object file and the directories above it, up to
-//! `annex/objects`, are synced. On macOS, `File::sync_all` is `F_FULLFSYNC`.
+//! `annex/objects`, are synced. A lock that proves another custodian's drop
+//! also waits for the object's SHA-256 to match its key (ADR 0059); a
+//! mismatch queues `git annex fsck --key`. On macOS, `sync_all` is
+//! `F_FULLFSYNC`.
 
 use std::future::Future;
-use std::io;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
+use sha2::{Digest, Sha256};
+
 use super::Repository;
 
-/// A sync of one object, run by the relay when the filter asks for it.
-pub type SyncFuture = Pin<Box<dyn Future<Output = io::Result<()>> + Send>>;
+/// A sync of one object: whether its hash matched (true if none was asked).
+pub type SyncFuture = Pin<Box<dyn Future<Output = io::Result<bool>> + Send>>;
 
-/// Makes the object of a key durable in a repository.
+/// A repair started after a hash mismatch.
+pub type RepairFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+
+/// Makes the object of a key durable in a repository, and checks it.
 pub trait Syncer: Send + Sync + 'static {
-    /// Syncs the object of `key` and its directories to disk.
-    fn sync(&self, repository: &Repository, key: &str) -> SyncFuture;
+    /// Syncs the object of `key` and its directories to disk; if `hash`,
+    /// also checks the object's SHA-256 against the key.
+    fn sync(&self, repository: &Repository, key: &str, hash: bool) -> SyncFuture;
+    /// Moves a rotten object out, so that repair starts (08 §8.4).
+    fn repair(&self, repository: &Repository, key: &str) -> RepairFuture;
 }
 
 /// Finds the object with `git annex contentlocation`, then syncs it.
@@ -34,12 +45,27 @@ pub fn plausible_key(key: &str) -> bool {
             .all(|b| b.is_ascii_graphic() && b != b'/' && b != b'\\')
 }
 
+/// The SHA-256 a `SHA256` or `SHA256E` key names, in hex.
+pub fn key_sha256(key: &str) -> Option<&str> {
+    let (backend, rest) = key.split_once('-')?;
+    if backend != "SHA256" && backend != "SHA256E" {
+        return None;
+    }
+    let (_, name) = rest.split_once("--")?;
+    let hex = name.split('.').next()?;
+    (hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit())).then_some(hex)
+}
+
+fn directory(repository: &Repository) -> PathBuf {
+    repository
+        .worktree
+        .clone()
+        .unwrap_or_else(|| repository.git_dir.clone())
+}
+
 impl Syncer for AnnexSyncer {
-    fn sync(&self, repository: &Repository, key: &str) -> SyncFuture {
-        let dir = repository
-            .worktree
-            .clone()
-            .unwrap_or_else(|| repository.git_dir.clone());
+    fn sync(&self, repository: &Repository, key: &str, hash: bool) -> SyncFuture {
+        let dir = directory(repository);
         let key = key.to_owned();
         Box::pin(async move {
             if !plausible_key(&key) {
@@ -56,9 +82,32 @@ impl Syncer for AnnexSyncer {
             }
             let relative = String::from_utf8_lossy(&out.stdout).trim_end().to_owned();
             let object = dir.join(relative);
-            tokio::task::spawn_blocking(move || sync_object(&object))
-                .await
-                .map_err(io::Error::other)?
+            tokio::task::spawn_blocking(move || {
+                sync_object(&object)?;
+                if !hash {
+                    return Ok(true);
+                }
+                let Some(expected) = key_sha256(&key) else {
+                    return Ok(false);
+                };
+                Ok(sha256_file(&object)? == expected.to_ascii_lowercase())
+            })
+            .await
+            .map_err(io::Error::other)?
+        })
+    }
+
+    fn repair(&self, repository: &Repository, key: &str) -> RepairFuture {
+        let dir = directory(repository);
+        let key = key.to_owned();
+        Box::pin(async move {
+            if plausible_key(&key) {
+                let _ = tokio::process::Command::new("git")
+                    .args(["annex", "fsck", "--key", &key])
+                    .current_dir(&dir)
+                    .output()
+                    .await;
+            }
         })
     }
 }
@@ -76,4 +125,23 @@ pub fn sync_object(object: &Path) -> io::Result<()> {
         dir = d.parent().map(Path::to_path_buf);
     }
     Ok(())
+}
+
+/// The SHA-256 of a file, in lowercase hex.
+pub fn sha256_file(path: &Path) -> io::Result<String> {
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 1 << 16];
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect())
 }

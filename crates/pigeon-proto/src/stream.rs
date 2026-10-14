@@ -1,4 +1,4 @@
-//! What opens each iroh stream between devices (09 §9.3, §9.8; ADR 0059).
+//! What opens each iroh stream between devices (09 §9.3, §9.8; ADR 0066).
 //!
 //! A stream starts with one header line naming the group, the peer answers
 //! with one line, and then the stream carries git-annex's protocol

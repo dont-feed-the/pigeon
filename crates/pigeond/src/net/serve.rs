@@ -104,10 +104,11 @@ pub async fn relay(
         role: repository.role,
         auth_token: repository.auth_token.clone(),
         peer_uuid: admitted.annex_uuid.clone(),
+        peer_custodian: admitted.custodian,
     };
     let mut filter = Filter::new(config, repository.checking);
     let (mut from_server, mut to_server) = server.into_split();
-    let mut syncs: JoinSet<(u64, std::io::Result<()>)> = JoinSet::new();
+    let mut syncs: JoinSet<(u64, std::io::Result<bool>)> = JoinSet::new();
     let mut client_buf = vec![0u8; 64 * 1024];
     let mut server_buf = vec![0u8; 64 * 1024];
     let mut client_open = true;
@@ -126,7 +127,7 @@ pub async fn relay(
                 _ => break 'session,
             },
             Some(done) = syncs.join_next(), if !syncs.is_empty() => match done {
-                Ok((ticket, Ok(()))) => filter.synced(ticket),
+                Ok((ticket, Ok(matched))) => filter.synced(ticket, matched),
                 Ok((_, Err(e))) => {
                     tracing::error!(peer = %device, error = %e, "sync-failed");
                     break 'session;
@@ -146,9 +147,13 @@ pub async fn relay(
                         break 'session;
                     }
                 }
-                Action::Sync { ticket, key } => {
-                    let sync = net.syncer.sync(repository, &key);
+                Action::Sync { ticket, key, hash } => {
+                    let sync = net.syncer.sync(repository, &key, hash);
                     syncs.spawn(async move { (ticket, sync.await) });
+                }
+                Action::Repair { key } => {
+                    tracing::error!(peer = %device, key = %key, "object-hash-mismatch");
+                    tokio::spawn(net.syncer.repair(repository, &key));
                 }
                 Action::Refused { rule, line } => {
                     let line = String::from_utf8_lossy(&line);

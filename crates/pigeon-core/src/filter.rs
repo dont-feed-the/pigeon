@@ -1,11 +1,11 @@
 //! The filter between a peer and git-annex's `remotedaemon` (09 §9.4).
 //!
 //! A pure state machine over the two byte streams of one git-annex P2P
-//! session (ADRs 0014, 0043, 0054, 0059): the client's messages pass an
-//! allow-list, `VERSION` is capped, removals are refused on custodians and
+//! session (ADRs 0014, 0043, 0054, 0059, 0066): the client's messages pass
+//! an allow-list, `VERSION` is capped, removals are refused on custodians and
 //! pushes everywhere, a custodian answers `CHECKPRESENT` with a lock probe,
-//! and a custodian's positive answer for a key waits until that object is
-//! synced to disk. Only the framing is parsed, so a payload passes by its
+//! a custodian's positive answer for a key waits until that object is synced
+//! to disk, and a lock that proves another custodian's drop waits for a hash. Only the framing is parsed, so a payload passes by its
 //! length whatever the read sizes. `pigeond` feeds it the bytes of each side
 //! and carries out the [`Action`]s it returns, in order. Its laws are
 //! property tests in `tests/filter_laws.rs` (ADR 0012).
@@ -67,11 +67,15 @@ pub struct Config {
     pub role: Role,
     /// The token this repository's git-annex accepts. When set, it replaces
     /// the token of the client's `AUTH`, since `pigeond` has authenticated
-    /// the peer by its device key already (ADR 0059).
+    /// the peer by its device key already (ADR 0066).
     pub auth_token: Option<String>,
     /// The git-annex UUID the roster gives the peer. When set, an `AUTH`
     /// naming another UUID closes the session.
     pub peer_uuid: Option<String>,
+    /// Whether the peer is a custodian: then a custodian's lock for it, or
+    /// its probe, is granted only for an object whose hash matched
+    /// (ADR 0059).
+    pub peer_custodian: bool,
 }
 
 /// What `pigeond` must do, in the order given.
@@ -81,12 +85,21 @@ pub enum Action {
     ToServer(Vec<u8>),
     /// Write these bytes to the peer.
     ToClient(Vec<u8>),
-    /// Sync the object of `key` and its directories to disk, then call
-    /// [`Filter::synced`] with `ticket`.
+    /// Sync the object of `key` and its directories to disk and, if `hash`,
+    /// check its SHA-256 against the key; then call [`Filter::synced`] with
+    /// `ticket` and whether the hash matched.
     Sync {
         /// Names this request in [`Filter::synced`].
         ticket: u64,
         /// The git-annex key whose object must be durable.
+        key: String,
+        /// Whether the object must also be hashed (ADR 0059).
+        hash: bool,
+    },
+    /// The object of `key` failed its hash: queue `git annex fsck --key`,
+    /// which moves it out and starts repair (08 §8.4).
+    Repair {
+        /// The key whose object is rotten.
         key: String,
     },
     /// A message refused by the rules; logged at `error` with the peer.
@@ -253,6 +266,18 @@ struct Segment {
     bytes: Vec<u8>,
 }
 
+/// What a held answer is, so that its sync's outcome can complete it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Held {
+    /// git-annex granted the client's `LOCKCONTENT`; the client unlocks.
+    Lock(String),
+    /// git-annex granted the filter's own lock for a `CHECKPRESENT`; the
+    /// filter unlocks once the sync is done.
+    Probe(String),
+    /// git-annex stored the object, or already had it.
+    Put,
+}
+
 /// The filter of one session. See the module documentation.
 #[derive(Debug)]
 pub struct Filter {
@@ -265,6 +290,7 @@ pub struct Filter {
     server: Framer,
     awaiting: VecDeque<Awaiting>,
     outbox: VecDeque<Segment>,
+    held: Vec<(u64, Held)>,
     next_ticket: u64,
 }
 
@@ -282,6 +308,7 @@ impl Filter {
             server: Framer::default(),
             awaiting: VecDeque::new(),
             outbox: VecDeque::new(),
+            held: Vec::new(),
             next_ticket: 0,
         }
     }
@@ -336,16 +363,36 @@ impl Filter {
         out
     }
 
-    /// The sync asked for with `ticket` has completed.
-    pub fn synced(&mut self, ticket: u64) -> Vec<Action> {
+    /// The sync asked for with `ticket` has completed; `matched` says
+    /// whether the hash matched, and is true when none was asked for. A
+    /// failed sync is no answer: `pigeond` closes the session instead.
+    pub fn synced(&mut self, ticket: u64, matched: bool) -> Vec<Action> {
         let mut out = Vec::new();
         if self.closed {
             return out;
         }
+        let Some(i) = self.held.iter().position(|(t, _)| *t == ticket) else {
+            return out;
+        };
+        let (_, held) = self.held.remove(i);
+        let (unlock, key) = match &held {
+            Held::Lock(k) => (!matched, Some(k.clone())),
+            Held::Probe(k) => (true, Some(k.clone())),
+            Held::Put => (false, None),
+        };
+        if unlock {
+            out.push(Action::ToServer(b"UNLOCKCONTENT\n".to_vec()));
+        }
         for segment in self.outbox.iter_mut() {
             if segment.ticket == Some(ticket) {
                 segment.ticket = None;
+                if !matched {
+                    segment.bytes = b"FAILURE\n".to_vec();
+                }
             }
+        }
+        if let (false, Some(key)) = (matched, key) {
+            out.push(Action::Repair { key });
         }
         self.release(&mut out);
         out
@@ -375,11 +422,14 @@ impl Filter {
         }
     }
 
-    /// A positive answer for `key`, held until the object is synced.
-    fn hold(&mut self, line: &[u8], key: String, out: &mut Vec<Action>) {
+    /// A positive answer for `key`, held until the object is synced, and
+    /// hashed if it proves another custodian's drop.
+    fn hold(&mut self, line: &[u8], key: String, held: Held, out: &mut Vec<Action>) {
         let ticket = self.next_ticket;
         self.next_ticket += 1;
-        out.push(Action::Sync { ticket, key });
+        let hash = self.config.peer_custodian && matches!(held, Held::Lock(_) | Held::Probe(_));
+        self.held.push((ticket, held));
+        out.push(Action::Sync { ticket, key, hash });
         let mut bytes = line.to_vec();
         bytes.push(b'\n');
         self.outbox.push_back(Segment {
@@ -580,18 +630,21 @@ impl Filter {
             }
             Some(Awaiting::Probe(k)) => {
                 if name == b"SUCCESS" {
-                    out.push(Action::ToServer(b"UNLOCKCONTENT\n".to_vec()));
-                    self.hold(b"SUCCESS", k, out);
+                    self.hold(b"SUCCESS", k.clone(), Held::Probe(k), out);
                 } else {
                     self.send_client(b"FAILURE\n".to_vec(), out);
                 }
             }
-            Some(Awaiting::Lock(k)) if name == b"SUCCESS" => self.hold(&line, k, out),
+            Some(Awaiting::Lock(k)) if name == b"SUCCESS" => {
+                self.hold(&line, k.clone(), Held::Lock(k), out);
+            }
             Some(Awaiting::Put(k)) if name == b"PUT-FROM" => {
                 self.awaiting.push_front(Awaiting::PutData(k));
                 self.send_client(with_newline(&line), out);
             }
-            Some(Awaiting::Put(k) | Awaiting::PutData(k)) if positive => self.hold(&line, k, out),
+            Some(Awaiting::Put(k) | Awaiting::PutData(k)) if positive => {
+                self.hold(&line, k, Held::Put, out);
+            }
             Some(_) => self.send_client(with_newline(&line), out),
             None if positive && self.custodian() => return Err(Closed::Unattributed),
             None => self.send_client(with_newline(&line), out),

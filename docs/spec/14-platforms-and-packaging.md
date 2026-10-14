@@ -152,7 +152,7 @@ and upgraded deliberately.
 | Need | Crate | ADR |
 |---|---|---|
 | async runtime | `tokio` 1.53 | 0011 |
-| transport | `iroh` 1.3, `iroh-mdns-address-lookup` 0.6; `iroh-relay` 1.3 for self-hosting | 0006, 0016 |
+| transport | `iroh` 1.3 (default features off, `tls-ring`), `iroh-mdns-address-lookup` 0.6; `iroh-relay` 1.3 for self-hosting | 0006, 0016, 0066 |
 | keys and signatures | `ssh-key` 0.6 (SSHSIG), `ed25519-dalek` 3.0 | 0007 |
 | join proof | `hmac` 0.13, `sha2` 0.11; `data-encoding` 2.11 (base32); `qrcode` 0.14 | 0017 **[no ADR: crates]** |
 | change hints | `notify` 8.2 | 0013 |

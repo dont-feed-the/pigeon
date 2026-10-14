@@ -104,8 +104,6 @@ them all.
 
 ### F. Network and joining ([09](09-network-and-joining.md))
 
-- Routing a stream by group ID, and the stream header (§9.2, §9.8).
-- The ALPN names (§9.3).
 - The invitation encoding `pgn1-` + base32 (§9.6).
 - A custodian's default `maxsize`: free space minus 10 % (§9.6).
 - The safety words (§9.6).
@@ -237,4 +235,4 @@ experiments stay listed in [13](13-verification.md) and in the prototype (#17).
 | #14 | file-system object model | [07 §7.9](07-capture-and-install.md), [04 §4.4](04-roster-and-authority.md), [05 §5.2–5.4](05-catalogue-and-names.md), [03 §3.3–3.7](03-repository-and-roles.md), [14 §14.2](14-platforms-and-packaging.md) | ADRs 0044 and 0045 (Proposed); E20 asserts on Linux and macOS |
 | #15 | replicated-format compatibility | [04 §4.2, §4.4](04-roster-and-authority.md), [06 §6.3](06-status.md), [08 §8.2](08-custody-loops.md), [09 §9.3](09-network-and-joining.md), [14 §14.3](14-platforms-and-packaging.md), [13 §13.4, §13.6](13-verification.md) | ADR 0048 (Proposed); fixtures and mixed releases with the prototype (#17) |
 | #16 | one authoritative specification | this specification; [README](README.md) precedence | done |
-| #17 | minimal end-to-end prototype | [13 §13.12](13-verification.md), [14 §14.6, §14.8](14-platforms-and-packaging.md) | ADR 0057 (Proposed): scope, setup, scenarios S1–S11 and the ledger; ADR 0058 (Proposed): the Rust workspace; ADR 0064 (Proposed): readings fixed by pigeon-core's laws; ADR 0065 (Proposed): runs of the code checked by TLC; open until the slice passes and `docs/reports/slice-1.md` is published |
+| #17 | minimal end-to-end prototype | [13 §13.12](13-verification.md), [14 §14.6, §14.8](14-platforms-and-packaging.md) | ADR 0057 (Proposed): scope, setup, scenarios S1–S11 and the ledger; ADR 0058 (Proposed): the Rust workspace; ADR 0064 (Proposed): readings fixed by pigeon-core's laws; ADR 0065 (Proposed): runs of the code checked by TLC; ADR 0066 (Proposed): the transport; open until the slice passes and `docs/reports/slice-1.md` is published |

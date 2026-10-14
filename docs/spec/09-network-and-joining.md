@@ -29,7 +29,8 @@
 ## 9.2 The transport helper `git-annex-p2p-iroh` (ADR 0006)
 
 git-annex reaches peers through its generic P2P transport: the remote URL
-`p2p-annex::iroh+<device-id>` ([03 §3.6](03-repository-and-roles.md)) makes it
+`p2p-annex::iroh:<device-id>` ([03 §3.6](03-repository-and-roles.md); git-annex's
+format, `P2P/Address.hs`, ADR 0066) makes it
 run the helper `git-annex-p2p-iroh`, a small Rust binary installed next to
 `pigeon`. The helper is a thin client of `pigeond` (ADR 0011) and has three
 modes, fixed by git-annex:
@@ -43,18 +44,24 @@ modes, fixed by git-annex:
 - `pigeond` enables listening once per repository with `git annex p2p --enable
   iroh`, then runs `git annex remotedaemon --foreground` as a child (ADR 0011).
 - The helper identifies its repository from its environment (`GIT_DIR`, else
-  its working directory) and sends the group ID with each request
-  **[no ADR: routing by group ID]**.
+  its working directory) and sends that absolute path with each request;
+  `pigeond` maps it to the repository and its group (ADR 0066). The helper
+  cannot read git's configuration: its I/O is the socket and stdio.
+- Each serving repository stores one git-annex token for its own address
+  (`git annex p2p --gen-addresses`, once). The filter (§9.4) puts it in the
+  client's `AUTH`, whatever token the client sent, so no token travels
+  between devices (ADR 0066).
 - Without `pigeond`, or for an address that is not a device of the roster, the
-  helper exits non-zero at once with a one-line message on stderr; git-annex
-  then reports the remote as unavailable.
+  helper exits non-zero at once with its problem code on stderr
+  (`git-annex-p2p-iroh: peer-unreachable`); git-annex then reports the remote
+  as unavailable.
 
 ## 9.3 The endpoint of `pigeond` and the local socket (ADR 0011)
 
 ### The iroh endpoint
 
 `pigeond` owns the only iroh endpoint of the device (QUIC, TLS 1.3, hole
-punching, relays). It speaks these ALPN protocols **[no ADR: names]**:
+punching, relays). It speaks these ALPN protocols (ADR 0066):
 
 | ALPN | Carries | Accepted from |
 |---|---|---|
@@ -86,8 +93,10 @@ Linux, the per-user temporary directory (`confstr(_CS_DARWIN_USER_TEMP_DIR)`)
 on macOS. Messages are newline-delimited JSON objects, one request and one or
 more responses each, matched by an `id` field. The request types are those of
 the internal API ([10 §10.1](10-interfaces.md)); the helper uses three more:
-`Address`, `Connect {group, device}`, `Listen {group, socket}`. After a
-`Connect` or `Listen` reply, the connection carries raw bytes only.
+`Address {repository}`, `Connect {repository, device}`, `Listen {repository,
+socket}` (ADR 0066). After a `Connected` or `Listening` reply, the connection
+carries raw bytes only. `PIGEON_SOCKET` overrides the socket's path, for
+tests and the lab; on macOS the per-user temporary directory is `$TMPDIR`.
 
 `pigeond` refuses a second instance (a lock file next to the socket), and a
 client checks the peer credentials of the socket (`SO_PEERCRED`,
@@ -141,6 +150,10 @@ every device:
   lock, answers `FAILURE` and queues `git annex fsck --key k`. Laptops' locks
   are not hashed: their copies never count, so their drops leave custody as
   it was;
+- on custodians, a request sent before the last is answered, and a positive
+  answer from git-annex that answers no request, close the session; once
+  `CONNECT git-upload-pack` is accepted, only `DATA`, `CONNECTDONE` and
+  `ERROR` pass from the client (ADR 0066);
 - an unknown message, a malformed `DATA` length or a line over 4096 bytes closes
   the session. A length is checked before anything is forwarded, and a payload
   passes by length, never parsed. The server's output is parsed only for its
@@ -269,7 +282,7 @@ from the roster.
 ## 9.8 The stream header and trace context (ADR 0025)
 
 Each stream that `pigeond` opens to a peer starts with one header line before
-any git-annex byte **[no ADR: format]**:
+any git-annex byte, of at most 4096 bytes and within 10 seconds (ADR 0066):
 
 ```json
 {"v":1,"group":"<group id>","traceparent":"00-<trace-id>-<span-id>-01"}
@@ -280,7 +293,9 @@ any git-annex byte **[no ADR: format]**:
 - `traceparent` is W3C trace context, so one action (an upload started by a
   capture, a fetch started by a change notice) is one trace across devices
   ([12](12-observability.md)). The peer answers with one line `{"v":1,"ok":true}`
-  or a refusal, then the stream carries git-annex's protocol unchanged.
+  or a refusal (`{"v":1,"ok":false,"refusal":…}`: `not-in-roster`,
+  `unknown-group`, `not-listening`, `bad-header`, `peer-too-old`), then the
+  stream carries git-annex's protocol unchanged.
 - The header is never passed to git-annex; the append-only filter (§9.4) starts
   after it.
 

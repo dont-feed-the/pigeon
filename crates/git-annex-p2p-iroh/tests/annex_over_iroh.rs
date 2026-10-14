@@ -1,7 +1,8 @@
 //! git-annex over iroh through the helper and two `pigeond` endpoints on
-//! one host (09 §9.2–9.4, ADR 0059): a laptop copies to a custodian, drops
-//! its copy, gets it back byte for byte, and cannot remove the custodian's;
-//! a device outside the roster and an unknown group are refused. Needs
+//! one host (09 §9.2–9.4, ADRs 0059, 0066): a laptop copies to a custodian,
+//! drops its copy, gets it back byte for byte, cannot remove the custodian's,
+//! and, as a custodian peer, cannot drop on the proof of a rotten copy; a
+//! device outside the roster and an unknown group are refused. Needs
 //! git-annex on PATH; skipped without it unless `PIGEON_REQUIRE_GIT_ANNEX`
 //! is set, as in CI.
 #![allow(
@@ -191,7 +192,8 @@ async fn annex_copy_get_and_refused_remove_over_iroh() {
         "g1",
         &lid,
         Admitted {
-            annex_uuid: Some(l_uuid),
+            annex_uuid: Some(l_uuid.clone()),
+            custodian: false,
         },
     );
     laptop.directory.add_repository(Repository {
@@ -248,7 +250,7 @@ async fn annex_copy_get_and_refused_remove_over_iroh() {
     )
     .await;
     assert_eq!(
-        std::fs::read(c.join(held)).unwrap(),
+        std::fs::read(c.join(&held)).unwrap(),
         bytes,
         "C holds the same bytes"
     );
@@ -271,6 +273,66 @@ async fn annex_copy_get_and_refused_remove_over_iroh() {
         bytes,
         "L gets the same bytes back"
     );
+
+    // As a custodian peer, L's drop is proved only by a hashed copy on C
+    // (ADR 0059): a sound copy proves it, a rotten one does not, and C's
+    // fsck then moves the rotten object out.
+    custodian.directory.admit_device(
+        "g1",
+        &lid,
+        Admitted {
+            annex_uuid: Some(l_uuid.clone()),
+            custodian: true,
+        },
+    );
+    ok(&l, &laptop.socket, &["git", "annex", "drop", "f"]).await;
+    ok(
+        &l,
+        &laptop.socket,
+        &["git", "annex", "get", "--from", "c", "f"],
+    )
+    .await;
+    let object = c.join(&held);
+    let mut rotten = bytes.clone();
+    rotten[0] ^= 1;
+    for p in [object.parent().unwrap(), &object] {
+        let mut perms = std::fs::metadata(p).unwrap().permissions();
+        #[allow(
+            clippy::permissions_set_readonly_false,
+            reason = "a test makes a copy rot"
+        )]
+        perms.set_readonly(false);
+        std::fs::set_permissions(p, perms).unwrap();
+    }
+    std::fs::write(&object, &rotten).unwrap();
+    let refused = run(&l, &laptop.socket, &["git", "annex", "drop", "f"]).await;
+    assert!(!refused.status.success(), "a rotten copy proves no drop");
+    assert_eq!(
+        std::fs::read(l.join("f")).unwrap(),
+        bytes,
+        "L keeps its copy"
+    );
+    let mut moved = false;
+    for _ in 0..100 {
+        let out = run(
+            &c,
+            &custodian.socket,
+            &["git", "annex", "contentlocation", &key],
+        )
+        .await;
+        if !out.status.success() {
+            moved = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+    assert!(moved, "C's fsck moved the rotten object out");
+    ok(
+        &l,
+        &laptop.socket,
+        &["git", "annex", "copy", "--to", "c", "f"],
+    )
+    .await;
 
     // A removal from C is answered FAILURE by C's filter; C keeps its copy.
     let removed = run(

@@ -36,7 +36,7 @@ pub struct Repository {
     pub worktree: Option<PathBuf>,
     /// This device's role in the group.
     pub role: Role,
-    /// The token its git-annex accepts (ADR 0059).
+    /// The token its git-annex accepts (ADR 0066).
     pub auth_token: Option<String>,
     /// Whether it is being re-checked (06 §6.3).
     pub checking: bool,
@@ -47,6 +47,9 @@ pub struct Repository {
 pub struct Admitted {
     /// Its git-annex UUID in that group, from the roster.
     pub annex_uuid: Option<String>,
+    /// Whether it is a custodian of that group: its locks are hashed
+    /// (ADR 0059).
+    pub custodian: bool,
 }
 
 /// What the network needs to know of the groups; the loops provide it.

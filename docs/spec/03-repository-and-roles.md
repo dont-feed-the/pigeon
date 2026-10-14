@@ -136,7 +136,7 @@ Every other device of the roster is a git remote of this repository:
 
 ```ini
 [remote "pigeon-3f9a0c1d2e4b"]          ; "pigeon-" + first 12 hex digits of the device ID [no ADR]
-    url = p2p-annex::iroh+<device-id>   ; git-annex's generic P2P transport (ADR 0006)
+    url = p2p-annex::iroh:<device-id>   ; git-annex's generic P2P transport (ADRs 0006, 0066)
     annex-uuid = <the device's git-annex UUID, from the roster>
     fetch = +refs/heads/main:refs/pigeon/peers/<device-id>/main
     fetch = +refs/heads/git-annex:refs/remotes/pigeon-3f9a0c1d2e4b/git-annex
