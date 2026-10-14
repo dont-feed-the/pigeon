@@ -1,8 +1,7 @@
 # 2. Guarantees
 
-> Mission: what pigeon promises (P1–P6, from proposal §3 and ADR 0034), under
-> which assumptions, what it does not promise, and the invariants that carry
-> each promise, with the model, law or experiment that checks each.
+> Mission: the promises P1–P6 (ADR 0034), their assumptions, what is not
+> promised, and the invariants that carry them with what checks each.
 
 ## 2.1 Definitions
 
@@ -16,7 +15,7 @@
   scrub finds it; a version that never reached K is in one (ADR 0046).
 - A version is **captured** when its content is in the local annex and in a
   signed commit, accepted or proposal ([07](07-capture-and-install.md)).
-- A **saved file** is the content a person or their application left at a path.
+- A **saved file** is the content a person or an application left at a path.
 
 ## 2.2 Assumptions
 
@@ -26,8 +25,8 @@
 - **Members** are honest but fallible; **keys** are not stolen.
 - **Networks** partition, reorder, duplicate and drop messages; **devices**
   crash at any instant, including during a write, and restart.
-- **Clocks** may be wrong by minutes. Correctness never depends on them; only
-  displayed times, thresholds and the end of a retention period do.
+- **Clocks** may be wrong by minutes. Only displayed times, thresholds and
+  the end of a retention period depend on them, never correctness.
 - **Disks** are POSIX file systems of the supported list
   ([14](14-platforms-and-packaging.md)): `rename` is atomic, `fsync` durable.
 
@@ -43,11 +42,10 @@ and its history from the custodians alone (ADR 0047, [09 §9.9](09-network-and-j
 **P2 Capture, and no overwrite.** A captured version is kept by its laptop as
 an immutable copy until protected ([07 §7.8](07-capture-and-install.md)).
 pigeon never replaces, moves aside or removes content a person saved unless
-that person asks (ADR 0034). Install is crash-recoverable, skips every
-diverging path, moves a file from its name only to prove it is pigeon's own,
-lets a racing save win the name, and keeps a write that escapes the proof as a
-recovered version ([07 §7.5](07-capture-and-install.md)). Writes between two
-captures are protected on a best-effort basis only.
+that person asks (ADR 0034). Install is crash-recoverable, skips diverging
+paths and moves a file from its name only to prove it is pigeon's own; a
+racing save wins the name, and a write that escapes the proof is kept as a
+recovered version ([07 §7.5](07-capture-and-install.md)).
 
 **P3 Reversible deletion.** Unlinking, even in bulk, never releases
 protection; until purge, every deleted protected version can be restored. A
@@ -76,15 +74,14 @@ what happens next (ADR 0027).
 ## 2.4 Not guaranteed
 
 - Versions not yet *protected*: always shown as such (P6).
-- History beyond a purge's retention period; writes between two captures;
-  an application's unsaved data.
+- History beyond a purge's retention period; writes between two captures
+  (best effort only); an application's unsaved data.
 - Protection beyond custodial capacity: versions that do not fit in
   K × (collection + retained history + suggestions not erased) are not
   protected, and the group is told how much is missing and who can act
   (ADR 0003, [08 §8.9](08-custody-loops.md)).
-- Independence: pigeon does not model which custodians share a disk, machine
-  or place; two custodians on one machine count as two (ADR 0046). Groups are
-  advised to keep custodians on separate machines, in separate places.
+- Independence: two custodians on one machine count as two (ADR 0046).
+  Groups are advised to keep custodians in separate places.
 - Malicious members, stolen keys, a stolen unlocked laptop before an admin
   removes it (ADR 0007).
 - Confidentiality from the group's members. In transit it is QUIC's
@@ -92,9 +89,9 @@ what happens next (ADR 0027).
 
 ## 2.5 Invariants that carry the guarantees
 
-A TLA+ invariant (`Module.tla` `Name`) or a `pigeon-core` law (module and test
-of [13 §13.13](13-verification.md)) cited here is normative for its invariant.
-E*n* are the git-annex experiments of `lab/git-annex/`.
+A cited TLA+ invariant (`Module.tla` `Name`) or `pigeon-core` law
+([13 §13.13](13-verification.md)) is normative. E*n* are the experiments of
+`lab/git-annex/`.
 
 | Id | Invariant | Carries | Enforced in | Checked by |
 |---|---|---|---|---|
@@ -117,8 +114,7 @@ E*n* are the git-annex experiments of `lab/git-annex/`.
 
 ## 2.6 Escapes and their records
 
-Force and Drop are the only ways around these guarantees ([01 §1.7](01-concepts.md)).
-Both are signed and recorded ([04 §4.6](04-roster-and-authority.md),
-[08 §8.7](08-custody-loops.md)), ask before acting and need `--yes` without a
-terminal (ADR 0024). With Force every invariant but the folder-rule part of
+Force and Drop are the only ways around these guarantees ([01 §1.7](01-concepts.md)),
+signed and recorded ([04 §4.6](04-roster-and-authority.md), [08 §8.7](08-custody-loops.md));
+both ask first, or need `--yes` without a terminal (ADR 0024). With Force every invariant but the folder-rule part of
 INV-Valid holds; with Drop every invariant but INV-K holds for other versions.
