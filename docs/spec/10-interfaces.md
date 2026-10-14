@@ -126,7 +126,8 @@ An error that reaches a person is a **Problem**:
 ```
 
 - `code`: stable, public kebab-case, shown as `P-INVITE-EXPIRED` (ux.md §7);
-  `docs/problems.md`, which documents them, is not yet written.
+  [`docs/problems.md`](../problems.md) documents each, with its English
+  message and when it is raised (`docs_problems_lists_every_code`).
 - `message` and `hint`: Fluent ids and arguments rendered at the edge
   (`every_problem_has_a_message_and_ids_are_kebab_case`,
   `a_problem_message_round_trips_as_json`). `details`, for helpers: the

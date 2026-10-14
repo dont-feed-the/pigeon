@@ -211,3 +211,20 @@ fn a_problem_message_round_trips_as_json() {
         Err(Mismatch::Args { .. })
     ));
 }
+
+#[test]
+fn docs_problems_lists_every_code() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/problems.md");
+    let text = std::fs::read_to_string(path).expect("docs/problems.md");
+    let listed: Vec<&str> = text
+        .lines()
+        .filter_map(|l| l.strip_prefix("| `")?.split_once('`'))
+        .map(|(code, _)| code)
+        .filter(|c| *c != "Code")
+        .collect();
+    let mut want: Vec<&str> = ids::PROBLEMS.to_vec();
+    let mut got = listed.clone();
+    want.sort_unstable();
+    got.sort_unstable();
+    assert_eq!(got, want, "docs/problems.md lists exactly ids::PROBLEMS");
+}
