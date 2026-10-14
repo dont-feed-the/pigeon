@@ -1,9 +1,8 @@
 # 5. The catalogue and its names
 
-> Mission: the logical catalogue every device computes from accepted history,
-> the deterministic merge that keeps it identical everywhere (P5), conflict
-> names, and portable names. Normative model: `models/catalogue/catalogue.py`
-> (mode `new`) and its laws.
+> Mission: the catalogue every device computes from accepted history, its
+> deterministic merge (P5), conflict names and portable names. Normative:
+> `models/catalogue/catalogue.py` (mode `new`), its cases and laws.
 
 ## 5.1 The logical catalogue
 
@@ -21,20 +20,16 @@ The logical catalogue is a pure function of a set of accepted commits
 
 An accepted commit *c* has base `B(c)`, the catalogue of its accepted
 ancestors, and `Δ(c) = diff(B(c), tree(c))` ([04 §4.4](04-roster-and-authority.md)).
-It is a **contribution** when Δ(c) is not empty or it carries the trailer
-`Pigeon-Resolved: <path>` (*Keep both*, §5.3). Saves (capture, restore,
-resolution, Force) and decision merges (the decider's contribution) are
-contributions; clean merges are not, so who wrote them, and how many, never
-matters; proposals and local divergences count for nothing.
+It is a **contribution** when Δ(c) is not empty or it carries
+`Pigeon-Resolved: <path>` (*Keep both*, §5.3): saves (capture, restore,
+resolution, Force) and decision merges are; clean merges are not, so who
+wrote them never matters; proposals and local divergences count for nothing.
 
-**Slots.** Paths are compared after portable folding (§5.4): `Photo.jpg` and
-`photo.jpg` are one slot. A package ([07 §7.9](07-capture-and-install.md)) is
-one slot whose value is its whole subtree. A contribution writes the slots of
-its Δ.
-
-**Restoring** a version or a deleted file (ux.md §8.6–8.7) is a new change
-setting *p* to the old key, checked by the authority rule like any change; no
-content moves, unless a purge erased it ([08 §8.6](08-custody-loops.md)).
+**Slots.** Paths are compared after portable folding (§5.4), so `Photo.jpg`
+and `photo.jpg` are one slot; a package ([07 §7.9](07-capture-and-install.md))
+is one slot holding its subtree. **Restoring** (ux.md §8.6–8.7) is a new
+change setting *p* to the old key, checked like any change; no content moves
+unless a purge erased it ([08 §8.6](08-custody-loops.md)).
 
 ## 5.2 The deterministic merge
 
@@ -42,50 +37,43 @@ content moves, unless a purge erased it ([08 §8.6](08-custody-loops.md)).
 from **events**: the contributions of S not revoked ([04 §4.4](04-roster-and-authority.md))
 and the conflict events they froze.
 
-1. **Order.** An event comes after its ancestors and the events it froze.
-2. **Heads** of a slot: the events that wrote it with no later writer of it.
-3. **Versions:** each distinct content among the heads' values. A deletion is
-   no version, so a modification survives a concurrent deletion (P3).
-4. **Representative** of a version: its earliest head by (author time, device
-   ID, that device's earlier contributions, commit ID); an adoption counts
-   with its proposal's author and time.
-5. **Placement**, in representative order: a folder takes its first version's
-   spelling; each slot's first version takes its own name, unless a folder of
-   that folded name is there; every other version takes its first free
-   conflict name (§5.3).
-6. **Freezing.** A slot with several versions, or a version under another
-   name, is unsettled. Every contribution freezes each unsettled slot of its
-   base into a **conflict event** that writes each version where B(c) showed
-   it, so a later save of *p* keeps the copies its person saw.
-
-| Case | Result |
+| # | Step |
 |---|---|
-| edit and edit, add and add | the first representative keeps *p*; the others go to conflict names |
-| edit and delete | the edit stays; the deletion is in `versions(p)` |
-| rename and edit | a rename is a deletion and an add: *p* holds the edit, *q* the renamed file |
-| case or Unicode collision | one slot: the later goes to `photo (Bob, 2026-10-13 14h02).jpg`; one content under both names is one version |
-| package | two edits keep two whole packages, never a mix |
-| *Keep mine* racing an edit | a new conflict, both kept |
-| *Keep both* racing an edit of a copy | the edited copy stays; the conflict is closed |
-| `.pigeon/` | never a conflict name: the roster is the fold of [04 §4.8](04-roster-and-authority.md); another file keeps its first version, the others stay in history |
+| 1 | **Order:** an event comes after its ancestors and the events it froze |
+| 2 | **Heads** of a slot: the events that wrote it with no later writer of it |
+| 3 | **Versions:** each distinct content among the heads' values; a deletion is none, so a modification survives a concurrent deletion (P3) |
+| 4 | **Representative** of a version: its earliest head by (author time, device ID, that device's earlier contributions, commit ID); an adoption counts with its proposal's author and time |
+| 5 | **Placement**, in representative order: a folder takes its first version's spelling; each slot's first version its own name, unless a folder of that folded name is there; every other version its first free conflict name (§5.3) |
+| 6 | **Freezing:** a slot with several versions, or a version under another name, is unsettled; every contribution freezes each unsettled slot of its base into a **conflict event** writing each version where B(c) showed it, so a later save keeps the copies its person saw |
 
-**Laws** (`catalogue.py`, every schedule of three devices for each case,
-[13 §13.4](13-verification.md)): `order` (the catalogue depends only on the
-contributions and on which saw which: merge is commutative, associative,
-idempotent), `tree` (`tree(c) = catalogue(anc*(c))`), `kept` (a key leaves only
-through a contribution whose base showed it), `seen` (no unseen version comes
-back), `names` (portable, injective after folding), `authority` (clean
-merges change nothing; each copy is allowed to its representative's person).
-Time only orders: a wrong clock changes which version keeps the name, never
-whether one is kept. Not yet coded in `pigeon-core`.
+| Case (`catalogue.py`) | Result |
+|---|---|
+| `edit-edit`, `add-add` | the first representative keeps *p*; the others go to conflict names |
+| `edit-delete` | the edit stays; the deletion is in `versions(p)` |
+| `rename-edit` | a rename is a deletion and an add: *p* holds the edit, *q* the renamed file |
+| `case`, `unicode` | one slot: the later goes to `photo (Bob, 2026-10-13 14h02).jpg`; one content under both names is one version |
+| `package` | two edits keep two whole packages, never a mix |
+| `keep-mine` racing an edit | a new conflict, both kept |
+| `keep-both` racing an edit of a copy | the edited copy stays; the conflict is closed |
+| `supersede` | an edit made after seeing a conflict replaces the name and keeps the copies it saw |
+| `decision` | an adoption racing an edit: both kept, the adoption with its proposal's author and time |
+| `.pigeon/` (no case) | never a conflict name: the roster is the fold of [04 §4.8](04-roster-and-authority.md); another file keeps its first version, the others stay in history |
 
-**Merge commits.** `pigeond` writes the tree of a merge *M* as
-`catalogue(anc*(M))` with git plumbing; `git merge-tree --write-tree` may serve
-as a checked fast path (ADR 0010). A device merges a peer's tip only if it
-brings a contribution it lacks, otherwise it records the tip as equivalent,
-so `main` branches may differ by merge commits only (P5). A clean merge may be
-signed by a device of any parent's roster; a conflict event is no commit; a
-decision merge is judged as the decider's change ([04 §4.4](04-roster-and-authority.md)).
+**Laws** (`catalogue.py`, every schedule of three devices per case,
+[13 §13.4](13-verification.md)): `order` (only the contributions and who saw
+which matter), `tree` (`tree(c) = catalogue(anc*(c))`), `kept` (a key leaves
+only through a contribution whose base showed it), `seen` (no unseen version
+returns), `names` (portable, injective after folding), `authority` (clean
+merges change nothing; each copy is allowed to its representative's
+person). A wrong clock changes which version keeps the name, never whether
+one is kept. Not yet coded in `pigeon-core`.
+
+**Merge commits.** `pigeond` writes a merge *M*'s tree as
+`catalogue(anc*(M))` with plumbing (`merge-tree --write-tree` as a checked
+fast path, ADR 0010). It merges a peer's tip only if it brings a missing
+contribution, else records it as equivalent, so `main` branches differ by
+merge commits only (P5). A conflict event is no commit; a decision merge is
+judged as the decider's change ([04 §4.4](04-roster-and-authority.md)).
 
 ## 5.3 Conflict names
 
@@ -93,25 +81,21 @@ decision merge is judged as the decider's change ([04 §4.4](04-roster-and-autho
 dir/stem (Person, 2026-10-13 14h02).ext
 ```
 
-- *Person* is the representative's person's display name, made portable; the
-  time is its author time in the offset recorded in that commit, so every
-  device computes the same name. A colon or a month name would break P5, so
-  this differs from ux.md §8.9 **[no ADR]**.
+- *Person*: the representative's display name, made portable; the time: its
+  author time in the offset recorded in that commit, so every device computes
+  the same name. A colon or a month name would break P5: this differs from
+  ux.md §8.9 **[no ADR]**.
 - A taken name gets ` 2`, ` 3`, … inside the parentheses, in representative
-  order. The extension is kept; a package gets the suffix on its folder.
+  order; the extension is kept; a package takes the suffix on its folder.
 
 A slot is **in conflict** while it has several versions or one under its
-conflict name; the conflict is **open** until a later contribution writes the
-slot or one of its names, or carries `Pigeon-Resolved: p`.
-
-People see "Paul and you edited *budget.xlsx* at the same time; both versions
-are kept", with *Keep mine*, *Keep Paul's*, *Keep both* (ux.md §8.9). Each is
-a signed change: the first two set *p* and delete the conflict names; *Keep
-both* changes no file and counts only when its person may change *p*. The
-first choice decides for the group. The notice is computed, never stored
-(ADR 0036). On the device whose file lost the name, install leaves it as a
-**divergence** ([07 §7.6](07-capture-and-install.md)), resolved by the same
-choices (ADR 0034).
+conflict name, **open** until a contribution writes the slot or one of its
+names, or carries `Pigeon-Resolved: p`. *Keep mine*, *Keep Paul's* and *Keep
+both* (ux.md §8.9) are signed changes: the first two set *p* and delete the
+conflict names; *Keep both* changes no file and counts only when its person
+may change *p*. The first choice decides for the group; the notice is
+computed (ADR 0036). The device whose file lost the name keeps it as a
+**divergence** ([07 §7.6](07-capture-and-install.md), ADR 0034).
 
 ## 5.4 Portable names
 
@@ -125,14 +109,12 @@ choices (ADR 0034).
 - is at most 255 bytes, the path at most 1024 **[no ADR: limits]**;
 - is not `.git`, nor `.pigeon` at the root unless it is pigeon's folder.
 
-**At capture** a non-portable name is *held back* on this computer; the
-headline says "Needs you: *Rapport: v2.docx* can't be shared because of its
-name", with a suggested name and a rename button **[no ADR: hold back]**.
-**At acceptance** it makes a commit invalid (rule 5, [04 §4.4](04-roster-and-authority.md)).
+**At capture** a non-portable name is *held back* here, with *Needs you*, a
+suggested name and a rename button **[no ADR: hold back]**; **at acceptance**
+it makes a commit invalid (rule 5, [04 §4.4](04-roster-and-authority.md)).
 The Unicode tables are pinned in the core; changing them is a format change
-(issue #15). So every platform can write every name, with no mapping in v1
-(ADR 0005); a Windows-only mapping like Samba's `catia` is an open question
-([16](16-open-questions.md)).
+(issue #15). Every platform can write every name, with no mapping in v1
+(ADR 0005; [16 §16.4](16-open-questions.md)).
 
 Laws, not yet coded: normalisation is idempotent; `portable` accepts every
 conflict name of §5.3; the suggested name is portable and differs from every
