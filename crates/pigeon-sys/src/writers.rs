@@ -128,9 +128,10 @@ mod imp {
     const PROX_FDTYPE_VNODE: u32 = 1;
     const FWRITE: u32 = 0x2;
     const VM_PROT_WRITE: u32 = 0x2;
-    const SM_SHARED: u32 = 4;
-    const SM_TRUESHARED: u32 = 5;
-    const SM_SHARED_ALIASED: u32 = 7;
+    const SM_COW: u32 = 1;
+    const SM_PRIVATE: u32 = 2;
+    const SM_PRIVATE_ALIASED: u32 = 6;
+    const PROC_REGION_SHARED: u32 = 2;
 
     #[repr(C)]
     #[derive(Clone, Copy)]
@@ -242,8 +243,11 @@ mod imp {
         matches(&info.pvip.vip_vi.vi_stat, id) && info.pfi.fi_openflags & FWRITE != 0
     }
 
-    fn maps_writable(pid: c_int, id: FileId) -> bool {
+    /// The `(protection, share mode, flags)` of every region of `pid` that
+    /// maps the file `id`.
+    pub(super) fn regions(pid: c_int, id: FileId) -> Vec<(u32, u32, u32)> {
         let size = c_int::try_from(size_of::<ProcRegionWithPathinfo>()).unwrap_or(0);
+        let mut out = Vec::new();
         let mut address: u64 = 0;
         for _ in 0..100_000 {
             let mut info = MaybeUninit::<ProcRegionWithPathinfo>::zeroed();
@@ -259,28 +263,33 @@ mod imp {
                 )
             };
             if got <= 0 {
-                return false;
+                break;
             }
             // SAFETY: zeroed plain data, possibly filled in by the call.
             let info = unsafe { info.assume_init() };
             let r = info.prp_prinfo;
-            let shared = matches!(
-                r.pri_share_mode,
-                SM_SHARED | SM_TRUESHARED | SM_SHARED_ALIASED
-            );
-            if shared
-                && r.pri_protection & VM_PROT_WRITE != 0
-                && matches(&info.prp_vip.vip_vi.vi_stat, id)
-            {
-                return true;
+            if matches(&info.prp_vip.vip_vi.vi_stat, id) {
+                out.push((r.pri_protection, r.pri_share_mode, r.pri_flags));
             }
             let next = r.pri_address.saturating_add(r.pri_size);
             if next <= address {
-                return false;
+                break;
             }
             address = next;
         }
-        false
+        out
+    }
+
+    /// A region maps the file shared and writable when its protection allows
+    /// writes and it is not known to be private. A region whose pages were
+    /// never touched reports `SM_EMPTY`, so that mode counts as shared: an
+    /// install that waits is safe, a missed writer is not.
+    fn maps_writable(pid: c_int, id: FileId) -> bool {
+        regions(pid, id).into_iter().any(|(prot, mode, flags)| {
+            let private = matches!(mode, SM_COW | SM_PRIVATE | SM_PRIVATE_ALIASED)
+                && flags & PROC_REGION_SHARED == 0;
+            prot & VM_PROT_WRITE != 0 && !private
+        })
     }
 
     pub(super) fn scan(id: FileId) -> Scan {
@@ -370,9 +379,13 @@ mod tests {
         .unwrap();
         drop(file);
         let me = std::process::id();
+        #[cfg(target_vendor = "apple")]
+        let seen = imp::regions(i32::try_from(me).unwrap(), id);
+        #[cfg(not(target_vendor = "apple"))]
+        let seen: Vec<(u32, u32, u32)> = Vec::new();
         assert!(
             scan(id).writers.contains(&me),
-            "a shared writable mapping is a writer"
+            "a shared writable mapping is a writer; regions {seen:?}"
         );
         // SAFETY: `addr` is the mapping made above, of 4096 bytes.
         unsafe { munmap(addr, 4096) }.unwrap();
