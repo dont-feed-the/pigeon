@@ -1,12 +1,9 @@
 # 8. Custody loops
 
-> Mission: the loops that move history and content between devices and keep
-> K custody copies: accept, placement and repair, freeing and keeping
-> folders, scrubs, purge, Drop. They carry P1 and P3; git-annex does the
-> verified drops (ADR 0001).
-
-Normative: the invariants of `Repair.tla`, `AnnexDrop.tla`, `Evict.tla` and
-`Purge.tla`, and the `pigeon-core::queue` laws, named below.
+> Mission: the loops that move history and content and keep K custody
+> copies, carrying P1 and P3; git-annex does the verified drops (ADR 0001).
+> The `Repair`, `AnnexDrop`, `Evict` and `Purge` invariants and the `queue`
+> laws cited below are normative.
 
 ## 8.1 The loops of `pigeond`
 
@@ -85,10 +82,8 @@ reserve than the endangered keys it wants defers other downloads and reports
 you* ([06 §6.5](06-status.md)). A replacement joins as a new device; a
 reused disk (new UUID) or a restored backup counts only after a hashing
 fsck of everything ([09 §9.9](09-network-and-joining.md), ADR 0046).
-`Repair.tla` ([13 §13.2](13-verification.md)) checks repair, placement and
-rebalancing against lost disks, removed custodians, rotten and restored
-copies, crashes and partitions: `Survival` (a protected key keeps an intact
-copy), `INV_K`, `ReserveKept`, `EndangeredFirst`, `Restores`.
+`Repair.tla` checks repair, placement and rebalancing under faults:
+`Survival`, `INV_K`, `ReserveKept`, `EndangeredFirst`, `Restores`.
 
 ## 8.5 Freeing and keeping a folder (ADR 0031)
 
@@ -124,12 +119,11 @@ left by a killed git of `pigeond`, the only writer, is removed at start
 
 ## 8.6 Purge: erase forever (ADR 0018)
 
-A purge releases **references**, not keys. A reference of key *k* is a pair
-(*c*, *p*): an accepted or proposal commit *c* whose tree has *k* at *p*
-while none of its parents does. A key is dropped only once all its
-references are released, so files sharing a key never lose each other.
-`Purge.tla` ([13 §13.2](13-verification.md)) checks the protocol; E14
-asserts it with git-annex. The loop is not yet coded.
+Not yet coded; `Purge.tla` checks the protocol and E14 asserts it with
+git-annex. A purge releases **references**, not keys. A reference of key
+*k* is a pair (*c*, *p*): an accepted or proposal commit *c* whose tree has
+*k* at *p* while none of its parents does. A key is dropped only once all
+its references are released.
 
 `pigeon erase PATH` (any member) commits `.pigeon/decisions/purge-<id>.toml`,
 deleting PATH if current: a decision from an admin, else a proposal to them
@@ -161,10 +155,9 @@ what is covered and what shares a key but stays.
 | new references | a version saved offline before the decision, a copy elsewhere or a restore after the seals keeps its key like any version; a device that still has dropped content uploads it again; if none has it, it is *missing* (`erased`, [06 §6.4](06-status.md)) and the deciders see *Needs you* and may erase it again | `NoResurrection` |
 
 A purge completes only when every custodian not `dead` has sealed, and says
-whom it waits for ("Erasing waits for Paul's NAS"). It ends pigeon's custody
-only: copies outside pigeon or on devices that never return remain, and
-names, authors and times stay in the signed history; `pigeon erase` says so
-before asking.
+whom it waits for. It ends pigeon's custody only: copies outside pigeon or
+on devices that never return remain, and names, authors and times stay in
+the signed history; `pigeon erase` says so before asking.
 
 ## 8.7 Drop: remove without checking
 
