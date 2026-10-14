@@ -26,6 +26,8 @@ jobs:
         run: scripts/check-file-length-and-header
       - name: ADR index matches the ADR files
         run: scripts/check-adr-index
+      - name: every cited section of the spec exists
+        run: scripts/check-spec-refs
 
   catalogue:
     name: catalogue model

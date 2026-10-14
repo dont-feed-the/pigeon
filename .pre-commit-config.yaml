@@ -13,3 +13,9 @@ repos:
         language: script
         files: ^docs/adr/
         pass_filenames: false
+      - id: check-spec-refs
+        name: check spec references
+        entry: scripts/check-spec-refs
+        language: script
+        types: [text]
+        pass_filenames: false
