@@ -1,0 +1,71 @@
+From: Mario Geiger <geiger.mario@gmail.com>
+Subject: [PATCH 2/2] P2P: CONNECTDONE does not overtake a relayed service's output
+
+A git fetch from a P2P remote sometimes hangs forever after the last ACK:
+GIT_TRACE_PACKET shows the final ACK and then no pack data. It happens in
+about 2 of 100 fetches in a loop.
+
+In runRelayService (P2P/IO.hs, line 398), relayReader, which reads the
+output of upload-pack or receive-pack, and waitexit (line 436), which waits
+for the process to exit, both put into one MVar RelayData. The process can
+exit while relayReader still holds its last chunk; when RelayDone wins the
+race for the MVar, relayHelper (line 450) sends CONNECTDONE and returns, and
+the rest of the output is never sent. The client then waits forever for the
+end of the pack. Because remotedaemon fetches inside its notification loop
+(RemoteDaemon/Transport/P2PGeneric.hs), one hung fetch also stops every
+later change notification from that peer.
+
+Also, relayHelper sends CONNECTDONE when it takes RelayDone, and runrelay
+(line 431) then sent a second CONNECTDONE.
+
+Put RelayDone only after relayReader has reached EOF on the process's
+output, and after the process has exited, from one thread; and send
+CONNECTDONE once. A process that exits while a child of it still holds its
+stdout open is now waited on until that child closes it.
+
+Reproducer: lab/git-annex/ga-e25-relay-stress.py in
+https://github.com/mariogeiger/pigeon (branch v2), which loops git fetch over
+P2P with a new commit on each iteration.
+---
+ P2P/IO.hs | 23 ++++++++++++++---------
+ 1 file changed, 14 insertions(+), 9 deletions(-)
+
+--- a/P2P/IO.hs
++++ b/P2P/IO.hs
+@@ -418,22 +418,27 @@
+ 	go (Just hin) (Just hout) _ pid = do
+ 		v <- newEmptyMVar
+ 		r <- withAsync (relayFeeder runner v hin) $ \_ ->
+-			withAsync (relayReader v hout) $ \_ ->
+-				withAsync (waitexit v pid) $ \_ -> do
+-					r <- runrelay v
+-					hClose hin
+-					hClose hout
+-					return r
++			withAsync (readthenwaitexit v hout pid) $ \_ -> do
++				r <- runrelay v
++				hClose hin
++				hClose hout
++				return r
+ 		void $ waitForProcess pid
+ 		return r
+ 	go _ _ _ _ = error "internal"
+ 	
++	-- relayHelper sends CONNECTDONE when it gets RelayDone.
+ 	runrelay v = relayHelper runner v >>= \case
+ 		Left e -> return $ Left e
+-		Right exitcode -> runner $
+-			net $ relayToPeer (RelayDone exitcode)
++		Right _exitcode -> return $ Right ()
+ 
+-	waitexit v pid = putMVar v . RelayDone =<< waitForProcess pid
++	-- RelayDone is only put once all of the process's output has
++	-- been read and put into the MVar. If it were put as soon as the
++	-- process exited, it could overtake the end of the process's
++	-- output, which would then never be sent to the peer.
++	readthenwaitexit v hout pid = do
++		relayReader v hout
++		putMVar v . RelayDone =<< waitForProcess pid
+ 
+ -- Processes RelayData as it is put into the MVar.
+ relayHelper :: RunProto IO -> MVar RelayData -> IO (Either ProtoFailure ExitCode)

@@ -10,7 +10,8 @@ the copies it counts (`verifyEnoughCopiesToDrop`, Annex/NumCopies.hs). Asserted:
   (E1's setup) `inAnnexSafe` refuses it;
 - two drops that hold their removal locks before checking each other both
   succeed: numcopies 1 loses the key; numcopies = mincopies = 2 on three
-  custodians leaves one copy;
+  custodians leaves one copy. pigeon's git-annex (`-pigeon` in its version,
+  third_party/git-annex patch 0001) refuses the counted copy and both races;
 - a filter answering CHECKPRESENT by LOCKCONTENT, UNLOCKCONTENT (spec 09 §9.4)
   keeps every copy in the same schedule;
 - a stale location log (E5) and `dead` never let a drop count a missing copy;
@@ -26,6 +27,8 @@ ENV = dict(os.environ, LABNET=NET, PATH=BIN + ':' + os.environ['PATH'],
            GIT_AUTHOR_NAME='lab', GIT_AUTHOR_EMAIL='lab@x', GIT_COMMITTER_NAME='lab',
            GIT_COMMITTER_EMAIL='lab@x')
 FAILS = []
+PATCHED = '-pigeon' in subprocess.run(['git', 'annex', 'version', '--raw'], env=ENV,
+                                      capture_output=True, text=True).stdout
 # The lab network: `git-annex-p2p-lab`. As a client it can hold a drop at two
 # points, so that schedules are deterministic: LABCONN=n waits after connecting
 # until n git-annex processes have connected (0: until the file `go` exists);
@@ -345,12 +348,19 @@ def main():
     py = start_drop(Y, 1, ignore=('z',), LABCONN=0)
     wait_for(lambda: held() == 1)
     ok = drop(X, 1, ignore=('z',))
-    check(ok and not has_key(X, KEY) and has_key(Y, KEY),
-          "over P2P, X's drop counts Y's copy although Y holds it locked for removal")
     open(os.path.join(NET, 'go'), 'w').close()
     py.wait(timeout=90)
-    check(py.returncode != 0 and has_key(Y, KEY), "Y's drop, released, finds X gone and refuses")
-    restore(X)
+    if PATCHED:
+        check(not ok and has_key(X, KEY),
+              "patched: over P2P, X's drop refuses Y's copy while Y holds it locked for removal")
+        check(py.returncode == 0 and not has_key(Y, KEY) and has_key(X, KEY),
+              "patched: Y's drop, released, counts X's copy and succeeds")
+    else:
+        check(ok and not has_key(X, KEY) and has_key(Y, KEY),
+              "over P2P, X's drop counts Y's copy although Y holds it locked for removal")
+        check(py.returncode != 0 and has_key(Y, KEY),
+              "Y's drop, released, finds X gone and refuses")
+    restore(X, Y)
 
     # 2. The same with Y as a local-path remote of X: inAnnexSafe sees the lock.
     git(X, 'remote', 'add', 'ylocal', Y)
@@ -370,15 +380,23 @@ def main():
     # 3. Two drops, numcopies 1: each locks its copy, then counts the other's.
     res = race((X, Y), 1, ignore=('z',))
     left = [n for n, r in (('X', X), ('Y', Y)) if has_key(r, KEY)]
-    check(res == [True, True] and left == [],
-          f'over P2P two concurrent drops with numcopies 1 both succeed: copies left {left}')
+    if PATCHED:
+        check(left == ['X', 'Y'],
+              f'patched: two concurrent drops with numcopies 1 keep both: {left}; drops {res}')
+    else:
+        check(res == [True, True] and left == [],
+              f'over P2P two concurrent drops with numcopies 1 both succeed: copies left {left}')
     restore(X, Y)
 
     # 4. K = 2 on three custodians, as pigeon drops (--numcopies 2 --mincopies 2).
     res = race((X, Y), 2)
     left = [n for n, r in R.items() if has_key(r, KEY)]
-    check(res == [True, True] and left == ['Z'],
-          f'with numcopies = mincopies = 2, two concurrent drops leave one copy: {left}')
+    if PATCHED:
+        check(left == ['X', 'Y', 'Z'],
+              f'patched: with numcopies = mincopies = 2 the same race keeps every copy: {left}')
+    else:
+        check(res == [True, True] and left == ['Z'],
+              f'with numcopies = mincopies = 2, two concurrent drops leave one copy: {left}')
     restore(X, Y)
 
     # 5. The same schedules behind the probing filter of spec 09 §9.4.
@@ -421,7 +439,7 @@ def main():
     ann(X, 'semitrust', 'y')
     for f in filters:
         f.stop()
-    print(f'E23: {len(FAILS)} failure(s)')
+    print(f'E23 ({"patched" if PATCHED else "stock"} git-annex): {len(FAILS)} failure(s)')
     sys.exit(1 if FAILS else 0)
 
 

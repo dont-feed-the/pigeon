@@ -1,0 +1,46 @@
+# pigeon's git-annex (ADR 0069): restores the build of third_party/git-annex
+# that git-annex.yml cached for this runner and this patch set, and puts it
+# first on PATH. Run it after the step that installs the stock git-annex.
+# On Linux it also puts the system's git first: the standalone build's `git`
+# runs the standalone's own git-annex (its runshell puts its bin/ first on
+# PATH), so pigeon's build runs with the system's git (14 §14.3). On a miss
+# it fails if `required`, and otherwise warns and leaves the stock git-annex
+# in use: the first push of a new patch set runs before git-annex.yml has
+# built it.
+name: pigeon's git-annex
+description: Puts the cached build of third_party/git-annex first on PATH.
+inputs:
+  required:
+    description: Fail when no build is cached for this patch set.
+    default: "false"
+outputs:
+  hit:
+    description: Whether the cached build is on PATH.
+    value: ${{ steps.restore.outputs.cache-hit == 'true' }}
+runs:
+  using: composite
+  steps:
+    - id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/pigeon-git-annex-dist
+        key: git-annex-pigeon-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/git-annex/VERSION', 'third_party/git-annex/build.sh', 'third_party/git-annex/patches/**') }}
+    - shell: bash
+      env:
+        HIT: ${{ steps.restore.outputs.cache-hit }}
+        REQUIRED: ${{ inputs.required }}
+      run: |
+        if [ "$HIT" = true ]; then
+          if [ "$RUNNER_OS" = Linux ]; then
+            d=$RUNNER_TEMP/pigeon-git-annex-git
+            mkdir -p "$d" && ln -sf /usr/bin/git "$d/git"
+            echo "$d" >> "$GITHUB_PATH"
+          fi
+          echo ~/.cache/pigeon-git-annex-dist/bin >> "$GITHUB_PATH"
+          echo "pigeon's git-annex: $(~/.cache/pigeon-git-annex-dist/bin/git-annex version --raw)"
+        elif [ "$REQUIRED" = true ]; then
+          echo "::error::no cached build of pigeon's git-annex for this patch set (git-annex.yml builds it)"
+          exit 1
+        else
+          echo "::warning::no cached build of pigeon's git-annex for this patch set yet; running the stock $(git annex version --raw 2>/dev/null || echo git-annex)"
+        fi

@@ -1,0 +1,159 @@
+# pigeon's git-annex (ADR 0069, third_party/git-annex): builds the pinned
+# release with pigeon's patches on GitHub's Linux and macOS runners, caches
+# the binaries by patch set for slice.yml and models-full.yml (through
+# .github/actions/git-annex-pigeon) and uploads them, then proves the
+# patches against the stock build: E23 races two drops over P2P, which keep
+# their copies with pigeon's build and lose them with the stock one, and
+# E25 runs 500 fetches over P2P, none of which may hang with pigeon's build.
+# The stock runs are the negative control: they report, and never fail the
+# job. A cold build takes about an hour; it runs only when the patch set
+# changes.
+name: git-annex
+
+on:
+  push:
+    paths:
+      - third_party/git-annex/**
+      - .github/workflows/git-annex.yml
+      - .github/actions/git-annex-pigeon/**
+      - lab/git-annex/ga-e23-p2p-drop.py
+      - lab/git-annex/ga-e25-relay-stress.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: git-annex-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GIT_ANNEX_VERSION: "10.20261006"
+  GIT_ANNEX_SHA256: 88ea73c9bb8fb751916e0e4a0a8f489a7476f9b9e861fd2cce2601a77f4f409d
+  HOMEBREW_NO_AUTO_UPDATE: "1"
+  HOMEBREW_NO_INSTALL_CLEANUP: "1"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  git-annex:
+    name: git-annex (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: key
+        run: echo "key=git-annex-pigeon-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/git-annex/VERSION', 'third_party/git-annex/build.sh', 'third_party/git-annex/patches/**') }}" >> "$GITHUB_OUTPUT"
+      - id: dist
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pigeon-git-annex-dist
+          key: ${{ steps.key.outputs.key }}
+      - name: Stack, its GHC and the snapshot's packages (cache)
+        if: steps.dist.outputs.cache-hit != 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.stack
+            ~/.cache/pigeon-git-annex/bin
+          key: stack-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/git-annex/VERSION') }}
+      - name: the C libraries GHC links (Linux)
+        if: steps.dist.outputs.cache-hit != 'true' && runner.os == 'Linux'
+        run: sudo apt-get install -y -q libgmp-dev libffi-dev zlib1g-dev libnuma-dev pkg-config
+      - name: build pigeon's git-annex
+        if: steps.dist.outputs.cache-hit != 'true'
+        run: |
+          start=$(date +%s)
+          third_party/git-annex/build.sh ~/.cache/pigeon-git-annex-dist/bin
+          echo "cold build: $(( ($(date +%s) - start) / 60 )) min on ${{ matrix.os }}" | tee -a "$GITHUB_STEP_SUMMARY"
+      - if: steps.dist.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pigeon-git-annex-dist
+          key: ${{ steps.key.outputs.key }}
+      - name: what was built
+        run: |
+          d=~/.cache/pigeon-git-annex-dist/bin
+          { echo '```'; "$d/git-annex" version; ls -l "$d"
+            if [ "$RUNNER_OS" = Linux ]; then ldd "$d/git-annex"; else otool -L "$d/git-annex"; fi
+            echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+          tar -C ~/.cache/pigeon-git-annex-dist -czf "git-annex-pigeon-${{ matrix.os }}.tar.gz" bin
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: git-annex-pigeon-${{ matrix.os }}
+          path: git-annex-pigeon-${{ matrix.os }}.tar.gz
+      - name: the stock git-annex, standalone build at the pinned checksum (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          t=$RUNNER_TEMP/git-annex-standalone-amd64.tar.gz
+          curl -fsSL -o "$t" https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
+          echo "$GIT_ANNEX_SHA256  $t" | sha256sum -c - || {
+            echo "::error::upstream moved past git-annex $GIT_ANNEX_VERSION; move the pin deliberately"; exit 1; }
+          tar -C ~ -xzf "$t"
+          echo "STOCK=$HOME/git-annex.linux" >> "$GITHUB_ENV"
+      - name: the stock git-annex from Homebrew (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install git-annex
+          echo "STOCK=$(brew --prefix)/bin" >> "$GITHUB_ENV"
+      - name: E23 with pigeon's git-annex, concurrent drops over P2P keep their copies
+        run: |
+          export PATH=~/.cache/pigeon-git-annex-dist/bin:$PATH
+          git annex version --raw; echo
+          python3 lab/git-annex/ga-e23-p2p-drop.py | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: E25 with pigeon's git-annex, 500 fetches over P2P and no hang
+        timeout-minutes: 20
+        run: |
+          export PATH=~/.cache/pigeon-git-annex-dist/bin:$PATH
+          python3 lab/git-annex/ga-e25-relay-stress.py 500 | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: negative control, E23 with the stock git-annex (asserts the bug)
+        continue-on-error: true
+        timeout-minutes: 20
+        run: |
+          export PATH=$STOCK:$PATH
+          git annex version --raw; echo
+          python3 lab/git-annex/ga-e23-p2p-drop.py | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: negative control, E25 with the stock git-annex (counts hangs)
+        continue-on-error: true
+        timeout-minutes: 20
+        run: |
+          export PATH=$STOCK:$PATH
+          python3 lab/git-annex/ga-e25-relay-stress.py 500 | tee -a "$GITHUB_STEP_SUMMARY"
+
+  consumer:
+    name: the cached build as slice.yml gets it (${{ matrix.os }})
+    needs: git-annex
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: the stock git-annex first, as slice.yml installs it (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          t=$RUNNER_TEMP/git-annex-standalone-amd64.tar.gz
+          curl -fsSL -o "$t" https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
+          echo "$GIT_ANNEX_SHA256  $t" | sha256sum -c -
+          tar -C ~ -xzf "$t" && echo ~/git-annex.linux >> "$GITHUB_PATH"
+      - name: the stock git-annex first, as slice.yml installs it (macOS)
+        if: runner.os == 'macOS'
+        run: brew install git-annex
+      - uses: ./.github/actions/git-annex-pigeon
+        with:
+          required: "true"
+      - name: git annex, git-annex and git-remote-p2p-annex run pigeon's build
+        run: |
+          . third_party/git-annex/VERSION
+          for got in "$(git annex version --raw)" "$(git-annex version --raw)"; do
+            [ "$got" = "$PIGEON_VERSION" ] || { echo "::error::PATH runs git-annex $got"; exit 1; }
+          done
+          ls -l "$(command -v git-remote-p2p-annex)" && git --version

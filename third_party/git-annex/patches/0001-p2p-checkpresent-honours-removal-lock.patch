@@ -1,0 +1,50 @@
+From: Mario Geiger <geiger.mario@gmail.com>
+Subject: [PATCH 1/2] P2P: CHECKPRESENT does not report content locked for removal
+
+Two repositories that each hold a copy of a key, and are each other's P2P
+remotes, can both drop the key at the same time and leave no copy, even with
+numcopies = mincopies = 2.
+
+Command/Drop.hs performLocal (line 131) takes the content's removal lock,
+then verifyEnoughCopiesToDrop (Annex/NumCopies.hs, line 255) asks each remote
+to LOCKCONTENT. The other side's lock fails, because that side holds its own
+removal lock, so the drop falls back to CHECKPRESENT and counts a
+RecentlyVerifiedCopy (line 279). With a removal lock held, safeDropAnalysis
+(Types/NumCopies.hs, line 196) accepts copies of any kind, because the lock
+"will prevent other git repos that are concurrently dropping from using the
+local copy as a VerifiedCopy".
+
+Over a local path that holds: checklocal in Remote/Git.hs (line 490) uses
+inAnnexSafe, which reports content locked for removal as not present. Over
+P2P it does not: the server answers CHECKPRESENT (P2P/Protocol.hs, line 645)
+through CheckContentPresent, which P2P/Annex.hs (line 129) runs with inAnnex,
+ignoring the lock. So each side counts the other's copy and both drop.
+
+Run CheckContentPresent with inAnnexSafe, as checklocal does, treating
+content locked for removal as not present. CheckContentPresent also decides
+ALREADY-HAVE for PUT and DATA-PRESENT (P2P/Protocol.hs, lines 686 and 696);
+there too, content that is being removed is better not claimed.
+
+Reproducer: lab/git-annex/ga-e23-p2p-drop.py in
+https://github.com/mariogeiger/pigeon (branch v2), which races two drops at a
+barrier, over P2P and over a local path.
+---
+ P2P/Annex.hs | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+--- a/P2P/Annex.hs
++++ b/P2P/Annex.hs
+@@ -127,7 +127,12 @@
+ 			Left e -> return $ Left $ ProtoFailureException e
+ 			Right () -> runner next
+ 	CheckContentPresent k next -> do
+-		v <- tryNonAsync $ inAnnex k
++		-- Content that is locked for removal is in the process of
++		-- being dropped, so it is not reported as present. Otherwise
++		-- two repositories that drop the same key at the same time
++		-- could each count the other's copy and both drop it. This
++		-- is the same check that Remote.Git uses for a local remote.
++		v <- tryNonAsync $ fromMaybe False <$> inAnnexSafe k
+ 		case v of
+ 			Left e -> return $ Left $ ProtoFailureException e
+ 			Right result -> runner (next result)
