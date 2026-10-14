@@ -4,8 +4,9 @@
 `pigeon-lab run` writes OUT/<scenario>/trace.ndjson, every device's events in
 Lamport-clock order. For each specification of a trace that has a trace
 specification (SPECS), its events become a TLA+ module through
-scripts/trace-to-tla and TLC must accept them. A specification without one
-is listed as not checked yet, never silently passed.
+scripts/trace-to-tla and TLC must accept them. A specification without one,
+or whose events lack the variables its trace specification reads (FIELDS),
+is listed as not checked yet with what is missing, never silently passed.
 Usage: scripts/check-lab-traces [--java JAVA] OUT
 """
 
@@ -24,6 +25,27 @@ ROOT = Path(__file__).resolve().parent.parent
 MODELS = ROOT / "models" / "tla"
 # spec of the events: trace specification, its log module and name, config.
 SPECS = {"Roster": ("RosterTrace", ("RosterCodeLog", "CodeLog"), "RosterTrace_good")}
+# The variables each action of a trace specification reads. RosterTrace was
+# written for pigeon-core's simulated group, which logs the replica, the
+# operation and the roster; pigeond logs a commit ID only.
+FIELDS = {
+    "Roster": {
+        "Commit": {"r", "t", "op", "edits", "ros"},
+        "Merge": {"r", "y", "ff", "ros"},
+    }
+}
+
+
+def lacking(spec, lines):
+    """The variables the events of `spec` lack, as `Action: a, b` items."""
+    out = set()
+    for line in lines:
+        event = json.loads(line)
+        need = FIELDS.get(spec, {}).get(event["action"], set())
+        missing = need - set(event.get("vars", {}))
+        if missing:
+            out.add(f"{event['action']} lacks {', '.join(sorted(missing))}")
+    return sorted(out)
 
 
 def load(name):
@@ -41,7 +63,7 @@ def main():
     args = parser.parse_args()
     tla, tlc = load("trace-to-tla"), load("run-tlc")
     jar = tlc.tlc_jar()
-    failures, unchecked = 0, set()
+    failures, unchecked, partial = 0, set(), {}
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp) / "models"
         shutil.copytree(MODELS, work)
@@ -53,6 +75,10 @@ def main():
             for spec, lines in sorted(by_spec.items()):
                 if spec not in SPECS:
                     unchecked.add(spec)
+                    continue
+                missing = lacking(spec, lines)
+                if missing:
+                    partial.setdefault(spec, set()).update(missing)
                     continue
                 trace_spec, (module, name), cfg = SPECS[spec]
                 try:
@@ -69,6 +95,8 @@ def main():
                     print(output[-3000:], file=sys.stderr)
     for spec in sorted(unchecked):
         print(f"not checked yet: {spec} has no trace specification in models/tla", flush=True)
+    for spec, missing in sorted(partial.items()):
+        print(f"not checked yet: {spec}: {'; '.join(sorted(missing))}", flush=True)
     return 1 if failures else 0
 
 

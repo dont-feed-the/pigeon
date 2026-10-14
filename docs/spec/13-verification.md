@@ -558,7 +558,9 @@ generated and shrunk by hegel. Two interpreters fold the same steps:
   logs, where each device's events must contain its part of the scenario's
   projection in its own order, and which `scripts/check-lab-traces` hands
   to TLC for every specification with a `*Trace.tla` (the others are
-  listed as not checked yet). A device's paths stay short (`/tmp/lab`, a
+  listed as not checked yet, and so are events without the variables
+  their trace specification reads: pigeond's `Roster` events carry a
+  commit ID, `RosterTrace` the replica, operation and roster). A device's paths stay short (`/tmp/lab`, a
   hashed directory per scenario): unix sockets live under them, and past
   104 bytes a join fails with `inviter-offline`.
 
