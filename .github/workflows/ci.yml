@@ -1,6 +1,7 @@
 # Checks of every push and pull request: repository rules, the fast set of
-# TLA+ models with their expected verdicts (ADR 0026), and the catalogue
-# model on every schedule of its cases (ADR 0052).
+# TLA+ models with their expected verdicts (ADR 0026), the catalogue model on
+# every schedule of its cases (ADR 0052), and the Rust workspace on Linux and
+# macOS (ADR 0058).
 name: ci
 
 on:
@@ -53,3 +54,33 @@ jobs:
         run: scripts/trace-to-tla --check
       - name: every configuration gives its expected verdict
         run: scripts/run-tlc
+
+  rust:
+    name: Rust workspace (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: rust-${{ matrix.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: rust-${{ matrix.os }}-
+      - name: the pinned toolchain (rust-toolchain.toml)
+        run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
+      - name: formatted with rustfmt
+        run: cargo fmt --all --check
+      - name: clippy without warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: tests and laws
+        run: cargo test --workspace --locked
+      - name: pigeon-core depends on no crate that does I/O (14 §14.6)
+        run: scripts/check-core-deps

@@ -1,0 +1,5 @@
+# The pinned stable toolchain (14 §14.8, ADR 0058); upgraded deliberately.
+[toolchain]
+channel = "1.99.0"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

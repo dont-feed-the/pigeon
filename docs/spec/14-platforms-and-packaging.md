@@ -125,7 +125,7 @@ class by `pigeond` itself (ADRs 0032, 0037). On macOS, a **launchd agent**
 - Uninstalling removes the binaries and the unit and keeps the folder, the
   repository and the configuration, unless the person asks.
 
-## 14.6 The Rust workspace **[no ADR: crate layout]**
+## 14.6 The Rust workspace (ADR 0058, Proposed)
 
 | Crate | Kind | Holds | May do I/O |
 |---|---|---|---|
@@ -140,8 +140,9 @@ class by `pigeond` itself (ADRs 0032, 0037). On macOS, a **launchd agent**
 | `pigeon` | bin | the CLI (ADR 0024) | socket only |
 | `git-annex-p2p-iroh` | bin | the transport helper (ADR 0006) | socket and stdio only |
 
-`pigeon-core` depends on no crate that performs I/O; a CI check enforces it
-(`cargo tree` against an allow-list).
+Each crate lives in `crates/<name>/` and is created when its work starts.
+`pigeon-core` depends on no crate that performs I/O; `scripts/check-core-deps`
+enforces it in CI (`cargo tree` against `crates/pigeon-core/allowed-deps.txt`).
 
 ## 14.7 Dependencies
 
@@ -174,10 +175,11 @@ for [15](15-resource-use.md) if the shaper or the battery probe needs them.
 
 ## 14.8 Build rules
 
-- Rust edition 2024, stable toolchain pinned in `rust-toolchain.toml`
-  **[no ADR]**.
-- `panic = "abort"` in release; clippy's `unwrap_used` and `expect_used`
-  denied outside tests, except next to a stated invariant (ADR 0023).
+- Rust edition 2024, stable toolchain 1.99.0 pinned in `rust-toolchain.toml`
+  (ADR 0058, Proposed).
+- `panic = "abort"` in release; clippy's `unwrap_used`, `expect_used`,
+  `panic` and `print_*` denied outside tests, except next to a stated
+  invariant (ADRs 0023, 0058).
 - `unsafe` only in `pigeon-sys`, each block with a safety comment.
 - English text meant for people never appears in Rust code (ADR 0028).
 - `cargo deny` checks licences and advisories in CI (ADR 0019).

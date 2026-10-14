@@ -1,0 +1,34 @@
+# The pigeon v2 workspace (14 §14.6, ADR 0058). Each crate pins its
+# dependencies here, one minor version each (14 §14.7).
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "2.0.0-alpha.0"
+edition = "2024"
+rust-version = "1.99"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/mariogeiger/pigeon"
+publish = false
+
+[workspace.dependencies]
+pigeon-core = { path = "crates/pigeon-core" }
+pigeon-proto = { path = "crates/pigeon-proto" }
+pigeon-i18n = { path = "crates/pigeon-i18n" }
+pigeon-git = { path = "crates/pigeon-git" }
+pigeon-sys = { path = "crates/pigeon-sys" }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+
+[profile.release]
+panic = "abort"

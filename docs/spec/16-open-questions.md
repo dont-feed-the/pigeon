@@ -125,9 +125,9 @@ them all.
   the `PIGEON_TRACE` switch (§12.2, §12.3).
 - The E17 runner with a hard disk (§13.8).
 - Minimum OS versions (§14.1); the file-system list (§14.2); the `MemoryHigh`
-  value (§14.4); the Homebrew tap and release signing (§14.5); the crate
-  layout (§14.6); the crates `hmac`, `sha2`, `data-encoding`, `qrcode`,
-  `rustix` (§14.7); edition 2024 and the pinned toolchain (§14.8).
+  value (§14.4); the Homebrew tap and release signing (§14.5); the crates
+  `hmac`, `sha2`, `data-encoding`, `qrcode`, `rustix` (§14.7). The crate
+  layout, edition and pinned toolchain went to ADR 0058 (Proposed).
 
 ### I. Resource use ([15](15-resource-use.md)), within ADR 0037
 
@@ -225,4 +225,4 @@ experiments stay listed in [13](13-verification.md) and in the prototype (#17).
 | #14 | file-system object model | [07 §7.9](07-capture-and-install.md), [04 §4.4](04-roster-and-authority.md), [05 §5.2–5.4](05-catalogue-and-names.md), [03 §3.3–3.7](03-repository-and-roles.md), [14 §14.2](14-platforms-and-packaging.md) | ADRs 0044 and 0045 (Proposed); E20 asserts on Linux and macOS |
 | #15 | replicated-format compatibility | [04 §4.2, §4.4](04-roster-and-authority.md), [06 §6.3](06-status.md), [08 §8.2](08-custody-loops.md), [09 §9.3](09-network-and-joining.md), [14 §14.3](14-platforms-and-packaging.md), [13 §13.4, §13.6](13-verification.md) | ADR 0048 (Proposed); fixtures and mixed releases with the prototype (#17) |
 | #16 | one authoritative specification | this specification; [README](README.md) precedence | done |
-| #17 | minimal end-to-end prototype | [13 §13.12](13-verification.md) | ADR 0057 (Proposed): scope, setup, scenarios S1–S11 and the ledger; open until the slice passes and `docs/reports/slice-1.md` is published |
+| #17 | minimal end-to-end prototype | [13 §13.12](13-verification.md), [14 §14.6, §14.8](14-platforms-and-packaging.md) | ADR 0057 (Proposed): scope, setup, scenarios S1–S11 and the ledger; ADR 0058 (Proposed): the Rust workspace; open until the slice passes and `docs/reports/slice-1.md` is published |

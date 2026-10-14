@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""Fail when pigeon-core depends on a crate outside its allow-list.
+
+pigeon-core is the pure core and performs no I/O (14 §14.6, ADR 0058), so
+every normal dependency, direct or transitive, must be named in
+`crates/pigeon-core/allowed-deps.txt`, one crate per line, with the reason
+it performs no I/O. Development dependencies, such as hegeltest, are free.
+"""
+
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+ALLOWED = ROOT / "crates" / "pigeon-core" / "allowed-deps.txt"
+
+
+def allowed():
+    names = set()
+    for line in ALLOWED.read_text().splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line:
+            names.add(line)
+    return names
+
+
+def dependencies():
+    out = subprocess.run(
+        ["cargo", "tree", "--locked", "-p", "pigeon-core", "-e", "normal",
+         "--prefix", "none", "-f", "{p}", "--target", "all"],
+        cwd=ROOT, check=True, capture_output=True, text=True,
+    ).stdout
+    names = set()
+    for line in out.splitlines():
+        words = line.split()
+        if words and words[0] != "pigeon-core":
+            names.add(words[0])
+    return names
+
+
+def main():
+    extra = sorted(dependencies() - allowed())
+    for name in extra:
+        print(f"pigeon-core depends on {name}, which is not in {ALLOWED.relative_to(ROOT)}")
+    return 1 if extra else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
