@@ -1,7 +1,7 @@
 # pigeon v2 — specification
 
 > **Status:** version 1 of the specification, 13 October 2026. It assembles the
-> decisions recorded in [ADRs 0001–0056](../adr/README.md), the guarantees P1–P6 of the
+> decisions recorded in [ADRs 0001–0057](../adr/README.md), the guarantees P1–P6 of the
 > [proposal](../design/proposal/proposal.pdf), the [UX study](../design/ux.md), the
 > [TLA+ models](../../models/tla/), the [catalogue model](../../models/catalogue/catalogue.py)
 > and the [git-annex experiments](../../lab/git-annex/).
@@ -45,7 +45,7 @@ Each file has one mission. Read them in order the first time.
 | [10-interfaces.md](10-interfaces.md) | the request API, the CLI, the web interface, notifications, messages and errors |
 | [11-local-state.md](11-local-state.md) | the files `pigeond` keeps on each device, their formats and how they are written |
 | [12-observability.md](12-observability.md) | logs, telemetry and trace events |
-| [13-verification.md](13-verification.md) | TLA+ models, trace validation, property-based tests, the lab, CI, the usability test |
+| [13-verification.md](13-verification.md) | TLA+ models, trace validation, property-based tests, the lab, CI, the usability test, the safety slice |
 | [14-platforms-and-packaging.md](14-platforms-and-packaging.md) | platforms, delivery of git and git-annex, the Rust workspace, dependencies |
 | [15-resource-use.md](15-resource-use.md) | how background work stays out of the way: priorities, adaptive limits, settings, budgets |
 | [16-open-questions.md](16-open-questions.md) | what is not decided, and the details this specification adds that still need an ADR |
@@ -150,3 +150,4 @@ or a collaborative editor), nor real-time sync of hot files (proposal §1).
 | 0054 a copy counts only if it can be locked (Proposed) | [08](08-custody-loops.md), [09](09-network-and-joining.md), [13](13-verification.md), [16](16-open-questions.md) |
 | 0055 install recovery rolls forward from a journalled proof (Proposed) | [07](07-capture-and-install.md), [11](11-local-state.md), [13](13-verification.md) |
 | 0056 every asserting experiment runs on Linux and macOS (Proposed) | [07](07-capture-and-install.md), [08](08-custody-loops.md), [13](13-verification.md), [14](14-platforms-and-packaging.md), [16](16-open-questions.md) |
+| 0057 the first milestone is a safety slice: one laptop, two custodians, no proposals or purge (Proposed) | [13](13-verification.md), [16](16-open-questions.md) |

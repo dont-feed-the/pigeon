@@ -69,3 +69,4 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0054](0054-a-copy-counts-only-if-it-can-be-locked.md) | A copy counts only if it can be locked: custodians answer `CHECKPRESENT` with a lock | Proposed |
 | [0055](0055-install-recovery-rolls-forward-from-a-journalled-proof.md) | Install recovery rolls forward from a journalled proof | Proposed |
 | [0056](0056-every-experiment-runs-on-both-platforms.md) | Every asserting experiment runs on Linux and macOS; a platform difference is shown, never hidden | Proposed |
+| [0057](0057-the-first-milestone-is-a-safety-slice.md) | The first milestone is a safety slice: one laptop, two custodians, no proposals or purge | Proposed |

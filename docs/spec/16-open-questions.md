@@ -29,7 +29,7 @@
 | ADR 0054: a copy counts only if it can be locked; custodians answer `CHECKPRESENT` with a lock | Proposed, for issue #10: over P2P git-annex's verified drop counts a copy locked for removal (E23); [09 §9.4](09-network-and-joining.md) and [08 §8.3](08-custody-loops.md) apply it, `AnnexDrop` checks it ([13 §13.2](13-verification.md)); report upstream | Guillaume |
 | ADR 0055: install recovery rolls forward from a journalled proof | Proposed, for issue #1; [07 §7.5–7.6](07-capture-and-install.md), [11 §11.3](11-local-state.md) apply it, the `CaptureInstall` model checks it ([13 §13.2](13-verification.md)) | Guillaume |
 | ADR 0056: every asserting experiment runs on Linux and macOS | Proposed, for issue #10; `lab.yml` runs it; [07 §7.5](07-capture-and-install.md), [08 §8.2, §8.5](08-custody-loops.md), [13 §13.7–13.8](13-verification.md), [14 §14.3](14-platforms-and-packaging.md) apply it | Guillaume |
-| TLC with the `Json` module for trace validation | ADR 0026 foresees a new ADR pinning it by SHA-256 ([13 §13.3](13-verification.md)) | before the first `*Trace.tla` |
+| ADR 0057: the first milestone is a safety slice | Proposed, for issue #17; [13 §13.12](13-verification.md) applies it | Guillaume |
 
 ## 16.2 Where this specification departs from a source
 
@@ -46,6 +46,7 @@
 | Order of work | ADR 0037: protect, downloads, then repair | protect and repair are one class, fewest copies first, before downloads ([15 §15.2](15-resource-use.md)) | ADR 0050 (Proposed), issue #13: a custodian must not spend its last space on a new key while an old one has a single copy |
 | Counting copies | ADRs 0002, 0003: K distinct custodians | K distinct failure domains ([06 §6.2](06-status.md)) | ADR 0049 (Proposed), issue #12 |
 | Reading trace logs | ADR 0008: `ndJsonDeserialize`, said to be in our `tla2tools.jar` | a TLA+ module generated from the NDJSON log, read by the pinned TLC 1.7.4 ([13 §13.3](13-verification.md)) | ADR 0053 (Proposed), issue #10 |
+| First week of the feasibility study | proposal §7: the roles and the six daemon loops, then fault injection | the safety slice first: no proposals, purge or scrub until it passes; one person, one laptop, two custodians ([13 §13.12](13-verification.md)) | ADR 0057 (Proposed), issue #17 |
 
 Accepted ADRs are not rewritten; each line above becomes either an ADR that
 confirms this specification or a correction of this specification.
@@ -224,4 +225,4 @@ experiments stay listed in [13](13-verification.md) and in the prototype (#17).
 | #14 | file-system object model | [07 §7.9](07-capture-and-install.md), [04 §4.4](04-roster-and-authority.md), [05 §5.2–5.4](05-catalogue-and-names.md), [03 §3.3–3.7](03-repository-and-roles.md), [14 §14.2](14-platforms-and-packaging.md) | ADRs 0044 and 0045 (Proposed); E20 asserts on Linux and macOS |
 | #15 | replicated-format compatibility | [04 §4.2, §4.4](04-roster-and-authority.md), [06 §6.3](06-status.md), [08 §8.2](08-custody-loops.md), [09 §9.3](09-network-and-joining.md), [14 §14.3](14-platforms-and-packaging.md), [13 §13.4, §13.6](13-verification.md) | ADR 0048 (Proposed); fixtures and mixed releases with the prototype (#17) |
 | #16 | one authoritative specification | this specification; [README](README.md) precedence | done |
-| #17 | minimal end-to-end prototype | — | after the design issues |
+| #17 | minimal end-to-end prototype | [13 §13.12](13-verification.md) | ADR 0057 (Proposed): scope, setup, scenarios S1–S11 and the ledger; open until the slice passes and `docs/reports/slice-1.md` is published |

@@ -338,3 +338,65 @@ round, not technical, plus two "Pauls" for setup; moderated think-aloud,
 correctly; at least 4 of 5 complete tasks 4 and 5 (an old version, a deleted
 folder) without help; **no** participant believes that a file which is not
 safe is safe. The thresholds of [06 §6.7](06-status.md) are tuned from it.
+
+## 13.12 The first milestone: the safety slice (ADR 0057)
+
+The first code of v2 is a slice that carries the promises and nothing else
+(issue #17). Its group has one person, who is its admin, one laptop (Linux on
+ext4, or macOS on APFS) and two Linux custodians on ext4, with K = 2. It has
+one repository and two folders.
+
+| Part | In the slice | After it passes |
+|---|---|---|
+| crates ([14 §14.6](14-platforms-and-packaging.md)) | `pigeon-core`, `pigeon-proto`, `pigeon-i18n` (the English bundle), `pigeon-git`, `pigeon-sys`, `pigeond`, `pigeon`, `git-annex-p2p-iroh` | `pigeon-web`, `pigeon-telemetry`, the French bundle (ADR 0028) |
+| loops ([08 §8.1](08-custody-loops.md)) | capture, accept, install with its journal (ADR 0055), place, repair (started by a removed custodian), free and keep, settings check; the filter with its `CHECKPRESENT` probe (ADRs 0043, 0054) | scrub, purge |
+| commands ([10](10-interfaces.md)) | `create`, `invite --backup-machine`, `join --backup-machine`, `status`, `machines`, `history`, `restore`, `free`, `keep`, `remove-computer`, `recovery-sheet`, `recover`, `doctor`, `debug bundle` | the rest answer `not-in-this-build` |
+| content | regular files and folders, the executable bit, portable names (ADR 0044) | other file systems: `create` and `join` name the one they refuse |
+| network | iroh with direct addresses and mDNS | relays and discovery (ADR 0016) |
+| diagnostics | JSON logs (ADR 0022), trace logs (ADR 0008) | telemetry transport and dashboards (ADR 0025) |
+
+The deferrals concern the order of work only: v1 still meets every accepted
+ADR.
+
+**Setup** (`lab/slice/`). The lab build (`--features lab`) adds two seams to
+`pigeon-sys`, and nothing else:
+
+- fingerprints read from a file, since one host is one failure domain
+  (ADR 0049);
+- named crash points (`PIGEON_LAB_CRASH=point:n`).
+
+It says so in `doctor`, and its status reports carry `lab = true`, which a
+release build never counts. On one Linux host, each custodian runs in its own
+mount namespace on its own loop-mounted ext4 image, connected over
+127.0.0.1. The *three-machine run* uses release builds on real hardware: a
+laptop, once on Linux and once on macOS, and two Linux custodians.
+
+**Scenarios.** Each is an asserting script. Each validates its trace log
+against the models covering the steps it logs (§13.3), and records disk use.
+
+| Scenario | Asserts |
+|---|---|
+| S1 | *local* → *published* → *protected*, each step from a recorded observation (ADR 0046); a symbolic link listed as not shared |
+| S2 | `free` refuses while a version is not protected, then frees without a pointer (ADR 0039) |
+| S3 | `keep` and `restore` give back the same bytes (SHA-256) |
+| S4 | an offline custodian: *published* only; *protected* without action when it returns |
+| S5 | a 1 GiB transfer killed on either side resumes; no partial object counts |
+| S6 | a save racing `keep`'s install wins (ADR 0040) |
+| S7 | a custodian's image destroyed: not safe; `remove-computer`, a new custodian, repair in ADR 0050's order |
+| S8 | a full custodian refuses admission and says why; a full laptop refuses a restore before it starts |
+| S9 | `pigeond` crashed at each named point of capture, install, place and free: nothing lost or duplicated; 50 random schedules per push, 1000 in `models-full` |
+| S10 | a fresh laptop recovers from the custodians with the recovery sheet (ADR 0047); the keys, metadata and authority it needed are listed |
+| S11 | steady and peak disk use per device: folders, `.git`, annex objects, `.git/annex/tmp`, pending history (ADR 0041), pigeon's state, temporary files |
+
+**Laws first.** The parts of `pigeon-core` that the slice uses have their
+hegel-rust laws before their drivers: states and headline, domain counting,
+the install journal, the queue order and the roster fold.
+
+**Passing and the ledger.** The slice passes when every scenario asserts on
+Linux CI and in the three-machine run, no protected version is lost in any
+schedule, and laptop disk use in the steady state is at most 1.1 × the
+content kept (§13.11). The peak is reported with its causes.
+`docs/reports/slice-1.md` marks each promise (P1–P6) and each Proposed ADR it
+exercises as *established* (with its scenarios and traces), *conditional*
+(with the assumption it rests on) or *untested*. Evidence from pigeon's own
+code enters the "now" column of §13.10 only through this ledger.
