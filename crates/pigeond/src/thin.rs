@@ -11,9 +11,16 @@
 //! thaws an object it hard-links (`linkAnnex` in `Annex/Content.hs`). An
 //! in-place save may then change the object, which never counts toward K
 //! (ADR 0002), while the custodians keep theirs.
+//!
+//! The file is gone from its path between move-aside and rename-in, so
+//! that window holds only the writer scan and the stat check of 07 §7.5:
+//! the content is hashed in place before, and the aside after, where a
+//! mismatch keeps it as a recovered version (step 9). A file changed in
+//! the last minute waits, so that one in use is not moved (ADR 0037).
 
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use pigeon_core::journal::{Begin, End, Record};
 use pigeon_core::state::State;
@@ -23,6 +30,21 @@ use crate::evict::{hidden_paths, is_old, journal, next_seq, record, stat_of, tru
 use crate::group::Group;
 use crate::journal_file::read;
 use crate::trace::{Act, Tracer};
+
+/// How long a file stays unchanged (content and metadata) before it is
+/// re-thinned.
+const QUIET_S: i64 = 60;
+
+/// Whether `file` has not changed for [`QUIET_S`] seconds.
+fn quiet(file: &Path) -> bool {
+    let Ok(m) = std::fs::symlink_metadata(file) else {
+        return false;
+    };
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX));
+    now.saturating_sub(m.ctime().max(m.mtime())) >= QUIET_S
+}
 
 fn same_inode(a: &Path, b: &Path) -> bool {
     match (std::fs::symlink_metadata(a), std::fs::symlink_metadata(b)) {
@@ -77,7 +99,11 @@ fn one(
     let Some(st) = stat_of(file) else {
         return Ok(false);
     };
-    if crate::restore::key_size(key).is_some_and(|n| n != st.size) {
+    if crate::restore::key_size(key).is_some_and(|n| n != st.size) || !quiet(file) {
+        return Ok(false);
+    }
+    // The content is proved in place; in the window only the stat is.
+    if !is_old(file, Some(key)) || stat_of(file) != Some(st) {
         return Ok(false);
     }
     let mode = std::fs::symlink_metadata(file)
@@ -102,6 +128,7 @@ fn one(
         }),
     )?;
     t.event(Act::Start, &[("path", path)]);
+    let window = Instant::now();
     if rename_noreplace(file, &aside).map_err(|e| e.to_string())? != Renamed::Done {
         record(g, &Record::End(seq, End::Skip))?;
         let _ = std::fs::remove_file(&stage);
@@ -113,7 +140,7 @@ fn one(
         .flatten()
         .is_some_and(|a| pigeon_sys::writers::scan(a.id).is_clear());
     t.event(Act::Scan, &[("path", path)]);
-    if !clear || stat_of(&aside) != Some(st) || !is_old(&aside, Some(key)) {
+    if !clear || stat_of(&aside) != Some(st) {
         let end = match rename_noreplace(&aside, file).map_err(|e| e.to_string())? {
             Renamed::Done | Renamed::SourceMissing => End::Skip,
             Renamed::TargetExists => End::Recovered,
@@ -130,9 +157,17 @@ fn one(
         return Ok(false);
     }
     t.event(Act::RenameIn, &[("path", path)]);
+    let ms = window.elapsed().as_millis();
+    tracing::debug!(group = %g.id, path, ms, "rethin-window");
     record(g, &Record::End(seq, End::Done))?;
     t.event(Act::Done, &[("path", path)]);
-    let _ = std::fs::remove_file(&aside);
+    if is_old(&aside, Some(key)) {
+        let _ = std::fs::remove_file(&aside);
+    } else {
+        // Changed without a trace in its stat: kept, as 07 §7.5 step 9 says.
+        tracing::warn!(group = %g.id, path, seq, "rethin-aside-recovered");
+        let _ = std::fs::rename(&aside, g.files.recovered().join(seq.to_string()));
+    }
     record(g, &Record::Released(seq))?;
     t.event(Act::Release, &[("path", path)]);
     Ok(true)

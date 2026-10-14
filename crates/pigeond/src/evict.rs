@@ -119,9 +119,18 @@ fn targets(g: &Group) -> BTreeSet<String> {
         .unwrap_or_default()
 }
 
+/// Orders the requests that change a target against the loop's check
+/// before each hide, so that no file is hidden once `keep` has answered.
+static TARGETS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn targets_lock() -> std::sync::MutexGuard<'static, ()> {
+    TARGETS.lock().unwrap_or_else(|p| p.into_inner())
+}
+
 /// Records whether the folder `prefix` is to be freed (`pigeon free`) or
-/// kept (`pigeon keep`); the loops do the rest.
+/// kept (`pigeon keep`); the loops do the rest, and never record one.
 pub fn set_target(g: &Group, prefix: &str, freed: bool) {
+    let _order = targets_lock();
     let mut t = targets(g);
     if freed {
         t.insert(prefix.to_owned());
@@ -190,10 +199,9 @@ fn hide(g: &Group, wt: &Path, seq: u64, path: &str, key: &str, t: &Tracer) -> Re
     Ok(true)
 }
 
-/// `pigeon free PREFIX`.
+/// Frees the folder `prefix` while it is a target (`pigeon free` records it).
 pub async fn free(g: &Group, me: &str, prefix: &str, t: &Tracer) -> Result<Freed, String> {
     let wt = g.worktree.clone().ok_or("not-in-group")?;
-    set_target(g, prefix, true);
     let observed = crate::status::observe(g, me, prefix).await;
     let mut hidden = hidden_paths(g).await;
     let mut seq = next_seq(&read(&journal(g)));
@@ -210,7 +218,13 @@ pub async fn free(g: &Group, me: &str, prefix: &str, t: &Tracer) -> Result<Freed
         if hidden.contains(&o.path) {
             continue;
         }
-        if hide(g, &wt, seq, &o.path, &o.key, t)? {
+        let order = targets_lock();
+        if !targets(g).contains(prefix) {
+            break;
+        }
+        let hidden_now = hide(g, &wt, seq, &o.path, &o.key, t);
+        drop(order);
+        if hidden_now? {
             new.push((seq, o.path.clone()));
         }
         seq += 1;
@@ -232,7 +246,9 @@ pub async fn free(g: &Group, me: &str, prefix: &str, t: &Tracer) -> Result<Freed
         }
     }
     done.hidden = observed.iter().filter(|o| hidden.contains(&o.path)).count();
-    done.dropped = drop_hidden(g, &hidden, prefix).await;
+    if targets(g).contains(prefix) {
+        done.dropped = drop_hidden(g, &hidden, prefix).await;
+    }
     truncate_if_done(g);
     Ok(done)
 }
