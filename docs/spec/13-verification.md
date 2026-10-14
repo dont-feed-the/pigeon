@@ -273,12 +273,9 @@ with what its last runs showed; per push it is reported as blocked, and
 disk is sized above the `annex.diskreserve` pigeon sets (03 §3.4): 4 GiB
 for a laptop, 8 GiB (sparse) for a custodian; below it git-annex refuses
 every transfer, which kept the first runs at *published*. In run
-38610156407 (14 October 2026) S1–S4, S7, S10 and S11 pass on both runners,
-and S6, S8 and S9 on Linux. On macOS a restore on a full laptop said
-`internal-error`, a restarted daemon replayed its journal before it
-answered (S5, S9), and re-thinning moved a file the person had just saved
-(S6); on Linux an orphaned `git annex get` kept a transfer lock (S5). Each
-is fixed since; `slice::BLOCKED` keeps S8 and S9.
+38620593663 (14 October 2026, at 767dc0b) S1–S11 and every S9 point pass on
+both runners. Only S9's random schedules stay blocked: they have not run in
+CI yet, and 50 at 50–90 s each do not fit `slice.yml`'s 90-minute job.
 
 | Scenario | Asserts |
 |---|---|

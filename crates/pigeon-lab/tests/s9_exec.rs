@@ -19,7 +19,7 @@ fn random_crash_schedules_lose_and_duplicate_nothing(tc: TestCase) {
     let Ok(bin) = std::env::var("PIGEON_LAB_BIN") else {
         return;
     };
-    // While S9 is blocked (slice::BLOCKED), its random schedules wait too.
+    // While the random schedules are blocked (slice::BLOCKED), they wait.
     if slice::blocked("S9-random").is_some() {
         return;
     }

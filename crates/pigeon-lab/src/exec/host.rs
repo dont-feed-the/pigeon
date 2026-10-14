@@ -135,6 +135,20 @@ pub struct Space {
     ids: (String, String),
 }
 
+/// `step` until it succeeds, at most `times` times, 3 s apart; the last
+/// error otherwise.
+fn retried(times: u32, mut step: impl FnMut() -> Result<String, String>) -> Result<String, String> {
+    let mut last = step();
+    for _ in 1..times {
+        if last.is_ok() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        last = step();
+    }
+    last
+}
+
 fn id(flag: &str) -> Result<String, String> {
     run(Command::new("id").arg(flag)).map(|s| s.trim().to_owned())
 }
@@ -180,24 +194,23 @@ impl Space {
             }
             Isolation::Images => {
                 let image = dir.join("disk.sparseimage");
-                run(Command::new("hdiutil")
-                    .args([
-                        "create", "-quiet", "-type", "SPARSE", "-fs", "APFS", "-size",
-                    ])
-                    .arg(format!("{mib}m"))
-                    .args(["-volname", &format!("pigeon-lab-{name}")])
-                    .arg(&image))?;
-                run(Command::new("hdiutil")
-                    .args([
-                        "attach",
-                        "-quiet",
-                        "-nobrowse",
-                        "-owners",
-                        "on",
-                        "-mountpoint",
-                    ])
-                    .arg(&root)
-                    .arg(&image))?;
+                // hdiutil on a CI runner now and then fails at once with no
+                // message (slice run 38620593695, S4 on macOS); it is retried
+                // from a fresh image, and run without -quiet to say why.
+                retried(3, || {
+                    let _ = std::fs::remove_file(&image);
+                    run(Command::new("hdiutil")
+                        .args(["create", "-type", "SPARSE", "-fs", "APFS", "-size"])
+                        .arg(format!("{mib}m"))
+                        .args(["-volname", &format!("pigeon-lab-{name}")])
+                        .arg(&image))
+                })?;
+                retried(3, || {
+                    run(Command::new("hdiutil")
+                        .args(["attach", "-nobrowse", "-owners", "on", "-mountpoint"])
+                        .arg(&root)
+                        .arg(&image))
+                })?;
                 space.image = Some(image);
             }
         }
