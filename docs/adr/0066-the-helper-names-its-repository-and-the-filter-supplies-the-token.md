@@ -70,7 +70,11 @@ specification.
 6. **The local socket.** `PIGEON_SOCKET` overrides its path, for tests and
    the lab. On macOS, the per-user temporary directory is read from
    `$TMPDIR`. A client is served only if its peer credentials name the user
-   who owns the socket file.
+   who owns the socket file. A remotedaemon socket whose path is longer than
+   100 bytes (`sun_path` holds 104 on macOS) is reached through a short
+   symbolic link next to `pigeond`'s socket: git-annex picks a relative path
+   for that reason (`getSocketFile` in `RemoteDaemon/Transport/P2PGeneric.hs`),
+   but `pigeond` does not share its working directory.
 7. **Dependencies.** `iroh` is built without default features, with
    `tls-ring`: no relays, no global discovery, mDNS when asked (ADR 0057).
    `cargo deny` checks the four targets of ADR 0005 only, so the relay

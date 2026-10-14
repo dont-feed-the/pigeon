@@ -92,6 +92,29 @@ pub async fn serve_socket(net: Arc<Net>, listener: UnixListener) {
     }
 }
 
+/// The longest unix socket path every platform connects to: `sun_path`
+/// holds 104 bytes on macOS and 108 on Linux, the final NUL included.
+const MAX_SOCKET_PATH: usize = 100;
+
+/// A short symbolic link next to `pigeond`'s socket for remotedaemon's
+/// socket, when that path is too long to connect to; `None` if it is not.
+fn short_link(own: &Path, group: &str, socket: &Path) -> std::io::Result<Option<PathBuf>> {
+    if socket.as_os_str().len() <= MAX_SOCKET_PATH {
+        return Ok(None);
+    }
+    let name: String = group
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .take(16)
+        .collect();
+    let link = own.with_file_name(format!("annex-{name}.sock"));
+    if link.symlink_metadata().is_ok() {
+        std::fs::remove_file(&link)?;
+    }
+    std::os::unix::fs::symlink(socket, &link)?;
+    Ok(Some(link))
+}
+
 fn problem(code: &str, details: Option<String>) -> Response {
     Response::Problem(Problem {
         code: code.to_owned(),
@@ -200,10 +223,15 @@ async fn client(net: Arc<Net>, stream: UnixStream) -> Result<(), NetError> {
                         .unwrap_or_else(|| repo.git_dir.clone())
                         .join(path);
                 }
-                let registration = net.listeners.register(&repo.group, path);
+                let link = short_link(&net.socket_path, &repo.group, &path)?;
+                let target = link.clone().unwrap_or(path);
+                let registration = net.listeners.register(&repo.group, target);
                 reply(&mut wr, id, &Response::Listening).await?;
                 while rd.read(&mut buf).await.map(|n| n > 0).unwrap_or(false) {}
                 net.listeners.unregister(&repo.group, registration);
+                if let Some(link) = link {
+                    let _ = std::fs::remove_file(link);
+                }
                 return Ok(());
             }
             _ => reply(&mut wr, id, &problem("not-in-this-build", None)).await?,

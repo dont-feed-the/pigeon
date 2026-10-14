@@ -96,7 +96,9 @@ the internal API ([10 §10.1](10-interfaces.md)); the helper uses three more:
 `Address {repository}`, `Connect {repository, device}`, `Listen {repository,
 socket}` (ADR 0066). After a `Connected` or `Listening` reply, the connection
 carries raw bytes only. `PIGEON_SOCKET` overrides the socket's path, for
-tests and the lab; on macOS the per-user temporary directory is `$TMPDIR`.
+tests and the lab; on macOS the per-user temporary directory is `$TMPDIR`. A
+remotedaemon socket path over 100 bytes is reached through a short link next
+to it (ADR 0066).
 
 `pigeond` refuses a second instance (a lock file next to the socket), and a
 client checks the peer credentials of the socket (`SO_PEERCRED`,
