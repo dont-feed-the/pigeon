@@ -18,6 +18,19 @@ pigeon-proto = { path = "crates/pigeon-proto" }
 pigeon-i18n = { path = "crates/pigeon-i18n" }
 pigeon-git = { path = "crates/pigeon-git" }
 pigeon-sys = { path = "crates/pigeon-sys" }
+dirs = "7.0"
+fluent-bundle = "0.16"
+fluent-langneg = "0.14"
+libc = "0.2"
+rustix = { version = "1.1", features = ["fs", "mm", "process", "stdio"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.11"
+tempfile = "3.27"
+thiserror = "2.0"
+tokio = { version = "1.53", features = ["io-util", "macros", "process", "rt", "sync", "time"] }
+tracing = "0.1.44"
+unic-langid = "0.9"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
