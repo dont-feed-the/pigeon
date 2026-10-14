@@ -202,6 +202,15 @@ report ([06 §6.3](06-status.md)).
   who)`, and admins and the full custodians' owners see *Needs you*: GB
   missing, who can free space where, what declined suggestions take. An
   endangered key's room never goes to another (`EndangeredFirst`).
+  A custodian plans the keys it wants and lacks in queue order
+  ([15 §15.2](15-resource-use.md)) with its *room*, the free space above
+  its reserve less the downloads in progress, which git-annex counts too:
+  an endangered key is admitted if it fits in what is left, any other key
+  only if the endangered keys not yet admitted still fit after it. A
+  deferred key says the bytes it misses. Normative: `pigeon-core::capacity`
+  and its laws (`tests/capacity.rs`); `Admission.tla` checks the plan with
+  sizes (`ReserveKept`, `EndangeredFirst`, `DeferredStays`), and
+  `AdmitTrace` checks the code's plans against it.
 - Admins and custodian owners are warned when capacity < 1.25 × need
   (`sizebalanced` is heuristic, E10). `pigeon status --capacity` and the web
   *Space* page show the parts of the need, each custodian's offered, used

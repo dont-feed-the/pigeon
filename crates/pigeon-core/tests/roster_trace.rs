@@ -212,4 +212,5 @@ fn names_match<A: Actions>() {
 fn action_names_are_operators_of_their_specs() {
     names_match::<Action>();
     names_match::<CaptureInstall>();
+    names_match::<pigeon_core::trace::Admission>();
 }

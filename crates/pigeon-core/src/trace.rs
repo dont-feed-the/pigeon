@@ -226,6 +226,21 @@ actions! {
     }
 }
 
+actions! {
+    /// The actions of `models/tla/Admission.tla`: the instance, then each
+    /// decision of one plan (08 §8.9).
+    Admission = "Admission" {
+        /// The keys, their sizes, the room and the endangered keys.
+        Init,
+        /// A key is admitted.
+        Admit,
+        /// A key is deferred.
+        Defer,
+        /// Every key is planned.
+        Done,
+    }
+}
+
 impl Event {
     /// An event of action `a` of its specification.
     pub fn new<A: Actions>(

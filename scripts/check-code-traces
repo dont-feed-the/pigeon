@@ -4,11 +4,11 @@
 `cargo test` writes NDJSON traces of pigeon-core's simulated runs (feature
 `tla-trace`); each becomes a TLA+ module through scripts/trace-to-tla, and TLC
 checks it with its *Trace.tla specification: every run must be accepted. A
-mutant of each run, with one logged roster changed, must be rejected, so a
-check that accepts everything fails. Usage: scripts/check-code-traces
+mutant of each run (a logged roster changed, a decision reversed) must be
+rejected, so a check that accepts everything fails. Usage: scripts/check-code-traces
 [--seeds N] [--fixtures]. With --fixtures, the committed sample logs of
-models/tla (RosterTrace_good and _bad) are rewritten from seed 1 and their
-modules regenerated, for scripts/run-tlc.
+models/tla (RosterTrace_good and _bad, AdmitTrace_good and _bad) are
+rewritten from seed 1 and their modules regenerated, for scripts/run-tlc.
 """
 
 import argparse
@@ -25,8 +25,6 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parent.parent
 MODELS = ROOT / "models" / "tla"
-# spec, cargo test target, file prefix, good and bad log modules.
-SPECS = [("RosterTrace", "roster_trace", "roster", ("RosterCodeLog", "CodeLog"), ("RosterCodeBadLog", "BadLog"))]
 
 
 def load(name):
@@ -37,13 +35,29 @@ def load(name):
     return module
 
 
-def mutant(lines):
+def roster_mutant(lines):
     """The same run with the roster of its last checked step altered (a
     fast-forward writes no roster)."""
     events = [json.loads(line) for line in lines]
     last = [e for e in events if not e["vars"].get("ff", False)][-1]["vars"]["ros"]
     last["dev"][0] = 2 if last["dev"][0] != 2 else 1
     return [json.dumps(e, separators=(",", ":")) for e in events]
+
+
+def admit_mutant(lines):
+    """The same plan with its last decision reversed: an admitted key
+    deferred, or a deferred one admitted."""
+    events = [json.loads(line) for line in lines]
+    last = [e for e in events if e["action"] in ("Admit", "Defer")][-1]
+    last["action"] = "Defer" if last["action"] == "Admit" else "Admit"
+    return [json.dumps(e, separators=(",", ":")) for e in events]
+
+
+# spec, cargo test target, file prefix, good and bad log modules, mutant.
+SPECS = [("RosterTrace", "roster_trace", "roster", ("RosterCodeLog", "CodeLog"), ("RosterCodeBadLog", "BadLog"),
+          roster_mutant),
+         ("AdmitTrace", "admit_trace", "admit", ("AdmitCodeLog", "CodeLog"), ("AdmitCodeBadLog", "BadLog"),
+          admit_mutant)]
 
 
 def traces(target, seeds, out):
@@ -63,7 +77,7 @@ def main():
     failures = 0
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        for spec, target, prefix, good, bad in SPECS:
+        for spec, target, prefix, good, bad, mutant in SPECS:
             traces(target, 1 if args.fixtures else args.seeds, tmp / "logs")
             work = tmp / "models"
             shutil.copytree(MODELS, work, dirs_exist_ok=True)

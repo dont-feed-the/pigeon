@@ -32,6 +32,8 @@ TraceSample_good	TraceSample	fast	trace:accepted
 TraceSample_bad	TraceSample	fast	trace:rejected:2
 RosterTrace_good	RosterTrace	fast	trace:accepted
 RosterTrace_bad	RosterTrace	fast	trace:rejected:7
+AdmitTrace_good	AdmitTrace	fast	trace:accepted
+AdmitTrace_bad	AdmitTrace	fast	trace:rejected:4
 AnnexDrop_design	AnnexDrop	fast	pass
 AnnexDrop_ranked	AnnexDrop	fast	pass
 AnnexDrop_p2p	AnnexDrop	fast	violation:INV_K
@@ -70,6 +72,9 @@ Repair_nofsck	Repair	fast	violation:Survival
 Repair_noprio	Repair	fast	violation:EndangeredFirst
 Repair_inflight	Repair	fast	violation:ReserveKept
 Repair_wantall	Repair	fast	violation:temporal
+Admission_design	Admission	fast	pass
+Admission_noprio	Admission	fast	violation:EndangeredFirst
+Admission_noused	Admission	fast	violation:ReserveKept
 Evict_free	Evict	fast	pass
 Evict_keep	Evict	fast	pass
 Evict_live	Evict	fast	pass

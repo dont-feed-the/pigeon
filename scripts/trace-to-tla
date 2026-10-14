@@ -24,7 +24,9 @@ MODELS = Path(__file__).resolve().parent.parent / "models" / "tla"
 FIXTURES = [("TraceSample_good.ndjson", "TraceSampleGoodLog", "GoodLog"),
             ("TraceSample_bad.ndjson", "TraceSampleBadLog", "BadLog"),
             ("RosterTrace_good.ndjson", "RosterCodeLog", "CodeLog"),
-            ("RosterTrace_bad.ndjson", "RosterCodeBadLog", "BadLog")]
+            ("RosterTrace_bad.ndjson", "RosterCodeBadLog", "BadLog"),
+            ("AdmitTrace_good.ndjson", "AdmitCodeLog", "CodeLog"),
+            ("AdmitTrace_bad.ndjson", "AdmitCodeBadLog", "BadLog")]
 IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 RESERVED = set("""ASSUME ASSUMPTION AXIOM CASE CHOOSE CONSTANT CONSTANTS DOMAIN ELSE
     ENABLED EXCEPT EXTENDS IF IN INSTANCE LET LOCAL MODULE OTHER SF_ SUBSET THEN

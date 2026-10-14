@@ -30,12 +30,13 @@ invariants this specification cites are normative.
 | `CaptureInstall` | `NoLoss`, `Journal`, `IndexHonest`, `CaptureFirst`, `NoOverwrite`, `DeletionKept`; `SavesCaptured`, `Converges` | [07 §7.5](07-capture-and-install.md), [07 §7.7](07-capture-and-install.md) |
 | `Evict` | `NoLoss`, `NoPointer`, `DropsProtected`, `CaptureOnlySaves`, `NoDeletion`; `FreeLive`, `KeepLive` | [08 §8.5](08-custody-loops.md) |
 | `Repair` | `Survival`, `INV_K` (of steps), `ReserveKept`, `EndangeredFirst`; `Restores` | [08 §8.3–8.4](08-custody-loops.md), [08 §8.9](08-custody-loops.md) |
+| `Admission` | `ReserveKept`, `EndangeredFirst`, `DeferredStays` | [08 §8.9](08-custody-loops.md) |
 | `AnnexDrop` | `INV_K`, `LockedStays` | [08 §8.3](08-custody-loops.md), [09 §9.4](09-network-and-joining.md) |
 | `Purge` | `KeepWins`, `WaitingPeriod`, `NoResurrection` | [08 §8.6](08-custody-loops.md) |
 | `Roster` | `AdminRemains`, `RemovalWins`, `PersonRemovalWins`, `TreeIsFold`, `Agreement`, `MergeAlwaysPossible`, `SkipsNeedConcurrency`; `NoConcurrentRetirement` is a witness, violated on purpose | [04 §4.8](04-roster-and-authority.md) |
 | `Authority` | `AuthorisedContent`, `AdoptionHoldsContent`, `DecidersCanAdopt`, `DecisionsByDeciders`, `HonestMergesAccepted`, `TreeIsCatalogue`, `RemovalRevokesAdded`, `RemovedSilenced`, `ConvergedWhenQuiet`; `Converge` | [04 §4.3–4.5](04-roster-and-authority.md), [09 §9.7](09-network-and-joining.md) |
 | `CustodyNaive`, `CustodyTokens` | `NoLoss`; `TokensNeverLost`, `TokenHolderHasContent`, `KCopies`, `AtMostOneToken` | evidence about hand-offs in general, not about git-annex |
-| `TraceSample`, `RosterTrace` | `TraceNotConsumed` (§13.3) | [12 §12.3](12-observability.md) |
+| `TraceSample`, `RosterTrace`, `AdmitTrace` | `TraceNotConsumed` (§13.3) | [12 §12.3](12-observability.md) |
 
 Per safeguard, each model has a configuration without it (`Off`) that must
 fail with the verdict `expected.tsv` names (ADR 0026). Bounds start at
@@ -323,6 +324,7 @@ the same way: `pigeond/tests/codecs.rs` and `net_laws.rs`,
 | more presence observations never lower a state; a second entry for one custodian changes nothing; custodian order is irrelevant; protected exactly when K distinct custodians count (ADRs 0002, 0046); a new holder never lowers a state | `state` | `tests/state.rs` | — |
 | the join is a semilattice with *Safe* as identity and *Needs you* absorbing; the headline of a union is the join; adding an item never lowers it; a version only this computer holds is *Not safe yet* after the grace period, even unreachable | `headline` | `tests/headline.rs` | — |
 | the queue order is total; a higher class goes first; arrival order is irrelevant; a key on fewer custodians never waits behind one on more | `queue` | `tests/queue.rs` | — |
+| admitted bytes never exceed the room; an endangered key is never deferred for one that is not; the plan does not depend on arrival and keeps queue order, each item once; a deferred item says the bytes it misses, and that much more room admits everything; the reserve is a floor or a share; the parts of the need sum to K times each distinct key; capacity counts at most one copy per custodian | `capacity` | `tests/capacity.rs`, `tests/admit_trace.rs` | `Admission` (`ReserveKept`, `EndangeredFirst`) |
 | recovery ends every entry and a second does nothing; a crash during recovery ends as one recovery; a person's save is never lost; a deletion after install stays; without a person, the path ends old or new and the index agrees (INV-Journal); pigeon never renames over a name | `journal` | `tests/journal.rs` | `CaptureInstall` (`NoLoss`, `Journal`, `NoOverwrite`, `DeletionKept`) |
 | every tree is the fold of its history; the fold depends only on the set of changes; every fold is valid and removals win, even of a device not yet added; skips need concurrency; a linear history skips nothing; the canonical order is topological; pigeon-core lets a device sign every change of the model's `Ops` | `roster` | `tests/roster.rs` | `Roster` (`TreeIsFold`, `Agreement`, `AdminRemains`, `RemovalWins`, `SkipsNeedConcurrency`), and `RosterTrace` on runs |
 | allowed streams pass unchanged; chunking does not matter; custodians never forward removals or pushes; malformed input closes; a custodian answers only after the sync; an unattributed success closes; `AUTH` is rewritten and checked | `filter` | `tests/filter_laws.rs` | — |
