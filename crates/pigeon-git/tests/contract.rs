@@ -118,7 +118,7 @@ async fn capture_ignores_the_persons_git_configuration() {
         "{key}"
     );
     assert_eq!(pigeon_git::annex::key_size(&key), Some(6));
-    annex.stop().await;
+    assert!(annex.stop(T).await);
 }
 
 /// Batch mode answers every input line with one line: JSON, or a blank line
@@ -152,7 +152,7 @@ async fn batch_answers_one_line_per_input() {
         w.answer.success && w.whereis.len() == 1 && w.whereis[0].here,
         "{w:?}"
     );
-    annex.stop().await;
+    assert!(annex.stop(T).await);
 }
 
 /// The behaviour every drop rests on (ADRs 0002, 0043, 0054): with explicit
@@ -209,7 +209,7 @@ async fn drop_refuses_without_k_verified_copies() {
         std::fs::read(a.join("photo.jpg")).unwrap(),
         vec![7u8; 10_000]
     );
-    annex.stop().await;
+    assert!(annex.stop(T).await);
 }
 
 #[tokio::test]
@@ -243,7 +243,7 @@ async fn catfile_and_status_read_what_git_wrote() {
     std::fs::write(dir.join("kept.bin"), b"y").unwrap();
     let mut annex = Annex::new(&dir, env, 1);
     annex.add("kept.bin", T).await.unwrap().unwrap();
-    annex.stop().await;
+    assert!(annex.stop(T).await);
     let args = [
         "status",
         "--porcelain=v2",
@@ -308,5 +308,5 @@ async fn a_batch_past_its_deadline_restarts() {
         "{answer}"
     );
     assert_eq!(b.starts, 2);
-    b.stop().await;
+    assert!(b.stop(T).await);
 }

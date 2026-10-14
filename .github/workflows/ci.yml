@@ -110,7 +110,7 @@ jobs:
       - name: clippy without warnings
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: tests, laws and the git-annex contract tests (13 §13.6)
-        run: cargo test --workspace --locked
+        run: cargo test --workspace --locked --no-fail-fast
       - name: the lab build's seams (ADR 0057)
         run: cargo test -p pigeon-sys --features lab --locked
       - name: licences, advisories and sources (cargo deny, ADR 0019)

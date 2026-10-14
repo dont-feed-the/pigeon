@@ -110,11 +110,11 @@ impl Batch {
         match result {
             Ok(Ok(answer)) => Ok(answer),
             Ok(Err(source)) => {
-                self.stop().await;
+                self.kill().await;
                 Err(Error::Pipe { argv, source })
             }
             Err(_) => {
-                self.stop().await;
+                self.kill().await;
                 Err(Error::Timeout {
                     argv,
                     after: timeout,
@@ -141,10 +141,27 @@ impl Batch {
             })
     }
 
-    /// Ends the process: closes its stdin, then kills it.
-    pub async fn stop(&mut self) {
+    /// Ends the process: closes its stdin and lets it finish, then kills it
+    /// if it is still running after `grace`. git-annex stages what it queued
+    /// for the index only as it ends (Annex/Queue.hs), so a batch `add` is in
+    /// the index only after this. True when the process ended on its own.
+    pub async fn stop(&mut self, grace: Duration) -> bool {
+        let Some(mut running) = self.running.take() else {
+            return true;
+        };
+        drop(running.stdin);
+        let ended = tokio::time::timeout(grace, running.child.wait()).await;
+        if matches!(ended, Ok(Ok(_))) {
+            return true;
+        }
+        let _ = running.child.start_kill();
+        let _ = running.child.wait().await;
+        false
+    }
+
+    /// Kills the process at once, for one past its deadline.
+    async fn kill(&mut self) {
         if let Some(mut running) = self.running.take() {
-            drop(running.stdin);
             let _ = running.child.start_kill();
             let _ = running.child.wait().await;
         }

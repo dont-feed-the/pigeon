@@ -210,11 +210,15 @@ impl Annex {
         self.batches.iter().filter_map(|(_, b)| b.pid()).collect()
     }
 
-    /// Stops every batch process.
-    pub async fn stop(&mut self) {
+    /// Stops every batch process, letting each finish its queued index
+    /// updates for up to `grace` (see [`Batch::stop`]). True when all ended
+    /// on their own.
+    pub async fn stop(&mut self, grace: Duration) -> bool {
+        let mut all = true;
         for (_, b) in &mut self.batches {
-            b.stop().await;
+            all &= b.stop(grace).await;
         }
+        all
     }
 }
 
