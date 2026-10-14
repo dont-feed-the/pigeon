@@ -1,7 +1,7 @@
 # pigeon v2 — specification
 
 > **Status:** version 1 of the specification, 13 October 2026. It assembles the
-> decisions recorded in [ADRs 0001–0067](../adr/README.md), the guarantees P1–P6 of the
+> decisions recorded in [ADRs 0001–0068](../adr/README.md), the guarantees P1–P6 of the
 > [proposal](../design/proposal/proposal.pdf), the [UX study](../design/ux.md), the
 > [TLA+ models](../../models/tla/), the [catalogue model](../../models/catalogue/catalogue.py)
 > and the [git-annex experiments](../../lab/git-annex/).
@@ -157,3 +157,4 @@ or a collaborative editor), nor real-time sync of hot files (proposal §1).
 | 0062 a removal revokes what the removed device signed that the removal had not seen (Proposed) | [02](02-guarantees.md), [04](04-roster-and-authority.md), [05](05-catalogue-and-names.md), [09](09-network-and-joining.md), [13](13-verification.md) |
 | 0063 a decision is a merge by a decider of the main it is made on (Proposed) | [02](02-guarantees.md), [04](04-roster-and-authority.md), [13](13-verification.md) |
 | 0067 the git driver checks every command against the allow-list and bounds every call with a deadline (Proposed) | [03](03-repository-and-roles.md), [13](13-verification.md), [14](14-platforms-and-packaging.md), [16](16-open-questions.md) |
+| 0068 messages are listed with their variables and checked in every bundle; the language follows gettext's order (Proposed) | [10](10-interfaces.md), [13](13-verification.md), [14](14-platforms-and-packaging.md), [16](16-open-questions.md) |

@@ -131,7 +131,7 @@ class by `pigeond` itself (ADRs 0032, 0037). On macOS, a **launchd agent**
 |---|---|---|---|
 | `pigeon-core` | lib | the pure core: roster, authority rule, catalogue merge, names, states, headline, queue order, journal replay, filter state machine, trace event enums (ADR 0012) | no |
 | `pigeon-proto` | lib | the request and response types of the API and the socket framing (ADR 0021) | no |
-| `pigeon-i18n` | lib | Fluent bundles, language choice, the completeness test (ADR 0028) | reads embedded files only |
+| `pigeon-i18n` | lib | Fluent bundles, language choice, the completeness test (ADRs 0028, 0068) | reads embedded files only |
 | `pigeon-git` | lib | drivers for git and git-annex: batch processes, JSON parsing, contract tests (ADRs 0004, 0010) | yes |
 | `pigeon-sys` | lib | the platform layer: renames, signals, `fadvise`, pressure, battery and metered probes, sockets (ADR 0037) | yes |
 | `pigeon-telemetry` | lib | the only crate depending on `opentelemetry*` (ADR 0025) | yes |
@@ -161,7 +161,7 @@ and upgraded deliberately.
 | errors | `thiserror` 2.0 | 0023 |
 | logs | `tracing` 0.1.44, `tracing-subscriber` 0.3, `tracing-appender` 0.2 | 0022 |
 | telemetry | `opentelemetry` 0.33, `tracing-opentelemetry` 0.34 | 0025 |
-| messages | `fluent-bundle` 0.16, `fluent-langneg` 0.14 | 0028 |
+| messages | `fluent-bundle` 0.16, `fluent-langneg` 0.13 (the version `fluent-bundle` uses), `fluent-syntax` 0.12 (tests) | 0028, 0068 |
 | notifications, launcher | `notify-rust` 4.18, `open` 5.4; `tray-icon` 0.26 in v1.1 | 0029 |
 | times | `jiff` 0.2 | 0028 |
 | local state | `dirs` 7.0, `tempfile` 3.27, `toml` 1.1, `toml_edit` 0.25, `serde` 1.0, `serde_json` 1.0 | 0036 |

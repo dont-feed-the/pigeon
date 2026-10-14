@@ -116,7 +116,7 @@ them all.
 - Force as `accept --override`, and the verbs `held`, `settings`, `leave`,
   `erase --cancel`, `invite --list | --cancel` (§10.1).
 - At most one notification per kind and day (§10.4).
-- Problem codes shown as `P-` and capitals (§10.6).
+- Problem codes shown as `P-` and capitals (§10.6) went to ADR 0068 (Proposed).
 - The clock-skew warning at 5 minutes (§10.7).
 
 ### H. Local state, observability, platforms ([11](11-local-state.md), [12](12-observability.md), [14](14-platforms-and-packaging.md))

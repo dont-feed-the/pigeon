@@ -20,7 +20,8 @@ pigeon-git = { path = "crates/pigeon-git" }
 pigeon-sys = { path = "crates/pigeon-sys" }
 dirs = "7.0"
 fluent-bundle = "0.16"
-fluent-langneg = "0.14"
+fluent-langneg = "0.13"
+fluent-syntax = "0.12"
 libc = "0.2"
 rustix = { version = "1.1", features = ["fs", "mm", "process", "stdio"] }
 serde = { version = "1.0", features = ["derive"] }

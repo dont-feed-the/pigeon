@@ -80,3 +80,4 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0065](0065-runs-of-the-core-are-checked-by-tlc.md) | Runs of pigeon-core are checked by TLC before the drivers exist | Proposed |
 | [0066](0066-the-helper-names-its-repository-and-the-filter-supplies-the-token.md) | The helper names its repository by path, and the serving filter supplies git-annex's token | Proposed |
 | [0067](0067-the-git-driver-checks-every-command-and-bounds-every-call.md) | The git driver checks every command against the allow-list and bounds every call with a deadline | Proposed |
+| [0068](0068-messages-are-listed-with-their-variables-and-checked-in-every-bundle.md) | Messages are listed with their variables and checked in every bundle; the language follows gettext's order | Proposed |

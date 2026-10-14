@@ -483,7 +483,7 @@ one repository and two folders.
 | crates ([14 §14.6](14-platforms-and-packaging.md)) | `pigeon-core`, `pigeon-proto`, `pigeon-i18n` (the English bundle), `pigeon-git`, `pigeon-sys`, `pigeond`, `pigeon`, `git-annex-p2p-iroh` | `pigeon-web`, `pigeon-telemetry`, the French bundle (ADR 0028) |
 | loops ([08 §8.1](08-custody-loops.md)) | capture, accept, install with its journal (ADR 0055), place, repair (started by a removed custodian), free and keep, settings check; the filter with its `CHECKPRESENT` probe (ADRs 0043, 0054) | scrub, purge |
 | commands ([10](10-interfaces.md)) | `create`, `invite --backup-machine`, `join --backup-machine`, `status`, `machines`, `history`, `restore`, `free`, `keep`, `remove-computer`, `recovery-sheet`, `recover`, `doctor`, `debug bundle` | the rest answer `not-in-this-build` |
-| content | regular files and folders, the executable bit, portable names (ADR 0044) | other file systems: `create` and `join` name the one they refuse |
+| content | regular files and folders, the executable bit, portable names (ADR 0044) | other file systems: `create` and `join` name the one they refuse (`file-system-not-in-this-build`, ADR 0068) |
 | network | iroh with direct addresses and mDNS | relays and discovery (ADR 0016) |
 | diagnostics | JSON logs (ADR 0022), trace logs (ADR 0008) | telemetry transport and dashboards (ADR 0025) |
 
