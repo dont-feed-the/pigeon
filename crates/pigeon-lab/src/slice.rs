@@ -296,7 +296,11 @@ pub fn s8() -> Scenario {
     let steps = vec![
         c1.fill(8),
         l.write(&big, body.clone()),
-        wait(c1.says("disk-full"), 180),
+        // backup-1 is full before the file exists: wait for both.
+        wait(
+            every(vec![c1.says("disk-full"), l.sees(&big, Kind::Published)]),
+            180,
+        ),
         hold(l.sees(&big, Kind::Published), 10),
         c1.unfill(),
         wait(l.sees(&big, Kind::Protected), 300),
@@ -456,10 +460,12 @@ pub fn s11() -> Scenario {
     let protected = every(files.iter().map(|f| l.sees(f, Kind::Protected)).collect());
     steps.extend([
         wait(protected.clone(), 180),
+        // Re-thinning follows protection: the steady state is reached
+        // once the loop has hard-linked the files to their objects.
+        wait(l.disk_within(1100), 120),
         l.measure("steady"),
         c1.measure("steady"),
         c2.measure("steady"),
-        expect(l.disk_within(1100)),
         l.write(&files[0], random(120, 4)),
         wait(protected, 180),
         l.measure("after an edit"),
@@ -478,46 +484,33 @@ pub fn s11() -> Scenario {
 
 /// The scenarios that do not pass yet against pigeond on both runners,
 /// with what their last runs there showed (models-full.yml, run
-/// 38592753952, at 5d9e740; 13 §13.12). `pigeon-lab run` reports each as
+/// 38602095008, at e1e3f88; 13 §13.12). `pigeon-lab run` reports each as
 /// blocked without running it, and runs it with `--with-blocked`, where a
 /// pass says to unmark it and a failure does not fail the run. An id `S9`
 /// stands for every S9 point. Each one but S5, S7 and S8, which need sized
 /// disks or a 1 GiB file, passes with `--isolation dirs` at bcece9a.
 pub const BLOCKED: &[(&str, &str)] = &[
     (
-        "S3",
-        "pigeon restore answered not-in-this-build (both runners)",
-    ),
-    (
-        "S5",
-        "the 1 GiB file is not protected 900 s after the laptop's restart \
-         (published on Linux, local on macOS): a restarted device listened on a new port",
-    ),
-    (
-        "S7",
-        "the laptop still says protected 120 s after backup-1's disk is \
-         destroyed (both runners)",
-    ),
-    (
         "S8",
-        "a full custodian says nothing: no disk-full in status or doctor within 180 s \
-         (both runners)",
+        "step 4 read the file local: the scenario waited for disk-full alone, \
+         which comes before the file is published (both runners)",
     ),
     ("S9", S9),
     (
         "S10",
-        "pigeon recovery-sheet answered not-in-this-build (both runners)",
+        "passes on Linux; on macOS the new laptop saw published, not protected, \
+         120 s after recovery: backup-2 had no address for backup-1 and never \
+         learned the roster commit that adds it",
     ),
     (
         "S11",
-        "the laptop's disk holds 2.07 × the content kept (34.7 MB for 16.8 MB) on \
-         both runners: each file and its annex object (13 §13.11 allows 1.1 ×)",
+        "passes on Linux; on macOS the laptop's disk held 34.6 MB for 16.8 MB \
+         kept: it was measured before re-thinning had run",
     ),
 ];
 
-const S9: &str = "a crash at a point of free or keep fell inside the request, which \
-     answered daemon-not-running (both runners); after a crash before capture's ref, \
-     the files were still published after 180 s";
+const S9: &str = "every point passes on Linux, and every point but free-after-begin \
+     on macOS, where that one failed in setup (hdiutil create)";
 
 /// Why the scenario `id` is blocked, if it is.
 pub fn blocked(id: &str) -> Option<&'static str> {
