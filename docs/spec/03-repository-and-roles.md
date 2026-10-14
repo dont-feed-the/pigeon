@@ -198,6 +198,16 @@ pigeon's own mistakes and is not a sandbox. **[no ADR: driver]**
 | `git init`, `config`, `remote`, `git annex init`, `describe` | `create` and `join` (§3.6) |
 | `git rev-parse`, `ls-files`, `ls-tree`, `show-ref`, `hash-object`, `mktree`, `git annex lookupkey`, `examinekey`, `contentlocation` | reading the index, trees and keys; writing objects without the working tree |
 
+**Before the subcommand** **[no ADR]**, the check accepts two `-c` settings
+and no other: `-c annex.thin=false`, so that capture never hard-links a file
+into the annex whatever the repository says ([07 §7.8](07-capture-and-install.md)),
+and `-c remote.<name>.annex-ignore=true`, so that one command leaves one remote
+alone. `git annex p2p` runs only as `--enable iroh` (the transport,
+[09 §9.2](09-network-and-joining.md)) and `--gen-addresses` (its token). A
+long-running process (`remotedaemon`) leads a process group of its own, which
+`pigeond` stops with it, since the P2P fetches it starts can hang past its end
+([16 §16.4](16-open-questions.md), *A P2P fetch that never ends*).
+
 **Never run:** `git annex sync`, `assist` and `assistant` (they commit and
 merge on their own, E9); `git annex move`, `drop --from`, `satisfy`,
 `--rebalance` run against a remote, `dropunused` (they drop from peers or

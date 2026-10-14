@@ -19,5 +19,6 @@ pub mod run;
 pub mod status;
 pub mod version;
 
+pub use env::GitEnv;
 pub use error::{Error, Result};
-pub use run::{Output, Repo};
+pub use run::{DEFAULT_TIMEOUT, Output, Repo};

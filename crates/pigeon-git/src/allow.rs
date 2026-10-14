@@ -61,6 +61,7 @@ const ANNEX: &[&str] = &[
     "lookupkey",
     "examinekey",
     "contentlocation",
+    "p2p",
 ];
 
 /// Options that select keys git-annex would choose, or reach other
@@ -72,8 +73,27 @@ fn has(argv: &[String], flag: &str) -> bool {
         .any(|a| a == flag || a.starts_with(&format!("{flag}=")))
 }
 
+/// Whether a leading `-c NAME=VALUE` may be given: `annex.thin=false`, with
+/// which capture copies a version into the annex (03 §3.4), and
+/// `remote.R.annex-ignore=true`, with which a verified drop counts only the
+/// custodians it asks (ADR 0046; 13 §13.12).
+fn allowed_config(kv: &str) -> bool {
+    kv == "annex.thin=false"
+        || kv
+            .strip_prefix("remote.")
+            .and_then(|r| r.strip_suffix(".annex-ignore=true"))
+            .is_some_and(|r| !r.is_empty() && !r.contains('='))
+}
+
 /// Checks the arguments after `git`. `Err` names the rule broken.
 pub fn check(argv: &[String]) -> Result<(), &'static str> {
+    let mut argv = argv;
+    while argv.first().is_some_and(|a| a == "-c") {
+        match argv.get(1) {
+            Some(kv) if allowed_config(kv) => argv = argv.get(2..).unwrap_or_default(),
+            _ => return Err("-c sets only annex.thin=false or remote.R.annex-ignore=true"),
+        }
+    }
     let Some(first) = argv.first() else {
         return Err("no subcommand");
     };
@@ -116,6 +136,12 @@ pub fn check(argv: &[String]) -> Result<(), &'static str> {
             Err("drop states --numcopies and --mincopies, or is a purge with --force")
         }
         "add" if !has(argv, "--no-check-gitignore") => Err("add ignores .gitignore"),
+        "p2p"
+            if argv.get(2..) != Some(&["--enable".to_owned(), "iroh".to_owned()][..])
+                && argv.get(2..) != Some(&["--gen-addresses".to_owned()][..]) =>
+        {
+            Err("p2p only enables iroh or generates its addresses")
+        }
         _ => Ok(()),
     }
 }
@@ -142,6 +168,10 @@ mod tests {
             "annex drop --key K --force",
             "annex whereis --batch-keys --json",
             "annex version --raw",
+            "-c annex.thin=false annex add --no-check-gitignore --json -- f",
+            "-c remote.c.annex-ignore=true annex drop --key K --numcopies 2 --mincopies 2",
+            "annex p2p --enable iroh",
+            "annex p2p --gen-addresses",
         ] {
             assert_eq!(check(&v(ok)), Ok(()), "{ok}");
         }
@@ -175,6 +205,13 @@ mod tests {
             "annex copy --key K",
             "annex copy --to c --key K --rebalance",
             "annex add file",
+            "-c core.sshCommand=x fetch c",
+            "-c annex.thin=true annex add --no-check-gitignore f",
+            "-c remote.c.annex-ignore=false annex get --key K",
+            "-c",
+            "annex p2p --link",
+            "annex p2p --enable tor",
+            "annex p2p --pair",
         ] {
             assert!(check(&v(bad)).is_err(), "{bad} must be refused");
         }
