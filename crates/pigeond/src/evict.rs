@@ -231,6 +231,17 @@ pub async fn free(g: &Group, me: &str, prefix: &str, t: &Tracer) -> Result<Freed
     Ok(done)
 }
 
+/// Frees again each folder freed on this computer, so that a file which
+/// became protected since is hidden and dropped (08 §8.5, step 5). The
+/// round runs it before capture, so a restart first resumes the transition.
+pub async fn free_targets(g: &Group, me: &str, t: &Tracer) {
+    for prefix in targets(g) {
+        if let Err(e) = free(g, me, &prefix, t).await {
+            tracing::warn!(group = %g.id, prefix = %prefix, error = %e, "free-failed");
+        }
+    }
+}
+
 /// Drops the keys of hidden paths under `prefix` that no visible path names.
 async fn drop_hidden(g: &Group, hidden: &BTreeSet<String>, prefix: &str) -> usize {
     let Some(main) = g.git.rev("refs/heads/main").await else {

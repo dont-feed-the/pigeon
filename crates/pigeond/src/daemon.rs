@@ -128,10 +128,11 @@ impl Daemon {
         crate::settings::check(g).await;
         g.ensure_remotedaemon().await;
         g.reload_roster().await;
-        if g.role == Role::Laptop
-            && let Err(e) = crate::capture::capture(g, &self.tracer).await
-        {
-            tracing::warn!(group = %g.id, error = %e, "capture-failed");
+        if g.role == Role::Laptop {
+            crate::evict::free_targets(g, &self.device, &self.tracer).await;
+            if let Err(e) = crate::capture::capture(g, &self.tracer).await {
+                tracing::warn!(group = %g.id, error = %e, "capture-failed");
+            }
         }
         crate::custody::accept(g, &self.device, &self.tracer).await;
         crate::custody::place(g, &self.device).await;

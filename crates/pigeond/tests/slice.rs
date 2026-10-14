@@ -3,7 +3,7 @@
 //! CLI with `--json`: a file is local after `create`, published once one
 //! backup machine joined, protected once the second did; `free` hides it,
 //! and `keep` gives back the same bytes. A second test stops a backup
-//! machine while a version is saved and starts it again, as S4 does.
+//! machine while a version is saved and freed, and starts it again (S4, S2).
 //!
 //! Needs git-annex on PATH, and `pigeon` and `git-annex-p2p-iroh` built next
 //! to `pigeond` (`cargo build -p pigeon -p git-annex-p2p-iroh`). Skipped
@@ -324,8 +324,8 @@ fn local_published_protected_then_free_and_keep() {
     }
 }
 
-/// S4 on one host: a backup machine stopped while a version is saved gets
-/// it once it starts again, at the address its peers recorded, without mDNS.
+/// S4 and S2 on one host: a backup machine stopped while a version is saved
+/// gets it once it starts again, and a folder freed meanwhile is freed then.
 #[test]
 fn a_backup_machine_back_from_a_stop_gets_the_new_version() {
     let _one = SERIAL
@@ -350,10 +350,34 @@ fn a_backup_machine_back_from_a_stop_gets_the_new_version() {
     join(&lap, &c2, &[&lap, &c1, &c2]);
     until(&lap, State::Protected, &[&lap, &c1, &c2]);
 
+    // S2: `free` leaves a version that is not protected in place, and the
+    // loops free it once it is.
     drop(c2);
-    std::fs::write(folder.join("b.txt"), b"second\n").unwrap();
+    let later = folder.join("later");
+    std::fs::create_dir_all(&later).unwrap();
+    std::fs::write(later.join("b.txt"), b"second\n").unwrap();
     let s1 = until(&lap, State::Published, &[&lap, &c1]);
-    assert!(s1.versions.iter().any(|v| v.path == "b.txt"), "{s1:?}");
+    assert!(
+        s1.versions.iter().any(|v| v.path == "later/b.txt"),
+        "{s1:?}"
+    );
+    let freed = pigeon(&lap, &["free", later.to_str().unwrap()]);
+    assert_eq!(
+        said(&freed, "free-result", "safe").as_deref(),
+        Some("0"),
+        "{freed:?}"
+    );
+    assert!(
+        later.join("b.txt").exists(),
+        "freed before it was protected"
+    );
     let c2 = start(&root, s, "c2");
-    until(&lap, State::Protected, &[&lap, &c1, &c2]);
+    let all = [&lap, &c1, &c2];
+    until(&lap, State::Protected, &all);
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while later.join("b.txt").exists() {
+        assert!(Instant::now() < deadline, "never freed\n{}", logs(&all));
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    assert_eq!(status(&lap).state, State::Protected);
 }
