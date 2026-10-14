@@ -32,6 +32,7 @@ guarantees (P1–P6) is in the [proposal](docs/design/proposal/proposal.pdf) and
 |---|---|
 | [`docs/spec/`](docs/spec/) | the specification of v2, one mission per file, built from the ADRs |
 | [`docs/adr/`](docs/adr/) | architecture decision records, one per choice, with an index |
+| [`docs/roadmap.md`](docs/roadmap.md) | the milestones to v1.0 and when each counts as done |
 | [`docs/design/`](docs/design/) | proposal, UX study and mockups, review of the drafts, git-annex study, related work, superseded spec drafts |
 | [`models/tla/`](models/tla/) | TLA+ models of custody and their expected TLC verdicts |
 | [`lab/git-annex/`](lab/git-annex/) | shell experiments E1–E10 and E15 on git-annex behaviour |
