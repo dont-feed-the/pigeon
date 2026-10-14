@@ -128,6 +128,14 @@ Consequences, checked by `Authority.tla` (`AuthorisedContent`,
 - **Locality:** a verdict depends only on *c* and its ancestors, so
   `accepted(S ∪ T) = accepted(S) ∪ accepted(T)` for ancestor-closed S, T; a
   roster change applies to the *children* of its commit.
+- **In code:** `pigeon-core::sig` signs and verifies (`tests/sig.rs`) and
+  `authority::judge` gives the verdict for one accepted parent
+  (`tests/authority.rs`, against an oracle of §4.3's tables); merges and
+  proposals come with the catalogue merge. `pigeond` signs every commit it
+  writes with the device key, and accept takes a peer's commits oldest
+  first up to the first it refuses, which `doctor` names with its problem
+  code: `commit-unsigned`, `commit-forged`, `commit-unknown-signer`,
+  `commit-not-allowed` or `commit-malformed` ([10 §10.6](10-interfaces.md)).
 
 ## 4.5 Proposals
 

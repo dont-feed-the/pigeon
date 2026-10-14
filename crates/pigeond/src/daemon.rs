@@ -294,6 +294,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     crate::logs::init(dirs.logs());
     let config = config::load(&dirs.config_file()).map_err(|e| e.to_string())?;
     let secret = crate::util::device_key(&dirs.device_key()).map_err(|e| e.to_string())?;
+    crate::git::set_signer(secret);
     let bind: SocketAddr = config
         .network
         .bind

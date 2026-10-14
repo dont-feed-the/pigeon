@@ -49,6 +49,9 @@ pub struct Known {
     pub lost: BTreeSet<String>,
     /// What admission deferred in the last round, on a custodian (08 §8.9).
     pub shortfall: Option<crate::admission::Shortfall>,
+    /// The first commit of each peer's `main` that accept refused, and its
+    /// problem code (04 §4.4).
+    pub refused: BTreeMap<String, (String, &'static str)>,
 }
 
 /// How long remotedaemon's fetch of a notice may last before it is

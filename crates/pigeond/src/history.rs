@@ -188,6 +188,20 @@ pub async fn doctor(d: &Daemon, _details: bool) -> Vec<Response> {
             out.push(problem("no-capacity", &args, None));
         }
     }
+    for g in d.groups() {
+        let refused = g.lock().refused.clone();
+        let names = g.roster().map(|doc| doc.roster.devices).unwrap_or_default();
+        for (peer, (commit, code)) in refused {
+            let name = names
+                .get(&DeviceId(peer.clone()))
+                .map_or(peer.clone(), |x| x.name.clone());
+            let args = [
+                ("machine", text(&name)),
+                ("commit", text(commit.get(..12).unwrap_or(&commit))),
+            ];
+            out.push(problem(code, &args, Some(format!("{peer} {commit}"))));
+        }
+    }
     match bad {
         Some(p) => out.push(p),
         None => out.push(Response::Said {

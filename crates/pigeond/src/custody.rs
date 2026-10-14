@@ -8,7 +8,8 @@
 //! both in queue order; with K = 2 and two custodians that is
 //! `sizebalanced`'s choice too (13 §13.12). Accept only
 //! fast-forwards: with one laptop, nothing else commits, and a divergence
-//! is logged and left (slice only).
+//! is logged and left (slice only). A custodian fast-forwards only as far
+//! as the authority rule accepts (`verify`, 04 §4.4).
 
 use std::collections::BTreeSet;
 use std::time::Duration;
@@ -130,14 +131,17 @@ pub async fn accept(g: &Group, me: &str, tracer: &Tracer) -> bool {
             tracing::info!(group = %g.id, peer = %id, "accept-install-not-in-this-build");
             continue;
         }
+        let Some(target) = judged(g, &id, ours.as_deref(), &theirs).await else {
+            continue;
+        };
         match g
             .git
-            .update_ref("refs/heads/main", &theirs, ours.as_deref())
+            .update_ref("refs/heads/main", &target, ours.as_deref())
             .await
         {
             Ok(()) => {
-                tracer.event(Act::Merge, &[("commit", &theirs)]);
-                tracing::info!(group = %g.id, peer = %id, commit = %theirs, "accepted");
+                tracer.event(Act::Merge, &[("commit", &target)]);
+                tracing::info!(group = %g.id, peer = %id, commit = %target, "accepted");
                 moved = true;
             }
             Err(e) => tracing::warn!(group = %g.id, error = %e, "accept-ref-failed"),
@@ -145,6 +149,33 @@ pub async fn accept(g: &Group, me: &str, tracer: &Tracer) -> bool {
     }
     g.reload_roster().await;
     moved
+}
+
+/// The last commit of `theirs` that the authority rule accepts after
+/// `ours` (04 §4.4); the first it refuses is kept, by peer, for `doctor`.
+async fn judged(g: &Group, peer: &str, ours: Option<&str>, theirs: &str) -> Option<String> {
+    let judged = match crate::verify::judge(&g.git, ours, theirs).await {
+        Ok(j) => j,
+        Err(e) => {
+            tracing::warn!(group = %g.id, peer = %peer, error = %e, "accept-judge-failed");
+            return None;
+        }
+    };
+    match &judged.stopped {
+        Some((commit, verdict)) => {
+            let code = crate::verify::code(verdict);
+            let entry = (commit.clone(), code);
+            let known = g.lock().refused.insert(peer.to_owned(), entry.clone());
+            if known.as_ref() != Some(&entry) {
+                tracing::warn!(group = %g.id, peer = %peer, commit = %commit, code,
+                    verdict = ?verdict, "accept-refused");
+            }
+        }
+        None => {
+            g.lock().refused.remove(peer);
+        }
+    }
+    judged.accepted
 }
 
 /// The annex UUIDs git-annex knows to hold `key`.

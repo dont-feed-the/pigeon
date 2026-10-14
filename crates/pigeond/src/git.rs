@@ -3,10 +3,15 @@
 //!
 //! `pigeond` commits with `commit-tree` and moves a ref with `update-ref`
 //! and its expected old value, so that no ref moves under a concurrent
-//! writer. Commits are not signed yet (13 §13.12, first build).
+//! writer. Each commit is signed with the device key ([`set_signer`]) as
+//! `git commit -S` with `gpg.format=ssh` would sign it (ADR 0007), then
+//! written back with `hash-object -t commit`.
 
 use std::collections::BTreeMap;
+use std::sync::OnceLock;
 use std::time::Duration;
+
+use pigeon_core::authority::{Entry, Tree};
 
 use pigeon_git::{GitEnv, Repo};
 
@@ -25,6 +30,15 @@ pub struct TreeFile {
     pub oid: String,
     /// Its path.
     pub path: String,
+}
+
+/// The device key every commit is signed with, once the daemon set it.
+static SIGNER: OnceLock<[u8; 32]> = OnceLock::new();
+
+/// Sets the device key commits are signed with (ADR 0007); a second call
+/// changes nothing.
+pub fn set_signer(secret: [u8; 32]) {
+    let _ = SIGNER.set(secret);
 }
 
 /// A repository, as the loops call git in it.
@@ -141,7 +155,65 @@ impl Git {
         }
         args.push("-m");
         args.push(message);
-        Ok(self.run(&args).await?.trim().to_owned())
+        let commit = self.run(&args).await?.trim().to_owned();
+        match SIGNER.get() {
+            Some(secret) => self.sign(&commit, secret).await,
+            None => Ok(commit),
+        }
+    }
+
+    /// The commit `commit` signed with `secret`, written to the object
+    /// store.
+    pub async fn sign(&self, commit: &str, secret: &[u8; 32]) -> Result<String, Error> {
+        let raw = self.object(commit).await?;
+        let signed = pigeon_core::sig::sign(&raw, secret).map_err(|e| Error::Parse {
+            argv: vec!["cat-file".into(), commit.to_owned()],
+            detail: format!("signing: {e:?}"),
+        })?;
+        let args = ["hash-object", "-t", "commit", "-w", "--stdin"];
+        Ok(self.run_in(&args, &signed).await?.trim().to_owned())
+    }
+
+    /// The bytes of the object `name`.
+    pub async fn object(&self, name: &str) -> Result<Vec<u8>, Error> {
+        let found = self.objects(&[name.to_owned()]).await?;
+        found
+            .into_iter()
+            .next()
+            .flatten()
+            .map(|(_, data)| data)
+            .ok_or_else(|| Error::Parse {
+                argv: vec!["cat-file".into(), "--batch".into()],
+                detail: format!("{name} is missing"),
+            })
+    }
+
+    /// Every entry of `commit`'s tree, files and gitlinks, by path.
+    pub async fn tree(&self, commit: &str) -> Result<Tree, Error> {
+        let out = self
+            .repo
+            .run(
+                &["ls-tree", "-r", "-z", "--full-tree", commit],
+                None,
+                pigeon_git::DEFAULT_TIMEOUT,
+            )
+            .await?;
+        let mut tree = Tree::new();
+        for rec in out.stdout.split(|b| *b == 0) {
+            let rec = String::from_utf8_lossy(rec);
+            let Some((meta, path)) = rec.split_once('\t') else {
+                continue;
+            };
+            if let [mode, kind, oid] = meta.split(' ').collect::<Vec<_>>().as_slice() {
+                let entry = Entry {
+                    mode: (*mode).to_owned(),
+                    kind: (*kind).to_owned(),
+                    oid: (*oid).to_owned(),
+                };
+                tree.insert(path.to_owned(), entry);
+            }
+        }
+        Ok(tree)
     }
 
     /// Objects by name, through one `cat-file --batch`: `(kind, data)`, or

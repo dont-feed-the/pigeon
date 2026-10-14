@@ -208,14 +208,17 @@ from this specification as follows, each to close before S1–S11 run
 
 - `restore --at TIME` answers `not-in-this-build`; `recover` joins the new
   machine on `pigeon/join/1` through a backup machine of the sheet, dialled
-  with the sheet's key, which writes the roster commit once it has checked
-  that the recovery device may add the machine (`may_sign`);
-- roster and capture commits are not signed ([04 §4.4](04-roster-and-authority.md)),
-  and accept only fast-forwards `main`, on custodians: a laptop installs no
-  incoming version, so the group has one laptop and no merge;
-- place copies every key to every custodian, without the queue order or
-  admission ([08 §8.9](08-custody-loops.md)); repair marks a removed
-  device's UUID `dead`, after which place copies again;
+  with the sheet's key, which writes and signs the roster commit once it
+  has checked that the recovery device may add the machine (`may_sign`):
+  the others accept it while the backup machine's person may add it (an
+  admin in the slice), where ADR 0047 has the sheet key sign;
+- every commit is signed with the device key, and a custodian fast-forwards
+  `main` only as far as the authority rule accepts each commit against its
+  one parent ([04 §4.4](04-roster-and-authority.md)); a merge waits: a
+  laptop installs no incoming version, so the group has one laptop;
+- place follows the queue order with admission
+  ([08 §8.9](08-custody-loops.md)) but reads no introduction time; repair
+  marks a removed device's UUID `dead`, after which place copies again;
 - `heard` times and the trace clock are in memory, not in `clock.json`
   ([11 §11.3](11-local-state.md)); `history` takes older versions' states
   from their copy counts;
@@ -265,7 +268,7 @@ Laws (`crates/pigeon-lab/tests/laws.rs`): steps form a monoid; validation
 and the trace projection are compositional; a prefix runs the same whatever
 follows; settling the model is idempotent; a crash at any named point, then
 a restart, changes no outcome (1000 model schedules per push). The workflow
-`slice.yml` runs them, then S1–S12 and 50 random S9 schedules against the
+`slice.yml` runs them, then S1–S13 and 50 random S9 schedules against the
 real binaries on both runners; `models-full.yml` runs 1000. A scenario that
 does not pass yet against the first build is listed in `slice::BLOCKED`
 with what its last runs showed; per push it is reported as blocked, and
@@ -292,6 +295,7 @@ CI yet, and 50 at 50–90 s each do not fit `slice.yml`'s 90-minute job.
 | S10 | a fresh laptop recovers from the custodians with the recovery sheet (ADR 0047); the keys, metadata and authority it needed are listed |
 | S11 | steady and peak disk use per device: folders, `.git`, annex objects, `.git/annex/tmp`, pending history ([07 §7.8](07-capture-and-install.md)), pigeon's state, temporary files |
 | S12 | a nearly full custodian takes what fits in its room above the reserve, says `no-capacity` without being full, and takes the rest once room returns ([08 §8.9](08-custody-loops.md), issue #13) |
+| S13 | a commit signed outside the group, put on the laptop's `main` beside pigeond, is refused by both custodians with `commit-unknown-signer`, with every commit after it; what came before stays protected ([04 §4.4](04-roster-and-authority.md), ADR 0007) |
 
 S7's repair order and S10's list of what recovery needed are read from the
 run's trace and report, not yet asserted by a condition.
@@ -324,6 +328,8 @@ the same way: `pigeond/tests/codecs.rs` and `net_laws.rs`,
 |---|---|---|---|
 | more presence observations never lower a state; a second entry for one custodian changes nothing; custodian order is irrelevant; protected exactly when K distinct custodians count (ADRs 0002, 0046); a new holder never lowers a state | `state` | `tests/state.rs` | — |
 | the join is a semilattice with *Safe* as identity and *Needs you* absorbing; the headline of a union is the join; adding an item never lowers it; a version only this computer holds is *Not safe yet* after the grace period, even unreachable | `headline` | `tests/headline.rs` | — |
+| a signed commit verifies to its signer; changing any byte of it never does; signing then cutting the signature off gives the commit back | `sig` | `tests/sig.rs` | — |
+| a commit signed by a device of R(p) that changes only what its person may is accepted; one unsigned, forged or signed outside R(p) is refused; a path's change is allowed exactly as §4.3's tables say; a roster change is accepted iff `may_sign` allows it and it applies whole; `diff` is a right inverse of `apply` and says every change of one edit | `authority` | `tests/authority.rs` | `Authority` (`AuthorisedContent`, `DecisionsByDeciders`) for one parent |
 | the queue order is total; a higher class goes first; arrival order is irrelevant; a key on fewer custodians never waits behind one on more | `queue` | `tests/queue.rs` | — |
 | admitted bytes never exceed the room; an endangered key is never deferred for one that is not; the plan does not depend on arrival and keeps queue order, each item once; a deferred item says the bytes it misses, and that much more room admits everything; the reserve is a floor or a share; the parts of the need sum to K times each distinct key; capacity counts at most one copy per custodian | `capacity` | `tests/capacity.rs`, `tests/admit_trace.rs` | `Admission` (`ReserveKept`, `EndangeredFirst`) |
 | recovery ends every entry and a second does nothing; a crash during recovery ends as one recovery; a person's save is never lost; a deletion after install stays; without a person, the path ends old or new and the index agrees (INV-Journal); pigeon never renames over a name | `journal` | `tests/journal.rs` | `CaptureInstall` (`NoLoss`, `Journal`, `NoOverwrite`, `DeletionKept`) |

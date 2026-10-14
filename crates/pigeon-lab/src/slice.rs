@@ -1,4 +1,4 @@
-//! The scenarios of the safety slice, S1–S12 (13 §13.12), as EDSL programs.
+//! The scenarios of the safety slice, S1–S13 (13 §13.12), as EDSL programs.
 //!
 //! Every scenario has one laptop and two custodians, K = 2, and the folder
 //! `docs`; some add a spare device. Deadlines are generous: they bound a
@@ -528,6 +528,51 @@ pub fn s12() -> Scenario {
     )
 }
 
+/// S13: a commit signed outside the group is refused (04 §4.4, ADR 0007):
+/// the custodians keep `main` before it and say why, what came before
+/// stays protected, and a save made after it is not protected.
+pub fn s13() -> Scenario {
+    let Slice {
+        world,
+        l,
+        c1,
+        c2,
+        docs,
+    } = slice();
+    let (a, forged, b) = (
+        docs.file("a.txt"),
+        docs.file("forged.txt"),
+        docs.file("b.txt"),
+    );
+    let steps = vec![
+        l.write_text(&a, "signed words"),
+        wait(l.sees(&a, Kind::Protected), 120),
+        l.forge(&forged),
+        wait(
+            every(vec![
+                c1.says("commit-unknown-signer"),
+                c2.says("commit-unknown-signer"),
+            ]),
+            120,
+        ),
+        l.write_text(&b, "after the forgery"),
+        hold(
+            every(vec![
+                l.sees(&a, Kind::Protected),
+                not(l.sees(&b, Kind::Protected)),
+            ]),
+            20,
+        ),
+    ];
+    scenario(
+        "S13",
+        "a commit signed outside the group is refused, with what follows it",
+        world,
+        steps,
+        vec![],
+    )
+}
+
 /// The scenarios that do not pass yet against pigeond on both runners,
 /// with why. S1-S11 and every S9 point passed on both in models-full.yml
 /// run 38620593663, at 767dc0b (13 §13.12). `pigeon-lab run` reports a
@@ -553,6 +598,6 @@ pub fn blocked(id: &str) -> Option<&'static str> {
 pub fn all() -> Vec<Scenario> {
     let mut out = vec![s1(), s2(), s3(), s4(), s5(), s6(), s7(), s8()];
     out.extend(CrashPoint::ALL.iter().map(|p| s9_point(*p)));
-    out.extend([s10(), s11(), s12()]);
+    out.extend([s10(), s11(), s12(), s13()]);
     out
 }

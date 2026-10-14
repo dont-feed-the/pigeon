@@ -103,6 +103,9 @@ pub struct LaptopM {
     pub ballast: u64,
     /// It printed a recovery sheet.
     pub sheet: bool,
+    /// Its `main` holds a commit signed outside the group, which the
+    /// custodians refuse with all that follows it.
+    pub forged: bool,
     /// Problem codes it reports.
     pub says: BTreeSet<String>,
 }
@@ -372,8 +375,10 @@ impl Model {
 
     fn laptop_op(&mut self, on: Laptop, op: &LaptopOp) -> Outcome {
         let d = Device::Laptop(on);
-        if !matches!(op, LaptopOp::Write { .. } | LaptopOp::Symlink { .. })
-            && !matches!(op, LaptopOp::Recover { .. })
+        if !matches!(
+            op,
+            LaptopOp::Write { .. } | LaptopOp::Symlink { .. } | LaptopOp::Forge { .. }
+        ) && !matches!(op, LaptopOp::Recover { .. })
             && !self.laptops[on.0 as usize].daemon.running
         {
             return Outcome::Refused("daemon-not-running".into());
@@ -436,6 +441,7 @@ impl Model {
                 self.log("Roster", "Commit", d);
             }
             LaptopOp::RecoverySheet => self.laptop(on).sheet = true,
+            LaptopOp::Forge { .. } => self.laptop(on).forged = true,
             LaptopOp::Recover { .. } => {
                 let lm = self.laptop(on);
                 lm.present = true;

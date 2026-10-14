@@ -10,6 +10,7 @@
 //! merged for the projection check and for TLC.
 
 pub mod cli;
+mod forge;
 pub mod host;
 pub mod observe;
 pub mod trace;
@@ -322,6 +323,11 @@ impl Exec {
                     .entry(file.clone())
                     .or_default()
                     .push(content.clone());
+                Outcome::Done
+            }
+            LaptopOp::Forge { file } => {
+                let dev = &self.devs[on.0 as usize];
+                forge::forge(&dev.space, &dev.env, &dev.tree, &w.path(file))?;
                 Outcome::Done
             }
             LaptopOp::Symlink { file, target } => {

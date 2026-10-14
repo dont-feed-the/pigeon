@@ -134,6 +134,11 @@ impl Laptop {
     pub fn write_text(self, file: &File, text: &str) -> Step {
         self.write(file, Content::Text(text.to_owned()))
     }
+    /// A commit adding `file`, signed outside the group, lands on its
+    /// `main` beside pigeond.
+    pub fn forge(self, file: &File) -> Step {
+        self.does(LaptopOp::Forge { file: file.clone() })
+    }
     /// The person makes a symbolic link at `file`.
     pub fn symlink(self, file: &File, target: &str) -> Step {
         self.does(LaptopOp::Symlink {
@@ -401,6 +406,7 @@ pub fn check_step(w: &World, p: &mut Presence, s: &Step) -> Result<(), String> {
             match op {
                 LaptopOp::Write { file, .. }
                 | LaptopOp::Symlink { file, .. }
+                | LaptopOp::Forge { file }
                 | LaptopOp::Restore { file, .. } => check_file(w, file),
                 LaptopOp::Free { folder } | LaptopOp::Keep { folder } => {
                     check_file(w, &folder.file("x"))
@@ -541,6 +547,7 @@ fn labels_of(s: &Step) -> Vec<Label> {
                 | LaptopOp::Restore { .. }
                 | LaptopOp::Recover { .. }
                 | LaptopOp::Symlink { .. }
+                | LaptopOp::Forge { .. }
                 | LaptopOp::RecoverySheet => Vec::new(),
             }
         }
@@ -681,6 +688,12 @@ pub fn step_text(w: &World, s: &Step) -> String {
                     format!("writes {} = {}", w.path(file), content_text(content))
                 }
                 LaptopOp::Symlink { file, target } => format!("links {} → {target}", w.path(file)),
+                LaptopOp::Forge { file } => {
+                    format!(
+                        "gets a commit adding {}, signed outside the group",
+                        w.path(file)
+                    )
+                }
                 LaptopOp::Free { folder } => format!("frees {}", w.folder_name(*folder)),
                 LaptopOp::Keep { folder } => format!("keeps {}", w.folder_name(*folder)),
                 LaptopOp::Restore { file, version } => {

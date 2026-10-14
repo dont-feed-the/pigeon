@@ -22,6 +22,13 @@ pub enum LaptopOp {
         /// What it holds after.
         content: Content,
     },
+    /// Someone outside the group puts a commit on this laptop's `main`: it
+    /// adds `file`, holding `forged`, and is signed by a key outside the
+    /// roster. No request: git writes it beside pigeond (04 §4.4).
+    Forge {
+        /// The file it adds.
+        file: File,
+    },
     /// The person makes a symbolic link, which pigeon does not share.
     Symlink {
         /// The link.

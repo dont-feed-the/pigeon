@@ -154,8 +154,14 @@ impl Model {
     fn place(&mut self) {
         let mut known: BTreeMap<File, usize> = BTreeMap::new();
         let mut sources: BTreeMap<Key, u64> = BTreeMap::new();
+        let mut forged = false;
         for (i, lm) in self.laptops.iter().enumerate() {
-            if self.up(Laptop(i as u8)) {
+            if self.up(Laptop(i as u8)) && lm.forged {
+                // Accept stops at the forged commit (04 §4.4): no later
+                // history of this laptop reaches the custodians.
+                forged = true;
+                sources.extend(lm.content.iter().map(|(k, n)| (k.clone(), *n)));
+            } else if self.up(Laptop(i as u8)) {
                 for (f, v) in &lm.history {
                     let n = known.entry(f.clone()).or_default();
                     *n = (*n).max(v.len());
@@ -175,6 +181,9 @@ impl Model {
         for c in &mut self.custodians {
             if !(c.present && c.daemon.running && !c.lost) {
                 continue;
+            }
+            if forged {
+                c.says.insert("commit-unknown-signer".into());
             }
             for (f, n) in &known {
                 let m = c.known.entry(f.clone()).or_default();
