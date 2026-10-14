@@ -2195,6 +2195,7 @@ dependencies = [
 name = "pigeon-git"
 version = "2.0.0-alpha.0"
 dependencies = [
+ "rustix",
  "serde",
  "serde_json",
  "tempfile",

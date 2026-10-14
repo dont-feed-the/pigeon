@@ -1,5 +1,10 @@
 //! One-shot git and git-annex calls with a deadline. A call past its deadline
 //! is killed; a failed call keeps its command, exit status and stderr tail.
+//!
+//! The kill is a `TERM` first, which git passes on to the git-annex it runs
+//! (`clean_on_exit` in git's `run-command.c`), then a `KILL` after a grace
+//! period: a `KILL` alone ends git and orphans git-annex, which then keeps
+//! its transfer locks (S5).
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -13,6 +18,9 @@ use crate::error::{Error, Result, tail};
 
 /// The deadline of a one-shot call unless the caller gives one.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// How long a call past its deadline has to end after `TERM`.
+const GRACE: Duration = Duration::from_secs(10);
 
 /// A repository pigeon drives: its directory and the children's environment.
 #[derive(Clone, Debug)]
@@ -119,6 +127,10 @@ impl Repo {
             source,
         })?;
         let stdin = child.stdin.take();
+        let pid = child
+            .id()
+            .and_then(|p| i32::try_from(p).ok())
+            .and_then(rustix::process::Pid::from_raw);
         let work = async {
             if let (Some(mut pipe), Some(bytes)) = (stdin, input) {
                 pipe.write_all(bytes).await?;
@@ -126,8 +138,14 @@ impl Repo {
             }
             child.wait_with_output().await
         };
-        let out = match tokio::time::timeout(timeout, work).await {
+        tokio::pin!(work);
+        let out = match tokio::time::timeout(timeout, &mut work).await {
             Err(_) => {
+                // Not yet waited for, so the pid is still the child's.
+                if let Some(pid) = pid {
+                    let _ = rustix::process::kill_process(pid, rustix::process::Signal::TERM);
+                }
+                let _ = tokio::time::timeout(GRACE, &mut work).await;
                 return Err(Error::Timeout {
                     argv,
                     after: timeout,
