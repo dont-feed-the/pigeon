@@ -497,8 +497,8 @@ Windows. A deferred command answers `not-in-this-build`, and the slice holds
 no partial code for it. The deferrals concern the order of work only: v1
 still meets every accepted ADR. **[no ADR: milestone]**
 
-**Setup** (`lab/slice/`). The lab build (`--features lab`) adds two seams to
-`pigeon-sys`, and nothing else:
+**Setup** (`crates/pigeon-lab`). The lab build (`--features lab`) adds three
+seams to `pigeon-sys`, and nothing else:
 
 - fingerprints read from a file named by `PIGEON_LAB_FINGERPRINTS`
   (`{"storage": [...], "host": "...", "virtual": ""}`, `null` for unknown),
@@ -506,27 +506,52 @@ still meets every accepted ADR. **[no ADR: milestone]**
   its host (`IOPlatformUUID`) and no storage;
 - named crash points (`PIGEON_LAB_CRASH=point:n`, checked at start): the n-th
   crossing sends `SIGKILL` to the process itself, so no destructor runs and
-  no buffer is flushed, as with `kill -9`. A release build ignores both
-  variables.
+  no buffer is flushed, as with `kill -9`;
+- a root for a backup machine's system directories
+  (`PIGEON_LAB_SERVICE_ROOT`), so that custodians run without mount
+  namespaces on the macOS runners and on a developer's machine.
+
+A release build ignores the three variables.
 
 It says so in `doctor`, and its status reports carry `lab = true`, which a
 release build never counts. On one Linux host, each custodian runs in its own
 mount namespace on its own loop-mounted ext4 image, connected over
 127.0.0.1, with direct addresses only. On GitHub's hosted runners the scenarios run on `ubuntu-24.04`
-(this setup) and on `macos-latest`, where the laptop runs on APFS and its
-custodians run as local processes (lab only). These two runners replace a
+(this setup, with the runner's `sudo`) and on `macos-latest`, where each
+device's disk is a sparse APFS image attached with `hdiutil` and custodians
+use the service-root seam (lab only: macOS is no backup machine, ADR 0032). These two runners replace a
 run on real hardware (Guillaume, chat, 14 October 2026). Real fingerprints
 reaching *protected* are then shown only by E22, and network faults beyond
 loopback (NAT, relays, Wi-Fi drops) by no scenario; the ledger marks what
 rests on them *conditional*.
 
-**Scenarios.** Each is an asserting script. Each validates its trace log
-against the models covering the steps it logs (§13.3), and records disk use.
+**Scenarios.** Each is a program of pigeon-lab's typed EDSL
+(`crates/pigeon-lab/src/slice.rs`), not a script: a world of typed device
+handles (a custodian has no `free`), steps, conditions with deadlines and
+expected outcomes, as data that prints, round-trips through JSON and is
+generated and shrunk by hegel. Two interpreters fold the same steps:
+
+- the **model**, over `pigeon-core` (states, headline, the install journal
+  and its recovery), in `cargo test`: every scenario must pass there, so its
+  expectations are what the specification predicts;
+- the **executor**, with the lab build of `pigeond` and `pigeon --json` per
+  device, supervised as systemd or launchd would; it records disk use, and
+  merges the devices' trace logs, which must contain the scenario's
+  projection in order and which `scripts/check-lab-traces` hands to TLC for
+  every specification with a `*Trace.tla` (the others are listed as not
+  checked yet).
+
+Laws (`crates/pigeon-lab/tests/laws.rs`): steps form a monoid; validation
+and the trace projection are compositional; a prefix runs the same whatever
+follows; settling the model is idempotent; a crash at any named point, then
+a restart, changes no outcome (1000 model schedules per push). The workflow
+`slice.yml` runs them, then S1–S11 and 50 random S9 schedules against the
+real binaries on both runners; `models-full.yml` runs 1000.
 
 | Scenario | Asserts |
 |---|---|
 | S1 | *local* → *published* → *protected*, each step from a recorded observation (ADR 0046); a symbolic link listed as not shared |
-| S2 | `free` refuses while a version is not protected, then frees without a pointer (ADR 0039) |
+| S2 | `free` leaves a version that is not protected in place, then frees it without a pointer (ADR 0039) |
 | S3 | `keep` and `restore` give back the same bytes (SHA-256) |
 | S4 | an offline custodian: *published* only; *protected* without action when it returns |
 | S5 | a 1 GiB transfer killed on either side resumes; no partial object counts |
@@ -536,6 +561,9 @@ against the models covering the steps it logs (§13.3), and records disk use.
 | S9 | `pigeond` crashed at each named point of capture, install, place and free: nothing lost or duplicated; 50 random schedules per push, 1000 in `models-full` |
 | S10 | a fresh laptop recovers from the custodians with the recovery sheet (ADR 0047); the keys, metadata and authority it needed are listed |
 | S11 | steady and peak disk use per device: folders, `.git`, annex objects, `.git/annex/tmp`, pending history (ADR 0041), pigeon's state, temporary files |
+
+S7's repair order and S10's list of what recovery needed are read from the
+run's trace and report, not yet asserted by a condition.
 
 **Laws first.** The parts of `pigeon-core` that the slice uses have their
 hegel-rust laws before their drivers: states and headline, domain counting,

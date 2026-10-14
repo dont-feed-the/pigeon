@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""Check the merged trace logs of the slice's scenarios against TLA+ (ADR 0008, 13 §13.12).
+
+`pigeon-lab run` writes OUT/<scenario>/trace.ndjson, every device's events in
+Lamport-clock order. For each specification of a trace that has a trace
+specification (SPECS), its events become a TLA+ module through
+scripts/trace-to-tla and TLC must accept them. A specification without one
+is listed as not checked yet, never silently passed.
+Usage: scripts/check-lab-traces [--java JAVA] OUT
+"""
+
+import argparse
+import importlib.machinery
+import importlib.util
+import json
+import os
+import shutil
+import sys
+import tempfile
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+ROOT = Path(__file__).resolve().parent.parent
+MODELS = ROOT / "models" / "tla"
+# spec of the events: trace specification, its log module and name, config.
+SPECS = {"Roster": ("RosterTrace", ("RosterCodeLog", "CodeLog"), "RosterTrace_good")}
+
+
+def load(name):
+    loader = importlib.machinery.SourceFileLoader(name.replace("-", "_"), str(ROOT / "scripts" / name))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("out")
+    parser.add_argument("--java", default=os.environ.get("JAVA", "java"))
+    args = parser.parse_args()
+    tla, tlc = load("trace-to-tla"), load("run-tlc")
+    jar = tlc.tlc_jar()
+    failures, unchecked = 0, set()
+    with tempfile.TemporaryDirectory() as tmp:
+        work = Path(tmp) / "models"
+        shutil.copytree(MODELS, work)
+        tlc.MODELS = work
+        for log in sorted(Path(args.out).glob("*/trace.ndjson")):
+            by_spec = {}
+            for line in log.read_text().splitlines():
+                by_spec.setdefault(json.loads(line)["spec"], []).append(line)
+            for spec, lines in sorted(by_spec.items()):
+                if spec not in SPECS:
+                    unchecked.add(spec)
+                    continue
+                trace_spec, (module, name), cfg = SPECS[spec]
+                try:
+                    (work / f"{module}.tla").write_text(tla.convert(lines, module, name))
+                except tla.Refused as error:
+                    print(f"FAIL {log}: {spec}: {error}", flush=True)
+                    failures += 1
+                    continue
+                got, output = tlc.run(jar, cfg, trace_spec, args.java, "1", None)
+                ok = got.startswith("trace:accepted")
+                print(f"{'ok' if ok else 'FAIL':4} {log.parent.name} {spec}: {len(lines)} events: {got}", flush=True)
+                if not ok:
+                    failures += 1
+                    print(output[-3000:], file=sys.stderr)
+    for spec in sorted(unchecked):
+        print(f"not checked yet: {spec} has no trace specification in models/tla", flush=True)
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

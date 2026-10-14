@@ -5,8 +5,8 @@
 //!
 //! Without the `lab` feature all are inert: [`crash_point`] does nothing and
 //! [`fingerprints_file`] and [`service_root`] are `None`, so a release build
-//! behaves as if this module did not exist. [`LAB`] says which build this is, for `doctor` and
-//! for the `lab = true` mark of status reports.
+//! behaves as if this module did not exist. [`LAB`] says which build this
+//! is, for `doctor` and for the `lab = true` mark of status reports.
 
 use std::path::PathBuf;
 

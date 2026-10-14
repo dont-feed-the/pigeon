@@ -736,6 +736,7 @@ impl Interpreter for Exec {
                 (s("XDG_RUNTIME_DIR"), root.join("run").display().to_string()),
                 (s("PIGEON_LAB_FINGERPRINTS"), fp.display().to_string()),
                 (s("PIGEON_TRACE"), s("1")),
+                (s("PIGEON_NAME"), name.clone()),
                 (s("RUST_LOG"), s("info")),
             ];
             if custodian && self.cfg.isolation.service_seam() {

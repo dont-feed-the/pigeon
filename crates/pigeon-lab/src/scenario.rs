@@ -220,6 +220,16 @@ impl Laptop {
     }
 }
 
+/// A custodian has no laptop operations: asking one to free a folder does
+/// not compile.
+///
+/// ```compile_fail
+/// use pigeon_lab::world::World;
+/// let mut w = World::new("g", 2);
+/// let c = w.custodian("backup");
+/// let docs = w.folder("docs");
+/// let _ = c.free(docs);
+/// ```
 impl Custodian {
     /// Its disk is destroyed and made anew.
     pub fn destroy(self) -> Step {

@@ -8,6 +8,9 @@
 //!   binaries, built with `--features lab,tla-trace`; writes one report per
 //!   scenario and `summary.md` to `--out`.
 //!
+//! - `pigeon-lab spaces [--isolation …]`: checks this host's isolation: a
+//!   sized disk fills, a custodian's system directories land on its disk.
+//!
 //! No ID means every scenario. The exit status is 1 when a check fails.
 
 use std::io::Write;
@@ -170,6 +173,81 @@ fn go(args: &[String]) -> Result<bool, String> {
             std::fs::write(outdir.join("summary.md"), summary).map_err(|e| e.to_string())?;
             Ok(ok)
         }
+        "spaces" => spaces(isolation, &work),
         other => Err(format!("no command {other}")),
     }
+}
+
+/// Checks the isolation of this host end to end, without pigeond.
+fn spaces(isolation: Isolation, work: &std::path::Path) -> Result<bool, String> {
+    use pigeon_lab::exec::host::{SERVICE_DIRS, Space};
+    std::fs::create_dir_all(work).map_err(|e| e.to_string())?;
+    let work = std::fs::canonicalize(work)
+        .map_err(|e| e.to_string())?
+        .join("spaces");
+    let _ = std::fs::remove_dir_all(&work);
+    let mut laptop = Space::create(isolation, &work, "laptop", 64, false)?;
+    let mut custodian = Space::create(isolation, &work, "custodian", 64, true)?;
+    let mut ok = true;
+    let mut check = |what: &str, good: bool| {
+        out(&format!("{} {what}", if good { "ok  " } else { "FAIL" }));
+        ok &= good;
+    };
+    let free = laptop.free_bytes()?;
+    if isolation.sized() {
+        check(
+            &format!("a 64 MiB disk has {} MiB free", free >> 20),
+            free <= 64 << 20 && free > 32 << 20,
+        );
+        let ballast = laptop.root.join("ballast");
+        let wrote = std::fs::write(&ballast, vec![0u8; 80 << 20]).is_err();
+        check("writing 80 MiB on it fails", wrote);
+        let _ = std::fs::remove_file(&ballast);
+    }
+    let (root, env) = if isolation.service_seam() {
+        (
+            custodian.root.join("service"),
+            vec![(
+                "ROOT".to_owned(),
+                custodian.root.join("service").display().to_string(),
+            )],
+        )
+    } else {
+        (
+            std::path::PathBuf::from("/"),
+            vec![("ROOT".to_owned(), "/".to_owned())],
+        )
+    };
+    let script = format!("echo here > \"$ROOT/{}/probe\"", SERVICE_DIRS[0]);
+    let mut cmd = custodian.command(
+        std::path::Path::new("/bin/sh"),
+        &["-c".to_owned(), script],
+        &env,
+    );
+    let ran = cmd.status().is_ok_and(|s| s.success());
+    let landed = std::fs::read_to_string(
+        custodian
+            .root
+            .join("service")
+            .join(SERVICE_DIRS[0])
+            .join("probe"),
+    )
+    .is_ok();
+    check(
+        &format!(
+            "a custodian's {} ({}) lands on its disk",
+            SERVICE_DIRS[0],
+            root.display()
+        ),
+        ran && landed,
+    );
+    if isolation == Isolation::Namespaces {
+        let host = std::path::Path::new("/")
+            .join(SERVICE_DIRS[0])
+            .join("probe");
+        check("and not on the host's", !host.exists());
+    }
+    laptop.teardown();
+    custodian.teardown();
+    Ok(ok)
 }
