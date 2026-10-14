@@ -1,10 +1,9 @@
 # 6. Status
 
-> Mission: how a device computes each version's state from what it observed,
-> with the time of the observation (P6), and how everything reduces to one
-> headline with a reason and a next step (ADR 0027). Pure core code over
-> observations, never stored (ADR 0036). Normative: `pigeon-core::state`
-> (§6.2) and `pigeon-core::headline` (§6.5), with their laws.
+> Mission: each version's state from timed observations (P6), and one
+> headline with a reason and a next step (ADR 0027); computed, never stored
+> (ADR 0036). Normative: `pigeon-core::state` (§6.2) and
+> `pigeon-core::headline` (§6.5), with their laws.
 
 ## 6.1 Observations
 
@@ -22,29 +21,26 @@ Observations only grow; each (device, key) keeps its latest (ADR 0012).
 
 ## 6.2 Version states
 
-For key *k* introduced by commit *c*, at *now* (`state`, ADR 0046):
+For key *k* introduced by commit *c*, at *now* (`state`, ADR 0046), the first
+rule that holds:
 
-1. **H** is the roster custodians with `holds(x, k)` and `has_commit(x, c)`,
-   heard within `offline_after` (default 24 h **[no ADR]**), not reporting
-   `checking` or a lost repository. Content without its commit does not count.
-2. |H| ≥ K, each custodian counted once by its device: **protected**, observed
-   at T, the K-th most recent `heard(x)` ("Safe. Checked 3 hours ago").
-3. No custodian heard within `stale_after` (default 1 h **[no ADR]**): a
-   version that would be protected is **uncertain**, "not checked since T".
-4. Another device has *c*, or a custodian holds *k*: **published**, with its
-   reason (§6.4).
-5. This device holds *k*: **local**.
-6. Otherwise **missing**: `content-missing`, or `erased` after a purge
-   ([08 §8.6](08-custody-loops.md)).
+| # | Rule | State |
+|---|---|---|
+| 1 | **H**: roster custodians with `holds(x, k)` and `has_commit(x, c)`, heard within `offline_after` (24 h **[no ADR]**), not `checking` nor lost; content without its commit does not count | — |
+| 2 | \|H\| ≥ K, each custodian counted once by its device; observed at the K-th most recent `heard(x)` ("Safe. Checked 3 hours ago") | **protected** |
+| 3 | no custodian heard within `stale_after` (1 h **[no ADR]**), for a version that would be protected | **uncertain**, "not checked since T" |
+| 4 | another device has *c*, or a custodian holds *k* | **published**, with its reason (§6.4) |
+| 5 | this device holds *k* | **local** |
+| 6 | otherwise | **missing**: `content-missing`, or `erased` after a purge ([08 §8.6](08-custody-loops.md)) |
 
-Proposals have states like accepted versions. A version is called safe only
-when *protected*; until then its laptop keeps an immutable copy
-([07 §7.8](07-capture-and-install.md)). A version under capture, or held back
-(mass deletion, non-portable name), is *local* with its reason. Laptops are
-untrusted (ADR 0002) and never in H. Laws (`tests/state.rs`): more presence
-never lowers the state; a second entry of one device changes nothing;
-custodian order is irrelevant; protected exactly when K distinct custodians
-count; a new holder never lowers the state.
+Proposals have states like accepted versions. Only *protected* is called
+safe; until then the laptop keeps an immutable copy ([07 §7.8](07-capture-and-install.md)).
+A version under capture or held back (mass deletion, non-portable name) is
+*local* with its reason. Laptops are untrusted (ADR 0002), never in H.
+Laws (`tests/state.rs`): `more_presence_never_lowers_the_state`,
+`a_second_entry_for_one_device_changes_nothing`,
+`custodian_order_does_not_matter`, `protected_when_k_distinct_custodians_count`,
+`protected_is_observed_within_offline_after`, `a_new_holder_never_lowers_the_state`.
 
 ## 6.3 Status reports **[no ADR]**
 
@@ -86,13 +82,12 @@ paused = ""                         # "", "person", "battery", "metered", "disk-
 admits = "all"                      # custodians: "endangered" while they keep room for repair (08 §8.9)
 ```
 
-A custodian refuses a repository on `tmpfs` or `ramfs`, and before each
-report and served session checks that its repository is there with its UUID;
-if not, it reports `repository = "lost"` and stops serving. A device
-publishes on each change and at least every 10 minutes. A report is accepted
-only if signed by the device it names, listed in this device's roster, with a
-known `format` and fields (otherwise ignored, ADR 0048), and an `at` later than
-the last accepted one. Every peer relays reports.
+Not yet coded. A custodian refuses a repository on `tmpfs` or `ramfs`, and
+before each report and served session checks its repository and UUID; if
+lost, it reports `repository = "lost"` and stops serving. A device publishes
+on each change and at least every 10 minutes. A report counts only if signed
+by the roster device it names, with a known `format` and fields (else
+ignored, ADR 0048), and an `at` later than the last; every peer relays it.
 
 ## 6.4 Reasons and next steps
 
@@ -130,25 +125,22 @@ Five levels, the headline being their join (`headline`, ADR 0027, ux.md §4):
 | **Working** | capture or transfer under way, all younger than the grace period |
 | **Safe** | every version *protected* within `stale_after`; "2 items of your folder aren't shared" when so ([07 §7.9](07-capture-and-install.md)) |
 
-Precedence is the table's order. *Not checked recently* is never better than
-*Working* or *Safe*, unlike ADR 0027's list **[no ADR]**; an *erased* version
-counts for nothing. Laws (`tests/headline.rs`): the join is a semilattice with
-*Safe* as identity and *Needs you* absorbing; the headline of a union is the
-join; adding an item never lowers it; a version only this computer holds is
-*Not safe yet* after the grace period, even when the group is unreachable
-(ux.md §9 pass criterion).
+Precedence is the table's order; *Not checked recently* is never better than
+*Working* or *Safe*, unlike ADR 0027 **[no ADR]** (16 §16.2); an *erased*
+version counts for nothing. Laws (`tests/headline.rs`):
+`join_is_a_semilattice` (*Safe* the identity, *Needs you* absorbing),
+`headline_of_a_union_is_the_join`, `adding_an_item_never_lowers_it`,
+`only_here_is_not_safe_yet_after_grace_even_unreachable` (ux.md §9).
 
 The sentence names the most important case and counts the rest, in at most
-two sentences (what; why and what next) with the time of the last check. The
-owner of a missing machine and the admins see the same fact on their own
-devices.
+two sentences (what; why and what next) with the time of the last check; the
+owner of a missing machine and the admins see the same fact.
 
 ## 6.6 Folders, files and times
 
-- Items not shared (links, nested repositories, live libraries, unreadable
-  paths; [07 §7.9](07-capture-and-install.md)) have no state; the folder row,
-  the *Not shared* list and `pigeon status --not-shared` name them, and one
-  notification tells of each when it first appears.
+- Items not shared ([07 §7.9](07-capture-and-install.md)) have no state; the
+  folder row, the *Not shared* list and `pigeon status --not-shared` name
+  them, and one notification tells of each when it first appears.
 - A folder row aggregates its files; a folder not kept here shows its state.
 - A file's page shows each version's author, time and state; *Details* lists
   the backup machines holding it and when each was last heard (ux.md §6).
