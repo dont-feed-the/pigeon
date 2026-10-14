@@ -1,8 +1,7 @@
 # 14. Platforms and packaging
 
-> Mission: where pigeon runs, on which file systems, how git and git-annex
-> reach each machine, how `pigeond` is supervised and installed, and how the
-> Rust code is organised: crates, dependencies, build rules, licence.
+> Mission: platforms, file systems, git and git-annex, supervision and
+> packaging, and the Rust workspace: crates, dependencies, build, licence.
 
 ## 14.1 Platforms (ADRs 0005, 0032)
 
@@ -11,10 +10,9 @@
 | a person's computer (laptop) | Linux x86-64 and arm64; macOS on Apple Silicon and Intel | native Windows in v1.1 (E11); phones as read-only viewers, not designed (ux.md §11) |
 | backup machine (custodian) | Linux x86-64 and arm64 with systemd | macOS; NAS vendor packages (Synology, QNAP) |
 
-- WSL is not Windows support. Unix-only code (`renameat2`, `SIGSTOP`,
-  `posix_fadvise`, unix sockets) stays behind `pigeon-sys` (§14.6) and no
-  protocol or format assumes it, so Windows can join in v1.1; names are
-  portable from day one ([05 §5.4](05-catalogue-and-names.md)).
+- WSL is not Windows support. Unix-only code stays behind `pigeon-sys`
+  (§14.6) and no protocol or format assumes it, so Windows can join in
+  v1.1; names are portable from day one ([05 §5.4](05-catalogue-and-names.md)).
 - Minimum OS versions are those of the CI runners (Ubuntu LTS, the oldest
   macOS runner) until a test says otherwise **[no ADR]**.
 
@@ -28,11 +26,9 @@ renames, hard links, and an atomic exclusive rename (`RENAME_NOREPLACE`,
 |---|---|
 | ext4, btrfs, xfs (Linux); APFS (macOS) | FAT, exFAT, NTFS through FUSE, network file systems (NFS, SMB), FUSE in general, HFS+ |
 
-**[no ADR: list]**. A case-insensitive APFS volume is supported, since names
-are case-folded for collisions at capture. What the folder may hold is in
-[07 §7.9](07-capture-and-install.md). A backup machine may use any local
-Linux file system git-annex supports (ext4, xfs, btrfs, ZFS): its repository
-is bare.
+**[no ADR: list]**. Case-insensitive APFS is supported (names are folded at
+capture). A backup machine may use any local Linux file system git-annex
+supports (ext4, xfs, btrfs, ZFS): its repository is bare.
 
 ## 14.3 git and git-annex (ADRs 0004, 0010, 0020)
 
@@ -59,35 +55,16 @@ is bare.
 
 ## 14.4 Supervision (ADR 0011)
 
-A person's Linux computer runs a **systemd user unit** (resource settings:
-ADR 0037, [15 §15.1](15-resource-use.md)):
+| Machine | Supervisor |
+|---|---|
+| a person's Linux computer | a **systemd user unit**: `ExecStart=%h/.local/share/pigeon/bin/pigeond`, `Restart=on-failure`, `RestartSec=5`, `Nice=10`, `IOSchedulingClass=idle`, `CPUWeight=20`, `IOWeight=20`, `MemoryHigh=512M`, `WantedBy=default.target` (ADR 0037, [15 §15.1](15-resource-use.md)) |
+| a backup machine | a **system unit** `pigeond.service`, user `pigeon`, normal priority, scrubs in the idle I/O class (ADRs 0032, 0037) |
+| macOS | a **launchd agent** `~/Library/LaunchAgents/org.pigeon.pigeond.plist` (`KeepAlive`, `RunAtLoad`, `ProcessType = Background`) |
 
-```ini
-[Unit]
-Description=pigeon: share and keep the group's files
-
-[Service]
-ExecStart=%h/.local/share/pigeon/bin/pigeond
-Restart=on-failure
-RestartSec=5
-Nice=10
-IOSchedulingClass=idle
-CPUWeight=20
-IOWeight=20
-MemoryHigh=512M
-
-[Install]
-WantedBy=default.target
-```
-
-A backup machine runs a **system unit** `pigeond.service` as a dedicated
-user `pigeon`, at normal priority, scrubs in the idle I/O class (ADRs 0032,
-0037). macOS runs a **launchd agent**
-`~/Library/LaunchAgents/org.pigeon.pigeond.plist` (`KeepAlive`,
-`RunAtLoad`, `ProcessType = Background`). The supervisor restarts `pigeond`
-after a panic (`panic = "abort"`, ADR 0023); on exit `pigeond` stops its
-git-annex children and closes its endpoint. `MemoryHigh` is a default for
-the budgets of [15 §15.7](15-resource-use.md) to check **[no ADR: value]**.
+The supervisor restarts `pigeond` after a panic (`panic = "abort"`, ADR
+0023); on exit `pigeond` stops its git-annex children and closes its
+endpoint. `MemoryHigh` is a default for the budgets of
+[15 §15.7](15-resource-use.md) to check **[no ADR: value]**. Not yet packaged.
 
 ## 14.5 Packaging and installation
 
@@ -98,9 +75,8 @@ the budgets of [15 §15.7](15-resource-use.md) to check **[no ADR: value]**.
 | macOS | a Homebrew formula in pigeon's tap **[no ADR]** | the binaries, the launchd agent, the small launcher app bundle (ADR 0029); depends on `git-annex` |
 
 Release archives come with SHA-256 checksums, built by CI from a tag
-**[no ADR: signing]**. Installers for non-technical people are not designed
-in v1: Paul installs (ux.md §11). Uninstalling keeps the folder, the
-repository and the configuration unless the person asks.
+**[no ADR: signing]**. Paul installs (ux.md §11). Uninstalling keeps the
+folder, the repository and the configuration unless the person asks.
 
 ## 14.6 The Rust workspace
 
@@ -119,16 +95,15 @@ repository and the configuration unless the person asks.
 | `pigeon-lab` | lib and bin, never shipped | the slice's scenarios as typed values, their model interpreter over `pigeon-core` and their process executor ([13 §13.12](13-verification.md)) | yes: it runs `pigeond` and `pigeon` and mounts disk images |
 
 Each crate lives in `crates/<name>/`, created when its work starts
-(`pigeon-web` and `pigeon-telemetry` are not yet). `pigeon-core` depends on
-no crate that does I/O: `scripts/check-core-deps` checks `cargo tree`
-against `crates/pigeon-core/allowed-deps.txt` in CI.
+(`pigeon-web`, `pigeon-telemetry` not yet). `pigeon-core` does no I/O:
+`scripts/check-core-deps` checks `cargo tree` against
+`crates/pigeon-core/allowed-deps.txt` in CI.
 
 ## 14.7 Dependencies
 
-Each is pinned in `Cargo.toml` to one minor version and upgraded
-deliberately. The crates for logs, telemetry, the CLI, the web, errors,
-messages, times and notifications are those of ADRs 0021–0025, 0028 and
-0029. Others:
+Pinned in `Cargo.toml` to one minor version. The crates for logs, telemetry,
+the CLI, the web, errors, messages, times and notifications are those of
+ADRs 0021–0025, 0028 and 0029. Others:
 
 | Need | Crate | ADR |
 |---|---|---|
@@ -147,17 +122,15 @@ alternatives for [15](15-resource-use.md) if needed.
 
 ## 14.8 Build rules
 
-- Rust edition 2024, stable toolchain pinned in `rust-toolchain.toml`.
-- `panic = "abort"` in release; clippy's `unwrap_used`, `expect_used`,
-  `panic` and `print_*` denied outside tests, except next to a stated
-  invariant (ADR 0023).
+- Edition 2024; the stable toolchain pinned in `rust-toolchain.toml`.
+- `panic = "abort"` in release; `unwrap_used`, `expect_used`, `panic` and
+  `print_*` denied outside tests (`Cargo.toml` lints, `clippy.toml`), except
+  next to a stated invariant (ADR 0023).
 - `unsafe` only in `pigeon-sys`, each block with a safety comment; no
   English text for people in Rust code (ADR 0028).
 - `cargo deny` (ADR 0019) for the four targets of ADR 0005; `deny.toml`
-  records each licence exception (MPL-2.0 for `option-ext`,
-  CDLA-Permissive-2.0 for `webpki-roots` and `webpki-root-certs`) and each
-  ignored advisory with its reason. `Cargo.lock` is exempt from the
-  1000-line rule.
+  records each licence exception and ignored advisory with its reason.
+  `Cargo.lock` is exempt from the 1000-line rule.
 
 ## 14.9 Licence (ADR 0019)
 
