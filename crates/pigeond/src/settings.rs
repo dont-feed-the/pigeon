@@ -19,6 +19,15 @@ pub const INFO_ATTRIBUTES: &str = "* filter=annex annex.largefiles=anything anne
 /// `.gitattributes`, in the genesis commit.
 pub const GITATTRIBUTES: &str = "* annex.largefiles=anything\n.gitattributes annex.largefiles=nothing\n.pigeon/** annex.largefiles=nothing\n";
 
+/// The `annex.diskreserve` of a role in bytes, which `wanted_config` sets
+/// and pigeon checks itself before it receives content (03 §3.4, 08 §8.9).
+pub fn reserve_bytes(role: Role) -> u64 {
+    match role {
+        Role::Laptop => 1_000_000_000,
+        Role::Custodian => 5_000_000_000,
+    }
+}
+
 /// The `.git/config` values of a role (03 §3.4).
 pub fn wanted_config(role: Role, empty_file: &str) -> Vec<(String, String)> {
     let mut v: Vec<(&str, String)> = vec![

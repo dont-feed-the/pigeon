@@ -15,11 +15,39 @@ use pigeon_proto::api::{self, Arg, VersionStatus};
 use crate::api::{problem, relative};
 use crate::daemon::Daemon;
 use crate::git::pointer_key;
+use crate::group::Group;
 use crate::status::msg;
 use crate::util::rfc3339;
 
 fn text(s: &str) -> Arg {
     Arg::Text(s.to_owned())
+}
+
+/// The versions of `rel` in `main`'s history, newest first, each with the
+/// commit that saved it, among the last 100 that touch it.
+pub async fn versions(g: &Group, rel: &str) -> Vec<(String, String)> {
+    let out = g
+        .git
+        .run(&["rev-list", "--max-count=100", "refs/heads/main", "--", rel])
+        .await
+        .unwrap_or_default();
+    let mut keys: Vec<(String, String)> = Vec::new();
+    for c in out.lines() {
+        let Some(blob) = g.git.blob(&format!("{c}:{rel}")).await else {
+            continue;
+        };
+        let Some(key) = pointer_key(&blob) else {
+            continue;
+        };
+        if let Some(last) = keys.last_mut()
+            && last.1 == key
+        {
+            c.clone_into(&mut last.0);
+            continue;
+        }
+        keys.push((c.to_owned(), key));
+    }
+    keys
 }
 
 /// `pigeon history PATH`.
@@ -30,12 +58,6 @@ pub async fn history(d: &Daemon, path: &Path) -> Vec<Response> {
     let Some(rel) = relative(&g, path) else {
         return vec![problem("not-in-group", &[], None)];
     };
-    let out = g
-        .git
-        .run(&["rev-list", "--max-count=100", "refs/heads/main", "--", &rel])
-        .await
-        .unwrap_or_default();
-    let commits: Vec<String> = out.lines().map(str::to_owned).collect();
     let k = crate::status::settings(&g).k;
     let doc = g.roster();
     let custodians: Vec<String> = doc
@@ -49,22 +71,7 @@ pub async fn history(d: &Daemon, path: &Path) -> Vec<Response> {
         })
         .unwrap_or_default();
     let current = crate::status::observe(&g, &d.device, &rel).await;
-    let mut keys: Vec<(String, String)> = Vec::new();
-    for c in &commits {
-        let Some(blob) = g.git.blob(&format!("{c}:{rel}")).await else {
-            continue;
-        };
-        let Some(key) = pointer_key(&blob) else {
-            continue;
-        };
-        if keys.last().is_some_and(|(_, k)| *k == key) {
-            if let Some(last) = keys.last_mut() {
-                last.0.clone_from(c);
-            }
-            continue;
-        }
-        keys.push((c.clone(), key));
-    }
+    let keys = versions(&g, &rel).await;
     let n = keys.len();
     let mut versions = Vec::new();
     for (i, (commit, key)) in keys.iter().enumerate() {

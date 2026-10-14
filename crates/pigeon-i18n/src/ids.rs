@@ -153,6 +153,7 @@ pub const MESSAGES: &[Entry] = &[
     e("problem-peer-too-new", &["peer"]),
     e("problem-settings-check", &[]),
     e("problem-receiving", &[]),
+    e("problem-no-such-version", &["path", "version"]),
     e("hint-receiving", &[]),
     e("problem-unknown-computer", &["name"]),
     e("hint-unknown-computer", &[]),

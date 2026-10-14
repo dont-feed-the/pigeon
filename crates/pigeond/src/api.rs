@@ -149,6 +149,9 @@ async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         Request::RemoveDevice { name } => crate::history::remove_device(d, &name).await,
         Request::Doctor { details } => crate::history::doctor(d, details).await,
         Request::DebugBundle { .. } => crate::history::debug_bundle(d).await,
+        Request::Restore { path, version, at } if at.is_none() => {
+            crate::restore::restore(d, Path::new(&path), version).await
+        }
         Request::Restore { .. } => not_in_this_build("restore"),
         Request::RecoverySheet => not_in_this_build("recovery-sheet"),
         Request::Recover { .. } => not_in_this_build("recover"),

@@ -151,6 +151,7 @@ problem-peer-too-old = { $peer } runs a pigeon too old for the group.
 problem-peer-too-new = { $peer } runs a newer pigeon that this one can't follow.
 problem-settings-check = The group's settings on this computer were changed outside pigeon; freeing space waits until they are restored.
 problem-receiving = A copy of this folder is still arriving.
+problem-no-such-version = { $path } has no version { $version }.
 hint-receiving = Try again in a moment.
 problem-unknown-computer = The group has no computer named { $name }.
 hint-unknown-computer = See the names with: pigeon machines

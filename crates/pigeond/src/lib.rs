@@ -22,6 +22,7 @@ pub mod journal_file;
 pub mod logs;
 pub mod net;
 pub mod repair;
+pub mod restore;
 pub mod roster_file;
 pub mod settings;
 pub mod status;

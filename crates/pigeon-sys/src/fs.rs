@@ -102,6 +102,25 @@ pub enum Renamed {
     SourceMissing,
 }
 
+/// The space of a file system.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Space {
+    /// Bytes an unprivileged writer may still use.
+    pub available: u64,
+    /// The file system's size in bytes.
+    pub total: u64,
+}
+
+/// The space of the file system that holds `path` (`statvfs`), which
+/// pigeon checks itself before it receives content (08 §8.9).
+pub fn space(path: &Path) -> Result<Space> {
+    let s = rustix::fs::statvfs(path).map_err(|e| Error::path("statvfs", path, e.into()))?;
+    Ok(Space {
+        available: s.f_bavail.saturating_mul(s.f_frsize),
+        total: s.f_blocks.saturating_mul(s.f_frsize),
+    })
+}
+
 /// Renames `from` to `to` unless something has the name `to`: Linux
 /// `renameat2(RENAME_NOREPLACE)`, macOS `renamex_np(RENAME_EXCL)`. pigeon
 /// never renames over a name (spec 07 §7.5).

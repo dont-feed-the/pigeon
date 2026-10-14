@@ -43,7 +43,7 @@ pub struct Freed {
     pub dropped: usize,
 }
 
-fn stat_of(p: &Path) -> Option<Stat> {
+pub(crate) fn stat_of(p: &Path) -> Option<Stat> {
     let st = lstat(p).ok()??;
     st.is_regular().then_some(Stat {
         dev: st.id.dev,
@@ -53,11 +53,11 @@ fn stat_of(p: &Path) -> Option<Stat> {
     })
 }
 
-fn journal(g: &Group) -> PathBuf {
+pub(crate) fn journal(g: &Group) -> PathBuf {
     g.files.install_journal()
 }
 
-fn next_seq(records: &[Record]) -> u64 {
+pub(crate) fn next_seq(records: &[Record]) -> u64 {
     records
         .iter()
         .filter_map(|r| match r {
@@ -103,7 +103,7 @@ fn escape(path: &str) -> String {
 }
 
 /// Writes the sparse patterns that hide exactly `hidden` (non-cone).
-fn write_sparse(g: &Group, hidden: &BTreeSet<String>) {
+pub(crate) fn write_sparse(g: &Group, hidden: &BTreeSet<String>) {
     let mut text = String::from("/*\n");
     for p in hidden {
         text.push_str(&format!("!/{}\n", escape(p)));
@@ -133,11 +133,11 @@ pub fn set_target(g: &Group, prefix: &str, freed: bool) {
     }
 }
 
-fn record(g: &Group, r: &Record) -> Result<(), String> {
+pub(crate) fn record(g: &Group, r: &Record) -> Result<(), String> {
     append(&journal(g), r).map_err(|e| e.to_string())
 }
 
-fn is_old(aside: &Path, key: Option<&str>) -> bool {
+pub(crate) fn is_old(aside: &Path, key: Option<&str>) -> bool {
     match (key.and_then(key_sha256), sha256_file(aside)) {
         (Some(want), Ok(have)) => have == want.to_ascii_lowercase(),
         _ => false,
@@ -289,7 +289,7 @@ async fn drop_hidden(g: &Group, hidden: &BTreeSet<String>, prefix: &str) -> usiz
     dropped
 }
 
-fn truncate_if_done(g: &Group) {
+pub(crate) fn truncate_if_done(g: &Group) {
     let records = read(&journal(g));
     if !records.is_empty() && can_truncate(&entries(&records)) {
         let _ = pigeon_sys::fs::write_atomic(&journal(g), b"");
