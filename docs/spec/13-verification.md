@@ -205,7 +205,10 @@ host (`crates/pigeond/tests/slice.rs`). Until the slice passes it differs
 from this specification as follows, each to close before S1–S11 run
 **[no ADR: first build]**:
 
-- `restore`, `recovery-sheet` and `recover` answer `not-in-this-build`;
+- `restore --at TIME` answers `not-in-this-build`; `recover` joins the new
+  machine on `pigeon/join/1` through a backup machine of the sheet, dialled
+  with the sheet's key, which writes the roster commit once it has checked
+  that the recovery device may add the machine (`may_sign`);
 - roster and capture commits are not signed ([04 §4.4](04-roster-and-authority.md)),
   and accept only fast-forwards `main`, on custodians: a laptop installs no
   incoming version, so the group has one laptop and no merge;
@@ -223,9 +226,17 @@ from this specification as follows, each to close before S1–S11 run
   name>-<6 hex digits of its device ID>`;
 - the CLI parses its arguments by hand, without completions or colour
   ([10 §10.2](10-interfaces.md));
-- one round runs, per group, the settings check, capture, accept, place and
-  repair, every `[loops] interval_seconds` and at once after a change;
-  `status` on a laptop captures first.
+- one round runs, per group, the settings check, free and keep toward each
+  folder's target, capture, accept, place, re-thinning and repair, every
+  `[loops] interval_seconds` and at once after a request or a peer's
+  notice (remotedaemon's `CONNECTED` and `DONESYNCING`); `free` and `keep`
+  only record the target; `status` on a laptop captures first;
+- a peer is dialled at the direct addresses it last gave (an opener's in its
+  stream header; the inviter's known peers' in a join's welcome; iroh still
+  authenticates by key), and a device keeps
+  the port it picked across restarts (`<state>/port`); a custodian that
+  answers but serves the group no more (`unknown-group`) counts for nothing
+  until it is removed.
 
 **Setup** (`crates/pigeon-lab`; its module docs and `slice.yml`'s header
 give the details). The lab build (`--features lab`) adds named crash points
@@ -261,13 +272,12 @@ with what its last runs showed; per push it is reported as blocked, and
 --with-blocked`, with pigeond's debug log) without failing. A device's
 disk is sized above the `annex.diskreserve` pigeon sets (03 §3.4): 4 GiB
 for a laptop, 8 GiB (sparse) for a custodian; below it git-annex refuses
-every transfer, which kept the first runs at *published*. On 14 October
-2026 the rest is blocked by pigeond: `free` hid nothing (S2, S3, S6), no
-partial object showed during S5's transfer, a full custodian says
-nothing (S8), S9's crash points of `free` and `keep` fall inside the
-request where the model frees in its loops, there is no recovery sheet
-yet (S10), and the laptop's disk holds each file twice (S11, 2.06 × the
-content kept).
+every transfer, which kept the first runs at *published*. In run
+38602095008 (14 October 2026) S1–S7 pass on both runners, and S9–S11 on
+Linux; still blocked are S8, whose scenario waited for `disk-full` alone,
+which comes before the file is published, and on macOS S10, whose
+custodians had no address for each other, S11, measured before
+re-thinning, and one S9 point, whose image setup failed.
 
 | Scenario | Asserts |
 |---|---|
