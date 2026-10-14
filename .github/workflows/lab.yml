@@ -1,11 +1,12 @@
 # Lab experiments that assert, run against real git and git-annex on Linux and
 # macOS (ADR 0026). For now E20, the file-system objects of issue #14, E21,
-# the disaster drill of issue #11, and E22, failure domains and capacity
-# limits of issues #12 and #13 (on Linux it mounts a tmpfs and a loop device
-# with the runner's passwordless sudo). Linux uses git-annex's standalone
-# build, pinned by checksum, so a new upstream release fails here until the
-# pin is moved deliberately (spec 14 §14.3); macOS uses Homebrew's current
-# git-annex, whose version the log records.
+# the disaster drill of issue #11, E22, failure domains and capacity limits
+# of issues #12 and #13 (on Linux it mounts a tmpfs and a loop device with the
+# runner's passwordless sudo), and E23, the verified drop over P2P (issue #10).
+# Linux uses git-annex's standalone build, pinned by checksum, so a new
+# upstream release fails here until the pin is moved deliberately (spec 14
+# §14.3); macOS uses Homebrew's current git-annex, whose version the log
+# records.
 name: lab
 
 on:
@@ -27,7 +28,7 @@ env:
 
 jobs:
   e20:
-    name: E20 file-system objects, E21 disaster drill, E22 domains and capacity (${{ matrix.os }})
+    name: E20 file-system objects, E21 disaster drill, E22 domains and capacity, E23 drop over P2P (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -68,3 +69,5 @@ jobs:
         run: python3 lab/git-annex/ga-e21-disaster-drill.py
       - name: E22, failure domains and capacity
         run: python3 lab/git-annex/ga-e22-domains-and-capacity.py
+      - name: E23, the verified drop over P2P
+        run: python3 lab/git-annex/ga-e23-p2p-drop.py

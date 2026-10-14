@@ -26,6 +26,8 @@
 | ADR 0051: the roster is a fold of its changes; forks merge without an admin | Proposed, for issue #6; [04 §4.4, §4.7, §4.8](04-roster-and-authority.md), [05 §5.2](05-catalogue-and-names.md) apply it, the `Roster` model checks it | Guillaume |
 | ADR 0052: the catalogue is built from contributions and the conflicts they saw | Proposed, for issue #8; [05 §5.1–5.3](05-catalogue-and-names.md), [04 §4.4–4.5](04-roster-and-authority.md), [02](02-guarantees.md) INV-Merge apply it, `models/catalogue` checks it ([13 §13.4](13-verification.md)) | Guillaume |
 | ADR 0053: trace logs reach TLC as generated TLA+ modules; TLC stays at 1.7.4 | Proposed, for issue #10; [13 §13.3](13-verification.md) and [12 §12.3](12-observability.md) apply it; `TraceSample` and `scripts/trace-to-tla --check` run in CI | Guillaume |
+| ADR 0054: a copy counts only if it can be locked; custodians answer `CHECKPRESENT` with a lock | Proposed, for issue #10: over P2P git-annex's verified drop counts a copy locked for removal (E23); [09 §9.4](09-network-and-joining.md) and [08 §8.3](08-custody-loops.md) apply it, `AnnexDrop` checks it ([13 §13.2](13-verification.md)); report upstream | Guillaume |
+| TLC with the `Json` module for trace validation | ADR 0026 foresees a new ADR pinning it by SHA-256 ([13 §13.3](13-verification.md)) | before the first `*Trace.tla` |
 
 ## 16.2 Where this specification departs from a source
 
@@ -198,7 +200,7 @@ experiments stay listed in [13](13-verification.md) and in the prototype (#17).
 | #7 | decisions by non-admin owners and stewards | [04 §4.3, §4.5](04-roster-and-authority.md) | ADR 0038 (Proposed) |
 | #8 | catalogue merge algorithm and its laws | [05 §5.1–5.3](05-catalogue-and-names.md), [04 §4.4](04-roster-and-authority.md) | ADR 0052 (Proposed); `models/catalogue` checks the laws on every schedule of three devices |
 | #9 | git-annex cannot bypass pigeon | [03 §3.5–3.8](03-repository-and-roles.md), [09 §9.4](09-network-and-joining.md) | ADR 0043 (Proposed); E12 and E13 assert |
-| #10 | models and coverage | [13 §13.2, §13.10](13-verification.md) | coverage map and liveness assumptions written |
+| #10 | models and coverage | [13 §13.2, §13.10](13-verification.md) | coverage map and liveness assumptions written; `AnnexDrop` model and E23 found the P2P drop race (ADR 0054, Proposed) |
 | #11 | recovery onto fresh machines | [09 §9.9](09-network-and-joining.md), [06 §6.2–6.3](06-status.md), [02 §2.1](02-guarantees.md), [04 §4.2–4.3](04-roster-and-authority.md), [09 §9.4](09-network-and-joining.md) | ADRs 0046 and 0047 (Proposed); E21 is the disaster drill |
 | #12 | independent failure domains | [02 §2.1–2.5](02-guarantees.md), [04 §4.2, §4.7](04-roster-and-authority.md), [06 §6.2–6.5](06-status.md), [08 §8.3, §8.10](08-custody-loops.md) | ADR 0049 (Proposed); E22 asserts |
 | #13 | capacity admission and repair priority | [08 §8.4, §8.9](08-custody-loops.md), [15 §15.2, §15.4](15-resource-use.md), [03 §3.4](03-repository-and-roles.md), [07 §7.8](07-capture-and-install.md) | ADR 0050 (Proposed); E22 asserts |

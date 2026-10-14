@@ -30,3 +30,13 @@ Roster_clock	Roster	full	pass
 Roster_fold3	Roster	full	pass
 TraceSample_good	TraceSample	fast	trace:accepted
 TraceSample_bad	TraceSample	fast	trace:rejected:2
+AnnexDrop_design	AnnexDrop	fast	pass
+AnnexDrop_disk	AnnexDrop	fast	pass
+AnnexDrop_ranked	AnnexDrop	fast	pass
+AnnexDrop_p2p	AnnexDrop	fast	violation:INV_K
+AnnexDrop_log	AnnexDrop	fast	violation:INV_K
+AnnexDrop_storage	AnnexDrop	fast	violation:INV_K
+AnnexDrop_trusted	AnnexDrop	fast	violation:INV_K
+AnnexDrop_gets2	AnnexDrop	full	pass
+AnnexDrop_ranked4	AnnexDrop	full	pass
+AnnexDrop_design4	AnnexDrop	full	pass

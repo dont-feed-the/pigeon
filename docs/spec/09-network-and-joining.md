@@ -121,6 +121,15 @@ every device:
   `F_FULLFSYNC` on macOS), since git-annex never syncs. While a restored
   repository is being re-checked (`checking`, [06 §6.3](06-status.md)),
   `LOCKCONTENT` is answered `FAILURE` (ADR 0046);
+- on custodians, the filter answers `CHECKPRESENT k` itself. Over P2P
+  git-annex answers it with `inAnnex` (`P2P/Annex.hs`), which ignores a removal
+  lock, and a drop whose `LOCKCONTENT` failed counts that answer (E23). The
+  filter sends `LOCKCONTENT k` instead; on `SUCCESS` it sends `UNLOCKCONTENT`
+  and answers `SUCCESS`, otherwise `FAILURE`. So a copy the custodian holds
+  locked for its own drop is never said present, and two custodians dropping
+  at once never count each other (ADR 0054). The answer waits for the sync and
+  is `FAILURE` while `checking`, as for `LOCKCONTENT`. A probe that meets the
+  custodian's own drop starting makes that drop fail, to be retried;
 - an unknown message, a malformed `DATA` length or a line over 4096 bytes closes
   the session. A length is checked before anything is forwarded, and a payload
   passes by length, never parsed. The server's output is parsed only for its
@@ -129,9 +138,11 @@ every device:
 Every repository also has pigeon's `pre-receive` hook, which refuses every
 push for any transport (ADR 0043). The filter is a pure state machine with
 property tests (ADR 0012). It never forwards a removal on a custodian, it
-forwards every allowed message unchanged, no positive answer for a key leaves
-it before that key's sync has completed, and it never loses its place across
-`DATA` boundaries, whatever the read sizes. E13 checks it against git-annex.
+forwards every allowed message unchanged but a custodian's `CHECKPRESENT`, no
+positive answer for a key leaves it before that key's sync has completed, a
+positive `CHECKPRESENT` only for a copy it could lock, and it never loses its
+place across `DATA` boundaries, whatever the read sizes. E13 checks it against
+git-annex, and E23 the probe.
 
 ## 9.5 Relays and discovery (ADR 0016)
 

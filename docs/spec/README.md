@@ -1,7 +1,7 @@
 # pigeon v2 — specification
 
 > **Status:** version 1 of the specification, 13 October 2026. It assembles the
-> decisions recorded in [ADRs 0001–0053](../adr/README.md), the guarantees P1–P6 of the
+> decisions recorded in [ADRs 0001–0054](../adr/README.md), the guarantees P1–P6 of the
 > [proposal](../design/proposal/proposal.pdf), the [UX study](../design/ux.md), the
 > [TLA+ models](../../models/tla/), the [catalogue model](../../models/catalogue/catalogue.py)
 > and the [git-annex experiments](../../lab/git-annex/).
@@ -147,3 +147,4 @@ or a collaborative editor), nor real-time sync of hot files (proposal §1).
 | 0051 the roster is a fold of its changes; forks merge without an admin (Proposed) | [04](04-roster-and-authority.md), [05](05-catalogue-and-names.md), [13](13-verification.md) |
 | 0052 the catalogue is built from contributions and the conflicts they saw (Proposed) | [02](02-guarantees.md), [04](04-roster-and-authority.md), [05](05-catalogue-and-names.md), [08](08-custody-loops.md), [13](13-verification.md), [16](16-open-questions.md) |
 | 0053 trace logs reach TLC as generated TLA+ modules; TLC stays at 1.7.4 (Proposed) | [12](12-observability.md), [13](13-verification.md) |
+| 0054 a copy counts only if it can be locked (Proposed) | [08](08-custody-loops.md), [09](09-network-and-joining.md), [13](13-verification.md), [16](16-open-questions.md) |

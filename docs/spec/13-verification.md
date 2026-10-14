@@ -31,6 +31,14 @@
 | `T_nonce` | `CustodyTokens` | `pass` | nonces make the hand-off safe |
 | `T_n42o3`, `T_n31o5`, `T_n32o5` | `CustodyTokens` | `pass` (fast set) | N, K and offers varied |
 | `T_n42o4` | `CustodyTokens` | `pass` (full set) | N = 4, K = 2, 4 offers |
+| `AnnexDrop_design` | `AnnexDrop` | `pass` (fast set) | git-annex's verified drop as pigeon uses it (ADRs 0049, 0054): each custodian drops only its own copy, under its removal lock, once it has locked, or seen present by a check that honours removal locks, K copies in K failure domains among those its location log lists; location logs go stale, partitions cut a drop off, a lock expires under a stalled drop, a custodian is marked `dead`, a new copy is made. The key stays in K domains (INV_K) and a locked copy stays (LockedStays); 3 custodians, K = 2: 406 880 distinct states, 11 s on 1 worker |
+| `AnnexDrop_disk` | `AnnexDrop` | `pass` (fast set) | the same with custodians 1 and 2 on one disk: the drop counts domains, not repositories (E22.7) |
+| `AnnexDrop_ranked` | `AnnexDrop` | `pass` (fast set) | with git-annex's P2P check, which ignores removal locks, a drop that counts only custodians ranked above its own is safe: the alternative ADR 0054 rejects, for liveness |
+| `AnnexDrop_design4`, `AnnexDrop_gets2`, `AnnexDrop_ranked4` | `AnnexDrop` | `pass` (full set) | the design with 4 custodians, without expiry or new copies (4 518 880 distinct states, 4.5 minutes on 1 worker); with two new copies (1 259 520, 35 s); the ranked drop with 4 custodians (970 240, 44 s) |
+| `AnnexDrop_p2p` | `AnnexDrop` | `violation:INV_K` | git-annex over its P2P protocol: `CHECKPRESENT` ignores the removal lock, so two custodians that drop at once each count the other's copy (E23) |
+| `AnnexDrop_log` | `AnnexDrop` | `violation:INV_K` | counting the location log without checking: a stale log drops the last copies (E5) |
+| `AnnexDrop_storage` | `AnnexDrop` | `violation:INV_K` | counting repositories, as git-annex does: two on one disk count twice (E22.2) |
+| `AnnexDrop_trusted` | `AnnexDrop` | `violation:INV_K` | one custodian marked `trust`: the others count it unasked from a stale log (E23) |
 | `Purge_full` | `Purge` | `pass` (fast set) | ADR 0042: a restore or cancel that reaches any custodian before its seal keeps the content (KeepWins); nothing is dropped before the waiting period (WaitingPeriod); a dropped copy returns only for an uncovered reference (NoResurrection); 2 custodians (one holds the key), 2 laptops (one offline with a copy), restarts, any message order |
 | `Purge_full3` | `Purge` | `pass` (full set) | 3 custodians, 2 of them holding the key, and the deciding laptop with a copy: 12.4 million states, 2 minutes |
 | `Purge_seals` | `Purge` | `violation:KeepWins` | accepting every seal without merging the sealers' `main` loses a cancel |
@@ -49,10 +57,35 @@
 | `TraceSample_bad` | `TraceSample` | `trace:rejected:2` | a capture of a path never saved: no behaviour explains line 2, and the verdict names it |
 
 The violations and the deadlock are negative tests: a model edit that hides
-the failure is caught (ADR 0026). These models argue why custody hand-off
-needs locking and fresh identifiers, and why naive designs fail. In v2 the
-mechanism is git-annex's lock-based verified drop (E1, E5), not pigeon's own
-tokens; the planned `AnnexDrop` model below states what pigeon relies on.
+the failure is caught (ADR 0026). `CustodyNaive` and `CustodyTokens` argue
+why custody hand-off needs locking and fresh identifiers, and why naive designs
+fail. In v2 the mechanism is git-annex's lock-based verified drop (E1, E5,
+E23), not pigeon's own tokens; `AnnexDrop` states what pigeon relies on from
+it, and its header cites the git-annex 10.20261006 source of each action.
+
+**How the `AnnexDrop` traces match the lab.** `Check = "safe"` is a drop over
+a local path, which checks presence with `inAnnexSafe` (`Remote/Git.hs`), as
+in E1: its 40 runs never lost the last copy, and the design passes.
+`Check = "p2p"` is a drop over git-annex's P2P protocol, pigeon's transport
+(ADR 0043). There the server answers `CHECKPRESENT` with `inAnnex`
+(`P2P/Annex.hs`), which ignores the removal lock, and a drop whose
+`LOCKCONTENT` fails counts that answer (`Annex/NumCopies.hs`). The 8-step
+counterexample of `AnnexDrop_p2p` (two custodians begin, each `LOCKCONTENT`
+meets the other's removal lock, each `CHECKPRESENT` says present, both remove)
+is E23's race with real git-annex: with numcopies 1 no copy is left, with
+numcopies = mincopies = 2 on three custodians one is. Behind pigeon's probe
+(ADR 0054) the check is `"safe"` again, and E23's same races keep every copy.
+`AnnexDrop_log` is E5: counting a stale log drops the last copies, while the
+design checks each copy, as git-annex does (E5, and E23's stale log).
+`AnnexDrop_trusted` is E23's `trust`: a trusted custodian counts unasked from
+the log, so pigeon never sets `trust` ([03 §3.5](03-repository-and-roles.md)).
+`AnnexDrop_storage` is E22.2 and `AnnexDrop_disk` E22.7: git-annex counts two
+repositories on one disk twice, and pigeon's drop, which ignores all remotes
+but one per domain, refuses until another domain holds the key. Laptops are
+not modelled: they are untrusted and never counted, and their drops leave the
+custody copies alone. Nor are remote drops (pigeon's filter refuses `REMOVE`,
+E13), or the forced drops of purge and Drop, which skip the check (purge has
+the `Purge` model).
 
 ### Planned, before or with the code (ADR 0008)
 
@@ -60,7 +93,6 @@ tokens; the planned `AnnexDrop` model below states what pigeon relies on.
 |---|---|---|---|
 | `CaptureInstall` ([07 §7.7](07-capture-and-install.md)) | `Save`, `Scan`, `Capture`, `InstallStep`, `Crash`, `Recover`, `Decide`, `Resolve` | INV-Capture, INV-NoOverwrite, INV-Journal | every save is captured; every clean path reaches `current(p)` |
 | `Authority` ([04](04-roster-and-authority.md)) | `Receive`, `Validate`, `Merge`, `Propose`, `Adopt`, `Reject`, roster changes | INV-Valid, INV-Merge: devices with the same commits have the same catalogue | connected devices converge |
-| `AnnexDrop` | lock, check, drop, location-log updates, stale logs, `dead`, partitions | no key below K custody copies except by purge or Drop (INV-K) | — (a model of git-annex, checked against E1, E5) |
 | `Evict` ([08 §8.5](08-custody-loops.md)) | free, keep, verified drop, sparse hide and show | a laptop drops only protected keys; a kept folder never shows pointers | a freed folder's space is freed once its files are protected |
 | `Repair` ([08 §8.4](08-custody-loops.md)) | custodian loss, `dead`, want, get, scrub failure | no protected version is lost while one custody copy remains | K copies are restored when capacity allows |
 
@@ -122,7 +154,7 @@ and each law is a `hegeltest` property (pinned to 0.49, a dev-dependency).
 | install journal | replay idempotent; each path ends old or new | [11 §11.5](11-local-state.md) |
 | local files | round trip; newer formats refused | [11 §11.5](11-local-state.md) |
 | compatibility | an older release's verdict is the newer one's or *unknown*; an unknown field or `format` is never ignored; an unreadable status report never raises a state (ADR 0048) | [04 §4.4](04-roster-and-authority.md), [06 §6.3](06-status.md) |
-| append-only filter | never forwards a removal; forwards allowed messages unchanged; keeps `DATA` framing; no positive answer for a key before its sync (ADR 0046) | [09 §9.4](09-network-and-joining.md) |
+| append-only filter | never forwards a removal; forwards allowed messages unchanged, but a custodian's `CHECKPRESENT`; keeps `DATA` framing; no positive answer for a key before its sync (ADR 0046); a positive `CHECKPRESENT` only for a copy it could lock (ADR 0054) | [09 §9.4](09-network-and-joining.md) |
 | trace merge | Lamport merge associative and commutative; per-device order kept | [12 §12.3](12-observability.md) |
 | work queue | order is a total preorder of the classes of ADR 0037; capture never starves; a key held in fewer failure domains never waits behind one held in more (ADR 0050) | [15 §15.2](15-resource-use.md) |
 | failure domains | domains are the connected components of shared storage, host and declared `domain`; their number is at most the number of custodians; a fingerprint or declaration never raises a state; with one custodian per domain the state is ADR 0002's; a drop's chosen remotes lie in K distinct domains; domain repair is deterministic and wants nothing for a key that spans K domains (ADR 0049) | [06 §6.2](06-status.md), [08 §8.3](08-custody-loops.md) |
@@ -190,7 +222,7 @@ from two commits, in one group, are a prototype test (#17).
 
 | Experiment | Result | Used by |
 |---|---|---|
-| E1, E5 | concurrent drops of the last two copies: 40/40 left one; a stale location log is not trusted | INV-K, [08 §8.3](08-custody-loops.md) |
+| E1, E5 | concurrent drops of the last two copies over local paths: 40/40 left one (over P2P they do not: E23); a stale location log is not trusted | INV-K, [08 §8.3](08-custody-loops.md) |
 | E2–E4, E6 | deleted content kept until `dropunused`; a propagated `rm -rf` undone; concurrent edits keep two variants; absent content is a pointer file | [05](05-catalogue-and-names.md), [07](07-capture-and-install.md) |
 | E7 | a pull filter merges an allowed contribution and keeps a disallowed edit as a proposal | [04](04-roster-and-authority.md) |
 | E8 | `annex.thin`: an in-place edit corrupts the laptop's copy; others refuse to count it | ADR 0002, [07 §7.5](07-capture-and-install.md) |
@@ -206,6 +238,7 @@ from two commits, in one group, are a prototype test (#17).
 | E20 | what the folder may hold, on Linux and macOS (`lab.yml`, 53 checks each): links, nested repositories, FIFOs and sockets are never staged when capture takes paths from `git status` and checks `lstat` first, yet `git annex add` stages a link or a nested repository's file it is given; `git annex add` stages an executable file as 100644 and ignores a mode-only change, and `update-index --chmod` restores the bit; extended attributes do not travel; a thin object is hard-linked to one path only, and `fsck` does not notice an object changed through that link; unreadable paths are not reported deleted; a file rewritten while it is added never yields an object that mismatches its key; a person's `~/.gitconfig` (`annex.backend=WORM`, `annex.largefiles=nothing`, `core.excludesFile`) changes keys, tree and listing unless git runs isolated; `--ignored=traditional -uall` lists the files of ignored folders; `.git/info/attributes` overrides nested `.gitattributes`; `add --batch` fails on a name that is not UTF-8 (asserts) | ADRs 0044, 0045, [07 §7.9](07-capture-and-install.md), [03 §3.7](03-repository-and-roles.md) |
 | E21 | the disaster drill (issue #11): content on K custodians before they have its commit is a key without a name once the laptop is lost; after losing every laptop and its key, a fresh machine recovers from custodians alone every name, hash, deleted version and suggestion, and every signature verifies against the roster at its parents; a recovery sheet's roster commit is accepted and nothing else it signs; `git clone` and `git annex get` read the files without pigeon, across partial custodians; a copied repository under a new UUID counts only after a hashing fsck; git's default `core.fsync` syncs neither loose objects nor refs (asserts) | ADRs 0046, 0047, [09 §9.9](09-network-and-joining.md), [06 §6.2](06-status.md) |
 | E22 | failure domains and capacity (issues #12, #13), on Linux and macOS, 7 checks: fingerprints of disks and machines (one volume, one fingerprint; a loop mount or disk image follows its file to its disk; a tmpfs differs, and its mount source alone collides); git-annex counts two repositories on one disk as two copies, even one hard-linked inode; a drop that ignores all but one remote per domain refuses until another domain holds the key; `annex.diskreserve` refuses a get and an incoming copy, local and over `p2pstdio`, with a misleading message at the sender; `sizebalanced` with small `maxsize` leaves keys at one copy and the verified drop refuses to go lower; a real `ENOSPC` (another writer; git-annex alone stops at the free space) fails a get and a fetch cleanly, `git annex fsck` fails until space is freed, the retries succeed; a custodian killed during a copy counts only complete keys, and a deleted one is written into again and still claimed, which only the verified drop catches (asserts). Found on the way: `annex-bwlimit-download` is never read (`Types/GitConfig.hs` maps it to `bwlimit-upload`) | ADRs 0049, 0050, [08 §8.3, §8.9](08-custody-loops.md) |
+| E23 | git-annex's verified drop over its P2P protocol (lab network, 12 checks, about 15 s): a drop counts a copy that another custodian holds locked for its own removal, since `CHECKPRESENT` answers with `inAnnex`; over a local path it refuses; two concurrent drops leave no copy with numcopies 1, and one of three with numcopies = mincopies = 2; behind a filter that answers `CHECKPRESENT` by `LOCKCONTENT` both races keep every copy and a lone drop still succeeds; a stale log is not counted, but is for a custodian marked `trust`; a `dead` one never counts (asserts) | ADR 0054, `AnnexDrop`, [08 §8.3](08-custody-loops.md), [09 §9.4](09-network-and-joining.md) |
 
 **Pending:** E11 native Windows (v1.1). **New:** E16 `annex.bwlimit` over the P2P
 transport; E17 the HDD video-editing acceptance test ([15 §15.8](15-resource-use.md)).
@@ -246,7 +279,7 @@ are specified here but not built; the gaps are tracked as GitHub issues
 
 | Guarantee | Now | Planned | Gaps (issues) |
 |---|---|---|---|
-| P1 Survival | E1, E5, E8, E9, E10 (lab, printing); E13 (asserting: pigeon's filter refuses remote `REMOVE`); E21 (asserting: recovery from custodians alone); E22 (asserting: one copy per failure domain, the reserve, disk full); `CustodyNaive`, `CustodyTokens` (evidence about hand-offs in general and about the earlier token protocol, not about git-annex) | `AnnexDrop`, `Repair` models; failure-domain and capacity laws; fault injection; asserting E9, E10 | independence pigeon cannot see (virtual machines, places not declared; ADR 0049); power loss on a custodian (outside the lab; ADR 0046 rests on the git and git-annex sources) |
+| P1 Survival | E1, E5, E8, E9, E10 (lab, printing); E13 (asserting: pigeon's filter refuses remote `REMOVE`); E21 (asserting: recovery from custodians alone); E22 (asserting: one copy per failure domain, the reserve, disk full); E23 (asserting: over P2P git-annex's verified drop counts a copy locked for removal, two concurrent drops lose the key, pigeon's probe keeps it); `AnnexDrop` model (git-annex's verified drop: safe over a local path or behind the probe, not over P2P; ADR 0054); `CustodyNaive`, `CustodyTokens` (evidence about hand-offs in general and about the earlier token protocol, not about git-annex) | `Repair` model; failure-domain and capacity laws; fault injection; asserting E9, E10 | independence pigeon cannot see (virtual machines, places not declared; ADR 0049); power loss on a custodian (outside the lab; ADR 0046 rests on the git and git-annex sources) |
 | P2 Capture, no overwrite | E20 (asserting, Linux and macOS: what capture stages and what it never reads); E15b (asserting: no pointer during free and keep); E18 (asserting: offline in-place saves keep every version); E19 (asserting: racing saves and `kill -9` during install) | `CaptureInstall` model; install journal laws (hegel-rust); E19 on macOS | copy-on-write cost of pending history on APFS and btrfs (E18 there); saves from stale memory (16 §16.4) |
 | P3 Reversible deletion | E2, E4 (lab, printing); `Purge` model (seals against restores, cancels, partitions, restarts and a returning laptop; ADR 0042); E14 (asserting: shared keys, a restore against the seals, per-key transfers, the forced drop, a returning laptop's new generation) | purge laws (hegel-rust); `Purge` trace validation | a custodian clock that jumps forward by more than the waiting period; erased names stay in history (16 §16.4) |
 | P4 Authority | E7 (lab, printing); E12 (asserting: no pushed ref, `remotedaemon` only fetches); `Roster` model (roster forks, ADR 0051) | `Authority` model; roster fold laws; acceptance laws; decision-rights tests (ADR 0038) | format compatibility (#15) |

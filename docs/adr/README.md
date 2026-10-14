@@ -66,3 +66,4 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0051](0051-the-roster-is-a-fold-of-its-changes.md) | The roster is a fold of its changes in a canonical order; roster forks merge without an admin | Proposed |
 | [0052](0052-catalogue-from-contributions-and-the-conflicts-they-saw.md) | The catalogue is built from contributions and the conflicts they saw; merge commits never count | Proposed |
 | [0053](0053-trace-logs-as-generated-tla-modules.md) | Trace logs reach TLC as generated TLA+ modules; TLC stays at 1.7.4 | Proposed |
+| [0054](0054-a-copy-counts-only-if-it-can-be-locked.md) | A copy counts only if it can be locked: custodians answer `CHECKPRESENT` with a lock | Proposed |

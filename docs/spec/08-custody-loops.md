@@ -67,8 +67,9 @@ order-independent; the accepted set is a join (ADR 0012).
   git-annex verifies content on arrival; the location log records it.
 - A laptop then drops what it does not want (old versions, folders not kept)
   with a verified drop for each such key it holds (ADR 0043): git-annex locks
-  and checks K custody copies on custodians first (E1, E5), and the laptop's
-  own copy never counts (ADR 0002).
+  and checks K custody copies on custodians first (E1, E5, which ran over
+  local paths; over P2P see below), and the laptop's own copy never counts
+  (ADR 0002).
 - **Every verified drop locks one copy per failure domain** (ADR 0049).
   `pigeond` chooses K custodians holding the key, in K domains and spanning
   `min_sites` declared sites, reachable ones first, and runs
@@ -77,6 +78,16 @@ order-independent; the accepted set is a join (ADR 0012).
   verifies only remotes that are not ignored (`verifiableCopies` in
   `Annex/NumCopies.hs`), so its K locks fall in K domains (E22). Without such
   a choice, the drop waits.
+- **A copy counts only if it can be locked** (ADR 0054). A custodian that
+  drops its own copy (rebalancing, §8.10) holds its removal lock, and git-annex
+  then also counts a copy it could not lock but saw present, assuming that a
+  removal lock keeps every other drop from using the copy. Over a local path
+  that holds (E1); over P2P `CHECKPRESENT` ignores the removal lock, so two
+  custodians dropping at once each count the other and both drop (E23), and
+  `--mincopies` does not help. Each custodian's filter therefore answers
+  `CHECKPRESENT` with a lock ([09 §9.4](09-network-and-joining.md)); the
+  `AnnexDrop` model shows the drop safe with it and unsafe without
+  ([13 §13.2](13-verification.md)).
 - **Domain repair.** `sizebalanced` knows nothing of domains. When the
   custodians that hold or want a key span d < K domains, the custodians of the
   other domains with room for it (free space above `annex.diskreserve`, within
@@ -304,7 +315,7 @@ failures go into the custodian's status report ([06 §6.3](06-status.md)).
 At the lowest priority, a custodian drops each key it holds that its `wanted`
 expression no longer matches after the shares moved (a custodian joined or
 changed `maxsize`), and that domain repair does not give it, with a verified
-drop (§8.3): git-annex checks K other custody copies in K domains first
-(ADRs 0014, 0049). pigeon
+drop (§8.3): git-annex checks K other custody copies in K domains first, each
+by a lock (ADRs 0014, 0049, 0054). pigeon
 never runs `--rebalance` against a remote. A placement planner may replace
 `sizebalanced` later (ADR 0003).
