@@ -1,374 +1,255 @@
 # 7. Capture and install: the disk door
 
-> Mission: specify the only two ways pigeon meets the shared folder on a laptop:
-> **capture** turns what people save into signed commits, **install** writes what
-> the group accepted. Together they carry P2 (capture, no overwrite) and part of
-> P3 (the mass-deletion guard). Custodians have no working tree and run neither.
+> Mission: the only two ways pigeon meets the shared folder on a laptop.
+> **Capture** turns saves into signed commits; **install** writes what the
+> group accepted. They carry P2 and part of P3. Custodians run neither.
+
+The `CaptureInstall.tla` invariants and `journal` laws cited are normative.
 
 ## 7.1 Principles
 
-- People and their applications write the folder; pigeon reads it at capture and
-  writes it only at install. No other pigeon code touches it.
-- **The index records what pigeon last captured or installed** at every clean
-  path: the git index always equals `main`'s tree, with the stat data of the file
-  pigeon left there. A path whose file differs from the index (`git status`) is
-  either a new save (capture's job) or a divergence (§7.6).
-- pigeon never replaces, moves aside or removes content a person saved, unless
-  the person asks (ADR 0034). Install moves a file away from its name only to
-  prove it is pigeon's own, and a save that races it wins the name (§7.5,
-  §7.5).
-- Every step is crash-recoverable: a crash at any instant leaves each path at its
-  old or its new content, and the next start resumes (ADR 0036 journal).
+- People write the folder; pigeon reads it at capture and writes it only at
+  install. The git index always equals `main`'s tree, with the stat of the
+  file pigeon last left at each path; a path differing from it is a save
+  (capture's job) or a divergence (§7.6).
+- pigeon never replaces, moves aside or removes what a person saved unless
+  they ask (ADR 0034); install moves a file away only to prove it is its
+  own. A crash leaves each path at its old or new content (ADR 0036).
 
 ## 7.2 Noticing changes (ADRs 0013, 0037)
 
-- The `notify` watcher marks paths dirty; events are hints only.
-- A dirty path is captured after its **quiet period** (2 s, plus 1 s per 100 MB,
-  at most 60 s) and two consecutive equal `stat` results (size, mtime, inode).
-- A path captured more than 6 times in an hour is captured at most every 10
-  minutes (hot files, ADR 0037).
-- A full scan (`git status --porcelain=v2 -z`) runs at start, every 10 minutes,
-  and at once on a watcher overflow; it is the truth.
-- Names matching the **ignore list** are never captured (§7.9). The list
-  is fixed in the core and matched on each path component: `.DS_Store`, `._*`,
-  `Icon\r`, `.localized`, `.Spotlight-V100`, `.Trashes`, `.fseventsd`,
-  `.TemporaryItems`, `.DocumentRevisions-V100`, `.Trash-*`, `Thumbs.db`,
-  `desktop.ini`, `~$*`, `.~lock.*#` and `~*.tmp` (office files), `*.swp`,
-  `.goutputstream-*`, `*.part`, `*.crdownload`, and pigeon's own temporary
-  names. It applies to names not in the catalogue, as in git: a catalogue path
-  is captured and installed whatever its name, and an ignored name is never
-  captured as a deletion. In-tree `.gitignore` files and the person's git
-  excludes have no effect ([03 §3.7](03-repository-and-roles.md)). A per-group `.pigeon/ignore` is an open
-  question ([16](16-open-questions.md)).
-- A **package** (§7.9) is quiet when none of its files has changed for the
-  quiet period; its changes are captured together.
+- `notify` events are hints; a full scan (`git status --porcelain=v2 -z`) at
+  start, every 10 minutes and on watcher overflow is the truth.
+- A dirty path is captured after its **quiet period** (2 s plus 1 s per
+  100 MB, at most 60 s) and two equal `stat` (size, mtime, inode); more than
+  6 captures in an hour slow it to one per 10 minutes. A package (§7.9) is
+  quiet when all its files are, and is captured together.
+- The **ignore list**, fixed in the core and matched per path component:
+  `.DS_Store`, `._*`, `Icon\r`, `.localized`, `.Spotlight-V100`, `.Trashes`,
+  `.fseventsd`, `.TemporaryItems`, `.DocumentRevisions-V100`, `.Trash-*`,
+  `Thumbs.db`, `desktop.ini`, `~$*`, `.~lock.*#`, `~*.tmp`, `*.swp`,
+  `.goutputstream-*`, `*.part`, `*.crdownload`, pigeon's temporary names. It
+  applies only to names not in the catalogue, and an ignored name is never
+  captured as a deletion. In-tree `.gitignore` and personal excludes have no
+  effect ([03 §3.7](03-repository-and-roles.md)); `.pigeon/ignore` is open
+  ([16](16-open-questions.md)).
 
 ## 7.3 Capture
 
-One capture **batch** handles the stable dirty paths of one repository:
+A capture **batch** handles the stable dirty paths of one repository:
 
-1. **Root guard.** The folder's root, its `.git` and `.pigeon/roster.toml` exist,
-   and the root is on the same file system as at start (device number). If not
-   (drive unplugged, folder moved or deleted), capture and install stop, and the
-   headline says "Needs you: pigeon can't find your folder *Famille Geiger*".
-   Nothing is ever captured as a deletion because the root vanished.
-2. **Changes.** `git status --porcelain=v2 -z -uall --ignored=traditional`
-   lists the batch's added, modified, deleted and renamed paths, including
-   those an in-tree `.gitignore` names ([03 §3.7](03-repository-and-roles.md)). Paths of the install journal
-   whose content is the one being installed, held paths (§7.4) and ignored
-   paths are skipped. Capture takes paths from this listing only, never from
-   watcher events, since `git annex add` stages any path it is given, a file
-   of a nested repository included (E20). Each remaining path is checked with `lstat`: only regular
-   files go on; the other kinds are *not shared* (§7.9), and pigeon never
-   follows a link.
-3. **Mass-deletion guard.** If the deletions of the batch, with those already
-   held, exceed 100 files or remove a whole top-level folder, all of them are
-   **held** (§7.4). A package counts as one file. The rest of the batch goes
-   on.
-4. **Names.** A path whose name is not portable is held
+1. **Root guard.** The root, its `.git` and `.pigeon/roster.toml` exist, on
+   the device of the start. Otherwise capture and install stop ("Needs you:
+   pigeon can't find your folder"); nothing is captured as a deletion.
+2. **Changes** come only from `git status --porcelain=v2 -z -uall
+   --ignored=traditional`, never from events: `git annex add` stages any
+   path given, even in a nested repository (E20). Skipped: paths the install
+   journal is installing, held paths (§7.4), ignored names. Only regular
+   files (`lstat`) go on; other kinds are *not shared* (§7.9).
+3. **Mass-deletion guard.** Deletions of the batch, with those already held,
+   beyond 100 files (a package counts as one) or removing a top-level folder
+   are all **held** (§7.4); the rest goes on.
+4. **Names.** A non-portable name is held
    ([05 §5.4](05-catalogue-and-names.md)).
-5. **Classify** every change with the authority rule under the roster of `main`
-   ([04 §4.3](04-roster-and-authority.md)): *allowed*; *not allowed*, grouped by
-   set of deciders; or *diverging* (the path is in the divergence table, §7.6).
-6. **Ingest** the content of added and modified files with `git -c annex.thin=false
-   annex add --no-check-gitignore` (batch). A file that changes while it is
-   added is refused by git-annex and retried after its next quiet period
-   (§7.9, E20). `git annex add` stages every file as 100644, so capture
-   then sets the execute bit of each added path, and of each path whose only
-   change is its mode, with `git update-index --chmod=+x|-x` from its `lstat`
-   (E20, §7.9). The object is a copy (copy-on-write where the file system
-   can), so a later in-place save cannot destroy the captured version (§7.8,
-   §7.8). Re-adding content already in the annex is cheap, so a batch
-   interrupted here is simply redone. Content beyond the pending budget waits
-   (§7.8).
-7. **Commit.** Allowed changes: one commit, parent `main`, signed, then
-   `update-ref main` from the expected old value; the index then matches.
-   Not allowed: one proposal per set of deciders, parent `main` (or the pending
-   proposal of the same path, [04 §4.5](04-roster-and-authority.md)), stored as
-   its ref; the index keeps `main`'s version of those paths, and each path enters
-   the divergence table as a *suggestion*. Diverging paths: §7.6.
-8. **Trace.** Each commit and proposal emits its trace event (ADR 0008,
-   [12](12-observability.md)).
+5. **Classify** by the authority rule under `main`'s roster
+   ([04 §4.3](04-roster-and-authority.md)): *allowed*, *not allowed* (per set
+   of deciders) or *diverging* (§7.6).
+6. **Ingest** with `git -c annex.thin=false annex add --no-check-gitignore`;
+   a file changing meanwhile is retried after its next quiet period. Then
+   the execute bit is set from `lstat` (`update-index --chmod`; `annex add`
+   stages 100644, E20). The object is a copy (reflink where possible).
+   Content beyond the pending budget waits (§7.8).
+7. **Commit.** Allowed: one signed commit, then `update-ref main` from the
+   expected old value. Not allowed: one proposal ref per set of deciders, on
+   `main` or the path's pending proposal ([04 §4.5](04-roster-and-authority.md));
+   the index keeps `main`'s version; the path becomes a *suggestion* (§7.6).
+8. **Trace** each commit and proposal (ADR 0008, [12](12-observability.md)).
 
-A crash before step 7 loses nothing: the files are still on disk and the next
-scan finds them. A crash between the commit and `update-ref` leaves an
-unreferenced commit, which the next batch recreates. INV-Capture: a saved file
-reaches a commit (accepted or proposal) before install touches its path, because
-install only touches clean paths (§7.5).
+A crash anywhere loses nothing: the next scan finds the files and redoes the
+batch. INV-Capture (`CaptureFirst`): what install moves away for good is in
+a commit, since install touches only clean paths.
 
 ## 7.4 Held changes
 
-A **held** change stays on this computer only: the file is deleted (or
-misnamed) on disk, `main` still has it, and install leaves the path alone.
+A **held** change stays on this computer: the file is gone (or misnamed) on
+disk, `main` still has it, and install leaves the path alone. It is *local*
+with reason `held` ([06 §6.4](06-status.md)) and a *Needs you* item until the
+person chooses (ux.md §8.6):
 
-| Held because | The person chooses | Then |
+| Held because | Choice | Then |
 |---|---|---|
-| mass deletion (ux.md §8.6) | *Delete them for everyone* | the deletions are captured as usual |
-| | *Bring them back* | install restores them from `main` (the person asked) |
-| name not portable | *Rename to the suggested name* | pigeon renames the file (the person asked); capture adds it |
-| | rename it themselves | an ordinary capture |
-| a shared file became a link or a repository (§7.9) | *Delete it for everyone* | the deletion is captured |
-| | *Bring it back* | pigeon renames the link or folder to a free name beside it, then install restores the file from `main` (the person asked) |
-
-Held changes are *local* with reason `held` ([06 §6.4](06-status.md)) and a
-*Needs you* item until decided.
+| mass deletion | *Delete them for everyone* / *Bring them back* | captured as usual / install restores them from `main` |
+| non-portable name | *Rename to the suggested name* / rename it themselves | pigeon renames it and capture adds it / an ordinary capture |
+| a shared file became a link or a repository (§7.9) | *Delete it for everyone* / *Bring it back* | the deletion is captured / pigeon renames the link or folder to a free name beside it, and install restores the file |
 
 ## 7.5 Install
 
-Install runs when `main` moves (a merge from the accept loop, a decision, a
-restore) and when a folder is kept again ([08 §8.5](08-custody-loops.md)). It
-moves each **clean** path *p* of a kept folder from its index version to
-`current(p)`. A path is clean when git reports no change after
-`update-index --refresh` and its index entry is not racily clean (its mtime is
-older than the index file's). Hidden folders change in the index only (sparse
-checkout, E15). A path that is not clean is skipped: capture handles it first,
-then it may become a divergence (§7.6). Capture and install of one repository
-never run at the same time. The paths of a package (§7.9) are installed in one
-batch, and only once all of them are clean and none is in use; otherwise the
-whole package waits. A reader may see a mix of versions while the batch runs.
+Install runs when `main` moves and when a folder is kept again
+([08 §8.5](08-custody-loops.md)). It moves each **clean** path *p* of a kept
+folder (no change after `update-index --refresh`, not racily clean) from its
+index version to `current(p)`; hidden folders change in the index only
+(sparse checkout, E15). Other paths are left to capture (§7.6). Capture and
+install of a repository never run at once. A package (§7.9) is installed in
+one batch once all its paths are clean and none is in use. A path is
+deferred `in-use` ([06 §6.4](06-status.md)) while a lock file sits next to
+it (`~$name`, `.~lock.name#`, `.#name`, `.name.swp`) or step 5 finds a
+writer, and retried at every scan.
 
-A path is deferred with reason `in-use` (06 §6.4) while an application lock file
-sits next to it (`~$name`, `.~lock.name#`, `.#name`, `.name.swp`) or the writer
-scan of step 5 finds a writer. It is retried when the lock file goes and at every
-scan.
+Per path, in order (a batch shares its fsyncs and one writer scan):
 
-For each path, in this order (a batch shares its fsyncs and its one writer scan):
+1. **Content:** `git annex get --key` fetches and verifies the new key;
+   without a peer that has it, the path waits ("receiving").
+2. **Stage** the new file at `.git/pigeon/stage/<seq>` with its mode,
+   fsynced: on thin laptops a hard link to an object with no other name,
+   else a copy (as git-annex `linkOrCopy'`). No temporary name enters the
+   folder.
+3. **Journal** `begin` (path, both keys, the index entry's `(dev, ino, size,
+   mtime)`, staged file and inode, aside) in `.git/pigeon/install.ndjson`,
+   fsynced ([11](11-local-state.md)).
+4. **Move aside:** `rename(p, .git/pigeon/aside/<seq>)`. *p* gone: `skip`.
+5. **Writer scan:** no process holds the aside open for writing or maps it
+   writable (Linux `/proc/*/fd`, `fdinfo`, `maps`; macOS `libproc`). If some
+   processes cannot be inspected, it passes only if the file is not group-
+   or other-writable; otherwise `in-use`.
+6. **Check:** the aside's `(dev, ino, size, mtime)` are the journalled ones
+   and its link count is 1 (2 for the object's inode); a higher count marks
+   it *linked* (§7.9). If step 5 or 6 fails, the aside goes back
+   (`RENAME_NOREPLACE`, macOS `RENAME_EXCL`): `skip`; if *p* was recreated
+   meanwhile, the aside is captured as a recovered version (§7.6). Then
+   `proved` is journalled for the batch's passing entries. A creation is
+   proved when *p* is free.
+7. **Rename in** with `RENAME_NOREPLACE`. If *p* exists, the application's
+   file stays (`raced`) and is captured as a concurrent edit (§7.6). Fsync
+   both directories.
+8. **Index:** `update-index --cacheinfo` without stat, then `--refresh`
+   (`git annex restage`): git records the stat only if the file holds the
+   new key, so a later save shows as modified. pigeon never writes stat
+   data (E19).
+9. **Done.** The aside is kept until the first full scan 10 minutes later,
+   then `released` if no process writes it and it hashes to the old key (a
+   *linked* aside at once); otherwise it is captured as a recovered version.
 
-1. **Content.** `git annex get --key` brings and verifies the new key. If no peer
-   has it yet, the path waits; the status says "receiving".
-2. **New file.** Write the new content at `.git/pigeon/stage/<seq>`, set the
-   mode of the index entry, fsync it. On thin laptops it is a hard link to the
-   object if the object has no other name; otherwise, and on laptops that are
-   not thin, it is a copy (a reflink where the file system can). An object is
-   thus linked to at most one path, as git-annex does
-   (`Annex/Content/LowLevel.hs`, `linkOrCopy'`; §7.9). No temporary name
-   ever appears in the folder.
-3. **Journal.** Append `begin` with the path, both keys, the index entry's
-   `(dev, ino, size, mtime)`, the temporary file and its inode, and the aside, to
-   `.git/pigeon/install.ndjson`; fsync ([11](11-local-state.md)).
-4. **Move aside.** `rename(p, aside)`, with *aside* =
-   `.git/pigeon/aside/<seq>` on the same file system. No name now leads to the
-   old file. If *p* is gone, the person deleted it: `skip`.
-5. **Writer scan.** No process holds the aside open for writing or maps it
-   shared and writable (Linux `/proc/*/fd`, `fdinfo` and `maps`; macOS
-   `libproc`: descriptors with `FWRITE`, and every writable file-backed
-   region, private ones included, since the share mode does not tell them
-   apart). A scan that could not inspect some processes counts as clear only
-   if the file gives no write permission to group or others; otherwise the
-   path waits (`in-use`). It runs before the check, so no write slips in after it.
-   On macOS a write through a shared mapping leaves the stat unchanged until
-   `msync` (E19): capture sees such a save only once it is synced, and the
-   kept aside (step 9) still keeps it.
-6. **Check.** The aside's `(dev, ino, size, mtime)` equal the journalled ones.
-   Its link count is 1, or 2 if it is the object's inode. A higher count
-   means a person's hard link: the check still passes, and the aside is marked
-   *linked* (§7.9).
-   - If step 5 or 6 fails, a person saved or is saving *p*. The aside goes back
-     with `renameat2(RENAME_NOREPLACE)` (Linux) or `renamex_np(RENAME_EXCL)`
-     (macOS), the temporary file is dropped, and the entry ends `skip`;
-     capture takes over.
-   - If *p* was recreated meanwhile, the aside is captured as a recovered
-     version (§7.6), never deleted: `recovered`.
+A deletion skips steps 1, 2 and 7. The journal is truncated once every
+entry has ended and its aside is released.
 
-   Once the checks of the batch are done, append `proved` for the entries that
-   passed, and fsync. A creation is proved when *p* is found free.
-7. **Rename in.** `renameat2(tmp, p, RENAME_NOREPLACE)` (or `RENAME_EXCL`). If an
-   application created *p* since step 4, the call fails. The application's
-   file stays, the temporary file is dropped, and the entry ends `raced`. The
-   save is captured with the version pigeon last installed as its base, so it
-   is a concurrent edit (§7.6). Then fsync both directories.
-8. **Index.** `update-index --cacheinfo` with the new pointer and no stat data,
-   then `update-index --refresh` (`git annex restage` per batch). git records
-   the stat only if the file's content is the new key. A save landing after
-   step 7 therefore shows as modified and is captured; pigeon never writes stat
-   data itself (E19).
-9. **Done.** Append `done`. The aside is kept until the first full scan at least
-   10 minutes later (default). It is unlinked then (`released`) only
-   if no process writes it and its content still hashes to the old key, or, for
-   a *linked* aside, at once without hashing: its content lives on under its
-   other name. Otherwise it is captured as a recovered version.
+**Recovery** at start, before capture: an entry with `proved` rolls forward
+(step 7, `raced` if *p* exists, then step 8); any other rolls back (the
+aside goes back if *p* is absent, or is kept and hashed at release if *p* is
+another file). Staged files no entry names are removed. INV-Journal is
+`CaptureInstall.tla` `Journal` and the `journal` laws
+(`recovery_ends_every_entry_and_a_second_does_nothing`,
+`a_crash_during_recovery_ends_as_one_recovery`,
+`nothing_the_person_wrote_is_lost`).
 
-A deletion is the same without steps 1, 2 and 7. A released aside is
-journalled `released`. When every entry has ended and its aside is released,
-the journal is truncated. A staged file that no entry names (a crash between
-steps 2 and 3) is removed at recovery: no name in the folder leads to it
-(13 §13.13).
-
-**Recovery at start**, before any capture, for each `begin` without an end
-. An entry with `proved` rolls forward; any other rolls back.
-
-- *Proved:* if the new file is still at its stage name, do step 7
-  (`NOREPLACE`; if *p* exists, `raced`). Then redo step 8 and append `done`.
-  Whatever the person did at *p* after step 7 is an ordinary save on the new
-  version.
-- *Not proved,* *p* absent and the aside present: put the aside back
-  (`NOREPLACE`), then `skip`.
-- *Not proved,* *p* another file and the aside present: keep the aside and
-  hash it at release: `raced` if it holds the old key, otherwise a recovered
-  version.
-- Otherwise: `skip`.
-
-An entry ends before its staged file is removed, and only the staged files of
-ended entries are removed. Each path ends at its old content, the new one or
-the person's, and the index agrees with what pigeon left (INV-Journal).
-Replaying twice equals replaying once (a law, ADR 0036). The `CaptureInstall`
-model found that deciding from *p* alone, as this table did before the journal recorded the proof,
-brings back a finished deletion and undoes a deletion the person made after
-step 7.
-
-INV-NoOverwrite: pigeon never renames over a name, and moves a file away from
-its name only to prove it is its own. If the proof fails, the file returns
-within milliseconds, or is captured. A write through a handle opened before
-step 4 that escapes the scan lands in the kept aside and is captured at step 9.
-Such writers are a process of another user, an `open` in flight across the
-rename, or a mapping macOS cannot see. Its content is kept, but not at its name
-, if it lands before the aside is released: a write through such a
-handle after the keep period goes to a file with no name, and is lost
-. The name is absent between steps 4 and 7: E19 measured a median of
-0.55 ms and a maximum of 6.6 ms.
+INV-NoOverwrite (`NoOverwrite`, ADR 0034): pigeon never renames over a name
+and moves a file away only to prove it is its own. A write through a handle
+opened before step 4 that escapes the scan (another user's process, an
+`open` in flight, a macOS mapping before `msync`) lands in the kept aside
+and is captured at step 9; after the keep period it is lost. The name is absent for
+milliseconds (E19).
 
 ## 7.6 Divergences and conflicts (ADRs 0034, 0035)
 
-A **divergence** is a path whose file differs from the catalogue's version and
-from what pigeon last installed there, because the person saved it. The
-**divergence table** (`.git/pigeon/conflicts.json`, ADR 0036) keeps, per path:
-its kind, the person's key, the `stat` of their file when that key was captured,
-and their proposal chain; the catalogue key it diverged from, the key pigeon last
-installed, its state and since when.
+A **divergence** is a path the person saved, so its file differs from the
+catalogue's version and from pigeon's last install. The **divergence table**
+(`.git/pigeon/conflicts.json`, ADR 0036) keeps per path: kind, the person's
+key and file `stat` at capture, their proposal chain, the catalogue key it
+diverged from, the key last installed, state and since when.
 
 | Kind | Starts when | State |
 |---|---|---|
-| `suggestion` | capture made a proposal for the path | *waiting* ("Your suggestion, waiting for Paul") |
-| `concurrent` | a merge gave the path to another person's version ([05 §5.3](05-catalogue-and-names.md)), or a save won the name during an install (§7.5 step 7) | *conflict* |
-| `recovered` | install moved aside content that was not its own and could not put it back, or a kept aside changed (§7.5 steps 6 and 9) | *conflict* |
+| `suggestion` | capture made a proposal for the path | *waiting* ("waiting for Paul") |
+| `concurrent` | a merge gave the path to another person's version ([05 §5.3](05-catalogue-and-names.md)), or a save won the name during install (§7.5 step 7) | *conflict* |
+| `recovered` | install moved aside content not its own and could not put it back, or a kept aside changed (§7.5 steps 6 and 9) | *conflict* |
 
-Transitions:
+*waiting* ends when the proposal is accepted (only the index changes) and
+becomes *conflict* when it is rejected or `current(p)` moves: the person is
+told **once**, and Home keeps a *Needs you* item ("Paul declined your change
+to *tarte.docx*; your version is still on your computer"). A new save of a
+diverging path extends the person's proposal chain, or makes a proposal of
+their own, so it is replicated without changing the catalogue **[no ADR]**.
+Install never writes a diverging path. A divergence changes no safety state:
+the person's version is a proposal's content, *protected* once K custodians
+hold it ([06 §6.2](06-status.md)).
 
-- *waiting* → **ended** when the proposal is accepted: the person's key is now
-  `current(p)`; only the index changes.
-- *waiting* → *conflict* when the proposal is rejected, or `current(p)` changes
-  to another key meanwhile. The person is told **once** (notification), and Home
-  keeps a *Needs you* item: "Paul declined your change to *tarte.docx*; your
-  version is still on your computer."
-- A new save of a diverging path updates the person's side: the proposal chain
-  for a suggestion; a proposal of their own for the other kinds, so that it is
-  captured and replicated without changing the catalogue **[no ADR]**.
-- While a path diverges, install never writes it, and newer accepted versions
-  of it are not installed on this disk. A divergence changes no safety state:
-  the person's version is kept as a proposal's content and has that version's
-  state, *protected* only once K custodians hold it (ADR 0034, [06 §6.2](06-status.md)).
-
-Resolutions (`pigeon resolve PATH …`, or the buttons of ux.md §8.8):
+Resolutions (`pigeon resolve PATH …`, or ux.md §8.8):
 
 | Choice | Effect |
 |---|---|
-| *Take the group's version* (`--take-group`) | install writes `current(p)` over the file, because the person asked; a pending proposal is withdrawn ([04 §4.5](04-roster-and-authority.md)); the person's version stays in its history |
-| *Keep mine as a copy* (`--keep-copy DEST`) | the person's captured key is copied to DEST (never the live file), in a folder the person may change, and captured there; then as above |
-| *Suggest again* (`--suggest-again`) | a new proposal from the person's file on top of the current `main`; state *waiting* |
-| *Keep mine*, *Keep Paul's*, *Keep both* (concurrent edits) | the signed changes of [05 §5.3](05-catalogue-and-names.md) |
+| *Take the group's version* (`--take-group`) | install writes `current(p)` because the person asked; a pending proposal is withdrawn ([04 §4.5](04-roster-and-authority.md)); their version stays in history |
+| *Keep mine as a copy* (`--keep-copy DEST`) | the captured key (never the live file) is copied to DEST, in a folder they may change, and captured; then as above |
+| *Suggest again* (`--suggest-again`) | a new proposal from their file on the current `main`: *waiting* |
+| *Keep mine*, *Keep Paul's*, *Keep both* | the signed changes of [05 §5.3](05-catalogue-and-names.md) |
 
-**A save after the choice** (§7.5). *Take the group's version* runs install
-(§7.5) with one change: the check of step 6 compares the file with the person's
-key and `stat` in the divergence table, which capture has already committed,
-instead of what pigeon last installed. That `stat` comes from a quiet file
-(§7.2), so a later save changes it; one that is racily clean (its mtime not
-older than its capture) defers the resolution until the next capture
-(§7.5). A save made after the person chose fails the check. Nothing is
-replaced, the save extends their proposal, and they are told once: "You saved
-*tarte.docx* again after choosing; nothing was replaced."
+*Take the group's version* runs install with step 6 checking the person's
+key and `stat` from the table. A save after the choice fails the check (a
+racily clean one defers it to the next capture): nothing is replaced, the
+save extends their proposal, and they are told once.
 
-**Seeing the group's version** (ADR 0035): *Open Paul's version* or
-`pigeon view PATH --group` writes a read-only copy in pigeon's cache directory,
-outside the shared folder, named `tarte (Paul's version).docx` in the reader's
-language, and opens it with the default application; `--version N` does the same
-for any version. These copies are removed when the conflict is resolved, or after
-seven days. The shared folder only ever holds what the person saved and the
-accepted catalogue.
+**The group's version** (ADR 0035): *Open Paul's version* or `pigeon view
+PATH --group` (`--version N`) writes a read-only copy outside the folder, in
+pigeon's cache, named `tarte (Paul's version).docx` in the reader's
+language, and opens it; it goes at resolution or after seven days.
 
 ## 7.7 What the models must show
 
-The capture and install protocol gets its TLA+ specification
-([13 §13.2](13-verification.md)): actions `Save` (a person or application, at any
-time: in place, by atomic replace, by creating or deleting the name, and through a
-handle or mapping opened earlier), `Scan`, `Capture`, `InstallStep` (one per step
-of §7.5, the writer scan included), `Crash`, `Recover`, `Release`, `Decide`,
-`Resolve`. Invariants: INV-Capture, INV-NoOverwrite (no behaviour renames over a
-name or installs over a diverging path, ADR 0034), INV-Journal, and NoLoss (every
-saved content is at its name, kept aside or captured, §7.5). The model
-exists (`models/tla/CaptureInstall.tla`, 13 §13.2); one negative configuration
-per safeguard shows what fails without it. E19 runs the same steps against
-git-annex with an adversary at each boundary. Every fault-injection run is
-trace-validated against the model (ADR 0008).
+`models/tla/CaptureInstall.tla` ([13 §13.2](13-verification.md)) models
+every kind of save (in place, replace, create, delete, through an earlier
+handle or mapping), each step of §7.3–§7.5, crashes and recovery. Invariants:
+`NoLoss` (every saved content is captured, at a name pigeon keeps, or
+discarded by the person), `Journal`, `IndexHonest` (E19), `CaptureFirst`,
+`NoOverwrite`, `DeletionKept`; liveness `SavesCaptured`, `Converges`. Each
+safeguard has a failing configuration in `models/tla/expected.tsv`; E19 runs
+the steps against git-annex with an adversary at each boundary (ADR 0008).
 
 ## 7.8 Pending history and disk use
 
-A version captured on a laptop is kept there as an immutable copy until it is
-*protected* ([06 §6.2](06-status.md)). This holds for accepted versions and
-suggestions alike. The unprotected versions this laptop captured form its
-**pending history**.
+A version captured on a laptop stays there as an immutable copy until it is
+*protected* ([06 §6.2](06-status.md)), accepted or suggested: its **pending
+history**.
 
-- **Budget.** Pending history may use up to `pending_max`, 10 % of the file
-  system by default, and capture never goes below
-  `annex.diskreserve`, max(1 GB, 1 %) on laptops ([08 §8.9](08-custody-loops.md)), which pigeon
-  checks itself because `git annex add` does not. Beyond either, capture of new content pauses with reason
-  `history-full` ([06 §6.4](06-status.md)). The files stay as saved, and
-  deletions and renames are still captured.
-- **Once protected**, the laptop drops the old versions it holds by key
-  (`git annex drop --key`, verified; [08 §8.3](08-custody-loops.md)), with the
-  guard of [08 §8.5](08-custody-loops.md) step 4: never a key that a path of
-  a kept folder still has, which git-annex would turn into a pointer file
-  ([08 §8.5](08-custody-loops.md), E24, `Evict_prune`). If the
-  file system has no copy-on-write and the file is still the protected
-  version, the laptop re-thins it: an install (§7.5) of the same key, with the
-  object as the new file.
-- **Disk use** of a laptop:
-  - one copy of what it keeps, once protected (E18: 5.2 MB for a 4 MB file);
-  - plus the pending history (E18 on ext4: five offline versions of 4 MB took
-    25 MB; on APFS and btrfs only the changed blocks, to be measured);
-  - plus the kept asides of install (about 10 minutes, §7.5) and metadata.
+- **Budget:** `pending_max` (10 % of the file system) and
+  `annex.diskreserve` (max(1 GB, 1 %), [08 §8.9](08-custody-loops.md)),
+  which pigeon checks itself. Beyond either, capture of new content pauses
+  (`history-full`, [06 §6.4](06-status.md)); deletions and renames go on.
+- **Once protected**, old versions are dropped by key (verified,
+  [08 §8.3](08-custody-loops.md)), never a key a kept path still has
+  ([08 §8.5](08-custody-loops.md) step 4; `Evict.tla` `NoPointer`). Without
+  copy-on-write a file at the protected version is re-thinned by installing
+  the same key.
+- **Disk use** is about one copy of what is kept, plus the pending history
+  (changed blocks only on APFS and btrfs), kept asides and metadata (E18).
 
-  "About one copy" is the steady state while custodians are reachable.
-
-Content received from others is installed by hard link (thin): an in-place
-save may destroy that local copy, which never counts toward K, while its origin
-keeps an immutable one.
+Content received from others is a hard link (thin): an in-place save may
+destroy it, so it never counts toward K; its origin keeps an immutable copy.
 
 ## 7.9 What the folder may hold
 
-pigeon shares **regular files**, by their bytes and the owner's execute bit.
-Folders exist through their files. The rest is listed here, so that nobody
+pigeon shares **regular files**: their bytes and the owner's execute bit.
+Folders exist through their files. Everything else is listed, so that nobody
 takes an incomplete capture for a safe one.
 
 | Object | What pigeon does |
 |---|---|
-| regular file | shared: content (`SHA256E`) and execute bit; installed with mode 0644 or 0755 under the umask, at the time of the install |
-| other mode bits, owner, times, ACLs, extended attributes, resource forks, Finder tags | not shared, and not kept by an install, which writes a new file |
-| hard links | each name shared as its own file; an install of either name breaks the link, and the other name keeps its content (§7.5 step 6) |
-| empty folder | not shared, not listed; install removes a folder it emptied, with `rmdir`, which fails harmlessly if a person added something |
-| symbolic link | *not shared* (`link`), never followed; listed, notified once |
-| folder holding `.git` | *not shared* (`repository`), with everything in it; listed, notified once |
-| live library: `.photoslibrary`, `.musiclibrary`, `.tvlibrary`, `.imovielibrary`, `.fcpbundle`, `.sparsebundle` | *not shared* (`library`); listed, notified once |
-| file or folder pigeon may not read | *not shared* (`unreadable`) until readable: neither captured nor installed, never a deletion; listed, notified once |
-| FIFO, socket, device | not shared, not listed: they hold no data (`git status` does not show them) |
+| regular file | shared (`SHA256E`, execute bit); installed 0644 or 0755 under the umask at install time |
+| other mode bits, owner, times, ACLs, extended attributes, resource forks, Finder tags | not shared; an install writes a new file without them |
+| hard links | each name is its own file; installing one breaks the link and the other keeps its content (§7.5 step 6) |
+| empty folder | not shared, not listed; install `rmdir`s a folder it emptied, which fails harmlessly if a person added something |
+| symbolic link (`link`), folder holding `.git` (`repository`, with all it holds), live library (`library`: `.photoslibrary`, `.musiclibrary`, `.tvlibrary`, `.imovielibrary`, `.fcpbundle`, `.sparsebundle`), unreadable file or folder (`unreadable`, until readable; never a deletion) | *not shared*, never followed; listed, notified once |
+| FIFO, socket, device | not shared, not listed (no data) |
 | ignored name (§7.2) | not captured, not listed |
 | non-portable name | held, *Needs you* ([05 §5.4](05-catalogue-and-names.md)) |
-| package: `.app`, `.band`, `.bundle`, `.framework`, `.key`, `.logicx`, `.numbers`, `.pages`, `.playground`, `.rtfd`, `.scriv`, `.textbundle`, `.xcodeproj`, `.xcworkspace` | shared as one document: captured together when quiet (§7.2), merged as one slot ([05 §5.2](05-catalogue-and-names.md)), installed in one batch (§7.5); one divergence entry |
+| package: `.app`, `.band`, `.bundle`, `.framework`, `.key`, `.logicx`, `.numbers`, `.pages`, `.playground`, `.rtfd`, `.scriv`, `.textbundle`, `.xcodeproj`, `.xcworkspace` | one document: captured together (§7.2), merged as one slot ([05 §5.2](05-catalogue-and-names.md)), installed in one batch (§7.5), one divergence entry |
 
-`package(p)`, the outermost folder above *p* with one of these extensions,
-compared case-insensitively, is a pure function of the name, so every platform
-agrees. Outside packages, files saved together share a commit only if they
-settle in one capture batch; no other multi-file consistency is promised.
+`package(p)`, the outermost folder above *p* with such an extension
+(case-insensitive), is a pure function of the name. Outside packages, files
+saved together share a commit only if they settle in one batch. *Not shared*
+items show in the folder view, in `pigeon status --not-shared`, and in a
+*Safe* headline ("2 items of your folder aren't shared", [06 §6.5](06-status.md)).
 
-*Not shared* items appear in the folder view ("2 items not shared") and in
-`pigeon status --not-shared`. A *Safe* headline then adds "2 items of your
-folder aren't shared" ([06 §6.5](06-status.md)).
-
-The accept rule refuses trees that hold anything else. Rule 6 of
-[04 §4.4](04-roster-and-authority.md) allows only folders and files of mode
-100644 or 100755. Outside `.pigeon/` and the root `.gitattributes`, each file
-must be a pointer to a `SHA256E` key; inside them, a plain blob.
-
-git and git-annex run with pigeon's configuration only ([03 §3.7](03-repository-and-roles.md),
-[03 §3.7](03-repository-and-roles.md)). The person's global settings, in-tree
-`.gitattributes` and in-tree `.gitignore` files cannot change keys, trees or
-listings.
+The accept rule ([04 §4.4](04-roster-and-authority.md) rule 6) allows only
+folders and files of mode 100644 or 100755: `SHA256E` pointers, except plain
+blobs in `.pigeon/` and the root `.gitattributes`. git and git-annex run
+with pigeon's configuration only ([03 §3.7](03-repository-and-roles.md)):
+global settings and in-tree `.gitattributes` or `.gitignore` cannot change
+keys, trees or listings.
