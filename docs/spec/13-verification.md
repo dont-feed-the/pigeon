@@ -1,3 +1,8 @@
+# 13. Verification
+
+> Mission: the layers of evidence and what each must show, the coverage of
+> P1–P6, the criteria for going on, the safety slice, and the laws in code.
+
 ## 13.1 Layers of evidence
 
 | Layer | Checks | Decided by |
@@ -85,27 +90,21 @@ laws, each a `hegeltest` property. The laws coded so far are those of
 Example tests remain for regressions found by properties (with the shrunk
 input) and for the fixed scenarios of this specification.
 
-**Reference model of the catalogue** ([05 §5.2](05-catalogue-and-names.md)):
-`models/catalogue/catalogue.py` runs every schedule of contributions and
-pulls between three devices for eleven cases, and fixed histories with
-their expected trees. On each reachable state it checks that the catalogue
-is a function of the contributions and of which saw which; that
-`tree(c) = catalogue(anc*(c))`; that a key leaves only through a
-contribution whose base showed it and a superseded version never comes
-back; that conflict names are injective and independent of arrival order;
-and that each copy is allowed to its author. The earlier rules (`old`,
-`naive`) must fail; the core's laws must agree with it on the same cases.
+**Reference model of the catalogue**: `models/catalogue/catalogue.py` runs
+every schedule of three devices for each case of [05 §5.2](05-catalogue-and-names.md)
+and checks its laws there (`order`, `tree`, `kept`, `seen`, `names`,
+`authority`) on each reachable state. The earlier rules (`old`, `naive`)
+must fail; the core's laws must agree with it.
 
 ## 13.5 Stateful tests and fault injection
 
-hegel state-machine tests drive real repositories of several devices
-through random operations (every save pattern, renames, mass deletions,
-decisions, invitations, roster changes, free and keep, purges, Drop) and
-faults (`kill -9` of `pigeond` or a git-annex child at any step, disk full,
-an unplugged drive, partitions, clock skew, a custodian replaced, a relay
-down), at least 1000 schedules per full run (proposal §7), against the
-invariants of [02 §2.5](02-guarantees.md), no overwritten save, and trace
-validation.
+Not yet coded beyond the slice (§13.12). hegel state-machine tests drive
+real repositories of several devices through random operations (saves,
+renames, mass deletions, decisions, invitations, roster changes, free and
+keep, purges, Drop) and faults (`kill -9` of `pigeond` or a git-annex child,
+disk full, an unplugged drive, partitions, clock skew, a custodian replaced,
+a relay down), at least 1000 schedules per full run, against
+[02 §2.5](02-guarantees.md) and trace validation.
 
 ## 13.6 Contract tests against git and git-annex
 
@@ -132,12 +131,11 @@ rerun with bare custodian repositories.
 
 ## 13.8 Continuous integration (ADR 0026)
 
-The workflows in `.github/workflows/` run these layers, and each says what
-in its header: `ci.yml` and `lab.yml` on every push (the repository rules
-are `scripts/check-*`; clippy denies `unwrap_used` and `expect_used`,
-ADR 0023; the Fluent check, ADR 0028; `cargo deny`, ADR 0019), `slice.yml`
-on every push (§13.12), `models-full.yml` when a model changes, weekly and
-by hand, with E17 on a self-hosted HDD runner **[no ADR: runner]**. A lab
+Each workflow of `.github/workflows/` says in its header what it runs:
+`ci.yml` (the `scripts/check-*` rules, clippy, the Fluent check, `cargo
+deny`), `lab.yml` and `slice.yml` (§13.12) on every push; `models-full.yml`
+when a model changes, weekly and by hand, with E17 on a self-hosted HDD
+runner **[no ADR: runner]**. A lab
 platform difference prints `SKIP (platform)` with its reason, never a
 dropped check. TLC is pinned by SHA-256, actions by commit; permissions are
 read-only; fault-injection runs keep their OTLP-JSON and trace files
@@ -166,16 +164,14 @@ What carries each guarantee today; gaps are GitHub issues
 
 ## 13.11 Going on: technical and human criteria
 
-**Go** for v1 if all hold (proposal §7, on the platforms of ADR 0005): no
+**Go** for v1 if all hold (on the platforms of ADR 0005): no
 loss of a protected version in any fault schedule or model; laptop disk use
 at most 1.1 × the content kept; test users explain *only on this computer*,
 *shared, not safe yet* and *safe* correctly. Otherwise the requirements are
 reviewed before any engine is built. Windows criteria move to v1.1.
 
-**Usability test** (ux.md §9), with the mockups, then the real system: five
-non-technical participants per round plus two "Pauls" for setup; moderated
-think-aloud, 30 minutes, seven tasks. Pass: at least 4 of 5 explain the
-three states; at least 4 of 5 do tasks 4 and 5 (an old version, a deleted
+**Usability test** (protocol in ux.md §9), with the mockups, then the real
+system. Pass: at least 4 of 5 explain the three states; at least 4 of 5 do tasks 4 and 5 (an old version, a deleted
 folder) without help; **no** participant believes a file that is not safe
 is safe. It tunes the thresholds of [06 §6.7](06-status.md).
 
