@@ -31,22 +31,23 @@ Read the files in order the first time. Each has one mission and a budget;
 | [01-concepts.md](01-concepts.md) | the vocabulary | 110 |
 | [02-guarantees.md](02-guarantees.md) | P1–P6, their assumptions, and the invariants that carry them | 130 |
 | [03-repository-and-roles.md](03-repository-and-roles.md) | the git and git-annex layout and the configuration of each role | 210 |
-| [04-roster-and-authority.md](04-roster-and-authority.md) | the roster, the authority rule, suggestions, decisions, Force | 240 |
-| [05-catalogue-and-names.md](05-catalogue-and-names.md) | the catalogue, merges, conflict names, portable names (P5) | 140 |
+| [04-roster-and-authority.md](04-roster-and-authority.md) | the roster, the authority rule, suggestions, decisions, Force | 210 |
+| [05-catalogue-and-names.md](05-catalogue-and-names.md) | the catalogue, merges, conflict names, portable names (P5) | 130 |
 | [06-status.md](06-status.md) | states, observations, the headline and its reasons (P6) | 170 |
-| [07-capture-and-install.md](07-capture-and-install.md) | capture, install, divergences, the mass-deletion guard (P2, P3) | 260 |
-| [08-custody-loops.md](08-custody-loops.md) | accept, placement, repair, freeing, purge, capacity (P1, P3) | 280 |
-| [09-network-and-joining.md](09-network-and-joining.md) | keys, transport, the filter, invitations, removal, recovery | 310 |
-| [10-interfaces.md](10-interfaces.md) | the request API, CLI, web, notifications, messages, Problems | 180 |
-| [11-local-state.md](11-local-state.md) | the files `pigeond` keeps and how they are written | 200 |
-| [12-observability.md](12-observability.md) | logs, telemetry, trace events | 100 |
-| [13-verification.md](13-verification.md) | the evidence layers, the slice, the laws in code | 370 |
-| [14-platforms-and-packaging.md](14-platforms-and-packaging.md) | platforms, git-annex delivery, supervision, the workspace | 170 |
-| [15-resource-use.md](15-resource-use.md) | priorities, the work queue, adaptive limits, budgets | 160 |
-| [16-open-questions.md](16-open-questions.md) | conflicts left with ADRs, details decided without one, open questions | 240 |
+| [07-capture-and-install.md](07-capture-and-install.md) | capture, install, divergences, the mass-deletion guard (P2, P3) | 210 |
+| [08-custody-loops.md](08-custody-loops.md) | accept, placement, repair, freeing, purge, capacity (P1, P3) | 230 |
+| [09-network-and-joining.md](09-network-and-joining.md) | keys, transport, the filter, invitations, removal, recovery | 240 |
+| [10-interfaces.md](10-interfaces.md) | the request API, CLI, web, notifications, messages, Problems | 170 |
+| [11-local-state.md](11-local-state.md) | the files `pigeond` keeps and how they are written | 170 |
+| [12-observability.md](12-observability.md) | logs, telemetry, trace events | 90 |
+| [13-verification.md](13-verification.md) | the evidence layers, the slice, the laws in code | 340 |
+| [14-platforms-and-packaging.md](14-platforms-and-packaging.md) | platforms, git-annex delivery, supervision, the workspace | 150 |
+| [15-resource-use.md](15-resource-use.md) | priorities, the work queue, adaptive limits, budgets | 150 |
+| [16-open-questions.md](16-open-questions.md) | conflicts left with ADRs, details decided without one, open questions | 170 |
 
-A file that outgrows its budget moves detail to the law, model or ADR that
-holds it, rather than growing.
+With this README (120) the budget is 3,000 lines. A file that outgrows its
+budget moves detail to the law, model or ADR that holds it, rather than
+growing.
 
 ## Precedence
 
