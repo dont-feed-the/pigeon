@@ -9,10 +9,9 @@
 
 `pigeon create NAME` writes the **genesis commit**: no parent, a tree with
 `.gitattributes` ([03 §3.3](03-repository-and-roles.md)) and a roster of one
-admin person and one device, signed by this device (ADR 0007). The **group
-ID** is its commit ID. A device accepts a history only if its root is the
-genesis its invitation names (ADR 0017); other founders join by invitation
-and are made admins by a roster change.
+admin and one device, signed by it (ADR 0007). The **group ID** is its
+commit ID; a device accepts only a history rooted at the genesis its
+invitation names (ADR 0017). Other founders join by invitation.
 
 ## 4.2 The roster file
 
@@ -35,13 +34,9 @@ admin = true
 [devices."3f9a0c1d…64 hex"]         # device ID = ed25519 public key (ADR 0007)
 person = "paul"
 name = "Paul's laptop"
-role = "laptop"                     # or "custodian" (with maxsize = "4 TB", ADR 0003)
+role = "laptop"                     # or "custodian" (with maxsize = "4 TB", ADR 0003),
+                                    # or "recovery": a key on paper, no annex_uuid, never online (ADR 0047)
 annex_uuid = "…"                    # its git-annex repository UUID (03 §3.5)
-
-[devices."9c04…"]
-person = "paul"
-name = "Paul's recovery sheet"
-role = "recovery"                   # a key on paper: no annex_uuid, never online (ADR 0047)
 
 [[folders]]
 path = "Lab data"                   # a top-level folder, or a deeper one
@@ -50,11 +45,10 @@ stewards = ["roy"]
 ```
 
 A roster is **valid** when it parses, `rules` is not lower than at the
-parents, an admin remains, every device names an existing person, device
-names and person IDs are unique, `k ≥ 1`, owners and stewards are persons,
-every laptop and custodian has an `annex_uuid` that no other device ever had
-(ADR 0046), a recovery device has none, and no removed device ID returns
-(ADR 0051). A commit that leaves an invalid roster is invalid.
+parents, and `pigeon-core::roster::Roster::validate` passes: an admin, known
+persons, unique names, `k ≥ 1`, an `annex_uuid` never reused (ADR 0046) on
+each laptop and custodian and none on a recovery device, no removed device
+back (ADR 0051). A commit that leaves an invalid roster is invalid.
 
 ## 4.3 Folder rules
 
@@ -85,35 +79,27 @@ Each row is checked under the roster at the commit's parents.
 
 ## 4.4 The authority rule
 
-Pure functions of the core (ADR 0012):
+Pure functions of the core (ADR 0012): `R(p)`, the roster in force for the
+children of *p*, the fold of §4.8, held in `tree(p)`; `signer(c)`, the device
+whose SSHSIG signature (namespace `git`) is in the `gpgsig` header of *c*,
+verified with `ssh-key` (ADR 0007), and `person(c)` its person (unsigned
+commits are invalid; `allowedSignersFile` and commit dates play no part);
+`catalogue(S)` of an ancestor-closed set of accepted commits
+([05 §5.2](05-catalogue-and-names.md)).
 
-- `R(p)`: the roster in force for the children of *p*, the fold of §4.8, which
-  `tree(p)` holds as `.pigeon/roster.toml`.
-- `signer(c)`: the device whose SSHSIG signature (namespace `git`) is in the
-  `gpgsig` header of *c*, verified with the `ssh-key` crate (ADR 0007);
-  `person(c)` is its person. Unsigned commits are invalid; git's
-  `allowedSignersFile` and commit dates play no part.
-- `catalogue(S)`: the logical catalogue of an ancestor-closed set of accepted
-  commits ([05 §5.2](05-catalogue-and-names.md)).
+A commit *c* other than the genesis, with **A(c)** its accepted parents and
+**X(c)** the others, is **accepted** iff (`Authority.tla`, INV-Valid of
+[02 §2.5](02-guarantees.md)):
 
-For a commit *c* other than the genesis, with **A(c)** its accepted parents
-and **X(c)** the others, *c* is **accepted** iff:
-
-1. A(c) is not empty;
-2. `signer(c)` is a device of `R(p)` for every *p* in A(c), or, when Δ = ∅,
-   for some *p* in A(c) (ADR 0051);
-3. with `B = catalogue(⋃ anc*(p), p ∈ A(c))` and `Δ = diff(B, tree(c))`, every
-   change of Δ is allowed for `person(c)` under `R(p)` for every *p* in A(c)
-   (§4.3), or *c* is a valid Force (§4.6); with one accepted parent, B = tree(p);
-4. if Δ changes the roster, the new roster is valid (§4.2);
-5. every path Δ adds is portable ([05 §5.4](05-catalogue-and-names.md));
-6. `tree(c)` is **well formed** ([07 §7.9](07-capture-and-install.md)): only
-   folders and files of mode 100644 or 100755; outside `.pigeon/` and the root
-   `.gitattributes`, each file a git-annex pointer to a `SHA256E` key with its
-   size; inside them, plain blobs;
-7. every parent in X(c) is a proposal (§4.5) that *c* adopts: `signer(c)` is
-   one of its deciders under R(p) for every *p* in A(c), and `tree(c)` holds
-   the proposal's change (ADR 0051).
+| # | Rule |
+|---|---|
+| 1 | A(c) is not empty |
+| 2 | `signer(c)` is a device of `R(p)` for every *p* in A(c), or, when Δ = ∅, for some *p* (ADR 0051) |
+| 3 | with `B = catalogue(⋃ anc*(p), p ∈ A(c))` (B = tree(p) for one accepted parent) and `Δ = diff(B, tree(c))`, every change of Δ is allowed for `person(c)` under `R(p)` for every *p* in A(c) (§4.3), or *c* is a valid Force (§4.6) |
+| 4 | if Δ changes the roster, the new roster is valid (§4.2) |
+| 5 | every path Δ adds is portable ([05 §5.4](05-catalogue-and-names.md)) |
+| 6 | `tree(c)` is **well formed** ([07 §7.9](07-capture-and-install.md)): folders and files of mode 100644 or 100755 only; outside `.pigeon/` and the root `.gitattributes`, each file a git-annex pointer to a `SHA256E` key with its size; inside them, plain blobs |
+| 7 | every parent in X(c) is a proposal (§4.5) that *c* adopts: `signer(c)` is one of its deciders under R(p) for every *p* in A(c), and `tree(c)` holds its change (ADR 0051) |
 
 A commit breaking rule 6 is **malformed**: neither accepted nor a proposal,
 and its keys are not references ([08 §8.6](08-custody-loops.md)). A commit is
@@ -125,52 +111,43 @@ after an upgrade. An older release's verdict is a newer one's, or *unknown*
 
 Consequences, checked by `Authority.tla` (`AuthorisedContent`,
 `DecisionsByDeciders`, `AdoptionHoldsContent`, `RemovedSilenced`,
-`RemovalRevokesAdded`, `Converge`, `ConvergedWhenQuiet`):
+`RemovalRevokesAdded`, `HonestMergesAccepted`, `Converge`, `ConvergedWhenQuiet`):
 
 - A clean merge has Δ = ∅, counts in no catalogue ([05 §5.1](05-catalogue-and-names.md)),
-  and a device of any parent's roster may sign it, so two branches that
-  removed each other's devices can still merge (`Roster_every` shows the
-  deadlock otherwise).
-- **Adoption** is a merge with an accepted parent and a proposal parent; its
-  Δ is the proposal's change. A merge with a proposal parent it does not
-  adopt is itself a proposal.
+  and any parent's roster may sign it, so two branches that removed each
+  other's devices still merge (`Roster_every` deadlocks otherwise).
+- **Adoption** is a merge of an accepted parent and a proposal, with Δ the
+  proposal's change; a merge with a proposal it does not adopt is a proposal.
 - A commit mixing allowed and disallowed changes is rejected whole; capture
   splits, so never writes one ([07 §7.3](07-capture-and-install.md)).
-- **Revoked commits** (ADR 0051): an accepted *x* is revoked in a set that
-  holds an accepted removal of `signer(x)` not descending from *x*, or when
-  `signer(x)` is not in the roster folded from *x*'s ancestors in the set. The
-  catalogue and the fold skip it except for its device removals; it is shown
-  as a suggestion of its signer's person. So nothing a removed device signed
-  unseen by its removal counts, nor the keys it added ([09 §9.7](09-network-and-joining.md)).
-- **Locality:** the verdict of *c* depends only on *c* and its ancestors, so
-  `accepted(S ∪ T) = accepted(S) ∪ accepted(T)` for ancestor-closed S, T, and
-  a roster change applies to the *children* of its commit.
+- **Revoked** (ADR 0051): an accepted *x* is revoked in a set holding an
+  accepted removal of `signer(x)` not descending from *x*, or when
+  `signer(x)` is not in the roster folded from *x*'s ancestors. The catalogue
+  and the fold skip it except for its device removals; it is shown as a
+  suggestion of its signer's person ([09 §9.7](09-network-and-joining.md)).
+- **Locality:** a verdict depends only on *c* and its ancestors, so
+  `accepted(S ∪ T) = accepted(S) ∪ accepted(T)` for ancestor-closed S, T; a
+  roster change applies to the *children* of its commit.
 
 ## 4.5 Proposals
 
-A **proposal** is a signed commit §4.4 does not accept: made by capture, or
-found in a peer's history. Each is kept as
-`refs/pigeon/proposals/<signer-device-id>/<commit>` (ADR 0009).
+A **proposal** is a signed commit §4.4 does not accept, made by capture or
+found in a peer's history, kept as
+`refs/pigeon/proposals/<signer-device-id>/<commit>` (ADR 0009). Deciders,
+adoption and concurrent decisions are ADR 0051, checked by `Authority.tla`
+(`DecidersCanAdopt`, `DecisionsByDeciders`, `AdoptionHoldsContent`).
 
-- **Shape [no ADR].** Capture writes one proposal per batch and set of
-  deciders, on the `main` it captured on. A later save of a path in a pending
-  proposal of this device makes a new proposal on top of it; people see one
-  updated suggestion (ADR 0034).
-- **Deciders** of a proposal on `main` *m* (ADR 0051): the persons allowed
-  (§4.3) to make every change of its adoption on *m*; if nobody may, the
-  admins, who adopt with Force. Recomputed when `main` moves.
-- **Revisions.** A decision names one proposal commit. Adopting a revision
-  adopts its ancestors in the chain; rejecting one leaves later ones pending.
-- **State**, computed, never stored; the first that holds, in this order:
-  *accepted* (an accepted commit descends from it), *rejected* or
-  *withdrawn* (`.pigeon/decisions/<commit>.toml`, [07 §7.6](07-capture-and-install.md)),
-  *superseded* (a later revision exists), *pending*. Revoked commits (§4.4) are
-  shown and decided the same way.
-- **Accept.** On a `main` holding every accepted commit the proposal builds
-  on, the decider's device merges (`main`, proposal) with the proposal's
-  change. If the path changed meanwhile, both versions are kept, the
-  proposal's under its conflict name ([05 §5.2–5.3](05-catalogue-and-names.md)).
-- **Reject.** The decider's device commits:
+| Point | Rule |
+|---|---|
+| shape **[no ADR]** | one proposal per capture batch and set of deciders, on the `main` it captured on; a later save of a path in a pending proposal of this device stacks a new one on it, shown as one suggestion (ADR 0034) |
+| deciders | the persons allowed (§4.3) to make every change of its adoption on `main`; if nobody, the admins, with Force; recomputed when `main` moves |
+| revisions | a decision names one commit: adopting it adopts its ancestors in the chain; rejecting it leaves later ones pending |
+| state (computed) | the first that holds: *accepted* (an accepted commit descends), *rejected* or *withdrawn* (a decision, [07 §7.6](07-capture-and-install.md)), *superseded*, *pending*; revoked commits alike |
+| accept | on a `main` holding all it builds on, merge (`main`, proposal) with its change; a path changed meanwhile keeps both, the proposal's under its conflict name ([05 §5.2–5.3](05-catalogue-and-names.md)) |
+| concurrency | an adoption wins over a rejection; the proposal stays the author's **submission**, the adoption the decider's **authorised change**, so rights never widen |
+| content | replicates like any version: *protected* only once K custodians hold it (ADR 0034, [06 §6.2](06-status.md)) |
+
+A rejection or withdrawal is a commit of `.pigeon/decisions/<commit>.toml`:
 
 ```toml
 format = 1
@@ -179,61 +156,48 @@ verdict = "rejected"        # or "withdrawn"
 note = "On garde la recette de Mamie."
 ```
 
-- Concurrent decisions resolve deterministically: an adoption wins over a
-  rejection (ADR 0051). The proposal stays the author's signed
-  **submission**; the adoption, signed by a decider, is the **authorised
-  change**, so a signer's rights never widen.
-- Proposals replicate like everything else, and their content has the states
-  of any version: *protected* only once K custodians hold it (ADR 0034,
-  [06 §6.2](06-status.md)).
-
 ## 4.6 Force
 
-Force is the admin override: a commit §4.4 rejects only because of folder
-rules, accepted because it carries the trailer `Pigeon-Force: <reason>` and
-its signer is an admin under the rosters of its accepted parents. It never
-waives rules 2, 4 and 6 or the `.pigeon/` table. The CLI asks first; the web
-interface says what changes; history shows "admin override by Roy". Only
+A commit §4.4 rejects only for folder rules is accepted with the trailer
+`Pigeon-Force: <reason>` when its signer is an admin under the rosters of
+its accepted parents. It never waives rules 2, 4 and 6 or the `.pigeon/`
+table. The CLI asks first, the web interface says what changes, and history
+shows "admin override by Roy". Only
 admins force, as ux.md says, not any member as the proposal said **[no ADR]**.
 
 ## 4.7 Changing the roster
 
-- Every roster change is a signed commit checked by §4.4 (ADR 0009); the CLI
-  and the web interface write them. A hand edit of `roster.toml` is captured
-  like any file, a proposal from a non-admin.
-- Adding or removing a device of P: an admin or a device of P (ADR 0017).
-  Adding a person or removing an admin: an admin; the last admin stays.
-  A custodian's `maxsize`: an admin or a device of its person.
-- Concurrent changes may fork; the roster of a merge is the fold of §4.8,
-  never a file merge (ADR 0051).
-- A change of K, a role or `maxsize` re-applies the git-annex settings
-  ([03 §3.5](03-repository-and-roles.md)).
+- Every roster change is a signed commit checked by §4.4 (ADR 0009); a hand
+  edit of `roster.toml` is captured like any file, a proposal from a
+  non-admin.
+- A device of P: added or removed by an admin or a device of P (ADR 0017;
+  `a_member_who_is_no_admin_signs_only_their_devices`). A person, or an
+  admin's removal: an admin; the last admin stays. A custodian's `maxsize`:
+  an admin or a device of its person.
+- Forks merge by the fold of §4.8, never a file merge (ADR 0051). A change
+  of K, a role or `maxsize` re-applies the settings ([03 §3.5](03-repository-and-roles.md)).
 
 ## 4.8 Roster forks: the fold (ADR 0051)
 
-Normative: `pigeon-core::roster` with its laws (`tests/roster.rs`) and
-`Roster.tla` (`TreeIsFold`, `Agreement`, `AdminRemains`, `RemovalWins`,
-`PersonRemovalWins`, `SkipsNeedConcurrency`, `MergeAlwaysPossible`). In short:
+Normative: `pigeon-core::roster` with its laws and `Roster.tla`. Each
+accepted commit carries a **change** δ(c) from the fold of its accepted
+parents (`set` from the value its author saw, `add`, `remove device`,
+`remove person` with their devices and steward roles), judged once under
+its parents; a clean merge has none, a decision merge the change it adopts.
 
-- Each accepted commit carries a **change** δ(c) from the fold of its
-  accepted parents to its `roster.toml`: edits `set` a field (from the value
-  its author saw), `add` an entry, `remove device`, `remove person` (with
-  their devices and steward roles). A clean merge has none; a decision merge
-  carries the change it adopts. δ(c) is judged once, under its parents.
-- **Canonical order:** topological, and among commits whose ancestors are
-  placed, smallest (author time, device ID, commit ID) first, as in
-  [05 §5.2](05-catalogue-and-names.md).
-- **Fold:** from the genesis roster, a change applies whole when every `set`
-  finds its old or new value, every `add` finds its entry absent or equal,
-  and the result is valid; otherwise it is **skipped**, except its
-  `remove device` edits, which always apply (`Removals = "always"`). A revoked
-  commit's change is skipped the same way. The fold remembers every removed
-  device and `annex_uuid`, even of one never added, so neither returns.
-- **Laws:** the fold depends only on the set of ancestors; every result is
-  valid with an admin; removals win; skips need concurrency; a linear history
-  skips nothing. Replaying one side onto the other depends on who merges
-  (`Roster_rebase`); of two concurrent removals that would leave no admin the
-  later is skipped (`Roster_person`).
-- **Skipped changes** are listed with their reason; the admins and the author
-  see *Needs you* ("Alice and Bob gave up their admin role at the same time.
-  One admin must remain: Bob stays admin."). *Apply again* writes a new change.
+| Rule | Law (`tests/roster.rs`) | `Roster.tla` |
+|---|---|---|
+| canonical order: topological, then smallest (author time, device ID, commit ID), as in [05 §5.2](05-catalogue-and-names.md) | `the_canonical_order_is_topological` | `TreeIsFold` |
+| a change applies whole when every `set` finds its old or new value, every `add` its entry absent or equal, and the result is valid; else it is **skipped** | `every_tree_is_the_fold_of_its_history` | `TreeIsFold`, `Agreement` |
+| the fold depends only on the set of ancestors | `the_fold_depends_only_on_the_set_of_changes` | `Agreement` |
+| every result is valid with an admin; `remove device` edits always apply (`Removals = "always"`), a revoked commit's change is skipped likewise | `every_fold_is_valid_and_removals_win` | `AdminRemains`, `RemovalWins`, `PersonRemovalWins` |
+| a removed device or `annex_uuid` never returns, even one never added | `removing_an_absent_device_keeps_it_out` | `RemovalWins` |
+| skips need concurrency; a linear history skips nothing | `skips_need_concurrency`, `a_linear_history_skips_nothing` | `SkipsNeedConcurrency` |
+| a merge is always possible | — | `MergeAlwaysPossible` |
+
+Replaying one side onto the other depends on who merges (`Roster_rebase`);
+of two concurrent removals that would leave no admin the later is skipped
+(`Roster_person`). **Skipped changes** are listed with their reason; the
+admins and the author see *Needs you* ("Alice and Bob gave up their admin
+role at the same time. One admin must remain: Bob stays admin."). *Apply
+again* writes a new change.
