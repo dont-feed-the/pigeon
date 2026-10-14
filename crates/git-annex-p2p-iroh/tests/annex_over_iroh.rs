@@ -43,6 +43,8 @@ fn path_with_helper() -> String {
 }
 
 /// Runs a command in `dir` with the lab's git environment and `socket`.
+/// `pigeond`'s own calls get pigeon's environment instead (ADR 0045), so the
+/// repositories carry their identity in `.git/config`, as pigeon writes it.
 async fn run(dir: &Path, socket: &Path, args: &[&str]) -> std::process::Output {
     let mut c = Command::new(args[0]);
     c.args(&args[1..])
@@ -141,6 +143,9 @@ async fn annex_copy_get_and_refused_remove_over_iroh() {
     )
     .await;
     ok(&c, &custodian.socket, &["git", "annex", "init", "C"]).await;
+    for (k, v) in [("user.name", "lab"), ("user.email", "lab@x")] {
+        ok(&c, &custodian.socket, &["git", "config", k, v]).await;
+    }
     ok(
         &root,
         &laptop.socket,
@@ -148,6 +153,9 @@ async fn annex_copy_get_and_refused_remove_over_iroh() {
     )
     .await;
     ok(&l, &laptop.socket, &["git", "annex", "init", "L"]).await;
+    for (k, v) in [("user.name", "lab"), ("user.email", "lab@x")] {
+        ok(&l, &laptop.socket, &["git", "config", k, v]).await;
+    }
     let mut bytes = vec![0u8; 300_000];
     std::fs::File::open("/dev/urandom")
         .unwrap()

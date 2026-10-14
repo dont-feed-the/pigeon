@@ -60,6 +60,7 @@ const ANNEX: &[&str] = &[
     "describe",
     "lookupkey",
     "examinekey",
+    "contentlocation",
 ];
 
 /// Options that select keys git-annex would choose, or reach other

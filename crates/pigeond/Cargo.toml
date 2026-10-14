@@ -10,6 +10,7 @@ publish.workspace = true
 
 [dependencies]
 pigeon-core.workspace = true
+pigeon-git.workspace = true
 pigeon-proto.workspace = true
 iroh.workspace = true
 iroh-mdns-address-lookup.workspace = true

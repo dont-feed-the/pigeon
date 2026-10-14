@@ -2241,6 +2241,7 @@ dependencies = [
  "iroh",
  "iroh-mdns-address-lookup",
  "pigeon-core",
+ "pigeon-git",
  "pigeon-proto",
  "serde_json",
  "sha2",

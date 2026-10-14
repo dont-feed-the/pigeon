@@ -190,7 +190,7 @@ this table before a process starts (ADR 0067).
 | `git annex numcopies`, `mincopies`, `trust`, `untrust`, `semitrust`, `group`, `wanted`, `maxsize`, `dead` | settings ([§3.5](#35-settings-follow-the-roster-or-drops-stop)) |
 | `git annex merge`, `smudge --update`, `restage`, `remotedaemon`, `version` | branch merge, sparse folders (E15), notifications, checks |
 | `git init`, `config`, `remote`, `git annex init`, `describe` | `create` and `join` (§3.6, ADR 0067) |
-| `git rev-parse`, `ls-files`, `ls-tree`, `show-ref`, `hash-object`, `mktree`, `git annex lookupkey`, `examinekey` | reading the index, trees and keys; writing objects without the working tree (ADR 0067) |
+| `git rev-parse`, `ls-files`, `ls-tree`, `show-ref`, `hash-object`, `mktree`, `git annex lookupkey`, `examinekey`, `contentlocation` | reading the index, trees and keys; writing objects without the working tree (ADR 0067) |
 
 **Never run:** `git annex sync`, `assist` and `assistant` (they commit and
 merge on their own, E9); `git annex move`, `drop --from`, `satisfy`,

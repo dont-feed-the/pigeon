@@ -85,7 +85,11 @@ specification.
    and exempt from the 1000-line rule.
 8. **Layout.** `pigeond` has a library target (`src/lib.rs`), which its binary
    and the tests share. `git-annex-p2p-iroh` depends on `pigeond` for its
-   integration test only.
+   integration test only. The relay's syncs and repairs run git-annex
+   through `pigeon-git`, with pigeon's environment (ADR 0045), so
+   `contentlocation`, which 09 §9.4 already uses, joins the allow-list of
+   03 §3.7. A repair retries `fsck` once a second, ten times, since
+   remotedaemon may still hold the lock the filter has just released.
 
 ## Consequences
 

@@ -4,7 +4,8 @@
 //! for a key until its object file and the directories above it, up to
 //! `annex/objects`, are synced. A lock that proves another custodian's drop
 //! also waits for the object's SHA-256 to match its key (ADR 0059); a
-//! mismatch queues `git annex fsck --key`. On macOS, `sync_all` is
+//! mismatch queues `git annex fsck --key`. git-annex runs through
+//! `pigeon-git`, with pigeon's environment. On macOS, `sync_all` is
 //! `F_FULLFSYNC`.
 
 use std::future::Future;
@@ -12,6 +13,8 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
+use pigeon_git::env::GitEnv;
+use pigeon_git::run::Repo;
 use sha2::{Digest, Sha256};
 
 use super::Repository;
@@ -30,6 +33,9 @@ pub trait Syncer: Send + Sync + 'static {
     /// Moves a rotten object out, so that repair starts (08 §8.4).
     fn repair(&self, repository: &Repository, key: &str) -> RepairFuture;
 }
+
+/// The deadline of each git-annex call of a sync or a repair.
+const CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// How many times a repair runs fsck before it gives up and says so.
 const REPAIR_ATTEMPTS: usize = 10;
@@ -68,23 +74,17 @@ fn directory(repository: &Repository) -> PathBuf {
 
 impl Syncer for AnnexSyncer {
     fn sync(&self, repository: &Repository, key: &str, hash: bool) -> SyncFuture {
-        let dir = directory(repository);
+        let repo = Repo::new(directory(repository), GitEnv::default());
         let key = key.to_owned();
         Box::pin(async move {
             if !plausible_key(&key) {
                 return Err(io::Error::new(io::ErrorKind::InvalidInput, "key"));
             }
-            let out = tokio::process::Command::new("git")
-                .args(["annex", "contentlocation", &key])
-                .current_dir(&dir)
-                .kill_on_drop(true)
-                .output()
-                .await?;
-            if !out.status.success() {
-                return Err(io::Error::new(io::ErrorKind::NotFound, "contentlocation"));
-            }
-            let relative = String::from_utf8_lossy(&out.stdout).trim_end().to_owned();
-            let object = dir.join(relative);
+            let out = repo
+                .run(&["annex", "contentlocation", &key], None, CALL_TIMEOUT)
+                .await
+                .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
+            let object = repo.dir.join(out.text().trim_end());
             tokio::task::spawn_blocking(move || {
                 sync_object(&object)?;
                 if !hash {
@@ -101,7 +101,7 @@ impl Syncer for AnnexSyncer {
     }
 
     fn repair(&self, repository: &Repository, key: &str) -> RepairFuture {
-        let dir = directory(repository);
+        let repo = Repo::new(directory(repository), GitEnv::default());
         let key = key.to_owned();
         Box::pin(async move {
             if !plausible_key(&key) {
@@ -110,17 +110,13 @@ impl Syncer for AnnexSyncer {
             // fsck cannot move the object out while remotedaemon still holds
             // the lock the filter has just asked it to release: retry.
             for _ in 0..REPAIR_ATTEMPTS {
-                let _ = tokio::process::Command::new("git")
-                    .args(["annex", "fsck", "--key", &key])
-                    .current_dir(&dir)
-                    .output()
+                let _ = repo
+                    .run_status(&["annex", "fsck", "--key", &key], None, CALL_TIMEOUT)
                     .await;
-                let present = tokio::process::Command::new("git")
-                    .args(["annex", "contentlocation", &key])
-                    .current_dir(&dir)
-                    .output()
+                let present = repo
+                    .run_status(&["annex", "contentlocation", &key], None, CALL_TIMEOUT)
                     .await
-                    .map(|o| o.status.success())
+                    .map(|(code, _)| code == Some(0))
                     .unwrap_or(true);
                 if !present {
                     return;
