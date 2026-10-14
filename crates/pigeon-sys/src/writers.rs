@@ -128,10 +128,7 @@ mod imp {
     const PROX_FDTYPE_VNODE: u32 = 1;
     const FWRITE: u32 = 0x2;
     const VM_PROT_WRITE: u32 = 0x2;
-    const SM_COW: u32 = 1;
-    const SM_PRIVATE: u32 = 2;
-    const SM_PRIVATE_ALIASED: u32 = 6;
-    const PROC_REGION_SHARED: u32 = 2;
+    const VM_INHERIT_SHARE: u32 = 0;
 
     #[repr(C)]
     #[derive(Clone, Copy)]
@@ -243,8 +240,8 @@ mod imp {
         matches(&info.pvip.vip_vi.vi_stat, id) && info.pfi.fi_openflags & FWRITE != 0
     }
 
-    /// The `(protection, share mode, flags)` of every region of `pid` that
-    /// maps the file `id`.
+    /// The `(protection, inheritance, share mode)` of every region of `pid`
+    /// that maps the file `id`.
     pub(super) fn regions(pid: c_int, id: FileId) -> Vec<(u32, u32, u32)> {
         let size = c_int::try_from(size_of::<ProcRegionWithPathinfo>()).unwrap_or(0);
         let mut out = Vec::new();
@@ -269,7 +266,7 @@ mod imp {
             let info = unsafe { info.assume_init() };
             let r = info.prp_prinfo;
             if matches(&info.prp_vip.vip_vi.vi_stat, id) {
-                out.push((r.pri_protection, r.pri_share_mode, r.pri_flags));
+                out.push((r.pri_protection, r.pri_inheritance, r.pri_share_mode));
             }
             let next = r.pri_address.saturating_add(r.pri_size);
             if next <= address {
@@ -281,15 +278,15 @@ mod imp {
     }
 
     /// A region maps the file shared and writable when its protection allows
-    /// writes and it is not known to be private. A region whose pages were
-    /// never touched reports `SM_EMPTY`, so that mode counts as shared: an
-    /// install that waits is safe, a missed writer is not.
+    /// writes and `mmap` made it with `MAP_SHARED`, which XNU records as
+    /// `VM_INHERIT_SHARE` (`bsd/kern/kern_mman.c`). The share mode says how
+    /// many maps hold the object, not how it was mapped: a lone `MAP_SHARED`
+    /// mapping reports `SM_PRIVATE`. A process that changes the inheritance
+    /// with `minherit` is not seen.
     fn maps_writable(pid: c_int, id: FileId) -> bool {
-        regions(pid, id).into_iter().any(|(prot, mode, flags)| {
-            let private = matches!(mode, SM_COW | SM_PRIVATE | SM_PRIVATE_ALIASED)
-                && flags & PROC_REGION_SHARED == 0;
-            prot & VM_PROT_WRITE != 0 && !private
-        })
+        regions(pid, id)
+            .into_iter()
+            .any(|(prot, inherit, _)| prot & VM_PROT_WRITE != 0 && inherit == VM_INHERIT_SHARE)
     }
 
     pub(super) fn scan(id: FileId) -> Scan {
@@ -357,38 +354,54 @@ mod tests {
     }
 
     #[test]
-    fn sees_a_shared_writable_mapping() {
+    fn sees_a_shared_writable_mapping_and_not_a_private_one() {
         use rustix::mm::{MapFlags, ProtFlags, mmap, munmap};
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("m");
         std::fs::write(&p, vec![0u8; 4096]).unwrap();
         let id = crate::fs::lstat(&p).unwrap().unwrap().id;
-        let file = OpenOptions::new().read(true).write(true).open(&p).unwrap();
-        // SAFETY: a fresh shared mapping of a 4096-byte file we own, unmapped
-        // below; nothing else aliases it.
-        let addr = unsafe {
-            mmap(
-                std::ptr::null_mut(),
-                4096,
-                ProtFlags::READ | ProtFlags::WRITE,
-                MapFlags::SHARED,
-                &file,
-                0,
-            )
-        }
-        .unwrap();
-        drop(file);
         let me = std::process::id();
-        #[cfg(target_vendor = "apple")]
-        let seen = imp::regions(i32::try_from(me).unwrap(), id);
-        #[cfg(not(target_vendor = "apple"))]
-        let seen: Vec<(u32, u32, u32)> = Vec::new();
+        // Maps the file through a descriptor closed at once, so that only
+        // the mapping can make this process a writer.
+        let map = |flags| {
+            let file = OpenOptions::new().read(true).write(true).open(&p).unwrap();
+            // SAFETY: a fresh mapping of a 4096-byte file we own, unmapped
+            // below; nothing else aliases it.
+            unsafe {
+                mmap(
+                    std::ptr::null_mut(),
+                    4096,
+                    ProtFlags::READ | ProtFlags::WRITE,
+                    flags,
+                    &file,
+                    0,
+                )
+            }
+            .unwrap()
+        };
+        let regions = || {
+            #[cfg(target_vendor = "apple")]
+            let seen = imp::regions(i32::try_from(me).unwrap(), id);
+            #[cfg(not(target_vendor = "apple"))]
+            let seen: Vec<(u32, u32, u32)> = Vec::new();
+            seen
+        };
+        let private = map(MapFlags::PRIVATE);
+        assert!(
+            !scan(id).writers.contains(&me),
+            "a private mapping writes no file; regions {:?}",
+            regions()
+        );
+        let shared = map(MapFlags::SHARED);
         assert!(
             scan(id).writers.contains(&me),
-            "a shared writable mapping is a writer; regions {seen:?}"
+            "a shared writable mapping is a writer; regions {:?}",
+            regions()
         );
-        // SAFETY: `addr` is the mapping made above, of 4096 bytes.
-        unsafe { munmap(addr, 4096) }.unwrap();
+        // SAFETY: the mapping made above, of 4096 bytes.
+        unsafe { munmap(shared, 4096) }.unwrap();
+        // SAFETY: the mapping made above, of 4096 bytes.
+        unsafe { munmap(private, 4096) }.unwrap();
         assert!(!scan(id).writers.contains(&me));
     }
 }

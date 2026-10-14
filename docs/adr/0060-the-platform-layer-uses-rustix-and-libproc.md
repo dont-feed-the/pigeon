@@ -31,7 +31,9 @@ fingerprint, the runtime directory on macOS, and the exact form of the seams.
    target has the file's `(dev, ino)` is a writer unless its `fdinfo`
    access mode is read-only; a line of `maps` that maps it `rw-s` is a
    writer. On macOS, a vnode descriptor with `FWRITE`, or a region with
-   write protection and a shared mode. Install treats a scan with
+   write protection that `MAP_SHARED` made, which XNU marks
+   `VM_INHERIT_SHARE` (`bsd/kern/kern_mman.c`). The region's share mode
+   cannot tell: a lone shared mapping reports `SM_PRIVATE`. Install treats a scan with
    uninspected processes as clear only if the file gives no write
    permission to group or others; otherwise the path waits (`in-use`).
 3. **Directories.** As 11 §11.2, through `dirs`. The runtime directory is
