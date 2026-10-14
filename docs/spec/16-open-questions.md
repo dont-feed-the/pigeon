@@ -9,13 +9,9 @@
 
 ## 16.1 Decisions awaited
 
-One ADR is Proposed; Guillaume accepted ADRs 0047, 0048 and 0051 on
+No ADR is Proposed: Guillaume accepted ADRs 0046, 0047, 0048 and 0051 on
 14 October 2026. The details that were ADRs before that day are in the
 chapters cited ([16 §16.3](#163-details-decided-without-an-adr)).
-
-| Item | State | Who |
-|---|---|---|
-| ADR 0046: protected means K custodians hold the content and its commit, on disk | Proposed, for issues #11 and #12, revised at Guillaume's request to drop failure domains; [06 §6.2–6.3](06-status.md), [02 §2.1–2.2](02-guarantees.md), [03 §3.4](03-repository-and-roles.md), [08 §8.3](08-custody-loops.md), [09 §9.4](09-network-and-joining.md) apply it; E21 asserts it, the `Repair` model checks it | Guillaume |
 
 ## 16.2 Where this specification departs from a source
 
@@ -28,7 +24,7 @@ chapters cited ([16 §16.3](#163-details-decided-without-an-adr)).
 | Custody mechanism | proposal: pigeon's own custody tokens (`CustodyTokens`) | git-annex's verified, lock-based drop (ADR 0001; [13 §13.2](13-verification.md)) | the token models stay as evidence about hand-offs and their counterexamples |
 | Unauthorised edits | proposal: restored automatically from the catalogue | kept as the person's divergence and suggestion ([07 §7.6](07-capture-and-install.md)) | ADR 0034 |
 | Go criteria | proposal §7 includes Windows | Windows criteria move to v1.1 ([13 §13.11](13-verification.md)) | ADR 0005 |
-| Merging the roster | ADR 0009: a merge of roster changes needs an admin valid under both parents | the roster of a merge is the fold of its changes; no signer needed ([04 §4.8](04-roster-and-authority.md)) | ADR 0051 (Proposed), issue #6: concurrent self-retirements leave no such admin |
+| Merging the roster | ADR 0009: a merge of roster changes needs an admin valid under both parents | the roster of a merge is the fold of its changes; no signer needed ([04 §4.8](04-roster-and-authority.md)) | ADR 0051 (Accepted), issue #6: concurrent self-retirements leave no such admin |
 | Order of work | ADR 0037: protect, downloads, then repair | protect and repair are one class, fewest copies first, before downloads ([15 §15.2](15-resource-use.md)) | [08 §8.9](08-custody-loops.md), issue #13: a custodian must not spend its last space on a new key while an old one has a single copy |
 | Reading trace logs | ADR 0008: `ndJsonDeserialize`, said to be in our `tla2tools.jar` | a TLA+ module generated from the NDJSON log, read by the pinned TLC 1.7.4 ([13 §13.3](13-verification.md)) | [13 §13.3](13-verification.md), issue #10 |
 | First week of the feasibility study | proposal §7: the roles and the six daemon loops, then fault injection | the safety slice first: no proposals, purge or scrub until it passes; one person, one laptop, two custodians ([13 §13.12](13-verification.md)) | issue #17 **[no ADR: milestone]** |
@@ -247,15 +243,15 @@ experiments stay listed in [13](13-verification.md) and in the prototype (#17).
 | #3 | `annex.thin` and unprotected versions | [07 §7.8](07-capture-and-install.md), [06 §6.2](06-status.md), [03 §3.4](03-repository-and-roles.md) | [07 §7.8](07-capture-and-install.md), E18 asserts; copy-on-write measurement to come |
 | #4 | reference-aware purge | [08 §8.6](08-custody-loops.md), [05 §5.1](05-catalogue-and-names.md) | [08 §8.6](08-custody-loops.md); E14 asserts the three cases; purge laws (hegel-rust) to come |
 | #5 | purge against concurrent restores and returning peers | [08 §8.6](08-custody-loops.md), [06 §6.3](06-status.md) | [08 §8.6](08-custody-loops.md); the `Purge` model checks it; E14 asserts a restore against the seals and a returning laptop |
-| #6 | roster forks with disjoint admin sets | [04 §4.4, §4.7, §4.8](04-roster-and-authority.md), [05 §5.2](05-catalogue-and-names.md) | ADR 0051 (Proposed); the `Roster` model checks it |
-| #7 | decisions by non-admin owners and stewards | [04 §4.3, §4.5](04-roster-and-authority.md) | ADR 0051 (Proposed); the `Authority` model checks it |
+| #6 | roster forks with disjoint admin sets | [04 §4.4, §4.7, §4.8](04-roster-and-authority.md), [05 §5.2](05-catalogue-and-names.md) | ADR 0051 (Accepted); the `Roster` model checks it |
+| #7 | decisions by non-admin owners and stewards | [04 §4.3, §4.5](04-roster-and-authority.md) | ADR 0051 (Accepted); the `Authority` model checks it |
 | #8 | catalogue merge algorithm and its laws | [05 §5.1–5.3](05-catalogue-and-names.md), [04 §4.4](04-roster-and-authority.md) | [05 §5.2](05-catalogue-and-names.md); `models/catalogue` checks the laws on every schedule of three devices |
 | #9 | git-annex cannot bypass pigeon | [03 §3.5–3.8](03-repository-and-roles.md), [09 §9.4](09-network-and-joining.md) | [09 §9.4](09-network-and-joining.md); E12 and E13 assert |
-| #10 | models and coverage | [13 §13.2, §13.10](13-verification.md) | coverage map and liveness assumptions written; `AnnexDrop` model and E23 found the P2P drop race ([09 §9.4](09-network-and-joining.md)); the `Repair` model found a rotten copy proving a drop and a full custodian stalling overflow (ADR 0046, [09 §9.4](09-network-and-joining.md)); the `Evict` model and E24 found a hide losing a write through an earlier handle, drops turning kept and staged files into pointers, and a keep showing a replaced version ([08 §8.5](08-custody-loops.md)); the `Authority` model found a removed laptop's commits still counting, and deciders unable to adopt (ADR 0051, Proposed) |
-| #11 | recovery onto fresh machines | [09 §9.9](09-network-and-joining.md), [06 §6.2–6.3](06-status.md), [02 §2.1](02-guarantees.md), [04 §4.2–4.3](04-roster-and-authority.md), [09 §9.4](09-network-and-joining.md) | ADRs 0046 and 0047 (Proposed); E21 is the disaster drill |
-| #12 | independent failure domains | [02 §2.2, §2.4](02-guarantees.md), [06 §6.2](06-status.md) | not modelled, at Guillaume's request (ADR 0046, Proposed): each custodian counts once, and E22 shows that two on one disk count twice |
+| #10 | models and coverage | [13 §13.2, §13.10](13-verification.md) | coverage map and liveness assumptions written; `AnnexDrop` model and E23 found the P2P drop race ([09 §9.4](09-network-and-joining.md)); the `Repair` model found a rotten copy proving a drop and a full custodian stalling overflow (ADR 0046, [09 §9.4](09-network-and-joining.md)); the `Evict` model and E24 found a hide losing a write through an earlier handle, drops turning kept and staged files into pointers, and a keep showing a replaced version ([08 §8.5](08-custody-loops.md)); the `Authority` model found a removed laptop's commits still counting, and deciders unable to adopt (ADR 0051, Accepted) |
+| #11 | recovery onto fresh machines | [09 §9.9](09-network-and-joining.md), [06 §6.2–6.3](06-status.md), [02 §2.1](02-guarantees.md), [04 §4.2–4.3](04-roster-and-authority.md), [09 §9.4](09-network-and-joining.md) | ADRs 0046 and 0047 (Accepted); E21 is the disaster drill |
+| #12 | independent failure domains | [02 §2.2, §2.4](02-guarantees.md), [06 §6.2](06-status.md) | not modelled, at Guillaume's request (ADR 0046, Accepted): each custodian counts once, and E22 shows that two on one disk count twice |
 | #13 | capacity admission and repair priority | [08 §8.4, §8.9](08-custody-loops.md), [15 §15.2, §15.4](15-resource-use.md), [03 §3.4](03-repository-and-roles.md), [07 §7.8](07-capture-and-install.md) | [08 §8.9](08-custody-loops.md); E22 asserts |
 | #14 | file-system object model | [07 §7.9](07-capture-and-install.md), [04 §4.4](04-roster-and-authority.md), [05 §5.2–5.4](05-catalogue-and-names.md), [03 §3.3–3.7](03-repository-and-roles.md), [14 §14.2](14-platforms-and-packaging.md) | [07 §7.9](07-capture-and-install.md), [03 §3.7](03-repository-and-roles.md); E20 asserts on Linux and macOS |
-| #15 | replicated-format compatibility | [04 §4.2, §4.4](04-roster-and-authority.md), [06 §6.3](06-status.md), [08 §8.2](08-custody-loops.md), [09 §9.3](09-network-and-joining.md), [14 §14.3](14-platforms-and-packaging.md), [13 §13.4, §13.6](13-verification.md) | ADR 0048 (Proposed); fixtures and mixed releases with the prototype (#17) |
+| #15 | replicated-format compatibility | [04 §4.2, §4.4](04-roster-and-authority.md), [06 §6.3](06-status.md), [08 §8.2](08-custody-loops.md), [09 §9.3](09-network-and-joining.md), [14 §14.3](14-platforms-and-packaging.md), [13 §13.4, §13.6](13-verification.md) | ADR 0048 (Accepted); fixtures and mixed releases with the prototype (#17) |
 | #16 | one authoritative specification | this specification; [README](README.md) precedence | done |
 | #17 | minimal end-to-end prototype | [13 §13.12](13-verification.md), [14 §14.6, §14.8](14-platforms-and-packaging.md) | [14 §14.6](14-platforms-and-packaging.md): the Rust workspace; [13 §13.3](13-verification.md): runs of the code checked by TLC; decided in the specification **[no ADR]**: scope, setup, scenarios S1–S11 and the ledger (13 §13.12), readings fixed by pigeon-core's laws (13 §13.13), the transport (09 §9.2); open until the slice passes and `docs/reports/slice-1.md` is published |

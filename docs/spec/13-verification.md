@@ -605,7 +605,7 @@ journal, the queue order and the roster fold.
 both runners, no protected version is lost in any
 schedule, and laptop disk use in the steady state is at most 1.1 × the
 content kept (§13.11). The peak is reported with its causes.
-`docs/reports/slice-1.md` marks each promise (P1–P6) and each Proposed ADR it
+`docs/reports/slice-1.md` marks each promise (P1–P6) and each ADR it
 exercises as *established* (with its scenarios and traces), *conditional*
 (with the assumption it rests on) or *untested*. Evidence from pigeon's own
 code enters the "now" column of §13.10 only through this ledger. Issue #17

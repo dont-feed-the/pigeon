@@ -1,15 +1,16 @@
 # 0046. Protected means K custodians hold the content and the commit that names it, on disk
 
-- **Status:** Proposed, 14 October 2026, by the agent, for issues #11
-  (Guillaume's review: "Specify and test recovery onto fresh machines from
-  surviving custodians") and #12 ("Distinguish independent failure domains
-  from distinct custody repositories"), on the evidence of experiments E21 and
-  E22 and of the `Repair` model. Revised 14 October 2026 at Guillaume's
-  request (chat), absorbing the former ADR 0049 (failure domains), and again
-  the same day at his request (chat: "I think 46 is overcomplicating things,
-  we won't be able to keep track of failure domains in practice so we
-  shouldn't try to model them"), which dropped failure domains. Refines how
-  ADR 0002 counts its K custody copies.
+- **Status:** Accepted, 14 October 2026, by Guillaume (chat: the question on
+  the revised record, "Accepter telle quelle"); proposed by the agent for
+  issues #11 (Guillaume's review: "Specify and test recovery onto fresh
+  machines from surviving custodians") and #12 ("Distinguish independent
+  failure domains from distinct custody repositories"), on the evidence of
+  experiments E21 and E22 and of the `Repair` model, and revised twice at
+  Guillaume's request (chat): first absorbing the former ADR 0049, then
+  dropping failure domains ("I think 46 is overcomplicating things, we
+  won't be able to keep track of failure domains in practice so we
+  shouldn't try to model them"). Refines how ADR 0002 counts its K custody
+  copies.
 
 ## Context
 

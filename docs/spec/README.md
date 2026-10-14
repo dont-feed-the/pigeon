@@ -78,7 +78,7 @@ is the bug:
 2. **This specification**: the current, normative contract that assembles them.
    A detail it decides without an ADR is marked **[no ADR]**.
 3. **Proposed ADRs**: pending decisions. Where this specification assumes one, it
-   says so (for example ADR 0046 in [06 §6.2](06-status.md)).
+   says so; [16 §16.1](16-open-questions.md) lists them (none on 14 October 2026).
 4. **The UX study** ([ux.md](../design/ux.md)) and the mockups: words, journeys and
    screens. This specification follows them, except where
    [16 §16.2](16-open-questions.md) says why not.
@@ -132,7 +132,7 @@ or a collaborative editor), nor real-time sync of hot files (proposal §1).
 | 0031 free per folder | [08](08-custody-loops.md) |
 | 0036 local state | [11](11-local-state.md) |
 | 0037 background work | [15](15-resource-use.md) |
-| 0046 protected: K custodians hold the content and its commit, on disk (Proposed) | [02](02-guarantees.md), [03](03-repository-and-roles.md), [04](04-roster-and-authority.md), [06](06-status.md), [08](08-custody-loops.md), [09](09-network-and-joining.md), [10](10-interfaces.md), [13](13-verification.md) |
+| 0046 protected: K custodians hold the content and its commit, on disk (Accepted) | [02](02-guarantees.md), [03](03-repository-and-roles.md), [04](04-roster-and-authority.md), [06](06-status.md), [08](08-custody-loops.md), [09](09-network-and-joining.md), [10](10-interfaces.md), [13](13-verification.md) |
 | 0047 recovery: rejoin, sheets, refounding, export (Accepted) | [09](09-network-and-joining.md), [04](04-roster-and-authority.md), [10](10-interfaces.md), [11](11-local-state.md), [03](03-repository-and-roles.md) |
 | 0048 versioned formats and rules, unknown never guessed (Accepted) | [04](04-roster-and-authority.md), [06](06-status.md), [08](08-custody-loops.md), [09](09-network-and-joining.md), [10](10-interfaces.md), [13](13-verification.md), [14](14-platforms-and-packaging.md) |
 | 0051 authority: a fold of signed changes; forks merge without an admin; deciders sign decisions on suggestions (Accepted) | [02](02-guarantees.md), [04](04-roster-and-authority.md), [05](05-catalogue-and-names.md), [09](09-network-and-joining.md), [13](13-verification.md) |
