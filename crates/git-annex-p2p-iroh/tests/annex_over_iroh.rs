@@ -313,7 +313,7 @@ async fn annex_copy_get_and_refused_remove_over_iroh() {
         "L keeps its copy"
     );
     let mut moved = false;
-    for _ in 0..100 {
+    for _ in 0..300 {
         let out = run(
             &c,
             &custodian.socket,
@@ -326,7 +326,19 @@ async fn annex_copy_get_and_refused_remove_over_iroh() {
         }
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
-    assert!(moved, "C's fsck moved the rotten object out");
+    if !moved {
+        let fsck = run(
+            &c,
+            &custodian.socket,
+            &["git", "annex", "fsck", "--key", &key],
+        )
+        .await;
+        panic!(
+            "C's fsck did not move the rotten object out; by hand: {}{}",
+            String::from_utf8_lossy(&fsck.stdout),
+            String::from_utf8_lossy(&fsck.stderr)
+        );
+    }
     ok(
         &l,
         &laptop.socket,

@@ -31,6 +31,9 @@ pub trait Syncer: Send + Sync + 'static {
     fn repair(&self, repository: &Repository, key: &str) -> RepairFuture;
 }
 
+/// How many times a repair runs fsck before it gives up and says so.
+const REPAIR_ATTEMPTS: usize = 10;
+
 /// Finds the object with `git annex contentlocation`, then syncs it.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct AnnexSyncer;
@@ -101,13 +104,30 @@ impl Syncer for AnnexSyncer {
         let dir = directory(repository);
         let key = key.to_owned();
         Box::pin(async move {
-            if plausible_key(&key) {
+            if !plausible_key(&key) {
+                return;
+            }
+            // fsck cannot move the object out while remotedaemon still holds
+            // the lock the filter has just asked it to release: retry.
+            for _ in 0..REPAIR_ATTEMPTS {
                 let _ = tokio::process::Command::new("git")
                     .args(["annex", "fsck", "--key", &key])
                     .current_dir(&dir)
                     .output()
                     .await;
+                let present = tokio::process::Command::new("git")
+                    .args(["annex", "contentlocation", &key])
+                    .current_dir(&dir)
+                    .output()
+                    .await
+                    .map(|o| o.status.success())
+                    .unwrap_or(true);
+                if !present {
+                    return;
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
+            tracing::error!(key = %key, "repair-failed");
         })
     }
 }
