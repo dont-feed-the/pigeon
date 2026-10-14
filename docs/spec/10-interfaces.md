@@ -1,20 +1,18 @@
 # 10. Interfaces
 
-> Mission: specify what people and scripts touch: the internal request API that
-> every interface shares, the `pigeon` CLI, the local web interface,
-> notifications and the launcher, the message catalogue, and how errors reach a
-> person. The words are those of ux.md; the operations are those of the other
-> files of this specification.
+> Mission: what people and scripts touch: the request API every interface
+> shares, the CLI, the local web interface, notifications and the launcher,
+> messages, and how errors reach a person. Words are those of ux.md;
+> operations are those of the other files.
 
 ## 10.1 One request API (ADR 0021)
 
 Every operation is one **request type** of `pigeond`'s internal API, defined
-once in the `pigeon-proto` crate ([14](14-platforms-and-packaging.md)) with
-serde, and carried as NDJSON over the local socket ([09 §9.3](09-network-and-joining.md)).
-The CLI and the web interface are renderers of the same requests and
-responses, so no operation exists in only one of them (ADR 0021). A response
-is either a result, a stream of progress events then a result, or a `Problem`
-(§10.6).
+once in `pigeon-proto` ([14](14-platforms-and-packaging.md)) and carried as
+NDJSON over the local socket ([09 §9.3](09-network-and-joining.md)). The
+CLI and the web interface render the same requests and responses, so no
+operation exists in only one. A response is a result, progress events then a
+result, or a `Problem` (§10.6).
 
 | Request | CLI | Web | Specified in |
 |---|---|---|---|
@@ -43,111 +41,86 @@ is either a result, a stream of progress events then a result, or a `Problem`
 | `DebugBundle {peers}` | `pigeon debug bundle [--from NAME…]` | Settings → Advanced | [12](12-observability.md) |
 | `Subscribe` | — | live updates (SSE) | §10.3 |
 
-- Request names are the internal ones (ADR 0024 names `evict`, `purge`,
-  `reject` as examples); the CLI verbs are ux.md's words (`free`, `erase`,
-  `decline`). Both are stable; renaming either is an interface change.
-- `Accept {override}` is Force: an admin accepts a suggestion that the folder
-  rules do not let them decide, with a reason that becomes the
-  `Pigeon-Force:` trailer ([04 §4.6](04-roster-and-authority.md)) **[no ADR: verb]**.
-- `pigeon held`, `pigeon settings`, `pigeon leave`, `pigeon erase --cancel`
-  and `pigeon invite --list | --cancel ID` complete ux.md §7 for operations
-  this specification defines **[no ADR: verbs]**.
-- Requests are versioned with the socket protocol: `pigeond` answers `Hello`
-  with its version, and a CLI of another version refuses with
-  `version-mismatch` and a hint to restart pigeon.
+- Request names are internal (ADR 0024: `evict`, `purge`, `reject`); CLI
+  verbs are ux.md's (`free`, `erase`, `decline`). Renaming either is an
+  interface change.
+- `Accept {override}` is Force: an admin accepts what the folder rules do
+  not let them decide, with a reason that becomes the `Pigeon-Force:`
+  trailer ([04 §4.6](04-roster-and-authority.md)) **[no ADR: verb]**.
+- `pigeon held`, `settings`, `leave`, `erase --cancel` and `invite --list |
+  --cancel ID` complete ux.md §7 **[no ADR: verbs]**.
+- `pigeond` answers `Hello` with its version; a CLI of another version
+  refuses with `version-mismatch` and a hint to restart pigeon.
 
 ## 10.2 The command line (ADR 0024)
 
-- `clap` 4 with derive; one subcommand per request; shell completions and man
-  pages generated from the same definitions.
-- **Output.** The human result on stdout, messages and progress on stderr,
-  following the headline-then-detail pattern (ux.md §7). Colour only on a
-  terminal, through `anstream`, which honours `NO_COLOR` and `CLICOLOR`;
-  colour is never the only carrier of meaning (ux.md §3, principle 10).
-  Progress bars (`indicatif`) only on a terminal.
-- **`--json`** on every command: the response of the API in its schema on
-  stdout; problems as JSON on stderr. Scripts depend on `--json` and problem
-  codes, never on wording.
-- **Questions.** Dangerous operations ask before acting: `erase`, `accept
-  --override`, `refound`, `recover`, `free --without-checking`, `remove-computer`, `leave`, a held
-  mass deletion. Without a terminal they need `--yes`; `--no-input` never asks
-  and fails with `needs-confirmation` instead.
-- **Exit codes:** 0 success; 1 failure, with a `Problem`; 2 usage error.
-  `pigeon status` exits 0 whatever the headline, so that scripts read the
-  level from `--json` (`"level": "needs-you" | "not-safe" | "not-checked" |
-  "working" | "safe"`).
-- The CLI holds no logic: it parses, sends a request, renders the response.
-  Without `pigeond` it says so and how to start it (`pigeon doctor`). The one
-  exception is `pigeon export`, which reads repositories itself, read-only,
-  through the same core code, so that files can be read when `pigeond`
-  cannot run (ADR 0047).
+- One subcommand per request; completions and man pages come from the same
+  definitions. Result on stdout; messages and progress on stderr, headline
+  then detail (ux.md §7). Colour and progress bars only on a terminal,
+  never the only carrier of meaning.
+- **`--json`** on every command: the API response on stdout, problems as JSON
+  on stderr. Scripts rely on `--json` and problem codes, never on wording.
+- **Questions.** `erase`, `accept --override`, `refound`, `recover`, `free
+  --without-checking`, `remove-computer`, `leave` and a held mass deletion
+  ask first; without a terminal they need `--yes`, and `--no-input` fails
+  with `needs-confirmation`.
+- **Exit codes:** 0 success, 1 failure with a `Problem`, 2 usage error.
+  `pigeon status` exits 0 whatever the headline; scripts read `"level":
+  "needs-you" | "not-safe" | "not-checked" | "working" | "safe"`.
+- The CLI holds no logic. Without `pigeond` it says how to start it
+  (`pigeon doctor`). Only `pigeon export` reads repositories itself,
+  read-only, through the same core code (ADR 0047).
 
 ## 10.3 The web interface (ADR 0021, ux.md §6)
 
-- Served by `pigeond` with `axum`, rendered on the server with `maud`, no
-  JavaScript framework; a small script subscribes to server-sent events to
-  refresh the headline and the activity. Without JavaScript the pages work,
-  with a refresh link.
-- **Binding.** 127.0.0.1 only, on a port chosen at start and written to the
-  runtime directory. `pigeon open` (and the launcher, and a notification)
-  opens `http://127.0.0.1:<port>/login?token=<random 256 bits>`; the token is
-  single use and becomes an `HttpOnly`, `SameSite=Strict` session cookie.
-  Requests without the cookie, or with a `Host` or `Origin` other than the
-  loopback address and port, are refused (CSRF, DNS rebinding). Every
+- Served by `pigeond`, rendered on the server; a small script follows
+  server-sent events to refresh the headline and activity, and pages work
+  without JavaScript.
+- **Binding:** 127.0.0.1 only, on a port chosen at start and written to the
+  runtime directory. `pigeon open` (launcher, notification) opens
+  `http://127.0.0.1:<port>/login?token=<random 256 bits>`; the single-use
+  token becomes an `HttpOnly`, `SameSite=Strict` session cookie. Requests
+  without it, or with another `Host` or `Origin`, are refused; every
   state-changing request is a `POST` with a per-session form token.
-- **Five sections** in a fixed navigation bar, each page starting with its own
-  one-line answer (ux.md §6): Home, Files (with *Deleted files*), Suggestions
-  (*For you to decide*, *Yours*), People & machines, Settings (with
-  *Advanced*: diagnostics, logs, the telemetry dashboard of ADR 0025).
-- **Accessibility.** WCAG 2.2 level AA (ux.md §3, principle 10): keyboard use
-  throughout, visible focus, text alternatives, contrast, states written in
-  words and never by colour alone. An automated check (axe-core in CI) runs on
-  the mockup pages and the real pages; the usability test covers the rest.
-- The web interface writes nothing itself: every action is a request of §10.1.
+- **Five sections**, each page starting with its one-line answer (ux.md §6):
+  Home, Files (with *Deleted files*), Suggestions (*For you to decide*,
+  *Yours*), People & machines, Settings (with *Advanced*: diagnostics, logs,
+  the telemetry dashboard of ADR 0025).
+- **Accessibility:** WCAG 2.2 AA (ux.md §3): keyboard throughout, visible
+  focus, text alternatives, contrast, states in words. axe-core in CI checks
+  the mockups and the real pages.
+- It writes nothing itself: every action is a request of §10.1.
 
 ## 10.4 Notifications and the launcher (ADR 0029)
-
-Notifications go through `notify-rust` (D-Bus on Linux, Notification Center on
-macOS). They are calm:
 
 | Notify | When |
 |---|---|
 | *Needs you* | an item becomes *Needs you* ([06 §6.5](06-status.md)) for this person |
 | long *Not safe yet* | a version of this device stays *published* more than 24 h |
-| a suggestion or a conflict waits for this person | when it arrives, then once a day at most |
+| a suggestion or conflict waits for this person | on arrival, then at most once a day |
 
-- Never for success; grouped, never one per file; at most one notification per
-  kind and day, repeated only if the situation changed **[no ADR: rate]**.
-- Clicking a notification opens the web page that answers it.
-- Notifications are off on headless machines and can be turned off in Settings
-  (`notifications`, [11 §11.2](11-local-state.md)).
-- The **launcher** named "pigeon" (an XDG `.desktop` file on Linux, a small app
-  bundle on macOS) runs `pigeon open`. The status icon (`pigeon-tray`, a
-  `tray-icon` client of `pigeond`) comes in v1.1 and only renders the headline
-  level (ADRs 0027, 0029).
+Never for success; grouped, never per file; at most one per kind and day,
+repeated only if the situation changed **[no ADR: rate]**. A click opens the
+page that answers it. Off on headless machines and by the `notifications`
+setting ([11 §11.2](11-local-state.md)). The **launcher** "pigeon" (XDG
+`.desktop` file, macOS app bundle) runs `pigeon open`. The status icon
+(`pigeon-tray`) comes in v1.1 and only renders the headline level (ADRs
+0027, 0029).
 
 ## 10.5 Messages and languages (ADR 0028)
 
-- All user-facing text lives in Fluent files,
-  `crates/pigeon-i18n/i18n/en/pigeon.ftl` and `…/fr/pigeon.ftl`, embedded at
-  build time and loaded with `fluent-bundle` in the `pigeon-i18n` crate;
-  `fluent-langneg` picks the language from the `language` setting, then the
-  system locale (`LANGUAGE`, then the first of `LC_ALL`, `LC_MESSAGES` and
-  `LANG`, as gettext reads them), then English.
-- Message ids are shared by the CLI, the web interface, notifications and the
-  tray. Plural and gender rules are Fluent's.
-- A test checks that every message id exists in every language, that each
-  message formats with sample arguments, and that no Rust code holds English
-  text meant for people (a lint on string literals in renderers). Every id is
-  listed with its variables in `pigeon_i18n::ids`, which the test compares
-  with each bundle. An argument is wrapped in Unicode isolation marks in the
-  web interface, not in a terminal; an unknown id renders as the id itself
-  and never fails, which the test keeps from happening. **[no ADR: messages]**
-- Times use `jiff`: relative under a day ("4 minutes ago"), absolute beyond
-  ("Monday 18:02"), in local time; `--json` gives RFC 3339 instants (ux.md §4).
-- The vocabulary table of ux.md §2.2 is normative for both languages: *safe* /
-  *en sécurité*, *shared, not safe yet* / *partagé, pas encore en sécurité*,
-  *only on this computer* / *seulement sur cet ordinateur*, and so on.
+- All user-facing text is in `crates/pigeon-i18n/i18n/{en,fr}/pigeon.ftl`,
+  embedded at build time. The language is the `language` setting, else the
+  system locale (`LANGUAGE`, then the first of `LC_ALL`, `LC_MESSAGES`,
+  `LANG`), else English. Ids are shared by every interface.
+- **[no ADR: messages]** A test checks that every id exists in every
+  language and formats with sample arguments, matching the list in
+  `pigeon_i18n::ids`, and that renderers hold no English literals.
+  Arguments are wrapped in Unicode isolation marks on the web, not in a
+  terminal; an unknown id renders as itself.
+- Times: relative under a day ("4 minutes ago"), absolute beyond ("Monday
+  18:02"), local; `--json` gives RFC 3339 (ux.md §4).
+- The vocabulary table of ux.md §2.2 is normative in both languages.
 
 ## 10.6 Problems (ADR 0023)
 
@@ -162,46 +135,40 @@ An error that reaches a person is a **Problem**:
 }
 ```
 
-- `code` is stable, kebab-case, documented in `docs/problems.md`, and part of
-  the public interface. People see it as `P-` and the code in capitals
-  (`Code: P-INVITE-EXPIRED`, ux.md §7).
-- `message` and `hint` are a Fluent id and arguments, rendered at the edge in
-  the reader's language; logs and `--json` keep the code and the arguments.
-- `details` is for people helping: the operation, the object, and for a failed
-  `git` or `git annex` call the command, exit status and end of stderr.
-- Internally, each crate has `thiserror` enums with the cause as `#[source]`;
-  only the request layer of `pigeond` turns them into Problems. `anyhow` only
-  in tests and tools.
+- `code` is stable kebab-case, documented in `docs/problems.md`, public,
+  shown as `P-` plus the code in capitals (`P-INVITE-EXPIRED`, ux.md §7).
+- `message` and `hint` are Fluent ids and arguments rendered at the edge;
+  logs and `--json` keep code and arguments. `details` is for helpers: the
+  operation, the object, and for a failed `git` or `git annex` call the
+  command, exit status and end of stderr.
+- Only the request layer of `pigeond` turns crate errors into Problems.
 
-Problem codes this specification uses include: `invite-expired`,
-`invite-used`, `invite-unknown`, `invite-not-allowed`, `inviter-offline`,
-`not-in-group`, `not-allowed` (a request the roster does not allow),
+Codes used: `invite-expired`, `invite-used`, `invite-unknown`,
+`invite-not-allowed`, `inviter-offline`, `not-in-group`, `not-allowed`,
 `needs-confirmation`, `backup-machine-needs-linux` (§10.7), `disk-full`
 ([08 §8.9](08-custody-loops.md)), `repository-lost` (ADR 0046),
 `daemon-not-running`, `version-mismatch`, `git-annex-too-old`,
 `git-annex-untested`, `update-needed`, `pigeon-too-old`, `peer-too-old`,
-`peer-too-new` (ADR 0048),
-`settings-check` ([03 §3.5](03-repository-and-roles.md)), and in the slice
-`not-in-this-build` (13 §13.12) and `file-system-not-in-this-build` (13 §13.12).
-The first build adds **[no ADR]**: `usage` (the arguments do not fit, exit
-code 2), `unknown-computer` (no device of that name), `receiving` (`keep`
-while a copy is still arriving), `not-a-pigeon-repository`,
-`peer-unreachable` and `peer-refused` (the helper's requests, 09 §9.3), and
-`internal-error` (anything else, its details kept for the debug bundle).
+`peer-too-new` (ADR 0048), `settings-check`
+([03 §3.5](03-repository-and-roles.md)), and in the slice
+`not-in-this-build` and `file-system-not-in-this-build` (13 §13.12). The
+first build adds **[no ADR]**: `usage` (exit code 2), `unknown-computer`,
+`receiving` (`keep` while a copy arrives), `not-a-pigeon-repository`,
+`peer-unreachable` and `peer-refused` (the helper, 09 §9.3), and
+`internal-error` (details kept for the debug bundle).
 
 ## 10.7 Checks before acting
 
-- `pigeon join --backup-machine` (an invitation with `custodian` purpose) and
-  `pigeon create` on a machine meant as a backup machine are refused on
-  anything but Linux with systemd, with `backup-machine-needs-linux` (ADR 0032).
-- `pigeon doctor` checks, and explains in words: `pigeond` running and
-  supervised; git ≥ 2.38 and git-annex ≥ the minimum version
-  ([14](14-platforms-and-packaging.md)); `ssh-keygen` present; the key file
-  mode; the working tree's file system ([14 §14.2](14-platforms-and-packaging.md));
-  free disk space against `annex.diskreserve`; the settings check; reachability of the relay and of each peer; clock skew against peers above 5 minutes
-  **[no ADR: skew threshold]**. `--details` adds versions, paths and the last
-  errors.
-- Every request that changes the catalogue checks the roster first and fails
-  with `not-allowed` rather than producing a commit that would become a
-  surprise proposal; capture, which cannot ask, makes proposals instead
-  ([07 §7.3](07-capture-and-install.md)).
+- `pigeon join` with a custodian invitation, and `pigeon create` for a
+  backup machine, are refused except on Linux with systemd
+  (`backup-machine-needs-linux`, ADR 0032).
+- `pigeon doctor` checks and explains: `pigeond` running and supervised; git
+  ≥ 2.38 and git-annex ≥ the minimum ([14](14-platforms-and-packaging.md));
+  `ssh-keygen`; the key file's mode; the working tree's file system
+  ([14 §14.2](14-platforms-and-packaging.md)); free space against
+  `annex.diskreserve`; the settings check; reachability of relay and peers;
+  clock skew over 5 minutes **[no ADR: skew threshold]**. `--details` adds
+  versions, paths and the last errors.
+- A request that changes the catalogue checks the roster first and fails
+  with `not-allowed` rather than make a surprise proposal; capture, which
+  cannot ask, makes proposals ([07 §7.3](07-capture-and-install.md)).

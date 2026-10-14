@@ -129,7 +129,8 @@ normative: `allowed_streams_pass_unchanged`, `chunking_does_not_matter`,
   answered, or a positive answer to no request, closes the session; on all
   devices, so do an unknown message, a malformed `DATA` length or a line
   over 4096 bytes. A key from a peer must be printable ASCII, not start with
-  `-` and hold no `/`. Payloads pass by length, unparsed; the server's
+  `-` and hold no `/` (`pigeond/tests/net_laws.rs`,
+  `implausible_keys_are_refused`). Payloads pass by length, unparsed; the server's
   output is parsed only for framing, so the filter's replies fall between
   frames.
 

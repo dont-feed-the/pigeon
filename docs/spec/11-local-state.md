@@ -1,29 +1,22 @@
 # 11. Local state
 
-> Mission: specify every file `pigeond` keeps on a device besides git and
-> git-annex: where it lives, its format, who writes it, how it is written so
-> that a crash at any instant leaves it usable, and what is deliberately not
-> stored (ADR 0036).
+> Mission: every file `pigeond` keeps on a device besides git and git-annex:
+> where, its format, who writes it, how a crash leaves it usable, and what
+> is not stored (ADR 0036).
 
 ## 11.1 Principles (ADR 0036)
 
-- **git and git-annex hold the truth.** The catalogue, the roster, proposals,
-  decisions, status reports, where each copy is and when it was checked all
-  live in git or git-annex. "git status is the truth" for the working tree
-  (ADR 0013). Anything that can be rebuilt from them is not stored: authority
-  verdicts, version states, the work queue, observations, the headline.
-- **Plain files.** What remains is small: settings, the device key, and per
-  repository a journal and three tables. They are TOML (written by people) or
-  JSON (written by `pigeond`), read with `serde`.
-- **`format = N`** in every file. `pigeond` refuses a newer format with a
-  Problem (`state-format-too-new`) instead of guessing, and upgrades an older
-  one by rewriting it atomically after a successful read.
-- **One writer.** `pigeond` is the only process that writes these files
-  (ADR 0011). The CLI and the web interface ask it. The one exception is
-  `config.toml`, which people may also edit by hand (§11.2).
-- **Atomic whole-file writes.** Write a temporary file in the same directory
-  (`tempfile`), fsync it, rename it over the old file, fsync the directory. A
-  reader sees the old file or the new one, never a mix.
+- **git and git-annex hold the truth** (catalogue, roster, proposals,
+  decisions, reports, copies and checks); `git status` is the truth for the
+  working tree (ADR 0013). What can be rebuilt is not stored (§11.4).
+- **Plain files:** settings, the device key, and per repository a journal
+  and a few tables; TOML if people write it, JSON if `pigeond` does.
+- **`format = N`** in every file: a newer format is refused
+  (`state-format-too-new`), an older one upgraded by an atomic rewrite after
+  a successful read.
+- **One writer:** `pigeond` (ADR 0011); people may also edit `config.toml`.
+- **Atomic whole-file writes:** temporary file in the same directory, fsync,
+  rename over, fsync the directory.
 
 ## 11.2 Per-user files
 
@@ -38,14 +31,13 @@
 | `<cache>/bin/` | links first in the children's `PATH`: the transport helper, and `git-remote-p2p-annex` where git-annex installs none ([14 §14.3](14-platforms-and-packaging.md)) |
 | `<runtime>/pigeon/` | the socket, its lock file and the web port ([09 §9.3](09-network-and-joining.md)) |
 
-`<config>` is `$XDG_CONFIG_HOME/pigeon` on Linux and
-`~/Library/Application Support/pigeon` on macOS; `<state>` is
-`$XDG_STATE_HOME/pigeon` and `~/Library/Logs/pigeon`; `<cache>` is
-`$XDG_CACHE_HOME/pigeon` and `~/Library/Caches/pigeon`; all are found with the
-`dirs` crate (ADR 0036). `<runtime>` is `$XDG_RUNTIME_DIR/pigeon` on Linux
-and `<cache>/run` on macOS, which has no runtime directory. On a backup machine `pigeond` runs as a system service and these
-are under `/var/lib/pigeon`, `/var/log/pigeon`, `/var/cache/pigeon` and
-`/run/pigeon`.
+`<config>`, `<state>`, `<cache>` are `$XDG_CONFIG_HOME/pigeon`,
+`$XDG_STATE_HOME/pigeon`, `$XDG_CACHE_HOME/pigeon` on Linux and
+`~/Library/Application Support/pigeon`, `~/Library/Logs/pigeon`,
+`~/Library/Caches/pigeon` on macOS (ADR 0036). `<runtime>` is
+`$XDG_RUNTIME_DIR/pigeon`, or `<cache>/run` on macOS. On a backup machine,
+a system service, they are `/var/lib/pigeon`, `/var/log/pigeon`,
+`/var/cache/pigeon` and `/run/pigeon`.
 
 ### `config.toml`
 
@@ -81,27 +73,23 @@ path = "/home/martine/Famille"    # the folder on this device
 "Archives" = "low"
 ```
 
-- `[network]` and `[loops]` are **[no ADR]**: the lab and the slice's test
-  set `bind = "127.0.0.1:0"`, `mdns = false` and `interval_seconds = 1`. An
-  unspecified bind address is told to peers as loopback (with mDNS they find
-  the others).
-- Keys not listed take their defaults; unknown keys are kept and reported by
-  `pigeon doctor`, so that an older `pigeond` does not drop a newer setting.
-- `pigeond` watches the file and applies a hand edit at once; an invalid edit
-  is refused as a whole with a Problem naming the line, and the previous
-  settings stay in force.
-- When `pigeond` changes the file (Settings, `pigeon settings`, `pigeon
-  pause`), it edits it in place with `toml_edit`, keeping comments and order,
-  and writes it atomically **[no ADR: toml_edit]**.
-- Which folders are kept on this computer is **not** a setting here: git's
-  sparse-checkout file and the device's `wanted` expression record it, and
-  `pigeond` restores both at start (ADR 0031, [08 §8.5](08-custody-loops.md)).
+- `[network]` and `[loops]` are **[no ADR]**: the lab and the slice set
+  `bind = "127.0.0.1:0"`, `mdns = false`, `interval_seconds = 1`. An
+  unspecified bind address is told to peers as loopback.
+- Missing keys take defaults; unknown keys are kept and reported by `pigeon
+  doctor`, so an older `pigeond` drops no newer setting.
+- A hand edit applies at once; an invalid one is refused whole with a
+  Problem naming the line, and the old settings stay.
+- `pigeond` edits the file in place, keeping comments and order, and writes
+  it atomically **[no ADR: toml_edit]**.
+- Kept folders are not a setting: the sparse-checkout file and `wanted`
+  record them ([08 §8.5](08-custody-loops.md)).
 
 ## 11.3 Per-repository files: `.git/pigeon/`
 
-Per-repository state lives in `.git/pigeon/` of the repository (on a bare
-custodian repository, in its `pigeon/` directory), so it moves with the
-repository and git never shares it (ADR 0036).
+Per-repository state lives in `.git/pigeon/` (`pigeon/` of a bare
+custodian repository), so it moves with the repository and git never
+shares it (ADR 0036).
 
 | File | Written when | Content | Rebuildable? |
 |---|---|---|---|
@@ -115,13 +103,11 @@ repository and git never shares it (ADR 0036).
 | `recovered/` | install steps 6 and 9 | moved-aside content that was not pigeon's, until captured as a recovered version | no ([07 §7.6](07-capture-and-install.md)) |
 | `RECOVERY.txt` (custodians, in the repository directory) | the roster changes | the group's name, the other custodians, and the git and git-annex commands that read the files without pigeon ([09 §9.9](09-network-and-joining.md), ADR 0047) | yes: written again from the roster |
 
-The first build (13 §13.12) also keeps, in the same directory, `peers.json`
-(the direct addresses each peer gave at its join, as the lab runs without
-mDNS), `p2p-token` (the token of `git annex p2p --gen-addresses`, which the
-filter supplies to the helper, 09 §9.3), `freed.json` (the folders freed on
-this computer, besides the sparse-checkout file) and `dead.json` (the UUIDs of
-removed devices already marked `dead`). Each is rebuildable or a stand-in for
-a later mechanism **[no ADR: first build]**.
+The first build (13 §13.12) also keeps there `peers.json` (the addresses
+peers gave at their join; the lab runs without mDNS), `p2p-token` (the token
+the filter supplies, 09 §9.3), `freed.json` (folders freed here) and
+`dead.json` (UUIDs already marked `dead`): rebuildable or stand-ins
+**[no ADR: first build]**.
 
 ### `install.ndjson`
 
@@ -134,17 +120,12 @@ One JSON object per line, appended and fsynced before the step it announces:
 {"format":1,"seq":41,"op":"released"}
 ```
 
-- `old` is the index entry's `(dev, ino, size, mtime in ns)` that step 6 checks.
-  `proved` records that the writer scan and the check passed, before step 7
-  ([07 §7.5](07-capture-and-install.md)). An entry ends with one of `done`, `skip`, `raced` or
-  `recovered`; `released` records the removal of its aside ([07 §7.5](07-capture-and-install.md)). A
-  staged file is removed only once its entry has ended.
-- At start, `pigeond` replays every `begin` without an end with the recovery
-  rule of [07 §7.5](07-capture-and-install.md): forward if it has `proved`,
-  back otherwise; when every entry has ended and
-  its aside is released, it truncates the file (rename of an empty file over it).
-- A torn last line (a crash during the append) is ignored: its step had not
-  started. Every other malformed line stops install with a Problem.
+`old` is the index entry's `(dev, ino, size, mtime in ns)` that step 6
+checks; the ops are those of [07 §7.5](07-capture-and-install.md) (`journal`).
+Recovery at start replays every `begin` without an end, then truncates the
+file once every entry has ended and its aside is released (rename of an
+empty file over it). A torn last line is ignored (its step had not
+started); any other malformed line stops install with a Problem.
 
 ### `conflicts.json`
 
@@ -168,10 +149,9 @@ One JSON object per line, appended and fsynced before the step it announces:
 ```
 
 `installed` is the key pigeon last wrote at the path; `mine_stat` is the
-`(dev, ino, size, mtime)` of the person's file when `mine` was captured, which
-*Take the group's version* checks ([07 §7.5](07-capture-and-install.md)); `told` records that the
-person was told once (ADR 0034). The table is small (one entry per diverging
-path) and rewritten whole.
+stat of the person's file when `mine` was captured, which *Take the group's
+version* checks ([07 §7.5](07-capture-and-install.md)); `told` records that
+the person was told once (ADR 0034). The table is rewritten whole.
 
 ### `invitations.json`
 
@@ -179,8 +159,8 @@ path) and rewritten whole.
 {"format":1,"invitations":[{"id":"inv-7Q2M","secret":"…","secret_sha256":"…","purpose":{"new-person":{"name":"Martine","admin":false}},"expires":"2026-10-14T14:10:00+02:00","used_by":null}]}
 ```
 
-Expired entries are kept 30 days for the "already used / expired" messages,
-then removed **[no ADR: retention]**.
+Expired entries are kept 30 days for the "already used / expired" messages
+**[no ADR: retention]**.
 
 ## 11.4 What is kept only in memory
 
@@ -193,21 +173,20 @@ then removed **[no ADR: retention]**.
 | web sessions | none: a restart of `pigeond` asks people to open pigeon again ([10 §10.3](10-interfaces.md)) |
 | peers' addresses | iroh's lookup and mDNS ([09 §9.5](09-network-and-joining.md)) |
 
-A restart therefore costs one pass over the history and a `git status`, as
-large repositories already need at start (ADR 0013).
+A restart costs one pass over the history and a `git status` (ADR 0013).
 
 ## 11.5 Laws (ADR 0012)
 
-Each is a property test over generated states and crash points:
-
-- **Atomicity.** For any crash point during a write, a later read returns the
-  old value or the new one.
-- **Replay.** Replaying the install journal twice gives the same disk as
-  replaying it once, and every path ends at its old content, its new content
-  or the person's, with the index agreeing (INV-Journal; the `CaptureInstall`
-  model checks a crash during replay).
-- **Round trip.** `parse(render(x)) = x` for every file type and format, and a
-  file written by format N is read by every later format.
-- **Refusal.** A file with a newer `format` is never modified.
-- **Rebuild.** Deleting every in-memory structure and rebuilding it from git,
-  git-annex and the files of this chapter gives the same states and queue.
+- **Replay:** the `journal` laws (`recovery_ends_every_entry_and_a_second_does_nothing`,
+  `a_crash_during_recovery_ends_as_one_recovery`,
+  `nothing_the_person_wrote_is_lost`) and `CaptureInstall.tla` `Journal`.
+- **Round trip:** `parse(render(x)) = x` for every file and format, and
+  format N is read by every later format. Coded so far for journal records,
+  roster files and invitations (`pigeond/tests/codecs.rs`:
+  `journal_records_round_trip`, `roster_files_round_trip`,
+  `invitations_round_trip`) and the socket protocol
+  (`pigeon-proto/tests/proto_laws.rs`).
+- Not yet coded as laws: **atomicity** (a crash during a write leaves the
+  old value or the new one); **refusal** (a file of a newer format is never
+  modified); **rebuild** (rebuilding the in-memory state from git, git-annex
+  and these files gives the same states and queue).
