@@ -1,7 +1,8 @@
 //! Laws of `pigeond`'s own codecs (13 §13.12): hex and RFC 3339 times
 //! round-trip, a journal record parses back from its line (07 §7.5), a
-//! roster file parses back to the roster it renders, and an invitation
-//! decodes to what it encodes. HMAC-SHA256 matches RFC 4231.
+//! roster file parses back to the roster it renders, and an invitation and
+//! a recovery sheet decode to what they encode. HMAC-SHA256 matches RFC
+//! 4231.
 #![allow(clippy::unwrap_used, clippy::panic, reason = "tests")]
 
 use std::collections::BTreeMap;
@@ -194,6 +195,42 @@ fn invitations_round_trip(tc: TestCase) {
         Some(inv)
     );
     assert_eq!(decode(body), None);
+}
+
+/// Law *sheet*: a recovery sheet reads back from its `pgr1-` code wherever
+/// it stands in the sheet's text, and a code with any character changed
+/// reads as nothing (09 §9.9).
+#[hegel::test]
+fn recovery_sheets_round_trip(tc: TestCase) {
+    use pigeond::recovery::{Sheet, SheetCustodian, decode, encode};
+    let n = tc.draw(gs::integers::<u8>().max_value(3));
+    let sheet = Sheet {
+        v: 1,
+        group: hex(&tc.draw(gs::binary().min_size(20).max_size(20))),
+        name: word(&tc),
+        k: tc.draw(gs::integers::<u32>().min_value(1).max_value(9)),
+        person: word(&tc),
+        key: hex(&tc.draw(gs::binary().min_size(32).max_size(32))),
+        custodians: (0..n)
+            .map(|_| SheetCustodian {
+                device: hex(&tc.draw(gs::binary().min_size(32).max_size(32))),
+                name: word(&tc),
+                addresses: vec![format!("127.0.0.1:{}", tc.draw(gs::integers::<u16>()))],
+            })
+            .collect(),
+    };
+    let code = encode(&sheet);
+    let text = format!("pigeon recovery sheet\n  {code}\nKeep it safe.\n");
+    assert_eq!(decode(&text), Some(sheet));
+    let at = tc.draw(
+        gs::integers::<usize>()
+            .min_value(5)
+            .max_value(code.len() - 1),
+    );
+    let mut typo: Vec<char> = code.chars().collect();
+    typo[at] = if typo[at] == 'a' { 'b' } else { 'a' };
+    let typo: String = typo.into_iter().collect();
+    assert_eq!(decode(&typo), None);
 }
 
 /// RFC 4231, test case 2.
