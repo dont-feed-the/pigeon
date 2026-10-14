@@ -27,6 +27,7 @@
 | ADR 0052: the catalogue is built from contributions and the conflicts they saw | Proposed, for issue #8; [05 §5.1–5.3](05-catalogue-and-names.md), [04 §4.4–4.5](04-roster-and-authority.md), [02](02-guarantees.md) INV-Merge apply it, `models/catalogue` checks it ([13 §13.4](13-verification.md)) | Guillaume |
 | ADR 0053: trace logs reach TLC as generated TLA+ modules; TLC stays at 1.7.4 | Proposed, for issue #10; [13 §13.3](13-verification.md) and [12 §12.3](12-observability.md) apply it; `TraceSample` and `scripts/trace-to-tla --check` run in CI | Guillaume |
 | ADR 0054: a copy counts only if it can be locked; custodians answer `CHECKPRESENT` with a lock | Proposed, for issue #10: over P2P git-annex's verified drop counts a copy locked for removal (E23); [09 §9.4](09-network-and-joining.md) and [08 §8.3](08-custody-loops.md) apply it, `AnnexDrop` checks it ([13 §13.2](13-verification.md)); report upstream | Guillaume |
+| ADR 0055: install recovery rolls forward from a journalled proof | Proposed, for issue #1; [07 §7.5–7.6](07-capture-and-install.md), [11 §11.3](11-local-state.md) apply it, the `CaptureInstall` model checks it ([13 §13.2](13-verification.md)) | Guillaume |
 | TLC with the `Json` module for trace validation | ADR 0026 foresees a new ADR pinning it by SHA-256 ([13 §13.3](13-verification.md)) | before the first `*Trace.tla` |
 
 ## 16.2 Where this specification departs from a source

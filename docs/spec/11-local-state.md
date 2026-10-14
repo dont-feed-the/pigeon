@@ -108,15 +108,19 @@ One JSON object per line, appended and fsynced before the step it announces:
 
 ```json
 {"format":1,"seq":41,"op":"begin","path":"Photos/a.jpg","mode":"100644","old_key":"SHA256E-s…","old":[66311,4224493,2097152,1791922902880098214],"new_key":"SHA256E-s…","tmp":".git/pigeon/stage/41","tmp_ino":4224517,"aside":".git/pigeon/aside/41"}
+{"format":1,"seq":41,"op":"proved"}
 {"format":1,"seq":41,"op":"done"}
 {"format":1,"seq":41,"op":"released"}
 ```
 
 - `old` is the index entry's `(dev, ino, size, mtime in ns)` that step 6 checks.
-  An entry ends with one of `done`, `skip`, `raced` or `recovered`; `released`
-  records the removal of its aside (ADR 0040).
+  `proved` records that the writer scan and the check passed, before step 7
+  (ADR 0055). An entry ends with one of `done`, `skip`, `raced` or
+  `recovered`; `released` records the removal of its aside (ADR 0040). A
+  staged file is removed only once its entry has ended.
 - At start, `pigeond` replays every `begin` without an end with the recovery
-  rule of [07 §7.5](07-capture-and-install.md); when every entry has ended and
+  rule of [07 §7.5](07-capture-and-install.md): forward if it has `proved`,
+  back otherwise; when every entry has ended and
   its aside is released, it truncates the file (rename of an empty file over it).
 - A torn last line (a crash during the append) is ignored: its step had not
   started. Every other malformed line stops install with a Problem.
@@ -178,8 +182,9 @@ Each is a property test over generated states and crash points:
 - **Atomicity.** For any crash point during a write, a later read returns the
   old value or the new one.
 - **Replay.** Replaying the install journal twice gives the same disk as
-  replaying it once, and every path ends at its old or its new content
-  (INV-Journal).
+  replaying it once, and every path ends at its old content, its new content
+  or the person's, with the index agreeing (INV-Journal; the `CaptureInstall`
+  model checks a crash during replay).
 - **Round trip.** `parse(render(x)) = x` for every file type and format, and a
   file written by format N is read by every later format.
 - **Refusal.** A file with a newer `format` is never modified.

@@ -162,6 +162,9 @@ For each path, in this order (a batch shares its fsyncs and its one writer scan)
      capture takes over.
    - If *p* was recreated meanwhile, the aside is captured as a recovered
      version (§7.6), never deleted: `recovered`.
+
+   Once the checks of the batch are done, append `proved` for the entries that
+   passed, and fsync (ADR 0055). A creation is proved when *p* is found free.
 7. **Rename in.** `renameat2(tmp, p, RENAME_NOREPLACE)` (or `RENAME_EXCL`). If an
    application created *p* since step 4, the call fails. The application's
    file stays, the temporary file is dropped, and the entry ends `raced`. The
@@ -181,19 +184,27 @@ For each path, in this order (a batch shares its fsyncs and its one writer scan)
 A deletion is the same without steps 1, 2 and 7. When every entry has ended and
 its aside is released, the journal is truncated.
 
-**Recovery at start**, before any capture, for each `begin` without an end:
+**Recovery at start**, before any capture, for each `begin` without an end
+(ADR 0055). An entry with `proved` rolls forward; any other rolls back.
 
-- *p* has the temporary inode: step 7 happened, so the check had passed. Redo
-  step 8, then `done`.
-- *p* is absent and the aside exists: put the aside back (`NOREPLACE`), then
-  `skip`.
-- *p* is another file and the aside exists: hash the aside. If it is the old
-  key, `raced`; otherwise it is a recovered version.
-- Neither exists: `skip`.
+- *Proved:* if the new file is still at its stage name, do step 7
+  (`NOREPLACE`; if *p* exists, `raced`). Then redo step 8 and append `done`.
+  Whatever the person did at *p* after step 7 is an ordinary save on the new
+  version.
+- *Not proved,* *p* absent and the aside present: put the aside back
+  (`NOREPLACE`), then `skip`.
+- *Not proved,* *p* another file and the aside present: keep the aside and
+  hash it at release: `raced` if it holds the old key, otherwise a recovered
+  version.
+- Otherwise: `skip`.
 
-Then drop every unreferenced file of `stage/`. Each path ends at its old
-content, the new one, or the person's (INV-Journal). Replaying twice equals
-replaying once (a law, ADR 0036).
+An entry ends before its staged file is removed, and only the staged files of
+ended entries are removed. Each path ends at its old content, the new one or
+the person's, and the index agrees with what pigeon left (INV-Journal).
+Replaying twice equals replaying once (a law, ADR 0036). The `CaptureInstall`
+model found that deciding from *p* alone, as this table did before ADR 0055,
+brings back a finished deletion and undoes a deletion the person made after
+step 7.
 
 INV-NoOverwrite: pigeon never renames over a name, and moves a file away from
 its name only to prove it is its own. If the proof fails, the file returns
@@ -201,7 +212,9 @@ within milliseconds, or is captured. A write through a handle opened before
 step 4 that escapes the scan lands in the kept aside and is captured at step 9.
 Such writers are a process of another user, an `open` in flight across the
 rename, or a mapping macOS cannot see. Its content is kept, but not at its name
-(ADR 0040). The name is absent between steps 4 and 7: E19 measured a median of
+(ADR 0040), if it lands before the aside is released: a write through such a
+handle after the keep period goes to a file with no name, and is lost
+(ADR 0055). The name is absent between steps 4 and 7: E19 measured a median of
 0.55 ms and a maximum of 6.6 ms.
 
 ## 7.6 Divergences and conflicts (ADRs 0034, 0035)
@@ -247,9 +260,12 @@ Resolutions (`pigeon resolve PATH …`, or the buttons of ux.md §8.8):
 **A save after the choice** (ADR 0040). *Take the group's version* runs install
 (§7.5) with one change: the check of step 6 compares the file with the person's
 key and `stat` in the divergence table, which capture has already committed,
-instead of what pigeon last installed. A save made after the person chose fails
-the check. Nothing is replaced, the save extends their proposal, and they are
-told once: "You saved *tarte.docx* again after choosing; nothing was replaced."
+instead of what pigeon last installed. That `stat` comes from a quiet file
+(§7.2), so a later save changes it; one that is racily clean (its mtime not
+older than its capture) defers the resolution until the next capture
+(ADR 0055). A save made after the person chose fails the check. Nothing is
+replaced, the save extends their proposal, and they are told once: "You saved
+*tarte.docx* again after choosing; nothing was replaced."
 
 **Seeing the group's version** (ADR 0035): *Open Paul's version* or
 `pigeon view PATH --group` writes a read-only copy in pigeon's cache directory,
@@ -268,8 +284,11 @@ handle or mapping opened earlier), `Scan`, `Capture`, `InstallStep` (one per ste
 of §7.5, the writer scan included), `Crash`, `Recover`, `Release`, `Decide`,
 `Resolve`. Invariants: INV-Capture, INV-NoOverwrite (no behaviour renames over a
 name or installs over a diverging path, ADR 0034), INV-Journal, and NoLoss (every
-saved content is at its name, kept aside or captured, ADR 0040). E19 runs the
-same steps against git-annex with an adversary at each boundary. Every fault-injection run is trace-validated against it (ADR 0008).
+saved content is at its name, kept aside or captured, ADR 0040). The model
+exists (`models/tla/CaptureInstall.tla`, 13 §13.2); one negative configuration
+per safeguard shows what fails without it. E19 runs the same steps against
+git-annex with an adversary at each boundary. Every fault-injection run is
+trace-validated against the model (ADR 0008).
 
 ## 7.8 Pending history and disk use (ADR 0041)
 

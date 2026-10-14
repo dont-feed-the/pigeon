@@ -55,6 +55,22 @@
 | `Roster_adr0009` | `Roster` | `violation:MergeAlwaysPossible` | ADR 0009's rule (a merge of concurrent roster changes signed by an admin under both parents) leaves the concurrent self-retirements unmergeable: no person is admin on both sides |
 | `TraceSample_good` | `TraceSample` | `trace:accepted` (fast set) | the pattern of every trace module (ADR 0053) on a toy save-then-capture spec: a log whose values carry quotes, backslashes, nested tuples and records is explained line by line, and its `ASSUME`s check that TLC reads back what the NDJSON held |
 | `TraceSample_bad` | `TraceSample` | `trace:rejected:2` | a capture of a path never saved: no behaviour explains line 2, and the verdict names it |
+| `CaptureInstall_own` | `CaptureInstall` | `pass` (fast set) | issue #1, ADRs 0040 and 0055: capture and install of one path while a person writes in place, writes through a handle opened earlier, replaces atomically, creates and deletes at any instant, also while `pigeond` is down; the group changes or deletes the path; one crash. Nothing saved is lost (NoLoss); when idle, the path holds what the index says or the person's content (Journal); the index never calls a changed file clean (IndexHonest); what install moves away was captured (CaptureFirst), is the file it expected, and is written by nobody afterwards (NoOverwrite); a deletion the person made stays (DeletionKept); under fairness every save is captured (SavesCaptured) and the path ends at `current(p)` with no divergence and no kept aside (Converges). Own folder, two person actions: 122 560 states, 61 698 distinct, 9 s on 1 worker |
+| `CaptureInstall_other` | `CaptureInstall` | `pass` (fast set) | the same in another person's folder: saves become suggestions, which are accepted or rejected, then resolved (*Take the group's version*, *Suggest again*), also while new saves race the choice: 1 240 787 states, 612 281 distinct, 6 s |
+| `CaptureInstall_crash2` | `CaptureInstall` | `pass` (fast set) | two crashes, one during recovery: a second replay decides as the first (ADR 0036's law): 360 940 states, 171 214 distinct, 4 s |
+| `CaptureInstall_hidden` | `CaptureInstall` | `pass` (fast set) | writers that escape the writer scan and close within the keep period: nothing is lost, though NoOverwrite does not hold for them (ADR 0040) |
+| `CaptureInstall_own3`, `CaptureInstall_other3`, `CaptureInstall_otherlive` | `CaptureInstall` | `pass` (full set) | three person actions in the own folder (1 048 763 distinct states, 9 s); three in another's folder with escaping writers (21 968 788 distinct states, 3 minutes); liveness in another's folder (612 281 distinct states, 72 s) |
+| `CaptureInstall_rec07` | `CaptureInstall` | `violation:DeletionKept` | the recovery table of 07 before ADR 0055, which decides from *p* alone: the person deletes the new file after step 7, `pigeond` is killed before step 8, and recovery puts the old file back |
+| `CaptureInstall_rec07del` | `CaptureInstall` | `violation:Journal` | the same table: a deletion killed after step 8 gets its old file back while the index says deleted, so capture would add it again |
+| `CaptureInstall_nocheck` | `CaptureInstall` | `violation:CaptureFirst` | without the check of step 6, a save made after the clean test is moved away before capture has it |
+| `CaptureInstall_noscan` | `CaptureInstall` | `violation:NoOverwrite` | without the writer scan, a write through a handle opened earlier lands in the proved aside |
+| `CaptureInstall_racy` | `CaptureInstall` | `violation:IndexHonest` | trusting a racily clean index entry: a save in the same timestamp tick keeps the stat, and the path counts as clean |
+| `CaptureInstall_nojournal` | `CaptureInstall` | `violation:Journal` | without the journal, a crash between steps 4 and 7 leaves the path absent, and capture would delete it for everyone |
+| `CaptureInstall_noreplace` | `CaptureInstall` | `violation:NoLoss` | step 7 with a plain `rename`: a file an application created during the gap is replaced and lost |
+| `CaptureInstall_nohash` | `CaptureInstall` | `violation:NoLoss` | a kept aside released without hashing: a racing save kept there is unlinked |
+| `CaptureInstall_quiet` | `CaptureInstall` | `violation:CaptureFirst` | capture of a file written in the current tick: its `mine_stat` is racy, and *Take the group's version* moves away a save of the same tick |
+| `CaptureInstall_keep` | `CaptureInstall` | `violation:NoLoss` | a writer that escapes the scan and writes after the release: the write goes to a file with no name |
+| `CaptureInstall_escape` | `CaptureInstall` | `violation:NoOverwrite` | a writer that escapes the scan can write into a proved aside; `CaptureInstall_hidden` shows that the write is still kept |
 
 The violations and the deadlock are negative tests: a model edit that hides
 the failure is caught (ADR 0026). `CustodyNaive` and `CustodyTokens` argue
@@ -87,11 +103,28 @@ custody copies alone. Nor are remote drops (pigeon's filter refuses `REMOVE`,
 E13), or the forced drops of purge and Drop, which skip the check (purge has
 the `Purge` model).
 
+**`CaptureInstall`** ([07 §7.7](07-capture-and-install.md)) models one path on
+one laptop. Every write makes a new content, so a content names the save that
+made it. A file's stat is its inode and mtime, and a write in the same clock
+tick keeps the mtime, as in racy git. Install's steps 1 to 3 are one action;
+steps 4 to 9, `Crash`, `Recover` (forward or back, ADR 0055) and its end are
+one action each. Capture takes a quiet path, unchanged since the last tick.
+The person acts at any instant, pigeond being up or down; the group
+(`NewVersion`, `Decide`) changes `current(p)` and judges suggestions.
+Each negative configuration removes one safeguard (`Off`) and must fail. The
+model found that the recovery table, which decided from *p* alone, undoes a
+finished deletion and a deletion the person made after step 7; ADR 0055
+journals the proof and rolls proved entries forward. Its first repair, which
+decided from the staged file, failed the double replay of
+`CaptureInstall_crash2`. Not modelled: several paths and packages, thin hard
+links and their link count, the resolution of a recovered version (it is
+captured; the model checks only that it is kept), and the scan's retry period
+(a deferred path is retried once its writer has closed).
+
 ### Planned, before or with the code (ADR 0008)
 
 | Model | Actions | Safety | Liveness (under fairness) |
 |---|---|---|---|
-| `CaptureInstall` ([07 §7.7](07-capture-and-install.md)) | `Save`, `Scan`, `Capture`, `InstallStep`, `Crash`, `Recover`, `Decide`, `Resolve` | INV-Capture, INV-NoOverwrite, INV-Journal | every save is captured; every clean path reaches `current(p)` |
 | `Authority` ([04](04-roster-and-authority.md)) | `Receive`, `Validate`, `Merge`, `Propose`, `Adopt`, `Reject`, roster changes | INV-Valid, INV-Merge: devices with the same commits have the same catalogue | connected devices converge |
 | `Evict` ([08 §8.5](08-custody-loops.md)) | free, keep, verified drop, sparse hide and show | a laptop drops only protected keys; a kept folder never shows pointers | a freed folder's space is freed once its files are protected |
 | `Repair` ([08 §8.4](08-custody-loops.md)) | custodian loss, `dead`, want, get, scrub failure | no protected version is lost while one custody copy remains | K copies are restored when capacity allows |
@@ -280,7 +313,7 @@ are specified here but not built; the gaps are tracked as GitHub issues
 | Guarantee | Now | Planned | Gaps (issues) |
 |---|---|---|---|
 | P1 Survival | E1, E5, E8, E9, E10 (lab, printing); E13 (asserting: pigeon's filter refuses remote `REMOVE`); E21 (asserting: recovery from custodians alone); E22 (asserting: one copy per failure domain, the reserve, disk full); E23 (asserting: over P2P git-annex's verified drop counts a copy locked for removal, two concurrent drops lose the key, pigeon's probe keeps it); `AnnexDrop` model (git-annex's verified drop: safe over a local path or behind the probe, not over P2P; ADR 0054); `CustodyNaive`, `CustodyTokens` (evidence about hand-offs in general and about the earlier token protocol, not about git-annex) | `Repair` model; failure-domain and capacity laws; fault injection; asserting E9, E10 | independence pigeon cannot see (virtual machines, places not declared; ADR 0049); power loss on a custodian (outside the lab; ADR 0046 rests on the git and git-annex sources) |
-| P2 Capture, no overwrite | E20 (asserting, Linux and macOS: what capture stages and what it never reads); E15b (asserting: no pointer during free and keep); E18 (asserting: offline in-place saves keep every version); E19 (asserting: racing saves and `kill -9` during install) | `CaptureInstall` model; install journal laws (hegel-rust); E19 on macOS | copy-on-write cost of pending history on APFS and btrfs (E18 there); saves from stale memory (16 §16.4) |
+| P2 Capture, no overwrite | E20 (asserting, Linux and macOS: what capture stages and what it never reads); E15b (asserting: no pointer during free and keep); E18 (asserting: offline in-place saves keep every version); E19 (asserting: racing saves and `kill -9` during install); `CaptureInstall` model (racing saves, escaping writers, crashes during install and recovery, resolutions; ADR 0055) | install journal laws (hegel-rust), checked against the model; E19 on macOS | copy-on-write cost of pending history on APFS and btrfs (E18 there); saves from stale memory (16 §16.4) |
 | P3 Reversible deletion | E2, E4 (lab, printing); `Purge` model (seals against restores, cancels, partitions, restarts and a returning laptop; ADR 0042); E14 (asserting: shared keys, a restore against the seals, per-key transfers, the forced drop, a returning laptop's new generation) | purge laws (hegel-rust); `Purge` trace validation | a custodian clock that jumps forward by more than the waiting period; erased names stay in history (16 §16.4) |
 | P4 Authority | E7 (lab, printing); E12 (asserting: no pushed ref, `remotedaemon` only fetches); `Roster` model (roster forks, ADR 0051) | `Authority` model; roster fold laws; acceptance laws; decision-rights tests (ADR 0038) | format compatibility (#15) |
 | P5 Convergence | E3 (lab, printing); `models/catalogue` (every schedule of three devices over eleven cases; the rule before ADR 0052 fails as expected) | merge and name laws (hegel-rust), checked against the reference model | ADR 0052 is Proposed (#8); rename tracking (16 §16.4) |
