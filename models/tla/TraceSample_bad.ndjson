@@ -1,0 +1,2 @@
+{"spec":"TraceSample","device":"a","clock":1,"action":"Save","vars":{"path":"p1"}}
+{"spec":"TraceSample","device":"b","clock":2,"action":"Capture","vars":{"path":"p2"}}

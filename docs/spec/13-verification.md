@@ -45,6 +45,8 @@
 | `Roster_rebase` | `Roster` | `violation:Agreement` | replaying the other side's changes onto one's own roster depends on who merges: two merges of the same commits disagree |
 | `Roster_table` | `Roster` | `violation:AdminRemains` | merging `roster.toml` per TOML table, a clean merge of the concurrent self-retirements leaves no admin |
 | `Roster_adr0009` | `Roster` | `violation:MergeAlwaysPossible` | ADR 0009's rule (a merge of concurrent roster changes signed by an admin under both parents) leaves the concurrent self-retirements unmergeable: no person is admin on both sides |
+| `TraceSample_good` | `TraceSample` | `trace:accepted` (fast set) | the pattern of every trace module (ADR 0053) on a toy save-then-capture spec: a log whose values carry quotes, backslashes, nested tuples and records is explained line by line, and its `ASSUME`s check that TLC reads back what the NDJSON held |
+| `TraceSample_bad` | `TraceSample` | `trace:rejected:2` | a capture of a path never saved: no behaviour explains line 2, and the verdict names it |
 
 The violations and the deadlock are negative tests: a model edit that hides
 the failure is caught (ADR 0026). These models argue why custody hand-off
@@ -81,13 +83,22 @@ assumptions is expected and is not a bug.
   events ([12 §12.3](12-observability.md)) and constrains `Next` to the
   logged step; variables not traced stay non-deterministic (the method of
   Cirstea, Kuppe, Merz and others, arXiv 2404.16075).
+- **Reading the log** (ADR 0053). `scripts/trace-to-tla` writes the log as a
+  TLA+ module that defines it as a tuple of records, and the trace module
+  extends it; the pinned TLC 1.7.4 reads it (ADR 0026). Values it cannot
+  encode exactly (`null`, fractions, control or non-ASCII characters, keys
+  that are not identifiers) and lines out of Lamport order are refused, never
+  approximated. The CommunityModules' `ndJsonDeserialize` needs TLC 1.8,
+  which has only a rolling nightly; the choice is revisited when 1.8 is
+  released.
+- **Verdict.** A trace configuration checks the invariant `TraceNotConsumed`
+  (`l <= Len(log)`), violated exactly when a behaviour explains every line:
+  `scripts/run-tlc` reports `trace:accepted`. Otherwise TLC finds no error,
+  and since every step consumes one line, the depth of its search is the
+  first line that no behaviour explains: `trace:rejected:N`, which fails the
+  build with that line. `TraceSample` checks the pipeline in CI (13 §13.2).
 - Every fault-injection run in CI is trace-validated; a mismatch fails the
   build and reports the first log line no behaviour of the model explains.
-- **TLC version.** ADR 0008 assumes TLC reads NDJSON with `ndJsonDeserialize`
-  from the `Json` module. The pinned TLC 1.7.4 (ADR 0026) does not ship it;
-  ADR 0026 foresees pinning, by SHA-256, a build that has it (a TLC 1.8 build,
-  or the CommunityModules jar beside 1.7.4). That choice needs its own ADR
-  before the first trace module ([16](16-open-questions.md)).
 - Trace validation shows that observed runs conform; it is not a proof of
   the code.
 
@@ -117,7 +128,7 @@ and each law is a `hegeltest` property (pinned to 0.49, a dev-dependency).
 | failure domains | domains are the connected components of shared storage, host and declared `domain`; their number is at most the number of custodians; a fingerprint or declaration never raises a state; with one custodian per domain the state is ADR 0002's; a drop's chosen remotes lie in K distinct domains; domain repair is deterministic and wants nothing for a key that spans K domains (ADR 0049) | [06 §6.2](06-status.md), [08 §8.3](08-custody-loops.md) |
 | capacity | the parts of the need sum to the total; every key not protected has a reason; admission never defers an endangered key for one that is not (ADR 0050) | [08 §8.9](08-custody-loops.md) |
 | trees and names | every tree capture makes is well formed (rule 6); `package(p)` depends only on *p*'s name and is stable when other paths change; merging a package never mixes files of two sides; `ignored` is a pure function of the name | [07 §7.9](07-capture-and-install.md), [05 §5.2](05-catalogue-and-names.md) |
-| encodings | `parse(print(x)) = x` for roster TOML, NDJSON, git objects; our parser agrees with git | everywhere |
+| encodings | `parse(print(x)) = x` for roster TOML, NDJSON, git objects; our parser agrees with git; TLC reads from `scripts/trace-to-tla`'s module what the NDJSON held, or the line is refused (ADR 0053) | everywhere |
 
 Example tests remain for regressions found by properties (with the shrunk
 input) and for the fixed scenarios of this specification.

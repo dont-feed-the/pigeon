@@ -1,0 +1,4 @@
+{"spec":"TraceSample","device":"a","clock":1,"action":"Save","vars":{"path":"p1","note":"say \"hi\" \\ bye","flags":[true,false],"delta":-3}}
+{"spec":"TraceSample","device":"b","clock":2,"action":"Save","vars":{"path":"p2","note":"","flags":[],"delta":0}}
+{"spec":"TraceSample","device":"a","clock":3,"action":"Capture","vars":{"path":"p1","note":"{\"not\": \"json\"}","flags":[[1,2],[3]],"delta":7}}
+{"spec":"TraceSample","device":"b","clock":3,"action":"Capture","vars":{"path":"p2","note":"<<\"x\">>","flags":[{"k":1}],"delta":1}}

@@ -49,5 +49,7 @@ jobs:
         with:
           path: ~/.cache/pigeon
           key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
+      - name: trace logs become TLA+ modules (ADR 0053)
+        run: scripts/trace-to-tla --check
       - name: every configuration gives its expected verdict
         run: scripts/run-tlc

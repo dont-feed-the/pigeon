@@ -49,8 +49,20 @@ def expectations():
             yield tuple(line.split("\t"))
 
 
-def verdict(output):
-    """Name the outcome of one TLC run from its output."""
+def verdict(output, trace=False):
+    """Name the outcome of one TLC run from its output.
+
+    A trace configuration (invariant TraceNotConsumed, ADR 0053) accepts its log
+    when a behaviour violates that invariant, and otherwise names the first line
+    that no behaviour explains: the depth of TLC's search.
+    """
+    if trace:
+        if "Error: Invariant TraceNotConsumed is violated" in output:
+            return "trace:accepted"
+        depth = re.search(r"The depth of the complete state graph search is (\d+)", output)
+        if "No error has been found." in output and depth:
+            return f"trace:rejected:{depth.group(1)}"
+        return "error"
     if "Model checking completed. No error has been found." in output:
         return "pass"
     if "Error: Deadlock reached." in output:
@@ -70,7 +82,8 @@ def run(jar, config, module, java, workers, heap):
                    "-workers", workers, "-metadir", metadir,
                    "-config", f"{config}.cfg", module]
         done = subprocess.run(command, cwd=MODELS, capture_output=True, text=True)
-    return verdict(done.stdout + done.stderr), done.stdout + done.stderr
+    trace = re.search(r"^INVARIANT\s+TraceNotConsumed\b", (MODELS / f"{config}.cfg").read_text(), re.M)
+    return verdict(done.stdout + done.stderr, bool(trace)), done.stdout + done.stderr
 
 
 def main():
