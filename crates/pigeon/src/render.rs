@@ -1,5 +1,5 @@
 //! Turns `pigeond`'s responses into text with the Fluent catalogue (ADR
-//! 0028, 0068): the daemon sends message ids and arguments, times in RFC
+//! 0028, 10 §10.5–10.6): the daemon sends message ids and arguments, times in RFC
 //! 3339, and this module renders them in the person's language, with
 //! times relative to now.
 
