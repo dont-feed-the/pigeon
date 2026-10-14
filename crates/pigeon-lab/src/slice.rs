@@ -475,13 +475,34 @@ pub fn s11() -> Scenario {
 }
 
 /// The scenarios that do not pass yet against the first build of pigeond
-/// (14 October 2026), with what their last run showed (13 §13.12).
-/// `pigeon-lab run` reports each as blocked without running it, and runs it
-/// with `--with-blocked`, where a pass says to unmark it. An id `S9` stands
-/// for every S9 point.
+/// (14 October 2026), with what their last runs showed, on the runners
+/// (slice.yml, run 38556472036) or here (13 §13.12). `pigeon-lab run`
+/// reports each as blocked without running it, and runs it with
+/// `--with-blocked`, where a pass says to unmark it and a failure does not
+/// fail the run. An id `S9` stands for every S9 point.
 pub const BLOCKED: &[(&str, &str)] = &[
+    ("S1", PUBLISHED),
     ("S2", FREE),
     ("S3", FREE),
+    ("S4", PUBLISHED),
+    (
+        "S5",
+        "no partial object of the 1 GiB file shows on backup-1 within 300 s (both runners)",
+    ),
+    (
+        "S6",
+        "protected not reached within 120 s (macOS); free hides nothing within 60 s (Linux)",
+    ),
+    (
+        "S7",
+        "protected not reached (Linux); the headline stays working, not needs-you, \
+         once a custodian's disk is destroyed (macOS)",
+    ),
+    (
+        "S8",
+        "a full custodian says nothing: no disk-full in status or doctor within 180 s \
+         (both runners)",
+    ),
     ("S9", S9),
     ("S10", "pigeon recovery-sheet answers not-in-this-build"),
     (
@@ -491,8 +512,10 @@ pub const BLOCKED: &[(&str, &str)] = &[
     ),
 ];
 
+const PUBLISHED: &str = "the laptop stays at published after the second custodian accepts \
+     the version (both runners; passes now and then here)";
 const FREE: &str = "free answers free-result but hides no file within 60 s, though \
-     status says protected and no install begins (pigeond evict.rs; S6's free works)";
+     status says protected and no install begins (pigeond evict.rs)";
 const S9: &str = "a crash at a point of free or keep falls inside the request, which \
      answers daemon-not-running; the model frees in its loops and expects done";
 

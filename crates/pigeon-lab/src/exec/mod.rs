@@ -878,6 +878,12 @@ impl Interpreter for Exec {
                 &log,
                 self.out_dir().join(format!("{}.log", self.devs[i].name)),
             );
+            for f in trace::logs(&self.devs[i].space.root) {
+                if let Some(base) = f.file_name() {
+                    let to = format!("{}-{}", self.devs[i].name, base.to_string_lossy());
+                    let _ = fs::copy(&f, self.out_dir().join(to));
+                }
+            }
             self.devs[i].space.teardown();
         }
     }

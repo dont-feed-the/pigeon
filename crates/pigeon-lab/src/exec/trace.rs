@@ -38,6 +38,15 @@ pub fn files(root: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
+/// The daemon's own log files under a device's disk (11 §11.2).
+pub fn logs(root: &Path) -> Vec<PathBuf> {
+    walk(root, true)
+        .into_iter()
+        .filter(|p| p.extension().is_some_and(|e| e == "ndjson"))
+        .filter(|p| p.parent().is_some_and(|d| d.ends_with("pigeon/logs")))
+        .collect()
+}
+
 /// Every event of these files, merged in clock order.
 pub fn merged(files: &[PathBuf]) -> Vec<Line> {
     let mut lines = Vec::new();

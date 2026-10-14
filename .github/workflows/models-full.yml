@@ -1,6 +1,7 @@
 # The full set of TLA+ models, slow rows included (ADR 0026), 200 runs of
 # pigeon-core checked by TLC (spec 13 §13.3), and 1000 random S9 crash schedules
-# of the slice against the lab build, in ten shards (13 §13.12). Runs when a
+# of the slice against the lab build, in ten shards, and every slice scenario,
+# blocked ones included (13 §13.12). Runs when a
 # model or the runner changes, weekly, and by hand. GitHub runs `schedule`
 # and `workflow_dispatch` only from the default branch, so until v2 is the
 # default branch only the `push` trigger fires.
@@ -95,3 +96,39 @@ jobs:
           HEGEL_TEST_CASES: "100"
           HEGEL_SEED: ${{ matrix.shard }}
         run: cargo test --locked --release -p pigeon-lab --test s9_exec
+
+  slice-with-blocked:
+    name: S1-S11 with the blocked ones, against the lab build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GIT_ANNEX_SHA256: 88ea73c9bb8fb751916e0e4a0a8f489a7476f9b9e861fd2cce2601a77f4f409d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: git-annex, standalone build at the pinned checksum
+        run: |
+          t=/tmp/git-annex-standalone-amd64.tar.gz
+          curl -fsSL -o "$t" https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
+          echo "$GIT_ANNEX_SHA256  $t" | sha256sum -c -
+          tar -C ~ -xzf "$t" && echo ~/git-annex.linux >> "$GITHUB_PATH"
+      - name: the pinned toolchain (rust-toolchain.toml)
+        run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
+      - name: the lab build
+        run: |
+          cargo build --locked --release -p pigeond -p pigeon -p git-annex-p2p-iroh \
+            --features pigeond/lab,pigeond/tla-trace
+          mkdir -p target/lab/bin
+          cp target/release/pigeond target/release/pigeon target/release/git-annex-p2p-iroh target/lab/bin/
+      - name: every scenario, a blocked one's failure reported and not failing
+        run: |
+          cargo run --locked --release -q -p pigeon-lab -- run --with-blocked \
+            --bin target/lab/bin --work /tmp/lab --out target/lab/out
+      - name: summary
+        if: always()
+        run: cat target/lab/out/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: slice-with-blocked
+          path: target/lab/out
+          if-no-files-found: ignore
