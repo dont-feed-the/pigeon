@@ -231,6 +231,21 @@ impl Exec {
         let _ = dm.child.wait();
     }
 
+    /// Whether device `i`'s daemon died unasked, or does within 5 s.
+    fn died(&mut self, i: usize) -> bool {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let gone = self.devs[i]
+                .daemon
+                .as_mut()
+                .is_some_and(|dm| dm.child.try_wait().ok().flatten().is_some());
+            if gone || !self.devs[i].up || Instant::now() >= deadline {
+                return gone && self.devs[i].up;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
     /// Restarts every daemon that died unasked.
     fn supervise(&mut self) {
         for i in 0..self.devs.len() {
@@ -554,7 +569,14 @@ impl Exec {
         self.supervise();
         Ok(match step {
             Step::Laptop { on, op, expect } => {
-                let got = self.laptop_op(*on, op, w)?;
+                let mut got = self.laptop_op(*on, op, w)?;
+                // A request that met its daemon killed by a crash plan, as
+                // one past a wait for what the daemon did just before the
+                // crash can, is made again once the daemon is restarted.
+                if got == Outcome::Refused(s("daemon-not-running")) && self.died(on.0 as usize) {
+                    self.supervise();
+                    got = self.laptop_op(*on, op, w)?;
+                }
                 if got == *expect {
                     Verdict::Pass
                 } else {
