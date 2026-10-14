@@ -57,7 +57,7 @@ asks for none. Grouped by file, so that a few ADRs could cover them.
 | [12](12-observability.md) | telemetry bounded to 50 MB; `debug bundle` asks each peer's person; the `PIGEON_TRACE` switch (§12.2, §12.3) |
 | [13](13-verification.md) | the E17 runner with a hard disk (§13.8); the first milestone's scope, deferrals and `not-in-this-build` (§13.12) |
 | 13 | the first build's port kept in `<state>/port`, direct addresses in a stream's header and a join's welcome, re-thinning by hard link on every file system, of a file unchanged for a minute and hashed before it is moved aside, `disk-full` when free space is below `annex.diskreserve`; a backup machine writes a recovery's roster commit, unsigned, where ADR 0047 has the sheet key sign (§13.12) |
-| [14](14-platforms-and-packaging.md) | minimum OS versions (§14.1); the file-system list (§14.2); minimum git and git-annex per platform (§14.3); the `MemoryHigh` value (§14.4) |
+| [14](14-platforms-and-packaging.md) | minimum OS versions (§14.1); the file-system list (§14.2); minimum git and git-annex per platform, and the platforms pigeon's git-annex is built for (§14.3); the `MemoryHigh` value (§14.4) |
 | 14 | the Homebrew tap and release signing (§14.5); the crate layout, edition and pinned toolchain (§14.6); `hmac`, `sha2`, `data-encoding`, `qrcode`, `rustix`, `libc` (§14.7) |
 | [15](15-resource-use.md), within ADR 0037 | the shaper's constants and history exchange on metered networks (§15.3); disk-busy thresholds and back-off (§15.4); presets (§15.6); the reference tree and memory budget (§15.7) |
 
@@ -131,11 +131,12 @@ into 0054; 0065 into 0053.
 - **Shared mappings on macOS** change the stat only at `msync` (E19), so
   capture sees them late; the kept aside covers them. Hashing kept files
   periodically would close the gap, at a cost in reads.
-- **A P2P fetch that never ends** (E12): git-annex's relay
+- **A P2P fetch that never ends** (E12, E25): git-annex's relay
   (`runRelayService`, `P2P/IO.hs`) can send `CONNECTDONE` before the pack,
-  and remotedaemon fetches without a deadline. `pigeond` works around it
-  ([08 §8.2](08-custody-loops.md)); to report upstream, with the fix of
-  draining the output first.
+  and remotedaemon fetches without a deadline. pigeon's git-annex drains
+  the output first (patch 0002, ADR 0069); stock builds still hang, so
+  `pigeond` keeps its workaround ([08 §8.2](08-custody-loops.md)). To
+  report upstream.
 - **Unfound corruption** ([09 §9.4](09-network-and-joining.md)): a rotten
   copy counts until the next scrub, at most 30 days (08 §8.8). A custodian's
   drop no longer leans on it; a laptop's may. A shorter period costs reads

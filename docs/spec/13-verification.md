@@ -11,7 +11,7 @@
 | Trace validation (§13.3) | that real runs are behaviours of those models | ADR 0008 |
 | Laws (§13.4, §13.13) | the pure core, for all generated inputs | ADR 0012 |
 | Stateful tests and fault injection (§13.5) | the shell with real git and git-annex, under faults | ADR 0012 |
-| Contract tests (§13.6) | that git and git-annex behave and print as pigeon assumes | ADRs 0004, 0020 |
+| Contract tests (§13.6) | that git and git-annex behave and print as pigeon assumes | ADRs 0004, 0069 |
 | The lab (§13.7) | git-annex's own behaviour on which the design rests | ADR 0001 |
 | Budgets (§13.9) | that background work stays out of the way | ADR 0037 |
 | Usability test (§13.11) | that people understand the states | ux.md §9 |
@@ -121,7 +121,7 @@ their verdicts, and next-format fixtures that must be judged *unknown*.
 
 ## 13.7 The lab (`lab/git-annex/`)
 
-The experiments E1–E24 test git-annex's own behaviour;
+The experiments E1–E25 test git-annex's own behaviour;
 `lab/git-annex/README.md` lists each script, whether it asserts, what it
 found and what rests on it. An E*n* cited in this specification is one of
 them. Each joins CI once its script asserts (ADR 0026). Pending: E11 native

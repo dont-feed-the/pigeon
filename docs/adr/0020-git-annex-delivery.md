@@ -1,6 +1,7 @@
 # 0020. git-annex comes from its official builds, with a checked minimum version
 
-- **Status:** Accepted, 13 October 2026, by Guillaume (tooling interview,
+- **Status:** Superseded by 0069 (pigeon runs its own patched build of
+  git-annex). Accepted on 13 October 2026 by Guillaume (tooling interview,
   Q13).
 
 ## Context

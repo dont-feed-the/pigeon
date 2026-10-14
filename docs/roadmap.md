@@ -36,8 +36,9 @@ Exit: S1–S11 pass on both runners; `docs/reports/slice-1.md`.
   (ADR 0048, [13 §13.6](spec/13-verification.md), issue #15), so that later
   upgrades keep data.
 - pigeon runs a pinned git-annex carrying the fixes for the P2P removal lock
-  and the relay race (`third_party/git-annex/`). The ADR for this decision
-  supersedes ADR 0020's official builds.
+  and the relay race (`third_party/git-annex/`). ADR 0069, which records
+  this decision, supersedes ADR 0020's official builds. Its build and its
+  proof run in CI (`git-annex.yml`); the installers that ship it remain.
 
 Exit:
 

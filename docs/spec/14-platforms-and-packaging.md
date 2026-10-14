@@ -30,15 +30,26 @@ renames, hard links, and an atomic exclusive rename (`RENAME_NOREPLACE`,
 capture). A backup machine may use any local Linux file system git-annex
 supports (ext4, xfs, btrfs, ZFS): its repository is bare.
 
-## 14.3 git and git-annex (ADRs 0004, 0010, 0020)
+## 14.3 git and git-annex (ADRs 0004, 0010, 0069)
 
-- **Linux:** the installer fetches git-annex's standalone build into
+- **pigeon's git-annex** (ADR 0069): 10.20261006 with the patches of
+  `third_party/git-annex/`, reporting `10.20261006-pigeon1`, built by CI
+  for Linux x86-64 (on Ubuntu 24.04, so glibc 2.39 or later) and macOS on
+  Apple Silicon, with the names it dispatches on (`git-remote-p2p-annex`
+  among them). The installer puts it in pigeon's directory, first in the
+  `PATH` of `pigeond`'s children. On Linux it runs with the system's git,
+  since the standalone build's `git` would put its own git-annex first;
+  a distribution with glibc 2.39 ships git 2.38 or later (ADR 0010).
+  Linux arm64, macOS on Intel and older C libraries run the stock builds
+  below until CI builds them **[no ADR]**.
+- **Linux, stock:** the installer fetches git-annex's standalone build into
   `~/.local/share/pigeon/git-annex.linux` (`/opt/pigeon/git-annex.linux` on
-  a backup machine) and uses the git it bundles (≥ 2.38, ADR 0010), first in
-  the `PATH` of `pigeond`'s children; the person's git is not touched.
-- **macOS:** `brew install git-annex` (ADR 0020). Homebrew installs no
-  `git-remote-p2p-annex` (E12), so `pigeond` links that name to its
-  `git-annex` in its own directory, first in its children's `PATH`.
+  a backup machine) and uses the git it bundles (≥ 2.38, ADR 0010), first
+  in the `PATH` of `pigeond`'s children; the person's git is not touched.
+- **macOS, stock:** where pigeon's git-annex does not run, `brew install
+  git-annex`. Homebrew installs no `git-remote-p2p-annex` (E12), so
+  `pigeond` links that name to its `git-annex` in its own directory, first
+  in its children's `PATH`.
 - **Minimum versions:** the oldest CI tests, **10.20261006** (the pinned
   standalone build) on Linux and **10.20260901** (Homebrew, when E20 ran) on
   macOS. Below them `pigeond` refuses to run (`git-annex-too-old`,
@@ -49,8 +60,9 @@ supports (ext4, xfs, btrfs, ZFS): its repository is bare.
   idle priority. If a check fails it keeps capturing and serving, suspends
   every drop, and shows *Needs you* (`git-annex-untested`).
 - **Upgrades are deliberate:** CI records the version it tested and the
-  installer verifies what it fetched. A missing git-annex feature goes
-  upstream as a patch (ADR 0004).
+  installer verifies what it fetched. A missing git-annex feature or a
+  fix goes upstream as a patch (ADR 0004), carried in
+  `third_party/git-annex/` until a release has it (ADR 0069).
 - `ssh-keygen` is required for signing (ADR 0007).
 
 ## 14.4 Supervision (ADR 0011)
@@ -70,9 +82,9 @@ endpoint. `MemoryHigh` is a default for the budgets of
 
 | Platform | Package | Holds |
 |---|---|---|
-| Linux, people | a tarball and an install script | `pigeon`, `pigeond`, `git-annex-p2p-iroh`, the user unit, the `.desktop` launcher and icon, man pages, shell completions; the script fetches git-annex (§14.3) and enables the unit |
+| Linux, people | a tarball and an install script | `pigeon`, `pigeond`, `git-annex-p2p-iroh`, the user unit, the `.desktop` launcher and icon, man pages, shell completions, pigeon's git-annex; the script fetches git-annex's standalone build (§14.3) and enables the unit |
 | Linux, backup machines | a static tarball and a system unit (ADR 0032) | the same binaries, the system unit, a `pigeon` user created by the script |
-| macOS | a Homebrew formula in pigeon's tap **[no ADR]** | the binaries, the launchd agent, the small launcher app bundle (ADR 0029); depends on `git-annex` |
+| macOS | a Homebrew formula in pigeon's tap **[no ADR]** | the binaries, the launchd agent, the small launcher app bundle (ADR 0029), pigeon's git-annex (§14.3) |
 
 Release archives come with SHA-256 checksums, built by CI from a tag
 **[no ADR: signing]**. Paul installs (ux.md §11). Uninstalling keeps the

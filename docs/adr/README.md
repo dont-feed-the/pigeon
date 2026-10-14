@@ -56,7 +56,7 @@ decision is a new ADR that supersedes it.
   above. It keeps its number and file, as a short stub that says where its
   content went, so that numbers are never reused and old links still lead
   somewhere.
-- Evidence is cited by experiment (`E1`–`E24`, see [`lab/git-annex/`](../../lab/git-annex/)) or by
+- Evidence is cited by experiment (`E1`–`E25`, see [`lab/git-annex/`](../../lab/git-annex/)) or by
   model ([`models/tla/`](../../models/tla/)).
 
 ## Index
@@ -82,7 +82,7 @@ decision is a new ADR that supersedes it.
 | [0017](0017-joining-by-ticket.md) | Joining by a one-time ticket; people manage their own devices | Accepted |
 | [0018](0018-deletion-keeps-custody-until-purge.md) | Deleting a file never deletes its custody copies; only a purge does | Accepted |
 | [0019](0019-licence.md) | pigeon v2 is licensed MIT OR Apache-2.0 | Accepted |
-| [0020](0020-git-annex-delivery.md) | git-annex comes from its official builds, with a checked minimum version | Accepted |
+| [0020](0020-git-annex-delivery.md) | git-annex comes from its official builds, with a checked minimum version | Superseded by 0069 |
 | [0021](0021-cli-and-local-web-ui.md) | Interfaces: a CLI and a local web interface served by `pigeond` | Accepted |
 | [0022](0022-logging-with-tracing.md) | Logging: `tracing`, human logs to stderr, JSON logs to a file | Accepted |
 | [0023](0023-typed-errors.md) | Errors: typed enums everywhere; one serialisable problem for people | Accepted |
@@ -139,3 +139,4 @@ passes; 16 §16.3 lists where each rule now lives.
 | [0066](0066-the-helper-names-its-repository-and-the-filter-supplies-the-token.md) | The helper names its repository by path, and the serving filter supplies git-annex's token | Withdrawn |
 | [0067](0067-the-git-driver-checks-every-command-and-bounds-every-call.md) | The git driver checks every command against the allow-list and bounds every call with a deadline | Withdrawn |
 | [0068](0068-messages-are-listed-with-their-variables-and-checked-in-every-bundle.md) | Messages are listed with their variables and checked in every bundle; the language follows gettext's order | Withdrawn |
+| [0069](0069-pigeon-runs-a-pinned-patched-git-annex.md) | pigeon runs a pinned, patched git-annex, built by its own CI | Accepted |

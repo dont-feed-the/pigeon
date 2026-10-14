@@ -85,7 +85,7 @@ are history only.
   `nothing_the_person_wrote_is_lost`), invariants by model and name
   (`CaptureInstall.tla` `NoLoss`), configurations by name (`T_n42o4`, in
   [models/tla/expected.tsv](../../models/tla/expected.tsv)), experiments as
-  E1–E24.
+  E1–E25.
 - Names in code, `--json` and this specification are internal (*local*,
   *published*, *protected*, *custodian*, *proposal*); people see the words of
   ux.md §2.2. "Default *x*" is a setting with a tested default.
@@ -113,7 +113,7 @@ sync of hot files (proposal §1).
 | 0006 helper, 0011 one daemon, 0016 relays, 0017 joining, 0047 recovery | [09](09-network-and-joining.md) |
 | 0021, 0023, 0024, 0027, 0028, 0029 interfaces, errors, words, messages | [06](06-status.md), [10](10-interfaces.md) |
 | 0036 local state; 0022, 0025 logs and telemetry; 0008, 0012, 0026 evidence | [11](11-local-state.md), [12](12-observability.md), [13](13-verification.md) |
-| 0005, 0032 platforms; 0019 licence; 0020 git-annex delivery; 0037 resources | [14](14-platforms-and-packaging.md), [15](15-resource-use.md) |
+| 0005, 0032 platforms; 0019 licence; 0069 git-annex delivery; 0037 resources | [14](14-platforms-and-packaging.md), [15](15-resource-use.md) |
 | 0046 protected; 0048 versioned formats | [02](02-guarantees.md), [04](04-roster-and-authority.md), [06](06-status.md), [08](08-custody-loops.md), [09](09-network-and-joining.md), [13](13-verification.md) |
 
 0030 is Rejected, 0033 Superseded; the 27 withdrawn ADRs are rules or
