@@ -54,10 +54,6 @@ pub struct Device {
     pub annex_uuid: Option<String>,
     /// Capacity in bytes, for custodians.
     pub maxsize: Option<u64>,
-    /// The hardware it shares with other custodians (ADR 0046).
-    pub domain: Option<String>,
-    /// Where it stands (ADR 0046).
-    pub site: Option<String>,
 }
 
 /// The rule of a folder (04 §4.3).
@@ -85,10 +81,8 @@ pub struct Roster {
     pub rules: u32,
     /// Display name of the group.
     pub group: String,
-    /// K: custody copies in distinct failure domains.
+    /// K: custody copies, on distinct custodians (ADR 0046).
     pub k: u32,
-    /// Declared sites the copies must span.
-    pub min_sites: u32,
     /// Waiting period before a purge, in days.
     pub retention_days: u32,
     /// Persons by ID.
@@ -108,8 +102,6 @@ pub enum Field {
     Group,
     /// K.
     K,
-    /// `min_sites`.
-    MinSites,
     /// `retention_days`.
     RetentionDays,
     /// `rules`.
@@ -122,10 +114,6 @@ pub enum Field {
     DeviceName(DeviceId),
     /// A custodian's capacity.
     DeviceMaxsize(DeviceId),
-    /// A custodian's declared domain.
-    DeviceDomain(DeviceId),
-    /// A custodian's site.
-    DeviceSite(DeviceId),
 }
 
 /// The value of a field; `Unset` for an absent optional field.
@@ -176,12 +164,10 @@ pub enum Invalid {
     UnknownPerson(DeviceId),
     /// Two devices share a name.
     DuplicateDeviceName(String),
-    /// K or `min_sites` is zero.
+    /// K is zero.
     ZeroSetting,
     /// An owner or steward is not a person.
     UnknownSteward(String),
-    /// A device other than a custodian has a domain or a site, or a label is empty.
-    BadLabel(DeviceId),
     /// A laptop or custodian lacks an annex UUID, or a recovery device has one.
     BadUuid(DeviceId),
     /// An annex UUID belongs to two devices, a removed one included.
@@ -196,7 +182,7 @@ impl Roster {
         if !self.persons.values().any(|p| p.admin) {
             return Err(Invalid::NoAdmin);
         }
-        if self.k == 0 || self.min_sites == 0 {
+        if self.k == 0 {
             return Err(Invalid::ZeroSetting);
         }
         let mut names = BTreeSet::new();
@@ -213,14 +199,6 @@ impl Roster {
             }
             if !names.insert(d.name.as_str()) {
                 return Err(Invalid::DuplicateDeviceName(d.name.clone()));
-            }
-            let labels = [&d.domain, &d.site];
-            let custodian = d.role == Role::Custodian;
-            if labels
-                .iter()
-                .any(|l| l.as_ref().is_some_and(|s| s.is_empty() || !custodian))
-            {
-                return Err(Invalid::BadLabel(id.clone()));
             }
             match (&d.annex_uuid, d.role) {
                 (None, Role::Recovery) => {}
@@ -246,11 +224,9 @@ impl Roster {
 
     /// The current value of a field, `None` if its person or device is absent.
     pub fn get(&self, field: &Field) -> Option<Value> {
-        let text = |s: &Option<String>| s.clone().map_or(Value::Unset, Value::Text);
         Some(match field {
             Field::Group => Value::Text(self.group.clone()),
             Field::K => Value::Number(u64::from(self.k)),
-            Field::MinSites => Value::Number(u64::from(self.min_sites)),
             Field::RetentionDays => Value::Number(u64::from(self.retention_days)),
             Field::Rules => Value::Number(u64::from(self.rules)),
             Field::PersonName(p) => Value::Text(self.persons.get(p)?.name.clone()),
@@ -261,8 +237,6 @@ impl Roster {
                 .get(d)?
                 .maxsize
                 .map_or(Value::Unset, Value::Number),
-            Field::DeviceDomain(d) => text(&self.devices.get(d)?.domain),
-            Field::DeviceSite(d) => text(&self.devices.get(d)?.site),
         })
     }
 
@@ -271,19 +245,10 @@ impl Roster {
             Value::Number(n) => u32::try_from(*n).ok(),
             _ => None,
         };
-        let text = |v: &Value| match v {
-            Value::Text(s) => Some(Some(s.clone())),
-            Value::Unset => Some(None),
-            _ => None,
-        };
         match (field, value) {
             (Field::Group, Value::Text(s)) => self.group = s.clone(),
             (Field::K, v) => match small(v) {
                 Some(n) => self.k = n,
-                None => return false,
-            },
-            (Field::MinSites, v) => match small(v) {
-                Some(n) => self.min_sites = n,
                 None => return false,
             },
             (Field::RetentionDays, v) => match small(v) {
@@ -309,14 +274,6 @@ impl Roster {
             (Field::DeviceMaxsize(d), v) => match (self.devices.get_mut(d), v) {
                 (Some(x), Value::Number(n)) => x.maxsize = Some(*n),
                 (Some(x), Value::Unset) => x.maxsize = None,
-                _ => return false,
-            },
-            (Field::DeviceDomain(d), v) => match (self.devices.get_mut(d), text(v)) {
-                (Some(x), Some(t)) => x.domain = t,
-                _ => return false,
-            },
-            (Field::DeviceSite(d), v) => match (self.devices.get_mut(d), text(v)) {
-                (Some(x), Some(t)) => x.site = t,
                 _ => return false,
             },
             _ => return false,
@@ -549,8 +506,7 @@ impl<C: Ord + Clone> History<C> {
 
 /// Whether the device `signer` may sign `change` under `roster` (04 §4.7,
 /// §4.3's `.pigeon/` table): an admin changes anything; a device of person P
-/// adds or removes devices of P and sets its custodians' capacity, domain and
-/// site; a recovery device only adds and removes devices of its own person
+/// adds or removes devices of P and sets its custodians' capacity; a recovery device only adds and removes devices of its own person
 /// (ADR 0047); nobody removes their own person.
 pub fn may_sign(roster: &Roster, signer: &DeviceId, change: &[Edit]) -> bool {
     let Some(device) = roster.devices.get(signer) else {
@@ -565,7 +521,7 @@ pub fn may_sign(roster: &Roster, signer: &DeviceId, change: &[Edit]) -> bool {
         Edit::RemoveDevice(d) => admin || mine(d),
         _ if recovery => false,
         Edit::Set {
-            field: Field::DeviceMaxsize(d) | Field::DeviceDomain(d) | Field::DeviceSite(d),
+            field: Field::DeviceMaxsize(d),
             ..
         } => admin || mine(d),
         Edit::RemovePerson(p) => admin && p != me,

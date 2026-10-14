@@ -4,14 +4,14 @@
 //! decodes to what it encodes. HMAC-SHA256 matches RFC 4231.
 #![allow(clippy::unwrap_used, clippy::panic, reason = "tests")]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use hegel::TestCase;
 use hegel::generators as gs;
 use pigeon_core::journal::{Begin, End, Record, Stat};
 use pigeon_core::roster::{Device, DeviceId, Person, PersonId, Role, Roster};
 use pigeond::invite::{Invitation, decode, encode};
-use pigeond::roster_file::{Facts, RosterDoc, parse, render};
+use pigeond::roster_file::{RosterDoc, parse, render};
 use pigeond::util::{date, hex, hmac_sha256, parse_rfc3339, rfc3339, unhex};
 
 /// Law *hex*: bytes round-trip through their lower-case hex.
@@ -106,7 +106,6 @@ fn device_id(tc: &TestCase) -> DeviceId {
 fn roster_doc(tc: &TestCase) -> RosterDoc {
     let person = PersonId("ada".to_owned());
     let mut devices = BTreeMap::new();
-    let mut facts = BTreeMap::new();
     let mut removed = BTreeMap::new();
     for i in 0..tc.draw(gs::integers::<u8>().min_value(1).max_value(4)) {
         let id = device_id(tc);
@@ -119,29 +118,15 @@ fn roster_doc(tc: &TestCase) -> RosterDoc {
             .draw(gs::booleans())
             .then(|| tc.draw(gs::integers::<u64>().max_value(1 << 50)));
         devices.insert(
-            id.clone(),
+            id,
             Device {
                 person: person.clone(),
                 name: format!("{}{i}", word(tc)),
                 role,
                 annex_uuid: maybe(tc),
                 maxsize,
-                domain: maybe(tc),
-                site: maybe(tc),
             },
         );
-        if tc.draw(gs::booleans()) {
-            let n = tc.draw(gs::integers::<u8>().max_value(3));
-            let fingerprints: BTreeSet<String> = (0..n).map(|_| word(tc)).collect();
-            let f = Facts {
-                fingerprints,
-                host: maybe(tc),
-            };
-            // Empty facts are not written: they read back as none.
-            if !f.fingerprints.is_empty() || f.host.is_some() {
-                facts.insert(id, f);
-            }
-        }
         if tc.draw(gs::booleans()) {
             // An empty UUID is written for none.
             let uuid = maybe(tc).filter(|u| !u.is_empty());
@@ -153,7 +138,6 @@ fn roster_doc(tc: &TestCase) -> RosterDoc {
             rules: 1,
             group: word(tc),
             k: tc.draw(gs::integers::<u32>().min_value(1).max_value(5)),
-            min_sites: tc.draw(gs::integers::<u32>().min_value(1).max_value(3)),
             retention_days: tc.draw(gs::integers::<u32>().max_value(3650)),
             persons: BTreeMap::from([(
                 person,
@@ -166,12 +150,10 @@ fn roster_doc(tc: &TestCase) -> RosterDoc {
             removed,
             folders: Vec::new(),
         },
-        facts,
     }
 }
 
-/// Law *roster file*: a roster and its facts parse back from the text they
-/// render to.
+/// Law *roster file*: a roster parses back from the text it renders to.
 #[hegel::test]
 fn roster_files_round_trip(tc: TestCase) {
     let doc = roster_doc(&tc);

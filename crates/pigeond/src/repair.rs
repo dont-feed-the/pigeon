@@ -1,7 +1,7 @@
 //! Repair started by a removed custodian (08 §8.4, 08 §8.3): once the
 //! roster removes a custodian, its annex UUID is marked dead, so that no
 //! copy it held counts any more, and place sends every version to the
-//! custodians that remain until K domains hold it again.
+//! custodians that remain until K of them hold it again.
 
 use std::collections::BTreeSet;
 

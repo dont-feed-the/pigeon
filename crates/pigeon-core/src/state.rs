@@ -1,28 +1,24 @@
 //! Version states: local, published, protected, uncertain, missing (06 §6.2).
 //!
 //! A version's state is a function of its key's observations, the spread of
-//! the commit that names it, the failure domains and the present time. The
-//! domains partition all the roster's custodians; D is the set of those that
-//! hold a member of H (13 §13.13).
+//! the commit that names it and the present time. H is the set of custodians
+//! that count for it, each counted once by its device (ADR 0046, 13 §13.13).
 //!
 //! Laws (`tests/state.rs`): more presence observations never lower the state
-//! (its [`rank`]); adding a fingerprint or a declaration never raises it; the
-//! order of the custodians does not matter; with one custodian per domain and
-//! no sites, a version is protected when K custodians count (ADR 0002); a
+//! (its [`rank`]); a second entry for one device never changes it; the order
+//! of the custodians does not matter; a version is protected exactly when K
+//! distinct custodians count and one was heard within `stale_after`; a
 //! version only this device holds is *local* whatever the network says.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
-use crate::domain::{Facts, domains};
 use crate::time::{Span, Time};
 
 /// The thresholds of 06 §6.7 and the group's custody settings (04 §4.2).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Settings {
-    /// K: custody copies, in distinct failure domains.
+    /// K: custody copies, on distinct custodians.
     pub k: usize,
-    /// Declared sites the copies must span; 1 asks nothing.
-    pub min_sites: usize,
     /// A custodian silent for longer stops counting (24 hours).
     pub offline_after: Span,
     /// No custodian heard of for longer makes a version *uncertain* (1 hour).
@@ -33,7 +29,6 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             k: 2,
-            min_sites: 1,
             offline_after: Span::hours(24),
             stale_after: Span::hours(1),
         }
@@ -43,10 +38,8 @@ impl Default for Settings {
 /// One custodian of the roster, as this device observes it for one version.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Custodian<D> {
-    /// Its hardware facts, for failure domains.
-    pub facts: Facts<D>,
-    /// The site the roster declares for it.
-    pub site: Option<String>,
+    /// The custodian's device.
+    pub device: D,
     /// The latest news from it (`heard`).
     pub heard: Option<Time>,
     /// `holds(x, k)`: its location log says it holds the key.
@@ -77,10 +70,6 @@ pub struct Version<D> {
 pub enum Reason<D> {
     /// Copies are on the way, or nothing more specific is known.
     Sending,
-    /// K custodians count but they span fewer than K failure domains.
-    SameDomain(BTreeSet<D>),
-    /// K domains count but they span fewer than `min_sites` sites.
-    SameSite,
     /// Custodians holding it have been silent too long; the latest news.
     CustodianOffline(BTreeSet<D>, Option<Time>),
     /// A custodian holding it reports its repository lost.
@@ -116,7 +105,7 @@ pub enum State<D> {
     Published(Reason<D>),
     /// It would be protected, but no custodian was heard within `stale_after`.
     Uncertain(Option<Time>),
-    /// K failure domains hold it, observed at the given time.
+    /// K distinct custodians hold it, observed at the given time.
     Protected(Time),
 }
 
@@ -142,44 +131,28 @@ fn counts<D>(c: &Custodian<D>, s: &Settings, now: Time) -> bool {
 
 /// The state of `version` at `now` under `settings`.
 pub fn state<D: Ord + Clone>(version: &Version<D>, settings: &Settings, now: Time) -> State<D> {
-    let h: Vec<&Custodian<D>> = version
+    let k = settings.k.max(1);
+    // H, each device once, with the latest news from it.
+    let mut h: BTreeMap<&D, Option<Time>> = BTreeMap::new();
+    for c in version
         .custodians
         .iter()
         .filter(|c| counts(c, settings, now))
-        .collect();
-    // Domains partition every custodian of the roster, not only H: a
-    // custodian sharing facts with two others joins their domains whether or
-    // not it holds the key, so a new observation never merges domains.
-    let facts: Vec<Facts<D>> = version.custodians.iter().map(|c| c.facts.clone()).collect();
-    let ds: Vec<BTreeSet<D>> = domains(&facts)
-        .into_iter()
-        .filter(|d| h.iter().any(|c| d.contains(&c.facts.device)))
-        .collect();
-    let sites: BTreeSet<&str> = h.iter().filter_map(|c| c.site.as_deref()).collect();
-    let sites_ok = settings.min_sites <= 1 || sites.len() >= settings.min_sites;
+    {
+        let at = h.entry(&c.device).or_default();
+        *at = (*at).max(c.heard);
+    }
     let latest = version.custodians.iter().filter_map(|c| c.heard).max();
     let reachable = latest.is_some_and(|t| t.within(settings.stale_after, now));
-    if ds.len() >= settings.k.max(1) && sites_ok {
+    if h.len() >= k {
         if !reachable {
             return State::Uncertain(latest);
         }
-        let mut per_domain: Vec<Time> = ds
-            .iter()
-            .filter_map(|d| {
-                h.iter()
-                    .filter(|c| d.contains(&c.facts.device))
-                    .filter_map(|c| c.heard)
-                    .max()
-            })
-            .collect();
-        per_domain.sort_by(|a, b| b.cmp(a));
-        let at = per_domain
-            .get(settings.k.max(1) - 1)
-            .copied()
-            .unwrap_or_default();
-        return State::Protected(at);
+        let mut heard: Vec<Time> = h.values().flatten().copied().collect();
+        heard.sort_by(|a, b| b.cmp(a));
+        return State::Protected(heard.get(k - 1).copied().unwrap_or_default());
     }
-    let reason = reason(version, settings, now, &h, ds.len(), reachable, latest);
+    let reason = reason(version, settings, now, reachable, latest);
     if version.other_device_has_commit || version.custodians.iter().any(|c| c.holds) {
         State::Published(reason)
     } else if version.this_device_holds {
@@ -195,18 +168,10 @@ fn reason<D: Ord + Clone>(
     version: &Version<D>,
     settings: &Settings,
     now: Time,
-    h: &[&Custodian<D>],
-    domain_count: usize,
     reachable: bool,
     latest: Option<Time>,
 ) -> Reason<D> {
     let k = settings.k.max(1);
-    if h.len() >= k {
-        if domain_count < k {
-            return Reason::SameDomain(h.iter().map(|c| c.facts.device.clone()).collect());
-        }
-        return Reason::SameSite;
-    }
     let named: Vec<&Custodian<D>> = version
         .custodians
         .iter()
@@ -215,7 +180,7 @@ fn reason<D: Ord + Clone>(
     if let Some(lost) = named
         .iter()
         .filter(|c| c.repository_lost)
-        .map(|c| &c.facts.device)
+        .map(|c| &c.device)
         .min()
     {
         return Reason::RepositoryLost(lost.clone());
@@ -229,12 +194,9 @@ fn reason<D: Ord + Clone>(
         .collect();
     if !offline.is_empty() {
         let since = offline.iter().filter_map(|c| c.heard).max();
-        return Reason::CustodianOffline(
-            offline.iter().map(|c| c.facts.device.clone()).collect(),
-            since,
-        );
+        return Reason::CustodianOffline(offline.iter().map(|c| c.device.clone()).collect(), since);
     }
-    let roster: BTreeSet<&D> = version.custodians.iter().map(|c| &c.facts.device).collect();
+    let roster: BTreeSet<&D> = version.custodians.iter().map(|c| &c.device).collect();
     if roster.len() < k {
         return Reason::TooFewCustodians {
             have: roster.len(),

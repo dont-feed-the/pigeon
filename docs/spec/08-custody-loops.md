@@ -62,7 +62,7 @@ order-independent; the accepted set is a join (ADR 0012).
   ([15 §15.2](15-resource-use.md), §8.9).
 - A **custodian** downloads what it wants from any peer that has it: for each
   key of `keys()` that it lacks, history included (E9), and that its `wanted`
-  expression matches (`git annex matchexpression --key`) or domain repair
+  expression matches (`git annex matchexpression --key`) or overflow
   gives it (below), `git annex get --key`. pigeon chooses every transfer key by key (§8.6): git-annex
   refuses `get --auto` and `drop --auto` with `--all` or `--key`, and
   `satisfy --all` would drop content from peers. After each batch it syncs
@@ -74,14 +74,12 @@ order-independent; the accepted set is a join (ADR 0012).
   and checks K custody copies on custodians first (E1, E5, which ran over
   local paths; over P2P see below), and the laptop's own copy never counts
   (ADR 0002).
-- **Every verified drop locks one copy per failure domain** (ADR 0046).
-  `pigeond` chooses K custodians holding the key, in K domains and spanning
-  `min_sites` declared sites, reachable ones first, and runs
+- **Every verified drop names K custodians** (ADR 0046). `pigeond` chooses K
+  custodians holding the key, reachable ones first, and runs
   `git -c remote.<other>.annex-ignore=true … annex drop --key <key>
-  --numcopies K --mincopies K`, ignoring every other remote. git-annex
-  verifies only remotes that are not ignored (`verifiableCopies` in
-  `Annex/NumCopies.hs`), so its K locks fall in K domains (E22). Without such
-  a choice, the drop waits.
+  --numcopies K --mincopies K`, ignoring every other remote (git-annex
+  verifies only remotes that are not ignored, `verifiableCopies` in
+  `Annex/NumCopies.hs`). Without K such custodians, the drop waits.
 - **A copy counts only if it can be locked** ([09 §9.4](09-network-and-joining.md)). A custodian that
   drops its own copy (rebalancing, §8.10) holds its removal lock, and git-annex
   then also counts a copy it could not lock but saw present, assuming that a
@@ -92,14 +90,13 @@ order-independent; the accepted set is a join (ADR 0012).
   `CHECKPRESENT` with a lock ([09 §9.4](09-network-and-joining.md)); the
   `AnnexDrop` model shows the drop safe with it and unsafe without
   ([13 §13.2](13-verification.md)).
-- **Domain repair.** `sizebalanced` knows nothing of domains. When the
-  custodians that hold a key, are downloading it, or want it and have room for
-  it above their reserve span d < K domains (a custodian at its reserve still
-  wants its share but cannot take it, ADR 0046), the custodians of the
-  other domains with room for it (free space above `annex.diskreserve`, within
-  `maxsize`) rank themselves by SHA-256 of the key and their device ID; the
-  best-ranked custodian of each of the first K − d domains wants the key too
-  (ADR 0046). Every custodian computes the same choice. git-annex refuses
+- **Overflow.** When fewer than K custodians hold a key, are downloading it,
+  or want it and have room for it above their reserve (a custodian at its
+  reserve still wants its share but cannot take it), the other custodians
+  with room for it (free space above `annex.diskreserve`, within `maxsize`)
+  rank themselves by SHA-256 of the key and their device ID, and the best
+  ranked want it too, until K can take it. Every custodian computes the same
+  choice. git-annex refuses
   `--auto` with `--all` (E18). The laptop also re-thins the current files it
   captured ([07 §7.8](07-capture-and-install.md), [07 §7.8](07-capture-and-install.md)). This keeps laptops
   at about one copy of what they keep.
@@ -109,8 +106,8 @@ order-independent; the accepted set is a join (ADR 0012).
 A key falls below K custody copies when a custodian is removed from the roster
 (marked `dead`, [03 §3.4](03-repository-and-roles.md)), when a scrub finds it
 bad, or when a custodian's disk dies and its operator removes it. The other
-custodians' `sizebalanced` share and domain repair then include it, and their
-per-key downloads (§8.3) restore K domains within their capacity (E9, E10),
+custodians' `sizebalanced` share and overflow then include it, and their
+per-key downloads (§8.3) restore K copies within their capacity (E9, E10),
 before any new key (§8.9, [15 §15.2](15-resource-use.md)). While a key is
 in a repair epoch it is **endangered**: a custodian whose free space above its
 reserve is smaller than the endangered keys it wants defers its own downloads
@@ -155,7 +152,7 @@ capture resumes.
    Hiding with git's own unlink would lose a write through a handle opened
    before it (E24, `Evict_git`).
 4. **Drop** the keys of the hidden files with a verified `git annex drop --key`,
-   which locks K copies in K domains when it runs ([09 §9.4](09-network-and-joining.md)), whatever the
+   which locks K custody copies when it runs ([09 §9.4](09-network-and-joining.md)), whatever the
    status said at the hide. A key is dropped only if every path whose index
    entry has it is hidden, absent on disk, and in a folder whose target is
    free. A kept or visible path, or a staged or moved-in file of a folder
@@ -302,7 +299,7 @@ failures go into the custodian's status report ([06 §6.3](06-status.md)).
 
 - **Need,** in parts, each K × the size of its distinct keys: *current*
   versions; *history* not purged; *suggestions*, open, declined or withdrawn,
-  until erased; and the copies *domain repair* adds (ADR 0046). Each custodian
+  until erased; and the copies overflow adds (§8.3). Each custodian
   also needs its git repository and git-annex branch, transfers in progress
   and its reserve; a laptop, what it keeps, its pending history and its
   install asides ([07 §7.8](07-capture-and-install.md)).
@@ -345,8 +342,8 @@ failures go into the custodian's status report ([06 §6.3](06-status.md)).
 
 At the lowest priority, a custodian drops each key it holds that its `wanted`
 expression no longer matches after the shares moved (a custodian joined or
-changed `maxsize`), and that domain repair does not give it, with a verified
-drop (§8.3): git-annex checks K other custody copies in K domains first, each
+changed `maxsize`), and that overflow does not give it, with a verified
+drop (§8.3): git-annex checks K other custody copies first, each
 by a lock on a copy its holder has hashed for this drop
 ([09 §9.4](09-network-and-joining.md); ADRs 0014 and 0046, [09 §9.4](09-network-and-joining.md)). pigeon
 never runs `--rebalance` against a remote. A placement planner may replace

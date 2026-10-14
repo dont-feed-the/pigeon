@@ -236,9 +236,9 @@ pub struct Problem {
 pub enum State {
     /// Only on this computer.
     Local,
-    /// Reached a custodian, not yet K domains.
+    /// Reached a custodian, not yet K of them.
     Published,
-    /// Safe: on K failure domains.
+    /// Safe: on K custodians.
     Protected,
     /// No device is known to hold its content.
     Missing,

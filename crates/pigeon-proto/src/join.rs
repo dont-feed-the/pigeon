@@ -3,9 +3,8 @@
 //!
 //! The new device proves that it holds the invitation's secret with an HMAC
 //! bound to both device IDs, which the QUIC handshake authenticated. The
-//! slice adds the failure-domain facts and direct addresses of the new
-//! device, which the inviter writes to the roster and to its peers' list
-//! (13 §13.12).
+//! slice adds the direct addresses of the new device, which the inviter
+//! writes to its peers' list (13 §13.12).
 
 use serde::{Deserialize, Serialize};
 
@@ -30,12 +29,6 @@ pub struct Join {
     /// The free space it offers, in bytes, for a custodian.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capacity: Option<u64>,
-    /// Its failure-domain fingerprints, hex (ADR 0046).
-    #[serde(default)]
-    pub fingerprints: Vec<String>,
-    /// Its host's fingerprint, hex.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub host: Option<String>,
     /// Its direct addresses.
     #[serde(default)]
     pub addresses: Vec<String>,

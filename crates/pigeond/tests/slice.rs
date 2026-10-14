@@ -1,9 +1,8 @@
-//! The safety slice on one host (13 §13.12): three `pigeond`, a laptop
-//! and two backup machines, each with its own home and lab fingerprints, so
-//! they count as distinct failure domains. Driven through the `pigeon` CLI
-//! with `--json`: a file is local after `create`, published once one backup
-//! machine joined, protected once the second did; `free` hides it, and
-//! `keep` gives back the same bytes.
+//! The safety slice on one host (13 §13.12): three `pigeond`, a laptop and
+//! two backup machines, each with its own home. Driven through the `pigeon`
+//! CLI with `--json`: a file is local after `create`, published once one
+//! backup machine joined, protected once the second did; `free` hides it,
+//! and `keep` gives back the same bytes.
 //!
 //! Needs git-annex on PATH, and `pigeon` and `git-annex-p2p-iroh` built next
 //! to `pigeond` (`cargo build -p pigeon -p git-annex-p2p-iroh`). Skipped
@@ -78,16 +77,12 @@ fn start(root: &Path, sockets: &Path, name: &'static str) -> Daemon {
     let config =
         "[network]\nbind = \"127.0.0.1:0\"\nmdns = false\n\n[loops]\ninterval_seconds = 1\n";
     std::fs::write(home.join("config/config.toml"), config).unwrap();
-    let fp = home.join("fingerprints.json");
-    let ids = format!(r#"{{"storage":["disk-{name}"],"host":"host-{name}","virtual":null}}"#);
-    std::fs::write(&fp, ids).unwrap();
     let socket = sockets.join(format!("{name}.sock"));
     let log = std::fs::File::create(home.join("pigeond.out")).unwrap();
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_pigeond"));
     cmd.arg("--home")
         .arg(&home)
         .env("PIGEON_SOCKET", &socket)
-        .env("PIGEON_LAB_FINGERPRINTS", &fp)
         .env("PIGEON_LOG", "debug")
         .stdin(Stdio::null())
         .stdout(log.try_clone().unwrap())

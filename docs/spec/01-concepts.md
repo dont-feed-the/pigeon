@@ -68,8 +68,8 @@ has observed ([06](06-status.md)):
 | State | Definition | People see |
 |---|---|---|
 | **local** | captured on this device; no other device is known to have its commit | Only on this computer |
-| **published** | another device is known to have its commit, but custodians in fewer than K failure domains are known to hold verified copies | Shared, not safe yet |
-| **protected** | custodians in at least K distinct failure domains (ADR 0046) hold verified copies, as observed at time T | Safe |
+| **published** | another device is known to have its commit, but fewer than K custodians are known to hold verified copies | Shared, not safe yet |
+| **protected** | at least K distinct custodians (ADR 0046) hold verified copies, as observed at time T | Safe |
 | **uncertain** | the last observation is too old to say (P6) | Not checked since … |
 
 ## 1.6 Three removals, never conflated

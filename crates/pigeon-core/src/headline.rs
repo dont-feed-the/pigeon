@@ -59,8 +59,6 @@ pub enum NeedsYou {
     Removed,
     /// Custody capacity is short (ADR 0003, spec 08 §8.9).
     CapacityShort,
-    /// Two backup machines in one failure domain (ADR 0046).
-    SharedDomain,
     /// A backup machine's repository is lost (ADR 0046).
     RepositoryLost,
     /// Erased content came back (spec 08 §8.6).

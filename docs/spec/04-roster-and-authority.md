@@ -24,8 +24,7 @@ comes from the ADRs cited.
 format = 1
 rules = 1                           # the rule set the group runs; never decreases (ADR 0048)
 group = "Famille Geiger"            # display name
-k = 2                               # custody copies, in distinct failure domains (ADRs 0002 and 0046)
-min_sites = 1                       # optional: declared sites the copies must span (ADR 0046)
+k = 2                               # custody copies, on distinct custodians (ADRs 0002 and 0046)
 retention_days = 30                 # waiting period before a purge (ADR 0018)
 relay = "https://relay.example.org" # optional group relay (ADR 0016)
 telemetry_device = "…"              # optional device ID of the collector (ADR 0025)
@@ -49,8 +48,6 @@ name = "Paul's NAS"
 role = "custodian"
 annex_uuid = "…"
 maxsize = "4 TB"                    # capacity for sizebalanced (ADR 0003)
-domain = "paul-server"              # optional: hardware it shares with other custodians (ADR 0046)
-site = "Paul's home"                # optional: where it stands (ADR 0046)
 
 [devices."9c04…"]
 person = "paul"
@@ -71,8 +68,7 @@ stewards = ["roy"]
 Validity of a roster (checked on every commit that changes it): it parses,
 `rules` is not lower than at the parents, at least one admin remains, every device names an existing
 person, device names and person IDs are unique, `k ≥ 1`, every owner and steward
-is a person, `min_sites ≥ 1`, and only custodians have `domain` or `site`,
-each a non-empty label. Every laptop and custodian has an `annex_uuid`, a recovery device
+is a person. Every laptop and custodian has an `annex_uuid`, a recovery device
 has none, and an `annex_uuid` belongs to one device only: it is never given to
 another device, even after its own was removed (ADR 0046). A device ID that
 was removed is never added again (ADR 0051). A commit that leaves an invalid
@@ -283,11 +279,10 @@ This specification follows ux.md, the later decision **[no ADR]**.
   0009's rule that such a merge needs an admin valid under both parents.
 - **Removing an admin** is allowed to another admin; the last admin cannot be
   removed (§4.2).
-- A custodian's `maxsize`, `domain` and `site` may be changed by an admin or
-  by a device of its person; `min_sites` needs an admin (ADR 0046).
+- A custodian's `maxsize` may be changed by an admin or by a device of its
+  person.
 - A roster change that changes K, a device's role or `maxsize` re-applies
-  git-annex settings ([03 §3.5](03-repository-and-roles.md)). `domain`,
-  `site` and `min_sites` are pigeon's alone: git-annex does not see them.
+  git-annex settings ([03 §3.5](03-repository-and-roles.md)).
 
 ## 4.8 Roster forks: the fold (ADR 0051)
 

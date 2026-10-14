@@ -6,8 +6,8 @@
 //!
 //! Laws (`tests/queue.rs`): [`compare`] is a total order; a higher class
 //! always goes first; sorting gives one sequence whatever the arrival order;
-//! a protect item held in fewer failure domains never waits behind one held
-//! in more (spec 08 §8.9).
+//! a protect item held by fewer custodians never waits behind one held by
+//! more (spec 08 §8.9).
 
 use std::cmp::Ordering;
 
@@ -45,8 +45,8 @@ pub enum Work {
     Protect {
         /// The git-annex key.
         key: String,
-        /// Failure domains holding a custody copy.
-        custody_domains: u32,
+        /// Custodians holding a custody copy.
+        custody_copies: u32,
         /// Laptops holding a copy: they order, they do not protect.
         laptop_copies: u32,
         /// A holder is failing or leaving.
@@ -118,7 +118,7 @@ pub fn compare(a: &Work, b: &Work) -> Ordering {
         (
             Protect {
                 key: k1,
-                custody_domains: d1,
+                custody_copies: d1,
                 laptop_copies: l1,
                 endangered: e1,
                 introduced: i1,
@@ -126,7 +126,7 @@ pub fn compare(a: &Work, b: &Work) -> Ordering {
             },
             Protect {
                 key: k2,
-                custody_domains: d2,
+                custody_copies: d2,
                 laptop_copies: l2,
                 endangered: e2,
                 introduced: i2,

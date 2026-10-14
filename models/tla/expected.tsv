@@ -33,11 +33,9 @@ TraceSample_bad	TraceSample	fast	trace:rejected:2
 RosterTrace_good	RosterTrace	fast	trace:accepted
 RosterTrace_bad	RosterTrace	fast	trace:rejected:7
 AnnexDrop_design	AnnexDrop	fast	pass
-AnnexDrop_disk	AnnexDrop	fast	pass
 AnnexDrop_ranked	AnnexDrop	fast	pass
 AnnexDrop_p2p	AnnexDrop	fast	violation:INV_K
 AnnexDrop_log	AnnexDrop	fast	violation:INV_K
-AnnexDrop_storage	AnnexDrop	fast	violation:INV_K
 AnnexDrop_trusted	AnnexDrop	fast	violation:INV_K
 AnnexDrop_gets2	AnnexDrop	full	pass
 AnnexDrop_ranked4	AnnexDrop	full	pass
@@ -61,7 +59,6 @@ CaptureInstall_own3	CaptureInstall	full	pass
 CaptureInstall_other3	CaptureInstall	full	pass
 CaptureInstall_otherlive	CaptureInstall	full	pass
 Repair_design	Repair	fast	pass
-Repair_disk	Repair	fast	pass
 Repair_live	Repair	fast	pass
 Repair_live4	Repair	fast	pass
 Repair_design3	Repair	full	pass

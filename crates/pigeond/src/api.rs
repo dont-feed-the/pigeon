@@ -258,7 +258,6 @@ async fn create_inner(
         rules: 1,
         group: name.to_owned(),
         k,
-        min_sites: 1,
         retention_days: 30,
         persons: BTreeMap::from([(
             PersonId(pid.clone()),
@@ -275,18 +274,13 @@ async fn create_inner(
                 role: DeviceRole::Laptop,
                 annex_uuid: Some(uuid),
                 maxsize: None,
-                domain: None,
-                site: None,
             },
         )]),
         removed: BTreeMap::new(),
         folders: Vec::new(),
     };
     roster.validate().map_err(|e| format!("{e:?}"))?;
-    let doc = RosterDoc {
-        roster,
-        facts: BTreeMap::new(),
-    };
+    let doc = RosterDoc { roster };
     let text = crate::roster_file::render(&doc)?;
     let stage = |p: &'static str, b: Vec<u8>| {
         let git = git.clone();

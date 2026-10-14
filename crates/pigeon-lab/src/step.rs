@@ -155,11 +155,11 @@ pub enum Kind {
     Missing,
     /// Only this device holds it.
     Local,
-    /// Some other device has it, not yet K domains.
+    /// Some other device has it, not yet K custodians.
     Published,
     /// Would be protected, but nothing heard recently.
     Uncertain,
-    /// K failure domains hold it.
+    /// K custodians hold it.
     Protected,
 }
 

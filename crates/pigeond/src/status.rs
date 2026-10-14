@@ -7,7 +7,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use pigeon_core::domain::Facts;
 use pigeon_core::headline::{Level, headline, version_level};
 use pigeon_core::roster::Role as DeviceRole;
 use pigeon_core::state::{Custodian, Reason, Settings, State, Version, rank, state};
@@ -50,7 +49,6 @@ pub fn settings(g: &Group) -> Settings {
     let mut s = Settings::default();
     if let Some(doc) = g.roster() {
         s.k = usize::try_from(doc.roster.k).unwrap_or(2);
-        s.min_sites = usize::try_from(doc.roster.min_sites).unwrap_or(1);
     }
     s
 }
@@ -68,7 +66,7 @@ pub async fn observe(g: &Group, me: &str, prefix: &str) -> Vec<Observed> {
     let s = settings(g);
     let heard = g.lock().heard.clone();
     let mut peer_keys: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
-    let mut custodians: Vec<(String, String, Facts<String>, Option<String>)> = Vec::new();
+    let mut custodians: Vec<(String, String)> = Vec::new();
     if let Some(doc) = &doc {
         for (id, d) in &doc.roster.devices {
             if id.0 == me || d.role == DeviceRole::Recovery {
@@ -80,14 +78,7 @@ pub async fn observe(g: &Group, me: &str, prefix: &str) -> Vec<Observed> {
             if d.role == DeviceRole::Custodian
                 && let Some(uuid) = &d.annex_uuid
             {
-                let f = doc.facts.get(id).cloned().unwrap_or_default();
-                let facts = Facts {
-                    device: id.0.clone(),
-                    fingerprints: f.fingerprints,
-                    host: f.host,
-                    domain: d.domain.clone(),
-                };
-                custodians.push((id.0.clone(), uuid.clone(), facts, d.site.clone()));
+                custodians.push((id.0.clone(), uuid.clone()));
             }
         }
     }
@@ -101,9 +92,8 @@ pub async fn observe(g: &Group, me: &str, prefix: &str) -> Vec<Observed> {
         let version = Version {
             custodians: custodians
                 .iter()
-                .map(|(id, uuid, facts, site)| Custodian {
-                    facts: facts.clone(),
-                    site: site.clone(),
+                .map(|(id, uuid)| Custodian {
+                    device: id.clone(),
                     heard: heard.get(id).map(|t| Time(*t)),
                     holds: have.contains(uuid),
                     has_commit: named(id),

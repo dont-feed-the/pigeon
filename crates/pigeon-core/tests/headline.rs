@@ -4,7 +4,6 @@ mod common;
 
 use common::{flag, int, pick};
 use hegel::TestCase;
-use pigeon_core::domain::Facts;
 use pigeon_core::headline::{Level, headline, version_level};
 use pigeon_core::state::{Custodian, Settings, State, Version, state};
 use pigeon_core::time::{Span, Time};
@@ -58,11 +57,7 @@ fn only_here_is_not_safe_yet_after_grace_even_unreachable(tc: TestCase) {
     let now = Time(int(&tc, 0, 1_000_000));
     let custodians = (0..int(&tc, 0, 3))
         .map(|i| Custodian {
-            facts: Facts {
-                device: i as u8,
-                ..Facts::default()
-            },
-            site: None,
+            device: i as u8,
             heard: if flag(&tc) {
                 Some(Time(now.0 - int(&tc, 0, 200_000)))
             } else {

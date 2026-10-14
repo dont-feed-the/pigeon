@@ -1,7 +1,7 @@
 # Every lab experiment that asserts, run against real git and git-annex on
 # Linux and macOS (ADR 0026, issue #10), in four groups that run in parallel:
-# E20 E21 E22 (file-system objects, disaster drill, failure domains and
-# capacity; E22 mounts a tmpfs and a loop device with the runner's sudo),
+# E20 E21 E22 (file-system objects, disaster drill, repositories on one disk
+# and capacity; E22 mounts a tmpfs with the runner's sudo),
 # E12-E13 E14 E23 (the P2P boundary, purge, the verified drop over P2P),
 # E15 E15b E18 E24 (freeing folders, unprotected versions, what a hide
 # and a drop may lose or show) and E19 (install
@@ -72,9 +72,9 @@ jobs:
       - name: E21, disaster drill
         if: matrix.group == 'E20 E21 E22'
         run: python3 lab/git-annex/ga-e21-disaster-drill.py
-      - name: E22, failure domains and capacity
+      - name: E22, repositories on one disk and capacity
         if: matrix.group == 'E20 E21 E22'
-        run: python3 lab/git-annex/ga-e22-domains-and-capacity.py
+        run: python3 lab/git-annex/ga-e22-capacity.py
       - name: E12 and E13, the P2P boundary
         if: matrix.group == 'E12-E13 E14 E23'
         run: python3 lab/git-annex/ga-e12-e13-p2p-boundary.py

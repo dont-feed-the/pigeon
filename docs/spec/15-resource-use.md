@@ -34,7 +34,7 @@ issues transfers one key at a time from batch `get` and `copy` processes
 |---|---|---|
 | 1. capture | hashing and committing what people saved ([07 §7.3](07-capture-and-install.md)) | oldest change first |
 | 2. history | fetch, validate, merge, status reports ([08 §8.2](08-custody-loops.md)) | most recent notice first |
-| 3. protect | uploads and downloads that bring a version toward *protected*, and repair ([08 §8.3, §8.4](08-custody-loops.md), [08 §8.9](08-custody-loops.md)) | fewest failure domains holding a custody copy first (a laptop copy counts for ordering only: fewer laptop copies first among equal domains, 13 §13.13), then endangered keys, then newest, then smallest |
+| 3. protect | uploads and downloads that bring a version toward *protected*, and repair ([08 §8.3, §8.4](08-custody-loops.md), [08 §8.9](08-custody-loops.md)) | fewest custody copies first (a laptop copy counts for ordering only: fewer laptop copies first among equals, 13 §13.13), then endangered keys, then newest, then smallest |
 | 4. download | content of kept folders, install ([07 §7.5](07-capture-and-install.md)) | folder priority (`high`, `normal`, `low`), then recently changed first |
 | 5. scrub | `fsck --incremental --time-limit` slices ([08 §8.8](08-custody-loops.md)) | git-annex's incremental order |
 | 6. rebalance | verified `drop --key` of keys a custodian no longer wants ([08 §8.10](08-custody-loops.md)) | — |
@@ -44,8 +44,8 @@ issues transfers one key at a time from batch `get` and `copy` processes
 - The order is a pure function in `pigeon-core` with laws: it is a total
   preorder, made total by breaking every tie on the remaining fields (the
   key, the path, the peer; 13 §13.13); class 1 always runs within its floor (§15.4); a key's position
-  never depends on arrival order of equal items; a key held in fewer failure
-  domains never waits behind one held in more ([08 §8.9](08-custody-loops.md)). Repair is no longer
+  never depends on arrival order of equal items; a key held by fewer
+  custodians never waits behind one held by more ([08 §8.9](08-custody-loops.md)). Repair is no longer
   a class below downloads: a custodian spends its last space on the keys with
   the fewest copies.
 - Folder priority is a per-device setting (`[groups.priority]`,

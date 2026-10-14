@@ -48,8 +48,6 @@ pub fn device(i: usize, p: usize) -> Device {
         role: Role::Laptop,
         annex_uuid: Some(format!("uuid-{i}")),
         maxsize: None,
-        domain: None,
-        site: None,
     }
 }
 
@@ -59,7 +57,6 @@ pub fn genesis() -> Roster {
         rules: 1,
         group: "group".into(),
         k: 1,
-        min_sites: 1,
         retention_days: 30,
         persons: (1..=NP)
             .map(|i| {

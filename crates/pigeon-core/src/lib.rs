@@ -7,7 +7,6 @@
 //! they mirror.
 #![forbid(unsafe_code)]
 
-pub mod domain;
 pub mod filter;
 pub mod headline;
 pub mod journal;

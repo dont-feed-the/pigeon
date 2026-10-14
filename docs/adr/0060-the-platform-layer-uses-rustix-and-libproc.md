@@ -8,7 +8,6 @@ This record held library picks and platform details. Under the
 so it lives in the specification:
 [14 §14.7–14.8](../spec/14-platforms-and-packaging.md) (`rustix`, `libc` for
 `libproc`, `cargo deny`), [07 §7.5](../spec/07-capture-and-install.md) (the
-writer scan), [06 §6.3](../spec/06-status.md) (fingerprints),
-[11 §11.2](../spec/11-local-state.md) (directories) and
+writer scan), [11 §11.2](../spec/11-local-state.md) (directories) and
 [13 §13.12](../spec/13-verification.md) (the lab seams). Its text stays in the
 git history.

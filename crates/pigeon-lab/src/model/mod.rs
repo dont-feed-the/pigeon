@@ -17,7 +17,6 @@ mod loops;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use pigeon_core::domain::Facts;
 use pigeon_core::headline::{Level, version_level};
 use pigeon_core::journal::Record;
 use pigeon_core::state::{self, Settings, State, Version};
@@ -235,13 +234,7 @@ impl Model {
             .map(|(j, _)| {
                 let v = &lm.views[j];
                 state::Custodian {
-                    facts: Facts {
-                        device: j as u8,
-                        fingerprints: BTreeSet::from([format!("lab-disk-{j}")]),
-                        host: None,
-                        domain: None,
-                    },
-                    site: None,
+                    device: j as u8,
                     heard: v.heard,
                     holds: v.holds.contains(&ver.key),
                     has_commit: v.known.get(file).copied().unwrap_or(0) > i,

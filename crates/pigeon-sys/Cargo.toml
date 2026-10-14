@@ -9,16 +9,13 @@ repository.workspace = true
 publish.workspace = true
 
 [features]
-# The two seams of the lab build (13 §13.12): fingerprints read from a file and
-# named crash points. A release build never enables it.
+# The seams of the lab build (13 §13.12): named crash points and a root for a
+# backup machine's system directories. A release build never enables it.
 lab = []
 
 [dependencies]
 dirs.workspace = true
 rustix.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-sha2.workspace = true
 thiserror.workspace = true
 
 [target.'cfg(target_vendor = "apple")'.dependencies]

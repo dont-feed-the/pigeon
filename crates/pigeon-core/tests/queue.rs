@@ -23,7 +23,7 @@ fn work(tc: &TestCase) -> Work {
         },
         3 => Work::Protect {
             key: key(tc),
-            custody_domains: int(tc, 0, 2) as u32,
+            custody_copies: int(tc, 0, 2) as u32,
             laptop_copies: int(tc, 0, 1) as u32,
             endangered: flag(tc),
             introduced: t(tc),
@@ -75,15 +75,13 @@ fn order_does_not_depend_on_arrival(tc: TestCase) {
 }
 
 #[hegel::test(test_cases = 1000)]
-fn fewer_domains_never_wait_behind_more(tc: TestCase) {
+fn fewer_custody_copies_never_wait_behind_more(tc: TestCase) {
     let (a, b) = (work(&tc), work(&tc));
-    let domains = |w: &Work| match w {
-        Work::Protect {
-            custody_domains, ..
-        } => Some(*custody_domains),
+    let copies = |w: &Work| match w {
+        Work::Protect { custody_copies, .. } => Some(*custody_copies),
         _ => None,
     };
-    if let (Some(x), Some(y)) = (domains(&a), domains(&b))
+    if let (Some(x), Some(y)) = (copies(&a), copies(&b))
         && x < y
     {
         assert_eq!(compare(&a, &b), Ordering::Less);

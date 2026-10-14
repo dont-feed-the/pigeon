@@ -3,8 +3,8 @@
    09 §9.4; ADR 0046; 13 §13.2). Keys are one unit each. Custodians hold, get,
    sync, scrub and drop them; faults lose a disk, rot a copy or remove a
    custodian; crashes lose what was not synced. Assumption F (02 §2.2) bounds
-   the faults: within a repair epoch of a key, fewer than K failure domains
-   lose or corrupt it. The epoch is counted on intact, synced copies, so a
+   the faults: within a repair epoch of a key, fewer than K custodians lose
+   or corrupt it. The epoch is counted on intact, synced copies, so a
    silent corruption opens it when it happens, not when a scrub finds it, and
    a key not yet protected is in one.
    Grounded in git-annex 10.20261006:
@@ -21,10 +21,9 @@ EXTENDS Integers, FiniteSets, Sequences
 
 CONSTANTS Cust,      \* custodians
           Joiners,   \* custodians that may join later (the others start in)
-          Dom,       \* [Cust -> failure domains] (ADR 0046)
           Room,      \* [Cust -> units of free space above the reserve]
-          Rank,      \* [Keys -> Seq(Cust)]: sizebalanced's and domain repair's order
-          K,         \* copies needed, in K domains
+          Rank,      \* [Keys -> Seq(Cust)]: sizebalanced's and overflow's order
+          K,         \* copies needed, on K custodians
           Keys,      \* keys
           Start,     \* custodians holding the keys OnCust at start
           OnCust,    \* keys held at start by the custodians Start
@@ -46,14 +45,13 @@ VARIABLES member,    \* custodians in the roster
           inflight,  \* inflight[c]: keys c is downloading
           lap,       \* keys the laptop holds
           ever,      \* ghost: keys that have been protected
-          faults,    \* ghost: faults[k], domains that lost k in its epoch
-          hit,       \* ghost: <<key, domain>> pairs the last step hit
+          faults,    \* ghost: faults[k], custodians that lost k in its epoch
+          hit,       \* ghost: <<key, custodian>> pairs the last step hit
           starved,   \* ghost: an endangered key lost room to another key
           nf, ne     \* fault and environment counters
 vars == <<member, dead, lost, checking, up, has, bad, synced, inflight, lap,
           ever, faults, hit, starved, nf, ne>>
 
-Domains(S) == {Dom[c] : c \in S}
 Live == member \ lost
 Members == member \ (lost \cup checking)
 Used(c) == Cardinality({k \in Keys : has[c][k]})
@@ -64,7 +62,7 @@ Free(c) == Room[c] - Used(c) - Cardinality(inflight[c])
 \* What pigeon counts (06 §6.2): synced copies of members not being checked.
 Counted(k) == {c \in Live : has[c][k] /\ ("sync" \in Off \/ synced[c][k])
                             /\ ("fsck" \in Off \/ c \notin checking)}
-Protected(k) == Cardinality(Domains(Counted(k))) >= K
+Protected(k) == Cardinality(Counted(k)) >= K
 Endangered(k) == k \in ever /\ ~Protected(k)
 \* What really survives: intact, synced copies.
 Good(k) == {c \in Live : has[c][k] /\ ~bad[c][k] /\ synced[c][k]}
@@ -79,17 +77,17 @@ Getting(c, k) == has[c][k] \/ k \in inflight[c]
 \* The share's members that can take the key (08 §8.3, spec 08 §8.9).
 Taking(k) == IF "wantroom" \in Off THEN Share(k)
              ELSE {c \in Share(k) : Getting(c, k) \/ HasRoom(c)}
-\* Domain repair (ADR 0046): while those that hold or take the key span fewer
-\* than K domains, the best-ranked member with room in each missing domain.
+\* Overflow (08 §8.3): while fewer than K members hold or take the key, the
+\* next members in its rank order that have room.
 RECURSIVE Fill(_, _, _)
 Fill(k, s, span) ==
   IF Cardinality(span) >= K \/ s = <<>> THEN {}
   ELSE LET c == Head(s) IN
-       IF c \in Members /\ Dom[c] \notin span /\ (Getting(c, k) \/ HasRoom(c))
-         THEN {c} \cup Fill(k, Tail(s), span \cup {Dom[c]})
+       IF c \in Members /\ c \notin span /\ (Getting(c, k) \/ HasRoom(c))
+         THEN {c} \cup Fill(k, Tail(s), span \cup {c})
          ELSE Fill(k, Tail(s), span)
-DomainRepair(k) == Fill(k, Rank[k], Domains(Counted(k) \cup Taking(k)))
-Wants(c, k) == c \in Share(k) \/ c \in DomainRepair(k)
+Overflow(k) == Fill(k, Rank[k], Counted(k) \cup Taking(k))
+Wants(c, k) == c \in Share(k) \/ c \in Overflow(k)
 
 \* The endangered keys c wants and has not started (spec 08 §8.9).
 EndWanted(c) == {e \in Keys : Endangered(e) /\ Wants(c, e) /\ ~Getting(c, e)}
@@ -106,12 +104,10 @@ LaptopLockable(k) == {s \in Live \cap up :
                         /\ has[s][k]
                         /\ ("sync" \in Off \/ synced[s][k])
                         /\ ("fsck" \in Off \/ s \notin checking)}
-Proof(S) == \E P \in SUBSET S : Cardinality(P) = K /\ Cardinality(Domains(P)) = K
+Proof(S) == Cardinality(S) >= K
 
-\* Values for the configurations: one domain per custodian, or 2 and 3 on one
-\* disk; the joiner 3 has room for one key; keys ranked differently.
-OwnDisks == [c \in Cust |-> c]
-SharedDisk == [c \in Cust |-> IF c = 3 THEN 2 ELSE c]
+\* Values for the configurations: the joiner 3 has room for one key; keys
+\* ranked differently.
 RoomTight == [c \in Cust |-> IF c = 3 THEN 1 ELSE 2]
 RoomAmple == [c \in Cust |-> 2]
 RankAB == [k \in Keys |-> IF k = "a" THEN <<3, 1, 2>> ELSE <<1, 2, 3>>]
@@ -129,21 +125,21 @@ Init == /\ member = Cust \ Joiners
         /\ synced = has
         /\ inflight = [c \in Cust |-> {}]
         /\ lap = OnLaptop
-        /\ ever = {k \in OnCust : Cardinality(Domains(Start)) >= K}
+        /\ ever = {k \in OnCust : Cardinality(Start) >= K}
         /\ faults = [k \in Keys |-> {}]
         /\ hit = {}
         /\ starved = FALSE
         /\ nf = 0 /\ ne = 0
 
-\* After every step: a key is protected once; an epoch ends when its intact
-\* copies span K domains again (02 §2.1).
+\* After every step: a key is protected once; an epoch ends when K custodians
+\* hold intact copies again (02 §2.1).
 Ghosts == /\ ever' = ever \cup {k \in Keys : Protected(k)'}
           /\ faults' = [k \in Keys |->
-                          IF Cardinality(Domains(Good(k)')) >= K THEN {}
+                          IF Cardinality(Good(k)') >= K THEN {}
                           ELSE faults[k] \cup {p[2] : p \in {q \in hit' : q[1] = k}}]
-\* F: a fault keeps fewer than K domains lost per epoch. A key whose intact
-\* copies never spanned K domains is in an epoch too: a copy that rots before
-\* the key is counted protected counts against F.
+\* F: a fault keeps fewer than K custodians lost per epoch. A key whose intact
+\* copies never reached K custodians is in an epoch too: a copy that rots
+\* before the key is counted protected counts against F.
 F(h) == \A k \in Keys :
           Cardinality(faults[k] \cup {p[2] : p \in {q \in h : q[1] = k}}) < K
 
@@ -245,14 +241,14 @@ RemoveLost(c) ==
 \* Faults, bounded by F and MaxFaults.
 Rot(c, k) ==
   /\ nf < MaxFaults /\ c \in Live /\ has[c][k] /\ ~bad[c][k]
-  /\ hit' = {<<k, Dom[c]>>} /\ F(hit')
+  /\ hit' = {<<k, c>>} /\ F(hit')
   /\ bad' = [bad EXCEPT ![c][k] = TRUE]
   /\ nf' = nf + 1 /\ starved' = starved
   /\ UNCHANGED <<member, dead, lost, checking, lap, ne, up, has, synced, inflight>>
 
 LoseDisk(c) ==
   /\ nf < MaxFaults /\ c \in Live
-  /\ hit' = {<<k, Dom[c]>> : k \in {j \in Keys : has[c][j]}} /\ F(hit')
+  /\ hit' = {<<k, c>> : k \in {j \in Keys : has[c][j]}} /\ F(hit')
   /\ lost' = lost \cup {c} /\ checking' = checking \ {c}
   /\ has' = [has EXCEPT ![c] = [k \in Keys |-> FALSE]]
   /\ bad' = [bad EXCEPT ![c] = [k \in Keys |-> FALSE]]
@@ -263,7 +259,7 @@ LoseDisk(c) ==
 \* An admin removes a custodian that still holds copies: they leave the group.
 Remove(c) ==
   /\ nf < MaxFaults /\ c \in Live
-  /\ hit' = {<<k, Dom[c]>> : k \in {j \in Keys : has[c][j]}} /\ F(hit')
+  /\ hit' = {<<k, c>> : k \in {j \in Keys : has[c][j]}} /\ F(hit')
   /\ member' = member \ {c} /\ dead' = dead \cup {c} /\ checking' = checking \ {c}
   /\ has' = [has EXCEPT ![c] = [k \in Keys |-> FALSE]]
   /\ bad' = [bad EXCEPT ![c] = [k \in Keys |-> FALSE]]
@@ -321,14 +317,14 @@ ReserveKept == \A c \in Cust : Used(c) <= Room[c]
 EndangeredFirst == ~starved
 \* INV-K, as a property of steps: a copy leaves only with its disk, its
 \* custodian, a scrub of a bad object, a crash before its sync, or a drop of an
-\* unwanted key that K copies in K domains back.
+\* unwanted key that K lockable copies back.
 INV_K == [][\A c \in Cust, k \in Keys :
               (has[c][k] /\ ~has'[c][k]) =>
                 \/ c \in lost' \/ c \notin member' \/ bad[c][k] \/ ~synced[c][k]
                 \/ (~Wants(c, k) /\ Proof(Lockable(c, k)))]_vars
 \* The capacity assumption of the liveness configurations (13 §13.2): the
-\* members still standing and the joiners to come span K domains.
-CapacityHolds == Cardinality(Domains((member \ lost) \cup (Joiners \ (member \cup dead)))) >= K
-\* Under fairness, an endangered key gets K domains back.
+\* members still standing and the joiners to come are at least K.
+CapacityHolds == Cardinality((member \ lost) \cup (Joiners \ (member \cup dead))) >= K
+\* Under fairness, an endangered key gets K custodians back.
 Restores == \A k \in Keys : [](Endangered(k) => <>~Endangered(k))
 =============================================================================

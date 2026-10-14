@@ -33,7 +33,7 @@ EXTENDS Naturals, FiniteSets
 
 CONSTANTS
     K,            \* custody copies that protect a key (ADR 0002)
-    Custodians,   \* the custodians, each its own failure domain
+    Custodians,   \* the custodians
     MaxSaves,     \* saves by the person
     MaxGroup,     \* new versions of F's files from the group
     MaxCrash,     \* crashes of pigeond

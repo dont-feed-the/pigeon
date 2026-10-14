@@ -17,7 +17,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::daemon::Daemon;
 use crate::group::Group;
-use crate::roster_file::Facts;
 use crate::settings::{ensure_remote, init_annex};
 use crate::util::{hex, hmac_sha256, now, random, sha256_hex, unhex};
 
@@ -207,8 +206,6 @@ pub async fn welcome(d: &Daemon, device: &str, join: Join) -> JoinAnswer {
             role: DeviceRole::Custodian,
             annex_uuid: Some(join.annex_uuid.clone()),
             maxsize: join.capacity,
-            domain: None,
-            site: None,
         };
         let change = [Edit::AddDevice(id.clone(), added)];
         if !may_sign(&doc.roster, &DeviceId(d.device.clone()), &change) {
@@ -219,13 +216,6 @@ pub async fn welcome(d: &Daemon, device: &str, join: Join) -> JoinAnswer {
             return refused("invite-not-allowed");
         }
         doc.roster = applied.roster;
-        doc.facts.insert(
-            id,
-            Facts {
-                fingerprints: join.fingerprints.iter().cloned().collect(),
-                host: join.host.clone(),
-            },
-        );
         let message = format!("pigeon: add {}", join.device_name);
         let commit = match crate::change::commit_roster(&g, &doc, &message, &d.tracer).await {
             Ok(c) => c,
@@ -256,19 +246,6 @@ fn hostname() -> String {
         .map(|h| h.trim().to_owned())
         .filter(|h| !h.is_empty())
         .unwrap_or_else(|| "backup".to_owned())
-}
-
-/// The fingerprints of the repository at `path` in `group` (ADR 0046).
-fn facts(group: &str, path: &std::path::Path) -> (Vec<String>, Option<String>) {
-    let ids = pigeon_sys::fingerprint::identify(path).unwrap_or_default();
-    let fp = |s: &str| hex(&pigeon_sys::fingerprint::hash(group, s));
-    let storage = ids
-        .storage
-        .unwrap_or_default()
-        .iter()
-        .map(|s| fp(s))
-        .collect();
-    (storage, ids.host.as_deref().map(fp))
 }
 
 /// The new custodian's side: answers a problem code, or the group's name.
@@ -315,7 +292,6 @@ pub async fn join(d: &Daemon, code: &str, folder: Option<String>) -> Result<Stri
         .await
         .map_err(fail)?;
     let secret = unhex(&inv.secret).ok_or("invite-unknown")?;
-    let (fingerprints, host) = facts(&inv.group, &path);
     let request = Join {
         v: JOIN_VERSION,
         invitation_hash: sha256_hex(&secret),
@@ -324,8 +300,6 @@ pub async fn join(d: &Daemon, code: &str, folder: Option<String>) -> Result<Stri
         role: "custodian".to_owned(),
         annex_uuid: uuid,
         capacity: None,
-        fingerprints,
-        host,
         addresses: d.addresses().iter().map(ToString::to_string).collect(),
     };
     let addresses: Vec<std::net::SocketAddr> = inv

@@ -9,7 +9,7 @@ repository.workspace = true
 publish.workspace = true
 
 [features]
-# The lab build (13 §13.12): named crash points and fingerprints from a file.
+# The lab build (13 §13.12): named crash points and a backup machine's root.
 lab = ["pigeon-sys/lab"]
 # Trace events for checking runs against TLA+ (12 §12.3, ADR 0008).
 tla-trace = ["pigeon-core/tla-trace"]

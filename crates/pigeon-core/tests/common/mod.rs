@@ -25,12 +25,3 @@ pub fn flag(tc: &TestCase) -> bool {
 pub fn pick<T: Clone>(tc: &TestCase, items: &[T]) -> T {
     items[index(tc, items.len())].clone()
 }
-
-/// A label among `prefix0..prefix{n-1}`, or none.
-pub fn label(tc: &TestCase, prefix: &str, n: i64) -> Option<String> {
-    if flag(tc) {
-        Some(format!("{prefix}{}", int(tc, 0, n - 1)))
-    } else {
-        None
-    }
-}

@@ -7,13 +7,11 @@
 //! - [`signal`]: pausing, resuming and stopping children (ADR 0037);
 //! - [`pressure`]: the system's I/O pressure (ADR 0037);
 //! - [`paths`]: where pigeon keeps its files (11 §11.2, §11.3);
-//! - [`fingerprint`]: failure-domain fingerprints (ADR 0046);
 //! - [`lab`]: the two seams of the lab build (13 §13.12), inert in a release.
 //!
 //! This is the only crate allowed `unsafe`, each block with a `SAFETY:` comment.
 
 pub mod error;
-pub mod fingerprint;
 pub mod fs;
 pub mod lab;
 pub mod paths;

@@ -3,11 +3,11 @@
 //!
 //! Devices live in [`host::Space`]s: loop-mounted ext4 images and mount
 //! namespaces on Linux, APFS images on macOS, plain directories elsewhere.
-//! Every device has its own home, XDG directories and fingerprints file (the
-//! lab seam), and its daemon is supervised: a daemon that dies unasked, as a
-//! crash plan makes it, is restarted without the plan, as systemd or launchd
-//! would. Waits poll their condition until the deadline. At the end the
-//! devices' trace logs are merged for the projection check and for TLC.
+//! Every device has its own home and XDG directories, and its daemon is
+//! supervised: a daemon that dies unasked, as a crash plan makes it, is
+//! restarted without the plan, as systemd or launchd would. Waits poll their
+//! condition until the deadline. At the end the devices' trace logs are
+//! merged for the projection check and for TLC.
 
 pub mod cli;
 pub mod host;
@@ -726,9 +726,6 @@ impl Interpreter for Exec {
             let space = Space::create(self.cfg.isolation, &work, &name, mib, custodian)?;
             let root = space.root.clone();
             let home = root.join("home");
-            let fp = root.join("fingerprints.json");
-            let ident = serde_json::json!({"storage": [format!("lab-disk-{name}")], "host": format!("lab-host-{name}"), "virtual": ""});
-            fs::write(&fp, ident.to_string()).map_err(|e| e.to_string())?;
             let mut env = vec![
                 (s("HOME"), home.display().to_string()),
                 (
@@ -748,7 +745,6 @@ impl Interpreter for Exec {
                     home.join(".local/share").display().to_string(),
                 ),
                 (s("XDG_RUNTIME_DIR"), root.join("run").display().to_string()),
-                (s("PIGEON_LAB_FINGERPRINTS"), fp.display().to_string()),
                 (s("PIGEON_TRACE"), s("1")),
                 (s("PIGEON_NAME"), name.clone()),
                 (s("RUST_LOG"), s("info")),

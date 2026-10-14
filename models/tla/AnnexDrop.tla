@@ -18,14 +18,13 @@
    - Expire: a lock over P2P outlives a lost connection by 10 minutes only
      (p2pDefaultLockContentRetentionDuration); a stalled dropper keeps its proof.
    Purge and Drop (forced drops) bypass this protocol and are not modelled.
-   INV_K: the key stays in at least K failure domains (ADR 0046). *)
+   INV_K: the key stays on at least K custodians (ADR 0046). *)
 EXTENDS Naturals, FiniteSets
 
 CONSTANTS Cust,      \* custodians, a set of numbers (the order ranks them)
-          Dom,       \* [Cust -> domains]: the failure domain of each one
           K,         \* numcopies = mincopies
           Check,     \* "safe": CHECKPRESENT honours removal locks; "p2p": it does not
-          Choose,    \* "domains": K proofs in K domains (ADR 0046); "repos": every
+          Choose,    \* "named": K named remotes (ADR 0046); "repos": every
                      \* remote the log lists; "ranked": only custodians ranked above
           Trusted,   \* custodians marked `trust`
           LogOnly,   \* TRUE: count what the location log says, unchecked
@@ -44,13 +43,8 @@ VARIABLES has,     \* has[c]: c holds the content
           gets
 vars == <<has, excl, shared, log, up, cand, proof, dropping, dead, gets>>
 
-\* Values for Dom: every custodian on its own storage, or 1 and 2 on one disk.
-OwnDisks == [c \in Cust |-> c]
-SharedDisk == [c \in Cust |-> IF c = 2 THEN 1 ELSE c]
-
 Holders == {c \in Cust : has[c]}
-Domains(S) == {Dom[c] : c \in S}
-INV_K == Cardinality(Domains(Holders)) >= K
+INV_K == Cardinality(Holders) >= K
 
 \* What CHECKPRESENT answers about r's copy.
 Present(r) == IF Check = "p2p" THEN has[r] ELSE has[r] /\ ~excl[r]
@@ -60,10 +54,9 @@ Listed(d) == (log[d] \ {d}) \ dead
 \* pigeon's choice of the remotes not ignored (ADR 0046), among listed copies.
 Choices(d) ==
   CASE Choose = "repos"  -> {Listed(d)}
-    [] Choose = "domains" -> {S \in SUBSET Listed(d) :
-                                Cardinality(S) = K /\ Cardinality(Domains(S)) = K}
+    [] Choose = "named"  -> {S \in SUBSET Listed(d) : Cardinality(S) = K}
     [] Choose = "ranked" -> {S \in SUBSET {c \in Listed(d) : c > d} :
-                                Cardinality(S) = K /\ Cardinality(Domains(S)) = K}
+                                Cardinality(S) = K}
 
 Init == /\ has = [c \in Cust |-> TRUE]
         /\ excl = [c \in Cust |-> FALSE]

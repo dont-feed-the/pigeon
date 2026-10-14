@@ -1,31 +1,18 @@
 //! `.pigeon/roster.toml` (04 §4.2) as text, to and from pigeon-core's
-//! [`Roster`], with what the slice adds to each custodian: its fingerprints
-//! and host fingerprint, so that every member computes the same failure
-//! domains (13 §13.12, v0 of ADR 0046's facts). `maxsize` is a number of bytes.
+//! [`Roster`]. `maxsize` is a number of bytes.
 //!
 //! Law (`tests/codecs.rs`): parsing a rendered roster gives it back.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use pigeon_core::roster::{DeviceId, Folder, Person, PersonId, Role, Roster, Rule};
 use serde::{Deserialize, Serialize};
 
-/// What a custodian says of its hardware, beside the roster's fields.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Facts {
-    /// Fingerprints of its storage.
-    pub fingerprints: BTreeSet<String>,
-    /// Fingerprint of its host.
-    pub host: Option<String>,
-}
-
-/// A roster file: the roster and the facts of its devices.
+/// A roster file.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RosterDoc {
     /// The roster.
     pub roster: Roster,
-    /// The facts, by device.
-    pub facts: BTreeMap<DeviceId, Facts>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -34,8 +21,6 @@ struct FileT {
     rules: u32,
     group: String,
     k: u32,
-    #[serde(default = "one")]
-    min_sites: u32,
     #[serde(default = "thirty")]
     retention_days: u32,
     #[serde(default)]
@@ -64,14 +49,6 @@ struct DeviceT {
     annex_uuid: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     maxsize: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    domain: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    site: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    fingerprints: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    host: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -82,10 +59,6 @@ struct FolderT {
     owner: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     stewards: Vec<String>,
-}
-
-fn one() -> u32 {
-    1
 }
 
 fn thirty() -> u32 {
@@ -116,30 +89,17 @@ pub fn parse(text: &str) -> Result<RosterDoc, String> {
     if f.format != 1 {
         return Err(format!("roster format {}", f.format));
     }
-    let mut facts = BTreeMap::new();
     let mut devices = BTreeMap::new();
     for (id, d) in f.devices {
         let role = parse_role(&d.role).ok_or_else(|| format!("role {}", d.role))?;
-        let id = DeviceId(id);
-        if !d.fingerprints.is_empty() || d.host.is_some() {
-            facts.insert(
-                id.clone(),
-                Facts {
-                    fingerprints: d.fingerprints.into_iter().collect(),
-                    host: d.host,
-                },
-            );
-        }
         devices.insert(
-            id,
+            DeviceId(id),
             pigeon_core::roster::Device {
                 person: PersonId(d.person),
                 name: d.name,
                 role,
                 annex_uuid: d.annex_uuid,
                 maxsize: d.maxsize,
-                domain: d.domain,
-                site: d.site,
             },
         );
     }
@@ -156,7 +116,6 @@ pub fn parse(text: &str) -> Result<RosterDoc, String> {
         rules: f.rules,
         group: f.group,
         k: f.k,
-        min_sites: f.min_sites,
         retention_days: f.retention_days,
         persons: f
             .persons
@@ -179,7 +138,7 @@ pub fn parse(text: &str) -> Result<RosterDoc, String> {
             .collect(),
         folders,
     };
-    Ok(RosterDoc { roster, facts })
+    Ok(RosterDoc { roster })
 }
 
 /// Renders a roster file.
@@ -190,7 +149,6 @@ pub fn render(doc: &RosterDoc) -> Result<String, String> {
         rules: r.rules,
         group: r.group.clone(),
         k: r.k,
-        min_sites: r.min_sites,
         retention_days: r.retention_days,
         persons: r
             .persons
@@ -209,7 +167,6 @@ pub fn render(doc: &RosterDoc) -> Result<String, String> {
             .devices
             .iter()
             .map(|(id, d)| {
-                let facts = doc.facts.get(id).cloned().unwrap_or_default();
                 (
                     id.0.clone(),
                     DeviceT {
@@ -218,10 +175,6 @@ pub fn render(doc: &RosterDoc) -> Result<String, String> {
                         role: role_name(d.role).to_owned(),
                         annex_uuid: d.annex_uuid.clone(),
                         maxsize: d.maxsize,
-                        domain: d.domain.clone(),
-                        site: d.site.clone(),
-                        fingerprints: facts.fingerprints.into_iter().collect(),
-                        host: facts.host,
                     },
                 )
             })

@@ -239,14 +239,12 @@ person, named NAME in the roster (`pigeon invite --backup-machine NAS`, ux.md
    must be online; while it is not, the CLI and web say "Waiting for Paul's
    computer…" and retry until the invitation expires.
 2. It sends `Join {v, invitation_hash, proof, device_name, role, annex_uuid,
-   capacity?, fingerprints, host?, addresses}`, where `proof =
+   capacity?, addresses}`, where `proof =
    HMAC-SHA256(secret, "pigeon-join-1" ‖ new device ID ‖ inviter device ID)`.
    Both device IDs are those authenticated by the QUIC handshake, so the
    secret is bound to this connection and a recorded exchange cannot be
-   replayed. A custodian's `fingerprints` and `host` are the hashed
-   identifiers of its storage and host (ADR 0046), which the inviter records
-   with the device so that failure domains count from the join on; its
-   direct `addresses` let the inviter reach it before mDNS does **[no ADR]**.
+   replayed. Its direct `addresses` let the inviter reach it before mDNS
+   does **[no ADR]**.
 3. The inviter checks the proof, the expiry and that the invitation is unused,
    marks it used, and signs a roster commit that adds the device (and the
    person, for `new-person`) under the authority rule

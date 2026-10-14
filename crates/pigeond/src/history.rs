@@ -119,7 +119,6 @@ pub async fn remove_device(d: &Daemon, name: &str) -> Vec<Response> {
         return vec![problem("not-allowed", &[], None)];
     }
     doc.roster = apply(&doc.roster, &change).roster;
-    doc.facts.remove(&id);
     let message = format!("pigeon: remove {name}");
     if let Err(e) = crate::change::commit_roster(&g, &doc, &message, &d.tracer).await {
         return vec![problem("internal-error", &[], Some(e))];

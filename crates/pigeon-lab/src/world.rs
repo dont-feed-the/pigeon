@@ -191,7 +191,7 @@ pub struct CustodianSpec {
 pub struct World {
     /// The group's name.
     pub group: String,
-    /// K: custody copies in distinct failure domains.
+    /// K: custody copies, on distinct custodians.
     pub k: u32,
     /// The laptops; the first present one is the group's admin.
     pub laptops: Vec<LaptopSpec>,
