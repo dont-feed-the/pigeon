@@ -19,10 +19,12 @@ pigeon-i18n = { path = "crates/pigeon-i18n" }
 pigeon-git = { path = "crates/pigeon-git" }
 pigeon-sys = { path = "crates/pigeon-sys" }
 pigeon-lab = { path = "crates/pigeon-lab" }
+data-encoding = "2.11"
 dirs = "7.0"
 fluent-bundle = "0.16"
 fluent-langneg = "0.13"
 fluent-syntax = "0.12"
+getrandom = "0.4"
 libc = "0.2"
 rustix = { version = "1.1", features = ["fs", "mm", "process", "stdio"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -30,6 +32,7 @@ serde_json = "1.0"
 sha2 = "0.11"
 tempfile = "3.27"
 thiserror = "2.0"
+toml_edit = { version = "0.25", features = ["serde"] }
 tokio = { version = "1.53", features = ["io-util", "macros", "process", "rt", "sync", "time"] }
 tracing = "0.1.44"
 unic-langid = "0.9"

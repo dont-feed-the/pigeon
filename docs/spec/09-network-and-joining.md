@@ -199,8 +199,10 @@ git-annex, and E23 the probe.
 
 ### The invitation
 
-`pigeon invite [--admin] [--backup-machine] PERSON` (People → *Invite
-someone*) creates a one-time invitation:
+`pigeon invite [--admin] PERSON` (People → *Invite someone*), or `pigeon
+invite --backup-machine [NAME]` for a backup machine of the inviter's own
+person, named NAME in the roster (`pigeon invite --backup-machine NAS`, ux.md
+§8) **[no ADR: reading]**, creates a one-time invitation:
 
 | Field | Value |
 |---|---|
@@ -208,7 +210,7 @@ someone*) creates a one-time invitation:
 | `inviter` | the inviter's device ID and its current direct addresses |
 | `relay` | the group relay, if any (§9.5) |
 | `secret` | 256 random bits |
-| `purpose` | `new-person {name, admin}`, or `new-device {person}`; `--backup-machine` adds `role = "custodian"` |
+| `purpose` | `new-person {name, admin}`, or `new-device {person}`; `--backup-machine` adds `role = "custodian"` and the machine's name, if given |
 | `expires` | creation time + 24 hours by default |
 
 - It is written as `pgn1-` followed by the lowercase base32 (no padding) of its
@@ -216,8 +218,11 @@ someone*) creates a one-time invitation:
 - **Who may invite.** A new person needs an admin's device; a new device of
   person P needs an admin's device or one of P's devices (ADR 0017). A device
   that may not invite says so and suggests asking an admin.
-- The inviter stores only `SHA-256(secret)`, the purpose and the expiry in
-  `invitations.json` ([11](11-local-state.md)). An invitation works once: the
+- The inviter stores the secret, its SHA-256, the purpose and the expiry in
+  `invitations.json` ([11](11-local-state.md)), readable by its user only.
+  The hash finds the record; the secret itself is needed to check the proof
+  of step 2, which a hash alone cannot do **[no ADR: correction]**, found by
+  the first build (issue #17). An invitation works once: the
   record is marked used before the roster commit is signed, so a crash cannot
   let it work twice. `pigeon invite --list` and `--cancel` manage pending ones.
 
@@ -231,11 +236,15 @@ someone*) creates a one-time invitation:
    surviving disk, gets a new UUID first, §9.9), and connects to the inviter on `pigeon/join/1`. The inviter
    must be online; while it is not, the CLI and web say "Waiting for Paul's
    computer…" and retry until the invitation expires.
-2. It sends `Join {invitation_hash, proof, device_name, role, annex_uuid,
-   capacity?}`, where `proof = HMAC-SHA256(secret, "pigeon-join-1" ‖ new
-   device ID ‖ inviter device ID)`. Both device IDs are those authenticated by
-   the QUIC handshake, so the secret is bound to this connection and a
-   recorded exchange cannot be replayed.
+2. It sends `Join {v, invitation_hash, proof, device_name, role, annex_uuid,
+   capacity?, fingerprints, host?, addresses}`, where `proof =
+   HMAC-SHA256(secret, "pigeon-join-1" ‖ new device ID ‖ inviter device ID)`.
+   Both device IDs are those authenticated by the QUIC handshake, so the
+   secret is bound to this connection and a recorded exchange cannot be
+   replayed. A custodian's `fingerprints` and `host` are the hashed
+   identifiers of its storage and host (ADR 0046), which the inviter records
+   with the device so that failure domains count from the join on; its
+   direct `addresses` let the inviter reach it before mDNS does **[no ADR]**.
 3. The inviter checks the proof, the expiry and that the invitation is unused,
    marks it used, and signs a roster commit that adds the device (and the
    person, for `new-person`) under the authority rule
@@ -243,7 +252,8 @@ someone*) creates a one-time invitation:
    reported free space minus 10 %, and at most that free space minus
    `annex.diskreserve`, which an admin or its owner can change later
    ([08 §8.9](08-custody-loops.md)).
-4. The inviter answers `Welcome {commit}`, or a refusal whose code becomes a
+4. The inviter answers `Welcome {commit, annex_uuid}` (its own git-annex
+   UUID, for the new device's remote of it), or a refusal whose code becomes a
    Problem ([10 §10.6](10-interfaces.md)): `P-INVITE-EXPIRED`, `P-INVITE-USED`,
    `invite-unknown`, `invite-not-allowed`.
 5. The new device, now in the roster, fetches over `pigeon/annex/1`, validates

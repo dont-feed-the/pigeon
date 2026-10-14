@@ -64,6 +64,13 @@ full_speed = []                   # local time windows, e.g. ["12:00-13:00"]
 scrub_window = "01:00-06:00"      # backup machines only
 paused_until = 2026-10-13T18:00:00+02:00   # written by pigeon pause; absent if not paused
 
+[network]                         # 09 §9.5
+bind = "0.0.0.0:0"                # the endpoint's address; the lab binds 127.0.0.1:0
+mdns = true                       # find peers on the local network
+
+[loops]
+interval_seconds = 30             # a round of the loops besides change notices (08 §8.1)
+
 [[groups]]
 id = "<genesis commit id>"        # the group ID (04 §4.1)
 path = "/home/martine/Famille"    # the folder on this device
@@ -73,6 +80,10 @@ path = "/home/martine/Famille"    # the folder on this device
 "Archives" = "low"
 ```
 
+- `[network]` and `[loops]` are **[no ADR]**: the lab and the slice's test
+  set `bind = "127.0.0.1:0"`, `mdns = false` and `interval_seconds = 1`. An
+  unspecified bind address is told to peers as loopback (with mDNS they find
+  the others).
 - Keys not listed take their defaults; unknown keys are kept and reported by
   `pigeon doctor`, so that an older `pigeond` does not drop a newer setting.
 - `pigeond` watches the file and applies a hand edit at once; an invalid edit
@@ -97,11 +108,19 @@ repository and git never shares it (ADR 0036).
 | `conflicts.json` | a divergence starts, changes or ends ([07 §7.6](07-capture-and-install.md)) | the divergence table | no: "what pigeon last installed" is known only here |
 | `purges.toml` | a custodian first merges a purge decision, or seals it ([08 §8.6](08-custody-loops.md)) | when it received each active decision, and its seals | yes, conservatively: a lost file restarts each waiting period ([08 §8.6](08-custody-loops.md)) |
 | `clock.json` | at most every second, and at exit | the Lamport clock of trace events (ADR 0008) | no, but losing it only weakens trace ordering |
-| `invitations.json` | an invitation is created, used, cancelled or expires ([09 §9.6](09-network-and-joining.md)) | the hash of each secret, purpose, expiry, used flag | no |
+| `invitations.json` | an invitation is created, used, cancelled or expires ([09 §9.6](09-network-and-joining.md)) | each secret and its hash, purpose, expiry, used flag; mode 0600 | no |
 | `aside/` | install step 4 | files moved aside, kept until the first full scan 10 minutes after `done` | no ([07 §7.5](07-capture-and-install.md), [07 §7.5](07-capture-and-install.md)) |
 | `stage/` | install step 2; keeping a folder ([08 §8.5](08-custody-loops.md)) | new files before they enter the folder | yes: unreferenced files are deleted at start |
 | `recovered/` | install steps 6 and 9 | moved-aside content that was not pigeon's, until captured as a recovered version | no ([07 §7.6](07-capture-and-install.md)) |
 | `RECOVERY.txt` (custodians, in the repository directory) | the roster changes | the group's name, the other custodians, and the git and git-annex commands that read the files without pigeon ([09 §9.9](09-network-and-joining.md), ADR 0047) | yes: written again from the roster |
+
+The first build (13 §13.12) also keeps, in the same directory, `peers.json`
+(the direct addresses each peer gave at its join, as the lab runs without
+mDNS), `p2p-token` (the token of `git annex p2p --gen-addresses`, which the
+filter supplies to the helper, 09 §9.3), `freed.json` (the folders freed on
+this computer, besides the sparse-checkout file) and `dead.json` (the UUIDs of
+removed devices already marked `dead`). Each is rebuildable or a stand-in for
+a later mechanism **[no ADR: first build]**.
 
 ### `install.ndjson`
 
@@ -156,7 +175,7 @@ path) and rewritten whole.
 ### `invitations.json`
 
 ```json
-{"format":1,"invitations":[{"id":"inv-7Q2M","secret_sha256":"…","purpose":{"new-person":{"name":"Martine","admin":false}},"expires":"2026-10-14T14:10:00+02:00","used_by":null}]}
+{"format":1,"invitations":[{"id":"inv-7Q2M","secret":"…","secret_sha256":"…","purpose":{"new-person":{"name":"Martine","admin":false}},"expires":"2026-10-14T14:10:00+02:00","used_by":null}]}
 ```
 
 Expired entries are kept 30 days for the "already used / expired" messages,
