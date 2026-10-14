@@ -4,6 +4,10 @@
 > key, the transport helper, the `pigeond` endpoint and local socket,
 > append-only serving, relays, invitations, removal and recovery.
 
+Normative: the `pigeon-core::filter` laws, the `pigeon-proto` laws, the
+`pigeond` codec and network laws, and the `Authority.tla` invariants named
+below.
+
 ## 9.1 The device key (ADR 0007)
 
 - Each device has one **ed25519 key**, made when it creates or joins a
@@ -11,11 +15,10 @@
   iroh node ID, commit signer, roster key. One `pigeond` serves all the
   user's groups with it (ADR 0011), so two groups see the same device.
 - It is stored once as an OpenSSH private key, mode 0600, at
-  `<config>/device-key` ([11](11-local-state.md)), with the `ssh-key` crate.
-  git signs with it (`gpg.format=ssh`, `ssh-keygen -Y sign -n git`) and iroh
-  loads it as its secret key. pigeon verifies signatures itself (SSHSIG,
-  namespace `git`) against the roster at the commit's parents
-  ([04 §4.4](04-roster-and-authority.md)).
+  `<config>/device-key` ([11](11-local-state.md)). git signs with it (SSH
+  signatures) and iroh uses it as its secret key; pigeon verifies signatures
+  itself (SSHSIG, namespace `git`) against the roster at the commit's
+  parents ([04 §4.4](04-roster-and-authority.md)).
 - The key is not encrypted at rest: `pigeond` starts unattended. A stolen
   unlocked laptop signs until it is removed (§9.7); stolen keys are outside
   the guarantees ([02 §2.2](02-guarantees.md)).
@@ -23,9 +26,8 @@
 ## 9.2 The transport helper `git-annex-p2p-iroh` (ADR 0006)
 
 The remote URL `p2p-annex::iroh:<device-id>`
-([03 §3.6](03-repository-and-roles.md); git-annex `P2P/Address.hs`) makes
-git-annex run the helper, a small binary next to `pigeon` and a thin client
-of `pigeond` (ADR 0011), in the three modes git-annex fixes:
+([03 §3.6](03-repository-and-roles.md)) makes git-annex run the helper, a
+thin client of `pigeond` (ADR 0011), in the three modes git-annex fixes:
 
 | Called as | The helper |
 |---|---|
@@ -33,15 +35,13 @@ of `pigeond` (ADR 0011), in the three modes git-annex fixes:
 | `git-annex-p2p-iroh <address>` | relays stdin/stdout to a stream `pigeond` opens to that peer for this repository; exits non-zero if it cannot connect, zero when the peer closes |
 | `git-annex-p2p-iroh <address> <socket>` | registers git-annex's unix socket with `pigeond` for this repository, and stays until either ends it |
 
-- `pigeond` enables listening once per repository (`git annex p2p --enable
-  iroh`) and runs `git annex remotedaemon --foreground` as a child.
-- The helper names its repository by absolute path (`GIT_DIR`, else its
-  working directory) in each request; it reads no git configuration.
-- Each serving repository stores one git-annex token for its own address
-  (`git annex p2p --gen-addresses`); the filter (§9.4) puts it in the
-  client's `AUTH`, so no token travels between devices.
-- Without `pigeond`, or for a device not in the roster, the helper exits
-  non-zero at once with its problem code on stderr (`peer-unreachable`).
+`pigeond` enables listening once per repository and runs git-annex's
+`remotedaemon` as a child. The helper names its repository by absolute path
+in each request and reads no git configuration. Each serving repository
+keeps one git-annex token for its own address, which the filter puts in the
+client's `AUTH` (`auth_is_rewritten_and_checked`), so no token travels.
+Without `pigeond`, or for a device not in the roster, the helper exits
+non-zero at once with its problem code (`peer-unreachable`).
 
 ## 9.3 The endpoint of `pigeond` and the local socket (ADR 0011)
 
@@ -71,88 +71,54 @@ punching, relays), with these ALPN protocols:
 
 ### The local socket
 
-The CLI, the web server and the helper reach `pigeond` over one socket,
-mode 0600: `$XDG_RUNTIME_DIR/pigeon/pigeond.sock` on Linux, the per-user
-temporary directory (`$TMPDIR`) on macOS; `PIGEON_SOCKET` overrides it. It
-carries newline-delimited JSON, requests and responses matched by `id`: the
-internal API ([10 §10.1](10-interfaces.md)) plus the helper's `Address
-{repository}`, `Connect {repository, device}` and `Listen {repository,
-socket}`, after whose `Connected` or `Listening` reply only raw bytes pass.
-A remotedaemon socket path over 100 bytes is reached through a short link
-beside it, named after `pigeond`'s socket and the group **[no ADR]**.
-`pigeond` creates the socket's directory (0700) only if absent and refuses
-a second instance (a lock file); clients check that the peer is the same
-user (`SO_PEERCRED`, `getpeereid`).
+The CLI, the web server and the helper reach `pigeond` over one per-user
+socket, mode 0600 (`$XDG_RUNTIME_DIR/pigeon/pigeond.sock` on Linux, under
+`$TMPDIR` on macOS; `PIGEON_SOCKET` overrides it). It carries one JSON
+request or response per line, matched by `id`: the internal API
+([10 §10.1](10-interfaces.md)) plus the helper's `Address`, `Connect` and
+`Listen`, after whose `Connected` or `Listening` reply only raw bytes pass
+(`pigeon-proto` laws `an_envelope_is_one_line`, `requests_round_trip`,
+`responses_round_trip`, `raw_bytes_after_the_last_line_are_kept`). A
+remotedaemon socket path over 100 bytes is reached through a short link
+beside it **[no ADR]**. `pigeond` creates the socket's directory (0700)
+only if absent and refuses a second instance; clients check that the peer
+is the same user.
 
 ## 9.4 Serving peers: pull only, append-only on custodians (ADR 0014)
 
 `remotedaemon` serves P2P read-write whatever the environment, and any peer
 can push refs over it (E12, E13). So `pigeond` passes every incoming session
-to the device's `remotedaemon` through a **filter**, the pure state machine
-`pigeon-core::filter`. Its laws (`tests/filter_laws.rs`, ADR 0012) are
-normative: `allowed_streams_pass_unchanged`, `chunking_does_not_matter`,
-`custodians_never_forward_removals_or_pushes`, `malformed_input_closes`,
-`custodian_answers_only_after_sync`, `unattributed_success_closes`,
-`auth_is_rewritten_and_checked`. Its rules:
+through a **filter**, the pure state machine `pigeon-core::filter`, whose
+laws in `tests/filter_laws.rs` are normative:
 
-- **Allow-list** (protocol versions 0 to 4): `AUTH`, `VERSION`, `BYPASS`,
-  `CHECKPRESENT`, `LOCKCONTENT`, `UNLOCKCONTENT`, `GET`, `PUT`, `DATA`,
-  `VALID`, `INVALID`, `DATA-PRESENT`, `SUCCESS`, `FAILURE`, `GETTIMESTAMP`,
-  `NOTIFYCHANGE`, `CONNECT git-upload-pack`, `CONNECTDONE`, `ERROR`.
-  `VERSION n` is forwarded as `VERSION min(n, 4)`. After `CONNECT
-  git-upload-pack`, only `DATA`, `CONNECTDONE` and `ERROR` pass.
-- **No push anywhere:** any other `CONNECT` gets `ERROR` and closes the
-  session; each repository's `pre-receive` hook also refuses every push.
-- **No removal on custodians:** `REMOVE` and `REMOVE-BEFORE` get `FAILURE`
-  and are logged at `error` with the peer's ID. Laptops keep git-annex's
-  default, since their copies never count (ADR 0002).
-- **Sync before success** (custodians): a `SUCCESS`, `ALREADY-HAVE` or
-  `ALREADY-HAVE-PLUS` for `PUT`, `CHECKPRESENT` or `LOCKCONTENT` of a key
-  waits until `pigeond` has synced the object and its directories (`git
-  annex contentlocation`, then `fsync`, `F_FULLFSYNC` on macOS); a failed
-  sync closes the session. While a restored repository is `checking`
-  ([06 §6.3](06-status.md)), `LOCKCONTENT` and `CHECKPRESENT` get `FAILURE`
-  (ADR 0046).
-- **Probe** (custodians): the filter answers `CHECKPRESENT k` itself by
-  sending `LOCKCONTENT k`, then `UNLOCKCONTENT` and `SUCCESS`, else
-  `FAILURE`: git-annex's `inAnnex` ignores a removal lock, so two custodians
-  dropping at once would count each other (E23). A probe that meets the
-  custodian's own drop starting makes that drop fail, to be retried.
-- **Hash before proving** (custodians): another custodian's `LOCKCONTENT k`,
-  and a probe's lock, succeed only after the filter, holding git-annex's
-  lock, has hashed the object against its `SHA256E` key
-  (`lockContentShared` checks presence only). The probe holds the lock until
-  its sync and hash are done. On a mismatch the filter releases the lock,
-  answers `FAILURE` and queues `git annex fsck --key k`. Laptops' locks are
-  not hashed.
-- **Strict framing:** on custodians, a request sent before the last is
-  answered, or a positive answer to no request, closes the session; on all
-  devices, so do an unknown message, a malformed `DATA` length or a line
-  over 4096 bytes. A key from a peer must be printable ASCII, not start with
-  `-` and hold no `/` (`pigeond/tests/net_laws.rs`,
-  `implausible_keys_are_refused`). Payloads pass by length, unparsed; the server's
-  output is parsed only for framing, so the filter's replies fall between
-  frames.
+| Rule | Law |
+|---|---|
+| **allow-list** (protocol versions 0 to 4): `AUTH`, `VERSION`, `BYPASS`, `CHECKPRESENT`, `LOCKCONTENT`, `UNLOCKCONTENT`, `GET`, `PUT`, `DATA`, `VALID`, `INVALID`, `DATA-PRESENT`, `SUCCESS`, `FAILURE`, `GETTIMESTAMP`, `NOTIFYCHANGE`, `CONNECT git-upload-pack`, `CONNECTDONE`, `ERROR`; `VERSION n` is forwarded as `VERSION min(n, 4)`; after `CONNECT git-upload-pack` only `DATA`, `CONNECTDONE` and `ERROR` pass | `allowed_streams_pass_unchanged`, `chunking_does_not_matter` |
+| **no push anywhere**: any other `CONNECT` gets `ERROR` and closes; each repository's `pre-receive` hook also refuses every push | `custodians_never_forward_removals_or_pushes` |
+| **no removal on custodians**: `REMOVE` and `REMOVE-BEFORE` get `FAILURE`, logged at `error` with the peer's ID; laptops keep git-annex's default, since their copies never count (ADR 0002) | `custodians_never_forward_removals_or_pushes` |
+| **sync before success** (custodians): a positive answer for `PUT`, `CHECKPRESENT` or `LOCKCONTENT` of a key waits until the object and its directories are synced; a failed sync closes the session | `custodian_answers_only_after_sync` |
+| **probe** (custodians): `CHECKPRESENT k` is answered by taking and releasing `LOCKCONTENT k`, since git-annex's presence check ignores a removal lock (E23); a probe that meets the custodian's own drop starting makes that drop fail, to be retried | `custodian_answers_only_after_sync` |
+| **hash before proving** (custodians): another custodian's lock, and a probe's, succeed only after the filter, holding the lock, has hashed the object against its key; on a mismatch it answers `FAILURE` and queues a scrub of the key; laptops' locks are not hashed | `custodian_answers_only_after_sync` |
+| **strict framing**: on custodians, a request sent before the last is answered, or a positive answer to no request, closes the session; everywhere, so do an unknown message, a malformed `DATA` length or a line over 4096 bytes; payloads pass by length, unparsed | `unattributed_success_closes`, `malformed_input_closes` |
+| a key from a peer is printable ASCII, does not start with `-` and holds no `/` | `pigeond/tests/net_laws.rs` `implausible_keys_are_refused` |
 
-E13 checks the filter against git-annex, and E23 the probe.
+While a restored repository is `checking` ([06 §6.3](06-status.md)),
+`LOCKCONTENT` and `CHECKPRESENT` get `FAILURE` (ADR 0046). E13 checks the
+filter against git-annex, and E23 the probe.
 
 ## 9.5 Relays and discovery (ADR 0016)
 
-- By default `pigeond` uses n0's public relays and address lookup, and mDNS
-  (`iroh-mdns-address-lookup`), so devices on one LAN meet without the
-  Internet. A roster `relay = "<url>"` ([04 §4.2](04-roster-and-authority.md))
-  replaces n0's relays for the group, as an admin change; hosting
-  `iroh-relay` is documented, not required.
-- Without the relay or lookup service, LAN and direct connections still
-  work; versions waiting for a peer carry `group-unreachable` ("the relay
-  service cannot be reached…", [06 §6.4](06-status.md)).
-- What relay operators see is stated in [02](02-guarantees.md); content and
-  history are end-to-end encrypted. `pigeond` shapes network use (ADR 0037,
-  [15](15-resource-use.md)).
+By default `pigeond` uses n0's public relays and address lookup, and mDNS,
+so devices on one LAN meet without the Internet. A roster `relay = "<url>"`
+([04 §4.2](04-roster-and-authority.md)) replaces n0's relays for the group,
+as an admin change; hosting a relay is documented, not required. Without
+the relay or lookup service, LAN and direct connections still work, and
+versions waiting for a peer carry `group-unreachable`
+([06 §6.4](06-status.md)). What relay operators see is stated in
+[02](02-guarantees.md); content and history are end-to-end encrypted.
+`pigeond` shapes network use (ADR 0037, [15](15-resource-use.md)).
 
 ## 9.6 Invitations and joining (ADR 0017)
-
-### The invitation
 
 `pigeon invite [--admin] PERSON` (People → *Invite someone*), or `pigeon
 invite --backup-machine [NAME]` for a backup machine of the inviter's own
@@ -170,42 +136,23 @@ person (ux.md §8) **[no ADR: reading]**, creates a one-time invitation:
 - It is written `pgn1-` plus the lowercase unpadded base32 of its binary
   encoding, shown as text and QR code **[no ADR: encoding]**.
 - **Who may invite:** for a new person, an admin's device; for a new device
-  of person P, an admin's device or one of P's (ADR 0017). Others say so and
-  suggest asking an admin.
+  of person P, an admin's device or one of P's (ADR 0017).
 - The inviter keeps the secret, its SHA-256, purpose and expiry in
-  `invitations.json` ([11](11-local-state.md)), readable by its user only.
-  The hash finds the record; the secret checks the proof of step 2
-  **[no ADR: correction]** (issue #17). It is marked used before the roster
-  commit is signed, so a crash cannot let it work twice. `pigeon invite
-  --list` and `--cancel` manage pending ones.
-
-### The join exchange
+  `invitations.json` ([11 §11.3](11-local-state.md); `invitations_round_trip`),
+  readable by its user only. The hash finds the record; the secret checks
+  the proof of step 2 **[no ADR: correction]** (issue #17). It is marked
+  used before the roster commit is signed, so a crash cannot let it work
+  twice. `pigeon invite --list` and `--cancel` manage pending ones.
 
 `pigeon join INVITATION [FOLDER]` (Welcome → *Join a group*):
 
-1. The new device decodes the invitation, makes its key if it has none
-   (§9.1) and its repository (`git init`, `git annex init`; a repository
-   already in FOLDER gets a new UUID first, §9.9), and connects to the
-   inviter on `pigeon/join/1`, retrying ("Waiting for Paul's computer…")
-   until the invitation expires.
-2. It sends `Join {v, invitation_hash, proof, device_name, role,
-   annex_uuid, capacity?, addresses}`, with `proof = HMAC-SHA256(secret,
-   "pigeon-join-1" ‖ new device ID ‖ inviter device ID)`, both IDs from the
-   QUIC handshake, so a recorded exchange cannot be replayed. `addresses`
-   let the inviter reach it before mDNS does **[no ADR]**.
-3. The inviter checks proof, expiry and that it is unused, marks it used,
-   and signs a roster commit adding the device (and the person, for
-   `new-person`) under the authority rule ([04 §4.7](04-roster-and-authority.md)).
-   A custodian's `maxsize` is its reported free space minus 10 %, at most
-   that minus `annex.diskreserve` ([08 §8.9](08-custody-loops.md)).
-4. It answers `Welcome {commit, annex_uuid}` (its own UUID), or a refusal
-   that becomes a Problem ([10 §10.6](10-interfaces.md)):
-   `P-INVITE-EXPIRED`, `P-INVITE-USED`, `invite-unknown`,
-   `invite-not-allowed`.
-5. The new device fetches over `pigeon/annex/1`, validates the history from
-   the genesis named in the invitation (another root is refused), checks
-   that `commit` adds its own ID, and installs the folders to keep
-   ([07](07-capture-and-install.md)).
+| # | Who | Step |
+|---|---|---|
+| 1 | new device | decodes the invitation, makes its key if it has none (§9.1) and its repository (one already in FOLDER gets a new UUID first, §9.9), and connects to the inviter on `pigeon/join/1`, retrying ("Waiting for Paul's computer…") until the invitation expires |
+| 2 | new device | sends `Join {v, invitation_hash, proof, device_name, role, annex_uuid, capacity?, addresses}`, with `proof = HMAC-SHA256(secret, "pigeon-join-1" ‖ new device ID ‖ inviter device ID)`, both IDs from the QUIC handshake, so a recorded exchange cannot be replayed; `addresses` let the inviter reach it before mDNS does **[no ADR]** |
+| 3 | inviter | checks proof, expiry and that it is unused, marks it used, and signs a roster commit adding the device (and the person, for `new-person`) under the authority rule ([04 §4.7](04-roster-and-authority.md)); a custodian's `maxsize` is its reported free space minus 10 %, at most that minus `annex.diskreserve` ([08 §8.9](08-custody-loops.md)) |
+| 4 | inviter | answers `Welcome {commit, annex_uuid}` (its own UUID), or a refusal that becomes a Problem ([10 §10.6](10-interfaces.md)): `P-INVITE-EXPIRED`, `P-INVITE-USED`, `invite-unknown`, `invite-not-allowed` |
+| 5 | new device | fetches over `pigeon/annex/1`, validates the history from the genesis named in the invitation (another root is refused), checks that `commit` adds its own ID, and installs the folders to keep ([07](07-capture-and-install.md)) |
 
 **Safety words** (ux.md §8.2) **[no ADR: safety words]**: both screens show
 three words from a fixed list of 2048, by the first 33 bits of
@@ -220,12 +167,12 @@ inviter's "Martine's laptop joined the group" notification repeats them.
 commit removing a device, valid from an admin or another device of the same
 person (ADR 0017), and visible in the history.
 
-- Each device that accepts it closes connections to it, deletes its remote,
+- Each device that accepts it closes connections to it, deletes its remote
   and marks its UUID `dead` ([03 §3.5](03-repository-and-roles.md)). A
   custodian's copies stop counting and repair starts
   ([08 §8.4](08-custody-loops.md)); the CLI first says how many files will
   have fewer safe copies meanwhile.
-- Commits it signed that the removal had seen stay valid. Those it had not
+- Commits it signed that the removal had seen stay valid; those it had not
   seen are **revoked** wherever the removal arrives, with the keys they
   added and what those keys sign (04 §4.4, ADR 0051; `Authority.tla`
   `RemovalRevokesAdded`, `RemovedSilenced`). They count in no catalogue or
@@ -233,13 +180,14 @@ person (ADR 0017), and visible in the history.
   computer* offers to remove the devices the lost one added. This bounds the
   damage of a stolen key ([02](02-guarantees.md)).
 - Removal cannot unshare what the device already fetched (ADR 0017).
-- `pigeon leave` **[no ADR]** signs the device's own removal, then deletes
+  `pigeon leave` **[no ADR]** signs the device's own removal, then deletes
   its key and, if asked, its copy of the folder.
 
 ## 9.8 The stream header and trace context (ADR 0025)
 
 Each stream `pigeond` opens to a peer starts, before any git-annex byte,
-with one header line of at most 4096 bytes, within 10 seconds:
+with one header line of at most 4096 bytes, within 10 seconds
+(`stream_headers_round_trip`):
 
 ```json
 {"v":1,"group":"<group id>","traceparent":"00-<trace-id>-<span-id>-01"}
@@ -248,16 +196,15 @@ with one header line of at most 4096 bytes, within 10 seconds:
 `group` routes the stream and is checked for admission (§9.3);
 `traceparent` (W3C) makes one action one trace across devices
 ([12](12-observability.md)). The peer answers `{"v":1,"ok":true}` or a
-refusal (`{"v":1,"ok":false,"refusal":…}`: `not-in-roster`,
-`unknown-group`, `not-listening`, `bad-header`, `peer-too-old`). Then the
-stream carries git-annex's protocol, the header never reaching git-annex;
-the filter (§9.4) starts after it.
+refusal (`not-in-roster`, `unknown-group`, `not-listening`, `bad-header`,
+`peer-too-old`). Then the stream carries git-annex's protocol; the header
+never reaches git-annex, and the filter (§9.4) starts after it.
 
 ## 9.9 Recovering a group (ADRs 0046, 0047)
 
 Once versions are protected, everything a group needs is on its custodians:
-content, `main` and proposals (ADR 0046); the rest is rebuilt or not needed.
-Recovery also needs authority, a key that can sign a roster commit:
+content, `main` and proposals (ADR 0046). Recovery also needs authority, a
+key that can sign a roster commit:
 
 | What survives | Recovery |
 |---|---|
@@ -267,38 +214,28 @@ Recovery also needs authority, a key that can sign a roster commit:
 | no key of an admin, no sheet | `pigeon refound` (below), or `pigeon export` to read the files |
 
 Each new machine then fetches from the custodians and validates from the
-genesis, as on a join, and its person removes the lost devices (§9.7).
+genesis, as on a join, and its person removes the lost devices (§9.7). The
+tools are those of ADR 0047, which fixes their formats:
 
-- **Recovery sheets.** `pigeon recovery-sheet` (admins) adds a device of
-  the admin with `role = "recovery"` and prints its key (base32 with a
-  checksum, and QR), with the group's name and ID and the custodians' IDs;
-  no computer keeps it. `pigeon recover SHEET [FOLDER] [--from DEVICE]` runs
-  `pigeond` with the sheet's key, which custodians admit for git only;
-  validates `main` from the sheet's genesis; makes the machine's own key;
-  signs with the sheet's key a roster commit adding the machine as the
-  admin's device ([04 §4.3](04-roster-and-authority.md)); stays reachable
-  until a custodian has fetched it; then offers to remove the used sheet and
-  the lost devices and to print a new sheet. The People page recommends a
-  sheet or a second device while an admin has a single signing device.
-- **Refounding.** `pigeon refound [REPOSITORY]`, on any device holding a
-  repository of the group, signs a new genesis: the last accepted tree, the
-  refounder as only admin, trailer `Pigeon-Refound: <old group id> <old
-  main>`. The old history stays as `refs/pigeon/archive/<old group
-  id>/main`, replicated, its keys in `keys()`. Others join by invitation from
-  the new group, which says who refounded it and when; existing folders join
-  in place, objects reused by key.
-- **Export without pigeon.** `pigeon export --to DIR [--at DATE|COMMIT]
+- **Recovery sheets:** `pigeon recovery-sheet` (admins) adds a device of
+  the admin with `role = "recovery"` and prints its key; no computer keeps
+  it. `pigeon recover SHEET [FOLDER] [--from DEVICE]` signs with it a roster
+  commit adding the machine as the admin's device
+  ([04 §4.3](04-roster-and-authority.md)); custodians admit the sheet's key
+  for git only. The People page recommends a sheet or a second device while
+  an admin has a single signing device.
+- **Refounding:** `pigeon refound [REPOSITORY]` signs a new genesis with the
+  last accepted tree and the refounder as only admin, keeping the old
+  history replicated and its keys in `keys()`; existing folders join the new
+  group in place, objects reused by key.
+- **Export without pigeon:** `pigeon export --to DIR [--at DATE|COMMIT]
   [--deleted] [REPOSITORY…]` needs no `pigeond`, network or key
-  ([10 §10.2](10-interfaces.md)): it checks each object's SHA-256 and writes
-  plain files and a `MANIFEST.tsv` (path, size, SHA-256, commit, author,
-  date), listing what it could not find. Each custodian keeps
-  `RECOVERY.txt` next to its repository ([11 §11.3](11-local-state.md)): the
-  group's name, the other custodians, and the git and git-annex commands
-  that read the files without pigeon, as E21 runs them.
-- **Replacing a custodian.** The failed one is removed (§9.7) and its
-  replacement joins as a new device. A surviving disk gets a new UUID (`git
-  config --unset annex.uuid`, `git annex init`) and counts only after a
-  hashing `git annex fsck --all` (E21). A custodian whose repository is
-  older than its last status report relayed by peers (restored from backup,
-  rolled back) reports `checking` and is not counted until that fsck has
-  corrected its location log (ADR 0046).
+  ([10 §10.2](10-interfaces.md)) and checks every object's SHA-256. Each
+  custodian keeps `RECOVERY.txt` beside its repository
+  ([11 §11.3](11-local-state.md)), with the commands E21 runs.
+- **Replacing a custodian:** the failed one is removed (§9.7) and its
+  replacement joins as a new device. A surviving disk gets a new UUID and
+  counts only after a hashing fsck of everything (E21). A custodian whose
+  repository is older than its last status report relayed by peers reports
+  `checking` and is not counted until that fsck has corrected its location
+  log (ADR 0046).
