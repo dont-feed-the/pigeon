@@ -500,8 +500,13 @@ ADR.
 It says so in `doctor`, and its status reports carry `lab = true`, which a
 release build never counts. On one Linux host, each custodian runs in its own
 mount namespace on its own loop-mounted ext4 image, connected over
-127.0.0.1. The *three-machine run* uses release builds on real hardware: a
-laptop, once on Linux and once on macOS, and two Linux custodians.
+127.0.0.1. On GitHub's hosted runners the scenarios run on `ubuntu-24.04`
+(this setup) and on `macos-latest`, where the laptop runs on APFS and its
+custodians run as local processes (lab only). These two runners replace a
+run on real hardware (Guillaume, chat, 14 October 2026). Real fingerprints
+reaching *protected* are then shown only by E22, and network faults beyond
+loopback (NAT, relays, Wi-Fi drops) by no scenario; the ledger marks what
+rests on them *conditional*.
 
 **Scenarios.** Each is an asserting script. Each validates its trace log
 against the models covering the steps it logs (§13.3), and records disk use.
@@ -525,7 +530,7 @@ hegel-rust laws before their drivers: states and headline, domain counting,
 the install journal, the queue order and the roster fold.
 
 **Passing and the ledger.** The slice passes when every scenario asserts on
-Linux CI and in the three-machine run, no protected version is lost in any
+both runners, no protected version is lost in any
 schedule, and laptop disk use in the steady state is at most 1.1 × the
 content kept (§13.11). The peak is reported with its causes.
 `docs/reports/slice-1.md` marks each promise (P1–P6) and each Proposed ADR it
