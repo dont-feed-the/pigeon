@@ -264,6 +264,12 @@ version = "2.0.0-alpha.0"
 [[package]]
 name = "pigeon-proto"
 version = "2.0.0-alpha.0"
+dependencies = [
+ "hegeltest",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
 
 [[package]]
 name = "pigeon-sys"
