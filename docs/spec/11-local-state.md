@@ -1,22 +1,20 @@
 # 11. Local state
 
-> Mission: every file `pigeond` keeps on a device besides git and git-annex:
-> where, its format, who writes it, how a crash leaves it usable, and what
-> is not stored (ADR 0036).
+> Mission: the files `pigeond` keeps besides git and git-annex: where, their
+> format, writers, crash behaviour, and what is not stored (ADR 0036).
 
 ## 11.1 Principles (ADR 0036)
 
 - **git and git-annex hold the truth** (catalogue, roster, proposals,
-  decisions, reports, copies and checks); `git status` is the truth for the
-  working tree (ADR 0013). What can be rebuilt is not stored (§11.4).
+  decisions, reports, copies, checks); `git status` for the working tree
+  (ADR 0013). What can be rebuilt is not stored (§11.4).
 - **Plain files:** settings, the device key, and per repository a journal
   and a few tables; TOML if people write it, JSON if `pigeond` does.
-- **`format = N`** in every file: a newer format is refused
-  (`state-format-too-new`), an older one upgraded by an atomic rewrite after
-  a successful read.
-- **One writer:** `pigeond` (ADR 0011); people may also edit `config.toml`.
-- **Atomic whole-file writes:** temporary file in the same directory, fsync,
-  rename over, fsync the directory.
+- **`format = N`** everywhere: a newer format is refused
+  (`state-format-too-new`), an older one upgraded by an atomic rewrite.
+- **One writer**, `pigeond` (ADR 0011); people may also edit `config.toml`.
+- **Atomic writes:** temporary file in the same directory, fsync, rename,
+  fsync the directory.
 
 ## 11.2 Per-user files
 
@@ -73,23 +71,20 @@ path = "/home/martine/Famille"    # the folder on this device
 "Archives" = "low"
 ```
 
-- `[network]` and `[loops]` are **[no ADR]**: the lab and the slice set
-  `bind = "127.0.0.1:0"`, `mdns = false`, `interval_seconds = 1`. An
+- `[network]` and `[loops]` are **[no ADR]**; the lab and the slice set
+  `bind = "127.0.0.1:0"`, `mdns = false`, `interval_seconds = 1`; an
   unspecified bind address is told to peers as loopback.
 - Missing keys take defaults; unknown keys are kept and reported by `pigeon
-  doctor`, so an older `pigeond` drops no newer setting.
-- A hand edit applies at once; an invalid one is refused whole with a
-  Problem naming the line, and the old settings stay.
-- `pigeond` edits the file in place, keeping comments and order, and writes
-  it atomically **[no ADR: toml_edit]**.
+  doctor`. A hand edit applies at once; an invalid one is refused whole with
+  a Problem naming the line. `pigeond` edits in place with `toml_edit`,
+  keeping comments and order, atomically **[no ADR: toml_edit]**.
 - Kept folders are not a setting: the sparse-checkout file and `wanted`
   record them ([08 §8.5](08-custody-loops.md)).
 
 ## 11.3 Per-repository files: `.git/pigeon/`
 
-Per-repository state lives in `.git/pigeon/` (`pigeon/` of a bare
-custodian repository), so it moves with the repository and git never
-shares it (ADR 0036).
+In `.git/pigeon/` (`pigeon/` of a bare repository): it moves with the
+repository, and git never shares it (ADR 0036).
 
 | File | Written when | Content | Rebuildable? |
 |---|---|---|---|
@@ -98,7 +93,7 @@ shares it (ADR 0036).
 | `purges.toml` | a custodian first merges a purge decision, or seals it ([08 §8.6](08-custody-loops.md)) | when it received each active decision, and its seals | yes, conservatively: a lost file restarts each waiting period ([08 §8.6](08-custody-loops.md)) |
 | `clock.json` | at most every second, and at exit | the Lamport clock of trace events (ADR 0008) | no, but losing it only weakens trace ordering |
 | `invitations.json` | an invitation is created, used, cancelled or expires ([09 §9.6](09-network-and-joining.md)) | each secret and its hash, purpose, expiry, used flag; mode 0600 | no |
-| `aside/` | install step 4 | files moved aside, kept until the first full scan 10 minutes after `done` | no ([07 §7.5](07-capture-and-install.md), [07 §7.5](07-capture-and-install.md)) |
+| `aside/` | install step 4 | files moved aside, kept until the first full scan 10 minutes after `done` | no ([07 §7.5](07-capture-and-install.md)) |
 | `stage/` | install step 2; keeping a folder ([08 §8.5](08-custody-loops.md)) | new files before they enter the folder | yes: unreferenced files are deleted at start |
 | `recovered/` | install steps 6 and 9 | moved-aside content that was not pigeon's, until captured as a recovered version | no ([07 §7.6](07-capture-and-install.md)) |
 | `RECOVERY.txt` (custodians, in the repository directory) | the roster changes | the group's name, the other custodians, and the git and git-annex commands that read the files without pigeon ([09 §9.9](09-network-and-joining.md), ADR 0047) | yes: written again from the roster |
@@ -109,56 +104,27 @@ the filter supplies, 09 §9.3), `freed.json` (folders freed here) and
 `dead.json` (UUIDs already marked `dead`): rebuildable or stand-ins
 **[no ADR: first build]**.
 
-### `install.ndjson`
+**`install.ndjson`**: one JSON object per line, appended and fsynced before
+the step it announces (`journal_records_round_trip`). Fields: `format`,
+`seq`, `op` (`begin`, `proved`, `done`, `released`: the steps of
+[07 §7.5](07-capture-and-install.md)); on `begin` also `path`, `mode`,
+`old_key`, `old` (the index entry's `(dev, ino, size, mtime ns)` that step 6
+checks), `new_key`, `tmp`, `tmp_ino`, `aside`. Recovery replays every
+`begin` without an end, then truncates the file once every entry has ended
+and its aside is released (`journal` laws). A torn last line is ignored;
+any other malformed line stops install with a Problem.
 
-One JSON object per line, appended and fsynced before the step it announces:
+**`conflicts.json`** (not yet written by `pigeond`): `format`, and per path
+`kind` (`suggestion`), `since`, `state` (`waiting`), `mine` (key),
+`mine_stat` (the stat of the person's file when `mine` was captured, which
+*Take the group's version* checks), `proposal` (the chain's latest),
+`group`, `installed` (the key pigeon last wrote there) and `told` (told once,
+ADR 0034). Rewritten whole.
 
-```json
-{"format":1,"seq":41,"op":"begin","path":"Photos/a.jpg","mode":"100644","old_key":"SHA256E-s…","old":[66311,4224493,2097152,1791922902880098214],"new_key":"SHA256E-s…","tmp":".git/pigeon/stage/41","tmp_ino":4224517,"aside":".git/pigeon/aside/41"}
-{"format":1,"seq":41,"op":"proved"}
-{"format":1,"seq":41,"op":"done"}
-{"format":1,"seq":41,"op":"released"}
-```
-
-`old` is the index entry's `(dev, ino, size, mtime in ns)` that step 6
-checks; the ops are those of [07 §7.5](07-capture-and-install.md) (`journal`).
-Recovery at start replays every `begin` without an end, then truncates the
-file once every entry has ended and its aside is released (rename of an
-empty file over it). A torn last line is ignored (its step had not
-started); any other malformed line stops install with a Problem.
-
-### `conflicts.json`
-
-```json
-{
-  "format": 1,
-  "paths": {
-    "Recettes/tarte.docx": {
-      "kind": "suggestion",
-      "since": "2026-10-13T14:02:11+02:00",
-      "state": "waiting",
-      "mine": "SHA256E-s…",
-      "mine_stat": [66311, 4224610, 18432, 1791922931000000000],
-      "proposal": "<commit id of the latest proposal of the chain>",
-      "group": "SHA256E-s…",
-      "installed": "SHA256E-s…",
-      "told": false
-    }
-  }
-}
-```
-
-`installed` is the key pigeon last wrote at the path; `mine_stat` is the
-stat of the person's file when `mine` was captured, which *Take the group's
-version* checks ([07 §7.5](07-capture-and-install.md)); `told` records that
-the person was told once (ADR 0034). The table is rewritten whole.
-
-### `invitations.json`
-
-```json
-{"format":1,"invitations":[{"id":"inv-7Q2M","secret":"…","secret_sha256":"…","purpose":{"new-person":{"name":"Martine","admin":false}},"expires":"2026-10-14T14:10:00+02:00","used_by":null}]}
-```
-
+**`invitations.json`** (`invitations_round_trip`): `format`, and per
+invitation `id` (`inv-7Q2M`), `secret`, `secret_sha256`, `purpose`
+(`{"new-person": {"name", "admin"}}` or `{"new-device": {"person", "role",
+"name"}}`), `expires` (RFC 3339), `used_by`.
 Expired entries are kept 30 days for the "already used / expired" messages
 **[no ADR: retention]**.
 
