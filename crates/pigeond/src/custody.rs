@@ -20,8 +20,9 @@ use crate::group::Group;
 use crate::settings::ensure_remote;
 use crate::trace::{Act, Tracer};
 
-/// How long one fetch may take: a P2P fetch can hang (E12).
-const FETCH_TIMEOUT: Duration = Duration::from_secs(60);
+/// How long one fetch may take: a P2P fetch can hang (E12, 16 §16.4), and
+/// one that does is tried once more at once.
+const FETCH_TIMEOUT: Duration = Duration::from_secs(30);
 /// How long one transfer may take.
 const TRANSFER_TIMEOUT: Duration = Duration::from_secs(600);
 
@@ -39,25 +40,43 @@ pub fn peers(g: &Group, me: &str) -> Vec<(String, String, DeviceRole)> {
         .collect()
 }
 
-/// One round of accept: answers whether `main` moved.
+/// Fetches `id`'s branches; a fetch that hangs is killed and tried once
+/// more.
+async fn fetch(g: &Group, id: &str) -> Result<(), crate::git::Error> {
+    let spec = crate::settings::peer_refspec(id);
+    let args = [
+        "fetch",
+        "-q",
+        "--no-tags",
+        "--no-write-fetch-head",
+        id,
+        spec.as_str(),
+    ];
+    match g.git.run_for(&args, FETCH_TIMEOUT).await {
+        Err(e @ crate::git::Error::Timeout { .. }) => {
+            tracing::info!(group = %g.id, peer = %id, error = %e, "fetch-retried");
+            g.git.run_for(&args, FETCH_TIMEOUT).await.map(drop)
+        }
+        other => other.map(drop),
+    }
+}
+
+/// One round of accept: answers whether `main` moved. A peer whose fetch
+/// fails is unreachable for this round: place sends it nothing.
 pub async fn accept(g: &Group, me: &str, tracer: &Tracer) -> bool {
     let mut fetched = Vec::new();
-    for (id, uuid, _) in peers(g, me) {
-        if let Err(e) = ensure_remote(&g.git, &id, &uuid).await {
+    let mut unreachable = BTreeSet::new();
+    let peers = peers(g, me);
+    for (id, uuid, _) in &peers {
+        if let Err(e) = ensure_remote(&g.git, id, uuid).await {
             tracing::warn!(group = %g.id, peer = %id, error = %e, "remote-failed");
-            continue;
         }
-        let spec = format!("+refs/heads/*:refs/pigeon/peers/{id}/*");
-        let args = [
-            "fetch",
-            "-q",
-            "--no-tags",
-            "--no-write-fetch-head",
-            id.as_str(),
-            spec.as_str(),
-        ];
-        match g.git.run_for(&args, FETCH_TIMEOUT).await {
-            Ok(_) => {
+    }
+    g.reload_remotedaemon(peers.iter().map(|(id, _, _)| id.clone()).collect())
+        .await;
+    for (id, _, _) in peers {
+        match fetch(g, &id).await {
+            Ok(()) => {
                 g.lock().heard.insert(id.clone(), crate::util::now());
                 if let Some(ga) = g
                     .git
@@ -69,9 +88,13 @@ pub async fn accept(g: &Group, me: &str, tracer: &Tracer) -> bool {
                 }
                 fetched.push(id);
             }
-            Err(e) => tracing::debug!(group = %g.id, peer = %id, error = %e, "fetch-failed"),
+            Err(e) => {
+                tracing::debug!(group = %g.id, peer = %id, error = %e, "fetch-failed");
+                unreachable.insert(id);
+            }
         }
     }
+    g.lock().unreachable = unreachable;
     if fetched.is_empty() {
         return false;
     }
@@ -170,7 +193,7 @@ pub async fn place(g: &Group, me: &str) -> usize {
                 .filter(|(_, _, r)| *r == DeviceRole::Custodian)
                 .map(|(id, u, _)| (id, u))
                 .collect();
-            let mut failed = BTreeSet::new();
+            let mut failed = g.lock().unreachable.clone();
             for key in &keys {
                 let have = holders(&g.git, key).await;
                 for (id, uuid) in &custodians {

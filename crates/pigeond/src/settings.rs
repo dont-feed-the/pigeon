@@ -129,8 +129,10 @@ pub async fn init_annex(
     Ok((uuid, token))
 }
 
-/// Adds or updates the git remote of a peer: its URL through the helper and
-/// its annex UUID (09 §9.3). The remote is named by the device ID.
+/// Adds or updates the git remote of a peer: its URL through the helper,
+/// its annex UUID, and a refspec that fetches its branches where accept
+/// reads them, so remotedaemon's fetches of a notice serve too (09 §9.3,
+/// 03 §3.6). The remote is named by the device ID.
 pub async fn ensure_remote(git: &Git, device: &str, uuid: &str) -> Result<(), Error> {
     let url = format!("p2p-annex::iroh:{device}");
     let key = format!("remote.{device}.url");
@@ -141,5 +143,15 @@ pub async fn ensure_remote(git: &Git, device: &str, uuid: &str) -> Result<(), Er
     if git.config(&key).await.as_deref() != Some(uuid) {
         git.run(&["config", &key, uuid]).await?;
     }
+    let key = format!("remote.{device}.fetch");
+    let spec = peer_refspec(device);
+    if git.config(&key).await.as_deref() != Some(spec.as_str()) {
+        git.run(&["config", &key, &spec]).await?;
+    }
     Ok(())
+}
+
+/// Where a peer's branches are fetched: `refs/pigeon/peers/<device>/`.
+pub fn peer_refspec(device: &str) -> String {
+    format!("+refs/heads/*:refs/pigeon/peers/{device}/*")
 }

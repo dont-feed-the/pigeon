@@ -81,14 +81,15 @@ impl Repo {
 
     /// Starts a long-running `git args…`, such as `annex remotedaemon
     /// --foreground`, after [`crate::allow::check`]: its stdin is a pipe whose
-    /// closing stops it, its output is discarded, and it is killed on drop.
+    /// closing stops it, its stdout a pipe the caller reads (remotedaemon's
+    /// messages), its stderr is discarded, and it is killed on drop.
     /// It leads a process group of its own, so that the fetches it starts
     /// can be stopped with it (13 §13.12).
     pub fn spawn(&self, args: &[&str]) -> Result<tokio::process::Child> {
         let argv: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
         let mut cmd = command(&self.dir, &self.env, &argv)?;
         cmd.stdin(Stdio::piped())
-            .stdout(Stdio::null())
+            .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .process_group(0)
             .kill_on_drop(true);

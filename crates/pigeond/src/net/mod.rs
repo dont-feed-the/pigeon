@@ -215,7 +215,7 @@ pub struct NetConfig {
 #[derive(Clone, Debug)]
 pub struct Node {
     endpoint: Endpoint,
-    connections: Arc<tokio::sync::Mutex<HashMap<PublicKey, Connection>>>,
+    connections: Arc<tokio::sync::Mutex<HashMap<PublicKey, Slot>>>,
 }
 
 impl Node {
@@ -262,7 +262,9 @@ impl Node {
         self.endpoint.close().await;
     }
 
-    /// A stream to `device` for `group`, after its header was accepted.
+    /// A stream to `device` for `group`, after its header was accepted. A
+    /// cached connection that no longer answers (the peer restarted) is
+    /// dropped and dialled again, once.
     pub async fn open_annex_stream(
         &self,
         device: &str,
@@ -270,7 +272,30 @@ impl Node {
         addresses: Vec<SocketAddr>,
     ) -> Result<(iroh::endpoint::SendStream, iroh::endpoint::RecvStream), NetError> {
         let key = parse_device_id(device).ok_or_else(|| NetError::Connect("device id".into()))?;
-        let connection = self.connection(key, addresses).await?;
+        let mut tries = 0;
+        loop {
+            tries += 1;
+            let connection = self.connection(key, addresses.clone()).await?;
+            match tokio::time::timeout(CONNECT_TIMEOUT, Self::admit(&connection, group)).await {
+                Ok(Ok(pair)) => return Ok(pair),
+                Ok(Err(e @ NetError::Refused(_))) => return Err(e),
+                Ok(Err(e)) if tries > 1 => return Err(e),
+                Err(_) if tries > 1 => {
+                    return Err(NetError::Connect("peer-unreachable: no answer".into()));
+                }
+                _ => {
+                    connection.close(0u32.into(), b"stale");
+                    tracing::debug!(peer = %device, "connection-stale");
+                }
+            }
+        }
+    }
+
+    /// Opens a stream on `connection` and has its header accepted.
+    async fn admit(
+        connection: &Connection,
+        group: &str,
+    ) -> Result<(iroh::endpoint::SendStream, iroh::endpoint::RecvStream), NetError> {
         let (mut send, mut recv) = connection
             .open_bi()
             .await
@@ -325,13 +350,23 @@ impl Node {
         serde_json::from_slice(&answer).map_err(|e| NetError::Connect(e.to_string()))
     }
 
+    /// The open connection to `key`, or a new one. Each peer has a slot
+    /// of its own, so that dialling one that is offline, which waits until
+    /// [`CONNECT_TIMEOUT`], never holds up the streams to the others.
     async fn connection(
         &self,
         key: PublicKey,
         addresses: Vec<SocketAddr>,
     ) -> Result<Connection, NetError> {
-        let mut connections = self.connections.lock().await;
-        if let Some(c) = connections.get(&key)
+        let slot = self
+            .connections
+            .lock()
+            .await
+            .entry(key)
+            .or_default()
+            .clone();
+        let mut slot = slot.lock().await;
+        if let Some(c) = slot.as_ref()
             && c.close_reason().is_none()
         {
             return Ok(c.clone());
@@ -340,15 +375,20 @@ impl Node {
         for a in addresses {
             addr = addr.with_ip_addr(a);
         }
-        let c = self
-            .endpoint
-            .connect(addr, ALPN_ANNEX)
+        let c = tokio::time::timeout(CONNECT_TIMEOUT, self.endpoint.connect(addr, ALPN_ANNEX))
             .await
+            .map_err(|_| NetError::Connect("peer-unreachable: timed out".into()))?
             .map_err(|e| NetError::Connect(e.to_string()))?;
-        connections.insert(key, c.clone());
+        *slot = Some(c.clone());
         Ok(c)
     }
 }
+
+/// One peer's connection, dialled at most once at a time.
+type Slot = Arc<tokio::sync::Mutex<Option<Connection>>>;
+
+/// How long dialling a peer may take before it counts as unreachable.
+pub const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// Reads one line of at most [`MAX_HEADER`] bytes, its newline dropped,
 /// without reading past it.

@@ -5,11 +5,18 @@
 //! `<git_dir>/pigeon/peers.json`; when each was last heard of is kept in
 //! memory only (11 §11.4). The token git-annex accepts on this repository
 //! (09 §9.3) is kept in `<git_dir>/pigeon/p2p-token`, mode 0600.
+//!
+//! The repository's remotedaemon carries peers' change notices (08 §8.1):
+//! its `CONNECTED` and `DONESYNCING` messages start a round at once, and
+//! one whose fetch began (`SYNCING`) and never ended is restarted (08 §8.2).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+use tokio::sync::Notify;
 
 use pigeon_core::filter::Role;
 use pigeon_git::GitEnv;
@@ -35,7 +42,13 @@ pub struct Known {
     pub token: Option<String>,
     /// Paths capture leaves out, with why (07 §7.9).
     pub not_shared: Vec<(String, String)>,
+    /// Peers whose last fetch failed: place sends them nothing this round.
+    pub unreachable: BTreeSet<String>,
 }
+
+/// How long remotedaemon's fetch of a notice may last before it is
+/// restarted (08 §8.2, E12).
+pub const STUCK_SYNC_SECONDS: i64 = 90;
 
 /// One group of this device.
 #[derive(Debug)]
@@ -59,6 +72,37 @@ pub struct Group {
     pub busy: tokio::sync::Mutex<()>,
     /// The repository's remotedaemon.
     pub daemon: tokio::sync::Mutex<Option<tokio::process::Child>>,
+    /// The fetches remotedaemon began and has not ended, by remote URL,
+    /// with when each began.
+    pub syncing: Arc<Mutex<BTreeMap<String, i64>>>,
+    /// The peers remotedaemon was last told of; empty when it starts.
+    pub daemon_peers: Mutex<BTreeSet<String>>,
+}
+
+/// What one line of remotedaemon's output asks of `pigeond`: whether to
+/// start a round, and the fetch it began or ended.
+fn on_message(line: &str, syncing: &Mutex<BTreeMap<String, i64>>) -> bool {
+    let mut words = line.split_whitespace();
+    let (Some(verb), url) = (words.next(), words.next().unwrap_or_default()) else {
+        return false;
+    };
+    let mut s = syncing.lock().unwrap_or_else(|p| p.into_inner());
+    match verb {
+        "SYNCING" => {
+            s.insert(url.to_owned(), crate::util::now());
+            false
+        }
+        "DONESYNCING" => {
+            s.remove(url);
+            true
+        }
+        "CONNECTED" => true,
+        "DISCONNECTED" => {
+            s.remove(url);
+            false
+        }
+        _ => false,
+    }
 }
 
 /// How a path holds a group's repository.
@@ -90,6 +134,8 @@ impl Group {
             known: Mutex::new(Known::default()),
             busy: tokio::sync::Mutex::new(()),
             daemon: tokio::sync::Mutex::new(None),
+            syncing: Arc::new(Mutex::new(BTreeMap::new())),
+            daemon_peers: Mutex::new(BTreeSet::new()),
         };
         let uuid = g.git.config("annex.uuid").await;
         let token = std::fs::read_to_string(g.token_file())
@@ -194,24 +240,72 @@ impl Group {
         }
     }
 
-    /// Starts remotedaemon if it is not running (09 §9.3).
-    pub async fn ensure_remotedaemon(&self) {
+    /// Starts remotedaemon if it is not running (09 §9.3), and restarts it
+    /// if a fetch it began has lasted [`STUCK_SYNC_SECONDS`]. Its messages
+    /// wake `wake`.
+    pub async fn ensure_remotedaemon(&self, wake: &Arc<Notify>) {
+        let stuck = {
+            let s = self.syncing.lock().unwrap_or_else(|p| p.into_inner());
+            let now = crate::util::now();
+            s.values().any(|since| now - since > STUCK_SYNC_SECONDS)
+        };
+        if stuck {
+            tracing::warn!(group = %self.id, "remotedaemon-stuck");
+            self.stop_remotedaemon().await;
+        }
         let mut daemon = self.daemon.lock().await;
         if let Some(child) = daemon.as_mut()
             && matches!(child.try_wait(), Ok(None))
         {
             return;
         }
+        self.syncing
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clear();
+        self.daemon_peers
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clear();
         match self
             .git
             .repo
             .spawn(&["annex", "remotedaemon", "--foreground"])
         {
-            Ok(child) => {
+            Ok(mut child) => {
+                if let Some(out) = child.stdout.take() {
+                    let (wake, syncing, id) = (wake.clone(), self.syncing.clone(), self.id.clone());
+                    tokio::spawn(async move {
+                        let mut lines = tokio::io::BufReader::new(out).lines();
+                        while let Ok(Some(line)) = lines.next_line().await {
+                            tracing::debug!(group = %id, message = %line, "remotedaemon");
+                            if on_message(&line, &syncing) {
+                                wake.notify_one();
+                            }
+                        }
+                    });
+                }
                 tracing::info!(group = %self.id, "remotedaemon-started");
                 *daemon = Some(child);
             }
             Err(e) => tracing::warn!(group = %self.id, error = %e, "remotedaemon-failed"),
+        }
+    }
+
+    /// Tells remotedaemon to read the remotes again when `peers`, the
+    /// remotes of this round, differ from those it was last told of.
+    pub async fn reload_remotedaemon(&self, peers: BTreeSet<String>) {
+        {
+            let mut seen = self.daemon_peers.lock().unwrap_or_else(|p| p.into_inner());
+            if *seen == peers {
+                return;
+            }
+            *seen = peers;
+        }
+        let mut daemon = self.daemon.lock().await;
+        if let Some(stdin) = daemon.as_mut().and_then(|c| c.stdin.as_mut()) {
+            let _ = stdin.write_all(b"RELOAD\n").await;
+            let _ = stdin.flush().await;
         }
     }
 
@@ -225,5 +319,24 @@ impl Group {
             }
             let _ = child.kill().await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+    use std::sync::Mutex;
+
+    #[test]
+    fn a_notice_wakes_and_a_begun_fetch_is_remembered_until_it_ends() {
+        let s = Mutex::new(BTreeMap::new());
+        let url = "p2p-annex::iroh:abc";
+        assert!(!super::on_message(&format!("SYNCING {url}"), &s));
+        assert!(s.lock().unwrap().contains_key(url));
+        assert!(super::on_message(&format!("DONESYNCING {url} 1"), &s));
+        assert!(s.lock().unwrap().is_empty());
+        assert!(super::on_message(&format!("CONNECTED {url}"), &s));
+        assert!(!super::on_message("WARNING x y", &s));
+        assert!(!super::on_message("", &s));
     }
 }

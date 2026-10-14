@@ -4,7 +4,8 @@
 //! A round runs, for each group in turn, the settings check, capture (on a
 //! laptop), accept, place and repair; requests that change a repository
 //! wait for its round to end. Rounds start every `[loops]
-//! interval_seconds`, or at once after a request asks for one (13 §13.12).
+//! interval_seconds`, or at once after a request or a peer's change notice
+//! (remotedaemon) asks for one (13 §13.12).
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -41,8 +42,8 @@ pub struct Daemon {
     pub node: Node,
     /// The network part, once it is up.
     pub net: OnceLock<Arc<Net>>,
-    /// Starts a round at once.
-    pub wake: tokio::sync::Notify,
+    /// Starts a round at once: a request, or a peer's change notice.
+    pub wake: Arc<tokio::sync::Notify>,
     /// Trace events.
     pub tracer: Tracer,
 }
@@ -91,7 +92,7 @@ impl Daemon {
         }
         let g = Arc::new(g);
         crate::settings::check(&g).await;
-        g.ensure_remotedaemon().await;
+        g.ensure_remotedaemon(&self.wake).await;
         self.groups
             .write()
             .unwrap_or_else(|p| p.into_inner())
@@ -126,7 +127,7 @@ impl Daemon {
     pub async fn round(&self, g: &Group) {
         let _busy = g.busy.lock().await;
         crate::settings::check(g).await;
-        g.ensure_remotedaemon().await;
+        g.ensure_remotedaemon(&self.wake).await;
         g.reload_roster().await;
         if g.role == Role::Laptop {
             crate::evict::free_targets(g, &self.device, &self.tracer).await;
@@ -274,7 +275,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
         groups: RwLock::new(groups),
         node: node.clone(),
         net: OnceLock::new(),
-        wake: tokio::sync::Notify::new(),
+        wake: Arc::new(tokio::sync::Notify::new()),
         tracer,
     });
     for g in daemon.groups() {

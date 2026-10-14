@@ -476,26 +476,37 @@ pub fn s11() -> Scenario {
     )
 }
 
-/// The scenarios that do not pass yet against the first build of pigeond
-/// (14 October 2026), with what their last runs showed, on the runners
-/// (slice.yml, run 38556472036; models-full.yml, run 38561185580) or here
-/// (13 §13.12). Those runs gave custodians disks below their
-/// `annex.diskreserve`, so nothing reached protected there. `pigeon-lab run`
-/// reports each as blocked without running it, and runs it with
-/// `--with-blocked`, where a pass says to unmark it and a failure does not
-/// fail the run. An id `S9` stands for every S9 point.
+/// The scenarios that do not pass yet against pigeond, with what their
+/// last runs on both runners showed (models-full.yml, run 38572141897, at
+/// 4982c08; 13 §13.12). `pigeon-lab run` reports each as blocked without
+/// running it, and runs it with `--with-blocked`, where a pass says to
+/// unmark it and a failure does not fail the run. An id `S9` stands for
+/// every S9 point. Several of these timed out because dialling a stopped
+/// device held up every stream of the laptop for 30 s at a time; pigeond
+/// no longer does.
 pub const BLOCKED: &[(&str, &str)] = &[
-    ("S2", FREE),
-    ("S3", FREE),
+    (
+        "S2",
+        "Linux: the draft is still local after 120 s, with backup-2 stopped; \
+         macOS passes",
+    ),
+    (
+        "S3",
+        "pigeon restore answers not-in-this-build (both runners)",
+    ),
     (
         "S5",
-        "no partial object of the 1 GiB file shows on backup-1 within 300 s (both runners)",
+        "the 1 GiB file is not protected 900 s after the laptop's restart \
+         (published on Linux, local on macOS)",
     ),
-    ("S6", FREE),
+    (
+        "S6",
+        "Linux: the edit is still published 120 s after the race; macOS passes",
+    ),
     (
         "S7",
-        "the headline stays working, not needs-you, once a custodian's disk is \
-         destroyed (macOS)",
+        "the laptop still says protected 120 s after backup-1's disk is \
+         destroyed (both runners)",
     ),
     (
         "S8",
@@ -503,18 +514,20 @@ pub const BLOCKED: &[(&str, &str)] = &[
          (both runners)",
     ),
     ("S9", S9),
-    ("S10", "pigeon recovery-sheet answers not-in-this-build"),
+    (
+        "S10",
+        "pigeon recovery-sheet answers not-in-this-build (both runners)",
+    ),
     (
         "S11",
-        "the laptop's disk holds 2.06 × the content kept (34.6 MB for 16.8 MB): \
-         each file and its annex object (13 §13.11 allows 1.1 ×)",
+        "the laptop's disk holds 2.06 × the content kept (34.6 MB for 16.8 MB) on \
+         both runners: each file and its annex object (13 §13.11 allows 1.1 ×)",
     ),
 ];
 
-const FREE: &str = "free answers free-result but hides no file within 60 s, though \
-     status says protected and no install begins (pigeond evict.rs)";
 const S9: &str = "a crash at a point of free or keep falls inside the request, which \
-     answers daemon-not-running; the model frees in its loops and expects done";
+     answers daemon-not-running, where the model frees in its loops and expects done; \
+     after a crash before capture's ref, the files are still published after 180 s";
 
 /// Why the scenario `id` is blocked, if it is.
 pub fn blocked(id: &str) -> Option<&'static str> {
