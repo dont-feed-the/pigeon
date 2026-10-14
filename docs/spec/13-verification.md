@@ -497,6 +497,37 @@ Windows. A deferred command answers `not-in-this-build`, and the slice holds
 no partial code for it. The deferrals concern the order of work only: v1
 still meets every accepted ADR. **[no ADR: milestone]**
 
+**The first build** (14 October 2026) has `pigeond`'s main, the loops of the
+table, the commands and an integration test of three daemons on one host
+(`crates/pigeond/tests/slice.rs`: *local*, then *published* with one backup
+machine, *protected* with two, `free`, and `keep` giving back the same
+bytes). Until the slice passes, it differs from this specification as
+follows, each to close before S1–S11 run **[no ADR: first build]**:
+
+- `restore`, `recovery-sheet` and `recover` answer `not-in-this-build`;
+- roster and capture commits are not signed ([04 §4.4](04-roster-and-authority.md)),
+  and accept only fast-forwards `main`, on custodians: a laptop installs no
+  incoming version, so the group has one laptop and no merge;
+- place copies every key from the laptop to every custodian, and each
+  custodian gets every key, without the queue order or capacity admission
+  ([08 §8.9](08-custody-loops.md)); repair marks a removed device's UUID `dead`, after which place
+  copies again;
+- `heard` times and the trace clock are kept in memory, not in `clock.json`
+  ([11 §11.3](11-local-state.md)); `history` takes the state of older
+  versions from their copy counts;
+- the device key is kept as hex, not in OpenSSH format ([11 §11.2](11-local-state.md));
+  an invitation is base32 of JSON, not of a compact binary encoding, and
+  also carries the group's name, K and the inviter's name for messages;
+- a custodian's fingerprints and host are kept in `roster.toml` beside its
+  device, with no status reports yet ([06 §6.3](06-status.md));
+- the person's ID is taken from `$USER`, and a custodian is named
+  `<host name>-<6 hex digits of its device ID>`;
+- the CLI parses its arguments by hand, without `clap`, completions or
+  colour ([10 §10.2](10-interfaces.md));
+- one round runs, per group in turn, the settings check, capture, accept,
+  place and repair, every `[loops] interval_seconds` and at once after a
+  change; `status` on a laptop captures first.
+
 **Setup** (`crates/pigeon-lab`). The lab build (`--features lab`) adds three
 seams to `pigeon-sys`, and nothing else:
 

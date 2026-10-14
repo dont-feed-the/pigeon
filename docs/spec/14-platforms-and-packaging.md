@@ -155,7 +155,7 @@ and upgraded deliberately.
 | async runtime | `tokio` 1.53 | 0011 |
 | transport | `iroh` 1.3 (default features off, `tls-ring`: no relays or global discovery until ADR 0016's work, mDNS when asked), `iroh-mdns-address-lookup` 0.6; `iroh-relay` 1.3 for self-hosting | 0006, 0016 |
 | keys and signatures | `ssh-key` 0.6 (SSHSIG), `ed25519-dalek` 3.0 | 0007 |
-| join proof | `hmac` 0.13, `sha2` 0.11; `data-encoding` 2.11 (base32); `qrcode` 0.14 | 0017 **[no ADR: crates]** |
+| join proof | `hmac` 0.13 (the first build computes HMAC-SHA256 over `sha2` itself, checked against RFC 4231), `sha2` 0.11, `getrandom` 0.4 (secrets and device keys); `data-encoding` 2.11 (base32); `qrcode` 0.14 | 0017 **[no ADR: crates]** |
 | change hints | `notify` 8.2 | 0013 |
 | CLI | `clap` 4.6, `anstream` 1.0 / `anstyle` 1.0, `indicatif` 0.18 | 0024 |
 | web | `axum` 0.8, `maud` 0.27 | 0021 |

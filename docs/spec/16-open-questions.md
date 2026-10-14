@@ -55,7 +55,8 @@ if that day comes.
 - The settings check suspends drops and re-applies the expected settings (§3.5).
 - Remote names `pigeon-` + 12 hex digits of the device ID (§3.6).
 - The batch processes' grace period, and the argument checks of
-  `pigeon_git::allow::check` (§3.7).
+  `pigeon_git::allow::check`, with the two `-c` settings it accepts and
+  remotedaemon in a process group of its own (§3.7).
 
 ### B. Roster and authority ([04](04-roster-and-authority.md))
 
@@ -86,6 +87,9 @@ if that day comes.
 ### E. Capture, install and custody loops ([07](07-capture-and-install.md), [08](08-custody-loops.md))
 
 - The aside kept one hour under `.git/pigeon/aside/` (§7.5, [11 §11.3](11-local-state.md)).
+- The first build's departures from this specification, each to close before
+  the slice's scenarios run ([13 §13.12](13-verification.md)), and its extra
+  files `peers.json`, `p2p-token`, `freed.json` and `dead.json` ([11 §11.3](11-local-state.md)).
 - A save of a diverging path becomes a proposal of its own (§7.6).
 - Fetching every 5 minutes besides change notices (§8.1).
 - The deadline of a P2P fetch or push (§8.2).
@@ -95,6 +99,9 @@ if that day comes.
 ### F. Network and joining ([09](09-network-and-joining.md))
 
 - The invitation encoding `pgn1-` + base32 (§9.6).
+- The inviter keeps each invitation's secret, which checking the proof needs
+  (§9.6, a correction); the join exchange carries a custodian's fingerprints,
+  host and direct addresses, and the welcome the inviter's git-annex UUID (§9.6).
 - A custodian's default `maxsize`: free space minus 10 % (§9.6).
 - The safety words (§9.6).
 - Never merging new commits signed by a device absent from the current
@@ -108,13 +115,15 @@ if that day comes.
 - At most one notification per kind and day (§10.4).
 - Isolation marks around arguments, and an unknown message id rendered as
   itself (§10.5).
-- Problem codes shown as `P-` and capitals (§10.6).
+- Problem codes shown as `P-` and capitals (§10.6); the first build's codes
+  `usage`, `unknown-computer`, `receiving`, `not-a-pigeon-repository`,
+  `peer-unreachable`, `peer-refused` and `internal-error` (§10.6).
 - The clock-skew warning at 5 minutes (§10.7).
 
 ### H. Local state, observability, verification, platforms ([11](11-local-state.md), [12](12-observability.md), [13](13-verification.md), [14](14-platforms-and-packaging.md))
 
-- `toml_edit` for writing `config.toml`
-  (§11.2); invitation records kept 30 days (§11.3).
+- `toml_edit` for writing `config.toml`, and its `[network]` and `[loops]`
+  tables (§11.2); invitation records kept 30 days (§11.3).
 - Telemetry files bounded to 50 MB; `debug bundle` asks each peer's person;
   the `PIGEON_TRACE` switch (§12.2, §12.3).
 - The E17 runner with a hard disk (§13.8); the first milestone's scope, its
