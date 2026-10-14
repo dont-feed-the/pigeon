@@ -17,3 +17,13 @@ Purge_full	Purge	fast	pass
 Purge_seals	Purge	fast	violation:KeepWins
 Purge_none	Purge	fast	violation:KeepWins
 Purge_full3	Purge	full	pass
+Roster_fold	Roster	fast	pass
+Roster_atomic	Roster	fast	violation:RemovalWins
+Roster_every	Roster	fast	violation:MergeAlwaysPossible
+Roster_person	Roster	fast	violation:PersonRemovalWins
+Roster_witness	Roster	fast	violation:NoConcurrentRetirement
+Roster_rebase	Roster	fast	violation:Agreement
+Roster_table	Roster	fast	violation:AdminRemains
+Roster_adr0009	Roster	fast	violation:MergeAlwaysPossible
+Roster_clock	Roster	full	pass
+Roster_fold3	Roster	full	pass

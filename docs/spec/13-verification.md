@@ -35,6 +35,16 @@
 | `Purge_full3` | `Purge` | `pass` (full set) | 3 custodians, 2 of them holding the key, and the deciding laptop with a copy: 12.4 million states, 2 minutes |
 | `Purge_seals` | `Purge` | `violation:KeepWins` | accepting every seal without merging the sealers' `main` loses a cancel |
 | `Purge_none` | `Purge` | `violation:KeepWins` | dropping when one's own waiting period ends (ADR 0018's first mechanism) loses a restore that reached another custodian |
+| `Roster_fold` | `Roster` | `pass` (fast set) | issue #6: the roster of a commit is the fold of its non-merge ancestors' changes in canonical order (Kahn, smallest (time, device, id) first), each change atomic or skipped and reported, device removals always applied, a merge signed by a device of either parent's roster. Every roster keeps an admin (AdminRemains); a removed device stays removed (RemovalWins); each tree's roster is that fold, so merge order does not matter (TreeIsFold, Agreement); concurrent heads can always be merged (MergeAlwaysPossible); a change is skipped only for a concurrent one (SkipsNeedConcurrency). 3 persons (2 admins), 2 devices committing offline and merging any commit, a fresh key, all seven kinds of change, 5 commits: 608 563 states, 442 463 distinct, 11 s on 3 workers |
+| `Roster_clock` | `Roster` | `pass` (full set) | the same with author times 0 or 1, so wrong clocks reorder the fold: 8 569 377 states, 6 224 785 distinct, 4 minutes on 2 workers |
+| `Roster_fold3` | `Roster` | `pass` (full set) | three devices committing and merging, 5 commits: 10 321 071 states, 4 277 212 distinct, 5 minutes on 1 worker |
+| `Roster_witness` | `Roster` | `violation:NoConcurrentRetirement` | a and b retire concurrently and a merge joins them: the first in canonical order applies, the other is skipped, b stays admin |
+| `Roster_atomic` | `Roster` | `violation:RemovalWins` | skipping a rotation as a whole also skips its removal: a key added and removed on one branch makes the rotation to it fail on the other, and the old key comes back |
+| `Roster_every` | `Roster` | `violation:MergeAlwaysPossible` | with rule 2 of [04 §4.4](04-roster-and-authority.md) (a signer in every parent's roster), branches that removed each other's devices have no common device and never merge |
+| `Roster_person` | `Roster` | `violation:PersonRemovalWins` | a removes b while b removes a: both cannot apply without leaving no admin, so the later one in canonical order is skipped |
+| `Roster_rebase` | `Roster` | `violation:Agreement` | replaying the other side's changes onto one's own roster depends on who merges: two merges of the same commits disagree |
+| `Roster_table` | `Roster` | `violation:AdminRemains` | merging `roster.toml` per TOML table, a clean merge of the concurrent self-retirements leaves no admin |
+| `Roster_adr0009` | `Roster` | `violation:MergeAlwaysPossible` | ADR 0009's rule (a merge of concurrent roster changes signed by an admin under both parents) leaves the concurrent self-retirements unmergeable: no person is admin on both sides |
 
 The violations and the deadlock are negative tests: a model edit that hides
 the failure is caught (ADR 0026). These models argue why custody hand-off
