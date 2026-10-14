@@ -320,7 +320,7 @@ takes an incomplete capture for a safe one.
 | FIFO, socket, device | not shared, not listed: they hold no data (`git status` does not show them) |
 | ignored name (§7.2) | not captured, not listed |
 | non-portable name | held, *Needs you* ([05 §5.4](05-catalogue-and-names.md)) |
-| package: `.app`, `.band`, `.bundle`, `.framework`, `.key`, `.logicx`, `.numbers`, `.pages`, `.playground`, `.rtfd`, `.scriv`, `.textbundle`, `.xcodeproj`, `.xcworkspace` | shared as one document: captured together when quiet (§7.2), merged as one path ([05 §5.2](05-catalogue-and-names.md)), installed in one batch (§7.5); one divergence entry |
+| package: `.app`, `.band`, `.bundle`, `.framework`, `.key`, `.logicx`, `.numbers`, `.pages`, `.playground`, `.rtfd`, `.scriv`, `.textbundle`, `.xcodeproj`, `.xcworkspace` | shared as one document: captured together when quiet (§7.2), merged as one slot ([05 §5.2](05-catalogue-and-names.md)), installed in one batch (§7.5); one divergence entry |
 
 `package(p)`, the outermost folder above *p* with one of these extensions,
 compared case-insensitively, is a pure function of the name, so every platform

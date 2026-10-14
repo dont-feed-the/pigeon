@@ -125,7 +125,7 @@ test (ADR 0012), "lab" a git-annex experiment.
 | INV-Unlink | an unlink changes no preferred content of custodians | P3 | [03 §3.4](03-repository-and-roles.md), ADR 0018 | E2, E4 |
 | INV-Purge | a key is dropped by a purge only if every reference of it known to a custodian when it sealed is covered by an active purge decision, every custodian not `dead` has sealed it, and no current version uses it | P3 | [08 §8.6](08-custody-loops.md), ADR 0042 | `Purge` model (KeepWins, WaitingPeriod, NoResurrection); purge laws; E14 |
 | INV-Valid | a commit is accepted iff it is valid under the rosters of its parents and all its ancestors are accepted | P4 | [04 §4.4](04-roster-and-authority.md) | laws (homomorphism, determinism) |
-| INV-Merge | the tree of a merge is a function of its parents' trees only | P5 | [05 §5.2](05-catalogue-and-names.md) | laws (commutative, associative, idempotent) |
+| INV-Merge | the tree of a merge is the catalogue of its history: a function of the contributions and of which saw which, never of merge commits (ADR 0052) | P5 | [05 §5.2](05-catalogue-and-names.md) | laws (commutative, associative, idempotent); the reference model `models/catalogue` |
 | INV-Names | portable names are injective within a folder and stable for non-colliding files | P5 | [05 §5.4](05-catalogue-and-names.md) | laws |
 | INV-Observed | a state "protected" is shown only with the time of the observations it rests on; observations older than the staleness threshold give "uncertain" | P6 | [06 §6.2](06-status.md) | laws (monotone, join) |
 

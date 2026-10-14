@@ -24,6 +24,7 @@
 | ADR 0049: copies count once per failure domain | Proposed, for issue #12; [02 §2.1–2.2](02-guarantees.md), [04 §4.2](04-roster-and-authority.md), [06 §6.2–6.3](06-status.md), [08 §8.3](08-custody-loops.md) apply it, E22 asserts it | Guillaume |
 | ADR 0050: capacity budgeted, space reserved, fewest copies first | Proposed, for issue #13; [08 §8.4, §8.9](08-custody-loops.md), [15 §15.2](15-resource-use.md), [03 §3.4](03-repository-and-roles.md) apply it, E22 asserts it | Guillaume |
 | ADR 0051: the roster is a fold of its changes; forks merge without an admin | Proposed, for issue #6; [04 §4.4, §4.7, §4.8](04-roster-and-authority.md), [05 §5.2](05-catalogue-and-names.md) apply it, the `Roster` model checks it | Guillaume |
+| ADR 0052: the catalogue is built from contributions and the conflicts they saw | Proposed, for issue #8; [05 §5.1–5.3](05-catalogue-and-names.md), [04 §4.4–4.5](04-roster-and-authority.md), [02](02-guarantees.md) INV-Merge apply it, `models/catalogue` checks it ([13 §13.4](13-verification.md)) | Guillaume |
 | TLC with the `Json` module for trace validation | ADR 0026 foresees a new ADR pinning it by SHA-256 ([13 §13.3](13-verification.md)) | before the first `*Trace.tla` |
 
 ## 16.2 Where this specification departs from a source
@@ -71,7 +72,6 @@ them all.
 
 ### C. Catalogue and names ([05](05-catalogue-and-names.md))
 
-- No merge commit for a tip that brings only merge commits (§5.2).
 - Roster conflicts in a merge (§5.2, with B).
 - The conflict-name form (§5.3, and §16.2).
 - Name length limits, 255 bytes per name and 1024 per path, and holding a
@@ -132,6 +132,11 @@ them all.
 
 ## 16.4 Design questions left open
 
+- **Rename tracking.** A rename is a deletion and an add (ADR 0052). If Paul
+  renames *budget.xlsx* while Alice edits it, Alice's edit stays at the old
+  name and Paul's file at the new one: both kept, but apart. Should capture
+  record a rename, so that a concurrent edit follows the file? git's
+  similarity detection guesses from content, and fails on small files.
 - **Editing your own file in an add-only folder.** Martine adds *tarte.docx*
   to *Recettes* (allowed), then edits it: the edit becomes a suggestion to the
   stewards ([04 §4.3](04-roster-and-authority.md)). Should the author of a
@@ -191,7 +196,7 @@ experiments stay listed in [13](13-verification.md) and in the prototype (#17).
 | #5 | purge against concurrent restores and returning peers | [08 §8.6](08-custody-loops.md), [06 §6.3](06-status.md) | ADR 0042 (Proposed); the `Purge` model checks it; E14 asserts a restore against the seals and a returning laptop |
 | #6 | roster forks with disjoint admin sets | [04 §4.4, §4.7, §4.8](04-roster-and-authority.md), [05 §5.2](05-catalogue-and-names.md) | ADR 0051 (Proposed); the `Roster` model checks it |
 | #7 | decisions by non-admin owners and stewards | [04 §4.3, §4.5](04-roster-and-authority.md) | ADR 0038 (Proposed) |
-| #8 | catalogue merge algorithm and its laws | [05 §5.2](05-catalogue-and-names.md) | specified; ADR to come |
+| #8 | catalogue merge algorithm and its laws | [05 §5.1–5.3](05-catalogue-and-names.md), [04 §4.4](04-roster-and-authority.md) | ADR 0052 (Proposed); `models/catalogue` checks the laws on every schedule of three devices |
 | #9 | git-annex cannot bypass pigeon | [03 §3.5–3.8](03-repository-and-roles.md), [09 §9.4](09-network-and-joining.md) | ADR 0043 (Proposed); E12 and E13 assert |
 | #10 | models and coverage | [13 §13.2, §13.10](13-verification.md) | coverage map and liveness assumptions written |
 | #11 | recovery onto fresh machines | [09 §9.9](09-network-and-joining.md), [06 §6.2–6.3](06-status.md), [02 §2.1](02-guarantees.md), [04 §4.2–4.3](04-roster-and-authority.md), [09 §9.4](09-network-and-joining.md) | ADRs 0046 and 0047 (Proposed); E21 is the disaster drill |

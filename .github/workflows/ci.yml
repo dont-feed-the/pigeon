@@ -1,5 +1,6 @@
-# Checks of every push and pull request: repository rules, then the fast set
-# of TLA+ models with their expected verdicts (ADR 0026).
+# Checks of every push and pull request: repository rules, the fast set of
+# TLA+ models with their expected verdicts (ADR 0026), and the catalogue
+# model on every schedule of its cases (ADR 0052).
 name: ci
 
 on:
@@ -24,6 +25,15 @@ jobs:
         run: scripts/check-file-length-and-header
       - name: ADR index matches the ADR files
         run: scripts/check-adr-index
+
+  catalogue:
+    name: catalogue model
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: every schedule keeps the merge laws; the old rules fail as expected
+        run: python3 models/catalogue/catalogue.py
 
   models:
     name: TLA+ models (fast set)

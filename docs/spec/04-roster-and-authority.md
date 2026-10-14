@@ -124,7 +124,9 @@ All functions below are pure and live in the core (ADR 0012).
   `git`) in the `gpgsig` header of *c*, verified by pigeon with the `ssh-key`
   crate (ADR 0007); `person(c)` is that device's person. Unsigned commits are
   invalid. git's own `allowedSignersFile` and commit dates play no part.
-- `merge(t₁, …, tₙ)` is the deterministic tree merge of [05 §5.2](05-catalogue-and-names.md).
+- `anc*(p)` is *p* and its accepted ancestors, and `catalogue(S)` is the tree
+  of the logical catalogue of such a set ([05 §5.2](05-catalogue-and-names.md),
+  ADR 0052): a function of the history, not of the parents' trees alone.
 
 For a commit *c* other than the genesis, let **A(c)** be its parents that are
 accepted and **X(c)** the others. *c* is **accepted** if and only if:
@@ -132,9 +134,10 @@ accepted and **X(c)** the others. *c* is **accepted** if and only if:
 1. A(c) is not empty;
 2. `signer(c)` is a device of `R(p)` for every *p* in A(c), or, when Δ = ∅
    (rule 3), for some *p* in A(c) (ADR 0051);
-3. with base `B = merge(tree(p) for p in A(c))` and `Δ = diff(B, tree(c))`, every
-   change of Δ is allowed for `person(c)` under `R(p)` for every *p* in A(c)
-   (§4.3), or *c* is a valid Force (§4.6);
+3. with base `B = catalogue(⋃ anc*(p) for p in A(c))` and `Δ = diff(B, tree(c))`,
+   every change of Δ is allowed for `person(c)` under `R(p)` for every *p* in
+   A(c) (§4.3), or *c* is a valid Force (§4.6). With one accepted parent *p*,
+   B is `tree(p)`, because every accepted tree is the catalogue of its history;
 4. if Δ changes the roster, the new roster is valid (§4.2).
 5. every path that Δ adds is portable ([05 §5.4](05-catalogue-and-names.md)).
 6. `tree(c)` is **well formed** (ADR 0044): only folders and files of mode
@@ -156,7 +159,9 @@ makes is well formed, so only a faulty or hostile device can write one.
 
 Consequences, each a law with a property test (ADR 0012):
 
-- A clean merge of accepted heads has Δ = ∅, so a device of the roster of any
+- A clean merge, whose tree is the catalogue of its history, has Δ = ∅. It is
+  not a contribution, so it never counts in the catalogue
+  ([05 §5.1](05-catalogue-and-names.md)), and a device of the roster of any
   of its parents may sign it, even one that another parent's roster removed:
   the merge changes nothing, and its roster, the fold, removes that device.
   Requiring the signer in every parent's roster leaves two branches that
@@ -203,8 +208,10 @@ peer's history (a commit rejected here). Each is kept as
 | superseded | a later proposal of the same chain exists |
 
 - **Accept.** The decider's device writes a merge with parents (`main`, the
-  proposal) and tree `merge(main, proposal)`; if the path changed meanwhile on
-  `main`, both versions are kept under conflict names ([05 §5.3](05-catalogue-and-names.md)).
+  proposal) whose tree is `main`'s with the proposal's change. If the path
+  changed meanwhile on `main`, both versions are kept: the proposal's under
+  its conflict name, with the proposal's author and time
+  ([05 §5.2–5.3](05-catalogue-and-names.md)).
 - **Reject.** The decider's device commits `.pigeon/decisions/<commit>.toml`:
 
 ```toml

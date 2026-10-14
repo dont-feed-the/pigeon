@@ -102,7 +102,7 @@ and each law is a `hegeltest` property (pinned to 0.49, a dev-dependency).
 | fetched history | join-semilattice: associative, commutative, idempotent union | [08 §8.2](08-custody-loops.md) |
 | acceptance | `accepted(S ∪ T) = accepted(S) ∪ accepted(T)`; verdicts depend only on ancestors; a clean merge has Δ = ∅ | [04 §4.4](04-roster-and-authority.md) |
 | roster fold | R(c) depends only on the set of accepted ancestors (merge order, duplicate delivery, split and rejoin cycles); a linear history gives sequential application; every R(c) has an admin; a removed device never returns; a change applies at most once; every skipped change is listed (ADR 0051) | [04 §4.8](04-roster-and-authority.md) |
-| catalogue merge | commutative, associative, idempotent; conflict names independent of arrival order | [05 §5.2](05-catalogue-and-names.md) |
+| catalogue merge | a function of the contributions and of which saw which, never of contact order, duplicate deliveries or merge commits; commutative, associative, idempotent; `tree(c) = catalogue(anc*(c))`; a key leaves only through a contribution whose base showed it; a superseded version never comes back; conflict names independent of arrival order and injective after folding; each copy allowed to its author (ADR 0052) | [05 §5.1–5.3](05-catalogue-and-names.md), `models/catalogue` |
 | portable names | normalisation idempotent; injective within a folder; portable names unchanged | [05 §5.4](05-catalogue-and-names.md) |
 | custody observations | latest-observation join per (custodian, key); *protected* monotone in presence observations; a custodian counts only with `has_commit` for the version (ADR 0046) | [06 §6.1](06-status.md) |
 | headline | a pure function of the states; precedence total; never *Safe* while a version is not protected | [06 §6.5](06-status.md) |
@@ -121,6 +121,22 @@ and each law is a `hegeltest` property (pinned to 0.49, a dev-dependency).
 
 Example tests remain for regressions found by properties (with the shrunk
 input) and for the fixed scenarios of this specification.
+
+**Reference model of the catalogue** (ADR 0052). `models/catalogue/catalogue.py`,
+in plain Python, defines `catalogue(S)` and runs every schedule of
+contributions and pulls between three devices, for eleven cases: add and add,
+edit and edit (with two copies of one minute), edit and delete, rename and
+edit, a case collision, a Unicode collision of folders, a package, a save after
+a conflict, *Keep mine* and *Keep both* racing new edits, and a decision
+merge. Schedules cover orders, pairings, fast-forwards, duplicate merges and
+deliveries, and repeated split and rejoin. The reachable states are finite,
+and the model visits them all: up to 264 500 for one case. On each state it
+checks the laws of the *catalogue merge* row above. It also replays fixed
+histories with their expected trees and open conflicts. It runs the rule
+before ADR 0052 (`old`: merge commits are changes) and its obvious repair
+(`naive`: copies derived from the heads) up to five pulls, and expects their
+failures, so a model change that hides them fails. CI runs it in about 30
+seconds. The core's hegel properties must agree with it on the same cases.
 
 ## 13.5 Stateful tests and fault injection
 
@@ -223,7 +239,7 @@ are specified here but not built; the gaps are tracked as GitHub issues
 | P2 Capture, no overwrite | E20 (asserting, Linux and macOS: what capture stages and what it never reads); E15b (asserting: no pointer during free and keep); E18 (asserting: offline in-place saves keep every version); E19 (asserting: racing saves and `kill -9` during install) | `CaptureInstall` model; install journal laws (hegel-rust); E19 on macOS | copy-on-write cost of pending history on APFS and btrfs (E18 there); saves from stale memory (16 §16.4) |
 | P3 Reversible deletion | E2, E4 (lab, printing); `Purge` model (seals against restores, cancels, partitions, restarts and a returning laptop; ADR 0042); E14 (asserting: shared keys, a restore against the seals, per-key transfers, the forced drop, a returning laptop's new generation) | purge laws (hegel-rust); `Purge` trace validation | a custodian clock that jumps forward by more than the waiting period; erased names stay in history (16 §16.4) |
 | P4 Authority | E7 (lab, printing); E12 (asserting: no pushed ref, `remotedaemon` only fetches); `Roster` model (roster forks, ADR 0051) | `Authority` model; roster fold laws; acceptance laws; decision-rights tests (ADR 0038) | format compatibility (#15) |
-| P5 Convergence | E3 (lab, printing) | merge and name laws; three-way permutations | the merge algorithm (#8) |
+| P5 Convergence | E3 (lab, printing); `models/catalogue` (every schedule of three devices over eleven cases; the rule before ADR 0052 fails as expected) | merge and name laws (hegel-rust), checked against the reference model | ADR 0052 is Proposed (#8); rename tracking (16 §16.4) |
 | P6 Honest status | E20 (asserting: the kinds pigeon lists as not shared); E21 (asserting: content without its commit is not protected); E22 (asserting: two repositories on one disk are two copies to git-annex, so pigeon counts domains) | observation, domain and headline laws; usability test | — |
 
 ## 13.11 Going on: technical and human criteria

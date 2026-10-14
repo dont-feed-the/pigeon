@@ -40,7 +40,7 @@ For each reachable peer *d*:
    and the headline says *Needs you*: update pigeon (`update-needed`).
 5. **Merge** the maximal accepted commits into `main`: fast-forward if possible,
    else a signed merge commit ([05 §5.2](05-catalogue-and-names.md)), only if
-   they bring an accepted non-merge commit this device lacks.
+   they bring a contribution this device lacks ([05 §5.1](05-catalogue-and-names.md)).
 6. Accept the peer's status reports that are newer and validly signed
    ([06 §6.3](06-status.md)).
 7. Laptops: install ([07 §7.5](07-capture-and-install.md)).
