@@ -1,139 +1,119 @@
 # pigeon v2 — specification
 
-> **Status:** version 1 of the specification, 13 October 2026. It assembles the
-> decisions recorded in [ADRs 0001–0068](../adr/README.md) (27 withdrawn), the guarantees P1–P6 of the
-> [proposal](../design/proposal/proposal.pdf), the [UX study](../design/ux.md), the
-> [TLA+ models](../../models/tla/), the [catalogue model](../../models/catalogue/catalogue.py)
-> and the [git-annex experiments](../../lab/git-annex/).
-> It supersedes [spec draft 0](../design/spec-draft-0.md) and [draft 1](../design/spec-draft-1.md),
-> which described a custom engine (ADR 0001).
+> **Status:** version 2 of the specification, 14 October 2026: a high-level
+> contract that cites the laws and models that check it. It assembles the
+> accepted [ADRs](../adr/README.md), the guarantees P1–P6 of the
+> [proposal](../design/proposal/proposal.pdf), the [UX study](../design/ux.md),
+> the [TLA+ models](../../models/tla/README.md), the
+> [catalogue model](../../models/catalogue/catalogue.py), the laws of
+> `pigeon-core` and the [git-annex experiments](../../lab/git-annex/README.md).
 
 ## What pigeon is
 
-pigeon keeps the files of a small group (a family, a lab, a club) on everyone's
-computers, without a central server. Each person works in a normal folder.
-pigeon shares it with the group, keeps *safe copies* on the group's *backup
-machines*, and always says, in plain words, which files are safe.
+pigeon keeps the files of a small group (a family, a lab, a club) on
+everyone's computers, without a central server. Each person works in a
+normal folder; pigeon shares it, keeps *safe copies* on the group's *backup
+machines*, and always says in plain words which files are safe. It is a
+**policy and user-experience layer over git-annex** (ADR 0001), which stores
+versions, tracks copies, moves content and refuses unsafe deletions. pigeon
+adds a signed roster and the authority rule (P4), capture and install that
+never overwrite a person's file (P2), suggestions and decisions, three
+states and one honest headline (P6), joining by invitation, a peer-to-peer
+transport, a CLI and a local web page.
 
-pigeon v2 is a **policy and user-experience layer over git-annex** (ADR 0001).
-git-annex stores versions, tracks where every copy is, moves content and refuses
-unsafe deletions. pigeon adds what git-annex lacks:
+## Reading order and line budget
 
-- a signed list of members, computers and folder rules, and the authority rule
-  that every computer applies to every change (P4);
-- capture of what people save, and installation of what others saved, without
-  ever overwriting a person's file (P2, ADR 0034);
-- suggestions for changes a person may not make directly, and decisions on them;
-- three version states and one honest headline (P6, ADR 0027);
-- joining by invitation, a peer-to-peer transport, a CLI and a local web page.
+Read the files in order the first time. Each has one mission and a budget;
+`scripts/check-file-length-and-header` caps every file at 1000 lines.
 
-## How to read this specification
+| File | Mission | Budget |
+|---|---|---|
+| [01-concepts.md](01-concepts.md) | the vocabulary | 110 |
+| [02-guarantees.md](02-guarantees.md) | P1–P6, their assumptions, and the invariants that carry them | 130 |
+| [03-repository-and-roles.md](03-repository-and-roles.md) | the git and git-annex layout and the configuration of each role | 210 |
+| [04-roster-and-authority.md](04-roster-and-authority.md) | the roster, the authority rule, suggestions, decisions, Force | 240 |
+| [05-catalogue-and-names.md](05-catalogue-and-names.md) | the catalogue, merges, conflict names, portable names (P5) | 140 |
+| [06-status.md](06-status.md) | states, observations, the headline and its reasons (P6) | 170 |
+| [07-capture-and-install.md](07-capture-and-install.md) | capture, install, divergences, the mass-deletion guard (P2, P3) | 260 |
+| [08-custody-loops.md](08-custody-loops.md) | accept, placement, repair, freeing, purge, capacity (P1, P3) | 280 |
+| [09-network-and-joining.md](09-network-and-joining.md) | keys, transport, the filter, invitations, removal, recovery | 310 |
+| [10-interfaces.md](10-interfaces.md) | the request API, CLI, web, notifications, messages, Problems | 180 |
+| [11-local-state.md](11-local-state.md) | the files `pigeond` keeps and how they are written | 200 |
+| [12-observability.md](12-observability.md) | logs, telemetry, trace events | 100 |
+| [13-verification.md](13-verification.md) | the evidence layers, the slice, the laws in code | 370 |
+| [14-platforms-and-packaging.md](14-platforms-and-packaging.md) | platforms, git-annex delivery, supervision, the workspace | 170 |
+| [15-resource-use.md](15-resource-use.md) | priorities, the work queue, adaptive limits, budgets | 160 |
+| [16-open-questions.md](16-open-questions.md) | conflicts left with ADRs, details decided without one, open questions | 240 |
 
-Each file has one mission. Read them in order the first time.
+A file that outgrows its budget moves detail to the law, model or ADR that
+holds it, rather than growing.
 
-| File | Mission |
-|---|---|
-| [01-concepts.md](01-concepts.md) | the vocabulary: group, persons, devices, roles, folders, versions, states, removals, escapes |
-| [02-guarantees.md](02-guarantees.md) | what pigeon promises (P1–P6), under which assumptions, and the invariants that carry each promise |
-| [03-repository-and-roles.md](03-repository-and-roles.md) | the git and git-annex layout of each device, and the configuration of each role |
-| [04-roster-and-authority.md](04-roster-and-authority.md) | the roster file, the authority rule, suggestions, decisions, Force |
-| [05-catalogue-and-names.md](05-catalogue-and-names.md) | the logical catalogue, merges, conflict names and portable names (P5) |
-| [06-status.md](06-status.md) | version states, observations, the headline and its reasons (P6) |
-| [07-capture-and-install.md](07-capture-and-install.md) | the disk door: capture, install, divergences, the mass-deletion guard (P2, P3) |
-| [08-custody-loops.md](08-custody-loops.md) | exchanging history, placement and repair, freeing space, purge (P1, P3) |
-| [09-network-and-joining.md](09-network-and-joining.md) | device keys, the iroh transport, the daemon socket, invitations, removing a computer |
-| [10-interfaces.md](10-interfaces.md) | the request API, the CLI, the web interface, notifications, messages and errors |
-| [11-local-state.md](11-local-state.md) | the files `pigeond` keeps on each device, their formats and how they are written |
-| [12-observability.md](12-observability.md) | logs, telemetry and trace events |
-| [13-verification.md](13-verification.md) | TLA+ models, trace validation, property-based tests, the lab, CI, the usability test, the safety slice |
-| [14-platforms-and-packaging.md](14-platforms-and-packaging.md) | platforms, delivery of git and git-annex, the Rust workspace, dependencies |
-| [15-resource-use.md](15-resource-use.md) | how background work stays out of the way: priorities, adaptive limits, settings, budgets |
-| [16-open-questions.md](16-open-questions.md) | what is not decided, and the details this specification decides without an ADR |
+## Precedence
+
+When two documents disagree, the higher one wins and the lower one is the
+bug:
+
+1. **Accepted ADRs** ([docs/adr/](../adr/README.md)): the decisions, never
+   rewritten; a change of mind is a new ADR.
+   [16 §16.2](16-open-questions.md) lists where this specification still
+   departs from one.
+2. **This specification, with the laws and TLA+ modules it cites**: the
+   normative contract. A cited `pigeon-core` law (module documentation and
+   hegeltest property, 13 §13.13) or TLA+ invariant (13 §13.2) is normative
+   for its point. A conflict between a sentence here and a law it cites is
+   a bug in the sentence: fix the sentence.
+3. **The UX study** ([ux.md](../design/ux.md)) and the mockups: words,
+   journeys and screens.
+4. **The proposal** ([proposal.pdf](../design/proposal/proposal.pdf)): the
+   origin of P1–P6, restated in [02](02-guarantees.md); mechanisms that later
+   decisions replaced are history.
+
+Superseded drafts ([draft 0](../design/spec-draft-0.md),
+[draft 1](../design/spec-draft-1.md)) and the [review](../design/REVIEW.md)
+are history only.
 
 ## Conventions
 
-- **MUST**, **MUST NOT**, **SHOULD** and **MAY** have their RFC 2119 meaning. Text
-  without these words explains.
-- `(ADR NNNN)` cites the decision a rule comes from. A rule that no ADR decides is
-  marked **[no ADR]** and listed in [16 §16.3](16-open-questions.md): under the
-  [ADR policy](../adr/README.md#when-to-write-an-adr) it is settled here, and
-  raised to an ADR only if it turns out costly to reverse or a reviewer asks. If this
-  specification and an accepted ADR disagree, the ADR wins and this file is the bug.
-- Names in code, in `--json` and in this specification are the internal ones
-  (*local*, *published*, *protected*, *custodian*, *proposal*). People see the plain
-  words of the vocabulary table ([ux.md §2.2](../design/ux.md)), as
-  [01-concepts.md](01-concepts.md) recalls.
-- Experiments are cited as E1–E24 ([lab/git-annex/](../../lab/git-annex/)); models by
-  configuration name (`T_n42o4`, see [models/tla/expected.tsv](../../models/tla/expected.tsv)).
-- Thresholds written as "default *x*" are settings with tested defaults; the
-  usability test may change them (ux.md §11).
-
-## Precedence of documents
-
-When two documents disagree, the one higher in this list wins, and the lower one
-is the bug:
-
-1. **Accepted ADRs** ([docs/adr/](../adr/README.md)): the decisions. They are
-   never rewritten; a change of mind is a new ADR.
-2. **This specification**: the current, normative contract that assembles them.
-   A detail it decides without an ADR is marked **[no ADR]**.
-3. **Proposed ADRs**: pending decisions. Where this specification assumes one, it
-   says so; [16 §16.1](16-open-questions.md) lists them (none on 14 October 2026).
-4. **The UX study** ([ux.md](../design/ux.md)) and the mockups: words, journeys and
-   screens. This specification follows them, except where
-   [16 §16.2](16-open-questions.md) says why not.
-5. **The proposal** ([proposal.pdf](../design/proposal/proposal.pdf)): the origin
-   of P1–P6, restated normatively in [02](02-guarantees.md). Its mechanisms that
-   later decisions replaced (custody tokens, a Windows week in the feasibility
-   study, restoring unauthorised edits automatically) are historical.
-6. **Superseded drafts** ([spec draft 0](../design/spec-draft-0.md),
-   [draft 1](../design/spec-draft-1.md)) and the [review](../design/REVIEW.md) of them:
-   history only.
-
-Known gaps are tracked as GitHub issues; [16 §16.5](16-open-questions.md) maps
-each to the parts of this specification it concerns and to its state.
+- **MUST**, **MUST NOT**, **SHOULD** and **MAY** have their RFC 2119
+  meaning; other text explains.
+- `(ADR NNNN)` cites the decision a rule comes from. A rule no ADR decides
+  is marked **[no ADR]** and listed in [16 §16.3](16-open-questions.md).
+- `NN §N.M` cites a section; `scripts/check-spec-refs` checks in CI that
+  every cited section exists, so sections keep their numbers.
+- Laws are cited by module and test (`journal`:
+  `nothing_the_person_wrote_is_lost`), invariants by model and name
+  (`CaptureInstall.tla` `NoLoss`), configurations by name (`T_n42o4`, in
+  [models/tla/expected.tsv](../../models/tla/expected.tsv)), experiments as
+  E1–E24.
+- Names in code, `--json` and this specification are internal (*local*,
+  *published*, *protected*, *custodian*, *proposal*); people see the words of
+  ux.md §2.2. "Default *x*" is a setting with a tested default.
 
 ## Scope of v1
 
 In scope: Linux and macOS for people's computers, Linux for backup machines
-(ADRs 0005, 0032); groups of up to about 20 devices and a few hundred thousand
-files; the CLI and the local web interface (ADR 0021); notifications and a
-launcher (ADR 0029); French and English (ADR 0028).
+(ADRs 0005, 0032); groups of up to about 20 devices and a few hundred
+thousand files; the CLI and the local web interface (ADR 0021);
+notifications and a launcher (ADR 0029); French and English (ADR 0028).
+Later: native Windows and the status icon (v1.1), phones, per-file freeing
+(ADR 0031), a placement planner (ADR 0003), cloud special remotes,
+migration from pigeon 0.9 (ADR 0015), PAKE invitation codes (ADR 0017).
+pigeon does not fit projects several people edit at once, nor real-time
+sync of hot files (proposal §1).
 
-Out of scope for v1, designed so that it can come later: native Windows (v1.1,
-ADR 0005), the status icon (v1.1, ADR 0029), phones, per-file freeing of space
-(ADR 0031), a placement planner (ADR 0003), cloud special remotes, migration
-from pigeon 0.9 (ADR 0015), short invitation codes with a PAKE (ADR 0017).
+## Where the accepted ADRs apply
 
-pigeon does not fit projects that several people edit at the same time (use git
-or a collaborative editor), nor real-time sync of hot files (proposal §1).
-
-## Traceability
-
-| ADR | Where this specification applies it |
+| ADRs | Files |
 |---|---|
-| 0001 engine | everywhere; [03](03-repository-and-roles.md) |
-| 0002 copy classes, 0003 partial custodians | [03](03-repository-and-roles.md), [06](06-status.md), [08](08-custody-loops.md) |
-| 0004 Rust over the git-annex CLI | [03](03-repository-and-roles.md), [14](14-platforms-and-packaging.md) |
-| 0005 platforms, 0032 backup machines on Linux | [14](14-platforms-and-packaging.md) |
-| 0006 iroh helper, 0016 relays, 0017 joining | [09](09-network-and-joining.md) |
-| 0007 device keys | [04](04-roster-and-authority.md), [09](09-network-and-joining.md) |
-| 0008 trace validation, 0012 laws, 0026 CI | [13](13-verification.md), [12](12-observability.md) |
-| 0009 roster and proposals | [04](04-roster-and-authority.md) |
-| 0010 git CLI only, 0011 one daemon | [03](03-repository-and-roles.md), [09](09-network-and-joining.md) |
-| 0013 change detection | [07](07-capture-and-install.md) |
-| 0014 append-only serving, 0018 purge | [08](08-custody-loops.md), [09](09-network-and-joining.md) |
-| 0015 ignore 0.9, 0019 licence | this file, [14](14-platforms-and-packaging.md) |
-| 0020 git-annex delivery | [14](14-platforms-and-packaging.md) |
-| 0021 interfaces, 0024 CLI, 0029 notifications | [10](10-interfaces.md) |
-| 0022 logging, 0025 telemetry | [12](12-observability.md) |
-| 0023 errors, 0027 words and headline, 0028 Fluent | [06](06-status.md), [10](10-interfaces.md) |
-| 0030 (Rejected), 0033 (Superseded), 0034, 0035 | [07](07-capture-and-install.md), [10](10-interfaces.md) |
-| 0031 free per folder | [08](08-custody-loops.md) |
-| 0036 local state | [11](11-local-state.md) |
-| 0037 background work | [15](15-resource-use.md) |
-| 0046 protected: K custodians hold the content and its commit, on disk (Accepted) | [02](02-guarantees.md), [03](03-repository-and-roles.md), [04](04-roster-and-authority.md), [06](06-status.md), [08](08-custody-loops.md), [09](09-network-and-joining.md), [10](10-interfaces.md), [13](13-verification.md) |
-| 0047 recovery: rejoin, sheets, refounding, export (Accepted) | [09](09-network-and-joining.md), [04](04-roster-and-authority.md), [10](10-interfaces.md), [11](11-local-state.md), [03](03-repository-and-roles.md) |
-| 0048 versioned formats and rules, unknown never guessed (Accepted) | [04](04-roster-and-authority.md), [06](06-status.md), [08](08-custody-loops.md), [09](09-network-and-joining.md), [10](10-interfaces.md), [13](13-verification.md), [14](14-platforms-and-packaging.md) |
-| 0051 authority: a fold of signed changes; forks merge without an admin; deciders sign decisions on suggestions (Accepted) | [02](02-guarantees.md), [04](04-roster-and-authority.md), [05](05-catalogue-and-names.md), [09](09-network-and-joining.md), [13](13-verification.md) |
-| 0038–0045, 0049, 0050, 0052–0068 (Withdrawn): rules and details that are not ADRs | [16 §16.3](16-open-questions.md) lists each with its section |
+| 0001 engine; 0002, 0003 copy classes and partial custodians; 0004, 0010 the git and git-annex CLIs | [03](03-repository-and-roles.md), [06](06-status.md), [08](08-custody-loops.md), [14](14-platforms-and-packaging.md) |
+| 0007 keys; 0009, 0051 roster, proposals, decisions | [04](04-roster-and-authority.md), [09](09-network-and-joining.md) |
+| 0013 change detection; 0034, 0035 no overwrite, the group's version | [07](07-capture-and-install.md) |
+| 0014 append-only serving; 0018 purge; 0031 free per folder | [08](08-custody-loops.md), [09](09-network-and-joining.md) |
+| 0006 helper, 0011 one daemon, 0016 relays, 0017 joining, 0047 recovery | [09](09-network-and-joining.md) |
+| 0021, 0023, 0024, 0027, 0028, 0029 interfaces, errors, words, messages | [06](06-status.md), [10](10-interfaces.md) |
+| 0036 local state; 0022, 0025 logs and telemetry; 0008, 0012, 0026 evidence | [11](11-local-state.md), [12](12-observability.md), [13](13-verification.md) |
+| 0005, 0032 platforms; 0019 licence; 0020 git-annex delivery; 0037 resources | [14](14-platforms-and-packaging.md), [15](15-resource-use.md) |
+| 0046 protected; 0048 versioned formats | [02](02-guarantees.md), [04](04-roster-and-authority.md), [06](06-status.md), [08](08-custody-loops.md), [09](09-network-and-joining.md), [13](13-verification.md) |
+
+0030 is Rejected, 0033 Superseded; the 27 withdrawn ADRs are rules or
+details of this specification, listed in [16 §16.3](16-open-questions.md).
