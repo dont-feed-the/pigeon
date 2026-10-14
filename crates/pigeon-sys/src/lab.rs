@@ -110,7 +110,13 @@ mod imp {
         }
         if CROSSINGS.fetch_add(1, Ordering::SeqCst) + 1 == plan.n {
             let me = rustix::process::getpid();
-            let _ = rustix::process::kill_process(me, rustix::process::Signal::KILL);
+            if rustix::process::kill_process(me, rustix::process::Signal::KILL).is_ok() {
+                // On macOS the signal may land after `kill` returns, so the
+                // thread waits for it rather than abort first (CI saw it).
+                for _ in 0..500 {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+            }
             std::process::abort();
         }
     }
