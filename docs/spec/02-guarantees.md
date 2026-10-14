@@ -1,137 +1,124 @@
 # 2. Guarantees
 
-> Mission: state what pigeon promises, under which assumptions, what it does not
-> promise, and which invariants of the other files carry each promise. Taken from
-> the proposal (§3), strengthened by ADR 0034.
+> Mission: what pigeon promises (P1–P6, from proposal §3 and ADR 0034), under
+> which assumptions, what it does not promise, and the invariants that carry
+> each promise, with the model, law or experiment that checks each.
 
 ## 2.1 Definitions
 
-- A version V is **protected** when at least K distinct custodians hold
-  copies of its key that were verified when placed and, since, by every scrub
-  that covered them (ADR 0002), each on its disk, and each of them also holds
-  the commit that introduced V (ADR 0046). Each custodian counts once, by its
-  device. Those custodians then hold everything needed to recover V on a
-  fresh machine ([09 §9.9](09-network-and-joining.md)).
-- A **repair epoch** for V starts when fewer than K custodians of the roster
-  hold intact copies of V (on disk, not corrupt), and ends when K do again. A
-  copy that rots opens an epoch when it rots, not when a scrub finds it, and a
-  version that has never reached K is in one (ADR 0046).
-- A version is **captured** when pigeon has added its content to the local annex
-  and recorded it in a signed commit, accepted or proposal ([07](07-capture-and-install.md)).
-- A **saved file** is the content a person or their application left at a path
-  of the physical tree.
+- A version V is **protected** when at least K distinct custodians, each
+  counted once by its device, hold on disk a copy of its key verified when
+  placed and by every scrub since (ADR 0002), and the commit that introduced
+  V (ADR 0046). They then hold all a fresh machine needs to recover V
+  ([09 §9.9](09-network-and-joining.md)).
+- A **repair epoch** for V runs while fewer than K custodians of the roster
+  hold intact copies of V. A copy that rots opens it when it rots, not when a
+  scrub finds it; a version that never reached K is in one (ADR 0046).
+- A version is **captured** when its content is in the local annex and in a
+  signed commit, accepted or proposal ([07](07-capture-and-install.md)).
+- A **saved file** is the content a person or their application left at a path.
 
 ## 2.2 Assumptions
 
-- **F (failures):** within any repair epoch of V, fewer than K of the
-  custodians that hold V lose or corrupt it. A fault that takes several
-  custodians at once (one disk, one machine, one house) counts once per
-  custodian it takes (ADR 0046).
-- **Members** are honest but fallible: they make mistakes, run old versions,
-  delete by accident, but they do not attack the group. **Keys** are not stolen.
-- **Networks** partition, reorder, duplicate and drop messages; **devices** crash
-  at any instant, including during a write, and restart.
+- **F (failures):** within a repair epoch of V, fewer than K of the custodians
+  that hold V lose or corrupt it. A fault that takes several custodians (one
+  disk, machine or house) counts once per custodian it takes (ADR 0046).
+- **Members** are honest but fallible; **keys** are not stolen.
+- **Networks** partition, reorder, duplicate and drop messages; **devices**
+  crash at any instant, including during a write, and restart.
 - **Clocks** may be wrong by minutes. Correctness never depends on them; only
   displayed times, thresholds and the end of a retention period do.
-- **Disks** behave as POSIX file systems on the supported list
-  ([14](14-platforms-and-packaging.md)): `rename` is atomic, `fsync` is durable.
+- **Disks** are POSIX file systems of the supported list
+  ([14](14-platforms-and-packaging.md)): `rename` is atomic, `fsync` durable.
 
 ## 2.3 The six guarantees
 
-**P1 Survival.** If V is protected and F holds, no sequence of syncs, evictions,
-laptop edits, crashes or partitions destroys V. Only a purge whose retention
-period has ended, or a Drop, can. *Survival is not reachability:* during a
-partition V may survive but be out of reach. Nor does survival need any
-laptop: after the loss of every laptop and of pigeon's local state, a fresh
-machine recovers V, its name and its history from the custodians alone
-(ADRs 0046, 0047, [09 §9.9](09-network-and-joining.md)).
+**P1 Survival.** If V is protected and F holds, no sequence of syncs,
+evictions, laptop edits, crashes or partitions destroys V; only a purge after
+its retention period, or a Drop, can. Survival is not reachability: in a
+partition V may be out of reach. Survival needs no laptop: after the loss of
+every laptop and of pigeon's local state, a fresh machine recovers V, its name
+and its history from the custodians alone (ADR 0047, [09 §9.9](09-network-and-joining.md)).
 
-**P2 Capture, and no overwrite.** A captured version is never overwritten: its
-laptop keeps it as an immutable copy until it is protected ([07 §7.8](07-capture-and-install.md)).
-pigeon never replaces, moves aside or removes content that a person saved,
-unless that person asks (ADR 0034). Installing incoming content is
-crash-recoverable and skips every path whose file diverges. Install moves a file
-away from its name only to prove it is pigeon's own, a save that races it wins
-the name, and a write that escapes the proof is kept as a recovered version
-([07 §7.5](07-capture-and-install.md)). Writes made between
-two captures are protected on a best-effort basis only.
+**P2 Capture, and no overwrite.** A captured version is kept by its laptop as
+an immutable copy until protected ([07 §7.8](07-capture-and-install.md)).
+pigeon never replaces, moves aside or removes content a person saved unless
+that person asks (ADR 0034). Install is crash-recoverable, skips every
+diverging path, moves a file from its name only to prove it is pigeon's own,
+lets a racing save win the name, and keeps a write that escapes the proof as a
+recovered version ([07 §7.5](07-capture-and-install.md)). Writes between two
+captures are protected on a best-effort basis only.
 
-**P3 Reversible deletion.** Unlinking, including a mass deletion, never
-releases protection. Until purge, every deleted protected version can be
-restored. A device returning from offline cannot resurrect a deleted file or
-bypass a purge decision: what a purge covers stays released, and a version
-the purge never covered, such as one saved offline meanwhile, is kept and shown
-to its deciders ([08 §8.6](08-custody-loops.md)).
+**P3 Reversible deletion.** Unlinking, even in bulk, never releases
+protection; until purge, every deleted protected version can be restored. A
+returning device can neither resurrect a deleted file nor bypass a purge:
+what a purge covers stays released, and a version it never covered (one saved
+offline meanwhile) is kept and shown to its deciders ([08 §8.6](08-custody-loops.md)).
 
 **P4 Authority.** The accepted catalogue is the set of commits valid under the
 roster in force at their parents. Validation is deterministic, so all devices
 accept the same catalogue from the same commits. A release that does not know
 the group's `rules` or a document's `format` judges the commits concerned
-*unknown* and waits: it never accepts what a newer release rejects
-(ADR 0048). Commits mixing authorities are
-split at capture or rejected at acceptance, and merges are checked against their
-parents.
+*unknown* and waits; it never accepts what a newer release rejects (ADR 0048).
+Commits mixing authorities are split at capture or rejected at acceptance;
+merges are checked against their parents.
 
 **P5 Convergence.** Identical accepted history gives an identical logical
-catalogue (paths, versions, states). Physical trees differ only by the folders
-each device keeps and by unresolved divergences (ADR 0034). Names follow one
-portable rule set: Unicode NFC, case-fold collisions, Windows reserved names,
-deterministic conflict names.
+catalogue. Physical trees differ only by the folders kept and by unresolved
+divergences (ADR 0034). Names follow one portable rule set: Unicode NFC,
+case-fold collisions, Windows reserved names, deterministic conflict names.
 
-**P6 Honest status.** Each version's state is shown as *observed at time T* or
-as *uncertain*. A partitioned device says "not checked since T"; it never claims
+**P6 Honest status.** Each state is shown as *observed at time T* or as
+*uncertain*; a partitioned device says "not checked since T" and never claims
 knowledge it cannot have. A state that is not *Safe* comes with its reason and
 what happens next (ADR 0027).
 
 ## 2.4 Not guaranteed
 
-- Versions that are *local* or *published* but not yet *protected*: they are
-  always shown as such (P6).
-- History beyond a purge's retention period.
-- Writes between two captures (P2), and an application's unsaved data.
-- Protection without custodial capacity: a group with no custodian, or with less
-  capacity than K × (collection + retained history + suggestions not erased),
-  gets no protection for the versions that do not fit, and is told how much is
-  missing and who can act (ADR 0003, [08 §8.9](08-custody-loops.md)).
-- Independence: pigeon does not model which custodians share a disk, a
-  machine or a place. Two custodians on one machine count as two copies, and
-  one fault can take both (ADR 0046). Groups are advised to keep custodians
-  on separate machines, in separate places.
+- Versions not yet *protected*: always shown as such (P6).
+- History beyond a purge's retention period; writes between two captures;
+  an application's unsaved data.
+- Protection beyond custodial capacity: versions that do not fit in
+  K × (collection + retained history + suggestions not erased) are not
+  protected, and the group is told how much is missing and who can act
+  (ADR 0003, [08 §8.9](08-custody-loops.md)).
+- Independence: pigeon does not model which custodians share a disk, machine
+  or place; two custodians on one machine count as two (ADR 0046). Groups are
+  advised to keep custodians on separate machines, in separate places.
 - Malicious members, stolen keys, a stolen unlocked laptop before an admin
   removes it (ADR 0007).
-- Confidentiality from the group's own members: every member can read every
-  file of the group. Confidentiality in transit is QUIC's (TLS 1.3); relays see
-  metadata (ADR 0016).
+- Confidentiality from the group's members. In transit it is QUIC's
+  (TLS 1.3); relays see metadata (ADR 0016).
 
 ## 2.5 Invariants that carry the guarantees
 
-Each invariant names where it is enforced and how it is checked
-([13](13-verification.md)). "Model" means a TLA+ model, "law" a property-based
-test (ADR 0012), "lab" a git-annex experiment.
+A TLA+ invariant (`Module.tla` `Name`) or a `pigeon-core` law (module and test
+of [13 §13.13](13-verification.md)) cited here is normative for its invariant.
+E*n* are the git-annex experiments of `lab/git-annex/`.
 
 | Id | Invariant | Carries | Enforced in | Checked by |
 |---|---|---|---|---|
-| INV-K | a custodian's copy is dropped only by its own `pigeond`, and only if K other verified custody copies exist on K custodians, or by a purge after retention | P1 | [08 §8.4–8.6](08-custody-loops.md), ADR 0014 | E1, E5, E9, E13, E23; `AnnexDrop` and `Repair` models |
-| INV-Named | a custodian counts toward K for a version only if it also has the commit that introduced it, and only for copies synced to its disk | P1, P6 | [06 §6.2](06-status.md), [09 §9.4](09-network-and-joining.md), ADR 0046 | E21 (asserting); status and filter laws |
+| INV-K | a custodian's copy is dropped only by its own `pigeond`, and only if K other verified custody copies exist, or by a purge after retention | P1 | [08 §8.4–8.6](08-custody-loops.md), ADR 0014 | `AnnexDrop.tla` `INV_K`, `LockedStays`; `Repair.tla` `INV_K`; E1, E5, E9, E13, E23 |
+| INV-Named | a custodian counts for a version only if it has the commit that introduced it, and only for copies synced to its disk | P1, P6 | [06 §6.2](06-status.md), [09 §9.4](09-network-and-joining.md), ADR 0046 | `state` (`protected_when_k_distinct_custodians_count`); `filter` (`custodian_answers_only_after_sync`); E21 |
 | INV-NoCount | a laptop copy never counts toward K | P1 | [03 §3.3](03-repository-and-roles.md) (`untrust`) | E8, E9 |
-| INV-Settings | drops are suspended while git-annex's shared settings disagree with the roster | P1 | [03 §3.5](03-repository-and-roles.md) | law; lab |
+| INV-Settings | drops are suspended while git-annex's shared settings disagree with the roster | P1 | [03 §3.5](03-repository-and-roles.md) | lab; not yet coded |
 | INV-History | custodians want every version not purged, not only the current tree | P1, P3 | [03 §3.4](03-repository-and-roles.md) | E9, E10c |
-| INV-Capture | every saved file reaches a signed commit (accepted or proposal) before any install touches its path | P2 | [07 §7.3](07-capture-and-install.md) | `CaptureInstall` model; fault injection |
-| INV-NoOverwrite | install never renames over a name, and replaces a file only after proving it is what pigeon last installed and that nobody writes it | P2 | [07 §7.5](07-capture-and-install.md) | E19 (asserting); `CaptureInstall` model |
-| INV-Journal | after a crash at any point, replaying the install journal leaves every path at its old content, its new content or the person's | P2 | [07 §7.5](07-capture-and-install.md), [11](11-local-state.md) | law (replay idempotent); E19 `kill -9` at every step (asserting); `CaptureInstall` model (two crashes, one during replay) |
-| INV-Unlink | an unlink changes no preferred content of custodians | P3 | [03 §3.4](03-repository-and-roles.md), ADR 0018 | E2, E4 |
-| INV-Purge | a key is dropped by a purge only if every reference of it known to a custodian when it sealed is covered by an active purge decision, every custodian not `dead` has sealed it, and no current version uses it | P3 | [08 §8.6](08-custody-loops.md), [08 §8.6](08-custody-loops.md) | `Purge` model (KeepWins, WaitingPeriod, NoResurrection); purge laws; E14 |
-| INV-Valid | a commit is accepted iff one of its parents is accepted and it is valid under the rosters of its accepted parents (a proposal parent only through rule 7: adopted by a decider, with its change) | P4 | [04 §4.4](04-roster-and-authority.md) | laws (homomorphism, determinism); `Authority` model (AuthorisedContent, DecisionsByDeciders, AdoptionHoldsContent) |
-| INV-Revoke | in a history holding the removal of a device, nothing that device signed and the removal had not seen, nor any key it added, counts in the catalogue or the roster | P4 | [04 §4.4](04-roster-and-authority.md), [09 §9.7](09-network-and-joining.md), ADR 0051 | `Authority` model (RemovedSilenced, RemovalRevokesAdded) |
-| INV-Merge | the tree of a merge is the catalogue of its history: a function of the contributions and of which saw which, never of merge commits ([05 §5.2](05-catalogue-and-names.md)) | P5 | [05 §5.2](05-catalogue-and-names.md) | laws (commutative, associative, idempotent); the reference model `models/catalogue` |
-| INV-Names | portable names are injective within a folder and stable for non-colliding files | P5 | [05 §5.4](05-catalogue-and-names.md) | laws |
-| INV-Observed | a state "protected" is shown only with the time of the observations it rests on; observations older than the staleness threshold give "uncertain" | P6 | [06 §6.2](06-status.md) | laws (monotone, join) |
+| INV-Capture | every saved file reaches a signed commit before any install touches its path | P2 | [07 §7.3](07-capture-and-install.md) | `CaptureInstall.tla` `CaptureFirst`, `SavesCaptured` |
+| INV-NoOverwrite | install never renames over a name, and replaces a file only after proving it is what pigeon last installed and that nobody writes it | P2 | [07 §7.5](07-capture-and-install.md) | `CaptureInstall.tla` `NoOverwrite`, `DeletionKept`; E19 |
+| INV-Journal | after a crash at any point, recovery leaves every path at its old content, its new content or the person's, and the index agrees | P2 | [07 §7.5](07-capture-and-install.md), [11](11-local-state.md) | `journal` (all three laws); `CaptureInstall.tla` `NoLoss`, `Journal`, `IndexHonest`; E19 |
+| INV-Evict | `free` removes only working copies of protected versions, never a saved file, and leaves no pointer file | P1, P2 | [08 §8.5](08-custody-loops.md), ADR 0031 | `Evict.tla` `DropsProtected`, `NoLoss`, `NoPointer`, `NoDeletion` |
+| INV-Unlink | an unlink changes no custodian's preferred content | P3 | [03 §3.4](03-repository-and-roles.md), ADR 0018 | E2, E4 |
+| INV-Purge | a purge drops a key only if every reference a custodian knew when it sealed is covered by an active purge decision, every custodian not `dead` has sealed, and no current version uses it | P3 | [08 §8.6](08-custody-loops.md) | `Purge.tla` `KeepWins`, `WaitingPeriod`, `NoResurrection`; E14 |
+| INV-Valid | a commit is accepted iff a parent is accepted and it is valid under the rosters of its accepted parents (a proposal parent only through rule 7) | P4 | [04 §4.4](04-roster-and-authority.md) | `Authority.tla` `AuthorisedContent`, `DecisionsByDeciders`, `AdoptionHoldsContent`; `roster` (fold laws) |
+| INV-Revoke | once a history holds a device's removal, nothing that device signed unseen by the removal, nor any key it added, counts | P4 | [04 §4.4](04-roster-and-authority.md), [09 §9.7](09-network-and-joining.md), ADR 0051 | `Authority.tla` `RemovedSilenced`, `RemovalRevokesAdded`; `Roster.tla` `RemovalWins`; `roster` (`every_fold_is_valid_and_removals_win`) |
+| INV-Merge | a merge's tree is the catalogue of its history: a function of the contributions and of which saw which, never of merge commits | P5 | [05 §5.2](05-catalogue-and-names.md) | `models/catalogue/catalogue.py` |
+| INV-Names | portable names are injective within a folder and stable for files that do not collide | P5 | [05 §5.4](05-catalogue-and-names.md) | not yet coded |
+| INV-Observed | *protected* is shown only with the time of its observations; observations older than the staleness threshold give *uncertain* | P6 | [06 §6.2](06-status.md) | `state` (`more_presence_never_lowers_the_state`, `protected_is_observed_within_offline_after`); `headline` |
 
 ## 2.6 Escapes and their records
 
 Force and Drop are the only ways around these guarantees ([01 §1.7](01-concepts.md)).
-Both are signed and recorded in the catalogue
-([04 §4.6](04-roster-and-authority.md), [08 §8.7](08-custody-loops.md)), both ask
-before acting and need `--yes` without a terminal (ADR 0024). With Force, every
-invariant but INV-Valid's folder-rule part still holds; with Drop, every
-invariant but INV-K still holds for other versions.
+Both are signed and recorded ([04 §4.6](04-roster-and-authority.md),
+[08 §8.7](08-custody-loops.md)), ask before acting and need `--yes` without a
+terminal (ADR 0024). With Force every invariant but the folder-rule part of
+INV-Valid holds; with Drop every invariant but INV-K holds for other versions.
