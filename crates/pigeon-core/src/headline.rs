@@ -57,13 +57,13 @@ pub enum NeedsYou {
     Suggestion,
     /// This computer was removed from the group.
     Removed,
-    /// Custody capacity is short (ADRs 0003, 0050).
+    /// Custody capacity is short (ADR 0003, spec 08 §8.9).
     CapacityShort,
-    /// Two backup machines in one failure domain (ADR 0049).
+    /// Two backup machines in one failure domain (ADR 0046).
     SharedDomain,
-    /// A backup machine's repository is lost (ADR 0049).
+    /// A backup machine's repository is lost (ADR 0046).
     RepositoryLost,
-    /// Erased content came back (ADR 0042).
+    /// Erased content came back (spec 08 §8.6).
     ErasedCameBack,
 }
 

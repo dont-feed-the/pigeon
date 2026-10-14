@@ -1,4 +1,4 @@
-//! Laws of the work queue's order (15 §15.2, ADR 0050; pigeon-core `queue`).
+//! Laws of the work queue's order (15 §15.2, spec 08 §8.9; pigeon-core `queue`).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod common;
 

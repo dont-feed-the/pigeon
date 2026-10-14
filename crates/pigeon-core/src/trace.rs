@@ -1,7 +1,7 @@
 //! Trace events, for checking runs of the code against TLA+ (12 §12.3).
 //!
 //! One line of NDJSON per action of a specification: `spec`, `device`,
-//! `clock`, `action` and `vars`, read by `scripts/trace-to-tla` (ADR 0053).
+//! `clock`, `action` and `vars`, read by `scripts/trace-to-tla` (spec 13 §13.3).
 //! Each specification with events has one enum here, one variant per
 //! action; a test checks that each name is an operator of its `.tla` file.
 //! The module exists only with the cargo feature `tla-trace`.

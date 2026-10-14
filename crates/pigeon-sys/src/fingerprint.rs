@@ -1,4 +1,4 @@
-//! Failure-domain fingerprints (ADR 0049): which disks hold a repository,
+//! Failure-domain fingerprints (ADR 0046): which disks hold a repository,
 //! which host runs it, and under what virtualisation. Values pigeon cannot
 //! find are unknown, never guessed. A lab build reads them from the file named
 //! by `PIGEON_LAB_FINGERPRINTS` instead ([`crate::lab`], 13 §13.12).

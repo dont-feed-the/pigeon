@@ -8,3 +8,6 @@ This record refined ADR 0039 on the evidence of the `Evict` model and E24 (a
 hide as an install of absence, the guard on every laptop drop, keep showing
 only current files). ADR 0039 now holds it; see the
 [policy](README.md#when-to-write-an-adr).
+
+ADR 0039 was withdrawn in turn, the same day: the rule is in
+[08 §8.5](../spec/08-custody-loops.md).

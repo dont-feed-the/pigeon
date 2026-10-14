@@ -8,7 +8,7 @@
 
 The **logical catalogue** is a pure function of a set of accepted commits
 (ADR 0012), never of their arrival order nor of the merge commits that joined
-them (ADR 0052). It gives:
+them (§5.2). It gives:
 
 | Function | Value |
 |---|---|
@@ -17,7 +17,7 @@ them (ADR 0052). It gives:
 | `deleted()` | the paths whose last change is a deletion, with their last key (Deleted files, ux.md §6) |
 | `conflicts()` | the open conflicts and their versions (§5.3) |
 | `proposals()` | the proposals and their states ([04 §4.5](04-roster-and-authority.md)) |
-| `keys()` | every key that an accepted or proposal commit introduces at a path (a *reference*) and that no purge released: what custodians keep ([08 §8.6](08-custody-loops.md), ADR 0042) |
+| `keys` | every key that an accepted or proposal commit introduces at a path (a *reference*) and that no purge released: what custodians keep ([08 §8.6](08-custody-loops.md), [08 §8.6](08-custody-loops.md)) |
 
 **Contributions.** The **base** `B(c)` of an accepted commit *c* is the
 catalogue of its accepted ancestors, and `Δ(c) = diff(B(c), tree(c))`
@@ -33,7 +33,7 @@ is not empty, or when it carries the trailer `Pigeon-Resolved: <path>`
 | a proposal; a local divergence ([07 §7.6](07-capture-and-install.md)) | — | nothing: a proposal is not accepted, and a divergence is no commit until capture makes one |
 
 **Slots.** Paths are compared as **slots**: a path after portable folding
-(§5.4), so `Photo.jpg` and `photo.jpg` are one slot. A package (ADR 0044,
+(§5.4), so `Photo.jpg` and `photo.jpg` are one slot. A package ([07 §7.9](07-capture-and-install.md),
 [07 §7.9](07-capture-and-install.md)) is one slot whose value is its whole
 subtree; a change of any file inside is a change of the package. The value of
 a slot in a tree is an exact name with its content (a key, or a package's
@@ -45,7 +45,7 @@ that sets *p* to the old key; it is checked by the authority rule like any chang
 someone else's folder is a proposal). Nothing is re-transferred: the key is
 already known to custodians, unless a purge erased it ([08 §8.6](08-custody-loops.md)).
 
-## 5.2 The deterministic merge (ADR 0052)
+## 5.2 The deterministic merge
 
 `catalogue(S)`, for an ancestor-closed set S of accepted commits, is built
 from **events**: the contributions of S that are not revoked
@@ -122,11 +122,11 @@ whether a version is kept.
 checks (ADR 0010). Two devices that merge the same heads write different
 commits with the same tree, and neither counts. To avoid an endless exchange
 of such merges, a device merges a peer's tip only if it brings a contribution
-that this device lacks; otherwise it records the tip as equivalent (ADR
-0052). Devices' `main` branches may therefore differ by merge commits only,
+that this device lacks; otherwise it records the tip as equivalent.
+Devices' `main` branches may therefore differ by merge commits only,
 which changes nothing in the logical catalogue (P5).
 
-**Authority of merges** (ADR 0052). A clean merge changes nothing, so a
+**Authority of merges**. A clean merge changes nothing, so a
 device of any parent's roster may sign it, whoever made the changes it joins
 ([04 §4.4](04-roster-and-authority.md)). A conflict event is not a commit and
 has no signature. Each copy it writes is the version of its representative,
@@ -158,7 +158,7 @@ dir/stem (Person, 2026-10-13 14h02).ext
 - The extension is kept, so the file still opens in the same application
   (ux.md §8.9). A name without extension gets the suffix at its end.
 - A package gets the suffix on its folder: `Rapport (Paul, 2026-10-13
-  14h02).pages/`, with every file inside under it (ADR 0044).
+  14h02).pages/`, with every file inside under it ([07 §7.9](07-capture-and-install.md)).
 
 ux.md §8.9 shows `budget (Paul, 13 Oct 14:02).xlsx`. A colon is not portable and
 an English month would make names depend on the device's language, which breaks
@@ -168,7 +168,7 @@ P5; this specification uses the form above **[no ADR]**.
 version under its conflict name. The conflict is **open** while no
 contribution has frozen it; once frozen, it stays open until a later
 contribution writes the slot or one of the event's names, or carries
-`Pigeon-Resolved: p` (ADR 0052).
+`Pigeon-Resolved: p` (§5.2).
 
 **People see** "Paul and you edited *budget.xlsx* at the same time; both versions
 are kept", with *Keep mine*, *Keep Paul's*, *Keep both* (ux.md §8.9). Each choice
@@ -190,7 +190,7 @@ Every path of the catalogue must be **portable**, so that Linux, macOS and later
 Windows can all hold it under the same name (ADR 0005). `portable(path)` is a pure
 function of the core; a path is portable if every component:
 
-- is valid **UTF-8** (Linux allows any bytes; ADR 0044);
+- is valid **UTF-8** (Linux allows any bytes; [07 §7.9](07-capture-and-install.md));
 - is in Unicode **NFC** (`core.precomposeunicode=true` on macOS);
 - does not collide, by Unicode full case folding, with a sibling of the
   catalogue;
@@ -212,7 +212,7 @@ them as one slot (§5.2).
 
 The Unicode tables for NFC and case folding are pinned in the core. Changing
 them changes which commits are valid, so it is a format change (issue #15,
-ADR 0044). Because the catalogue only ever holds portable names, every
+[07 §7.9](07-capture-and-install.md)). Because the catalogue only ever holds portable names, every
 supported platform can write every name, and v1 needs no mapping between a
 stored name and a name on disk.
 

@@ -59,22 +59,22 @@ order-independent; the accepted set is a join (ADR 0012).
 - A **laptop** uploads, with `git annex copy --to <custodian> --key`, every key
   of `keys()` ([05 §5.1](05-catalogue-and-names.md)) that custodian wants (its `sizebalanced` share, [03 §3.4](03-repository-and-roles.md))
   and does not hold yet, in the queue order of the protect class
-  ([15 §15.2](15-resource-use.md), ADR 0050).
+  ([15 §15.2](15-resource-use.md), §8.9).
 - A **custodian** downloads what it wants from any peer that has it: for each
   key of `keys()` that it lacks, history included (E9), and that its `wanted`
   expression matches (`git annex matchexpression --key`) or domain repair
-  gives it (below), `git annex get --key`. pigeon chooses every transfer key by key (ADR 0042): git-annex
+  gives it (below), `git annex get --key`. pigeon chooses every transfer key by key (§8.6): git-annex
   refuses `get --auto` and `drop --auto` with `--all` or `--key`, and
   `satisfy --all` would drop content from peers. After each batch it syncs
   what arrived to disk (ADR 0046): git-annex never does.
 - Both directions run, so protection proceeds whichever side reaches the other.
   git-annex verifies content on arrival; the location log records it.
 - A laptop then drops what it does not want (old versions, folders not kept)
-  with a verified drop for each such key it holds (ADR 0043): git-annex locks
+  with a verified drop for each such key it holds ([09 §9.4](09-network-and-joining.md)): git-annex locks
   and checks K custody copies on custodians first (E1, E5, which ran over
   local paths; over P2P see below), and the laptop's own copy never counts
   (ADR 0002).
-- **Every verified drop locks one copy per failure domain** (ADR 0049).
+- **Every verified drop locks one copy per failure domain** (ADR 0046).
   `pigeond` chooses K custodians holding the key, in K domains and spanning
   `min_sites` declared sites, reachable ones first, and runs
   `git -c remote.<other>.annex-ignore=true … annex drop --key <key>
@@ -82,7 +82,7 @@ order-independent; the accepted set is a join (ADR 0012).
   verifies only remotes that are not ignored (`verifiableCopies` in
   `Annex/NumCopies.hs`), so its K locks fall in K domains (E22). Without such
   a choice, the drop waits.
-- **A copy counts only if it can be locked** (ADR 0054). A custodian that
+- **A copy counts only if it can be locked** ([09 §9.4](09-network-and-joining.md)). A custodian that
   drops its own copy (rebalancing, §8.10) holds its removal lock, and git-annex
   then also counts a copy it could not lock but saw present, assuming that a
   removal lock keeps every other drop from using the copy. Over a local path
@@ -95,13 +95,13 @@ order-independent; the accepted set is a join (ADR 0012).
 - **Domain repair.** `sizebalanced` knows nothing of domains. When the
   custodians that hold a key, are downloading it, or want it and have room for
   it above their reserve span d < K domains (a custodian at its reserve still
-  wants its share but cannot take it, ADR 0049), the custodians of the
+  wants its share but cannot take it, ADR 0046), the custodians of the
   other domains with room for it (free space above `annex.diskreserve`, within
   `maxsize`) rank themselves by SHA-256 of the key and their device ID; the
   best-ranked custodian of each of the first K − d domains wants the key too
-  (ADR 0049). Every custodian computes the same choice. git-annex refuses
+  (ADR 0046). Every custodian computes the same choice. git-annex refuses
   `--auto` with `--all` (E18). The laptop also re-thins the current files it
-  captured ([07 §7.8](07-capture-and-install.md), ADR 0041). This keeps laptops
+  captured ([07 §7.8](07-capture-and-install.md), [07 §7.8](07-capture-and-install.md)). This keeps laptops
   at about one copy of what they keep.
 
 ## 8.4 Repair
@@ -111,7 +111,7 @@ A key falls below K custody copies when a custodian is removed from the roster
 bad, or when a custodian's disk dies and its operator removes it. The other
 custodians' `sizebalanced` share and domain repair then include it, and their
 per-key downloads (§8.3) restore K domains within their capacity (E9, E10),
-before any new key (ADR 0050, [15 §15.2](15-resource-use.md)). While a key is
+before any new key (§8.9, [15 §15.2](15-resource-use.md)). While a key is
 in a repair epoch it is **endangered**: a custodian whose free space above its
 reserve is smaller than the endangered keys it wants defers its own downloads
 of other keys and reports `admits = "endangered"` ([06 §6.3](06-status.md)),
@@ -128,10 +128,10 @@ ADR 0046). The `Repair` model ([13 §13.2](13-verification.md)) checks this
 loop, placement and rebalancing against lost disks, removed custodians,
 rotten and restored copies, crashes and partitions.
 
-## 8.5 Freeing and keeping a folder (ADRs 0031, 0039)
+## 8.5 Freeing and keeping a folder (ADR 0031)
 
 Per top-level folder F, on a laptop. A file of F is always complete or absent,
-never a pointer file, including after a crash at any instant (ADR 0039,
+never a pointer file, including after a crash at any instant (,
 experiment E15b). Freeing and keeping hold F's lock: capture does not scan F
 during a transition. The target is recorded first, in this device's `wanted`
 expression ([03 §3.4](03-repository-and-roles.md)), and both sequences are
@@ -143,7 +143,7 @@ capture resumes.
 2. Refuse while F has an unresolved divergence ([07 §7.6](07-capture-and-install.md)):
    "Resolve the conflict on *tarte.docx* first".
 3. **Hide** the files of F whose versions are *protected*, each as an install
-   of its absence ([07 §7.5](07-capture-and-install.md), ADR 0039): journal
+   of its absence ([07 §7.5](07-capture-and-install.md)): journal
    `begin`, move aside, writer scan, check against the index entry, `proved`.
    Then `git sparse-checkout` non-cone patterns that exclude F and re-include
    its files not protected yet set the bits, with the files already absent,
@@ -155,7 +155,7 @@ capture resumes.
    Hiding with git's own unlink would lose a write through a handle opened
    before it (E24, `Evict_git`).
 4. **Drop** the keys of the hidden files with a verified `git annex drop --key`,
-   which locks K copies in K domains when it runs (ADR 0054), whatever the
+   which locks K copies in K domains when it runs ([09 §9.4](09-network-and-joining.md)), whatever the
    status said at the hide. A key is dropped only if every path whose index
    entry has it is hidden, absent on disk, and in a folder whose target is
    free. A kept or visible path, or a staged or moved-in file of a folder
@@ -177,7 +177,7 @@ capture resumes.
    received (all or nothing per folder).
 2. **Stage** the complete files under `.git/pigeon/stage/F`, with the modes of
    their index entries (on thin laptops a hard link to the object if it has no
-   other name, else a copy; at most one path per object, ADR 0044).
+   other name, else a copy; at most one path per object, [07 §7.9](07-capture-and-install.md)).
 3. **Move in** the staged folder with one `rename` that refuses to replace
    (`RENAME_NOREPLACE`, `RENAME_EXCL`). If F exists on disk (the person made a
    folder of that name meanwhile), install the files one by one instead
@@ -186,7 +186,7 @@ capture resumes.
    its index entry first. A file that main has passed since it was staged
    (the accept loop changes hidden paths in the index), unchanged and without
    a writer, is pigeon's own: it is removed and the current key is staged
-   (ADR 0039, `Evict_stale`). Then update the sparse patterns, clear the
+   (`Evict_stale`). Then update the sparse patterns, clear the
    skip-worktree bits of F's index entries (`git update-index
    --no-skip-worktree`, then `--refresh`), and run `git annex restage`.
 
@@ -201,9 +201,9 @@ removed at start, since `pigeond` is the only writer of the repository: a
 free fails until it is gone (E15b; without the removal a freed
 folder is never freed, `Evict_lockfile`).
 
-## 8.6 Purge: erase forever (ADRs 0018, 0042)
+## 8.6 Purge: erase forever (ADR 0018)
 
-A purge releases **references**, not keys (ADR 0042). A reference of key *k* is
+A purge releases **references**, not keys. A reference of key *k* is
 a pair (*c*, *p*): an accepted or proposal commit *c* whose tree has *k* at *p*
 while none of its parents does (an add, edit, restore, rename or conflict
 copy). A key is dropped only once every reference to it is released, so
@@ -298,11 +298,11 @@ every 30 days by default **[no ADR]**. Bad content is moved out and logged
 absent by git-annex, which starts repair (§8.4). The last completed pass and the
 failures go into the custodian's status report ([06 §6.3](06-status.md)).
 
-## 8.9 Capacity (ADRs 0003, 0050)
+## 8.9 Capacity (ADR 0003)
 
 - **Need,** in parts, each K × the size of its distinct keys: *current*
   versions; *history* not purged; *suggestions*, open, declined or withdrawn,
-  until erased; and the copies *domain repair* adds (ADR 0049). Each custodian
+  until erased; and the copies *domain repair* adds (ADR 0046). Each custodian
   also needs its git repository and git-annex branch, transfers in progress
   and its reserve; a laptop, what it keeps, its pending history and its
   install asides ([07 §7.8](07-capture-and-install.md)).
@@ -329,7 +329,7 @@ failures go into the custodian's status report ([06 §6.3](06-status.md)).
   "transfer already in progress"); the receiver's status report says why.
 - **Admission.** New content waits in view, never silently. A laptop captures
   within `pending_max` and the reserve, then waits with `history-full`
-  (ADR 0041). A key that no custodian can take stays *published* with
+  ([07 §7.8](07-capture-and-install.md)). A key that no custodian can take stays *published* with
   `no-capacity(missing_bytes, machines, who)`. The admins and the owners of
   the full custodians see *Needs you*: how many GB are missing, who can free
   space where, and how much declined suggestions take ("erasing them frees
@@ -348,6 +348,6 @@ expression no longer matches after the shares moved (a custodian joined or
 changed `maxsize`), and that domain repair does not give it, with a verified
 drop (§8.3): git-annex checks K other custody copies in K domains first, each
 by a lock on a copy its holder has hashed for this drop
-([09 §9.4](09-network-and-joining.md); ADRs 0014, 0049, 0054). pigeon
+([09 §9.4](09-network-and-joining.md); ADRs 0014 and 0046, [09 §9.4](09-network-and-joining.md)). pigeon
 never runs `--rebalance` against a remote. A placement planner may replace
 `sizebalanced` later (ADR 0003).

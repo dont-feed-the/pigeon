@@ -1,7 +1,7 @@
 ---------------------------- MODULE TraceSample ----------------------------
 (***************************************************************************)
 (* The shape of every *Trace.tla (ADR 0008), on a toy spec, with the log   *)
-(* read as a module that scripts/trace-to-tla generates (ADR 0053).        *)
+(* read as a module that scripts/trace-to-tla generates (spec 13 §13.3).        *)
 (*                                                                         *)
 (* The toy spec: a save of a path, then its capture, once.  TraceNext      *)
 (* takes exactly the logged step, so TLC searches the behaviours of the    *)

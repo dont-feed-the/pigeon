@@ -7,3 +7,6 @@ This record applied ADRs 0008 and 0053 to simulated runs of `pigeon-core`
 (`RosterTrace`, `scripts/check-code-traces`). ADR 0053 now holds it, and
 [13 §13.3](../spec/13-verification.md) describes the check; see the
 [policy](README.md#when-to-write-an-adr).
+
+ADR 0053 was withdrawn in turn, the same day: the rule is in
+[13 §13.3](../spec/13-verification.md).

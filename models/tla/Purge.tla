@@ -1,5 +1,5 @@
 ------------------------------- MODULE Purge -------------------------------
-(* Purge of one key against a concurrent restore or cancel (ADR 0042, spec 08 §8.6).
+(* Purge of one key against a concurrent restore or cancel (spec 08 §8.6, spec 08 §8.6).
    r0 is a reference the purge decision covers; r1 is a new reference to the same
    key (a restore during the waiting period, or a copy re-added offline); a cancel
    deletes the decision. History (decision, r1, cancel) and status reports (seals)
@@ -8,7 +8,7 @@
    Time is each custodian's own elapsed time since it received the decision, so
    no clock offset appears. Mode:
      "full"  : drop when every custodian sealed and this device merged each
-               sealer's main (the protocol of ADR 0042);
+               sealer's main (the protocol of spec 08 §8.6);
      "seals" : every seal, without merging the sealers' mains (negative test);
      "none"  : each device drops when its own waiting period ends (negative test). *)
 EXTENDS Naturals, FiniteSets

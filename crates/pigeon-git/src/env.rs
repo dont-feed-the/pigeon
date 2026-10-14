@@ -1,4 +1,4 @@
-//! The environment of every git and git-annex process (03 §3.7, ADR 0045):
+//! The environment of every git and git-annex process (03 §3.7, spec 03 §3.7):
 //! no inherited `GIT_*` variable, no system or global configuration, no
 //! system attributes, no prompt. git then reads only the repository's
 //! `.git/config`, which pigeon writes.

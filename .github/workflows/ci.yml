@@ -1,7 +1,7 @@
 # Checks of every push and pull request: repository rules, the fast set of
 # TLA+ models with their expected verdicts (ADR 0026), the catalogue model on
-# every schedule of its cases (ADR 0052), the Rust workspace on Linux and
-# macOS (ADR 0058), and runs of pigeon-core checked by TLC (ADR 0008, 13 §13.13).
+# every schedule of its cases (spec 05 §5.2), the Rust workspace on Linux and
+# macOS (spec 14 §14.6), and runs of pigeon-core checked by TLC (ADR 0008, 13 §13.13).
 name: ci
 
 on:
@@ -50,7 +50,7 @@ jobs:
         with:
           path: ~/.cache/pigeon
           key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
-      - name: trace logs become TLA+ modules (ADR 0053)
+      - name: trace logs become TLA+ modules (spec 13 §13.3)
         run: scripts/trace-to-tla --check
       - name: every configuration gives its expected verdict
         run: scripts/run-tlc

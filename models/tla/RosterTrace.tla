@@ -3,7 +3,7 @@
 (* Trace validation of pigeon-core's roster fold against Roster (ADR 0008, *)
 (* 13 §13.3).  crates/pigeon-core/tests/roster_trace.rs runs a simulated   *)
 (* group whose rosters come from the Rust fold and logs each step; the log *)
-(* is read as a module that scripts/trace-to-tla generates (ADR 0053).     *)
+(* is read as a module that scripts/trace-to-tla generates (spec 13 §13.3).     *)
 (*                                                                         *)
 (* TraceNext takes exactly the logged step: Commit(r, t) with the logged   *)
 (* op and edits, or Merge(r, y), and requires the roster the model writes  *)

@@ -1,5 +1,5 @@
 # The full set of TLA+ models, slow rows included (ADR 0026), 200 runs of
-# pigeon-core checked by TLC (ADR 0053), and 1000 random S9 crash schedules
+# pigeon-core checked by TLC (spec 13 §13.3), and 1000 random S9 crash schedules
 # of the slice against the lab build, in ten shards (13 §13.12; SLICE_EXEC
 # as in slice.yml). Runs when a
 # model or the runner changes, weekly, and by hand. GitHub runs `schedule`

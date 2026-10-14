@@ -1,4 +1,4 @@
-//! Laws of version states (06 §6.2, ADRs 0002, 0049; pigeon-core `state`).
+//! Laws of version states (06 §6.2, ADRs 0002 and 0046; pigeon-core `state`).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod common;
 

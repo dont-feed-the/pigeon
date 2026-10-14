@@ -1,6 +1,6 @@
 # cargo deny: every dependency's licence is compatible with MIT OR Apache-2.0
 # (ADR 0019), no crate has a known advisory, and crates come from crates.io
-# only. Run in CI's rust job (ADR 0058).
+# only. Run in CI's rust job (spec 14 §14.6).
 [graph]
 all-features = true
 # The platforms pigeon is built for (ADR 0005); wasm-only crates of iroh's

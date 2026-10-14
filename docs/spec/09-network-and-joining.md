@@ -104,7 +104,7 @@ to it.
 client checks the peer credentials of the socket (`SO_PEERCRED`,
 `getpeereid`) are the same user.
 
-## 9.4 Serving peers: pull only, append-only on custodians (ADRs 0014, 0043)
+## 9.4 Serving peers: pull only, append-only on custodians (ADR 0014)
 
 git-annex cannot serve a P2P network append-only. `remotedaemon` serves it
 read-write whatever the environment (E13; `serveAuthed ServeReadWrite` in
@@ -139,7 +139,7 @@ every device:
   filter sends `LOCKCONTENT k` instead; on `SUCCESS` it sends `UNLOCKCONTENT`
   and answers `SUCCESS`, otherwise `FAILURE`. So a copy the custodian holds
   locked for its own drop is never said present, and two custodians dropping
-  at once never count each other (ADR 0054). The answer waits for the sync and
+  at once never count each other. The answer waits for the sync and
   is `FAILURE` while `checking`, as for `LOCKCONTENT`. A probe that meets the
   custodian's own drop starting makes that drop fail, to be retried;
 - on custodians, a `LOCKCONTENT k` from another custodian (its device ID in
@@ -148,7 +148,7 @@ every device:
   object (`git annex contentlocation`, then SHA-256 against the `SHA256E`
   key). git-annex's lock checks only that the object is present
   (`lockContentShared` in `Annex/Content.hs`), and a rotten copy must not
-  prove a custodian's drop (ADR 0054). On a mismatch the filter releases the
+  prove a custodian's drop. On a mismatch the filter releases the
   lock, answers `FAILURE` and queues `git annex fsck --key k`. Laptops' locks
   are not hashed: their copies never count, so their drops leave custody as
   it was;
@@ -167,7 +167,7 @@ every device:
   framing, so that the filter's own replies fall between frames.
 
 Every repository also has pigeon's `pre-receive` hook, which refuses every
-push for any transport (ADR 0043). The filter is a pure state machine with
+push for any transport. The filter is a pure state machine with
 property tests (ADR 0012). It never forwards a removal on a custodian, it
 forwards every allowed message unchanged but a custodian's `CHECKPRESENT`, no
 positive answer for a key leaves it before that key's sync has completed, a
@@ -242,7 +242,7 @@ someone*) creates a one-time invitation:
    ([04 §4.7](04-roster-and-authority.md)). A custodian's `maxsize` is its
    reported free space minus 10 %, and at most that free space minus
    `annex.diskreserve`, which an admin or its owner can change later
-   (ADR 0050).
+   ([08 §8.9](08-custody-loops.md)).
 4. The inviter answers `Welcome {commit}`, or a refusal whose code becomes a
    Problem ([10 §10.6](10-interfaces.md)): `P-INVITE-EXPIRED`, `P-INVITE-USED`,
    `invite-unknown`, `invite-not-allowed`.

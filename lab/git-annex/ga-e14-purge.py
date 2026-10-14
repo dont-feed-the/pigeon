@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E14 (issues #4, #5; ADR 0042): a purge releases references, not keys, and
+"""E14 (issues #4, #5; spec 08 §8.6): a purge releases references, not keys, and
 content goes only after every custodian's seal.
 
 A reference implementation of spec 08 §8.6 (references, coverage by paths, base
@@ -148,7 +148,7 @@ class Repo:
         return r.stdout if r.returncode == 0 else None
 
     def decisions(self):
-        """The active, valid purge decisions of main (ADR 0042, spec 08 §8.6)."""
+        """The active, valid purge decisions of main (spec 08 §8.6, spec 08 §8.6)."""
         roster = tomllib.loads(self.file_at('.pigeon/roster.toml').decode())
         out = []
         for item in self.run('ls-tree', '--name-only', 'refs/heads/main', '.pigeon/decisions/').split():
@@ -478,7 +478,7 @@ def main():
 
 
 def contracts(root):
-    """git-annex behaviours that ADR 0042 relies on or avoids."""
+    """git-annex behaviours that spec 08 §8.6 relies on or avoids."""
     os.makedirs(root)
     A = Repo(os.path.join(root, 'A'), 'A')
     os.makedirs(A.root)

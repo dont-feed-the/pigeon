@@ -2,7 +2,7 @@
 # Columns (tab-separated): config, module, set, verdict.
 #   set     fast = every push; full = scheduled or manual run only.
 #   verdict pass | deadlock | violation:<Invariant>; for a trace configuration
-#           (ADR 0053) trace:accepted | trace:rejected:<first line unexplained>
+#           (spec 13 §13.3) trace:accepted | trace:rejected:<first line unexplained>
 # The violations and the deadlock are negative tests: they show that the
 # naive designs fail, so a model edit that hides the failure is caught.
 Naive_FALSE	CustodyNaive	fast	violation:NoLoss

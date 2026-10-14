@@ -1,6 +1,6 @@
 ------------------------------- MODULE Repair --------------------------------
-(* Repair and placement on custodians (spec 08 §8.3-8.4, §8.8-8.10; ADRs 0046,
-   0049, 0050, 0054; 13 §13.2). Keys are one unit each. Custodians hold, get,
+(* Repair and placement on custodians (spec 08 §8.3-8.4, §8.8-8.10,
+   09 §9.4; ADR 0046; 13 §13.2). Keys are one unit each. Custodians hold, get,
    sync, scrub and drop them; faults lose a disk, rot a copy or remove a
    custodian; crashes lose what was not synced. Assumption F (02 §2.2) bounds
    the faults: within a repair epoch of a key, fewer than K failure domains
@@ -21,7 +21,7 @@ EXTENDS Integers, FiniteSets, Sequences
 
 CONSTANTS Cust,      \* custodians
           Joiners,   \* custodians that may join later (the others start in)
-          Dom,       \* [Cust -> failure domains] (ADR 0049)
+          Dom,       \* [Cust -> failure domains] (ADR 0046)
           Room,      \* [Cust -> units of free space above the reserve]
           Rank,      \* [Keys -> Seq(Cust)]: sizebalanced's and domain repair's order
           K,         \* copies needed, in K domains
@@ -76,10 +76,10 @@ FirstK(s, S, n) == IF n = 0 \/ s = <<>> THEN {}
                    ELSE FirstK(Tail(s), S, n)
 Share(k) == FirstK(Rank[k], Members, K)
 Getting(c, k) == has[c][k] \/ k \in inflight[c]
-\* The share's members that can take the key (08 §8.3, ADR 0050).
+\* The share's members that can take the key (08 §8.3, spec 08 §8.9).
 Taking(k) == IF "wantroom" \in Off THEN Share(k)
              ELSE {c \in Share(k) : Getting(c, k) \/ HasRoom(c)}
-\* Domain repair (ADR 0049): while those that hold or take the key span fewer
+\* Domain repair (ADR 0046): while those that hold or take the key span fewer
 \* than K domains, the best-ranked member with room in each missing domain.
 RECURSIVE Fill(_, _, _)
 Fill(k, s, span) ==
@@ -91,7 +91,7 @@ Fill(k, s, span) ==
 DomainRepair(k) == Fill(k, Rank[k], Domains(Counted(k) \cup Taking(k)))
 Wants(c, k) == c \in Share(k) \/ c \in DomainRepair(k)
 
-\* The endangered keys c wants and has not started (ADR 0050).
+\* The endangered keys c wants and has not started (spec 08 §8.9).
 EndWanted(c) == {e \in Keys : Endangered(e) /\ Wants(c, e) /\ ~Getting(c, e)}
 
 \* Copies a verified drop by a custodian may lock. With the hash safeguard the
@@ -315,9 +315,9 @@ TypeOK == /\ member \subseteq Cust /\ lost \subseteq member /\ checking \subsete
           /\ nf \in 0..MaxFaults /\ ne \in 0..MaxEnv
 \* P1: a key once protected keeps an intact copy, on the laptop or on disk.
 Survival == \A k \in ever : k \in lap \/ Good(k) # {}
-\* The reserve is never crossed (ADR 0050).
+\* The reserve is never crossed (spec 08 §8.9).
 ReserveKept == \A c \in Cust : Used(c) <= Room[c]
-\* Admission never gives an endangered key's room to another (ADR 0050).
+\* Admission never gives an endangered key's room to another (spec 08 §8.9).
 EndangeredFirst == ~starved
 \* INV-K, as a property of steps: a copy leaves only with its disk, its
 \* custodian, a scrub of a bad object, a crash before its sync, or a drop of an

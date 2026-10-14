@@ -211,7 +211,7 @@ pub fn s5() -> Scenario {
     )
 }
 
-/// S6: a save racing `keep`'s install wins (ADR 0040).
+/// S6: a save racing `keep`'s install wins (spec 07 §7.5).
 pub fn s6() -> Scenario {
     let Slice { world, l, docs, .. } = slice();
     let a = docs.file("report.txt");

@@ -1,4 +1,4 @@
-//! Laws of the install journal and its recovery (07 §7.5, ADR 0040).
+//! Laws of the install journal and its recovery (07 §7.5, spec 07 §7.5).
 //!
 //! A model of one path's disk runs install's steps forward, with one action
 //! of a person at any point and a crash at any point, then recovery; the

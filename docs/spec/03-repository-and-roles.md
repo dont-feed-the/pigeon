@@ -49,11 +49,11 @@ included (`annex.dotfiles=true`); pigeon's own files are plain git blobs, so the
 commit signature covers them (ADR 0009). Only regular files and their
 execute bit are shared; links, nested repositories, empty folders, other
 permissions and extended attributes are not, and pigeon lists what it leaves
-out ([07 §7.9](07-capture-and-install.md), ADR 0044).
+out ([07 §7.9](07-capture-and-install.md), [07 §7.9](07-capture-and-install.md)).
 
 `.git/info/attributes`, which git ranks above every in-tree `.gitattributes`,
 is written by pigeon on every device, so that a nested `.gitattributes` copied
-into the folder changes nothing (ADR 0045):
+into the folder changes nothing (§3.7):
 
 ```gitattributes
 * filter=annex annex.largefiles=anything annex.backend=SHA256E -text -eol -ident -working-tree-encoding
@@ -68,15 +68,15 @@ into the folder changes nothing (ADR 0045):
 | Setting | Value | Why |
 |---|---|---|
 | `annex.addunlocked` | `true` | files are normal, editable files |
-| `annex.thin` | `true`; capture adds with `-c annex.thin=false` | received files cost one copy (E8); a captured version stays an immutable copy until protected, then is re-thinned (E18, ADR 0041) |
+| `annex.thin` | `true`; capture adds with `-c annex.thin=false` | received files cost one copy (E8); a captured version stays an immutable copy until protected, then is re-thinned (E18, [07 §7.8](07-capture-and-install.md)) |
 | `annex.autocommit` | `false` | pigeon alone commits (E9 pitfall) |
 | `annex.synccontent` | `false` | pigeon alone moves content |
 | `annex.resolvemerge` | `false` | pigeon merges, with its own conflict names ([05](05-catalogue-and-names.md)) |
 | `annex.dotfiles` | `true` | every file is annexed |
-| `annex.backend` | `SHA256E` | verifiable keys only (rule 6, ADR 0044) |
-| `core.attributesFile`, `core.excludesFile` | an empty file of pigeon's | the person's git attributes and excludes do not apply (ADR 0045) |
+| `annex.backend` | `SHA256E` | verifiable keys only (rule 6, [07 §7.9](07-capture-and-install.md)) |
+| `core.attributesFile`, `core.excludesFile` | an empty file of pigeon's | the person's git attributes and excludes do not apply (§3.7) |
 | `annex.jobs` | `1` | background work stays light (ADR 0037) |
-| `annex.diskreserve` | max(1 GB, 1 % of the file system) | git-annex refuses downloads that would cross it; capture does too (ADR 0050) |
+| `annex.diskreserve` | max(1 GB, 1 % of the file system) | git-annex refuses downloads that would cross it; capture does too ([08 §8.9](08-custody-loops.md)) |
 | trust | `untrust` | its copies never count toward K |
 | groups | `laptop` | for diagnostics |
 | `wanted` | `include=<folder>/* or …` over the top-level folders kept on this device | selective sync ([08 §8.5](08-custody-loops.md)) |
@@ -86,18 +86,19 @@ into the folder changes nothing (ADR 0045):
 | `gpg.format`, `user.signingkey` | `ssh`, the device key file | signed commits (ADR 0007) |
 | `core.fsync`, `core.fsyncMethod` | `objects,reference`, `fsync` | commits and refs reach the disk; git's default skips loose objects and refs (ADR 0046) |
 
-### Custodian (ADRs 0002, 0003, 0014, 0018, 0042)
+### Custodian (ADRs 0002, 0003, 0014 and 0018, [08 §8.6](08-custody-loops.md))
 
 | Setting | Value | Why |
 |---|---|---|
 | repository | bare ([§3.1](#31-one-repository-per-group-and-device)) | never exposed to applications |
 | trust | `semitrust` (git-annex's default), never `trust` | every drop verifies it |
 | groups | `custodian` | `sizebalanced` and status count this group |
-| `wanted` | `sizebalanced=custodian:K` | partial custodians balanced by capacity; `pigeond` applies it key by key to `keys()`, so to the whole history (E9) and never to released keys (ADR 0042, [08 §8.3](08-custody-loops.md)) |
-| `maxsize` | from the roster entry of the device | capacity for `sizebalanced` (ADR 0003); a share, never read as free space (ADR 0050) |
-| `annex.diskreserve` | max(5 GB, 2 % of the file system) | room for git, the git-annex journal and databases, and a recovery `fsck`; git-annex refuses downloads and incoming copies that would cross it (ADR 0050, E22) |
+| `wanted` | `sizebalanced=custodian:K` | partial custodians balanced by capacity; `pigeond` applies it key by key to `keys`, so to the whole history (E9) and never to released keys ([08 §8.6](08-custody-loops.md), [08 §8.3](08-custody-loops.md)) |
+| `maxsize` | from the roster entry of the device | capacity for `sizebalanced` (ADR 0003); a share, never read as free space ([08 §8.9](08-custody-loops.md)) |
+| `annex.diskreserve` | max(5 GB, 2 % of the file system) | room for git, the git-annex journal and databases, and a recovery `fsck`; git-annex refuses downloads and incoming copies that would cross it ([08 §8.9](08-custody-loops.md), E22) |
 | `annex.jobs` | `cpus` | a dedicated machine |
 | `core.fsync`, `core.fsyncMethod` | `objects,reference`, `fsync`; objects synced by `pigeond` before any positive answer ([09 §9.4](09-network-and-joining.md)) | what counts toward K is on disk; git-annex itself never syncs (ADR 0046) |
+| `annex.hardlink` | `false` | no two repositories share an inode or copy-on-write extents; they reach each other only over `p2p-annex::`, and `pigeond` refuses to serve a repository whose `annex/objects` is on another file system than the repository (ADR 0046, E22) |
 | serving | append-only: no remote `REMOVE` (ADR 0014) | [09 §9.4](09-network-and-joining.md) |
 
 ### Group-wide (git-annex branch)
@@ -120,10 +121,10 @@ After every merge of the git-annex branch and every change of `main`, `pigeond`:
 3. if they differ, **suspends every drop on this device** (evict, purge,
    rebalancing) and re-applies the expected settings **[no ADR: re-apply]**.
    The same holds if pigeon's `pre-receive` hook is missing or `core.hooksPath`
-   is set (ADR 0043), and then serving peers is suspended too; and if
+   is set ([09 §9.4](09-network-and-joining.md)), and then serving peers is suspended too; and if
    `.git/info/attributes`, `annex.backend`, `core.attributesFile`,
    `core.excludesFile` or `core.fsync` differ from §3.3–3.4, or `.git/config` has an
-   `include` (ADR 0045), and then capture is suspended too;
+   `include` (§3.7), and then capture is suspended too;
 4. resumes drops only when a fresh read matches.
 
 Drops stay suspended while two devices with different rosters disagree; this
@@ -147,7 +148,7 @@ Every other device of the roster is a git remote of this repository:
 - **Pull only.** A device never pushes `main` or proposals into a peer; each
   device fetches and validates for itself (P4). A device also accepts no push:
   pigeond's filter refuses `CONNECT git-receive-pack`, and a `pre-receive` hook
-  refuses every push (E12, ADR 0043). Content moves both ways
+  refuses every push (E12, [09 §9.4](09-network-and-joining.md)). Content moves both ways
   through git-annex's P2P protocol (`get` downloads, `copy --to` stores).
 - Remotes are created and removed by `pigeond` when the roster changes.
 - Proposal refs are fetched without `+`: their names are unique and their
@@ -160,7 +161,7 @@ Every other device of the roster is a git remote of this repository:
 
 ## 3.7 Driving git and git-annex
 
-**Environment** (ADR 0045). Every git and git-annex process starts without any
+**Environment**. Every git and git-annex process starts without any
 inherited `GIT_*` variable, with `GIT_CONFIG_NOSYSTEM=1`,
 `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_ATTR_NOSYSTEM=1` and
 `GIT_TERMINAL_PROMPT=0`. git then reads only the repository's `.git/config`,
@@ -188,9 +189,9 @@ pigeon's own mistakes and is not a sandbox. **[no ADR: driver]**
 | `git cat-file --batch`, `rev-list`, `for-each-ref`, `status --porcelain=v2 -z -uall --ignored=traditional` | reading commits, trees, refs and changes |
 | `commit-tree -S`, `update-ref`, `merge-tree --write-tree`, `read-tree`, `update-index`, `write-tree` | writing commits and merges without touching the working tree |
 | `git fetch <remote>`, `sparse-checkout` | exchanging history; folders kept |
-| `git annex add --no-check-gitignore`, `calckey`, `reinject` | capture (only regular files, checked with `lstat`, ADR 0044) |
-| `git annex get --key`, `copy --to <custodian> --key` | transfers, key by key in pigeon's priority order (ADRs 0037, 0042) |
-| `git annex drop --key --numcopies K --mincopies K` (local only, verified; the explicit counts outweigh `.gitattributes` and the branch, ADR 0043), `drop --key --force` (purge and Drop only) | freeing space, rebalancing, purge |
+| `git annex add --no-check-gitignore`, `calckey`, `reinject` | capture (only regular files, checked with `lstat`, [07 §7.9](07-capture-and-install.md)) |
+| `git annex get --key`, `copy --to <custodian> --key` | transfers, key by key in pigeon's priority order (ADR 0037, [08 §8.6](08-custody-loops.md)) |
+| `git annex drop --key --numcopies K --mincopies K` (local only, verified; the explicit counts outweigh `.gitattributes` and the branch, [09 §9.4](09-network-and-joining.md)), `drop --key --force` (purge and Drop only) | freeing space, rebalancing, purge |
 | `git annex whereis`, `find`, `info`, `matchexpression --key`, `fsck --incremental --time-limit` | observations, wanted keys, scrubs |
 | `git annex numcopies`, `mincopies`, `trust`, `untrust`, `semitrust`, `group`, `wanted`, `maxsize`, `dead` | settings ([§3.5](#35-settings-follow-the-roster-or-drops-stop)) |
 | `git annex merge`, `smudge --update`, `restage`, `remotedaemon`, `version` | branch merge, sparse folders (E15), notifications, checks |
@@ -200,7 +201,7 @@ pigeon's own mistakes and is not a sandbox. **[no ADR: driver]**
 **Never run:** `git annex sync`, `assist` and `assistant` (they commit and
 merge on their own, E9); `git annex move`, `drop --from`, `satisfy`,
 `--rebalance` run against a remote, `dropunused` (they drop from peers or
-outside a purge, ADRs 0014, 0042); `get --auto`, `drop --auto` (refused with
+outside a purge, ADR 0014, [08 §8.6](08-custody-loops.md)); `get --auto`, `drop --auto` (refused with
 `--all` and `--key`, so pigeon chooses keys itself); `git merge`, `checkout`, `pull`, `reset --hard` on the working tree
 (install is pigeon's, [07](07-capture-and-install.md)); `git push`.
 
@@ -208,7 +209,7 @@ The output of every command pigeon parses is covered by **JSON contract
 tests** run against the minimum git-annex version (ADRs 0004, 0020); a new
 git-annex version is supported only once they pass ([13](13-verification.md)).
 
-## 3.8 What may change a repository (ADR 0043)
+## 3.8 What may change a repository
 
 | Change | Only by | Never by |
 |---|---|---|

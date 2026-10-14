@@ -1,7 +1,7 @@
 # pigeon v2 — specification
 
 > **Status:** version 1 of the specification, 13 October 2026. It assembles the
-> decisions recorded in [ADRs 0001–0068](../adr/README.md) (13 withdrawn), the guarantees P1–P6 of the
+> decisions recorded in [ADRs 0001–0068](../adr/README.md) (27 withdrawn), the guarantees P1–P6 of the
 > [proposal](../design/proposal/proposal.pdf), the [UX study](../design/ux.md), the
 > [TLA+ models](../../models/tla/), the [catalogue model](../../models/catalogue/catalogue.py)
 > and the [git-annex experiments](../../lab/git-annex/).
@@ -78,7 +78,7 @@ is the bug:
 2. **This specification**: the current, normative contract that assembles them.
    A detail it decides without an ADR is marked **[no ADR]**.
 3. **Proposed ADRs**: pending decisions. Where this specification assumes one, it
-   says so (for example ADR 0040, ADR 0041).
+   says so (for example ADR 0046 in [06 §6.2](06-status.md)).
 4. **The UX study** ([ux.md](../design/ux.md)) and the mockups: words, journeys and
    screens. This specification follows them, except where
    [16 §16.2](16-open-questions.md) says why not.
@@ -132,20 +132,8 @@ or a collaborative editor), nor real-time sync of hot files (proposal §1).
 | 0031 free per folder | [08](08-custody-loops.md) |
 | 0036 local state | [11](11-local-state.md) |
 | 0037 background work | [15](15-resource-use.md) |
-| 0038 decisions on suggestions (Proposed) | [04](04-roster-and-authority.md), [02](02-guarantees.md), [13](13-verification.md) |
-| 0039 pointer-free freeing and keeping (Proposed) | [08](08-custody-loops.md), [07](07-capture-and-install.md), [12](12-observability.md), [13](13-verification.md) |
-| 0040 install proves its own file, racing saves win (Proposed) | [07](07-capture-and-install.md), [11](11-local-state.md), [13](13-verification.md) |
-| 0041 captured versions immutable until protected (Proposed) | [07](07-capture-and-install.md), [03](03-repository-and-roles.md), [06](06-status.md) |
-| 0042 purge by references and seals (Proposed) | [08](08-custody-loops.md), [05](05-catalogue-and-names.md), [06](06-status.md), [03](03-repository-and-roles.md) |
-| 0043 serving through a filter, pull only (Proposed) | [09](09-network-and-joining.md), [03](03-repository-and-roles.md), [08](08-custody-loops.md) |
-| 0044 regular files shared, the rest listed (Proposed) | [07](07-capture-and-install.md), [04](04-roster-and-authority.md), [05](05-catalogue-and-names.md), [06](06-status.md), [03](03-repository-and-roles.md), [14](14-platforms-and-packaging.md) |
-| 0045 git reads only pigeon's configuration (Proposed) | [03](03-repository-and-roles.md), [07](07-capture-and-install.md) |
-| 0046 protected needs the commit and the disk (Proposed) | [06](06-status.md), [02](02-guarantees.md), [03](03-repository-and-roles.md), [04](04-roster-and-authority.md), [08](08-custody-loops.md), [09](09-network-and-joining.md) |
+| 0046 protected: K custodians in K failure domains hold the content and its commit, on disk (Proposed) | [02](02-guarantees.md), [03](03-repository-and-roles.md), [04](04-roster-and-authority.md), [06](06-status.md), [08](08-custody-loops.md), [09](09-network-and-joining.md), [10](10-interfaces.md), [13](13-verification.md) |
 | 0047 recovery: rejoin, sheets, refounding, export (Proposed) | [09](09-network-and-joining.md), [04](04-roster-and-authority.md), [10](10-interfaces.md), [11](11-local-state.md), [03](03-repository-and-roles.md) |
 | 0048 versioned formats and rules, unknown never guessed (Proposed) | [04](04-roster-and-authority.md), [06](06-status.md), [08](08-custody-loops.md), [09](09-network-and-joining.md), [10](10-interfaces.md), [13](13-verification.md), [14](14-platforms-and-packaging.md) |
-| 0049 copies count once per failure domain (Proposed) | [02](02-guarantees.md), [04](04-roster-and-authority.md), [06](06-status.md), [08](08-custody-loops.md), [10](10-interfaces.md), [13](13-verification.md) |
-| 0050 capacity budgeted, space reserved, fewest copies first (Proposed) | [03](03-repository-and-roles.md), [06](06-status.md), [07](07-capture-and-install.md), [08](08-custody-loops.md), [09](09-network-and-joining.md), [15](15-resource-use.md) |
-| 0051 the roster is a fold of its changes; forks merge without an admin (Proposed) | [04](04-roster-and-authority.md), [05](05-catalogue-and-names.md), [13](13-verification.md), [02](02-guarantees.md), [09](09-network-and-joining.md) |
-| 0052 the catalogue is built from contributions and the conflicts they saw (Proposed) | [02](02-guarantees.md), [04](04-roster-and-authority.md), [05](05-catalogue-and-names.md), [08](08-custody-loops.md), [13](13-verification.md), [16](16-open-questions.md) |
-| 0053 trace logs reach TLC as generated TLA+ modules; TLC stays at 1.7.4 (Proposed) | [12](12-observability.md), [13](13-verification.md) |
-| 0054 a copy counts only if it can be locked (Proposed) | [08](08-custody-loops.md), [09](09-network-and-joining.md), [13](13-verification.md), [16](16-open-questions.md), [02](02-guarantees.md) |
+| 0051 authority: a fold of signed changes; forks merge without an admin; deciders sign decisions on suggestions (Proposed) | [02](02-guarantees.md), [04](04-roster-and-authority.md), [05](05-catalogue-and-names.md), [09](09-network-and-joining.md), [13](13-verification.md) |
+| 0038–0045, 0049, 0050, 0052–0068 (Withdrawn): rules and details that are not ADRs | [16 §16.3](16-open-questions.md) lists each with its section |

@@ -1,4 +1,4 @@
-//! The writer scan of install (ADR 0040): which processes hold a file open for
+//! The writer scan of install (spec 07 §7.5): which processes hold a file open for
 //! writing, or map it shared and writable. On Linux it reads `/proc/*/fd`,
 //! `fdinfo` and `maps`; on macOS it asks `libproc` for each process's vnode
 //! descriptors and memory regions. A process the scan may not inspect is

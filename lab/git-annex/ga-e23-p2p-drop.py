@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E23 (issue #10; ADR 0054): git-annex's verified drop over its P2P protocol.
+"""E23 (issue #10; spec 09 §9.4): git-annex's verified drop over its P2P protocol.
 
 Custodians X, Y, Z are bare repositories served by remotedaemon on a lab P2P
 network, as in E12; each knows the others as `p2p-annex::` remotes and from its
@@ -11,7 +11,7 @@ the copies it counts (`verifyEnoughCopiesToDrop`, Annex/NumCopies.hs). Asserted:
 - two drops that hold their removal locks before checking each other both
   succeed: numcopies 1 loses the key; numcopies = mincopies = 2 on three
   custodians leaves one copy;
-- a filter answering CHECKPRESENT by LOCKCONTENT, UNLOCKCONTENT (ADR 0054)
+- a filter answering CHECKPRESENT by LOCKCONTENT, UNLOCKCONTENT (spec 09 §9.4)
   keeps every copy in the same schedule;
 - a stale location log (E5) and `dead` never let a drop count a missing copy;
   `trust` does.
@@ -138,7 +138,7 @@ class Lines:
 
 
 class ProbeFilter:
-    """The change of ADR 0054 to pigeon's filter (09 §9.4), alone: CHECKPRESENT k
+    """The change that 09 §9.4 makes to pigeon's filter, alone: CHECKPRESENT k
     is answered SUCCESS only if LOCKCONTENT k succeeds (then UNLOCKCONTENT), so a
     copy locked for removal is never reported present. Everything else passes."""
     def __init__(self, addr):
@@ -381,7 +381,7 @@ def main():
           f'with numcopies = mincopies = 2, two concurrent drops leave one copy: {left}')
     restore(X, Y)
 
-    # 5. The same schedules behind the probing filter of ADR 0054.
+    # 5. The same schedules behind the probing filter of spec 09 §9.4.
     for d in daemons:
         d.stop()
     for a in 'XYZ':

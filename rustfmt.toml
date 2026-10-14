@@ -1,2 +1,2 @@
-# Formatting is rustfmt's default, with the 2024 style edition (ADR 0058).
+# Formatting is rustfmt's default, with the 2024 style edition (spec 14 §14.6).
 style_edition = "2024"

@@ -3,7 +3,7 @@
 # A laptop (untrusted) captures five versions of one file while its custodian is away, with
 # failed uploads, then reconnects. With annex.thin (ADR 0002) an in-place save destroys the
 # laptop's only copy of the previous version: the negative test. Capturing a copy instead
-# (`-c annex.thin=false`, ADR 0041) keeps every version until the custodian holds it; the old
+# (`-c annex.thin=false`, spec 07 §7.8) keeps every version until the custodian holds it; the old
 # versions are then dropped and the current file is re-thinned, back to one copy. Also checks
 # that atomic saves are safe even when thin, and that no git-annex command re-thins a copy.
 # Asserts; exits non-zero on failure.
@@ -71,7 +71,7 @@ for MODE in thin copy; do
       for k in "${keys[@]:0:$((VERSIONS - 1))}"; do git annex drop -q --key "$k" >/dev/null 2>&1 \
         || fail "copy/$HOW: verified drop of a protected old version refused"; done
       if git annex drop --auto --all >/dev/null 2>&1; then fail "drop --auto --all is accepted now"; fi
-      # re-thin the protected current version (pigeon uses the install sequence, ADR 0040)
+      # re-thin the protected current version (pigeon uses the install sequence, spec 07 §7.5)
       obj=$(git annex contentlocation "${keys[${#keys[@]}-1]}"); ln "$obj" .f.thin; chmod u+w .f.thin; mv -f .f.thin f
       G update-index -q --refresh || true; git annex restage >/dev/null 2>&1 || true
       [ -z "$(git status --porcelain)" ] || fail "copy/$HOW: re-thinned file shows as changed"

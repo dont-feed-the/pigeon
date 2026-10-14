@@ -1,6 +1,6 @@
 ------------------------------ MODULE AnnexDrop ------------------------------
-(* git-annex's verified drop, as pigeon relies on it (spec 08 §8.3, ADRs 0049,
-   0054; 13 §13.2). Custodians each hold or lack one key; each drops only its
+(* git-annex's verified drop, as pigeon relies on it (spec 08 §8.3, 09 §9.4,
+   ADR 0046; 13 §13.2). Custodians each hold or lack one key; each drops only its
    own copy, as pigeon does (remote REMOVE is refused by its filter, E13).
    Grounded in git-annex 10.20261006:
    - Begin: Command/Drop.hs performLocal takes lockContentForRemoval
@@ -18,14 +18,14 @@
    - Expire: a lock over P2P outlives a lost connection by 10 minutes only
      (p2pDefaultLockContentRetentionDuration); a stalled dropper keeps its proof.
    Purge and Drop (forced drops) bypass this protocol and are not modelled.
-   INV_K: the key stays in at least K failure domains (ADR 0049). *)
+   INV_K: the key stays in at least K failure domains (ADR 0046). *)
 EXTENDS Naturals, FiniteSets
 
 CONSTANTS Cust,      \* custodians, a set of numbers (the order ranks them)
           Dom,       \* [Cust -> domains]: the failure domain of each one
           K,         \* numcopies = mincopies
           Check,     \* "safe": CHECKPRESENT honours removal locks; "p2p": it does not
-          Choose,    \* "domains": K proofs in K domains (ADR 0049); "repos": every
+          Choose,    \* "domains": K proofs in K domains (ADR 0046); "repos": every
                      \* remote the log lists; "ranked": only custodians ranked above
           Trusted,   \* custodians marked `trust`
           LogOnly,   \* TRUE: count what the location log says, unchecked
@@ -57,7 +57,7 @@ Present(r) == IF Check = "p2p" THEN has[r] ELSE has[r] /\ ~excl[r]
 
 \* Copies d's location log lists, but not dead ones (Logs/Trust.hs).
 Listed(d) == (log[d] \ {d}) \ dead
-\* pigeon's choice of the remotes not ignored (ADR 0049), among listed copies.
+\* pigeon's choice of the remotes not ignored (ADR 0046), among listed copies.
 Choices(d) ==
   CASE Choose = "repos"  -> {Listed(d)}
     [] Choose = "domains" -> {S \in SUBSET Listed(d) :

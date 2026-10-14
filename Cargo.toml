@@ -1,4 +1,4 @@
-# The pigeon v2 workspace (14 §14.6, ADR 0058). Each crate pins its
+# The pigeon v2 workspace (14 §14.6, spec 14 §14.6). Each crate pins its
 # dependencies here, one minor version each (14 §14.7).
 [workspace]
 resolver = "3"

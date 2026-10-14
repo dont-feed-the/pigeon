@@ -1,7 +1,7 @@
 ------------------------------- MODULE Evict -------------------------------
 (***************************************************************************)
-(* Freeing and keeping a folder on a laptop (spec 08 §8.5; ADRs 0031,      *)
-(* 0039, 0041, 0046, 0054), issue #10.                                     *)
+(* Freeing and keeping a folder on a laptop (spec 08 §8.5, 07 §7.8,       *)
+(* 09 §9.4; ADRs 0031, 0046), issue #10.                                   *)
 (*                                                                         *)
 (* One laptop holds folders F = {a, b} and G = {c}; c has the same content *)
 (* (key) as a. The person keeps G and switches F between kept and freed.   *)
@@ -22,7 +22,7 @@
 (*    Annex/Content.hs, depopulatePointerFile in                           *)
 (*    Annex/Content/PointerFile.hs, isUnmodifiedLowLevel in                *)
 (*    Annex/Content/Presence/LowLevel.hs (E24).                            *)
-(*  - the drop counts a copy only if it can be locked (ADR 0054), so it    *)
+(*  - the drop counts a copy only if it can be locked (spec 09 §9.4), so it    *)
 (*    is verified at the instant it runs (AnnexDrop).                      *)
 (*  - git clears the skip-worktree bit of a file present on disk           *)
 (*    (sparse.expectFilesOutsideOfPatterns = false), so capture sees a     *)
@@ -54,21 +54,21 @@ Contents == 1..MaxC
 
 (* Safeguards, each the subject of a negative configuration:              *)
 (*  "aside"    hide by moving the file aside, scanning for writers and     *)
-(*             checking it (ADR 0040's steps), not by git's unlink         *)
+(*             checking it (spec 07 §7.5's steps), not by git's unlink         *)
 (*  "guard"    a free drops no key that a path outside freed, hidden       *)
 (*             folders uses                                                *)
 (*  "target"   that guard counts the paths of every folder whose target    *)
 (*             is keep, staged and moved-in files too, not visible ones    *)
 (*             only                                                        *)
-(*  "prune"    the drop of old versions (ADR 0041) has the same guard      *)
+(*  "prune"    the drop of old versions (spec 07 §7.8) has the same guard      *)
 (*  "lock"     a drop is verified when it runs, not trusted from the       *)
 (*             status report seen when the file was hidden                 *)
 (*  "lockfile" a stale info/sparse-checkout.lock is removed at start       *)
 (*  "stage"    keep stages complete files and shows them without a         *)
-(*             checkout (ADR 0039), instead of ADR 0031's order            *)
+(*             checkout (spec 08 §8.5), instead of ADR 0031's order            *)
 (*  "stale"    keep checks a moved-in file against the index before it     *)
 (*             shows it, and restages it if main has moved                 *)
-(*  "copy"     capture adds a copy (annex.thin=false, ADR 0041)            *)
+(*  "copy"     capture adds a copy (annex.thin=false, spec 07 §7.8)            *)
 (*  "journal"  capture skips a path whose file is aside                    *)
 On(s) == s \notin Off
 
@@ -178,7 +178,7 @@ ChooseKeep ==
 
 (* A new version of p from another device, protected there. A hidden or  *)
 (* moved-in path changes in the index only (07 §7.5); a visible, clean    *)
-(* one is installed (ADR 0040, modelled by CaptureInstall).               *)
+(* one is installed (spec 07 §7.5, modelled by CaptureInstall).               *)
 GroupChange(p) ==
     /\ up /\ groups < MaxGroup /\ p \in F /\ aside[p] = None
     /\ \/ /\ skip[p]
@@ -329,7 +329,7 @@ DropFree(k) ==
     /\ On("guard") => Guard(k)
     /\ DropEffect(k)
 
-(* ADR 0041: once protected, the old versions this laptop holds go.      *)
+(* spec 07 §7.8: once protected, the old versions this laptop holds go.      *)
 Prune(k) ==
     /\ up /\ obj[k] # None /\ Verified(k)
     /\ \E p \in Paths : k \in hist[p] /\ idx[p] # k
@@ -535,7 +535,7 @@ Linked == {data[wt[p]] : p \in {q \in Paths : File(q)}}
 (* custodian.                                                             *)
 NoLoss == \A c \in owed : c \in Linked \/ Present(c) \/ cust[c] # {}
 
-(* No folder ever shows a pointer file (ADR 0039).                        *)
+(* No folder ever shows a pointer file (spec 08 §8.5).                        *)
 NoPointer == \A p \in Paths : wt[p] # PTRINO
 
 (* A laptop drops a key only while K custodians hold it (ADR 0046).       *)

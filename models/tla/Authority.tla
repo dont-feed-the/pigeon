@@ -1,6 +1,6 @@
 ------------------------------ MODULE Authority ------------------------------
 (* Acceptance of commits, proposals and decisions, and the removal of a device
-   (spec 04 §4.3-4.5, 09 §9.7; ADRs 0009, 0038, 0051).
+   (spec 04 §4.3-4.5, 09 §9.7; ADRs 0009 and 0051).
    Persons 1 = a (the admin), 2 = b (owner of folder F), 3 = c (a member).
    Device i is person i's; device 4 is a fresh key that c may add. Devices 1
    and 2 are honest pigeonds. With Hostile, devices 3 and 4 belong to an
@@ -10,7 +10,7 @@
    stewards). A path's value is the set of versions the catalogue keeps there
    (a conflict keeps several); version n is the content commit n wrote.
    The catalogue is the abstraction of models/catalogue: the values of the
-   newest changes of each path (ADR 0052).
+   newest changes of each path (spec 05 §5.2).
    Modes (the design first; each other value removes a safeguard):
      Revocation   "revoke": a removal revokes its device's commits that it had
                   not seen, and the devices they added; "contentonly": the
@@ -20,7 +20,7 @@
      DecidersAt   "decision": the persons who may make the adoption's change
                   on the decision's main, under its roster; "mixed": the
                   proposal's own diff under the decision's roster; "proposal":
-                  its diff under the roster at its parents (ADR 0038's words).
+                  its diff under the roster at its parents (ADR 0051's words).
      ForceAdopt   the admins adopt with Force what nobody else may.
      DecisionMerge  a commit with a parent outside A(c) must adopt it.
      Rule3        "every" accepted parent's roster, or the "first" one only.

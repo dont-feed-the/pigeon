@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E19 (issue #1, ADR 0040): install never replaces nor loses a save that races it.
+"""E19 (issue #1, spec 07 §7.5): install never replaces nor loses a save that races it.
 
 A reference implementation of the install sequence of spec 07 §7.5 (journal, temp
 file, move aside, writer scan, stat check, RENAME_NOREPLACE, index refresh, kept

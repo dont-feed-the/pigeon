@@ -1,4 +1,4 @@
-//! Failure domains: which custodians fail together (ADR 0049, 06 §6.2).
+//! Failure domains: which custodians fail together (ADR 0046, 06 §6.2).
 //!
 //! Custodians whose storage fingerprints intersect, whose host is equal, or
 //! whose roster `domain` is equal are one domain: the domains are the

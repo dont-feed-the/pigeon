@@ -7,7 +7,7 @@
 //! Laws (`tests/queue.rs`): [`compare`] is a total order; a higher class
 //! always goes first; sorting gives one sequence whatever the arrival order;
 //! a protect item held in fewer failure domains never waits behind one held
-//! in more (ADR 0050).
+//! in more (spec 08 §8.9).
 
 use std::cmp::Ordering;
 

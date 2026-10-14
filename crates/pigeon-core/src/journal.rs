@@ -1,4 +1,4 @@
-//! The install journal and its recovery (07 §7.5, ADR 0040).
+//! The install journal and its recovery (07 §7.5, spec 07 §7.5).
 //!
 //! Install appends `begin`, then `proved` once a batch's checks pass, then
 //! an end (`done`, `skip`, `raced`, `recovered`), then `released` once the
@@ -155,7 +155,7 @@ pub enum Step {
     RemoveStage,
 }
 
-/// The recovery steps of one entry without an end (ADR 0040).
+/// The recovery steps of one entry without an end (spec 07 §7.5).
 pub fn recover(entry: &Entry, found: Found) -> Vec<Step> {
     let mut steps = Vec::new();
     if entry.end.is_some() {

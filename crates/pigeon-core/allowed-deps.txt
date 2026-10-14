@@ -1,2 +1,2 @@
 # Crates pigeon-core may depend on, directly or not: each performs no I/O
-# (14 §14.6, ADR 0058). scripts/check-core-deps enforces this list.
+# (14 §14.6, spec 14 §14.6). scripts/check-core-deps enforces this list.

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Reference model of the logical catalogue and its merge (spec 05, ADR 0052).
+"""Reference model of the logical catalogue and its merge (spec 05 §5.2).
 
 catalogue(S) is a pure function of a set S of accepted commits, in three modes:
-new is ADR 0052 (contributions, conflict events, folded slots); old is spec 05
+new is spec 05 §5.2 (contributions, conflict events, folded slots); old is spec 05
 §5.2 before it (heads over every change, merge commits included); naive is the
 obvious repair of old (heads over contributions only, copies derived).
 For each case the checker runs every schedule of the contributions and of
@@ -41,7 +41,7 @@ def fold(s):
 
 
 def unit(path):
-    """The outermost package above path (ADR 0044), or path itself."""
+    """The outermost package above path (spec 07 §7.9), or path itself."""
     parts = path.split("/")
     for i in range(len(parts) - 1):
         if parts[i].casefold().endswith(".pages"):
@@ -146,7 +146,7 @@ class Event:
 
 
 class New:
-    """ADR 0052: the catalogue of the contributions and of the conflict events they saw."""
+    """spec 05 §5.2: the catalogue of the contributions and of the conflict events they saw."""
 
     def __init__(self, run):
         self.run, self.events, self.info, self.memo = run, {}, {}, {}
@@ -282,7 +282,7 @@ def conflicted(shown):
 
 
 class Old:
-    """Spec 05 §5.2 before ADR 0052; with naive, merge commits are not changes."""
+    """Spec 05 §5.2 before spec 05 §5.2; with naive, merge commits are not changes."""
 
     def __init__(self, run, naive=False):
         self.run, self.naive, self.ok, self.memo, self.acc = run, naive, {}, {}, {}
@@ -741,7 +741,7 @@ def examples():
     return bad
 
 
-# Laws that old and naive fail, on every schedule of at most OLD_PULLS pulls (ADR 0052).
+# Laws that old and naive fail, on every schedule of at most OLD_PULLS pulls (spec 05 §5.2).
 # old: merge commits are changes (weaknesses a, c); naive: copies vanish (b); both: no folding (d).
 OLD_PULLS = 5
 MERGES_AS_CHANGES = ("algebra", "order", "seen", "tree")

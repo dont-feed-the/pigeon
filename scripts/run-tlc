@@ -52,7 +52,7 @@ def expectations():
 def verdict(output, trace=False):
     """Name the outcome of one TLC run from its output.
 
-    A trace configuration (invariant TraceNotConsumed, ADR 0053) accepts its log
+    A trace configuration (invariant TraceNotConsumed, spec 13 §13.3) accepts its log
     when a behaviour violates that invariant, and otherwise names the first line
     that no behaviour explains: the depth of TLC's search.
     """

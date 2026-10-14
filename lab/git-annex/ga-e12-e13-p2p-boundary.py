@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E12 and E13 (issue #9; ADRs 0011, 0014, 0043): what peers can do to a
+"""E12 and E13 (issue #9; ADRs 0011 and 0014, spec 09 §9.4): what peers can do to a
 repository over git-annex's generic P2P transport, and what stops them.
 
 A lab P2P network (`git-annex-p2p-lab`) joins a bare custodian C, a laptop L and

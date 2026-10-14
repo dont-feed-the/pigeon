@@ -1,128 +1,124 @@
-# 0046. Protected means K custodians hold the content and the commit that names it, on disk
+# 0046. Protected means K custodians in K failure domains hold the content and the commit that names it, on disk
 
-- **Status:** Proposed, 14 October 2026, by the agent, for issue #11
+- **Status:** Proposed, 14 October 2026, by the agent, for issues #11
   (Guillaume's review: "Specify and test recovery onto fresh machines from
-  surviving custodians"), on the evidence of experiment E21.
+  surviving custodians") and #12 ("Distinguish independent failure domains
+  from distinct custody repositories"), on the evidence of experiments E21 and
+  E22 and of the `Repair` model. Revised 14 October 2026 at Guillaume's
+  request (chat), absorbing the former ADR 0049 (failure domains). Refines how
+  ADR 0002 counts its K custody copies.
 
 ## Context
 
-Issue #11 asks what must survive for a group to be used again after every
-laptop and all of pigeon's local state are lost, while at least one custodian
-keeps its data, and how the durability of those items relates to *protected*.
-Four gaps stood in the way:
+*Protected* is the word behind "Safe", the only state people are told they can
+stop worrying about (P1, P6), and every verified drop relies on it. ADR 0002
+made a version protected when K custodians hold its key, which is what
+git-annex counts (`numCopiesCount` in `Annex/NumCopies.hs` counts UUIDs). The
+experiments found that count optimistic in three ways:
 
-- **A protected version could have no name.** Spec 06 §6.2 counted a custodian
-  toward K as soon as it held the key. A laptop uploads with `copy --to`
-  ([08 §8.3](../spec/08-custody-loops.md)), while custodians only fetch
-  history (pull only, ADR 0043). So content can reach K custodians before any
-  of them has the commit that names it. If the laptop is lost then, the
-  content survives as an unused key: nobody can tell which file, folder,
-  version or author it was. The status had said *Safe*. E21 shows it.
-- **What was counted was not on disk.** git's default `core.fsync` hardens
-  packs but neither loose objects nor references (`FSYNC_COMPONENTS_DEFAULT`
-  in git 2.55.0's `write-or-die.h`). A fetch of fewer than
-  `transfer.unpackLimit` (100) objects writes loose objects, so after a power
-  cut `main` can name commits that are not there. git-annex 10.20261006
-  never calls `fsync`: no call in its sources, where only the assistant sets
-  `core.fsyncobjectfiles`, for removable drives
-  (`Assistant/WebApp/Configurators/Local.hs`). E21 measures both: a
-  `git fetch` of three commits makes no fsync with git's defaults (trace2
-  counters), and `git annex get` makes no fsync, fdatasync or syncfs on an
-  object (strace); its only syncs are SQLite's, on `.git/annex/keysdb`. A custodian answers the
-  `LOCKCONTENT` of a verified drop as soon as the object file exists. A
-  laptop can therefore drop its copy while both custodians' copies are still
-  in their page caches, and one power cut in a house that holds both loses
-  the version (issue #12).
-- **The recovery set was implicit.** Nothing said which items a recovery needs,
-  which are derived, and where each lives.
-- **Duplicate repositories.** A custodian repository copied to a new disk, or
-  restored from a backup, keeps its git-annex UUID. Two live repositories with
-  one UUID count once, which errs on the safe side. A repository restored from
-  an older backup is worse: the location log says that its UUID holds keys
-  that the restored disk no longer has, and git-annex counts them.
+- **Content without a name.** A laptop uploads content with `copy --to`,
+  while custodians only fetch history (pull only). Content can reach K
+  custodians before any of them has the commit that names it; if the laptop
+  is lost then, nobody can tell which file, version or author it was (E21).
+- **Copies not on disk.** git's default `core.fsync` hardens neither loose
+  objects nor references, and git-annex 10.20261006 never calls `fsync`. A
+  custodian answers a drop's `LOCKCONTENT` as soon as the object file exists,
+  so one power cut in a house holding both custodians can lose a version the
+  laptop has already dropped (E21, traces and strace).
+- **Two repositories, one backup.** Two UUIDs can sit on one disk or one
+  machine; a reinitialized repository has a new UUID while its old one still
+  lists the same objects. E22 shows git-annex counting two repositories on
+  one disk as two copies, and a verified drop that relies on them leaving one
+  physical copy.
+
+Changing the meaning of *protected* later changes, after the fact, which
+versions people were told were safe, and what every device was allowed to
+drop. This is why it is recorded here.
 
 ## Decision
 
-**The recovery set.** Once the versions it concerns are protected, this is
-what a group needs and where it lives:
+**A version V is protected when the custodians that count for it span K
+failure domains** (and at least `min_sites` declared sites, by default 1). A
+custodian *x* counts for V only if all of these hold:
 
-| Item | Needed to recover | Lives on | Replicated by |
-|---|---|---|---|
-| content: the objects of every version not purged, history and suggestions included | yes | K custodians per key | placement and repair (08 §8.3–8.4) |
-| `main`: genesis, rosters, every accepted commit with its names, versions, authors, deletions, decisions, drop records and purge decisions | yes | every device, every custodian | fetch (08 §8.2) |
-| proposals: `refs/pigeon/proposals/*` and their commits | yes | every device, every custodian | fetch |
-| the git-annex branch | no: a cache. Settings are a function of the roster (03 §3.5), `dead` marks follow from removed devices, and location logs are rebuilt by a hashing `git annex fsck --all` | every device | fetch, `git annex merge` |
-| status reports and seals | no: a custodian seals again (ADR 0042) | every device | fetch |
-| a laptop's local state (11 §11.3) | no: every captured save is in a commit | that laptop | none |
-| a custodian's `purges.toml` | no: losing it restarts each waiting period (ADR 0042) | that custodian | none |
-| device keys | for authority only (ADR 0047) | each device | never |
+1. **It holds the content, on disk.** Its copy is verified, and synced before
+   it says so: every device sets `core.fsync = objects,reference`, and a
+   custodian's filter holds back the `SUCCESS` that answers `PUT`,
+   `CHECKPRESENT` or `LOCKCONTENT` until `pigeond` has synced that object.
+2. **It holds the commit that names V** (`has_commit`), observed from its
+   status report or a fetch. Until then a version whose content is there stays
+   *published*, with reason `sending`.
+3. **It is one checked repository.** A UUID belongs to one device for its
+   whole life and is never reused; joining always makes a new one, whose
+   copies count only once a hashing `git annex fsck --all` has logged them. A
+   repository that went back in time (restored from a backup) or lost its
+   folder counts for nothing until checked again.
 
-**Protected needs the commit.** H (06 §6.2) counts a custodian *x* only if,
-besides `holds(x, k)`, *x* has the commit *c* that introduced the version:
-`has_commit(x, c)`. It is observed when *c* is the `main` of *x*'s latest status
-report or one of its ancestors, when *c* is or precedes a proposal tip listed
-in that report, or when *x* advertised such a ref to this device's own fetch.
-Status reports gain `proposals`: the tips of the proposal chains the device
-keeps that are not in its `main`. Until a custodian has fetched it, a version
-whose content is already there stays *published*, with reason `sending`.
+**Failure domains.** Two custodians are in one domain when their storage
+fingerprints intersect (a disk or network share holds both), when their host
+fingerprints are equal (one machine), or when the roster gives them the same
+`domain` label (hardware pigeon cannot see, such as virtual machines on one
+host). A domain is a connected component of that relation, computed by
+`pigeon-core` from the roster and the status reports. Detection and
+declarations only merge domains, never split them; an unknown fingerprint is
+reported as unknown, never guessed. Sites are declared, never inferred.
 
-**Custodians harden what they count.**
+**Drops and repair follow the same count.** Every verified drop locks one
+copy in each of K distinct domains, by naming the K remotes and ignoring the
+others; if no such choice exists, the drop waits. When the custodians that
+can take a key span fewer than K domains, custodians of other domains with
+room want it too, chosen by a deterministic rank, so protection can recover.
 
-- Every device sets `core.fsync = objects,reference` and
-  `core.fsyncMethod = fsync`. git then flushes loose objects, packs and refs;
-  on macOS it uses `F_FULLFSYNC` (`git_fsync` in `wrapper.c`).
-- On custodians, pigeond's filter (ADR 0043) holds back the `SUCCESS` that
-  answers `PUT`, `CHECKPRESENT` or `LOCKCONTENT` for a key until pigeond has
-  synced that object to disk. The object file and its directories are found
-  with `git annex contentlocation`, then flushed with `fsync`, or
-  `F_FULLFSYNC` on macOS. After each batch of its own `get --key`, pigeond
-  syncs what arrived.
-- A verified drop rests on `LOCKCONTENT`, so no device drops on the strength of
-  a copy that is not on disk. The location log can run ahead of the disk by
-  one batch; that can make *Safe* seconds early, but it never leads to a drop.
-- A laptop syncs the objects of a capture batch before the commit that names
-  them, so a captured version is never a name without content (P2).
+**What a recovery needs.** Once its versions are protected, a group needs only
+what its custodians hold: content, `main` and proposals. The git-annex branch,
+status reports and every device's local state are rebuilt or not needed;
+authority comes from ADR 0047.
 
-**One repository, one UUID, counted only once checked.**
-
-- Roster validity (04 §4.2) gains a rule: an `annex_uuid` belongs to one device,
-  and is never given to another device, even after its own was removed.
-  The validator knows the UUIDs of the ancestors' rosters.
-- Joining always gives the repository a new UUID. When the folder already holds
-  a repository (a copied disk, a restored backup, the disk of a custodian whose
-  key was lost), pigeon gives it a new UUID first: `git config --unset
-  annex.uuid`, then `git annex init` (`reinit` would take an existing UUID).
-  The copies count only once a hashing `git annex fsck --all` has logged them
-  under that UUID; a corrupted object is not counted (E21). Until then the device is a custodian with no copies.
-- **A repository that went back in time.** Before serving, a custodian compares
-  its state with its own latest status report, which peers relay to it. If
-  that report names a `main` that is not in its repository, or is newer than
-  anything it published itself, the repository was restored or rolled back.
-  The custodian then reports `checking = true`, and nobody counts it in H.
-  Its filter answers `FAILURE` to `LOCKCONTENT`. A hashing `git annex fsck
-  --all` under its own UUID then corrects the location log.
-- A removed custodian that comes back is refused at admission, because its key
-  is not in the roster. Its UUID is `dead`, so its copies do not count. A
-  device key copied to a second machine is outside the assumptions (02 §2.2).
+The specification carries the mechanism: the count H and its reasons
+([06 §6.2–6.3](../spec/06-status.md)), the fingerprints
+([06 §6.3](../spec/06-status.md)), the configuration
+([03 §3.4](../spec/03-repository-and-roles.md)), the filter's sync and
+lock ([09 §9.4](../spec/09-network-and-joining.md)), drops and domain repair
+([08 §8.3–8.5](../spec/08-custody-loops.md)), the UUID rule
+([04 §4.2](../spec/04-roster-and-authority.md)), recovery
+([09 §9.9](../spec/09-network-and-joining.md)) and assumption F restated
+over failure domains ([02 §2.2](../spec/02-guarantees.md)).
 
 ## Consequences
 
-- *Safe* waits for one fetch by each counted custodian, which takes seconds
-  after the change notice when the custodian is reachable. A custodian that
-  does not fetch shows as such: `sending`, then `custodian-offline`.
-- Losing every laptop loses only what was not protected (02 §2.4). With the
-  devices' keys, the custodians' repositories hold everything else, without
-  pigeon's local state or the git-annex branch. ADR 0047 covers losing the keys
-  as well.
+- Fewer versions are *Safe* where custodians share hardware, and the reason
+  says why (`same-domain`, `same-site`, `independence-unknown`,
+  `repository-lost`). This is P6: the count was optimistic before.
+- *Safe* waits for one fetch by each counted custodian: seconds, when it is
+  reachable.
+- A group whose custodians all run on one host cannot reach K ≥ 2, and is told
+  so. Virtual machines on one host look independent unless someone declares a
+  `domain`; the notice and `pigeon doctor` say so.
 - fsync costs a few milliseconds per object and per fetch on custodians, and
-  one flush per capture batch on laptops, within ADR 0037's budgets.
-- The filter is no longer purely pass-through: a positive presence answer
-  waits for a sync effect. It stays a pure state machine that emits effects,
-  and its laws gain one: no positive answer for a key leaves the filter before
-  that key's sync effect has completed.
-- The status laws (06 §6.2) still hold: `has_commit` only grows, because `main`
-  only moves forward and proposal refs are never removed.
-- E21 checks the counter-example, the recovery from custodians alone, the new
-  UUID with its fsck, and git's fsync counters: none with the defaults, 13 for
-  the same fetch with `core.fsync = objects,reference`. Power loss itself is outside
-  the lab, so the hardening rests on the sources cited above.
+  one flush per capture batch on laptops, within ADR 0037's budgets. The
+  filter emits a sync effect before any positive presence answer.
+- Domain repair may store a key beyond `sizebalanced`'s share; capacity
+  ([08 §8.9](../spec/08-custody-loops.md)) counts it.
+- Laws (06 §6.2, 13 §13.4): adding a fingerprint, a declaration or a missing
+  commit never raises a state; with one custodian per domain the state equals
+  ADR 0002's; a drop's K locked remotes are in K domains; domain repair is
+  deterministic.
+
+## Alternatives considered
+
+- **Count the UUIDs that hold the key**, as git-annex does and as ADR 0002
+  first read. Simplest, and what git-annex users expect. Rejected: E21 and E22
+  each show a *Safe* version lost by one disk or one power cut.
+- **Protect content and history separately**, saying *Safe* once the content
+  is there. Earlier *Safe*; rejected because a key without its commit is
+  unusable after the laptop is lost.
+- **Trust the location log without syncing.** Cheaper on custodians; rejected
+  because a drop would rest on copies in a page cache.
+- **Untrust all but one custodian per domain.** Trust is per UUID, so keys held
+  only by the others would never count.
+- **Raise `--numcopies` to the worst case** instead of choosing the remotes: a
+  holder that appears during the drop breaks the bound.
+- **A placement planner aware of domains.** Out of scope (ADR 0003); domain
+  repair is the minimum that lets protection recover.
+- **Guess sites from network addresses.** Often right, sometimes not; never
+  counted.

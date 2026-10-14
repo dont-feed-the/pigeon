@@ -34,7 +34,7 @@ which install needs ([07 §7.5](07-capture-and-install.md)).
 **[no ADR: list]**. A case-insensitive APFS volume (the macOS default) is
 supported because names are case-folded for collisions at capture. What the
 folder may hold, whatever the file system, is in [07 §7.9](07-capture-and-install.md)
-(ADR 0044). On APFS, extended attributes, resource forks and Finder tags are
+([07 §7.9](07-capture-and-install.md)). On APFS, extended attributes, resource forks and Finder tags are
 not shared. On every file system, links are not followed and hard links are
 not kept. A backup
 machine may use any local Linux file system git-annex supports (ext4, xfs,
@@ -125,7 +125,7 @@ class by `pigeond` itself (ADRs 0032, 0037). On macOS, a **launchd agent**
 - Uninstalling removes the binaries and the unit and keeps the folder, the
   repository and the configuration, unless the person asks.
 
-## 14.6 The Rust workspace (ADR 0058, Proposed)
+## 14.6 The Rust workspace (Proposed)
 
 | Crate | Kind | Holds | May do I/O |
 |---|---|---|---|
@@ -177,10 +177,10 @@ for [15](15-resource-use.md) if the shaper or the battery probe needs them.
 ## 14.8 Build rules
 
 - Rust edition 2024, stable toolchain 1.99.0 pinned in `rust-toolchain.toml`
-  (ADR 0058, Proposed).
+  (§14.6).
 - `panic = "abort"` in release; clippy's `unwrap_used`, `expect_used`,
   `panic` and `print_*` denied outside tests, except next to a stated
-  invariant (ADRs 0023, 0058).
+  invariant (ADR 0023, §14.6).
 - `unsafe` only in `pigeon-sys`, each block with a safety comment.
 - English text meant for people never appears in Rust code (ADR 0028).
 - `cargo deny` checks licences, advisories and sources in CI (ADR 0019), for

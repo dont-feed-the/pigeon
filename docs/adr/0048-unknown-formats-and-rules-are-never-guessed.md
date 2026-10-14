@@ -48,7 +48,7 @@ the same rules.
   verdict of the newer one, or *unknown*.
 - A status report of an unknown format is ignored: the device counts fewer
   observations, so it may show less protection, and purges wait for seals it
-  cannot read. Both err towards keeping (ADR 0042).
+  cannot read. Both err towards keeping ([08 §8.6](../spec/08-custody-loops.md)).
 - A device that holds an unknown commit still captures, serves content and
   keeps every copy. It performs no forced drop (purge, Drop), and it installs
   nothing beyond its last understood `main`. Its headline is *Needs you*:
@@ -81,7 +81,7 @@ the same rules.
   names the release to install. The stream header (`"v":1`, 09 §9.8) and
   invitations (`pgn1-`) do the same.
 - git-annex's P2P protocol is capped by pigeond's filter at the highest
-  version it knows (ADR 0043). A newer git-annex therefore never speaks a
+  version it knows ([09 §9.4](../spec/09-network-and-joining.md)). A newer git-annex therefore never speaks a
   protocol version the filter has not been tested with.
 
 **git and git-annex outside the tested range.**

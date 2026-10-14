@@ -1,4 +1,4 @@
-# Tests may unwrap and panic (ADR 0023); production code may not (ADR 0058).
+# Tests may unwrap and panic (ADR 0023); production code may not (spec 14 §14.6).
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 allow-panic-in-tests = true

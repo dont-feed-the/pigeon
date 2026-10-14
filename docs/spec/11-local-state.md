@@ -95,11 +95,11 @@ repository and git never shares it (ADR 0036).
 |---|---|---|---|
 | `install.ndjson` | each install step ([07 §7.5](07-capture-and-install.md)) | the install journal | no: it is the crash record |
 | `conflicts.json` | a divergence starts, changes or ends ([07 §7.6](07-capture-and-install.md)) | the divergence table | no: "what pigeon last installed" is known only here |
-| `purges.toml` | a custodian first merges a purge decision, or seals it ([08 §8.6](08-custody-loops.md)) | when it received each active decision, and its seals | yes, conservatively: a lost file restarts each waiting period (ADR 0042) |
+| `purges.toml` | a custodian first merges a purge decision, or seals it ([08 §8.6](08-custody-loops.md)) | when it received each active decision, and its seals | yes, conservatively: a lost file restarts each waiting period ([08 §8.6](08-custody-loops.md)) |
 | `clock.json` | at most every second, and at exit | the Lamport clock of trace events (ADR 0008) | no, but losing it only weakens trace ordering |
 | `invitations.json` | an invitation is created, used, cancelled or expires ([09 §9.6](09-network-and-joining.md)) | the hash of each secret, purpose, expiry, used flag | no |
-| `aside/` | install step 4 | files moved aside, kept until the first full scan 10 minutes after `done` | no ([07 §7.5](07-capture-and-install.md), ADR 0040) |
-| `stage/` | install step 2; keeping a folder (ADR 0039) | new files before they enter the folder | yes: unreferenced files are deleted at start |
+| `aside/` | install step 4 | files moved aside, kept until the first full scan 10 minutes after `done` | no ([07 §7.5](07-capture-and-install.md), [07 §7.5](07-capture-and-install.md)) |
+| `stage/` | install step 2; keeping a folder ([08 §8.5](08-custody-loops.md)) | new files before they enter the folder | yes: unreferenced files are deleted at start |
 | `recovered/` | install steps 6 and 9 | moved-aside content that was not pigeon's, until captured as a recovered version | no ([07 §7.6](07-capture-and-install.md)) |
 | `RECOVERY.txt` (custodians, in the repository directory) | the roster changes | the group's name, the other custodians, and the git and git-annex commands that read the files without pigeon ([09 §9.9](09-network-and-joining.md), ADR 0047) | yes: written again from the roster |
 
@@ -116,8 +116,8 @@ One JSON object per line, appended and fsynced before the step it announces:
 
 - `old` is the index entry's `(dev, ino, size, mtime in ns)` that step 6 checks.
   `proved` records that the writer scan and the check passed, before step 7
-  (ADR 0040). An entry ends with one of `done`, `skip`, `raced` or
-  `recovered`; `released` records the removal of its aside (ADR 0040). A
+  ([07 §7.5](07-capture-and-install.md)). An entry ends with one of `done`, `skip`, `raced` or
+  `recovered`; `released` records the removal of its aside ([07 §7.5](07-capture-and-install.md)). A
   staged file is removed only once its entry has ended.
 - At start, `pigeond` replays every `begin` without an end with the recovery
   rule of [07 §7.5](07-capture-and-install.md): forward if it has `proved`,
@@ -149,7 +149,7 @@ One JSON object per line, appended and fsynced before the step it announces:
 
 `installed` is the key pigeon last wrote at the path; `mine_stat` is the
 `(dev, ino, size, mtime)` of the person's file when `mine` was captured, which
-*Take the group's version* checks (ADR 0040); `told` records that the
+*Take the group's version* checks ([07 §7.5](07-capture-and-install.md)); `told` records that the
 person was told once (ADR 0034). The table is small (one entry per diverging
 path) and rewritten whole.
 

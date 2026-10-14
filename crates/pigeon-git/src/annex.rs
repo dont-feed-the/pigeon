@@ -127,7 +127,7 @@ pub fn argv(op: Op, remote: Option<&str>, k: u32) -> Vec<String> {
 pub struct Annex {
     dir: PathBuf,
     env: GitEnv,
-    /// K, the copies a drop must verify elsewhere (ADRs 0002, 0043).
+    /// K, the copies a drop must verify elsewhere (ADR 0002, spec 09 §9.4).
     pub k: u32,
     batches: Vec<((Op, Option<String>), Batch)>,
 }
@@ -200,7 +200,7 @@ impl Annex {
     }
 
     /// Drops the local copy of `key` if git-annex verifies K copies
-    /// elsewhere (by locking them, ADR 0054). `success` is false otherwise.
+    /// elsewhere (by locking them, spec 09 §9.4). `success` is false otherwise.
     pub async fn drop_local(&mut self, key: &str, timeout: Duration) -> Result<Option<Answer>> {
         self.ask(Op::Drop, None, key, timeout).await
     }

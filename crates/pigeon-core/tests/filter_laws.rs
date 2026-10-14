@@ -1,4 +1,4 @@
-//! Laws of the P2P filter (09 §9.4; ADRs 0012, 0043, 0054), as hegel-rust
+//! Laws of the P2P filter (09 §9.4; ADR 0012, spec 09 §9.4), as hegel-rust
 //! property tests. Each law's statement is in its doc comment; the
 //! reference framing in this file is written independently of the filter's.
 #![allow(
@@ -346,7 +346,7 @@ impl Session<'_> {
     }
 }
 
-/// Laws *sync before success*, *probe* and *hash* (ADR 0054): on a
+/// Laws *sync before success*, *probe* and *hash* (spec 09 §9.4): on a
 /// custodian, whatever git-annex answers and whenever syncs complete,
 /// (1) a `SUCCESS` or `ALREADY-HAVE` for a key reaches the client only after
 /// a sync of that key asked for after git-annex's answer; (2) `CHECKPRESENT

@@ -1,4 +1,4 @@
-//! Laws of failure domains (ADR 0049; pigeon-core `domain`).
+//! Laws of failure domains (ADR 0046; pigeon-core `domain`).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod common;
 

@@ -6,42 +6,42 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 
 ## When to write an ADR
 
-An ADR records an *architecturally significant* decision: one that shapes the
-system and that a later reader would need to know, and whose reasons would be
-lost otherwise. Write one when a decision is, at once:
+An ADR records a decision that shapes the system and whose reasons a later
+reader would otherwise lose. Write one only when all three answers are yes:
 
-- **costly to reverse**: undoing it means migrating data, breaking peers that
-  run an older version, or rewriting more than one crate;
-- **structural or cross-cutting**: the parts of the system and how they
-  depend on each other, what crosses a boundary between devices or between
-  pigeon and git or git-annex, what stays on disk, the safety and security
-  rules (who may do what, what counts as a copy, what may be lost);
-- **a real choice**: at least two alternatives were viable, and the reasons
-  for the one taken, often an experiment or a model, are worth keeping.
+1. **Is there a real alternative?** Another option that a reasonable person,
+   knowing what we know, might choose. A rule whose alternative breaks a
+   promise (P1–P6) or loses data is not a choice: it is a safety invariant,
+   and the specification states it, the models and tests check it.
+2. **Is it costly to reverse?** Undoing it would mean migrating data or
+   formats, breaking peers that run an older version, changing what people
+   were told was safe, or rewriting several crates.
+3. **Does it change, rather than refine, what is already decided?** A rule
+   that applies or sharpens an accepted ADR without changing it belongs to the
+   specification, which cites that ADR.
 
-Typical subjects: the engine and the language; a protocol, wire or on-disk
-format; a guarantee and the mechanism that carries it (custody, install,
-authority); a major dependency or toolchain that the rest is built on; a
-platform supported or not; a policy people see (words, notifications).
+Typical ADRs: the engine and the language; a protocol, wire or on-disk format;
+the meaning of a guarantee people rely on (what *protected* means); how
+authority is computed; a platform supported or not; a major dependency the
+rest is built on.
 
-Do **not** write an ADR for:
+These go to the specification instead, marked **[no ADR]** where they are
+decided and listed in [16 §16.3](../spec/16-open-questions.md):
 
+- safety invariants and the mechanisms that carry them (install's proof,
+  freeing without pointers, the serving filter, lock-checked copies);
+- refinements of accepted ADRs (purge by references, capacity order);
+- the scope of v1 (which file kinds are shared), scheduling and resource
+  policy, test plans, milestones, experiment and CI policy;
+- tooling, layout and pins that are cheap to change while the code is young
+  (the trace pipeline, the workspace layout, library picks and versions);
 - implementation choices inside one crate, which its code documentation
-  explains (a data structure, a module layout, an error enum, a retry count);
-- readings of the specification, or details it leaves open: settle them in
-  the specification itself, marked **[no ADR]** and listed in
-  [16 §16.3](../spec/16-open-questions.md);
-- test plans, milestones, experiment and CI policy: they belong to
-  [13](../spec/13-verification.md) and the lab's README;
-- library picks with no lasting cost, versions and pins: they belong to
-  [14 §14.7](../spec/14-platforms-and-packaging.md);
-- refinements found while modelling or implementing an existing ADR: while it
-  is Proposed, revise it; once it is Accepted, a refinement that changes the
-  decision is a new ADR that supersedes it, and one that does not goes into
-  the specification.
+  explains.
 
-When in doubt, write the specification first; raise a detail to an ADR when
-a reviewer asks for it, or when it turns out costly to reverse.
+When in doubt, write the specification first; raise a rule to an ADR when a
+reviewer asks for it, or when it turns out costly to reverse. While an ADR is
+Proposed, a refinement revises it; once it is Accepted, a change of the
+decision is a new ADR that supersedes it.
 
 ## Status
 
@@ -100,34 +100,35 @@ a reviewer asks for it, or when it turns out costly to reverse.
 | [0035](0035-group-version-shown-only-in-pigeon.md) | During a conflict, the group's version is shown only in pigeon | Accepted |
 | [0036](0036-local-state-in-plain-files.md) | `pigeond` keeps its local state in plain files | Accepted |
 | [0037](0037-background-work-stays-out-of-the-way.md) | Background work stays out of the way: low priority, adaptive limits, priorities, settings | Accepted |
-| [0038](0038-deciders-sign-decisions-on-suggestions.md) | Deciders sign decisions on suggestions; authors withdraw their own | Proposed |
-| [0039](0039-freeing-and-keeping-never-show-a-pointer.md) | Freeing and keeping a folder never show a pointer file: hide before dropping, stage before showing | Proposed |
-| [0040](0040-install-proves-its-own-file-and-racing-saves-win.md) | Install proves a file is its own before replacing it, and a racing save always wins | Proposed |
-| [0041](0041-captured-versions-stay-immutable-until-protected.md) | A captured version stays immutable on its laptop until it is protected; thin only after | Proposed |
-| [0042](0042-purge-releases-references-and-completes-after-every-seal.md) | A purge releases the references its deciders saw; content goes only when no other reference holds it and every custodian has sealed | Proposed |
-| [0043](0043-every-device-serves-peers-through-a-filter.md) | Every device serves peers through pigeond's filter: pull only, append-only on custodians, drops with explicit copy counts | Proposed |
-| [0044](0044-share-regular-files-and-say-what-is-not-shared.md) | pigeon shares regular files and their executable bit, and says what it does not share | Proposed |
-| [0045](0045-git-reads-only-the-configuration-pigeon-writes.md) | git and git-annex read only the configuration pigeon writes | Proposed |
-| [0046](0046-protected-means-content-and-history-on-disk.md) | Protected means K custodians hold the content and the commit that names it, on disk | Proposed |
+| [0046](0046-protected-means-content-and-history-on-disk.md) | Protected means K custodians in K failure domains hold the content and the commit that names it, on disk | Proposed |
 | [0047](0047-recover-from-custodians-sheets-refound-export.md) | A group is recovered from its custodians: rejoin, recovery sheets, refounding, and export without pigeon | Proposed |
 | [0048](0048-unknown-formats-and-rules-are-never-guessed.md) | Replicated formats and rules are versioned; what a device does not understand, it never guesses | Proposed |
-| [0049](0049-copies-count-once-per-failure-domain.md) | Copies count once per failure domain: shared disks, machines and declared domains | Proposed |
-| [0050](0050-capacity-is-budgeted-reserved-and-admitted.md) | Capacity is budgeted, real free space is reserved, and endangered content goes first | Proposed |
-| [0051](0051-the-roster-is-a-fold-of-its-changes.md) | The roster is a fold of its changes in a canonical order; roster forks merge without an admin | Proposed |
-| [0052](0052-catalogue-from-contributions-and-the-conflicts-they-saw.md) | The catalogue is built from contributions and the conflicts they saw; merge commits never count | Proposed |
-| [0053](0053-trace-logs-as-generated-tla-modules.md) | Trace logs reach TLC as generated TLA+ modules; TLC stays at 1.7.4 | Proposed |
-| [0054](0054-a-copy-counts-only-if-it-can-be-locked.md) | A copy counts only if it can be locked: custodians answer `CHECKPRESENT` with a lock | Proposed |
-| [0058](0058-the-rust-workspace-has-a-pure-core-and-a-pinned-toolchain.md) | The Rust workspace has one crate per row of 14 §14.6, a pure core and a pinned toolchain | Proposed |
+| [0051](0051-the-roster-is-a-fold-of-its-changes.md) | Authority is a fold of signed changes: roster forks merge without an admin, and deciders sign decisions on suggestions | Proposed |
 
 ## Withdrawn
 
-Withdrawn on 14 October 2026 at Guillaume's request, under the policy above.
+Withdrawn on 14 October 2026 at Guillaume's request, under the policy above, in two
+passes; 16 §16.3 lists where each rule now lives.
 
 | # | Decision | Status |
 |---|----------|--------|
+| [0038](0038-deciders-sign-decisions-on-suggestions.md) | Deciders sign decisions on suggestions; authors withdraw their own | Withdrawn |
+| [0039](0039-freeing-and-keeping-never-show-a-pointer.md) | Freeing and keeping a folder never show a pointer file: hide before dropping, stage before showing | Withdrawn |
+| [0040](0040-install-proves-its-own-file-and-racing-saves-win.md) | Install proves a file is its own before replacing it, and a racing save always wins | Withdrawn |
+| [0041](0041-captured-versions-stay-immutable-until-protected.md) | A captured version stays immutable on its laptop until it is protected; thin only after | Withdrawn |
+| [0042](0042-purge-releases-references-and-completes-after-every-seal.md) | A purge releases the references its deciders saw; content goes only when no other reference holds it and every custodian has sealed | Withdrawn |
+| [0043](0043-every-device-serves-peers-through-a-filter.md) | Every device serves peers through pigeond's filter: pull only, append-only on custodians, drops with explicit copy counts | Withdrawn |
+| [0044](0044-share-regular-files-and-say-what-is-not-shared.md) | pigeon shares regular files and their executable bit, and says what it does not share | Withdrawn |
+| [0045](0045-git-reads-only-the-configuration-pigeon-writes.md) | git and git-annex read only the configuration pigeon writes | Withdrawn |
+| [0049](0049-copies-count-once-per-failure-domain.md) | Copies count once per failure domain: shared disks, machines and declared domains | Withdrawn |
+| [0050](0050-capacity-is-budgeted-reserved-and-admitted.md) | Capacity is budgeted, real free space is reserved, and endangered content goes first | Withdrawn |
+| [0052](0052-catalogue-from-contributions-and-the-conflicts-they-saw.md) | The catalogue is built from contributions and the conflicts they saw; merge commits never count | Withdrawn |
+| [0053](0053-trace-logs-as-generated-tla-modules.md) | Trace logs reach TLC as generated TLA+ modules; TLC stays at 1.7.4 | Withdrawn |
+| [0054](0054-a-copy-counts-only-if-it-can-be-locked.md) | A copy counts only if it can be locked: custodians answer `CHECKPRESENT` with a lock | Withdrawn |
 | [0055](0055-install-recovery-rolls-forward-from-a-journalled-proof.md) | Install recovery rolls forward from a journalled proof | Withdrawn |
 | [0056](0056-every-experiment-runs-on-both-platforms.md) | Every asserting experiment runs on Linux and macOS; a platform difference is shown, never hidden | Withdrawn |
 | [0057](0057-the-first-milestone-is-a-safety-slice.md) | The first milestone is a safety slice: one laptop, two custodians, no proposals or purge | Withdrawn |
+| [0058](0058-the-rust-workspace-has-a-pure-core-and-a-pinned-toolchain.md) | The Rust workspace has one crate per row of 14 §14.6, a pure core and a pinned toolchain | Withdrawn |
 | [0059](0059-a-custodians-drop-counts-only-hashed-copies.md) | A custodian's drop counts only copies hashed for it, and repair counts only members that can take a key | Withdrawn |
 | [0060](0060-the-platform-layer-uses-rustix-and-libproc.md) | The platform layer uses rustix, with libproc on macOS; the lab seams are a self-kill and a file | Withdrawn |
 | [0061](0061-freeing-hides-as-an-install-and-guards-every-drop.md) | Freeing hides a file as an install of its absence, and no drop takes a key that a kept path uses | Withdrawn |

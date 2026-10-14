@@ -3,7 +3,7 @@
 //! git-annex never syncs, so the filter holds a custodian's positive answer
 //! for a key until its object file and the directories above it, up to
 //! `annex/objects`, are synced. A lock that proves another custodian's drop
-//! also waits for the object's SHA-256 to match its key (ADR 0054); a
+//! also waits for the object's SHA-256 to match its key (spec 09 §9.4); a
 //! mismatch queues `git annex fsck --key`. git-annex runs through
 //! `pigeon-git`, with pigeon's environment. On macOS, `sync_all` is
 //! `F_FULLFSYNC`.

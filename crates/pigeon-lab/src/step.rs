@@ -256,7 +256,7 @@ pub enum Condition {
         file: File,
     },
     /// No file of the folder is a git-annex pointer file or symbolic link
-    /// into `.git/annex` (ADR 0039).
+    /// into `.git/annex` (spec 08 §8.5).
     NoPointers {
         /// Who looks.
         on: Laptop,

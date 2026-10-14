@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E20 (issue #14; ADR 0044): what git and git-annex do with each kind of
+"""E20 (issue #14; spec 07 §7.9): what git and git-annex do with each kind of
 file-system object a shared folder may hold, on Linux and macOS.
 
 Laptop repositories are set up as spec 03 §3.3–3.4 says; capture adds with

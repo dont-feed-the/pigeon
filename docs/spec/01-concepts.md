@@ -22,7 +22,7 @@ belong to **devices** (ADR 0007).
 
 | Role | What it does | Counts toward K | People see |
 |---|---|---|---|
-| **laptop** | a person's computer: holds editable *working copies* of the folders the person keeps, at about one copy of disk space once protected, plus its pending history (ADR 0041) | no | computer |
+| **laptop** | a person's computer: holds editable *working copies* of the folders the person keeps, at about one copy of disk space once protected, plus its pending history ([07 §7.8](07-capture-and-install.md)) | no | computer |
 | **custodian** | a machine dedicated to storage, Linux only in v1, holding read-only *custody copies* of what its capacity allows, history included (ADRs 0002, 0003, 0032) | yes | backup machine |
 
 "Laptop" means any person's computer, desktop included. A device has exactly
@@ -69,7 +69,7 @@ has observed ([06](06-status.md)):
 |---|---|---|
 | **local** | captured on this device; no other device is known to have its commit | Only on this computer |
 | **published** | another device is known to have its commit, but custodians in fewer than K failure domains are known to hold verified copies | Shared, not safe yet |
-| **protected** | custodians in at least K distinct failure domains (ADR 0049) hold verified copies, as observed at time T | Safe |
+| **protected** | custodians in at least K distinct failure domains (ADR 0046) hold verified copies, as observed at time T | Safe |
 | **uncertain** | the last observation is too old to say (P6) | Not checked since … |
 
 ## 1.6 Three removals, never conflated
@@ -78,7 +78,7 @@ has observed ([06](06-status.md)):
 |---|---|---|---|
 | **unlink** | deleting a path: a new commit without the file | none: custodians keep every version (ADR 0018) | delete (can be undone) |
 | **evict** | removing this device's working copy of protected versions | none: allowed only for protected versions (ADR 0031) | free up space on this computer |
-| **release** | a **purge**: a signed decision that releases the **references** it covers; a key goes once no other reference holds it and every custodian has **sealed** the decision after the **retention period** (ADR 0042) | the covered versions are gone from every device of the group; copies outside it and names in history stay | erase forever; waiting period |
+| **release** | a **purge**: a signed decision that releases the **references** it covers; a key goes once no other reference holds it and every custodian has **sealed** the decision after the **retention period** ([08 §8.6](08-custody-loops.md)) | the covered versions are gone from every device of the group; copies outside it and names in history stay | erase forever; waiting period |
 
 ## 1.7 The two escapes
 
@@ -100,8 +100,8 @@ Every unsafe action is one of two primitives, both signed, flagged and recorded
 | **core** | the pure functions of pigeon (authority, catalogue, names, states, headline), with laws (ADR 0012) |
 | **shell** | the code that performs I/O: git, git-annex, the file system, the network, behind traits (ADR 0012) |
 | **loop** | one of the protocols `pigeond` runs: capture, accept, place and repair, free and keep, purge, install |
-| **reference** | a path at which a commit introduces a key: an add, edit, restore, rename or conflict copy; a purge releases references, not keys (ADR 0042) |
-| **seal** | a custodian's statement, in its status report, that a purge's waiting period has ended for it, with the `main` it had then (ADR 0042) |
+| **reference** | a path at which a commit introduces a key: an add, edit, restore, rename or conflict copy; a purge releases references, not keys ([08 §8.6](08-custody-loops.md)) |
+| **seal** | a custodian's statement, in its status report, that a purge's waiting period has ended for it, with the `main` it had then ([08 §8.6](08-custody-loops.md)) |
 
 ## 1.9 Words people never see
 

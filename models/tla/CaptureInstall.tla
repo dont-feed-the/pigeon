@@ -1,6 +1,6 @@
 --------------------------- MODULE CaptureInstall ---------------------------
-(* Capture and install of one path p on one laptop (spec 07 §7.3-7.6, ADRs
-   0034, 0040). A person and their applications act at any instant, also
+(* Capture and install of one path p on one laptop (spec 07 §7.3-7.6, ADR
+   0034). A person and their applications act at any instant, also
    while pigeond is down: write in place or through a handle opened earlier,
    replace atomically, create, delete. The group changes current(p). pigeond
    captures quiet changes, refreshes the index, installs current(p) by the
@@ -11,7 +11,7 @@
    _otherlive check the design; the others are negative tests. Off names the
    safeguards removed: "check", "scan", "racy", "quiet", "journal",
    "noreplace", "hash", "keep", and "recovery" (the recovery table of 07
-   before ADR 0040 journalled the proof). Hidden: some writers escape the
+   before spec 07 §7.5 journalled the proof). Hidden: some writers escape the
    writer scan (another user's process, a mapping macOS cannot see); they
    close within the keep period unless "keep" is off. *)
 EXTENDS Naturals, FiniteSets
@@ -217,7 +217,7 @@ Check ==
   /\ pc = "scanned"     \* step 6: the journalled stat
   /\ IF Stat(at.aside) = jr.st \/ "check" \in Off
      THEN /\ pc' = "checked" /\ disp' = disp \cup {[i |-> at.aside, e |-> jr.exp, c |-> fc[at.aside]]}
-          /\ jr' = [jr EXCEPT !.proved = TRUE]      \* journalled: `proved` (ADR 0040)
+          /\ jr' = [jr EXCEPT !.proved = TRUE]      \* journalled: `proved` (spec 07 §7.5)
           /\ UNCHANGED <<at, kept, who, deferred>>
      ELSE Fail(FALSE) /\ UNCHANGED disp
   /\ UNCHANGED <<fc, fm, fresh, orph, hnd, hid, punl, idx, cur, store, saved, dropped, div, pdel, gap, n>>
@@ -255,13 +255,13 @@ Crash ==
   /\ pc # "down" /\ n.crash < MaxCrash /\ pc' = "down" /\ deferred' = FALSE
   /\ n' = [n EXCEPT !.crash = @ + 1]
   /\ UNCHANGED <<fc, fm, fresh, at, kept, orph, hnd, hid, punl, idx, cur, store, saved, dropped, div, jr, who, pdel, gap, disp>>
-(* Recovery at start, before any capture (ADR 0040). An entry whose proof is
+(* Recovery at start, before any capture (spec 07 §7.5). An entry whose proof is
    journalled rolls forward: step 7 if its new file is still at its stage name
    and p is free (else it raced), then step 8. Any other entry rolls back: the
    aside goes back with NOREPLACE, or is kept and hashed at release if p is
    another file. The entry ends before its staged file is removed, so a second
-   replay decides the same. With "recovery" off, the table of 07 before ADR
-   0040 journalled the proof decides from p alone: forward only if p has the
+   replay decides the same. With "recovery" off, the table of 07 before the
+   journal recorded the proof decides from p alone: forward only if p has the
    new file's inode. *)
 StepSeven == jr.new # Absent /\ at.stage # jr.tmp     \* the new file left its stage name
 Forward == IF "recovery" \in Off THEN at.p # 0 /\ at.p = jr.tmp ELSE jr.proved
@@ -305,7 +305,7 @@ Fairness == /\ WF_vars(Capture) /\ WF_vars(Refresh) /\ WF_vars(Start) /\ WF_vars
 LiveSpec == Spec /\ Fairness
 
 ----------------------------------------------------------------------------
-(* NoLoss (ADR 0040): every content the person wrote is captured, at a name
+(* NoLoss (spec 07 §7.5): every content the person wrote is captured, at a name
    pigeon keeps, or discarded by the person. *)
 NoLoss == \A c \in saved : c \in store \/ c \in dropped \/ \E i \in Linked : fc[i] = c
 (* INV-Journal: when idle, a name pigeon last set holds what the index says or

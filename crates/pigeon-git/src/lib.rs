@@ -1,5 +1,5 @@
 //! Drivers for git and git-annex: the only crate that runs them (ADRs 0004,
-//! 0010). Every process gets pigeon's environment ([`env`], ADR 0045) and
+//! 0010). Every process gets pigeon's environment ([`env`], spec 03 §3.7) and
 //! passes the allow-list of 03 §3.7 ([`allow`]) before it starts.
 //!
 //! - [`run`]: one-shot calls with a deadline;

@@ -53,7 +53,7 @@ keeps, as on any join. Once joined, its person removes the lost devices
   fetches and validates `main` from the genesis named on the sheet. It
   generates the machine's own key, signs with the sheet's key a roster commit
   that adds the machine as a device of the admin, and stays reachable until a
-  custodian has fetched that commit (pull only, ADR 0043). From then on the
+  custodian has fetched that commit (pull only, [09 §9.4](../spec/09-network-and-joining.md)). From then on the
   machine is that admin's device and continues as after a join.
 - Its first steps are offered at once: remove the lost devices and the used
   recovery device, whose key has now been typed into a machine, then print a

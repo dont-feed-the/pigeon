@@ -97,7 +97,7 @@ async fn refused_commands_never_start() {
     }
 }
 
-/// E20, ADR 0045: a person's ~/.gitconfig asks for WORM keys and ignores
+/// E20, spec 03 §3.7: a person's ~/.gitconfig asks for WORM keys and ignores
 /// `*.txt`; pigeon's environment makes capture use SHA256E and add the file.
 #[tokio::test]
 async fn capture_ignores_the_persons_git_configuration() {
@@ -155,7 +155,7 @@ async fn batch_answers_one_line_per_input() {
     assert!(annex.stop(T).await);
 }
 
-/// The behaviour every drop rests on (ADRs 0002, 0043, 0054): with explicit
+/// The behaviour every drop rests on (ADR 0002, spec 09 §9.4): with explicit
 /// `--numcopies K --mincopies K`, `drop` refuses until K other repositories
 /// hold a copy it can lock, and then drops; `get` brings the bytes back.
 #[tokio::test]

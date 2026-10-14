@@ -48,7 +48,7 @@ pub struct Admitted {
     /// Its git-annex UUID in that group, from the roster.
     pub annex_uuid: Option<String>,
     /// Whether it is a custodian of that group: its locks are hashed
-    /// (ADR 0054).
+    /// (spec 09 §9.4).
     pub custodian: bool,
 }
 

@@ -261,7 +261,7 @@ def host_raw():
 
 
 def fingerprint(kind, raw):
-    """What a custodian reports (ADR 0049): the raw ID hashed with the group ID."""
+    """What a custodian reports (ADR 0046): the raw ID hashed with the group ID."""
     return hashlib.sha256(f'{GROUP}\0{kind}\0{raw}'.encode()).hexdigest()[:16]
 
 
@@ -664,7 +664,7 @@ def e6(lab):
               'drop refuses every key', before)
 
 
-# ---- E22.7: pigeon's drop, one remote per failure domain (ADR 0049, spec 08 §8.3)
+# ---- E22.7: pigeon's drop, one remote per failure domain (ADR 0046, spec 08 §8.3)
 def e7(lab):
     """C1 and C2 share a domain, C4 stands for another. pigeond ignores every remote but one per
     domain for the drop: Annex/NumCopies.hs verifiableCopies asks only remotes not ignored."""

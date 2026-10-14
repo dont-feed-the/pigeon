@@ -1,6 +1,6 @@
 //! Files: stat tuples, renames that never replace a name, durable writes and
 //! appends, and reads that leave the page cache alone (07 §7.5, 11 §11.3,
-//! ADRs 0037, 0040).
+//! ADR 0037, spec 07 §7.5).
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
@@ -21,7 +21,7 @@ pub struct FileId {
 }
 
 /// What install compares with the index entry: `(dev, ino, size, mtime in ns)`,
-/// with the link count (ADR 0040, 11 §11.3).
+/// with the link count (spec 07 §7.5, 11 §11.3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Stat {
     /// Device and inode.
@@ -52,7 +52,7 @@ impl Stat {
         self.mode & 0o170000 == 0o100000
     }
 
-    /// Whether the owner's execute bit is set (the executable bit, ADR 0044).
+    /// Whether the owner's execute bit is set (the executable bit, spec 07 §7.9).
     pub fn is_executable(&self) -> bool {
         self.mode & 0o100 != 0
     }
@@ -104,7 +104,7 @@ pub enum Renamed {
 
 /// Renames `from` to `to` unless something has the name `to`: Linux
 /// `renameat2(RENAME_NOREPLACE)`, macOS `renamex_np(RENAME_EXCL)`. pigeon
-/// never renames over a name (ADR 0040).
+/// never renames over a name (spec 07 §7.5).
 pub fn rename_noreplace(from: &Path, to: &Path) -> Result<Renamed> {
     match renameat_with(CWD, from, CWD, to, RenameFlags::NOREPLACE) {
         Ok(()) => Ok(Renamed::Done),

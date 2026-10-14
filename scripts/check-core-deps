@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail when pigeon-core depends on a crate outside its allow-list.
 
-pigeon-core is the pure core and performs no I/O (14 §14.6, ADR 0058), so
+pigeon-core is the pure core and performs no I/O (14 §14.6, spec 14 §14.6), so
 every normal dependency, direct or transitive, must be named in
 `crates/pigeon-core/allowed-deps.txt`, one crate per line, with the reason
 it performs no I/O. Development dependencies, such as hegeltest, are free.

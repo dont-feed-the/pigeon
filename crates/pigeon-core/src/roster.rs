@@ -54,9 +54,9 @@ pub struct Device {
     pub annex_uuid: Option<String>,
     /// Capacity in bytes, for custodians.
     pub maxsize: Option<u64>,
-    /// The hardware it shares with other custodians (ADR 0049).
+    /// The hardware it shares with other custodians (ADR 0046).
     pub domain: Option<String>,
-    /// Where it stands (ADR 0049).
+    /// Where it stands (ADR 0046).
     pub site: Option<String>,
 }
 
