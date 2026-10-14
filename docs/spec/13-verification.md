@@ -1,9 +1,3 @@
-# 13. Verification
-
-> Mission: how pigeon shows that it keeps its guarantees: the layers of
-> evidence and what each must show, the coverage of P1–P6, the criteria for
-> going on, the safety slice, and the laws in code.
-
 ## 13.1 Layers of evidence
 
 | Layer | Checks | Decided by |
@@ -20,11 +14,11 @@
 
 ## 13.2 TLA+ models
 
-Each protocol has a model in `models/tla/` (ADR 0008). `models/tla/expected.tsv`
-lists every configuration with its model, its set (fast in `ci`, full in
-`models-full`) and its expected verdict; `scripts/run-tlc` runs them, and
-`models/tla/README.md` says what each shows and what each model leaves out.
-The invariants below are normative where the specification cites them.
+Each protocol has a model in `models/tla/` (ADR 0008).
+`models/tla/expected.tsv` lists every configuration with its set (fast in
+`ci`, full in `models-full`) and its expected verdict; `scripts/run-tlc`
+runs them; `models/tla/README.md` says what each shows and leaves out. The
+invariants this specification cites are normative.
 
 | Model | Invariants; liveness | Specified in |
 |---|---|---|
@@ -38,47 +32,39 @@ The invariants below are normative where the specification cites them.
 | `CustodyNaive`, `CustodyTokens` | `NoLoss`; `TokensNeverLost`, `TokenHolderHasContent`, `KCopies`, `AtMostOneToken` | evidence about hand-offs in general, not about git-annex |
 | `TraceSample`, `RosterTrace` | `TraceNotConsumed` (§13.3) | [12 §12.3](12-observability.md) |
 
-- **Negative configurations.** Each model has, per safeguard, a
-  configuration without it (`Off`) that must fail with the verdict
-  `expected.tsv` names, so a model edit that hides the failure is caught
-  (ADR 0026).
-- **Bounds** start at N ≤ 4 devices, K ≤ 2, a few paths and keys; larger
-  bounds run in the full set.
-- **Safety and liveness are stated apart.** Safety (the invariants of
-  [02 §2.5](02-guarantees.md)) holds in every behaviour, without fairness.
-  Liveness holds only under fairness conditions written in each model:
-  every pair of devices that stays online is eventually connected; a
-  custodian not removed is eventually online; capacity is at least K × the
-  content wanted ([08 §8.9](08-custody-loops.md)); a person eventually
-  answers what *Needs you*. A liveness failure without them is not a bug.
+Per safeguard, each model has a configuration without it (`Off`) that must
+fail with the verdict `expected.tsv` names (ADR 0026). Bounds start at
+N ≤ 4 devices, K ≤ 2, a few paths and keys; larger ones run in the full
+set. Safety (the invariants of [02 §2.5](02-guarantees.md)) holds in every
+behaviour, without fairness. Liveness holds under the fairness each model
+writes: devices that stay online eventually connect; a custodian not
+removed is eventually online; capacity is at least K × the content wanted
+([08 §8.9](08-custody-loops.md)); a person eventually answers what *Needs
+you*. A liveness failure without them is not a bug.
 
 ## 13.3 Trace validation (ADR 0008)
 
-- Each model with events has a module `*Trace.tla` that reads the merged
-  NDJSON events ([12 §12.3](12-observability.md)) and constrains `Next` to
-  each logged step; untraced variables stay non-deterministic (Cirstea,
-  Kuppe, Merz and others, arXiv 2404.16075).
-- `scripts/trace-to-tla` writes the log as a TLA+ module for the pinned TLC
-  1.7.4 (ADR 0026); values it cannot encode exactly and lines out of
-  Lamport order are refused, never approximated.
-- **Verdict:** the invariant `TraceNotConsumed` (`l <= Len(log)`) is
-  violated exactly when a behaviour explains every line (`trace:accepted`);
-  otherwise the depth reached names the first unexplained line
-  (`trace:rejected:N`), which fails the build.
-- **Runs of the code:** `scripts/check-code-traces` hands TLC the logs of
-  pigeon-core's functions run in a simulated environment taking the model's
-  steps (`crates/pigeon-core/tests/common/roster_sim.rs`): 20 runs in `ci`,
-  200 in `models-full`, and a mutant of each must be rejected.
-  `scripts/check-lab-traces` does the same for the slice's runs (§13.12).
-- Every fault-injection run is trace-validated. This shows that observed
-  runs conform; it is not a proof of the code.
+Each model with events has a `*Trace.tla` that reads the merged NDJSON
+events ([12 §12.3](12-observability.md)) and constrains `Next` to each
+logged step, leaving untraced variables free (arXiv 2404.16075).
+`scripts/trace-to-tla` writes the log as a module for the pinned TLC
+(ADR 0026), refusing values it cannot encode exactly and lines out of
+Lamport order. `TraceNotConsumed` is violated exactly when a behaviour
+explains every line (`trace:accepted`); otherwise the depth reached names
+the first unexplained line (`trace:rejected:N`), which fails the build.
+`scripts/check-code-traces` checks pigeon-core's functions run in a
+simulated environment taking the model's steps (20 runs in `ci`, 200 in
+`models-full`; a mutant of each must be rejected), and
+`scripts/check-lab-traces` the slice's runs (§13.12). Every fault-injection
+run is trace-validated. This shows that observed runs conform; it is not a
+proof of the code.
 
 ## 13.4 Laws and property tests (ADR 0012)
 
 The core is pure functions over values; git, git-annex, the file system and
-iroh sit behind traits in a thin shell. Every core structure states its laws,
-each a `hegeltest` property. The laws coded so far are those of §13.13; the
-others are required here, before or with their module:
+iroh sit behind traits in a thin shell. Every core structure states its
+laws, each a `hegeltest` property. The laws coded so far are those of
+§13.13; these are required before or with their module:
 
 | Structure | Laws still to code | Where |
 |---|---|---|
@@ -101,75 +87,61 @@ input) and for the fixed scenarios of this specification.
 
 **Reference model of the catalogue** ([05 §5.2](05-catalogue-and-names.md)):
 `models/catalogue/catalogue.py` runs every schedule of contributions and
-pulls between three devices for eleven cases, and fixed histories with their
-expected trees. On each reachable state it checks: a function of the
-contributions and of which saw which, never of contact order, duplicates or
-merge commits; `tree(c) = catalogue(anc*(c))`; a key leaves only through a
-contribution whose base showed it; a superseded version never comes back;
-conflict names independent of arrival order and injective; each copy
-allowed to its author. The earlier rules (`old`, `naive`) must fail. The
-core's laws must agree with it on the same cases.
+pulls between three devices for eleven cases, and fixed histories with
+their expected trees. On each reachable state it checks that the catalogue
+is a function of the contributions and of which saw which; that
+`tree(c) = catalogue(anc*(c))`; that a key leaves only through a
+contribution whose base showed it and a superseded version never comes
+back; that conflict names are injective and independent of arrival order;
+and that each copy is allowed to its author. The earlier rules (`old`,
+`naive`) must fail; the core's laws must agree with it on the same cases.
 
 ## 13.5 Stateful tests and fault injection
 
-hegel state-machine tests drive real repositories (several devices, in one
-process or in containers) through random operations, compare them with a
-model, and validate the trace:
-
-- **Operations:** every save pattern (in place, temporary file and rename,
-  delete and recreate, old handle), renames, deletions, mass deletions,
-  edits in another person's folder, decisions, invitations, roster changes,
-  freeing and keeping, purges, Drop.
-- **Faults:** `kill -9` of `pigeond` or a git-annex child at any step; disk
-  full; an unplugged drive; partitions; clock skew; a custodian lost and
-  replaced; a relay down.
-- **Scale:** at least 1000 schedules per full run (proposal §7); fewer per
-  push.
-- **Oracles:** INV-K, the invariants of [02 §2.5](02-guarantees.md), no
-  overwritten save, and trace validation.
+hegel state-machine tests drive real repositories of several devices
+through random operations (every save pattern, renames, mass deletions,
+decisions, invitations, roster changes, free and keep, purges, Drop) and
+faults (`kill -9` of `pigeond` or a git-annex child at any step, disk full,
+an unplugged drive, partitions, clock skew, a custodian replaced, a relay
+down), at least 1000 schedules per full run (proposal §7), against the
+invariants of [02 §2.5](02-guarantees.md), no overwritten save, and trace
+validation.
 
 ## 13.6 Contract tests against git and git-annex
 
 Every command pigeon runs ([03 §3.7](03-repository-and-roles.md)) is tested
 against the minimum git (2.38) and git-annex (10.20261006) and the newest:
-the output pigeon parses, the exit status, and the behaviour it relies on.
-A new git-annex is supported only once they pass
-([14 §14.3](14-platforms-and-packaging.md)). They are
-`crates/pigeon-git/tests/contract.rs`; CI sets `PIGEON_REQUIRE_GIT_ANNEX=1`
-so they fail rather than skip. A subset runs on each device as a self-test
-when it first meets a new version (ADR 0048).
-
+the output pigeon parses, the exit status, and the behaviour it relies on
+(`crates/pigeon-git/tests/contract.rs`; CI makes them fail rather than
+skip). A new git-annex is supported only once they pass
+([14 §14.3](14-platforms-and-packaging.md)). A subset runs on each device
+as a self-test when it first meets a new version (ADR 0048).
 **Format fixtures** (ADR 0048): `fixtures/formats/` holds golden documents
-and small signed histories for every supported (`format`, `rules`) pair with
-their expected verdicts, and fixtures of the next format that must be judged
-*unknown*. Every release runs them.
+and signed histories for every supported (`format`, `rules`) pair with
+their verdicts, and next-format fixtures that must be judged *unknown*.
 
 ## 13.7 The lab (`lab/git-annex/`)
 
-The experiments E1–E24 test git-annex's own behaviour; `lab/git-annex/README.md`
-lists each script, whether it asserts, what it found and what rests on it.
-An E*n* cited in this specification is one of them. Each joins CI once its
-script asserts (ADR 0026). Pending: E11 native Windows (v1.1); new: E16
-`annex.bwlimit` over P2P, E17 the HDD video-editing test
-([15 §15.8](15-resource-use.md)); E9 and E10 must be rerun with bare
-custodian repositories.
+The experiments E1–E24 test git-annex's own behaviour;
+`lab/git-annex/README.md` lists each script, whether it asserts, what it
+found and what rests on it. An E*n* cited in this specification is one of
+them. Each joins CI once its script asserts (ADR 0026). Pending: E11 native
+Windows (v1.1); new: E16 `annex.bwlimit` over P2P, E17 the HDD
+video-editing test ([15 §15.8](15-resource-use.md)); E9 and E10 must be
+rerun with bare custodian repositories.
 
 ## 13.8 Continuous integration (ADR 0026)
 
-- `.github/workflows/ci.yml`, every push: the repository rules
-  (`scripts/check-file-length-and-header`, `check-adr-index`,
-  `check-spec-refs`), the fast model set, the catalogue model, code traces,
-  `cargo fmt`, `clippy` (`unwrap_used` and `expect_used` denied, ADR 0023),
-  the tests, the Fluent check (ADR 0028), `cargo deny` (ADR 0019).
-- `lab.yml`, every push: every asserting experiment on Linux and macOS with
-  each installer's git-annex. A platform difference prints `SKIP (platform)`
-  with its reason, never a dropped check.
-- `slice.yml`, every push: the slice (§13.12).
-- `models-full.yml`, when a model or the runner changes, weekly, and by
-  hand: every configuration, the full fault-injection set, blocked slice
-  scenarios, and E17 on a self-hosted HDD runner **[no ADR: runner]**.
-- TLC is pinned by SHA-256, actions by commit; permissions are read-only;
-  fault-injection runs keep their OTLP-JSON and trace files (ADR 0025).
+The workflows in `.github/workflows/` run these layers, and each says what
+in its header: `ci.yml` and `lab.yml` on every push (the repository rules
+are `scripts/check-*`; clippy denies `unwrap_used` and `expect_used`,
+ADR 0023; the Fluent check, ADR 0028; `cargo deny`, ADR 0019), `slice.yml`
+on every push (§13.12), `models-full.yml` when a model changes, weekly and
+by hand, with E17 on a self-hosted HDD runner **[no ADR: runner]**. A lab
+platform difference prints `SKIP (platform)` with its reason, never a
+dropped check. TLC is pinned by SHA-256, actions by commit; permissions are
+read-only; fault-injection runs keep their OTLP-JSON and trace files
+(ADR 0025).
 
 ## 13.9 Resource budgets (ADR 0037)
 
@@ -200,20 +172,19 @@ at most 1.1 × the content kept; test users explain *only on this computer*,
 *shared, not safe yet* and *safe* correctly. Otherwise the requirements are
 reviewed before any engine is built. Windows criteria move to v1.1.
 
-**Usability test** (ux.md §9), with the mockups (`docs/design/mockups/`),
-then the real system: five non-technical participants per round plus two
-"Pauls" for setup; moderated think-aloud, 30 minutes, seven tasks. Pass: at
-least 4 of 5 explain the three states; at least 4 of 5 do tasks 4 and 5 (an
-old version, a deleted folder) without help; **no** participant believes a
-file that is not safe is safe. It tunes the thresholds of
-[06 §6.7](06-status.md).
+**Usability test** (ux.md §9), with the mockups, then the real system: five
+non-technical participants per round plus two "Pauls" for setup; moderated
+think-aloud, 30 minutes, seven tasks. Pass: at least 4 of 5 explain the
+three states; at least 4 of 5 do tasks 4 and 5 (an old version, a deleted
+folder) without help; **no** participant believes a file that is not safe
+is safe. It tunes the thresholds of [06 §6.7](06-status.md).
 
 ## 13.12 The first milestone: the safety slice
 
 The first code of v2 is a slice that carries the promises and nothing else
-(issue #17): one person, its admin, with one laptop (Linux on ext4, or macOS
-on APFS) and two Linux custodians on ext4, K = 2, one repository and two
-folders.
+(issue #17): one person, its admin, with one laptop (Linux on ext4, or
+macOS on APFS) and two Linux custodians on ext4, K = 2, one repository and
+two folders.
 
 | Part | In the slice | After it passes |
 |---|---|---|
@@ -232,11 +203,11 @@ answers `not-in-this-build`, with no partial code. The deferrals concern
 the order of work only: v1 still meets every accepted ADR. **[no ADR:
 milestone]**
 
-**The first build** (14 October 2026) has `pigeond`'s main, the loops of the
-table, the commands, and an integration test of three daemons on one host
-(`crates/pigeond/tests/slice.rs`). Until the slice passes it differs from
-this specification as follows, each to close before S1–S11 run **[no ADR:
-first build]**:
+**The first build** (14 October 2026) has `pigeond`'s main, the loops of
+the table, the commands, and an integration test of three daemons on one
+host (`crates/pigeond/tests/slice.rs`). Until the slice passes it differs
+from this specification as follows, each to close before S1–S11 run
+**[no ADR: first build]**:
 
 - `restore`, `recovery-sheet` and `recover` answer `not-in-this-build`;
 - roster and capture commits are not signed ([04 §4.4](04-roster-and-authority.md)),
@@ -260,37 +231,27 @@ first build]**:
   repair, every `[loops] interval_seconds` and at once after a change;
   `status` on a laptop captures first.
 
-**Setup** (`crates/pigeon-lab`). The lab build (`--features lab`) adds two
-seams to `pigeon-sys`, which a release build ignores: named crash points
-(`PIGEON_LAB_CRASH=point:n`: the n-th crossing sends `SIGKILL` to the
-process itself, as `kill -9`), and a root for a backup machine's system
-directories (`PIGEON_LAB_SERVICE_ROOT`). It says so in `doctor`, and its
-status reports carry `lab = true`, which a release build never counts. On
-`ubuntu-24.04` each custodian runs in its own mount namespace on its own
-loop-mounted ext4 image, over 127.0.0.1 with direct addresses only; on
-`macos-latest` each device's disk is a sparse APFS image (`hdiutil`) and
-custodians use the service root (lab only: macOS is no backup machine, ADR
-0032). These two runners replace a run on real hardware (Guillaume, chat,
-14 October 2026). Network faults beyond loopback (NAT, relays, Wi-Fi drops)
+**Setup** (`crates/pigeon-lab`; its module docs and `slice.yml`'s header
+give the details). The lab build (`--features lab`) adds named crash points
+(`PIGEON_LAB_CRASH=point:n`, as `kill -9`) and a root for a backup
+machine's system directories, which a release build ignores; it says so in
+`doctor`, and its status reports carry `lab = true`, which a release build
+never counts. On `ubuntu-24.04` each custodian has its own mount namespace
+and loop-mounted ext4 image, over 127.0.0.1 with direct addresses only; on
+`macos-latest` each device's disk is a sparse APFS image (custodians on
+macOS in the lab only, ADR 0032). These runners replace a run on real
+hardware (Guillaume, chat, 14 October 2026). Network faults beyond loopback
 are shown by no scenario; the ledger marks what rests on them
 *conditional*.
 
-**Scenarios** are programs of pigeon-lab's typed EDSL
-(`crates/pigeon-lab/src/slice.rs`): typed device handles, steps, conditions
-with deadlines and expected outcomes, as data that prints, round-trips
-through JSON and is generated and shrunk by hegel. Two interpreters fold the
-same steps:
-
-- the **model**, over `pigeon-core`, in `cargo test`: every scenario must
-  pass there, so its expectations are what the specification predicts;
-- the **executor**, with the lab build of `pigeond` and `pigeon --json` per
-  device, supervised as systemd or launchd would. It records disk use and
-  merges the devices' trace logs; each device's events must contain its
-  part of the scenario in order, and `scripts/check-lab-traces` hands them
-  to TLC for every specification with a `*Trace.tla` (the others, and
-  events without the variables their trace specification reads, are
-  listed as not checked yet). Device paths stay short (`/tmp/lab`): past
-  104 bytes a unix socket fails and a join reports `inviter-offline`.
+**Scenarios** are typed programs of pigeon-lab's EDSL
+(`crates/pigeon-lab/src/slice.rs`) that print, round-trip through JSON and
+are generated and shrunk by hegel. Two interpreters fold the same steps:
+the **model** over `pigeon-core`, where every scenario must pass, so its
+expectations are what the specification predicts; and the **executor**,
+which runs the lab build per device, records disk use and merges the trace
+logs: each device's events must contain its part of the scenario in order,
+and `scripts/check-lab-traces` hands them to TLC (§13.3).
 
 Laws (`crates/pigeon-lab/tests/laws.rs`): steps form a monoid; validation
 and the trace projection are compositional; a prefix runs the same whatever
