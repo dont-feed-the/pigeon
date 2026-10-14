@@ -1,9 +1,8 @@
 # 16. Open questions
 
-> Mission: what is not decided: the conflicts left between this
-> specification and an accepted ADR, the details it decides without an ADR
-> (each marked **[no ADR]** in the text), and the design questions left
-> open. Under the [ADR policy](../adr/README.md#when-to-write-an-adr) a
+> Mission: what is not decided: departures from accepted ADRs, details
+> decided without an ADR (marked **[no ADR]** in the text), and open design
+> questions. Under the [ADR policy](../adr/README.md#when-to-write-an-adr) a
 > **[no ADR]** detail is settled here; it becomes an ADR only if it turns
 > out costly to reverse, or a reviewer asks for one.
 
@@ -15,10 +14,9 @@ No ADR is Proposed: Guillaume accepted ADRs 0046, 0047, 0048 and 0051 on
 
 ## 16.2 Where this specification departs from a source
 
-Accepted ADRs come first ([README](README.md)) and are never rewritten, so
-each departure from one waits for a new ADR that confirms this
-specification, or for a correction of it. Departures from ux.md and the
-proposal need nothing: this specification comes before them.
+Accepted ADRs come first ([README](README.md)) and are never rewritten:
+each departure waits for a new ADR that confirms this specification, or
+for a correction of it. Departures from ux.md and the proposal need nothing.
 
 | Topic | Accepted ADR says | This specification | Why |
 |---|---|---|---|
@@ -32,103 +30,35 @@ ADR 0009's roster merge rule is superseded by ADR 0051 (`Roster_adr0009`).
 ## 16.3 Details decided without an ADR
 
 Each is cheap to reverse or local to one part of pigeon, so the ADR policy
-asks for none; grouped by subject, so that a few ADRs could cover them if
-needed.
+asks for none. Grouped by file, so that a few ADRs could cover them.
 
-### A. Repository layout ([03](03-repository-and-roles.md))
-
-- Custodians hold a **bare** repository at `/var/lib/pigeon/<group-id>.git` (§3.1).
-- Refs `refs/pigeon/peers/<device>/main` and `refs/pigeon/status/<device>` (§3.2).
-- The settings check suspends drops and re-applies the expected settings (§3.5).
-- Remote names `pigeon-` + 12 hex digits of the device ID (§3.6).
-- The batch processes' grace period, and the argument checks of
-  `pigeon_git::allow::check`, with the two `-c` settings it accepts and
-  remotedaemon in a process group of its own (§3.7).
-
-### B. Roster and authority ([04](04-roster-and-authority.md))
-
-- The field names of `roster.toml` (§4.2).
-- The longest-prefix folder rule, and add-only with the admins as stewards
-  where no rule applies (§4.3).
-- Drop records by any member about their own device (§4.3); decisions on
-  suggestions are now ADR 0051.
-- The proposal shape: one per capture batch and set of deciders, chained per
-  path (§4.5).
-- Force for admins only (§4.6, and §16.2).
-- Concurrent edits of one roster table: the first side wins, the other becomes
-  a proposal to the admins (§4.7).
-
-### C. Catalogue and names ([05](05-catalogue-and-names.md))
-
-- The conflict-name form (§5.3, and §16.2).
-- Name length limits, 255 bytes per name and 1024 per path, and holding a
-  non-portable name back at capture (§5.4).
-
-### D. Status ([06](06-status.md))
-
-- `offline_after` 24 h, `stale_after` 1 h, the report period 10 minutes (§6.2, §6.7).
-- Signed status reports under `refs/pigeon/status/` and their content (§6.3).
-- Naming the custodians that would hold a key through `find --want-get` (§6.4).
-- The headline precedence (§6.5, and §16.2).
-
-### E. Capture, install and custody loops ([07](07-capture-and-install.md), [08](08-custody-loops.md))
-
-- The aside kept until the first full scan 10 minutes after `done` (§7.5,
-  [11 §11.3](11-local-state.md)).
-- The first build's departures from this specification, each to close before
-  the slice's scenarios run ([13 §13.12](13-verification.md)), and its extra
-  files `peers.json`, `p2p-token`, `freed.json` and `dead.json` ([11 §11.3](11-local-state.md)).
-- A save of a diverging path becomes a proposal of its own (§7.6).
-- Fetching every 5 minutes besides change notices (§8.1); repair in the
-  protect class of the queue (§8.1, [15 §15.2](15-resource-use.md); issue
-  #13).
-- The deadline of a P2P fetch or push (§8.2).
-- The Drop command `free --without-checking` and its record (§8.7).
-- A full scrub pass every 30 days (§8.8).
-
-### F. Network and joining ([09](09-network-and-joining.md))
-
-- The invitation encoding `pgn1-` + base32 (§9.6).
-- The inviter keeps each invitation's secret, which checking the proof needs
-  (§9.6, a correction); the join exchange carries a custodian's direct
-  addresses, and the welcome the inviter's git-annex UUID (§9.6).
-- A custodian's default `maxsize`: free space minus 10 % (§9.6).
-- The safety words (§9.6).
-- `pigeon leave` (§9.7).
-
-### G. Interfaces ([10](10-interfaces.md))
-
-- Force as `accept --override`, and the verbs `held`, `settings`, `leave`,
-  `erase --cancel`, `invite --list | --cancel` (§10.1).
-- At most one notification per kind and day (§10.4).
-- Isolation marks around arguments, and an unknown message id rendered as
-  itself (§10.5).
-- Problem codes shown as `P-` and capitals (§10.6); the first build's codes
-  `usage`, `unknown-computer`, `receiving`, `not-a-pigeon-repository`,
-  `peer-unreachable`, `peer-refused` and `internal-error` (§10.6).
-- The clock-skew warning at 5 minutes (§10.7).
-
-### H. Local state, observability, verification, platforms ([11](11-local-state.md), [12](12-observability.md), [13](13-verification.md), [14](14-platforms-and-packaging.md))
-
-- `toml_edit` for writing `config.toml`, and its `[network]` and `[loops]`
-  tables (§11.2); invitation records kept 30 days (§11.3).
-- Telemetry files bounded to 50 MB; `debug bundle` asks each peer's person;
-  the `PIGEON_TRACE` switch (§12.2, §12.3).
-- The E17 runner with a hard disk (§13.8); the first milestone's scope, its
-  deferrals and `not-in-this-build` (§13.12).
-- Minimum OS versions (§14.1); the file-system list (§14.2); the `MemoryHigh`
-  value (§14.4); the Homebrew tap and release signing (§14.5); the crates
-  `hmac`, `sha2`, `data-encoding`, `qrcode`, and the platform crates `rustix`
-  and `libc` (§14.7); the per-platform minimum versions of git and git-annex
-  (§14.3). The crate layout, edition and pinned toolchain
-  ([14 §14.6](14-platforms-and-packaging.md)).
-
-### I. Resource use ([15](15-resource-use.md)), within ADR 0037
-
-- The shaper's constants (§15.3); history exchange on metered networks (§15.3).
-- Disk-busy thresholds and back-off timings (§15.4).
-- The preset values (§15.6).
-- The reference tree and the memory budget (§15.7).
+| File | Decided here |
+|---|---|
+| [03](03-repository-and-roles.md) | custodians' **bare** repository `/var/lib/pigeon/<group-id>.git` (§3.1); refs `refs/pigeon/peers/<device>/main`, `refs/pigeon/status/<device>` (§3.2) |
+| 03 | the settings check suspends drops and re-applies the settings (§3.5); remote names `pigeon-` + 12 hex digits of the device ID (§3.6) |
+| 03 | the batch processes' grace period; `pigeon_git::allow::check` with its two accepted `-c` settings; remotedaemon in its own process group (§3.7) |
+| [04](04-roster-and-authority.md) | the field names of `roster.toml` (§4.2); the longest-prefix folder rule, add-only with the admins as stewards where none applies (§4.3) |
+| 04 | drop records by any member about their own device (§4.3; decisions on suggestions are ADR 0051) |
+| 04 | one proposal per capture batch and set of deciders, chained per path (§4.5); force for admins only (§4.6, §16.2) |
+| 04 | concurrent edits of one roster table: the first side wins, the other becomes a proposal to the admins (§4.7) |
+| [05](05-catalogue-and-names.md) | the conflict-name form (§5.3); limits of 255 bytes per name and 1024 per path, and holding a non-portable name back at capture (§5.4) |
+| [06](06-status.md) | `offline_after` 24 h, `stale_after` 1 h, a report every 10 minutes (§6.2, §6.7); signed reports under `refs/pigeon/status/` (§6.3) |
+| 06 | naming the custodians that would hold a key through `find --want-get` (§6.4); the headline precedence (§6.5, §16.2) |
+| [07](07-capture-and-install.md) | the aside kept until the first full scan 10 minutes after `done` (§7.5, [11 §11.3](11-local-state.md)); a save of a diverging path is a proposal of its own (§7.6) |
+| 07 | the first build's departures, each to close before the slice's scenarios run ([13 §13.12](13-verification.md)), and its files `peers.json`, `p2p-token`, `freed.json`, `dead.json` (11 §11.3) |
+| [08](08-custody-loops.md) | fetching every 5 minutes besides change notices; repair in the protect class of the queue (§8.1, [15 §15.2](15-resource-use.md), issue #13) |
+| 08 | the deadline of a P2P fetch or push (§8.2); `free --without-checking` and its record (§8.7); a full scrub every 30 days (§8.8) |
+| [09](09-network-and-joining.md) | the invitation encoding `pgn1-` + base32; the inviter keeps each secret, which checking the proof needs (a correction) (§9.6) |
+| 09 | the join exchange carries a custodian's direct addresses, the welcome the inviter's git-annex UUID; default `maxsize` free space minus 10 %; the safety words (§9.6); `pigeon leave` (§9.7) |
+| [10](10-interfaces.md) | force as `accept --override`; the verbs `held`, `settings`, `leave`, `erase --cancel`, `invite --list \| --cancel` (§10.1); one notification per kind and day (§10.4) |
+| 10 | isolation marks around arguments, an unknown message id rendered as itself (§10.5); the clock-skew warning at 5 minutes (§10.7) |
+| 10 | problem codes as `P-` and capitals; the first build's `usage`, `unknown-computer`, `receiving`, `not-a-pigeon-repository`, `peer-unreachable`, `peer-refused`, `internal-error` (§10.6) |
+| [11](11-local-state.md) | `toml_edit` for writing `config.toml`, its `[network]` and `[loops]` tables (§11.2); invitation records kept 30 days (§11.3) |
+| [12](12-observability.md) | telemetry bounded to 50 MB; `debug bundle` asks each peer's person; the `PIGEON_TRACE` switch (§12.2, §12.3) |
+| [13](13-verification.md) | the E17 runner with a hard disk (§13.8); the first milestone's scope, deferrals and `not-in-this-build` (§13.12) |
+| [14](14-platforms-and-packaging.md) | minimum OS versions (§14.1); the file-system list (§14.2); minimum git and git-annex per platform (§14.3); the `MemoryHigh` value (§14.4) |
+| 14 | the Homebrew tap and release signing (§14.5); the crate layout, edition and pinned toolchain (§14.6); `hmac`, `sha2`, `data-encoding`, `qrcode`, `rustix`, `libc` (§14.7) |
+| [15](15-resource-use.md), within ADR 0037 | the shaper's constants and history exchange on metered networks (§15.3); disk-busy thresholds and back-off (§15.4); presets (§15.6); the reference tree and memory budget (§15.7) |
 
 ### Rules that were Proposed ADRs
 
@@ -166,56 +96,51 @@ into 0054; 0065 into 0053.
 
 ## 16.4 Design questions left open
 
-- **Rename tracking.** A rename is a deletion and an add
-  ([05 §5.2](05-catalogue-and-names.md)): an edit concurrent with a rename
-  stays at the old name. Should capture record renames? git's similarity
-  detection guesses, and fails on small files.
-- **Editing your own file in an add-only folder** becomes a suggestion to
-  the stewards ([04 §4.3](04-roster-and-authority.md)). May the author of a
-  path's only version modify it until someone else changes it?
-- **A per-group `.pigeon/ignore`** besides the fixed list
-  ([07 §7.2](07-capture-and-install.md)).
-- **Links, empty folders, extended attributes, live libraries** in a later
-  version ([07 §7.9](07-capture-and-install.md)); a package list taken from
-  macOS's type declarations rather than fixed.
-- **Names:** hold non-portable names (today) or map them on Windows only,
-  as Samba's `catia` does ([05 §5.4](05-catalogue-and-names.md)).
-- **K per folder**; the roster has one `k` today.
+- **Rename tracking.** Should capture record renames? A rename is a
+  deletion and an add ([05 §5.2](05-catalogue-and-names.md)), so an edit
+  concurrent with it stays at the old name; git's similarity detection
+  guesses, and fails on small files.
+- **Own files in an add-only folder** become suggestions
+  ([04 §4.3](04-roster-and-authority.md)). May the author of a path's only
+  version modify it until someone else changes it?
+- **Scope:** a per-group `.pigeon/ignore` ([07 §7.2](07-capture-and-install.md));
+  links, empty folders, extended attributes, live libraries, and packages
+  from macOS's type declarations (§7.9); mapping non-portable names on
+  Windows only, as Samba's `catia` does ([05 §5.4](05-catalogue-and-names.md));
+  K per folder.
 - **Expiring declined suggestions** ([08 §8.9](08-custody-loops.md)) by a
   group setting, as a purge decided in advance.
-- **Recovery** ([09 §9.9](09-network-and-joining.md), ADR 0047): Shamir
+- **Recovery** (ADR 0047, [09 §9.9](09-network-and-joining.md)): Shamir
   shares of a sheet among admins; refounding only with the surviving
-  custodians' owners; ADR 0046's sync points under power loss, with a
+  custodians' owners; ADR 0046's sync points under power loss, tested with a
   fault-injecting block device.
-- **Privacy across groups:** one key per device makes a device recognisable
-  in two groups ([09 §9.1](09-network-and-joining.md)); a key per group
-  costs an endpoint per group.
-- **The device key at rest** could live in the macOS keychain or the Secret
+- **Keys:** one key per device makes a device recognisable in two groups
+  ([09 §9.1](09-network-and-joining.md)), a key per group costs an endpoint
+  per group; the device key could rest in the macOS keychain or the Secret
   Service.
-- **Phones** as viewers; **installers** for non-technical people (ux.md
-  §11); **short invitation codes** with a PAKE (ADR 0017); a **placement
-  planner** (ADR 0003); **per-file freeing** (ADR 0031); **native Windows**
-  (ADR 0005, E11); **macOS backup machines** and **NAS packages** (ADR 0032).
+- **Later:** phones as viewers; installers (ux.md §11); short invitation
+  codes with a PAKE (ADR 0017); a placement planner (ADR 0003); per-file
+  freeing (ADR 0031); native Windows (ADR 0005, E11); macOS backup machines
+  and NAS packages (ADR 0032).
 - **Thresholds** of [06 §6.7](06-status.md), from the usability test, and
   `pending_max` ([07 §7.8](07-capture-and-install.md)).
-- **Saves from stale memory** ([07 §7.5](07-capture-and-install.md)): an
-  application holding a file's old content that saves after an install
-  replaces the new version, then only in history. Should a save within
-  seconds of an install count as concurrent?
-- **Saves through a shared mapping on macOS** change the stat only at
-  `msync` (E19), so capture sees them late (the kept aside keeps them).
-  Hashing kept files periodically would close the gap, at a cost in reads.
+- **Saves from stale memory** (07 §7.5): an application holding a file's old
+  content that saves after an install replaces the new version, then only in
+  history. Should a save within seconds of an install count as concurrent?
+- **Shared mappings on macOS** change the stat only at `msync` (E19), so
+  capture sees them late; the kept aside covers them. Hashing kept files
+  periodically would close the gap, at a cost in reads.
 - **A P2P fetch that never ends** (E12): git-annex's relay
   (`runRelayService`, `P2P/IO.hs`) can send `CONNECTDONE` before the pack,
   and remotedaemon fetches without a deadline. `pigeond` works around it
   ([08 §8.2](08-custody-loops.md)); to report upstream, with the fix of
   draining the output first.
-- **Corruption no scrub has found yet** ([09 §9.4](09-network-and-joining.md)):
-  a rotten copy counts until the next scrub, at most 30 days
-  ([08 §8.8](08-custody-loops.md)). A custodian's drop no longer leans on
-  it; a laptop's may. A shorter period costs reads (ADR 0037).
-- **Erased names** stay in the signed history
-  ([08 §8.6](08-custody-loops.md)). Is a re-signed history ever needed?
+- **Unfound corruption** ([09 §9.4](09-network-and-joining.md)): a rotten
+  copy counts until the next scrub, at most 30 days (08 §8.8). A custodian's
+  drop no longer leans on it; a laptop's may. A shorter period costs reads
+  (ADR 0037).
+- **Erased names** stay in the signed history (08 §8.6). Is a re-signed
+  history ever needed?
 
 ## 16.5 Review issues
 
