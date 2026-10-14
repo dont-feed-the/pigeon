@@ -219,9 +219,10 @@ from this specification as follows, each to close before S1–S11 run
 - place follows the queue order with admission
   ([08 §8.9](08-custody-loops.md)) but reads no introduction time; repair
   marks a removed device's UUID `dead`, after which place copies again;
-- `heard` times and the trace clock are in memory, not in `clock.json`
-  ([11 §11.3](11-local-state.md)); `history` takes older versions' states
-  from their copy counts;
+- `heard` times and the trace clock are kept in `clock.json`
+  ([11 §11.3](11-local-state.md)), but the clock travels in no stream
+  header or join message yet ([12 §12.3](12-observability.md)); `history`
+  takes older versions' states from their copy counts;
 - the device key is hex, not OpenSSH ([11 §11.2](11-local-state.md)); an
   invitation is base32 of JSON, and also carries the group's name, K and the
   inviter's name;

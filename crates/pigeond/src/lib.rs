@@ -11,6 +11,7 @@ pub mod admission;
 pub mod api;
 pub mod capture;
 pub mod change;
+pub mod clock_file;
 pub mod config;
 pub mod custody;
 pub mod daemon;

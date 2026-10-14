@@ -3,11 +3,12 @@
 //! the build has the `tla-trace` feature and `PIGEON_TRACE=1`. Otherwise
 //! nothing is written.
 //!
-//! The slice keeps the Lamport clock in memory, from 0 at each start, and
-//! sends it to no peer yet (13 §13.12).
+//! The Lamport clock is kept in each group's `clock.json` across restarts
+//! (`clock_file`); it is sent to no peer yet (13 §13.12).
 
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// The actions `pigeond` logs, named as in the specifications.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,7 +42,8 @@ pub enum Act {
 /// Where trace events go.
 #[derive(Debug)]
 pub struct Tracer {
-    out: Option<Mutex<(PathBuf, u64)>>,
+    out: Option<Mutex<PathBuf>>,
+    clock: AtomicU64,
     device: String,
 }
 
@@ -50,7 +52,8 @@ impl Tracer {
     pub fn new(dir: PathBuf, device: &str) -> Tracer {
         let on = cfg!(feature = "tla-trace") && std::env::var("PIGEON_TRACE").as_deref() == Ok("1");
         Tracer {
-            out: on.then(|| Mutex::new((dir.join(format!("{device}.ndjson")), 0))),
+            out: on.then(|| Mutex::new(dir.join(format!("{device}.ndjson")))),
+            clock: AtomicU64::new(0),
             device: device.to_owned(),
         }
     }
@@ -60,14 +63,25 @@ impl Tracer {
         let Some(out) = &self.out else {
             return;
         };
-        let mut out = out.lock().unwrap_or_else(|p| p.into_inner());
-        out.1 += 1;
-        if let Some(line) = line(act, &self.device, out.1, vars) {
-            if let Some(dir) = out.0.parent() {
+        let out = out.lock().unwrap_or_else(|p| p.into_inner());
+        let clock = self.clock.fetch_add(1, Ordering::SeqCst) + 1;
+        if let Some(line) = line(act, &self.device, clock, vars) {
+            if let Some(dir) = out.parent() {
                 let _ = std::fs::create_dir_all(dir);
             }
-            let _ = pigeon_sys::fs::append_durable(&out.0, line.as_bytes());
+            let _ = pigeon_sys::fs::append_durable(&out, line.as_bytes());
         }
+    }
+
+    /// The Lamport clock: the last event's.
+    pub fn clock(&self) -> u64 {
+        self.clock.load(Ordering::SeqCst)
+    }
+
+    /// Moves the clock to at least `n`, as a restart reads it from
+    /// `clock.json`.
+    pub fn at_least(&self, n: u64) {
+        self.clock.fetch_max(n, Ordering::SeqCst);
     }
 }
 

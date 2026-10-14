@@ -130,6 +130,7 @@ impl Daemon {
             crate::thin::rethin(g, &self.device, &self.tracer).await;
         }
         crate::repair::repair(g, &self.device).await;
+        crate::clock_file::save(g, self.tracer.clock());
     }
 }
 
@@ -316,7 +317,12 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     let mut groups = Vec::new();
     for entry in &config.groups {
         match Group::open(&entry.id, &entry.path, &env).await {
-            Some(g) => groups.push(Arc::new(g)),
+            Some(g) => {
+                if let crate::clock_file::Read::Known(c) = crate::clock_file::read(&g) {
+                    tracer.at_least(c.clock);
+                }
+                groups.push(Arc::new(g));
+            }
             None => {
                 tracing::warn!(group = %entry.id, path = %entry.path.display(), "group-missing")
             }

@@ -145,6 +145,9 @@ impl Group {
             syncing: Arc::new(Mutex::new(BTreeMap::new())),
             daemon_peers: Mutex::new(BTreeSet::new()),
         };
+        if let crate::clock_file::Read::Known(c) = crate::clock_file::read(&g) {
+            g.lock().heard = c.heard;
+        }
         let uuid = g.git.config("annex.uuid").await;
         let token = std::fs::read_to_string(g.token_file())
             .ok()
