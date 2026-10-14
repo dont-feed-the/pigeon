@@ -2237,6 +2237,7 @@ dependencies = [
 name = "pigeond"
 version = "2.0.0-alpha.0"
 dependencies = [
+ "hegeltest",
  "iroh",
  "iroh-mdns-address-lookup",
  "pigeon-core",
