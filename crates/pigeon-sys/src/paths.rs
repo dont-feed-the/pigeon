@@ -36,12 +36,15 @@ impl Dirs {
     /// `run/` under the cache directory.
     pub fn for_role(role: Role) -> Result<Dirs> {
         match role {
-            Role::Service => Ok(Dirs {
-                config: PathBuf::from("/var/lib/pigeon"),
-                state: PathBuf::from("/var/log/pigeon"),
-                cache: PathBuf::from("/var/cache/pigeon"),
-                runtime: PathBuf::from("/run/pigeon"),
-            }),
+            Role::Service => {
+                let root = crate::lab::service_root().unwrap_or_else(|| PathBuf::from("/"));
+                Ok(Dirs {
+                    config: root.join("var/lib/pigeon"),
+                    state: root.join("var/log/pigeon"),
+                    cache: root.join("var/cache/pigeon"),
+                    runtime: root.join("run/pigeon"),
+                })
+            }
             Role::Person => {
                 let missing = |what: &'static str| Error::Malformed {
                     what,

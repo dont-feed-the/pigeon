@@ -18,6 +18,7 @@ pigeon-proto = { path = "crates/pigeon-proto" }
 pigeon-i18n = { path = "crates/pigeon-i18n" }
 pigeon-git = { path = "crates/pigeon-git" }
 pigeon-sys = { path = "crates/pigeon-sys" }
+pigeon-lab = { path = "crates/pigeon-lab" }
 dirs = "7.0"
 fluent-bundle = "0.16"
 fluent-langneg = "0.13"

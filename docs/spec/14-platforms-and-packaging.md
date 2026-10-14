@@ -139,6 +139,7 @@ class by `pigeond` itself (ADRs 0032, 0037). On macOS, a **launchd agent**
 | `pigeond` | bin | the daemon: loops, iroh endpoint, socket, web server | yes |
 | `pigeon` | bin | the CLI (ADR 0024) | socket only |
 | `git-annex-p2p-iroh` | bin | the transport helper (ADR 0006) | socket and stdio only |
+| `pigeon-lab` | lib and bin, never shipped | the slice's scenarios as typed values, their model interpreter over `pigeon-core` and their process executor ([13 §13.12](13-verification.md)) | yes: it runs `pigeond` and `pigeon` and mounts disk images |
 
 Each crate lives in `crates/<name>/` and is created when its work starts.
 `pigeon-core` depends on no crate that performs I/O; `scripts/check-core-deps`

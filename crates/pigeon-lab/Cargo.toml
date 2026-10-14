@@ -1,0 +1,26 @@
+[package]
+name = "pigeon-lab"
+description = "The slice's scenarios as typed values, a model interpreter and a process executor (13 §13.12)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+pigeon-core.workspace = true
+pigeon-proto.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+hegeltest.workspace = true
+
+[[bin]]
+name = "pigeon-lab"
+path = "src/main.rs"
+
+[lints]
+workspace = true

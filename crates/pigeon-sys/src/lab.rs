@@ -1,9 +1,11 @@
-//! The two seams of the lab build (13 §13.12), and nothing else: failure-domain
-//! fingerprints read from a file, and named crash points.
+//! The three seams of the lab build (13 §13.12), and nothing else:
+//! failure-domain fingerprints read from a file, named crash points, and a
+//! root for a backup machine's system directories, so that several run on
+//! one host without mount namespaces (the macOS runners).
 //!
-//! Without the `lab` feature both are inert: [`crash_point`] does nothing and
-//! [`fingerprints_file`] is `None`, so a release build behaves as if this
-//! module did not exist. [`LAB`] says which build this is, for `doctor` and
+//! Without the `lab` feature all are inert: [`crash_point`] does nothing and
+//! [`fingerprints_file`] and [`service_root`] are `None`, so a release build
+//! behaves as if this module did not exist. [`LAB`] says which build this is, for `doctor` and
 //! for the `lab = true` mark of status reports.
 
 use std::path::PathBuf;
@@ -18,6 +20,9 @@ pub const CRASH_VAR: &str = "PIGEON_LAB_CRASH";
 
 /// The variable naming the fingerprints file of a lab build.
 pub const FINGERPRINTS_VAR: &str = "PIGEON_LAB_FINGERPRINTS";
+
+/// The variable naming the root of a lab backup machine's system directories.
+pub const SERVICE_ROOT_VAR: &str = "PIGEON_LAB_SERVICE_ROOT";
 
 /// A crash plan: abort at the `n`-th crossing of `point` (counted from 1).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -88,6 +93,17 @@ pub fn fingerprints_file() -> Option<PathBuf> {
     std::env::var_os(FINGERPRINTS_VAR).map(PathBuf::from)
 }
 
+/// The root under which a lab build keeps a backup machine's system
+/// directories (`PIGEON_LAB_SERVICE_ROOT`), instead of `/var/lib/pigeon` and
+/// the others. A backup machine with one runs outside systemd, so it is a lab
+/// one: `doctor` and its status reports say so. `None` in a release build.
+pub fn service_root() -> Option<PathBuf> {
+    if !LAB {
+        return None;
+    }
+    std::env::var_os(SERVICE_ROOT_VAR).map(PathBuf::from)
+}
+
 #[cfg(feature = "lab")]
 mod imp {
     use std::sync::OnceLock;
@@ -147,6 +163,7 @@ mod tests {
     fn a_release_build_has_no_seams() {
         if !LAB {
             assert_eq!(fingerprints_file(), None);
+            assert_eq!(service_root(), None);
             assert_eq!(check_env().unwrap(), None);
             crash_point("never");
         }

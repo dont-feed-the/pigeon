@@ -2210,6 +2210,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pigeon-lab"
+version = "2.0.0-alpha.0"
+dependencies = [
+ "hegeltest",
+ "pigeon-core",
+ "pigeon-proto",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "pigeon-proto"
 version = "2.0.0-alpha.0"
 dependencies = [
