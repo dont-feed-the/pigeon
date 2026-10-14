@@ -21,7 +21,11 @@ use std::sync::{Arc, Mutex};
 use iroh::endpoint::{Connection, RelayMode, presets};
 use iroh::{Endpoint, EndpointAddr, PublicKey, SecretKey};
 use pigeon_core::filter::Role;
-use pigeon_proto::stream::{ALPN_ANNEX, MAX_HEADER, Refusal, StreamAnswer, StreamHeader};
+use pigeon_proto::join::{Join, JoinAnswer};
+use pigeon_proto::stream::{
+    ALPN_ANNEX, ALPN_JOIN, MAX_HEADER, Refusal, StreamAnswer, StreamHeader,
+};
+use pigeon_proto::{Request, Response};
 use tokio::io::{AsyncRead, AsyncReadExt};
 
 /// A repository this device serves, as the loops know it.
@@ -62,6 +66,18 @@ pub trait Directory: Send + Sync + 'static {
     fn admit(&self, group: &str, device: &str) -> Option<Admitted>;
     /// Direct addresses known for `device`, besides what mDNS finds.
     fn addresses(&self, device: &str) -> Vec<SocketAddr>;
+}
+
+/// A boxed future, as the loops answer.
+pub type Answer<T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send>>;
+
+/// What the loops of `pigeond` answer: the socket's requests that are not
+/// the helper's, and the joins of new devices (09 §9.6).
+pub trait Loops: Send + Sync + 'static {
+    /// Answers one request of the local socket: progress, then the result.
+    fn request(&self, request: Request) -> Answer<Vec<Response>>;
+    /// Answers the join of `device`, authenticated by the QUIC handshake.
+    fn join(&self, device: String, join: Join) -> Answer<JoinAnswer>;
 }
 
 /// A [`Directory`] held in memory, set up by its owner.
@@ -207,7 +223,7 @@ impl Node {
     pub async fn bind(config: &NetConfig) -> Result<Node, NetError> {
         let mut builder = Endpoint::builder(presets::Minimal)
             .secret_key(SecretKey::from_bytes(&config.secret_key))
-            .alpns(vec![ALPN_ANNEX.to_vec()])
+            .alpns(vec![ALPN_ANNEX.to_vec(), ALPN_JOIN.to_vec()])
             .relay_mode(RelayMode::Disabled)
             .clear_ip_transports()
             .bind_addr(config.bind)
@@ -274,6 +290,39 @@ impl Node {
             return Err(NetError::Refused(answer.refusal));
         }
         Ok((send, recv))
+    }
+
+    /// Sends `join` to the inviter `device` on `pigeon/join/1` and reads its
+    /// answer, on a connection of its own.
+    pub async fn join(
+        &self,
+        device: &str,
+        addresses: Vec<SocketAddr>,
+        join: &Join,
+    ) -> Result<JoinAnswer, NetError> {
+        let key = parse_device_id(device).ok_or_else(|| NetError::Connect("device id".into()))?;
+        let mut addr = EndpointAddr::new(key);
+        for a in addresses {
+            addr = addr.with_ip_addr(a);
+        }
+        let connection = self
+            .endpoint
+            .connect(addr, ALPN_JOIN)
+            .await
+            .map_err(|e| NetError::Connect(e.to_string()))?;
+        let (mut send, mut recv) = connection
+            .open_bi()
+            .await
+            .map_err(|e| NetError::Connect(e.to_string()))?;
+        let mut line = serde_json::to_vec(join).map_err(|e| NetError::Connect(e.to_string()))?;
+        line.push(b'\n');
+        send.write_all(&line)
+            .await
+            .map_err(|e| NetError::Connect(e.to_string()))?;
+        let answer = read_line(&mut recv).await?;
+        let _ = send.finish();
+        connection.close(0u32.into(), b"joined");
+        serde_json::from_slice(&answer).map_err(|e| NetError::Connect(e.to_string()))
     }
 
     async fn connection(

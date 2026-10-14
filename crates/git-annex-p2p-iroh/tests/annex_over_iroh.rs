@@ -98,6 +98,7 @@ async fn device(dir: &Path, name: &str) -> Device {
         listeners: Listeners::default(),
         syncer: Arc::new(AnnexSyncer),
         socket_path: socket.clone(),
+        loops: None,
     });
     tokio::spawn(serve_socket(net.clone(), listener));
     tokio::spawn(accept_loop(net.clone()));

@@ -4,8 +4,9 @@
 //! connection carries raw bytes. `Address` answers this device's ID,
 //! `Connect` opens a stream to a peer and relays it, `Listen` registers
 //! remotedaemon's socket for the repository's group until the helper's
-//! connection ends. Other requests belong to the loops; here they are
-//! answered `not-in-this-build` (13 §13.12). Only the same user may connect.
+//! connection ends. Other requests go to the loops ([`super::Loops`]), and
+//! without them are answered `not-in-this-build` (13 §13.12). Only the same
+//! user may connect.
 
 use std::collections::{BTreeMap, HashMap};
 use std::os::unix::fs::MetadataExt;
@@ -17,7 +18,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::unix::OwnedWriteHalf;
 use tokio::net::{UnixListener, UnixStream};
 
-use super::{Directory, NetError, Node, sync::Syncer};
+use super::{Directory, Loops, NetError, Node, sync::Syncer};
 
 /// remotedaemon's sockets, by group, as the helper registered them.
 #[derive(Debug, Default)]
@@ -63,6 +64,17 @@ pub struct Net {
     pub syncer: Arc<dyn Syncer>,
     /// The local socket's path.
     pub socket_path: PathBuf,
+    /// The loops, which answer the other requests; without them those are
+    /// answered `not-in-this-build`.
+    pub loops: Option<Arc<dyn Loops>>,
+}
+
+impl std::fmt::Debug for Net {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Net")
+            .field("socket_path", &self.socket_path)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Binds the local socket at `path`, readable by the user only.
@@ -234,7 +246,14 @@ async fn client(net: Arc<Net>, stream: UnixStream) -> Result<(), NetError> {
                 }
                 return Ok(());
             }
-            _ => reply(&mut wr, id, &problem("not-in-this-build", None)).await?,
+            other => match &net.loops {
+                Some(loops) => {
+                    for response in loops.request(other).await {
+                        reply(&mut wr, id, &response).await?;
+                    }
+                }
+                None => reply(&mut wr, id, &problem("not-in-this-build", None)).await?,
+            },
         }
     }
 }

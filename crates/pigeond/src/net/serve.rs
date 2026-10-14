@@ -13,7 +13,8 @@ use std::time::Duration;
 
 use iroh::endpoint::{RecvStream, SendStream};
 use pigeon_core::filter::{Action, Config, Filter};
-use pigeon_proto::stream::{HEADER_VERSION, Refusal, StreamAnswer, StreamHeader};
+use pigeon_proto::join::{Join, JoinAnswer};
+use pigeon_proto::stream::{ALPN_JOIN, HEADER_VERSION, Refusal, StreamAnswer, StreamHeader};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 use tokio::task::JoinSet;
@@ -37,6 +38,12 @@ pub async fn accept_loop(net: Arc<Net>) {
                 }
             };
             let device = device_id(&connection.remote_id());
+            if connection.alpn() == ALPN_JOIN {
+                if let Ok((send, recv)) = connection.accept_bi().await {
+                    join(&net, device, send, recv).await;
+                }
+                return;
+            }
             while let Ok((send, recv)) = connection.accept_bi().await {
                 let net = net.clone();
                 let device = device.clone();
@@ -44,6 +51,28 @@ pub async fn accept_loop(net: Arc<Net>) {
             }
         });
     }
+}
+
+/// One join exchange: a [`Join`] line, answered by the loops.
+async fn join(net: &Net, device: String, mut send: SendStream, mut recv: RecvStream) {
+    let line = match tokio::time::timeout(HEADER_TIMEOUT, read_line(&mut recv)).await {
+        Ok(Ok(line)) => line,
+        _ => return,
+    };
+    let refused = |code: &str| JoinAnswer::Refused {
+        code: code.to_owned(),
+    };
+    let answer = match (serde_json::from_slice::<Join>(&line), &net.loops) {
+        (Ok(j), Some(loops)) => loops.join(device.clone(), j).await,
+        (Ok(_), None) => refused("not-in-this-build"),
+        (Err(_), _) => refused("invite-unknown"),
+    };
+    tracing::info!(peer = %device, answer = ?answer, "join-answered");
+    let mut out = serde_json::to_vec(&answer).unwrap_or_default();
+    out.push(b'\n');
+    let _ = send.write_all(&out).await;
+    let _ = send.finish();
+    let _ = tokio::time::timeout(Duration::from_secs(5), send.stopped()).await;
 }
 
 async fn refuse(mut send: SendStream, device: &str, refusal: Refusal) {
