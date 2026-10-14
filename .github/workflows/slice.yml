@@ -58,6 +58,8 @@ jobs:
       - name: git-annex from Homebrew (macOS)
         if: runner.os == 'macOS'
         run: brew install git-annex
+      - name: pigeon's git-annex, once git-annex.yml has built this patch set (ADR 0069)
+        uses: ./.github/actions/git-annex-pigeon
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
