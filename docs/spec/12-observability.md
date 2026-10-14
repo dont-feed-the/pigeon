@@ -110,7 +110,7 @@ specifications ([13 §13.3](13-verification.md)).
 |---|---|
 | `CaptureInstall` | `Save` (inferred from the scan), `Capture`, `InstallStep`, `Crash`, `Recover`, `Decide`, `Resolve` |
 | `Authority` | `Receive`, `Validate`, `Merge`, `Propose`, `Adopt`, `Reject` |
-| `Evict` | `FreeFolder`, `KeepFolder`, `DropVerified` (lock, check, drop) |
+| `Evict` | `ChooseFree`, `ChooseKeep` (the `wanted` target), `Hide`, `HideFinish`, `Release`, `DropFree`, `Prune`, `Get`, `Stage`, `MoveIn`, `Unhide`, `Restage`, `Unstage`, `Capture`, `Crash`, `Restart`; `Replace` and `WriteHandle` inferred from the scan, `GroupChange` from accept, `Observe` from status reports |
 | `Purge` | `Request`, `Cancel`, `Restore`, `Seal`, `Release`, `DropReleased`, `Refetch` |
 | `Repair` | `Join`, `RemoveLost`, `StartGet`, `FinishGet`, `AbortGet`, `Sync`, `Drop`, `LaptopDrop`, `Scrub`, `FsckDone`, `Crash` (logged at restart), `Remove` (a roster change); the faults `LoseDisk` and `Rot`, and `Partition` and `Heal`, are not logged and stay free |
 | `CustodyTokens` (existing) | the hand-off events of the existing model |

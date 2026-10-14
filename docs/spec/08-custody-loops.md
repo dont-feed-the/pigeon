@@ -128,7 +128,7 @@ ADR 0046). The `Repair` model ([13 §13.2](13-verification.md)) checks this
 loop, placement and rebalancing against lost disks, removed custodians,
 rotten and restored copies, crashes and partitions.
 
-## 8.5 Freeing and keeping a folder (ADRs 0031, 0039)
+## 8.5 Freeing and keeping a folder (ADRs 0031, 0039, 0061)
 
 Per top-level folder F, on a laptop. A file of F is always complete or absent,
 never a pointer file, including after a crash at any instant (ADR 0039,
@@ -142,13 +142,29 @@ capture resumes.
 1. Remove F from this device's `wanted`.
 2. Refuse while F has an unresolved divergence ([07 §7.6](07-capture-and-install.md)):
    "Resolve the conflict on *tarte.docx* first".
-3. **Hide** the files of F whose versions are *protected*, with
-   `git sparse-checkout` non-cone patterns that exclude F and re-include its
-   files not protected yet. Each file goes from complete to absent. A file that
-   git leaves in place (it differs from the index: someone saved it) is
-   captured like any save, and freeing resumes after.
+3. **Hide** the files of F whose versions are *protected*, each as an install
+   of its absence ([07 §7.5](07-capture-and-install.md), ADR 0061): journal
+   `begin`, move aside, writer scan, check against the index entry, `proved`.
+   Then `git sparse-checkout` non-cone patterns that exclude F and re-include
+   its files not protected yet set the bits, with the files already absent,
+   so git unlinks nothing. The aside is kept for the keep period and released
+   with a hash. A writer, or a file that is not the expected one (someone
+   saved it), sends the aside back, and the file is captured like any save;
+   freeing resumes after. If the file was made again meanwhile, the aside is
+   kept as a recovered version. Capture skips a path while its file is aside.
+   Hiding with git's own unlink would lose a write through a handle opened
+   before it (E24, `Evict_git`).
 4. **Drop** the keys of the hidden files with a verified `git annex drop --key`,
-   except keys that a kept path still uses.
+   which locks K copies in K domains when it runs (ADR 0054), whatever the
+   status said at the hide. A key is dropped only if every path whose index
+   entry has it is hidden, absent on disk, and in a folder whose target is
+   free. A kept or visible path, or a staged or moved-in file of a folder
+   being kept, keeps its key: git-annex's drop turns every unmodified file of
+   the key into a pointer file with its old mtime, and `git status` stays
+   clean (`removeAnnex` in `Annex/Content.hs`; E24). The drop of a key and
+   any install, staging or capture of that key run one at a time. A drop that
+   refuses leaves the file hidden, with its content here, and is retried once
+   the key is protected again.
 5. Files not protected yet keep their space and stay visible; the row says "6
    files are not safe yet; their space is freed once they are" (ux.md §8.5).
    When one becomes protected, steps 3 and 4 run for it.
@@ -166,7 +182,11 @@ capture resumes.
    (`RENAME_NOREPLACE`, `RENAME_EXCL`). If F exists on disk (the person made a
    folder of that name meanwhile), install the files one by one instead
    ([07 §7.5](07-capture-and-install.md)); colliding files become divergences.
-4. **Unhide without a checkout:** update the sparse patterns, clear the
+4. **Unhide without a checkout:** compare each moved-in file's staged key with
+   its index entry first. A file that main has passed since it was staged
+   (the accept loop changes hidden paths in the index), unchanged and without
+   a writer, is pigeon's own: it is removed and the current key is staged
+   (ADR 0061, `Evict_stale`). Then update the sparse patterns, clear the
    skip-worktree bits of F's index entries (`git update-index
    --no-skip-worktree`, then `--refresh`), and run `git annex restage`.
 
@@ -178,7 +198,8 @@ by git's own sparse-checkout file and the device's `wanted` expression;
 `info/sparse-checkout.lock` left by a killed git process of `pigeond` is
 removed at start, since `pigeond` is the only writer of the repository: a
 `kill -9` inside `git sparse-checkout set` leaves the latter, and every later
-free fails until it is gone (E15b, ADR 0056).
+free fails until it is gone (E15b, ADR 0056; without the removal a freed
+folder is never freed, `Evict_lockfile`).
 
 ## 8.6 Purge: erase forever (ADRs 0018, 0042)
 

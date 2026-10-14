@@ -73,3 +73,4 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0058](0058-the-rust-workspace-has-a-pure-core-and-a-pinned-toolchain.md) | The Rust workspace has one crate per row of 14 §14.6, a pure core and a pinned toolchain | Proposed |
 | [0059](0059-a-custodians-drop-counts-only-hashed-copies.md) | A custodian's drop counts only copies hashed for it, and repair counts only members that can take a key | Proposed |
 | [0060](0060-the-platform-layer-uses-rustix-and-libproc.md) | The platform layer uses rustix, with libproc on macOS; the lab seams are a self-kill and a file | Proposed |
+| [0061](0061-freeing-hides-as-an-install-and-guards-every-drop.md) | Freeing hides a file as an install of its absence, and no drop takes a key that a kept path uses | Proposed |

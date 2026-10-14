@@ -3,7 +3,8 @@
 # E20 E21 E22 (file-system objects, disaster drill, failure domains and
 # capacity; E22 mounts a tmpfs and a loop device with the runner's sudo),
 # E12-E13 E14 E23 (the P2P boundary, purge, the verified drop over P2P),
-# E15 E15b E18 (freeing folders, unprotected versions) and E19 (install
+# E15 E15b E18 E24 (freeing folders, unprotected versions, what a hide
+# and a drop may lose or show) and E19 (install
 # races). Linux uses git-annex's standalone build, pinned by checksum, so a
 # new upstream release fails here until the pin is moved deliberately (spec 14
 # §14.3); macOS uses Homebrew's current git-annex, whose version the log
@@ -34,7 +35,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-latest]
-        group: [E20 E21 E22, E12-E13 E14 E23, E15 E15b E18, E19]
+        group: [E20 E21 E22, E12-E13 E14 E23, E15 E15b E18 E24, E19]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -84,14 +85,17 @@ jobs:
         if: matrix.group == 'E12-E13 E14 E23'
         run: python3 lab/git-annex/ga-e23-p2p-drop.py
       - name: E15, freeing a folder with sparse checkout
-        if: matrix.group == 'E15 E15b E18'
+        if: matrix.group == 'E15 E15b E18 E24'
         run: bash lab/git-annex/ga-e15-sparse-folders.sh
       - name: E15b, no pointer file while freeing and keeping
-        if: matrix.group == 'E15 E15b E18'
+        if: matrix.group == 'E15 E15b E18 E24'
         run: bash lab/git-annex/ga-e15b-pointer-free-transitions.sh
       - name: E18, unprotected versions offline
-        if: matrix.group == 'E15 E15b E18'
+        if: matrix.group == 'E15 E15b E18 E24'
         run: bash lab/git-annex/ga-e18-unprotected-versions.sh
+      - name: E24, what a hide and a drop may lose or show
+        if: matrix.group == 'E15 E15b E18 E24'
+        run: python3 lab/git-annex/ga-e24-evict-boundaries.py
       - name: E19, install against racing saves
         if: matrix.group == 'E19'
         run: python3 lab/git-annex/ga-e19-install-races.py

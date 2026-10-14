@@ -309,7 +309,10 @@ suggestions alike. The unprotected versions this laptop captured form its
   `history-full` ([06 §6.4](06-status.md)). The files stay as saved, and
   deletions and renames are still captured.
 - **Once protected**, the laptop drops the old versions it holds by key
-  (`git annex drop --key`, verified; [08 §8.3](08-custody-loops.md)). If the
+  (`git annex drop --key`, verified; [08 §8.3](08-custody-loops.md)), with the
+  guard of [08 §8.5](08-custody-loops.md) step 4: never a key that a path of
+  a kept folder still has, which git-annex would turn into a pointer file
+  (ADR 0061, E24, `Evict_prune`). If the
   file system has no copy-on-write and the file is still the protected
   version, the laptop re-thins it: an install (§7.5) of the same key, with the
   object as the new file.
