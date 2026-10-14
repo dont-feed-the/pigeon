@@ -8,6 +8,8 @@ state-local = Only on this computer
 state-published = Shared, not safe yet
 state-protected = Safe
 state-uncertain = Not checked since { $since }
+state-missing = No copy can be found
+state-erased = Erased
 
 ## Headline levels (ux.md §4)
 
@@ -55,6 +57,12 @@ time-hours-ago =
         [one] 1 hour ago
        *[other] { $hours } hours ago
     }
+time-days-ago =
+    { $days ->
+        [one] 1 day ago
+       *[other] { $days } days ago
+    }
+time-never = never
 
 ## Commands of the safety slice (13 §13.12)
 
@@ -75,6 +83,8 @@ cmd-debug-bundle = Gather diagnostics for someone helping you
 opt-json = Print the result as JSON, for scripts
 opt-backup-machine = For a backup machine rather than a person's computer
 opt-not-shared = List what is not shared, and why
+help-usage = Usage: pigeon COMMAND [ARGUMENTS]
+help-commands = Commands:
 
 ## Results
 
@@ -91,6 +101,20 @@ restore-result = { $path } is restored; the newer version stays in its history.
 not-shared-kind = { $path }: not shared ({ $kind })
 doctor-lab-build = This is a lab build: its status reports are marked, and no release counts them.
 doctor-version = { $program } { $found } (at least { $minimum } is needed)
+doctor-ok = Everything pigeon needs is in place.
+created = The group “{ $group }” is created. Add a backup machine with: pigeon invite --backup-machine
+invitation = On the backup machine, within 24 hours, run: pigeon join --backup-machine { $code }
+joined = This backup machine now keeps copies for “{ $group }”.
+removed-computer = { $name } is removed from the group; its copies no longer count.
+bundle-written = The diagnostics are in { $path }. Nothing was sent.
+machine-row = { $name }: { $kind }, last heard { $heard }
+machine-kind-custodian = backup machine
+machine-kind-computer = computer
+machine-this = { $name }: this computer
+version-row = { $number }. { $saved }: { $state }
+waiting-row = { $path }: { $state }
+confirm-remove-computer = Remove { $name } from the group? Its copies will stop counting. [y/N]
+confirm-yes = yes
 
 ## Problems (10 §10.6, ADR 0023): problem-<code>, and hint-<code> when there is one
 
@@ -129,3 +153,14 @@ problem-pigeon-too-old = This pigeon is too old for the group.
 problem-peer-too-old = { $peer } runs a pigeon too old for the group.
 problem-peer-too-new = { $peer } runs a newer pigeon that this one can't follow.
 problem-settings-check = The group's settings on this computer were changed outside pigeon; freeing space waits until they are restored.
+problem-receiving = A copy of this folder is still arriving.
+hint-receiving = Try again in a moment.
+problem-unknown-computer = The group has no computer named { $name }.
+hint-unknown-computer = See the names with: pigeon machines
+problem-usage = “{ $command }” was given the wrong arguments.
+hint-usage = See: pigeon help
+problem-not-a-pigeon-repository = This folder is not shared with pigeon.
+problem-peer-unreachable = The other machine can't be reached right now.
+problem-peer-refused = The other machine refused the connection.
+problem-internal-error = Something went wrong inside pigeon.
+hint-internal-error = Gather the details with: pigeon debug bundle

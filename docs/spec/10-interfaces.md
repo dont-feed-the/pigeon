@@ -183,6 +183,11 @@ Problem codes this specification uses include: `invite-expired`,
 `peer-too-new` (ADR 0048),
 `settings-check` ([03 §3.5](03-repository-and-roles.md)), and in the slice
 `not-in-this-build` (13 §13.12) and `file-system-not-in-this-build` (13 §13.12).
+The first build adds **[no ADR]**: `usage` (the arguments do not fit, exit
+code 2), `unknown-computer` (no device of that name), `receiving` (`keep`
+while a copy is still arriving), `not-a-pigeon-repository`,
+`peer-unreachable` and `peer-refused` (the helper's requests, 09 §9.3), and
+`internal-error` (anything else, its details kept for the debug bundle).
 
 ## 10.7 Checks before acting
 
