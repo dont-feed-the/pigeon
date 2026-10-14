@@ -1,18 +1,16 @@
 # 10. Interfaces
 
-> Mission: what people and scripts touch: the request API every interface
-> shares, the CLI, the local web interface, notifications and the launcher,
-> messages, and how errors reach a person. Words are those of ux.md;
-> operations are those of the other files.
+> Mission: what people and scripts touch: the shared request API, the CLI,
+> the local web interface, notifications, messages and problems. Words are
+> ux.md's; operations are the other files'.
 
 ## 10.1 One request API (ADR 0021)
 
-Every operation is one **request type** of `pigeond`'s internal API, defined
-once in `pigeon-proto` ([14](14-platforms-and-packaging.md)) and carried as
-NDJSON over the local socket ([09 §9.3](09-network-and-joining.md)). The
-CLI and the web interface render the same requests and responses, so no
-operation exists in only one. A response is a result, progress events then a
-result, or a `Problem` (§10.6).
+Every operation is one **request type**, defined once in `pigeon-proto` and
+carried over the local socket ([09 §9.3](09-network-and-joining.md);
+`requests_round_trip`, `responses_round_trip`). The CLI and the web render
+the same requests, so no operation exists in only one. A response is a
+result, progress events then a result, or a `Problem` (§10.6).
 
 | Request | CLI | Web | Specified in |
 |---|---|---|---|
@@ -41,55 +39,50 @@ result, or a `Problem` (§10.6).
 | `DebugBundle {peers}` | `pigeon debug bundle [--from NAME…]` | Settings → Advanced | [12](12-observability.md) |
 | `Subscribe` | — | live updates (SSE) | §10.3 |
 
-- Request names are internal (ADR 0024: `evict`, `purge`, `reject`); CLI
-  verbs are ux.md's (`free`, `erase`, `decline`). Renaming either is an
-  interface change.
-- `Accept {override}` is Force: an admin accepts what the folder rules do
-  not let them decide, with a reason that becomes the `Pigeon-Force:`
-  trailer ([04 §4.6](04-roster-and-authority.md)) **[no ADR: verb]**.
+- Request names are internal (ADR 0024: `evict`, `purge`, `reject`), CLI
+  verbs ux.md's (`free`, `erase`, `decline`); renaming either is an
+  interface change. `Accept {override}` is Force, its reason the
+  `Pigeon-Force:` trailer ([04 §4.6](04-roster-and-authority.md)) **[no ADR: verb]**.
 - `pigeon held`, `settings`, `leave`, `erase --cancel` and `invite --list |
   --cancel ID` complete ux.md §7 **[no ADR: verbs]**.
 - `pigeond` answers `Hello` with its version; a CLI of another version
-  refuses with `version-mismatch` and a hint to restart pigeon.
+  refuses with `version-mismatch`.
 
 ## 10.2 The command line (ADR 0024)
 
-- One subcommand per request; completions and man pages come from the same
+- One subcommand per request; completions and man pages from the same
   definitions. Result on stdout; messages and progress on stderr, headline
-  then detail (ux.md §7). Colour and progress bars only on a terminal,
-  never the only carrier of meaning.
-- **`--json`** on every command: the API response on stdout, problems as JSON
-  on stderr. Scripts rely on `--json` and problem codes, never on wording.
+  then detail (ux.md §7); colour and bars only on a terminal, never alone.
+- **`--json`** on every command: the response on stdout, problems on stderr.
+  Scripts rely on `--json` and problem codes, never on wording.
 - **Questions.** `erase`, `accept --override`, `refound`, `recover`, `free
   --without-checking`, `remove-computer`, `leave` and a held mass deletion
-  ask first; without a terminal they need `--yes`, and `--no-input` fails
-  with `needs-confirmation`.
-- **Exit codes:** 0 success, 1 failure with a `Problem`, 2 usage error.
-  `pigeon status` exits 0 whatever the headline; scripts read `"level":
-  "needs-you" | "not-safe" | "not-checked" | "working" | "safe"`.
-- The CLI holds no logic. Without `pigeond` it says how to start it
-  (`pigeon doctor`). Only `pigeon export` reads repositories itself,
-  read-only, through the same core code (ADR 0047).
+  ask first; without a terminal they need `--yes`; `--no-input` fails with
+  `needs-confirmation`.
+- **Exit codes:** 0 success, 1 a `Problem`, 2 usage. `pigeon status` exits 0
+  whatever the headline; scripts read `"level": "needs-you" | "not-safe" |
+  "not-checked" | "working" | "safe"`.
+- The CLI holds no logic; without `pigeond` it points to `pigeon doctor`.
+  Only `pigeon export` reads repositories itself, read-only, with the same
+  core code (ADR 0047).
 
 ## 10.3 The web interface (ADR 0021, ux.md §6)
 
-- Served by `pigeond`, rendered on the server; a small script follows
-  server-sent events to refresh the headline and activity, and pages work
-  without JavaScript.
-- **Binding:** 127.0.0.1 only, on a port chosen at start and written to the
-  runtime directory. `pigeon open` (launcher, notification) opens
-  `http://127.0.0.1:<port>/login?token=<random 256 bits>`; the single-use
-  token becomes an `HttpOnly`, `SameSite=Strict` session cookie. Requests
-  without it, or with another `Host` or `Origin`, are refused; every
-  state-changing request is a `POST` with a per-session form token.
-- **Five sections**, each page starting with its one-line answer (ux.md §6):
-  Home, Files (with *Deleted files*), Suggestions (*For you to decide*,
-  *Yours*), People & machines, Settings (with *Advanced*: diagnostics, logs,
-  the telemetry dashboard of ADR 0025).
-- **Accessibility:** WCAG 2.2 AA (ux.md §3): keyboard throughout, visible
-  focus, text alternatives, contrast, states in words. axe-core in CI checks
-  the mockups and the real pages.
-- It writes nothing itself: every action is a request of §10.1.
+Not yet coded.
+
+- Served by `pigeond`, rendered on the server; server-sent events refresh
+  the headline and activity; pages work without JavaScript. It writes
+  nothing itself: every action is a request of §10.1.
+- **Binding:** 127.0.0.1 only, on a port written to the runtime directory.
+  `pigeon open` opens `http://127.0.0.1:<port>/login?token=<random 256
+  bits>`; the single-use token becomes an `HttpOnly`, `SameSite=Strict`
+  cookie. Requests without it, or with another `Host` or `Origin`, are
+  refused; every state change is a `POST` with a per-session form token.
+- **Five sections**, each page opening with its one-line answer: Home, Files
+  (with *Deleted files*), Suggestions (*For you to decide*, *Yours*), People
+  & machines, Settings (*Advanced*: diagnostics, logs, ADR 0025's dashboard).
+- **Accessibility:** WCAG 2.2 AA (ux.md §3); axe-core in CI checks the
+  mockups and the real pages.
 
 ## 10.4 Notifications and the launcher (ADR 0029)
 
@@ -99,28 +92,25 @@ result, or a `Problem` (§10.6).
 | long *Not safe yet* | a version of this device stays *published* more than 24 h |
 | a suggestion or conflict waits for this person | on arrival, then at most once a day |
 
-Never for success; grouped, never per file; at most one per kind and day,
-repeated only if the situation changed **[no ADR: rate]**. A click opens the
-page that answers it. Off on headless machines and by the `notifications`
-setting ([11 §11.2](11-local-state.md)). The **launcher** "pigeon" (XDG
-`.desktop` file, macOS app bundle) runs `pigeon open`. The status icon
-(`pigeon-tray`) comes in v1.1 and only renders the headline level (ADRs
-0027, 0029).
+Never for success; grouped; at most one per kind and day, repeated only if
+the situation changed **[no ADR: rate]**; a click opens the page that
+answers it; off on headless machines and by the `notifications` setting
+([11 §11.2](11-local-state.md)). The **launcher** (XDG `.desktop`, macOS app
+bundle) runs `pigeon open`; the status icon `pigeon-tray`, in v1.1, renders
+only the headline level (ADRs 0027, 0029).
 
 ## 10.5 Messages and languages (ADR 0028)
 
 - All user-facing text is in `crates/pigeon-i18n/i18n/{en,fr}/pigeon.ftl`,
-  embedded at build time. The language is the `language` setting, else the
-  system locale (`LANGUAGE`, then the first of `LC_ALL`, `LC_MESSAGES`,
-  `LANG`), else English. Ids are shared by every interface.
-- **[no ADR: messages]** A test checks that every id exists in every
-  language and formats with sample arguments, matching the list in
-  `pigeon_i18n::ids`, and that renderers hold no English literals.
-  Arguments are wrapped in Unicode isolation marks on the web, not in a
-  terminal; an unknown id renders as itself.
-- Times: relative under a day ("4 minutes ago"), absolute beyond ("Monday
-  18:02"), local; `--json` gives RFC 3339 (ux.md §4).
-- The vocabulary table of ux.md §2.2 is normative in both languages.
+  embedded at build time. Language: the `language` setting, else `LANGUAGE`,
+  then the first of `LC_ALL`, `LC_MESSAGES`, `LANG`, else English.
+- **[no ADR: messages]** Ids are shared by every interface and listed in
+  `pigeon_i18n::ids`; tests: `every_bundle_has_every_listed_message_and_nothing_else`,
+  `every_message_renders_with_sample_arguments`, `plurals_and_isolation`
+  (isolation marks on the web, not in a terminal). An unknown id renders as
+  itself; renderers hold no English literals.
+- Times: relative under a day, absolute beyond, local; `--json` gives RFC
+  3339 (ux.md §4). ux.md §2.2's vocabulary is normative in both languages.
 
 ## 10.6 Problems (ADR 0023)
 
@@ -135,12 +125,12 @@ An error that reaches a person is a **Problem**:
 }
 ```
 
-- `code` is stable kebab-case, documented in `docs/problems.md`, public,
-  shown as `P-` plus the code in capitals (`P-INVITE-EXPIRED`, ux.md §7).
-- `message` and `hint` are Fluent ids and arguments rendered at the edge;
-  logs and `--json` keep code and arguments. `details` is for helpers: the
-  operation, the object, and for a failed `git` or `git annex` call the
-  command, exit status and end of stderr.
+- `code`: stable, public kebab-case, shown as `P-INVITE-EXPIRED` (ux.md §7);
+  `docs/problems.md`, which documents them, is not yet written.
+- `message` and `hint`: Fluent ids and arguments rendered at the edge
+  (`every_problem_has_a_message_and_ids_are_kebab_case`,
+  `a_problem_message_round_trips_as_json`). `details`, for helpers: the
+  operation, the object, a failed call's command, status and stderr tail.
 - Only the request layer of `pigeond` turns crate errors into Problems.
 
 Codes used: `invite-expired`, `invite-used`, `invite-unknown`,
