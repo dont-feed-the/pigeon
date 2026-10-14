@@ -62,7 +62,7 @@ pub async fn restore(d: &Daemon, path: &Path, version: Option<u64>) -> Vec<Respo
     match bring(&g, &key).await {
         Ok(()) => {}
         Err("disk-full") => {
-            let me = this_name(d, &g);
+            let me = crate::status::this_name(&g, &d.device);
             return vec![problem("disk-full", &[("machine", text(&me))], None)];
         }
         Err(code) => return vec![problem(code, &[], None)],
@@ -79,15 +79,6 @@ pub async fn restore(d: &Daemon, path: &Path, version: Option<u64>) -> Vec<Respo
     vec![Response::Said {
         message: crate::status::msg("restore-result", &[("path", text(&rel))]),
     }]
-}
-
-fn this_name(d: &Daemon, g: &Group) -> String {
-    g.roster()
-        .and_then(|doc| {
-            let id = pigeon_core::roster::DeviceId(d.device.clone());
-            doc.roster.devices.get(&id).map(|x| x.name.clone())
-        })
-        .unwrap_or_else(|| "This computer".to_owned())
 }
 
 /// Makes `key`'s content present here: answers a problem code if it does

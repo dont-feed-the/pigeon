@@ -44,6 +44,24 @@ pub struct Observed {
     pub level: Level,
 }
 
+/// Whether the disk of `g`'s repository has less free space than its
+/// `annex.diskreserve`, below which git-annex refuses every transfer
+/// (`checkDiskSpace` in `Annex/Content/LowLevel.hs`; 08 §8.9).
+pub fn disk_full(g: &Group) -> bool {
+    pigeon_sys::fs::space(&g.git_dir)
+        .is_ok_and(|s| s.available < crate::settings::reserve_bytes(g.role))
+}
+
+/// This device's name in `g`'s roster.
+pub fn this_name(g: &Group, me: &str) -> String {
+    g.roster()
+        .and_then(|doc| {
+            let id = pigeon_core::roster::DeviceId(me.to_owned());
+            doc.roster.devices.get(&id).map(|x| x.name.clone())
+        })
+        .unwrap_or_else(|| "This computer".to_owned())
+}
+
 /// The settings of the roster.
 pub fn settings(g: &Group) -> Settings {
     let mut s = Settings::default();
@@ -188,7 +206,10 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
     let unsafe_files = observed.iter().filter(|o| o.level != Level::Safe).count();
     let files = Arg::Number(i64::try_from(unsafe_files).unwrap_or(i64::MAX));
     let last = g.lock().heard.values().max().copied().unwrap_or(now);
+    let full = disk_full(g);
+    let level = if full { Level::NeedsYou } else { level };
     let headline = match level {
+        _ if full => msg("headline-disk-full", &[]),
         Level::Safe => msg("headline-safe", &[("ago", Arg::Text(rfc3339(last)))]),
         Level::Working => msg("headline-working", &[("files", files)]),
         Level::NotCheckedRecently => msg(

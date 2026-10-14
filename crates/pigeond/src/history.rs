@@ -1,5 +1,6 @@
 //! The other commands of the slice: `history`, `remove-computer`, `doctor`
-//! and `debug bundle` (10 §10.2).
+//! and `debug bundle` (10 §10.2). `doctor` says `disk-full` for each
+//! repository whose disk is below its reserve (08 §8.9).
 //!
 //! `history` lists the versions of a file from `main`'s commits, newest
 //! first; an older version's state is told from its copies only (slice,
@@ -172,6 +173,12 @@ pub async fn doctor(d: &Daemon, _details: bool) -> Vec<Response> {
     }
     if pigeon_sys::lab::LAB {
         out.push(progress(msg("doctor-lab-build", &[])));
+    }
+    for g in d.groups() {
+        if crate::status::disk_full(&g) {
+            let name = crate::status::this_name(&g, &d.device);
+            out.push(problem("disk-full", &[("machine", text(&name))], None));
+        }
     }
     match bad {
         Some(p) => out.push(p),
