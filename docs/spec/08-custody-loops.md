@@ -21,9 +21,11 @@ and the `queue` laws cited here are normative.
 | purge | custodians, then laptops | a purge decision sealed by every custodian (§8.6) |
 | settings check | every device | every merge ([03 §3.5](03-repository-and-roles.md)) |
 
-All work goes through one queue in the priority order of ADR 0037
-([15 §15.2](15-resource-use.md), `queue`): capture, history, uploads toward
-protection, downloads, repair, scrubs, rebalancing.
+All work goes through one queue, ordered by `queue`
+([15 §15.2](15-resource-use.md)): capture, history, protect (uploads,
+downloads toward protection, and repair), download, scrub, rebalance. ADR
+0037 lists repair after downloads; issue #13 moved it into protect
+**[no ADR]** (16 §16.3).
 
 ## 8.2 Exchanging history (accept)
 
