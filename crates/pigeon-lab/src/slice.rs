@@ -484,33 +484,25 @@ pub fn s11() -> Scenario {
 
 /// The scenarios that do not pass yet against pigeond on both runners,
 /// with what their last runs there showed (models-full.yml, run
-/// 38602095008, at e1e3f88; 13 §13.12). `pigeon-lab run` reports each as
+/// 38610156407, at de7dc11; 13 §13.12). `pigeon-lab run` reports each as
 /// blocked without running it, and runs it with `--with-blocked`, where a
 /// pass says to unmark it and a failure does not fail the run. An id `S9`
-/// stands for every S9 point. Each one but S5, S7 and S8, which need sized
-/// disks or a 1 GiB file, passes with `--isolation dirs` at bcece9a.
+/// stands for every S9 point. Each one but S8, which needs sized disks,
+/// passes with `--isolation dirs`.
 pub const BLOCKED: &[(&str, &str)] = &[
     (
         "S8",
-        "step 4 read the file local: the scenario waited for disk-full alone, \
-         which comes before the file is published (both runners)",
+        "passes on Linux; on macOS the full laptop's restore answered \
+         internal-error, not disk-full: the version's object was still there, \
+         and installing copies it without checking the room",
     ),
     ("S9", S9),
-    (
-        "S10",
-        "passes on Linux; on macOS the new laptop saw published, not protected, \
-         120 s after recovery: backup-2 had no address for backup-1 and never \
-         learned the roster commit that adds it",
-    ),
-    (
-        "S11",
-        "passes on Linux; on macOS the laptop's disk held 34.6 MB for 16.8 MB \
-         kept: it was measured before re-thinning had run",
-    ),
 ];
 
-const S9: &str = "every point passes on Linux, and every point but free-after-begin \
-     on macOS, where that one failed in setup (hdiutil create)";
+const S9: &str = "every point passes on Linux; on macOS, after a crash at \
+     free-after-index the keep request found the daemon not answering (it \
+     replayed its journal before opening its socket), and after one at \
+     free-after-move-aside the files were not back 180 s after keep";
 
 /// Why the scenario `id` is blocked, if it is.
 pub fn blocked(id: &str) -> Option<&'static str> {
