@@ -1,0 +1,44 @@
+# cargo deny: every dependency's licence is compatible with MIT OR Apache-2.0
+# (ADR 0019), no crate has a known advisory, and crates come from crates.io
+# only. Run in CI's rust job (ADR 0058).
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[licenses]
+version = 2
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.9
+unused-allowed-license = "allow"
+
+# option-ext, under dirs-sys and dirs (ADR 0036): MPL-2.0 is file-level
+# copyleft, so pigeon's own files keep their licence; its source stays
+# available on crates.io (ADR 0060).
+[[licenses.exceptions]]
+crate = "option-ext"
+allow = ["MPL-2.0"]
+
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

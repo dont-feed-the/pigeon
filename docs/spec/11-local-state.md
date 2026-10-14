@@ -41,9 +41,11 @@
 `~/Library/Application Support/pigeon` on macOS; `<state>` is
 `$XDG_STATE_HOME/pigeon` and `~/Library/Logs/pigeon`; `<cache>` is
 `$XDG_CACHE_HOME/pigeon` and `~/Library/Caches/pigeon`; all are found with the
-`dirs` crate (ADR 0036) **[no ADR: state and cache paths]**. On a backup
-machine `pigeond` runs as a system service and these are under
-`/var/lib/pigeon`, `/var/log/pigeon` and `/var/cache/pigeon`.
+`dirs` crate (ADR 0036). `<runtime>` is `$XDG_RUNTIME_DIR/pigeon` on Linux
+and `<cache>/run` on macOS, which has no runtime directory (ADR 0060,
+Proposed). On a backup machine `pigeond` runs as a system service and these
+are under `/var/lib/pigeon`, `/var/log/pigeon`, `/var/cache/pigeon` and
+`/run/pigeon`.
 
 ### `config.toml`
 

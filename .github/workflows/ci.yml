@@ -82,5 +82,12 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: tests and laws
         run: cargo test --workspace --locked
+      - name: the lab build's seams (ADR 0057)
+        run: cargo test -p pigeon-sys --features lab --locked
+      - name: licences, advisories and sources (cargo deny, ADR 0019)
+        if: runner.os == 'Linux'
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check
       - name: pigeon-core depends on no crate that does I/O (14 §14.6)
         run: scripts/check-core-deps

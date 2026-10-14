@@ -120,14 +120,15 @@ them all.
 
 ### H. Local state, observability, platforms ([11](11-local-state.md), [12](12-observability.md), [14](14-platforms-and-packaging.md))
 
-- State and cache directories (§11.2); `toml_edit` for writing `config.toml`
+- `toml_edit` for writing `config.toml`
   (§11.2); invitation records kept 30 days (§11.3).
 - Telemetry files bounded to 50 MB; `debug bundle` asks each peer's person;
   the `PIGEON_TRACE` switch (§12.2, §12.3).
 - The E17 runner with a hard disk (§13.8).
 - Minimum OS versions (§14.1); the file-system list (§14.2); the `MemoryHigh`
   value (§14.4); the Homebrew tap and release signing (§14.5); the crates
-  `hmac`, `sha2`, `data-encoding`, `qrcode`, `rustix` (§14.7). The crate
+  `hmac`, `sha2`, `data-encoding`, `qrcode` (§14.7); `rustix` and the state
+  and cache directories went to ADR 0060 (Proposed). The crate
   layout, edition and pinned toolchain went to ADR 0058 (Proposed).
 
 ### I. Resource use ([15](15-resource-use.md)), within ADR 0037

@@ -165,7 +165,7 @@ and upgraded deliberately.
 | notifications, launcher | `notify-rust` 4.18, `open` 5.4; `tray-icon` 0.26 in v1.1 | 0029 |
 | times | `jiff` 0.2 | 0028 |
 | local state | `dirs` 7.0, `tempfile` 3.27, `toml` 1.1, `toml_edit` 0.25, `serde` 1.0, `serde_json` 1.0 | 0036 |
-| platform | `rustix` 1.1 (renames, `fadvise`, signals), `zbus` 5.19 (UPower, NetworkManager) | 0037 **[no ADR: rustix]** |
+| platform | `rustix` 1.1 (renames, `fadvise`, signals), `zbus` 5.19 (UPower, NetworkManager) | 0037, 0060 |
 | property tests (dev) | `hegeltest` 0.49 | 0012 |
 
 Not used: `gix` (ADR 0010: the git CLI only), `redb` and `rusqlite`

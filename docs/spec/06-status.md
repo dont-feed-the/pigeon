@@ -109,7 +109,7 @@ admits = "all"                      # custodians: "endangered" while they keep r
 ```
 
 The `[custody]` values are the first 16 bytes of SHA-256 over `pigeon-domain`,
-the group ID and the identifier found, recomputed at start and every hour: the
+the group ID and the identifier found, each followed by a zero byte (ADR 0060), recomputed at start and every hour: the
 WWN, else the serial, of each whole disk under the repository's file system
 (`lsblk -s`, a loop device followed to its backing file), the server and
 export of a network share, `/etc/machine-id` (ADR 0049, E22). They show
