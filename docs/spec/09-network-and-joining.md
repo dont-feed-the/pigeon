@@ -1,12 +1,9 @@
 # 9. Network and joining
 
-> Mission: how devices find, authenticate and talk to each other: the device
-> key, the transport helper, the `pigeond` endpoint and local socket,
-> append-only serving, relays, invitations, removal and recovery.
-
-Normative: the `pigeon-core::filter` laws, the `pigeon-proto` laws, the
-`pigeond` codec and network laws, and the `Authority.tla` invariants named
-below.
+> Mission: the device key, the transport helper, the endpoint and local
+> socket, append-only serving, relays, invitations, removal and recovery.
+> The `filter`, `pigeon-proto`, codec and network laws and the
+> `Authority.tla` invariants cited below are normative.
 
 ## 9.1 The device key (ADR 0007)
 
@@ -19,9 +16,8 @@ below.
   signatures) and iroh uses it as its secret key; pigeon verifies signatures
   itself (SSHSIG, namespace `git`) against the roster at the commit's
   parents ([04 §4.4](04-roster-and-authority.md)).
-- The key is not encrypted at rest: `pigeond` starts unattended. A stolen
-  unlocked laptop signs until it is removed (§9.7); stolen keys are outside
-  the guarantees ([02 §2.2](02-guarantees.md)).
+- The key is not encrypted at rest, so `pigeond` starts unattended; stolen
+  keys are outside the guarantees ([02 §2.2](02-guarantees.md)).
 
 ## 9.2 The transport helper `git-annex-p2p-iroh` (ADR 0006)
 
@@ -58,14 +54,13 @@ punching, relays), with these ALPN protocols:
 | `pigeon/debug/1` | `pigeon debug bundle` requests ([12](12-observability.md)) | devices of the roster |
 
 - **Versions** (ADR 0048): a device offers every version of each ALPN it
-  supports; with none in common, both sides show `peer-too-old` or
-  `peer-too-new` and the release to install. The stream header (§9.8) and
-  invitations (`pgn1-`, §9.6) are versioned the same way.
+  supports; with none in common, both show `peer-too-old` or `peer-too-new`
+  and the release to install. The header (§9.8) and invitations (`pgn1-`)
+  are versioned likewise.
 - **Admission:** on `annex`, `telemetry` and `debug`, only a peer whose
-  authenticated node ID is a device of the roster of the current `main` of
-  the group named in the header (§9.8). Anything else is closed with a
-  reason, logged at `warn`, and never reaches git-annex (ADR 0006). A
-  removed device is disconnected when its removal is accepted (§9.7).
+  node ID is a device of the roster of the current `main` of the group the
+  header names. Anything else is closed with a reason, logged at `warn`,
+  and never reaches git-annex (ADR 0006).
 - Connections are reused for all streams and groups; each git-annex session
   is one bidirectional QUIC stream.
 
@@ -108,15 +103,13 @@ filter against git-annex, and E23 the probe.
 
 ## 9.5 Relays and discovery (ADR 0016)
 
-By default `pigeond` uses n0's public relays and address lookup, and mDNS,
-so devices on one LAN meet without the Internet. A roster `relay = "<url>"`
-([04 §4.2](04-roster-and-authority.md)) replaces n0's relays for the group,
-as an admin change; hosting a relay is documented, not required. Without
-the relay or lookup service, LAN and direct connections still work, and
-versions waiting for a peer carry `group-unreachable`
-([06 §6.4](06-status.md)). What relay operators see is stated in
-[02](02-guarantees.md); content and history are end-to-end encrypted.
-`pigeond` shapes network use (ADR 0037, [15](15-resource-use.md)).
+Not yet coded: the slice uses direct addresses and mDNS (13 §13.12).
+By default `pigeond` uses n0's public relays and address lookup, and mDNS
+for one LAN. A roster `relay = "<url>"` ([04 §4.2](04-roster-and-authority.md))
+replaces n0's relays, as an admin change. Without relay or lookup, LAN and
+direct connections still work, and versions waiting for a peer carry
+`group-unreachable` ([06 §6.4](06-status.md)). Relays see only metadata
+([02 §2.4](02-guarantees.md)).
 
 ## 9.6 Invitations and joining (ADR 0017)
 
@@ -141,8 +134,8 @@ person (ux.md §8) **[no ADR: reading]**, creates a one-time invitation:
   `invitations.json` ([11 §11.3](11-local-state.md); `invitations_round_trip`),
   readable by its user only. The hash finds the record; the secret checks
   the proof of step 2 **[no ADR: correction]** (issue #17). It is marked
-  used before the roster commit is signed, so a crash cannot let it work
-  twice. `pigeon invite --list` and `--cancel` manage pending ones.
+  used before the roster commit is signed. `pigeon invite --list` and
+  `--cancel` manage pending ones.
 
 `pigeon join INVITATION [FOLDER]` (Welcome → *Join a group*):
 
@@ -177,8 +170,7 @@ person (ADR 0017), and visible in the history.
   added and what those keys sign (04 §4.4, ADR 0051; `Authority.tla`
   `RemovalRevokesAdded`, `RemovedSilenced`). They count in no catalogue or
   roster and show as suggestions of the device's person. *I lost a
-  computer* offers to remove the devices the lost one added. This bounds the
-  damage of a stolen key ([02](02-guarantees.md)).
+  computer* offers to remove the devices the lost one added.
 - Removal cannot unshare what the device already fetched (ADR 0017).
   `pigeon leave` **[no ADR]** signs the device's own removal, then deletes
   its key and, if asked, its copy of the folder.
