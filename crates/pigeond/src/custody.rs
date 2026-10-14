@@ -3,9 +3,10 @@
 //! custodians.
 //!
 //! In the slice a laptop sends every version to every custodian with
-//! `copy --to --key`, and a custodian gets every key of `main` it lacks
-//! with `get --key`, then syncs the object to disk; with K = 2 and two
-//! custodians that is `sizebalanced`'s choice too (13 §13.12). Accept only
+//! `copy --to --key`, and a custodian gets each key of `main` it lacks and
+//! admits (`admission`) with `get --key`, then syncs the object to disk,
+//! both in queue order; with K = 2 and two custodians that is
+//! `sizebalanced`'s choice too (13 §13.12). Accept only
 //! fast-forwards: with one laptop, nothing else commits, and a divergence
 //! is logged and left (slice only).
 
@@ -13,6 +14,7 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 
 use pigeon_core::filter::Role;
+use pigeon_core::queue::Work;
 use pigeon_core::roster::Role as DeviceRole;
 
 use crate::git::Git;
@@ -176,7 +178,10 @@ pub async fn present(g: &Group, key: &str) -> Option<std::path::PathBuf> {
     (!rel.is_empty()).then(|| g.git.repo.dir.join(rel))
 }
 
-/// One round of place: answers how many copies it made.
+/// One round of place, in queue order (15 §15.2): answers how many copies
+/// it made. A custodian gets what admission lets it take (08 §8.9); a
+/// laptop sends each key to the custodians lacking it, whose own reserve
+/// refuses what does not fit (E22).
 pub async fn place(g: &Group, me: &str) -> usize {
     let Some(main) = g.git.rev("refs/heads/main").await else {
         return 0;
@@ -188,16 +193,13 @@ pub async fn place(g: &Group, me: &str) -> usize {
     let mut made = 0;
     match g.role {
         Role::Laptop => {
-            let custodians: Vec<(String, String)> = peers(g, me)
-                .into_iter()
-                .filter(|(_, _, r)| *r == DeviceRole::Custodian)
-                .map(|(id, u, _)| (id, u))
-                .collect();
             let mut failed = g.lock().unreachable.clone();
-            for key in &keys {
-                let have = holders(&g.git, key).await;
-                for (id, uuid) in &custodians {
-                    if have.contains(uuid) || failed.contains(id) {
+            for (work, lacking) in crate::admission::items(g, me, &keys).await {
+                let Work::Protect { key, .. } = work else {
+                    continue;
+                };
+                for id in lacking {
+                    if failed.contains(&id) {
                         continue;
                     }
                     let args = [
@@ -213,21 +215,22 @@ pub async fn place(g: &Group, me: &str) -> usize {
                         Ok(_) => made += 1,
                         Err(e) => {
                             tracing::debug!(group = %g.id, peer = %id, error = %e, "copy-failed");
-                            failed.insert(id.clone());
+                            failed.insert(id);
                         }
                     }
                 }
             }
         }
         Role::Custodian => {
-            for key in &keys {
-                if present(g, key).await.is_some() {
+            let plan = crate::admission::plan(g, me, &keys).await;
+            for work in plan.admitted {
+                let Work::Protect { key, .. } = work else {
                     continue;
-                }
+                };
                 let args = ["annex", "get", "--json", "--key", key.as_str()];
                 match g.git.run_for(&args, TRANSFER_TIMEOUT).await {
                     Ok(_) => {
-                        if let Some(object) = present(g, key).await {
+                        if let Some(object) = present(g, &key).await {
                             let _ = crate::net::sync::sync_object(&object);
                         }
                         made += 1;

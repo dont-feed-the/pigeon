@@ -51,7 +51,7 @@ pub struct Observed {
 /// (`checkDiskSpace` in `Annex/Content/LowLevel.hs`; 08 §8.9).
 pub fn disk_full(g: &Group) -> bool {
     pigeon_sys::fs::space(&g.git_dir)
-        .is_ok_and(|s| s.available < crate::settings::reserve_bytes(g.role))
+        .is_ok_and(|s| s.available < crate::settings::reserve_bytes(g.role, &g.git_dir))
 }
 
 /// This device's name in `g`'s roster.
@@ -212,17 +212,30 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
     let files = Arg::Number(i64::try_from(unsafe_files).unwrap_or(i64::MAX));
     let last = g.lock().heard.values().max().copied().unwrap_or(now);
     let full = disk_full(g);
-    let lost = !g.lock().lost.is_empty();
-    let level = if full || lost { Level::NeedsYou } else { level };
-    let headline = match level {
+    let (lost, shortfall) = {
+        let k = g.lock();
+        (!k.lost.is_empty(), k.shortfall.clone())
+    };
+    let level = if full || lost || shortfall.is_some() {
+        Level::NeedsYou
+    } else {
+        level
+    };
+    let headline = match (level, &shortfall) {
         _ if full => msg("headline-disk-full", &[]),
-        Level::Safe => msg("headline-safe", &[("ago", Arg::Text(rfc3339(last)))]),
-        Level::Working => msg("headline-working", &[("files", files)]),
-        Level::NotCheckedRecently => msg(
-            "headline-not-checked",
-            &[("when", Arg::Text(rfc3339(last)))],
+        (_, Some(s)) => msg(
+            "headline-no-capacity",
+            &crate::admission::no_capacity_args(s),
         ),
-        Level::NotSafeYet | Level::NeedsYou => msg("headline-not-safe", &[("files", files)]),
+        (level, None) => match level {
+            Level::Safe => msg("headline-safe", &[("ago", Arg::Text(rfc3339(last)))]),
+            Level::Working => msg("headline-working", &[("files", files)]),
+            Level::NotCheckedRecently => msg(
+                "headline-not-checked",
+                &[("when", Arg::Text(rfc3339(last)))],
+            ),
+            Level::NotSafeYet | Level::NeedsYou => msg("headline-not-safe", &[("files", files)]),
+        },
     };
     let worst = worst(observed.iter().map(|o| &o.state));
     let asked = !prefix.is_empty();

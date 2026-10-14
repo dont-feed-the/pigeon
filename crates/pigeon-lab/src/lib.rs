@@ -7,7 +7,7 @@
 //! through an [`run::Interpreter`]: the pure [`model`], which computes with
 //! pigeon-core what the specification predicts, or the process executor of
 //! [`exec`], which runs `pigeond` and `pigeon --json` on Linux namespaces or
-//! macOS disk images. [`slice`] holds S1–S11.
+//! macOS disk images. [`slice`] holds S1–S12.
 
 pub mod exec;
 pub mod model;

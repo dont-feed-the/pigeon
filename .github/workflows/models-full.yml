@@ -98,7 +98,7 @@ jobs:
         run: cargo test --locked --release -p pigeon-lab --test s9_exec
 
   slice-with-blocked:
-    name: S1-S11 with the blocked ones, against the lab build (${{ matrix.os }})
+    name: S1-S12 with the blocked ones, against the lab build (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:

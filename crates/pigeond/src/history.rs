@@ -179,6 +179,14 @@ pub async fn doctor(d: &Daemon, _details: bool) -> Vec<Response> {
             let name = crate::status::this_name(&g, &d.device);
             out.push(problem("disk-full", &[("machine", text(&name))], None));
         }
+        let shortfall = g.lock().shortfall.clone();
+        if let Some(s) = shortfall {
+            let name = crate::status::this_name(&g, &d.device);
+            let args = crate::admission::no_capacity_args(&s);
+            let mut args: Vec<(&str, Arg)> = args.into_iter().collect();
+            args.push(("machine", text(&name)));
+            out.push(problem("no-capacity", &args, None));
+        }
     }
     match bad {
         Some(p) => out.push(p),

@@ -47,6 +47,8 @@ pub struct Known {
     /// Custodians that answer but serve this group no more: their
     /// repository is gone, so they count for nothing (06 §6.3, S7).
     pub lost: BTreeSet<String>,
+    /// What admission deferred in the last round, on a custodian (08 §8.9).
+    pub shortfall: Option<crate::admission::Shortfall>,
 }
 
 /// How long remotedaemon's fetch of a notice may last before it is

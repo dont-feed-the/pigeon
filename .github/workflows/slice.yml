@@ -1,4 +1,4 @@
-# The safety slice's scenarios S1-S11 (13 §13.12), written in pigeon-lab's
+# The safety slice's scenarios S1-S12 (13 §13.12), written in pigeon-lab's
 # EDSL, on GitHub's Linux and macOS runners, which replace a run on real
 # hardware. Every push runs the scenario laws and the model on both, checks
 # each runner's isolation (loop-mounted ext4 and mount namespaces with sudo
@@ -93,7 +93,7 @@ jobs:
             --features pigeond/lab,pigeond/tla-trace
           mkdir -p target/lab/bin
           cp target/release/pigeond target/release/pigeon target/release/git-annex-p2p-iroh target/lab/bin/
-      - name: S1-S11 against the real binaries
+      - name: S1-S12 against the real binaries
         run: |
           cargo run --locked --release -q -p pigeon-lab -- run --bin target/lab/bin \
             --work /tmp/lab --out target/lab/out

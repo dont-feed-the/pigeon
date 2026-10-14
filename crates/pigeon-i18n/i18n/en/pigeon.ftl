@@ -34,6 +34,7 @@ headline-working =
     }
 headline-not-checked = Last confirmed safe { $when }. pigeon can't reach the group right now; changes since then are only on this computer.
 headline-disk-full = Your disk is full. pigeon can't save new changes. Free up space or empty the trash.
+headline-no-capacity = This backup machine has no room for { $files } files. It needs { $missing_mb } MB more free space.
 headline-machine-missing =
     { $days ->
         [one] { $machine } has been missing for 1 day.
@@ -140,6 +141,8 @@ hint-needs-confirmation = Run it again in a terminal, or add --yes.
 problem-backup-machine-needs-linux = A backup machine must run Linux with systemd.
 problem-disk-full = { $machine } is full.
 hint-disk-full = Free up space on it, or add another backup machine.
+problem-no-capacity = { $machine } has no room for { $files } files: it needs { $missing_mb } MB more free space.
+hint-no-capacity = Free up space on it, or add another backup machine.
 problem-repository-lost = The files of { $machine } were lost or replaced.
 problem-daemon-not-running = pigeon is not running on this computer.
 hint-daemon-not-running = Start it, then check with: pigeon doctor

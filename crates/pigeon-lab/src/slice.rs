@@ -1,4 +1,4 @@
-//! The scenarios of the safety slice, S1–S11 (13 §13.12), as EDSL programs.
+//! The scenarios of the safety slice, S1–S12 (13 §13.12), as EDSL programs.
 //!
 //! Every scenario has one laptop and two custodians, K = 2, and the folder
 //! `docs`; some add a spare device. Deadlines are generous: they bound a
@@ -482,6 +482,52 @@ pub fn s11() -> Scenario {
     )
 }
 
+/// The MiB a custodian's disk keeps free for its `annex.diskreserve` on a
+/// lab disk, 5 GB (03 §3.4), rounded up.
+pub const CUSTODIAN_RESERVE_MIB: u32 = 4769;
+
+/// S12: a nearly full custodian takes what fits in its room above the
+/// reserve, says what it misses (`no-capacity`, 08 §8.9), is not full, and
+/// takes the rest once room returns, without action.
+pub fn s12() -> Scenario {
+    let mut world = World::new("slice", 2);
+    let l = world.laptop("laptop");
+    let c1 = world.custodian_with_disk("backup-1", 5632);
+    let _c2 = world.custodian("backup-2");
+    let docs = world.folder("docs");
+    let (small, big) = (docs.file("small.bin"), docs.file("big.bin"));
+    let steps = vec![
+        // 32 MiB of room: the small file fits, the big one does not.
+        c1.fill(CUSTODIAN_RESERVE_MIB + 32),
+        l.write(&small, random(12, 1)),
+        l.write(&big, random(13, 96)),
+        wait(
+            every(vec![
+                l.sees(&small, Kind::Protected),
+                l.sees(&big, Kind::Published),
+                c1.says("no-capacity"),
+            ]),
+            180,
+        ),
+        hold(
+            every(vec![
+                l.sees(&big, Kind::Published),
+                not(c1.says("disk-full")),
+            ]),
+            10,
+        ),
+        c1.unfill(),
+        wait(l.sees(&big, Kind::Protected), 300),
+    ];
+    scenario(
+        "S12",
+        "a nearly full custodian takes what fits, says what it misses, then the rest",
+        world,
+        steps,
+        vec![Need::SizedDisks],
+    )
+}
+
 /// The scenarios that do not pass yet against pigeond on both runners,
 /// with why. S1-S11 and every S9 point passed on both in models-full.yml
 /// run 38620593663, at 767dc0b (13 §13.12). `pigeon-lab run` reports a
@@ -507,6 +553,6 @@ pub fn blocked(id: &str) -> Option<&'static str> {
 pub fn all() -> Vec<Scenario> {
     let mut out = vec![s1(), s2(), s3(), s4(), s5(), s6(), s7(), s8()];
     out.extend(CrashPoint::ALL.iter().map(|p| s9_point(*p)));
-    out.extend([s10(), s11()]);
+    out.extend([s10(), s11(), s12()]);
     out
 }

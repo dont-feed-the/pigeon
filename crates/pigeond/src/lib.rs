@@ -7,6 +7,7 @@
 //! from pigeon-core and does I/O only through pigeon-git, pigeon-sys and
 //! [`net`].
 
+pub mod admission;
 pub mod api;
 pub mod capture;
 pub mod change;

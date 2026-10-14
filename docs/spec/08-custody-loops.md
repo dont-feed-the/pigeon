@@ -207,7 +207,10 @@ report ([06 §6.3](06-status.md)).
   its reserve less the downloads in progress, which git-annex counts too:
   an endangered key is admitted if it fits in what is left, any other key
   only if the endangered keys not yet admitted still fit after it. A
-  deferred key says the bytes it misses. Normative: `pigeon-core::capacity`
+  deferred key says the bytes it misses: the custodian's `doctor` and
+  `status` say `no-capacity` with the files and MB missing. Repair records
+  the keys a removed custodian held as it marks it dead; they are
+  endangered until K custodians hold them. Normative: `pigeon-core::capacity`
   and its laws (`tests/capacity.rs`); `Admission.tla` checks the plan with
   sizes (`ReserveKept`, `EndangeredFirst`, `DeferredStays`), and
   `AdmitTrace` checks the code's plans against it.

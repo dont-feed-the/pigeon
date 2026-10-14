@@ -265,7 +265,7 @@ Laws (`crates/pigeon-lab/tests/laws.rs`): steps form a monoid; validation
 and the trace projection are compositional; a prefix runs the same whatever
 follows; settling the model is idempotent; a crash at any named point, then
 a restart, changes no outcome (1000 model schedules per push). The workflow
-`slice.yml` runs them, then S1–S11 and 50 random S9 schedules against the
+`slice.yml` runs them, then S1–S12 and 50 random S9 schedules against the
 real binaries on both runners; `models-full.yml` runs 1000. A scenario that
 does not pass yet against the first build is listed in `slice::BLOCKED`
 with what its last runs showed; per push it is reported as blocked, and
@@ -291,6 +291,7 @@ CI yet, and 50 at 50–90 s each do not fit `slice.yml`'s 90-minute job.
 | S9 | `pigeond` crashed at each named point of capture, install, place and free: nothing lost or duplicated; 50 random schedules per push, 1000 in `models-full` |
 | S10 | a fresh laptop recovers from the custodians with the recovery sheet (ADR 0047); the keys, metadata and authority it needed are listed |
 | S11 | steady and peak disk use per device: folders, `.git`, annex objects, `.git/annex/tmp`, pending history ([07 §7.8](07-capture-and-install.md)), pigeon's state, temporary files |
+| S12 | a nearly full custodian takes what fits in its room above the reserve, says `no-capacity` without being full, and takes the rest once room returns ([08 §8.9](08-custody-loops.md), issue #13) |
 
 S7's repair order and S10's list of what recovery needed are read from the
 run's trace and report, not yet asserted by a condition.

@@ -4,6 +4,8 @@
 
 use std::collections::BTreeMap;
 
+use pigeon_core::capacity;
+use pigeon_core::filter::Role;
 use pigeon_core::journal::{self, Begin, End, Found, Record, Stat, Step as JStep};
 use pigeon_core::state::State;
 use pigeon_core::time::Time;
@@ -146,7 +148,9 @@ impl Model {
     }
 
     /// Place and repair: running custodians take every version's commit
-    /// from running laptops and each other, then its content, if it fits.
+    /// from running laptops and each other, then its content, if it fits
+    /// in the room above the reserve; a key that does not waits, and the
+    /// custodian says `no-capacity`.
     fn place(&mut self) {
         let mut known: BTreeMap<File, usize> = BTreeMap::new();
         let mut sources: BTreeMap<Key, u64> = BTreeMap::new();
@@ -186,9 +190,16 @@ impl Model {
                     if c.holds.contains_key(&ver.key) || !sources.contains_key(&ver.key) {
                         continue;
                     }
+                    // Admission (08 §8.9): a key fits in the room above
+                    // the reserve; below the reserve the disk is full.
                     let used: u64 = c.holds.values().sum::<u64>() + c.ballast;
-                    if used + ver.len > c.disk_bytes {
+                    let reserve = capacity::reserve(Role::Custodian, c.disk_bytes);
+                    let free = c.disk_bytes.saturating_sub(used);
+                    if free < reserve {
                         c.says.insert("disk-full".into());
+                    }
+                    if ver.len > free.saturating_sub(reserve) {
+                        c.says.insert("no-capacity".into());
                         continue;
                     }
                     c.holds.insert(ver.key.clone(), ver.len);

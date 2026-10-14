@@ -1,7 +1,8 @@
 //! Repair started by a removed custodian (08 §8.4, 08 §8.3): once the
 //! roster removes a custodian, its annex UUID is marked dead, so that no
 //! copy it held counts any more, and place sends every version to the
-//! custodians that remain until K of them hold it again.
+//! custodians that remain until K of them hold it again. The keys of
+//! `main` it held are endangered until then (08 §8.4, `admission`).
 
 use std::collections::BTreeSet;
 
@@ -22,6 +23,7 @@ pub async fn repair(g: &Group, _me: &str) -> usize {
         if dead.contains(uuid) {
             continue;
         }
+        endanger(g, uuid).await;
         match g.git.run(&["annex", "dead", uuid]).await {
             Ok(_) => {
                 tracing::info!(group = %g.id, uuid = %uuid, "repair-started");
@@ -37,4 +39,26 @@ pub async fn repair(g: &Group, _me: &str) -> usize {
         let _ = pigeon_sys::fs::write_atomic(&dead_file, &text);
     }
     marked
+}
+
+/// Records as endangered the keys of `main` that `uuid` holds, before it
+/// is marked dead and no longer listed.
+async fn endanger(g: &Group, uuid: &str) {
+    let Some(main) = g.git.rev("refs/heads/main").await else {
+        return;
+    };
+    let Ok(keys) = g.git.keys(&main).await else {
+        return;
+    };
+    let mut endangered = crate::admission::endangered(g);
+    let before = endangered.len();
+    for key in keys.into_values().collect::<BTreeSet<_>>() {
+        if crate::custody::holders(&g.git, &key).await.contains(uuid) {
+            endangered.insert(key);
+        }
+    }
+    if endangered.len() != before {
+        tracing::info!(group = %g.id, uuid = %uuid, keys = endangered.len() - before, "endangered");
+        crate::admission::save_endangered(g, &endangered);
+    }
 }

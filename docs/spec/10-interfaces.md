@@ -136,7 +136,7 @@ An error that reaches a person is a **Problem**:
 Codes used: `invite-expired`, `invite-used`, `invite-unknown`,
 `invite-not-allowed`, `inviter-offline`, `not-in-group`, `not-allowed`,
 `needs-confirmation`, `backup-machine-needs-linux` (§10.7), `disk-full`
-([08 §8.9](08-custody-loops.md)), `repository-lost` (ADR 0046),
+and `no-capacity` ([08 §8.9](08-custody-loops.md)), `repository-lost` (ADR 0046),
 `daemon-not-running`, `version-mismatch`, `git-annex-too-old`,
 `git-annex-untested`, `update-needed`, `pigeon-too-old`, `peer-too-old`,
 `peer-too-new` (ADR 0048), `settings-check`

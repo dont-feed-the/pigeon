@@ -7,6 +7,7 @@
 //! repository is made.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use pigeon_core::filter::Role;
 
@@ -19,17 +20,19 @@ pub const INFO_ATTRIBUTES: &str = "* filter=annex annex.largefiles=anything anne
 /// `.gitattributes`, in the genesis commit.
 pub const GITATTRIBUTES: &str = "* annex.largefiles=anything\n.gitattributes annex.largefiles=nothing\n.pigeon/** annex.largefiles=nothing\n";
 
-/// The `annex.diskreserve` of a role in bytes, which `wanted_config` sets
-/// and pigeon checks itself before it receives content (03 §3.4, 08 §8.9).
-pub fn reserve_bytes(role: Role) -> u64 {
-    match role {
-        Role::Laptop => 1_000_000_000,
-        Role::Custodian => 5_000_000_000,
-    }
+/// The `annex.diskreserve` of a role in bytes on the file system holding
+/// `dir`, max(1 GB, 1 %) on laptops and max(5 GB, 2 %) on custodians, which
+/// `wanted_config` sets and pigeon checks itself before it receives
+/// content (03 §3.4, 08 §8.9). A file system it cannot measure gets the
+/// floor.
+pub fn reserve_bytes(role: Role, dir: &Path) -> u64 {
+    let total = pigeon_sys::fs::space(dir).map_or(0, |s| s.total);
+    pigeon_core::capacity::reserve(role, total)
 }
 
 /// The `.git/config` values of a role (03 §3.4).
-pub fn wanted_config(role: Role, empty_file: &str) -> Vec<(String, String)> {
+/// `reserve` is the `annex.diskreserve` in bytes ([`reserve_bytes`]).
+pub fn wanted_config(role: Role, empty_file: &str, reserve: u64) -> Vec<(String, String)> {
     let mut v: Vec<(&str, String)> = vec![
         ("annex.autocommit", "false".into()),
         ("annex.synccontent", "false".into()),
@@ -45,13 +48,13 @@ pub fn wanted_config(role: Role, empty_file: &str) -> Vec<(String, String)> {
             ("annex.addunlocked", "true".into()),
             ("annex.thin", "true".into()),
             ("annex.jobs", "1".into()),
-            ("annex.diskreserve", "1 gigabyte".into()),
+            ("annex.diskreserve", reserve.to_string()),
             ("core.sparseCheckout", "true".into()),
         ]),
         Role::Custodian => {
             let cpus = std::thread::available_parallelism().map_or(1, usize::from);
             v.extend([
-                ("annex.diskreserve", "5 gigabytes".into()),
+                ("annex.diskreserve", reserve.to_string()),
                 ("annex.jobs", cpus.to_string()),
             ]);
         }
@@ -78,7 +81,8 @@ pub async fn check(g: &Group) -> usize {
     }
     let mut changed = 0;
     let current = local_config(&g.git).await;
-    for (k, v) in wanted_config(g.role, &empty.to_string_lossy()) {
+    let reserve = reserve_bytes(g.role, &g.git_dir);
+    for (k, v) in wanted_config(g.role, &empty.to_string_lossy(), reserve) {
         if current.get(&k.to_ascii_lowercase()) != Some(&v)
             && g.git.run(&["config", &k, &v]).await.is_ok()
         {

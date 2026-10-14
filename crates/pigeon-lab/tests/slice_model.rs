@@ -11,7 +11,7 @@ use pigeon_lab::step::CrashPoint;
 #[test]
 fn every_scenario_passes_in_the_model() {
     let all = slice::all();
-    assert_eq!(all.len(), 10 + CrashPoint::ALL.len());
+    assert_eq!(all.len(), 11 + CrashPoint::ALL.len());
     for s in &all {
         validate(s).unwrap_or_else(|e| panic!("{}: step {}: {}", s.id, e.step, e.why));
         let report = run(s, &mut ModelRun::default());

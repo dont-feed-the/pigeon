@@ -90,7 +90,7 @@ pub async fn restore(d: &Daemon, path: &Path, version: Option<u64>) -> Vec<Respo
 
 /// Whether `key`'s content fits here above the reserve.
 fn fits(g: &Group, key: &str) -> bool {
-    let need = key_size(key).unwrap_or(0) + crate::settings::reserve_bytes(g.role);
+    let need = key_size(key).unwrap_or(0) + crate::settings::reserve_bytes(g.role, &g.git_dir);
     let room = pigeon_sys::fs::space(&g.git_dir).map(|s| s.available);
     if room.is_ok_and(|room| room < need) {
         tracing::info!(group = %g.id, key = %key, need, "restore-disk-full");
