@@ -7,12 +7,14 @@
 //! they mirror.
 #![forbid(unsafe_code)]
 
+pub mod authority;
 pub mod capacity;
 pub mod filter;
 pub mod headline;
 pub mod journal;
 pub mod queue;
 pub mod roster;
+pub mod sig;
 pub mod state;
 pub mod time;
 #[cfg(feature = "tla-trace")]

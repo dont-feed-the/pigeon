@@ -534,3 +534,106 @@ pub fn may_sign(roster: &Roster, signer: &DeviceId, change: &[Edit]) -> bool {
 pub fn may_sign_merge(parents: &[&Roster], signer: &DeviceId) -> bool {
     parents.iter().any(|r| r.devices.contains_key(signer))
 }
+
+/// The change δ that turns `old` into `new` (04 §4.8), when edits can say
+/// it: `None` if a device changes person, role or annex UUID, a removal is
+/// undone, or a device with an annex UUID is both added and removed. Laws
+/// (`tests/authority.rs`): when it answers, `apply(old, diff(old, new))`
+/// gives `new` without a skip; it answers for every change of one edit.
+pub fn diff(old: &Roster, new: &Roster) -> Option<Vec<Edit>> {
+    let mut out = Vec::new();
+    let set = |field: Field, out: &mut Vec<Edit>| {
+        let (from, to) = (old.get(&field)?, new.get(&field)?);
+        if from != to {
+            out.push(Edit::Set { field, from, to });
+        }
+        Some(())
+    };
+    for f in [Field::Group, Field::K, Field::RetentionDays, Field::Rules] {
+        set(f, &mut out)?;
+    }
+    for (id, p) in &new.persons {
+        match old.persons.get(id) {
+            None => out.push(Edit::AddPerson(id.clone(), p.clone())),
+            Some(_) => {
+                set(Field::PersonName(id.clone()), &mut out)?;
+                set(Field::PersonAdmin(id.clone()), &mut out)?;
+            }
+        }
+    }
+    for (id, d) in &new.devices {
+        match old.devices.get(id) {
+            None => out.push(Edit::AddDevice(id.clone(), d.clone())),
+            Some(o) if o.person != d.person || o.role != d.role || o.annex_uuid != d.annex_uuid => {
+                return None;
+            }
+            Some(_) => {
+                set(Field::DeviceName(id.clone()), &mut out)?;
+                set(Field::DeviceMaxsize(id.clone()), &mut out)?;
+            }
+        }
+    }
+    if old.removed.keys().any(|id| !new.removed.contains_key(id)) {
+        return None;
+    }
+    // A device added and removed since `old` left only its annex UUID.
+    if new.removed.iter().any(|(id, uuid)| {
+        uuid.is_some() && !old.devices.contains_key(id) && !old.removed.contains_key(id)
+    }) {
+        return None;
+    }
+    let gone: BTreeSet<&PersonId> = old
+        .persons
+        .keys()
+        .filter(|p| !new.persons.contains_key(*p))
+        .collect();
+    // The folders as the removal of `gone` leaves them (it drops them from
+    // stewards in place); those kept in order stay, the rest are removed
+    // and `new`'s from the first difference on are added, in its order.
+    let left: Vec<Folder> = old
+        .folders
+        .iter()
+        .map(|f| {
+            let mut f = f.clone();
+            if let Rule::AddOnly(s) = &mut f.rule {
+                s.retain(|p| !gone.contains(p));
+            }
+            f
+        })
+        .collect();
+    let kept: Vec<&Folder> = left.iter().filter(|f| new.folders.contains(f)).collect();
+    let same = kept
+        .iter()
+        .zip(&new.folders)
+        .take_while(|(a, b)| **a == *b)
+        .count();
+    for f in &left {
+        if !kept[..same].contains(&f) {
+            out.push(Edit::RemoveFolder(f.path.clone()));
+        }
+    }
+    out.extend(new.folders[same..].iter().cloned().map(Edit::AddFolder));
+    for id in new
+        .removed
+        .keys()
+        .filter(|id| !old.removed.contains_key(*id))
+    {
+        let by_person = old
+            .devices
+            .get(id)
+            .is_some_and(|d| gone.contains(&d.person));
+        if !by_person {
+            out.push(Edit::RemoveDevice(id.clone()));
+        }
+    }
+    for (id, d) in &old.devices {
+        if !new.devices.contains_key(id)
+            && !new.removed.contains_key(id)
+            && !gone.contains(&d.person)
+        {
+            out.push(Edit::RemoveDevice(id.clone()));
+        }
+    }
+    out.extend(gone.into_iter().map(|p| Edit::RemovePerson(p.clone())));
+    Some(out)
+}
