@@ -2,7 +2,8 @@
 //! two backup machines, each with its own home. Driven through the `pigeon`
 //! CLI with `--json`: a file is local after `create`, published once one
 //! backup machine joined, protected once the second did; `free` hides it,
-//! and `keep` gives back the same bytes.
+//! and `keep` gives back the same bytes. A second test stops a backup
+//! machine while a version is saved and starts it again, as S4 does.
 //!
 //! Needs git-annex on PATH, and `pigeon` and `git-annex-p2p-iroh` built next
 //! to `pigeond` (`cargo build -p pigeon -p git-annex-p2p-iroh`). Skipped
@@ -76,7 +77,11 @@ fn start(root: &Path, sockets: &Path, name: &'static str) -> Daemon {
     std::fs::create_dir_all(home.join("config")).unwrap();
     let config =
         "[network]\nbind = \"127.0.0.1:0\"\nmdns = false\n\n[loops]\ninterval_seconds = 1\n";
-    std::fs::write(home.join("config/config.toml"), config).unwrap();
+    // Kept on a restart: a join adds the group to it.
+    let file = home.join("config/config.toml");
+    if !file.exists() {
+        std::fs::write(file, config).unwrap();
+    }
     let socket = sockets.join(format!("{name}.sock"));
     let log = std::fs::File::create(home.join("pigeond.out")).unwrap();
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_pigeond"));
@@ -214,24 +219,38 @@ fn annex_present() -> bool {
         .is_ok_and(|o| o.status.success())
 }
 
-#[test]
-fn local_published_protected_then_free_and_keep() {
+/// One test at a time: each runs three daemons.
+static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// A temporary root and a short private directory for the sockets: a unix
+/// socket's path holds about 100 bytes, and macOS's temporary directory is
+/// long. `None` without git-annex, unless it is required.
+fn dirs() -> Option<(tempfile::TempDir, PathBuf, tempfile::TempDir)> {
     if !annex_present() {
         assert!(
             std::env::var_os("PIGEON_REQUIRE_GIT_ANNEX").is_none(),
             "git-annex is required"
         );
         eprintln!("skipped: no git-annex");
-        return;
+        return None;
     }
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().canonicalize().unwrap();
-    // Sockets in a short private directory: a unix socket's path holds about
-    // 100 bytes, and macOS's temporary directory is long.
     let sockets = tempfile::Builder::new()
         .prefix("pgn")
         .tempdir_in("/tmp")
         .unwrap();
+    Some((tmp, root, sockets))
+}
+
+#[test]
+fn local_published_protected_then_free_and_keep() {
+    let _one = SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some((_tmp, root, sockets)) = dirs() else {
+        return;
+    };
     let s = sockets.path();
     let (lap, c1, c2) = (
         start(&root, s, "lap"),
@@ -303,4 +322,38 @@ fn local_published_protected_then_free_and_keep() {
         [Response::Problem(p)] => assert_eq!(p.code, "not-in-this-build"),
         other => panic!("pause: {other:?}"),
     }
+}
+
+/// S4 on one host: a backup machine stopped while a version is saved gets
+/// it once it starts again, at the address its peers recorded, without mDNS.
+#[test]
+fn a_backup_machine_back_from_a_stop_gets_the_new_version() {
+    let _one = SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some((_tmp, root, sockets)) = dirs() else {
+        return;
+    };
+    let s = sockets.path();
+    let (lap, c1, c2) = (
+        start(&root, s, "lap"),
+        start(&root, s, "c1"),
+        start(&root, s, "c2"),
+    );
+    let folder = root.join("folder");
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(folder.join("a.txt"), b"first\n").unwrap();
+    let f = folder.to_str().unwrap();
+    let created = pigeon(&lap, &["create", "Family", f, "--k", "2", "--name", "lap"]);
+    assert!(said(&created, "created", "group").is_some(), "{created:?}");
+    join(&lap, &c1, &[&lap, &c1, &c2]);
+    join(&lap, &c2, &[&lap, &c1, &c2]);
+    until(&lap, State::Protected, &[&lap, &c1, &c2]);
+
+    drop(c2);
+    std::fs::write(folder.join("b.txt"), b"second\n").unwrap();
+    let s1 = until(&lap, State::Published, &[&lap, &c1]);
+    assert!(s1.versions.iter().any(|v| v.path == "b.txt"), "{s1:?}");
+    let c2 = start(&root, s, "c2");
+    until(&lap, State::Protected, &[&lap, &c1, &c2]);
 }
