@@ -32,9 +32,8 @@ descendant of it.
 
 ## 3.3 What is annexed
 
-`.gitattributes`, written in the genesis commit, and `.git/info/attributes`,
-which git ranks above every in-tree `.gitattributes`, so that a nested one
-copied into the folder changes nothing (§3.7):
+`.gitattributes`, written in the genesis commit, then `.git/info/attributes`,
+which git ranks above any nested `.gitattributes` copied into the folder:
 
 ```gitattributes
 * annex.largefiles=anything
@@ -48,11 +47,9 @@ copied into the folder changes nothing (§3.7):
 /.pigeon/** annex.largefiles=nothing
 ```
 
-Every file of the folder is annexed (`SHA256E`), dotfiles included; pigeon's
-own files are plain git blobs, so commit signatures cover them (ADR 0009).
-Only regular files and their execute bit are shared; links, nested
-repositories, empty folders, other permissions and extended attributes are
-not, and pigeon lists what it leaves out ([07 §7.9](07-capture-and-install.md)).
+Every file is annexed (`SHA256E`), dotfiles included; pigeon's own files are
+plain blobs, covered by commit signatures (ADR 0009). Only regular files and
+their execute bit are shared ([07 §7.9](07-capture-and-install.md)).
 
 ## 3.4 Configuration by role
 
@@ -96,24 +93,17 @@ marked `dead`, so its copies stop counting and repair starts
 
 ## 3.5 Settings follow the roster, or drops stop
 
-git-annex's shared settings (each roster device's trust, groups, `wanted`,
-`maxsize`; the group's `numcopies`, `mincopies`) are a function of the
-roster, which maps each device ID to its annex UUID ([04 §4.2](04-roster-and-authority.md)).
-After every merge of the git-annex branch and every change of `main`,
-`pigeond`:
+git-annex's shared settings (each device's trust, groups, `wanted`,
+`maxsize`; `numcopies`, `mincopies`) are a function of the roster, which
+maps device IDs to annex UUIDs ([04 §4.2](04-roster-and-authority.md)).
+After every merge of the git-annex branch and change of `main`, `pigeond`:
 
-1. computes the expected settings from the roster of its `main`;
-2. reads the actual ones (`git annex info --json`, `wanted`, `group`, `trust`);
-3. if they differ, **suspends every drop on this device** (evict, purge,
-   rebalancing) and re-applies the expected ones **[no ADR: re-apply]**. A
-   missing `pre-receive` hook or a set `core.hooksPath` also suspends serving
-   ([09 §9.4](09-network-and-joining.md)). A difference in
-   `.git/info/attributes`, `annex.backend`, `core.attributesFile`,
-   `core.excludesFile` or `core.fsync` from §3.3–3.4, or an `include` in
-   `.git/config` (§3.7), also suspends capture;
-4. resumes only when a fresh read matches.
-
-Status shows "checking the group's settings" meanwhile (P6).
+| # | Step |
+|---|---|
+| 1 | computes the expected settings from the roster of its `main` |
+| 2 | reads the actual ones (`git annex info --json`, `wanted`, `group`, `trust`) |
+| 3 | if they differ, **suspends every drop** (evict, purge, rebalancing) and re-applies them **[no ADR: re-apply]**; a missing `pre-receive` hook or a set `core.hooksPath` also suspends serving ([09 §9.4](09-network-and-joining.md)); a difference in `.git/info/attributes`, `annex.backend`, `core.attributesFile`, `core.excludesFile` or `core.fsync` (§3.3–3.4), or an `include` in `.git/config`, also suspends capture |
+| 4 | resumes only when a fresh read matches; status shows "checking the group's settings" meanwhile (P6) |
 
 ## 3.6 Remotes
 
@@ -129,38 +119,38 @@ Every other device of the roster is a remote:
     fetch = +refs/pigeon/status/*:refs/pigeon/peers/<device-id>/status/*
 ```
 
-- **Pull only.** No device pushes history into a peer or accepts a push: the
-  filter refuses `CONNECT git-receive-pack` and a `pre-receive` hook refuses
-  every push (E12, [09 §9.4](09-network-and-joining.md)). Content moves both
-  ways by git-annex's P2P protocol (`get`, `copy --to`).
-- `pigeond` creates and removes remotes as the roster changes. Proposal refs
-  are fetched without `+`: unique names, fixed targets.
-- One `git annex remotedaemon --foreground` per repository (ADR 0011), its
-  stdin held open by `pigeond`, tells peers of changes so they fetch at once.
-  On a notice it only fetches by these refspecs and never moves `main`,
-  `HEAD`, the index or the working tree (E12).
+- **Pull only.** No device pushes history or accepts a push: the filter
+  refuses `CONNECT git-receive-pack`, a `pre-receive` hook every push (E12,
+  [09 §9.4](09-network-and-joining.md)). Content moves both ways by
+  git-annex's P2P protocol (`get`, `copy --to`).
+- `pigeond` keeps the remotes in step with the roster. Proposal refs are
+  fetched without `+`: unique names, fixed targets.
+- One `git annex remotedaemon --foreground` per repository (ADR 0011), stdin
+  held open, tells peers of changes; on a notice it only fetches by these
+  refspecs, never moving `main`, `HEAD`, the index or the tree (E12).
 
 ## 3.7 Driving git and git-annex
 
-**Environment.** Every process starts without inherited `GIT_*` variables,
-with `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`,
-`GIT_ATTR_NOSYSTEM=1` and `GIT_TERMINAL_PROMPT=0`, so git reads only the
-`.git/config` pigeon writes (E20: a person's `~/.gitconfig` changed keys,
-blobs and exclusions).
+**Environment.** No inherited `GIT_*` variable, `GIT_CONFIG_NOSYSTEM=1`,
+`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_ATTR_NOSYSTEM=1`, `GIT_TERMINAL_PROMPT=0`:
+git reads only the `.git/config` pigeon writes (E20; contract test
+`capture_ignores_the_persons_git_configuration`).
 
 **Processes [no ADR: driver].** Per repository, one `git cat-file --batch`
-and long-lived `git annex … --batch --json` processes for frequent commands
-(`add`, `whereis`, `matchexpression`, `get`, `copy`, `drop`), parsed with
-serde (ADR 0004). Each call has a timeout (default 120 s); a failure keeps the
-command, exit status and last 4 KiB of stderr (ADR 0023). A blank answer is
-never success; a batch past its deadline is killed and restarted at the next
-call; it is stopped by closing its input, so git-annex stages what it queued
-(`Annex/Queue.hs`), and killed only after a grace period. Every argument
-vector is checked against the table below before a process starts
-(`pigeon_git::allow::check`), which also refuses `get`, `copy` and `drop`
-without explicit keys, `copy` without `--to`, and `drop` without
-`--numcopies` and `--mincopies` (except a purge's `--force`). It guards
-against pigeon's mistakes; it is not a sandbox.
+and long-lived `git annex … --batch --json` processes for `add`, `whereis`,
+`matchexpression`, `get`, `copy`, `drop`, parsed with serde (ADR 0004). Each
+call has a timeout (default 120 s); a failure keeps the command, exit status
+and last 4 KiB of stderr (ADR 0023). A blank answer is never success; a batch
+past its deadline is killed and restarted at the next call
+(`a_batch_past_its_deadline_restarts`); it is stopped by closing its input,
+so git-annex stages what it queued, and killed after a grace period.
+
+**Allowed commands.** `pigeon_git::allow::check` checks every argument vector
+against this table before a process starts (`refused_commands_never_start`),
+and refuses `get`, `copy` and `drop` without explicit keys, `copy` without
+`--to`, `drop` without `--numcopies` and `--mincopies` except a purge's
+`--force` (`drop_refuses_without_k_verified_copies`). It guards against
+pigeon's mistakes; it is not a sandbox.
 
 | Allowed | Used for |
 |---|---|
@@ -189,9 +179,9 @@ E9); `move`, `drop --from`, `satisfy`, `--rebalance` against a remote,
 `drop --auto`; `git merge`, `checkout`, `pull`, `reset --hard` on the working
 tree (install is pigeon's, [07](07-capture-and-install.md)); `git push`.
 
-Every output pigeon parses has a JSON contract test against the minimum
-git-annex version (`crates/pigeon-git/tests/contract.rs`, ADRs 0004, 0020); a
-new git-annex version is supported once they pass ([13 §13.6](13-verification.md)).
+Every output pigeon parses has a contract test against the minimum versions
+(`crates/pigeon-git/tests/contract.rs`, ADRs 0004, 0020); a new git-annex is
+supported once they pass ([13 §13.6](13-verification.md)).
 
 ## 3.8 What may change a repository
 
@@ -203,11 +193,9 @@ new git-annex version is supported once they pass ([13 §13.6](13-verification.m
 | the index, `HEAD`, the working tree | `pigeond`: capture, install ([07](07-capture-and-install.md)), sparse folders ([08 §8.5](08-custody-loops.md)) | `remotedaemon` (E12), git porcelain |
 | annexed content | `pigeond` driving git-annex; peers through the filter: reads, stores, and removals on laptops only ([09 §9.4](09-network-and-joining.md)) | a remote `REMOVE` on a custodian |
 
-Hooks: git-annex installs `pre-commit`, `post-checkout`, `post-merge` and
-`post-receive` on laptops; pigeon never fires them (it uses `commit-tree`,
-runs `smudge --update` itself, and accepts no push). pigeon installs
-`pre-receive` in every repository, refusing every push. A bare custodian has
-no git-annex hooks. The only background processes are `pigeond` and its
-children: one `remotedaemon` per repository, the batch processes, and the
-network helper git-annex starts ([09 §9.2](09-network-and-joining.md)); never
-an assistant, `sync` or `watch`.
+Hooks: pigeon never fires git-annex's laptop hooks (it uses `commit-tree`,
+runs `smudge --update` itself, accepts no push), and installs `pre-receive`,
+refusing every push, everywhere (a bare custodian has no other hook). The
+only background processes are `pigeond`, one `remotedaemon` per repository,
+the batch processes and git-annex's network helper
+([09 §9.2](09-network-and-joining.md)); never an assistant, `sync` or `watch`.
