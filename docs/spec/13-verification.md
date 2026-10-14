@@ -273,11 +273,12 @@ with what its last runs showed; per push it is reported as blocked, and
 disk is sized above the `annex.diskreserve` pigeon sets (03 §3.4): 4 GiB
 for a laptop, 8 GiB (sparse) for a custodian; below it git-annex refuses
 every transfer, which kept the first runs at *published*. In run
-38602095008 (14 October 2026) S1–S7 pass on both runners, and S9–S11 on
-Linux; still blocked are S8, whose scenario waited for `disk-full` alone,
-which comes before the file is published, and on macOS S10, whose
-custodians had no address for each other, S11, measured before
-re-thinning, and one S9 point, whose image setup failed.
+38610156407 (14 October 2026) S1–S4, S7, S10 and S11 pass on both runners,
+and S6, S8 and S9 on Linux. On macOS a restore on a full laptop said
+`internal-error`, a restarted daemon replayed its journal before it
+answered (S5, S9), and re-thinning moved a file the person had just saved
+(S6); on Linux an orphaned `git annex get` kept a transfer lock (S5). Each
+is fixed since; `slice::BLOCKED` keeps S8 and S9.
 
 | Scenario | Asserts |
 |---|---|
