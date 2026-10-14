@@ -40,11 +40,15 @@ models-full runs 38610156407 and 38620593663 agree.
 | S10 | a fresh laptop recovers with the recovery sheet | pass | pass |
 | S11 | steady and peak disk use per device | pass | pass |
 
-**Still blocked: the random S9 schedules.** One schedule takes 50–90 s, so
-the 50 per push did not fit the slice job beside S1–S11, which take about
-35 minutes. `slice.yml` now runs them in a job of their own, in two shards
-of 25 per runner. They leave `slice::BLOCKED` once both runners pass, and
-v0.1.0 is tagged then.
+**Still blocked: the random S9 schedules.** They did not fit the slice job
+beside S1–S11, which take about 35 minutes, so `slice.yml` runs them in a
+job of their own, two shards of 25 per runner: a schedule takes about 10 s
+on Linux and 60 s on macOS. In run 38648627496 (at 13188f8) both Linux
+shards and one macOS shard passed; in the other macOS shard one case failed
+once and passed in hegel's 10 replays, which overwrote its logs, so the
+cause is not known yet. Each case now keeps its logs and prints why it
+fails. They leave `slice::BLOCKED`, and v0.1.0 is tagged, once both runners
+pass.
 
 ## What the slice found
 

@@ -277,10 +277,12 @@ with what its last runs showed; per push it is reported as blocked, and
 --with-blocked`, with pigeond's debug log) without failing. A device's
 disk is sized above the `annex.diskreserve` pigeon sets (03 §3.4): 4 GiB
 for a laptop, 8 GiB (sparse) for a custodian; below it git-annex refuses
-every transfer, which kept the first runs at *published*. In run
-38620593663 (14 October 2026, at 767dc0b) S1–S11 and every S9 point pass on
-both runners. Only S9's random schedules stay blocked: they have not run in
-CI yet, and 50 at 50–90 s each do not fit `slice.yml`'s 90-minute job.
+every transfer, which kept the first runs at *published*. In `slice.yml`
+run 38648627496 (15 October 2026, at 13188f8) S1–S12 and every S9 point
+pass on both runners. Only S9's random schedules stay blocked: they run in
+a job of their own, as 50 at about 10 s (Linux) to 60 s (macOS) each do not
+fit beside the scenarios, and one macOS case of 50 failed once, then passed
+in 10 replays.
 
 | Scenario | Asserts |
 |---|---|

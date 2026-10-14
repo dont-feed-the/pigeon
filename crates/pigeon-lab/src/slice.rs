@@ -582,8 +582,10 @@ pub fn s13() -> Scenario {
 /// random schedules of tests/s9_exec.rs.
 pub const BLOCKED: &[(&str, &str)] = &[(
     "S9-random",
-    "not yet run in CI: a schedule takes 50-90 s, so slice.yml's 50 do not \
-     fit its 90-minute job beside S1-S11 (about 35 minutes)",
+    "flaky on macOS: in slice.yml run 38648627496 (13188f8) 75 of 76 passed, \
+     the 50 on Linux included; one macOS case failed once and passed in \
+     hegel's 10 replays, which overwrote its logs. Cases now keep their logs \
+     and print why they fail",
 )];
 
 /// Why the scenario `id` is blocked, if it is.
