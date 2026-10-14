@@ -182,6 +182,50 @@ pub fn dirs_under(home: &Path) -> Dirs {
     }
 }
 
+/// The directory first in the children's `PATH` (14 §14.3): `<cache>/bin`,
+/// with a link to the transport helper next to `pigeond` and, when the
+/// git-annex on `PATH` installs none (Homebrew), a `git-remote-p2p-annex`
+/// link to `git-annex`, which dispatches on its name. Without it, the
+/// directory of `pigeond` itself.
+fn child_bin(dirs: &Dirs) -> Option<PathBuf> {
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf));
+    let bin = dirs.cache.join("bin");
+    if std::fs::create_dir_all(&bin).is_err() {
+        return exe_dir;
+    }
+    let link = |name: &str, target: Option<PathBuf>| {
+        let at = bin.join(name);
+        let _ = std::fs::remove_file(&at);
+        if let Some(target) = target
+            && let Err(e) = std::os::unix::fs::symlink(&target, &at)
+        {
+            tracing::warn!(link = %at.display(), error = %e, "link-failed");
+        }
+    };
+    let helper = exe_dir
+        .as_ref()
+        .map(|d| d.join("git-annex-p2p-iroh"))
+        .filter(|p| p.is_file());
+    link("git-annex-p2p-iroh", helper);
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let find = |name: &str| {
+        std::env::split_paths(&path)
+            .map(|d| d.join(name))
+            .find(|p| p.is_file())
+    };
+    let remote = find("git-remote-p2p-annex")
+        .is_none()
+        .then(|| find("git-annex"))
+        .flatten();
+    if remote.is_some() {
+        tracing::info!("git-remote-p2p-annex-linked");
+    }
+    link("git-remote-p2p-annex", remote);
+    Some(bin)
+}
+
 /// Runs `pigeond` until it is told to stop.
 pub async fn run(dirs: Dirs) -> Result<(), String> {
     crate::logs::init(dirs.logs());
@@ -205,11 +249,8 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     if std::os::unix::net::UnixStream::connect(&socket).is_ok() {
         return Err(format!("pigeond already runs on {}", socket.display()));
     }
-    let helper_dir = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(Path::to_path_buf));
     let env = GitEnv {
-        path_first: helper_dir,
+        path_first: child_bin(&dirs),
         extra: vec![("PIGEON_SOCKET".into(), socket.clone().into_os_string())],
     };
     let device = node.device_id();

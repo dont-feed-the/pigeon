@@ -35,6 +35,7 @@
 | `<state>/telemetry/` | the bounded local OTLP-JSON files (ADR 0025) |
 | `<state>/traces/` | trace events, only with the `tla-trace` feature (ADR 0008) |
 | `<cache>/view/` | read-only copies opened by `pigeon view` (ADR 0035) |
+| `<cache>/bin/` | links first in the children's `PATH`: the transport helper, and `git-remote-p2p-annex` where git-annex installs none ([14 §14.3](14-platforms-and-packaging.md)) |
 | `<runtime>/pigeon/` | the socket, its lock file and the web port ([09 §9.3](09-network-and-joining.md)) |
 
 `<config>` is `$XDG_CONFIG_HOME/pigeon` on Linux and
