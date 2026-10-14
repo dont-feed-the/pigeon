@@ -476,32 +476,22 @@ pub fn s11() -> Scenario {
     )
 }
 
-/// The scenarios that do not pass yet against pigeond, with what their
-/// last runs on both runners showed (models-full.yml, run 38572141897, at
-/// 4982c08; 13 §13.12). `pigeon-lab run` reports each as blocked without
-/// running it, and runs it with `--with-blocked`, where a pass says to
-/// unmark it and a failure does not fail the run. An id `S9` stands for
-/// every S9 point. Several of these timed out because dialling a stopped
-/// device held up every stream of the laptop for 30 s at a time; pigeond
-/// no longer does.
+/// The scenarios that do not pass yet against pigeond on both runners,
+/// with what their last runs there showed (models-full.yml, run
+/// 38592753952, at 5d9e740; 13 §13.12). `pigeon-lab run` reports each as
+/// blocked without running it, and runs it with `--with-blocked`, where a
+/// pass says to unmark it and a failure does not fail the run. An id `S9`
+/// stands for every S9 point. Each one but S5, S7 and S8, which need sized
+/// disks or a 1 GiB file, passes with `--isolation dirs` at bcece9a.
 pub const BLOCKED: &[(&str, &str)] = &[
     (
-        "S2",
-        "Linux: the draft is still local after 120 s, with backup-2 stopped; \
-         macOS passes",
-    ),
-    (
         "S3",
-        "pigeon restore answers not-in-this-build (both runners)",
+        "pigeon restore answered not-in-this-build (both runners)",
     ),
     (
         "S5",
         "the 1 GiB file is not protected 900 s after the laptop's restart \
-         (published on Linux, local on macOS)",
-    ),
-    (
-        "S6",
-        "Linux: the edit is still published 120 s after the race; macOS passes",
+         (published on Linux, local on macOS): a restarted device listened on a new port",
     ),
     (
         "S7",
@@ -516,18 +506,18 @@ pub const BLOCKED: &[(&str, &str)] = &[
     ("S9", S9),
     (
         "S10",
-        "pigeon recovery-sheet answers not-in-this-build (both runners)",
+        "pigeon recovery-sheet answered not-in-this-build (both runners)",
     ),
     (
         "S11",
-        "the laptop's disk holds 2.06 × the content kept (34.6 MB for 16.8 MB) on \
+        "the laptop's disk holds 2.07 × the content kept (34.7 MB for 16.8 MB) on \
          both runners: each file and its annex object (13 §13.11 allows 1.1 ×)",
     ),
 ];
 
-const S9: &str = "a crash at a point of free or keep falls inside the request, which \
-     answers daemon-not-running, where the model frees in its loops and expects done; \
-     after a crash before capture's ref, the files are still published after 180 s";
+const S9: &str = "a crash at a point of free or keep fell inside the request, which \
+     answered daemon-not-running (both runners); after a crash before capture's ref, \
+     the files were still published after 180 s";
 
 /// Why the scenario `id` is blocked, if it is.
 pub fn blocked(id: &str) -> Option<&'static str> {
