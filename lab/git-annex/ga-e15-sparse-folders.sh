@@ -4,12 +4,15 @@
 # show it, then let git-annex smudge it. Asserts each step; exits non-zero on failure.
 set -euo pipefail
 export PATH=~/git-annex.linux:$PATH
+# git isolated from the person's configuration (E20), with a lab identity for git-annex's commits
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME=lab GIT_AUTHOR_EMAIL=lab@pigeon \
+  GIT_COMMITTER_NAME=lab GIT_COMMITTER_EMAIL=lab@pigeon
 L=${LAB:-$HOME/ga-lab15}; chmod -R u+w "$L" 2>/dev/null || true; rm -rf "$L"; mkdir -p "$L"; cd "$L"
 fail() { echo "FAIL: $*"; exit 1; }
 ok() { echo "ok: $*"; }
-objects() { find .git/annex/objects -type f 2>/dev/null | wc -l; }
+objects() { find .git/annex/objects -type f 2>/dev/null | wc -l | tr -d ' '; }  # BSD wc pads
 
-git init -q A; cd A; git annex init -q A; git config annex.addunlocked true
+git init -q -b main A; cd A; git annex init -q A; git config annex.addunlocked true
 mkdir Photos Docs; echo photo-1 > Photos/a.jpg; echo doc-1 > Docs/b.txt
 git annex add -q .; git -c user.name=lab -c user.email=lab@pigeon commit -qm init; cd ..
 git clone -q A B; cd B; git annex init -q B; git config annex.addunlocked true

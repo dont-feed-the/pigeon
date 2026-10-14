@@ -28,7 +28,11 @@ For each reachable peer *d*:
 
 1. `git fetch <remote of d>` with the refspecs of [03 §3.6](03-repository-and-roles.md):
    its `main` into `refs/pigeon/peers/<d>/main`, its git-annex branch, the
-   proposals it knows, the status reports it relays.
+   proposals it knows, the status reports it relays. Over P2P a fetch can
+   wait forever (16 §16.4), so it has a deadline, after which its process
+   group is killed and the next notice or period fetches again; a
+   remotedaemon whose fetch began (`SYNCING`) and never ended is restarted,
+   since it hears no more notices from that peer (ADR 0056).
 2. `git annex merge` (the git-annex branch is a union; git-annex merges it).
 3. Settings check ([03 §3.5](03-repository-and-roles.md)).
 4. **Validate** the new commits of the peer's `main` in topological order with
@@ -166,9 +170,11 @@ Hidden files are never read as deletions: `git status` skips skip-worktree
 entries, and the staging directory is inside `.git`. Kept folders are recorded
 by git's own sparse-checkout file and the device's `wanted` expression;
 `pigeond` restores both at start (ADR 0031). Path commands skip hidden folders
-(E15), so pigeon handles hidden folders by key. A stale `index.lock` left by a
-killed git process of `pigeond` is removed at start, since `pigeond` is the
-only writer of the repository.
+(E15), so pigeon handles hidden folders by key. A stale `index.lock` or
+`info/sparse-checkout.lock` left by a killed git process of `pigeond` is
+removed at start, since `pigeond` is the only writer of the repository: a
+`kill -9` inside `git sparse-checkout set` leaves the latter, and every later
+free fails until it is gone (E15b, ADR 0056).
 
 ## 8.6 Purge: erase forever (ADRs 0018, 0042)
 

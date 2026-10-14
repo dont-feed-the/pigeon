@@ -151,7 +151,12 @@ For each path, in this order (a batch shares its fsyncs and its one writer scan)
    old file. If *p* is gone, the person deleted it: `skip`.
 5. **Writer scan.** No process holds the aside open for writing or maps it
    shared and writable (Linux `/proc/*/fd`, `fdinfo` and `maps`; macOS
-   `libproc`). It runs before the check, so no write slips in after it.
+   `libproc`: descriptors with `FWRITE`, and every writable file-backed
+   region, private ones included, since the share mode does not tell them
+   apart; ADR 0056). It runs before the check, so no write slips in after it.
+   On macOS a write through a shared mapping leaves the stat unchanged until
+   `msync` (E19): capture sees such a save only once it is synced, and the
+   kept aside (step 9) still keeps it.
 6. **Check.** The aside's `(dev, ino, size, mtime)` equal the journalled ones.
    Its link count is 1, or 2 if it is the object's inode. A higher count
    means a person's hard link: the check still passes, and the aside is marked

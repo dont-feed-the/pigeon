@@ -22,6 +22,7 @@ import glob, os, shutil, signal, socket, subprocess, sys, threading, time
 LAB = os.path.expanduser(os.environ.get('LAB', '~/ga-lab23'))
 NET, BIN = os.path.join(LAB, 'net'), os.path.join(LAB, 'bin')
 ENV = dict(os.environ, LABNET=NET, PATH=BIN + ':' + os.environ['PATH'],
+           GIT_CONFIG_GLOBAL='/dev/null', GIT_CONFIG_NOSYSTEM='1',
            GIT_AUTHOR_NAME='lab', GIT_AUTHOR_EMAIL='lab@x', GIT_COMMITTER_NAME='lab',
            GIT_COMMITTER_EMAIL='lab@x')
 FAILS = []

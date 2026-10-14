@@ -48,7 +48,10 @@ btrfs, ZFS), since its repository is bare and no person edits it.
   bundles, which meets git ≥ 2.38 (ADR 0010). `pigeond` puts that directory
   first in the `PATH` of its children; a person's own git is not touched.
 - **macOS:** the installer runs `brew install git-annex` (ADR 0020), which
-  brings a recent git.
+  brings a recent git. Homebrew installs no `git-remote-p2p-annex` (E12), so
+  `pigeond` links that name to the `git-annex` it uses, in its own directory
+  first in its children's `PATH`; the binary dispatches on its name
+  (`CmdLine/Multicall.hs`, ADR 0056).
 - **Checks at start.** `pigeond` runs `git annex version` and `git --version`
   and refuses to run below the minimum versions CI tests, with
   `git-annex-too-old` ([10 §10.6](10-interfaces.md)). The minimum is the

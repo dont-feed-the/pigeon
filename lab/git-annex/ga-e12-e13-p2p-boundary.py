@@ -14,13 +14,14 @@ a peer P. Asserted:
   an unknown message closes; payloads holding protocol lines pass intact;
 - `.gitattributes` numcopies lowers path drops, not key drops; explicit
   `--numcopies` outweighs a lowered group setting; the hooks git-annex installs.
-Usage: ga-e12-e13-p2p-boundary.py (LAB defaults to ~/ga-lab12). Linux, about 90 s.
+Usage: ga-e12-e13-p2p-boundary.py (LAB defaults to ~/ga-lab12). Linux and macOS, about 90 s.
 """
 import os, random, shutil, signal, socket, subprocess, sys, threading, time
 
 LAB = os.path.expanduser(os.environ.get('LAB', '~/ga-lab12'))
 NET, BIN = os.path.join(LAB, 'net'), os.path.join(LAB, 'bin')
-ENV = dict(os.environ, LABNET=NET, PATH=BIN + ':' + os.environ['PATH'],
+ENV = dict(os.environ, LABNET=NET, PATH=BIN + ':' + os.path.expanduser('~/git-annex.linux') + ':'
+           + os.environ['PATH'], GIT_CONFIG_GLOBAL='/dev/null', GIT_CONFIG_NOSYSTEM='1',
            GIT_AUTHOR_NAME='lab', GIT_AUTHOR_EMAIL='lab@x', GIT_COMMITTER_NAME='lab',
            GIT_COMMITTER_EMAIL='lab@x')
 FAILS, NOTES = [], []
@@ -44,7 +45,8 @@ try: s.connect(os.path.join(net, a[0] + '.sock'))
 except OSError as e: print('cannot connect:', e, file=sys.stderr); sys.exit(1)
 def up():
     while (b := os.read(0, 65536)): s.sendall(b)
-    s.shutdown(socket.SHUT_WR)
+    try: s.shutdown(socket.SHUT_WR)
+    except OSError: pass  # macOS: ENOTCONN once the peer has gone
 threading.Thread(target=up, daemon=True).start()
 while (b := s.recv(65536)): os.write(1, b)
 '''
@@ -57,8 +59,18 @@ def check(cond, what):
 
 
 def run(cwd, *cmd, ok=True, inp=None, env=None, timeout=90):
-    p = subprocess.run(cmd, cwd=cwd, env=env or ENV, input=inp, capture_output=True,
-                       text=True, timeout=timeout)
+    """On timeout the whole process group is killed: no git-annex helper is left
+    holding a connection or a lock."""
+    with subprocess.Popen(cmd, cwd=cwd, env=env or ENV, text=True, start_new_session=True,
+                          stdin=subprocess.DEVNULL if inp is None else subprocess.PIPE,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE) as q:
+        try:
+            out, err = q.communicate(inp, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            os.killpg(q.pid, signal.SIGKILL)
+            q.communicate()
+            raise
+    p = subprocess.CompletedProcess(cmd, q.returncode, out, err)
     if ok and p.returncode:
         sys.exit(f'{cwd}: {" ".join(cmd)} failed: {p.stderr.strip()[-400:]}')
     return p
@@ -72,6 +84,18 @@ def ann(cwd, *a, **k):
     return run(cwd, 'git', 'annex', *a, **k)
 
 
+def p2p(cwd, *a, ok=True):
+    """git fetch or push over P2P. git-annex's relay can send CONNECTDONE before the
+    last of git's output (P2P/IO.hs runRelayService: waitexit races relayReader for
+    the MVar), and the client then waits forever: retry, and say so."""
+    for attempt in (1, 2, 3):
+        try:
+            return run(cwd, 'git', *a, ok=ok, timeout=20)
+        except subprocess.TimeoutExpired:
+            NOTES.append(f'git {" ".join(a)} over P2P hung (attempt {attempt}): the relay race of 16 §16.4')
+    sys.exit(f'{cwd}: git {" ".join(a)} over P2P hung three times')
+
+
 def has_key(repo, key):
     return ann(repo, 'contentlocation', key, ok=False).returncode == 0
 
@@ -80,14 +104,27 @@ DAEMONS = []
 
 
 class Daemon:
-    """git annex remotedaemon --foreground; it ends when its stdin closes."""
+    """git annex remotedaemon --foreground; it ends when its stdin closes. Its
+    stdout says CONNECTED once a P2P remote is reached (RemoteDaemon/Types.hs)."""
     def __init__(self, repo, env=None):
         DAEMONS.append(self)
         self.p = subprocess.Popen(['git', 'annex', 'remotedaemon', '--foreground'], cwd=repo,
                                   env=env or ENV, stdin=subprocess.PIPE,
-                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                  stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                   start_new_session=True)
+        self.said = []
+        threading.Thread(target=lambda: self.said.extend(iter(self.p.stdout.readline, b'')),
+                         daemon=True).start()
         time.sleep(1.5)
+
+    def connected(self, seconds=30):
+        """Wait until it has reached its remotes: a change notice sent earlier is lost."""
+        return wait_for(lambda: any(l.startswith(b'CONNECTED') for l in self.said), seconds)
+
+    def hung(self):
+        """Its last fetch began (SYNCING) and never ended (DONESYNCING)."""
+        s = [l for l in self.said if l.startswith((b'SYNCING', b'DONESYNCING'))]
+        return bool(s) and s[-1].startswith(b'SYNCING')
 
     def stop(self):
         if self.p.poll() is None:
@@ -136,7 +173,10 @@ class Shim:
         threading.Thread(target=up, daemon=True).start()
         while (b := p.stdout.read1(65536)):
             conn.sendall(b)
-        conn.shutdown(socket.SHUT_RDWR)
+        try:
+            conn.shutdown(socket.SHUT_RDWR)
+        except OSError:                      # macOS: ENOTCONN once the peer has gone
+            pass
         conn.close()
 
     def stop(self):
@@ -363,6 +403,23 @@ def commit_in(repo, msg):
     return c
 
 
+def notice_fetched(L, C, d, restart, msg):
+    """A commit on C, which L's remotedaemon d must fetch into its refspec. Its fetch
+    runs inside the notice loop without a deadline (P2PGeneric.hs handlepeer), so one
+    that hangs in the relay race (see p2p) silences C for good: say so, restart, retry."""
+    for attempt in (1, 2):
+        new = commit_in(C, msg)
+        if wait_for(lambda: ref(L, 'refs/pigeon/peers/C/main') == new):
+            return d, new, True
+        if not d.hung():
+            break
+        NOTES.append(f"L's remotedaemon fetch hung (attempt {attempt}): the relay race of 16 §16.4")
+        d.stop()
+        d = restart()
+        d.connected()
+    return d, new, False
+
+
 def hooks(gitdir):
     d = os.path.join(gitdir, 'hooks')
     return sorted(h for h in os.listdir(d) if not h.endswith('.sample'))
@@ -404,6 +461,11 @@ def setup():
     with open(os.path.join(BIN, 'git-annex-p2p-lab'), 'w') as f:
         f.write(HELPER)
     os.chmod(os.path.join(BIN, 'git-annex-p2p-lab'), 0o755)
+    if not shutil.which('git-remote-p2p-annex', path=ENV['PATH']):
+        # Homebrew installs git-annex without this name; the binary dispatches on its
+        # name (CmdLine/Multicall.hs), so an installer must provide the link
+        os.symlink(shutil.which('git-annex', path=ENV['PATH']), os.path.join(BIN, 'git-remote-p2p-annex'))
+        NOTES.append('this git-annex has no git-remote-p2p-annex; linked it to git-annex')
     L, C, P = (os.path.join(LAB, n) for n in ('L', 'C.git', 'P'))
     git(LAB, 'init', '-q', '-b', 'main', L)
     ann(L, 'init', 'L')
@@ -442,31 +504,31 @@ def main():
     git(L, 'config', 'remote.c.fetch', '+refs/heads/main:refs/pigeon/peers/C/main')
     dL.stop()
     dL = Daemon(L)
+    check(dL.connected(), "L's remotedaemon connects to C")
     before = worktree_state(L)
-    new = commit_in(C, 'changed on C')
-    check(wait_for(lambda: ref(L, 'refs/pigeon/peers/C/main') == new),
-          "E12: L's remotedaemon fetched C's change into L's configured refspec")
+    dL, new, fetched = notice_fetched(L, C, dL, lambda: Daemon(L), 'changed on C')
+    check(fetched, "E12: L's remotedaemon fetched C's change into L's configured refspec")
     check(worktree_state(L) == before,
           'E12: and main, HEAD, the index and the working tree of L did not move')
     check(ref(L, 'refs/remotes/c/main') == '', 'E12: no other ref was written')
 
     # Pushes into peers over P2P.
     pc = commit_in(P, 'unvalidated, by P')
-    r = run(P, 'git', 'push', 'c', '+main:refs/heads/main', ok=False)
+    r = p2p(P, 'push', 'c', '+main:refs/heads/main', ok=False)
     check(r.returncode == 0 and ref(C, 'main') == pc,
           'by default a peer pushes an unvalidated main into custodian C over P2P')
     git(C, 'update-ref', 'refs/heads/main', new)
     refuse_pushes(C)
-    r = run(P, 'git', 'push', 'c', '+main:refs/heads/main', ok=False)
+    r = p2p(P, 'push', 'c', '+main:refs/heads/main', ok=False)
     check(r.returncode != 0 and ref(C, 'main') == new, "pigeon's pre-receive hook refuses it")
-    r = run(P, 'git', 'push', 'l', 'main:refs/heads/main', ok=False)
+    r = p2p(P, 'push', 'l', 'main:refs/heads/main', ok=False)
     check(r.returncode != 0 and ref(L, 'main') == before[0],
           "git refuses a push to L's checked-out main by default (receive.denyCurrentBranch)")
-    r = run(P, 'git', 'push', 'l', 'main:refs/pigeon/peers/X/main', ok=False)
+    r = p2p(P, 'push', 'l', 'main:refs/pigeon/peers/X/main', ok=False)
     check(r.returncode == 0 and ref(L, 'refs/pigeon/peers/X/main') == pc,
           "but accepts a push to any other ref of L, such as refs/pigeon/peers/X/main")
     refuse_pushes(os.path.join(L, '.git'))
-    r = run(P, 'git', 'push', 'l', 'main:refs/pigeon/peers/Y/main', ok=False)
+    r = p2p(P, 'push', 'l', 'main:refs/pigeon/peers/Y/main', ok=False)
     check(r.returncode != 0 and ref(L, 'refs/pigeon/peers/Y/main') == '',
           "pigeon's pre-receive hook refuses that too")
 
@@ -514,17 +576,18 @@ def main():
     k2 = git(L, 'annex', 'lookupkey', 'f2')
     ann(L, 'copy', '--to', 'c', 'f2')
     check(has_key(C, k2), 'filter: a laptop stores on C a file whose bytes hold protocol lines')
-    git(P, 'fetch', 'c')
+    p2p(P, 'fetch', 'c')
     check(ref(P, 'refs/remotes/c/main') == new, 'filter: git fetch (CONNECT git-upload-pack) passes')
-    git(P, 'fetch', 'l')                  # L's location log knows that C has k2
+    p2p(P, 'fetch', 'l')                  # L's location log knows that C has k2
     ann(P, 'merge')
     ann(P, 'get', '--from', 'c', '--key', k2)
     with open(os.path.join(P, git(P, 'annex', 'contentlocation', k2)), 'rb') as f:
         got = f.read()
     check(got == payload, 'filter: a peer reads it back intact (DATA framing, random read sizes)')
-    new2 = commit_in(C, 'changed on C again')
-    check(wait_for(lambda: ref(L, 'refs/pigeon/peers/C/main') == new2),
-          "filter: change notices still reach L's remotedaemon")
+    check(dL.connected(), "L's remotedaemon connects to C through the filter")
+    dL, new2, fetched = notice_fetched(L, C, dL, lambda: Daemon(L, env=dict(ENV, LABFILTER='1')),
+                                       'changed on C again')
+    check(fetched, "filter: change notices still reach L's remotedaemon")
     r = ann(P, 'drop', '--from', 'c', '--force', '--key', k1, ok=False)
     check(r.returncode != 0 and has_key(C, k1) and any(l.startswith(b'REMOVE') for l in fc.refused),
           'E13 filter: REMOVE is answered FAILURE on C; C keeps its copy')
@@ -557,10 +620,6 @@ def main():
           "drop --key obeys annex.numcopies=1 of the key's file in .gitattributes")
     fc.stop()
     fl.stop()
-    dC.stop()
-    dL.stop()
-    for n in NOTES:
-        print('note', n)
     print(f'E12/E13: {len(FAILS)} failure(s)')
     sys.exit(1 if FAILS else 0)
 
@@ -571,3 +630,5 @@ if __name__ == '__main__':
     finally:
         for d in DAEMONS:
             d.stop()
+        for n in NOTES:
+            print('note', n)

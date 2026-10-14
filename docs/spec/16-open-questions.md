@@ -28,6 +28,7 @@
 | ADR 0053: trace logs reach TLC as generated TLA+ modules; TLC stays at 1.7.4 | Proposed, for issue #10; [13 §13.3](13-verification.md) and [12 §12.3](12-observability.md) apply it; `TraceSample` and `scripts/trace-to-tla --check` run in CI | Guillaume |
 | ADR 0054: a copy counts only if it can be locked; custodians answer `CHECKPRESENT` with a lock | Proposed, for issue #10: over P2P git-annex's verified drop counts a copy locked for removal (E23); [09 §9.4](09-network-and-joining.md) and [08 §8.3](08-custody-loops.md) apply it, `AnnexDrop` checks it ([13 §13.2](13-verification.md)); report upstream | Guillaume |
 | ADR 0055: install recovery rolls forward from a journalled proof | Proposed, for issue #1; [07 §7.5–7.6](07-capture-and-install.md), [11 §11.3](11-local-state.md) apply it, the `CaptureInstall` model checks it ([13 §13.2](13-verification.md)) | Guillaume |
+| ADR 0056: every asserting experiment runs on Linux and macOS | Proposed, for issue #10; `lab.yml` runs it; [07 §7.5](07-capture-and-install.md), [08 §8.2, §8.5](08-custody-loops.md), [13 §13.7–13.8](13-verification.md), [14 §14.3](14-platforms-and-packaging.md) apply it | Guillaume |
 | TLC with the `Json` module for trace validation | ADR 0026 foresees a new ADR pinning it by SHA-256 ([13 §13.3](13-verification.md)) | before the first `*Trace.tla` |
 
 ## 16.2 Where this specification departs from a source
@@ -92,6 +93,7 @@ them all.
 - The aside kept one hour under `.git/pigeon/aside/` (§7.5, [11 §11.3](11-local-state.md)).
 - A save of a diverging path becomes a proposal of its own (§7.6).
 - Fetching every 5 minutes besides change notices (§8.1).
+- The deadline of a P2P fetch or push (§8.2).
 - The Drop command `free --without-checking` and its record (§8.7).
 - A full scrub pass every 30 days (§8.8).
 
@@ -178,7 +180,21 @@ them all.
   file's old content in memory and saves after an install replaces the new
   version, which then lives on only in the history. Lock files cover office
   suites and editors. Should a save within seconds of an install count as
-  concurrent? The **writer scan on macOS** (`libproc`) also awaits E19 on a Mac.
+  concurrent?
+- **Saves through a shared mapping on macOS** (ADR 0056). Such a write leaves
+  the stat unchanged until `msync` (E19), so capture does not see the save
+  until the application syncs it. An install keeps it in the aside, so it is
+  not lost, but it is not captured earlier. Hashing kept files periodically
+  would close the gap, at a cost in disk reads (ADR 0037).
+- **A P2P fetch that never ends** (ADR 0056). In git-annex's relay
+  (`runRelayService`, `P2P/IO.hs`) the exit of `git upload-pack` and its last
+  output race for one `MVar`; when the exit wins, `CONNECTDONE` goes out, the
+  pack is dropped and the client waits for it forever (E12; 2 of about 100
+  fetches in a loop with a concurrent notice). It also sends `CONNECTDONE`
+  twice. remotedaemon fetches inside its notice loop without a deadline
+  (`P2PGeneric.hs`), so the peer's notices stop until it restarts. `pigeond`
+  works around it (08 §8.2); to report upstream, with the fix of draining the
+  output before `CONNECTDONE`.
 - **Erased names.** A purge erases content, but the names, authors and times of
   the erased versions stay in the signed history (ADR 0042). Removing a name
   would need a new history signed again by the admins. Is that ever needed?

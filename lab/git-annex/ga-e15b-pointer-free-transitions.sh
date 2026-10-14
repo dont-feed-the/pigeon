@@ -7,12 +7,17 @@
 # Asserts; exits non-zero on failure. Needs python3.
 set -euo pipefail
 export PATH=~/git-annex.linux:$PATH
+# git isolated from the person's configuration (E20), with a lab identity for git-annex's commits
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME=lab GIT_AUTHOR_EMAIL=lab@pigeon \
+  GIT_COMMITTER_NAME=lab GIT_COMMITTER_EMAIL=lab@pigeon
 L=${LAB:-$HOME/ga-lab15b}; chmod -R u+w "$L" 2>/dev/null || true; rm -rf "$L"; mkdir -p "$L"
 cd "$L"
 N=${N:-100}; TRIALS=${TRIALS:-10}
 fail() { echo "FAIL: $*"; exit 1; }
 ok() { echo "ok: $*"; }
 G() { git -c user.name=lab -c user.email=lab@pigeon "$@"; }
+# setsid(1) without util-linux (macOS): the job leads its own group, so kill -- -PID ends it all
+SETSID=(python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])')
 
 cat > observe.py <<'PY'
 import os, sys, time
@@ -35,16 +40,17 @@ watch_start() { rm -f "$L/stop.flag"; python3 "$L/observe.py" "$1" "$L/stop.flag
 watch_stop() { touch "$L/stop.flag"; wait "$OBS"; grep -vc '^#' "$1" || true; }
 
 # A holds everything (it stands for the backup machines); B is a laptop.
-git init -q A; cd A; git annex init -q A; git config annex.addunlocked true
+git init -q -b main A; cd A; git annex init -q A; git config annex.addunlocked true
 mkdir Photos Docs
 for i in $(seq 1 "$N"); do echo "photo-$i" > "Photos/p$i.jpg"; done
 echo doc-1 > Docs/b.txt
 git annex add -q .; G commit -qm init; cd ..
 git clone -q A B; cd B; git annex init -q B; git config annex.addunlocked true
 git annex get -q .
-keys() { git ls-tree -r HEAD Photos/ --name-only | while read -r p; do git annex lookupkey "$p"; done; }
+# git-annex's batch modes (one process for all keys; --batch-keys, Command/Get.hs, Command/Drop.hs)
+keys() { git ls-tree -r HEAD Photos/ --name-only | git annex lookupkey --batch; }
 keys > ../keys.txt
-[ "$(wc -l < ../keys.txt)" = "$N" ] || fail "expected $N keys"
+[ "$(wc -l < ../keys.txt | tr -d ' ')" = "$N" ] || fail "expected $N keys"
 ok "B holds $N photos"
 
 # 1. ADR 0031's free order: drop while checked out, then hide.
@@ -57,8 +63,7 @@ echo "measured: drop-then-hide showed $n pointer observations"
 ok "the order of ADR 0031 exposes pointer files (issue #2 confirmed)"
 
 # 2. ADR 0031's keep order: get, show, then smudge.
-git annex get -q --key-from-stdin < ../keys.txt 2>/dev/null || \
-  while read -r k; do git annex get -q --key="$k"; done < ../keys.txt
+git annex get -q --batch-keys < ../keys.txt >/dev/null
 watch_start . ../obs2.log
 git sparse-checkout add /Photos/
 git annex smudge --update >/dev/null 2>&1
@@ -70,19 +75,19 @@ git annex restage >/dev/null 2>&1
 # The reordered sequences. free: hide first (files go from complete to absent), then
 # drop by key. keep: get by key, stage complete copies outside the tree, move the
 # folder in with one rename, then clear skip-worktree without any checkout.
-free_new() {
-  rm -f .git/index.lock
+free_new() {   # a kill -9 inside `git sparse-checkout set` leaves its lock; pigeond removes it at start
+  rm -f .git/index.lock .git/info/sparse-checkout.lock
   git sparse-checkout set --no-cone '/*' '!/Photos/'
-  git annex drop -q --key-from-stdin < ../keys.txt 2>/dev/null || \
-    while read -r k; do git annex drop -q --key="$k" 2>/dev/null || true; done < ../keys.txt
+  git annex drop -q --batch-keys < ../keys.txt >/dev/null 2>&1 || true
 }
 keep_new() {
   rm -f .git/index.lock
-  while read -r k; do git annex get -q --key="$k"; done < ../keys.txt
+  git annex get -q --batch-keys < ../keys.txt >/dev/null
   if [ ! -d Photos ]; then
     rm -rf .git/pigeon/stage; mkdir -p .git/pigeon/stage/Photos
-    git ls-tree -r HEAD Photos/ --name-only | while read -r p; do
-      k=$(git annex lookupkey "$p"); o=$(git annex contentlocation "$k")
+    git ls-tree -r HEAD Photos/ --name-only > ../paths.txt
+    git annex lookupkey --batch < ../paths.txt | git annex contentlocation --batch > ../locations.txt
+    paste ../paths.txt ../locations.txt | while IFS=$'\t' read -r p o; do
       cp "$o" ".git/pigeon/stage/$p"; chmod 0644 ".git/pigeon/stage/$p"   # objects are read-only
     done
     python3 -c 'import os; os.rename(".git/pigeon/stage/Photos", "Photos")'
@@ -121,7 +126,7 @@ keep_new
 n=$(watch_stop ../obs4.log)
 [ "$n" = 0 ] || fail "stage-then-show showed $n pointers"
 complete_or_absent || fail "keep left wrong content"
-[ "$(ls Photos | wc -l)" = "$N" ] || fail "not all photos are back"
+[ "$(ls Photos | wc -l | tr -d ' ')" = "$N" ] || fail "not all photos are back"
 [ -z "$(git status --porcelain)" ] || fail "status not clean after keep: $(git status --porcelain | head -3)"
 ok "stage-then-show: no pointer observed, all $N photos complete, status clean"
 
@@ -131,13 +136,13 @@ export -f free_new keep_new; export N
 for t in $(seq 1 "$TRIALS"); do
   d=$(python3 -c 'import random; print(round(random.uniform(0, 1.5), 2))')
   watch_start . ../obs5.log
-  setsid bash -c free_new & P=$!; sleep "$d"; kill -9 -- -"$P" 2>/dev/null || true; wait "$P" 2>/dev/null || true
+  "${SETSID[@]}" bash -c free_new & P=$!; sleep "$d"; kill -9 -- -"$P" 2>/dev/null || true; wait "$P" 2>/dev/null || true
   complete_or_absent || fail "trial $t: free killed at ${d}s left a bad file"
-  free_new >/dev/null 2>&1
+  bash -ec free_new > ../rerun.log 2>&1 || fail "trial $t: rerun of free_new failed: $(tail -3 ../rerun.log)"
   [ ! -e Photos ] || fail "trial $t: rerun of free left Photos"
-  setsid bash -c keep_new & P=$!; sleep "$d"; kill -9 -- -"$P" 2>/dev/null || true; wait "$P" 2>/dev/null || true
+  "${SETSID[@]}" bash -c keep_new & P=$!; sleep "$d"; kill -9 -- -"$P" 2>/dev/null || true; wait "$P" 2>/dev/null || true
   complete_or_absent || fail "trial $t: keep killed at ${d}s left a bad file"
-  keep_new >/dev/null 2>&1
+  bash -ec keep_new > ../rerun.log 2>&1 || fail "trial $t: rerun of keep_new failed: $(tail -3 ../rerun.log)"
   n=$(watch_stop ../obs5.log)
   [ "$n" = 0 ] || fail "trial $t: $n pointers observed"
   complete_or_absent || fail "trial $t: bad content after rerun"

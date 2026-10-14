@@ -9,6 +9,9 @@
 # Asserts; exits non-zero on failure.
 set -euo pipefail
 export PATH=~/git-annex.linux:$PATH
+# git isolated from the person's configuration (E20), with a lab identity for git-annex's commits
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME=lab GIT_AUTHOR_EMAIL=lab@pigeon \
+  GIT_COMMITTER_NAME=lab GIT_COMMITTER_EMAIL=lab@pigeon
 L=${LAB:-$HOME/ga-lab18}; chmod -R u+w "$L" 2>/dev/null || true; rm -rf "$L"; mkdir -p "$L"
 cd "$L"
 SIZE_MB=${SIZE_MB:-4}; VERSIONS=5
@@ -17,11 +20,13 @@ ok() { echo "ok: $*"; }
 G() { git -c user.name=lab -c user.email=lab@pigeon "$@"; }
 intact() {  # intact REPO KEY: REPO holds KEY's content and it hashes to KEY
   local loc; loc=$(git -C "$1" annex contentlocation "$2" 2>/dev/null) || return 1
-  [ "$(sha256sum < "$1/$loc" | cut -c1-64)" = "${2##*--}" ]
+  [ "$(sha256 < "$1/$loc" | cut -c1-64)" = "${2##*--}" ]
 }
+sha256() { if command -v sha256sum >/dev/null; then sha256sum; else shasum -a 256; fi; }
+links() { stat -c %h "$1" 2>/dev/null || stat -f %l "$1"; }  # GNU stat, else BSD stat
 kb() { du -sk "$1" | cut -f1; }
 
-new_custodian() { chmod -R u+w "$L/C" 2>/dev/null || true; rm -rf "$L/C"; git init -q "$L/C"
+new_custodian() { chmod -R u+w "$L/C" 2>/dev/null || true; rm -rf "$L/C"; git init -q -b main "$L/C"
   (cd "$L/C" && git annex init -q custodian && G commit -q --allow-empty -m genesis); }
 # setup MODE SAVE: a laptop repository; MODE thin|copy decides how capture adds content
 setup() {
@@ -47,9 +52,9 @@ for MODE in thin copy; do
       save "$HOW" "$n"; keys+=("$(capture "$MODE")")
       if git annex copy -q --all --to origin >/dev/null 2>&1; then fail "$MODE/$HOW: upload worked offline"; fi
     done
-    [ "$MODE" = copy ] && [ "$(stat -c %h f)" != 1 ] && fail "copy/$HOW: capture made a hard link"
+    [ "$MODE" = copy ] && [ "$(links f)" != 1 ] && fail "copy/$HOW: capture made a hard link"
     git annex fsck -q f >/dev/null 2>&1 || true; git annex restage >/dev/null 2>&1 || true
-    [ "$MODE" = copy ] && [ "$(stat -c %h f)" != 1 ] && fail "copy/$HOW: fsck or restage re-thinned the copy"
+    [ "$MODE" = copy ] && [ "$(links f)" != 1 ] && fail "copy/$HOW: fsck or restage re-thinned the copy"
     pending=$(kb .)
     mv ../C.away ../C   # back online
     git annex copy -q --all --to origin >/dev/null 2>&1 || true
@@ -67,17 +72,20 @@ for MODE in thin copy; do
         || fail "copy/$HOW: verified drop of a protected old version refused"; done
       if git annex drop --auto --all >/dev/null 2>&1; then fail "drop --auto --all is accepted now"; fi
       # re-thin the protected current version (pigeon uses the install sequence, ADR 0040)
-      obj=$(git annex contentlocation "${keys[-1]}"); ln "$obj" .f.thin; chmod u+w .f.thin; mv -T .f.thin f
+      obj=$(git annex contentlocation "${keys[${#keys[@]}-1]}"); ln "$obj" .f.thin; chmod u+w .f.thin; mv -f .f.thin f
       G update-index -q --refresh || true; git annex restage >/dev/null 2>&1 || true
       [ -z "$(git status --porcelain)" ] || fail "copy/$HOW: re-thinned file shows as changed"
-      [ "$(stat -c %h f)" = 2 ] || fail "copy/$HOW: re-thin did not link the object"
+      [ "$(links f)" = 2 ] || fail "copy/$HOW: re-thin did not link the object"
       after=$(kb .); echo "copy/$HOW: laptop ${pending} KiB offline, ${after} KiB once protected and re-thinned"
       [ "$after" -lt $((SIZE_MB * 1024 * 3 / 2 + 512)) ] || fail "copy/$HOW: more than about one copy left"
       ok "copy/$HOW: back to about one copy"
     fi
   done
 done
-if cp --reflink=always "$L/v1" "$L/v1.reflink" 2>/dev/null; then
+if [ "$(uname)" = Darwin ]; then   # clonefile(2) through cp -c: APFS shares the blocks
+  if cp -c "$L/v1" "$L/v1.clone" 2>/dev/null; then echo "clonefile: supported here (APFS); a copy shares its blocks"
+  else echo "clonefile: not supported on this volume"; fi
+elif cp --reflink=always "$L/v1" "$L/v1.reflink" 2>/dev/null; then
   echo "reflink: supported here; a copy shares its blocks (measure with df)"
 else
   echo "reflink: not supported on this file system ($(stat -f -c %T "$L")); to measure on APFS and btrfs"

@@ -23,6 +23,9 @@ import os, shutil, subprocess, sys, tomllib
 from datetime import datetime, timedelta, timezone
 
 os.environ['PATH'] = os.path.expanduser('~/git-annex.linux') + ':' + os.environ['PATH']
+# git isolated from the person's configuration (E20), with a lab identity for git-annex's commits
+os.environ.update(GIT_CONFIG_GLOBAL='/dev/null', GIT_CONFIG_NOSYSTEM='1', GIT_AUTHOR_NAME='lab',
+                  GIT_AUTHOR_EMAIL='lab@pigeon', GIT_COMMITTER_NAME='lab', GIT_COMMITTER_EMAIL='lab@pigeon')
 CUSTODIANS = ['C1', 'C2']
 WANTED = 'sizebalanced=custodian:2'
 RETENTION_DAYS = 30

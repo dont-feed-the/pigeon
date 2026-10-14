@@ -9,18 +9,24 @@ delete, write through a handle opened earlier (closed or held), and a shared
 writable mapping. Pigeon is also killed at every boundary and then recovered
 twice. A fuzz phase races a writer process against installs and captures.
 Asserts: the adversary's last content is never lost; the index never calls a
-file clean unless its content is the index's key; recovery is idempotent; with
-the writer scan, no aside changes after its check. Linux only; exits non-zero
-on failure. Environment: LAB (directory), FUZZ (seconds, default 20).
+file clean unless its content is the index's key (after a mapped write, once the
+stat changes: macOS does not update it); recovery is idempotent; with the writer
+scan, no aside changes after its check; the scan sees writers. Linux (/proc,
+renameat2) and macOS (libproc, renamex_np). Environment: LAB, FUZZ (seconds).
 """
 import ctypes, hashlib, json, mmap, os, random, shutil, signal, subprocess, sys, time
 
 os.environ['PATH'] = os.path.expanduser('~/git-annex.linux') + ':' + os.environ['PATH']
+# git isolated from the person's configuration (E20), with a lab identity for git-annex's commits
+os.environ.update(GIT_CONFIG_GLOBAL='/dev/null', GIT_CONFIG_NOSYSTEM='1', GIT_AUTHOR_NAME='lab',
+                  GIT_AUTHOR_EMAIL='lab@pigeon', GIT_COMMITTER_NAME='lab', GIT_COMMITTER_EMAIL='lab@pigeon')
 LIBC = ctypes.CDLL(None, use_errno=True)
+DARWIN = sys.platform == 'darwin'
 POINTS = ['prepared', 'journaled', 'aside', 'scanned', 'checked', 'renamed', 'indexed']
 ACTIONS = ['inplace', 'atomic', 'create', 'delete', 'oldfd', 'oldfd-held', 'mmap']
 SIZE = 64
-FAILS = []
+FAILS, BLIND = [], []
+MAPPED_WRITES_CHANGE_STAT = True
 
 
 def fail(msg):
@@ -29,10 +35,38 @@ def fail(msg):
 
 
 def rename_noreplace(src, dst):
-    """renameat2(RENAME_NOREPLACE): FileExistsError if dst exists."""
-    if LIBC.renameat2(-100, os.fsencode(src), -100, os.fsencode(dst), 1) != 0:
+    """renameat2(RENAME_NOREPLACE), or renamex_np(RENAME_EXCL) on macOS:
+    FileExistsError if dst exists."""
+    if DARWIN:
+        r = LIBC.renamex_np(os.fsencode(src), os.fsencode(dst), 0x4)
+    else:
+        r = LIBC.renameat2(-100, os.fsencode(src), -100, os.fsencode(dst), 1)
+    if r != 0:
         err = ctypes.get_errno()
         raise OSError(err, os.strerror(err), dst)
+
+
+class Mapping:
+    """A writable mapping of a file that keeps no descriptor open (Python's mmap
+    keeps a duplicate, which the scan would find instead of the mapping)."""
+
+    def __init__(self, path, flags=mmap.MAP_SHARED):
+        LIBC.mmap.restype, LIBC.mmap.argtypes = ctypes.c_void_p, [
+            ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int64]
+        fd = os.open(path, os.O_RDWR)
+        self.addr = LIBC.mmap(None, SIZE, mmap.PROT_READ | mmap.PROT_WRITE, flags, fd, 0)
+        os.close(fd)
+        if self.addr in (None, ctypes.c_void_p(-1).value):
+            raise OSError(ctypes.get_errno(), 'mmap failed', path)
+
+    def write(self, data):
+        ctypes.memmove(self.addr, data, len(data))
+
+    def flush(self):
+        LIBC.msync(ctypes.c_void_p(self.addr), ctypes.c_size_t(SIZE), 0x10 if DARWIN else 4)  # MS_SYNC
+
+    def close(self):
+        LIBC.munmap(ctypes.c_void_p(self.addr), ctypes.c_size_t(SIZE))
 
 
 def key_of_bytes(data):
@@ -52,9 +86,75 @@ def fsync_path(path, directory=False):
         os.close(fd)
 
 
+class VinfoStat(ctypes.Structure):          # <sys/proc_info.h>, macOS
+    _fields_ = [('dev', ctypes.c_uint32), ('mode', ctypes.c_uint16), ('nlink', ctypes.c_uint16),
+                ('ino', ctypes.c_uint64), ('uid', ctypes.c_uint32), ('gid', ctypes.c_uint32),
+                ('times', ctypes.c_int64 * 8), ('size', ctypes.c_int64), ('blocks', ctypes.c_int64),
+                ('blksize', ctypes.c_int32), ('flags', ctypes.c_uint32), ('gen', ctypes.c_uint32),
+                ('rdev', ctypes.c_uint32), ('qspare', ctypes.c_int64 * 2)]
+
+
+class VnodeInfoPath(ctypes.Structure):
+    _fields_ = [('stat', VinfoStat), ('type', ctypes.c_int), ('pad', ctypes.c_int),
+                ('fsid', ctypes.c_int32 * 2), ('path', ctypes.c_char * 1024)]
+
+
+class VnodeFdInfoWithPath(ctypes.Structure):
+    _fields_ = [('openflags', ctypes.c_uint32), ('status', ctypes.c_uint32), ('offset', ctypes.c_int64),
+                ('type', ctypes.c_int32), ('guardflags', ctypes.c_uint32), ('vip', VnodeInfoPath)]
+
+
+class RegionWithPathInfo(ctypes.Structure):
+    _fields_ = [('protection', ctypes.c_uint32), ('max_protection', ctypes.c_uint32),
+                ('inheritance', ctypes.c_uint32), ('flags', ctypes.c_uint32), ('offset', ctypes.c_uint64),
+                ('counts', ctypes.c_uint32 * 9), ('share_mode', ctypes.c_uint32),
+                ('more', ctypes.c_uint32 * 4), ('address', ctypes.c_uint64), ('size', ctypes.c_uint64),
+                ('vip', VnodeInfoPath)]
+
+
+def writers_darwin(inodes):
+    """libproc, as Apple's proc_listpidspath walks it: each process's vnode file
+    descriptors (PROC_PIDLISTFDS, PROC_PIDFDVNODEPATHINFO, open flag FWRITE) and its
+    vnode-backed regions (PROC_PIDREGIONPATHINFO2) mapped writable. A writable
+    private mapping also counts: a false alarm only defers the install."""
+    found, pids = set(), (ctypes.c_int32 * 16384)()
+    n = LIBC.proc_listallpids(pids, ctypes.sizeof(pids))
+    fds, vfi, rwpi = (ctypes.c_int32 * 2 * 8192)(), VnodeFdInfoWithPath(), RegionWithPathInfo()
+    for pid in pids[:max(n, 0)]:
+        used = LIBC.proc_pidinfo(pid, 1, ctypes.c_uint64(0), fds, ctypes.sizeof(fds))
+        for fd, kind in [tuple(x) for x in fds[:max(used, 0) // 8]]:
+            if kind == 1 and LIBC.proc_pidfdinfo(pid, fd, 2, ctypes.byref(vfi),
+                                                 ctypes.sizeof(vfi)) == ctypes.sizeof(vfi):
+                st = vfi.vip.stat
+                if (st.dev, st.ino) in inodes and vfi.openflags & 2:
+                    found.add((st.dev, st.ino))
+        a = 0
+        while LIBC.proc_pidinfo(pid, 22, ctypes.c_uint64(a), ctypes.byref(rwpi),
+                                ctypes.sizeof(rwpi)) == ctypes.sizeof(rwpi):
+            st = rwpi.vip.stat
+            if (st.dev, st.ino) in inodes and rwpi.protection & 2:
+                found.add((st.dev, st.ino))
+                ri = RegionWithPathInfo()        # PATHINFO2 leaves the share mode 0
+                if LIBC.proc_pidinfo(pid, 7, ctypes.c_uint64(rwpi.address), ctypes.byref(ri), 96) == 96:
+                    SHARE_MODES[pid] = ri.share_mode
+            a = rwpi.address + rwpi.size
+    return found
+
+
+SHARE_MODES = {}                            # pid -> share mode of a writable mapping seen
+if DARWIN:
+    assert (ctypes.sizeof(VnodeFdInfoWithPath), ctypes.sizeof(RegionWithPathInfo)) == (1200, 1272)
+    LIBC.proc_listallpids.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    LIBC.proc_pidinfo.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_int]
+    LIBC.proc_pidfdinfo.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int]
+    LIBC.renamex_np.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+
+
 def writers(inodes):
     """The (dev, ino) of `inodes` that a process holds open for writing or maps
     shared and writable: /proc/*/fd with the access mode of fdinfo, and /proc/*/maps."""
+    if DARWIN:
+        return writers_darwin(inodes)
     found = set()
     for pid in os.listdir('/proc'):
         if not pid.isdigit():
@@ -205,7 +305,9 @@ class Repo:
         busy = self.scan and writers({(st.st_dev, st.st_ino)})
         hook('scanned')
         st = os.lstat(aside)
-        own = (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns) == (e['dev'], e['ino'], e['size'], e['mtime']) \
+        m = 0xffffffff                         # the index keeps 32 bits of dev and ino
+        own = (st.st_dev & m, st.st_ino & m, st.st_size, st.st_mtime_ns) == \
+            (e['dev'] & m, e['ino'] & m, e['size'], e['mtime']) \
             and st.st_nlink == (2 if self.thin else 1)
         if busy or not own:
             outcome = self.put_back(seq, rel, aside)
@@ -334,6 +436,59 @@ class Repo:
         return False
 
 
+def scan_selftest(lab):
+    """The writer scan sees another process's write handle and its shared writable
+    mapping (handle closed), and ignores a read-only handle."""
+    p = os.path.join(lab, 'scan-probe')
+    with open(p, 'wb') as h:
+        h.write(b'\0' * SIZE)
+    st = os.stat(p)
+    for how, expect in (('read', False), ('write', True), ('mmap', True), ('private', None)):
+        r, w = os.pipe()
+        pid = os.fork()
+        if pid == 0:
+            if how in ('mmap', 'private'):
+                m = Mapping(p, mmap.MAP_SHARED if how == 'mmap' else mmap.MAP_PRIVATE)
+            else:
+                fd = os.open(p, os.O_RDONLY if how == 'read' else os.O_RDWR)
+            os.write(w, b'x')
+            time.sleep(60)
+            os._exit(0)
+        os.read(r, 1)
+        t0 = time.perf_counter()
+        seen = bool(writers({(st.st_dev, st.st_ino)}))
+        ms = 1000 * (time.perf_counter() - t0)
+        os.kill(pid, signal.SIGKILL)
+        os.waitpid(pid, 0)
+        os.close(r), os.close(w)
+        mode = f', share mode {SHARE_MODES[pid]}' if pid in SHARE_MODES else ''
+        print(f'scan: a {how} handle of another process is {"seen" if seen else "not seen"} ({ms:.0f} ms{mode})')
+        if expect is not None and seen != expect:
+            fail(f'the writer scan {"misses" if expect else "flags"} a {how} handle')
+    return mapped_write_changes_stat(p)
+
+
+def mapped_write_changes_stat(p):
+    """Whether a write through a shared mapping changes the file's stat data (mtime,
+    ctime), which is all git's refresh and capture's scan look at: right after the
+    write, after munmap without msync (the adversary's case), and after msync."""
+    stamp = lambda: (os.stat(p).st_mtime_ns, os.stat(p).st_ctime_ns)
+    seen = []
+    for sync in (False, True):
+        before = stamp()
+        time.sleep(0.05)
+        m = Mapping(p)
+        m.write(b'map!' if sync else b'MAP!')
+        seen.append(('write', stamp() != before))
+        if sync:
+            m.flush()
+        m.close()
+        seen.append(('msync' if sync else 'munmap without msync', stamp() != before))
+    print('stat after a write through a shared mapping: ' +
+          ', '.join(f'{k} {"changed" if v else "unchanged"}' for k, v in seen))
+    return seen[0][1]
+
+
 def pad(text):
     return text.ljust(SIZE).encode()
 
@@ -353,9 +508,7 @@ class Adversary:
         if action in ('oldfd', 'oldfd-held'):
             self.fd = os.open(self.p, os.O_RDWR)
         if action == 'mmap':
-            fd = os.open(self.p, os.O_RDWR)
-            self.map = mmap.mmap(fd, SIZE, mmap.MAP_SHARED, mmap.PROT_READ | mmap.PROT_WRITE)
-            os.close(fd)
+            self.map = Mapping(self.p)
 
     def act(self):
         self.acted, a, p = True, self.action, self.p
@@ -382,7 +535,7 @@ class Adversary:
                     os.close(self.fd)
                     self.fd = None
             elif a == 'mmap':
-                self.map[0:SIZE] = self.tag
+                self.map.write(self.tag)
             self.wrote = True
         except FileNotFoundError:            # the name was absent for an instant
             pass
@@ -417,7 +570,15 @@ def boundary_trials(repo, names, contents, label):
             fail(f'{label}: {action} at {point}: the file is missing ({outcome})')
         if os.path.exists(p) and open(p, 'rb').read() not in (tag, *contents[rel]):
             fail(f'{label}: {action} at {point}: unexpected content')
-        if repo.lies([rel]):
+        if repo.lies([rel]) and action == 'mmap' and not MAPPED_WRITES_CHANGE_STAT:
+            e, st = repo.entry(rel), os.stat(p)  # the platform's blind spot, not the install's:
+            if (st.st_mtime_ns, st.st_size) != (e['mtime'], e['size']) and repo.lies([rel]):
+                fail(f'{label}: mmap at {point}: git calls a changed file clean, and its stat changed')
+            BLIND.append(f'{label} {point}')
+            os.utime(p)                          # once the stat changes, git must see the change
+            if repo.lies([rel]):
+                fail(f'{label}: mmap at {point}: git calls a changed file clean after its stat changed')
+        elif repo.lies([rel]):
             fail(f'{label}: {action} at {point}: git calls a changed file clean')
     return outcomes
 
@@ -536,6 +697,8 @@ def main():
         subprocess.run(['chmod', '-R', 'u+w', lab])
         shutil.rmtree(lab)
     os.makedirs(lab)
+    global MAPPED_WRITES_CHANGE_STAT
+    MAPPED_WRITES_CHANGE_STAT = scan_selftest(lab)
     nb, nc = len(ACTIONS) * len(POINTS), len(POINTS) * 3
     windows = []
     for thin in (False, True):
@@ -566,6 +729,10 @@ def main():
     windows = sorted(windows + repo.windows)
     print(f'name absent while installing: median {1000 * windows[len(windows) // 2]:.2f} ms,'
           f' max {1000 * windows[-1]:.2f} ms over {len(windows)} installs')
+    if BLIND:
+        print(f'SKIP (platform): in {len(BLIND)} mmap trials git calls the file clean although a shared'
+              ' mapping changed it, because its stat data did not change; each save is kept, and git sees'
+              ' the change once the stat changes (ADR 0056)')
     print('FAILED' if FAILS else 'ok: E19 passed')
     sys.exit(1 if FAILS else 0)
 
