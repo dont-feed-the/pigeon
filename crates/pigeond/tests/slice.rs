@@ -297,7 +297,12 @@ fn local_published_protected_then_free_and_keep() {
         Some("1"),
         "{freed:?}"
     );
-    assert!(!sub.join("big.bin").exists(), "big.bin is still here");
+    // The request records the target; the loops hide the file.
+    eventually(
+        || !sub.join("big.bin").exists(),
+        "big.bin is still here",
+        &all,
+    );
     assert_eq!(status(&lap).state, State::Protected);
 
     let kept = pigeon(&lap, &["keep", sub.to_str().unwrap()]);
@@ -305,6 +310,11 @@ fn local_published_protected_then_free_and_keep() {
         said(&kept, "keep-result", "folder").is_some(),
         "{kept:?}\n{}",
         logs(&all)
+    );
+    eventually(
+        || sub.join("big.bin").exists(),
+        "big.bin never came back",
+        &all,
     );
     assert_eq!(std::fs::read(sub.join("big.bin")).unwrap(), big);
 
@@ -321,6 +331,15 @@ fn local_published_protected_then_free_and_keep() {
     match pigeon(&lap, &["pause"]).as_slice() {
         [Response::Problem(p)] => assert_eq!(p.code, "not-in-this-build"),
         other => panic!("pause: {other:?}"),
+    }
+}
+
+/// Waits up to 60 s for `done`, else fails with `what` and the logs.
+fn eventually(done: impl Fn() -> bool, what: &str, all: &[&Daemon]) {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while !done() {
+        assert!(Instant::now() < deadline, "{what}\n{}", logs(all));
+        std::thread::sleep(Duration::from_millis(250));
     }
 }
 

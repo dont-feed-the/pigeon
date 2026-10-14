@@ -309,6 +309,18 @@ async fn create_inner(
     Ok(())
 }
 
+/// Starts a round shortly after the answer is on its way, so that a crash
+/// in the round never takes the answer with it (13 §13.12, S9).
+fn wake_soon(d: &Daemon) {
+    let wake = d.wake.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        wake.notify_one();
+    });
+}
+
+/// `pigeon free`: records the target; the loops hide each protected file
+/// and drop its content, and the others once they are protected (08 §8.5).
 async fn free(d: &Daemon, path: &Path) -> Vec<Response> {
     let Some(g) = group_of(d, path) else {
         return vec![problem("not-in-group", &[], None)];
@@ -316,29 +328,32 @@ async fn free(d: &Daemon, path: &Path) -> Vec<Response> {
     let Some(prefix) = relative(&g, path) else {
         return vec![problem("not-in-group", &[], None)];
     };
-    let _busy = g.busy.lock().await;
-    match crate::evict::free(&g, &d.device, &prefix, &d.tracer).await {
-        Ok(f) => {
-            let mut out = vec![said(
-                "free-result",
-                &[("safe", number(f.hidden)), ("total", number(f.total))],
-            )];
-            if f.waiting > 0 {
-                out.insert(
-                    0,
-                    Response::Progress {
-                        message: msg("free-waiting", &[("files", number(f.waiting))]),
-                        done: None,
-                        total: None,
-                    },
-                );
-            }
-            out
-        }
-        Err(e) => vec![problem("internal-error", &[], Some(e))],
+    crate::evict::set_target(&g, &prefix, true);
+    let observed = crate::status::observe(&g, &d.device, &prefix).await;
+    let safe = observed
+        .iter()
+        .filter(|o| matches!(o.state, pigeon_core::state::State::Protected(_)))
+        .count();
+    let waiting = observed.len() - safe;
+    wake_soon(d);
+    let mut out = vec![said(
+        "free-result",
+        &[("safe", number(safe)), ("total", number(observed.len()))],
+    )];
+    if waiting > 0 {
+        out.insert(
+            0,
+            Response::Progress {
+                message: msg("free-waiting", &[("files", number(waiting))]),
+                done: None,
+                total: None,
+            },
+        );
     }
+    out
 }
 
+/// `pigeon keep`: records the target; the loops bring the folder back.
 async fn keep(d: &Daemon, path: &Path) -> Vec<Response> {
     let Some(g) = group_of(d, path) else {
         return vec![problem("not-in-group", &[], None)];
@@ -346,12 +361,9 @@ async fn keep(d: &Daemon, path: &Path) -> Vec<Response> {
     let Some(prefix) = relative(&g, path) else {
         return vec![problem("not-in-group", &[], None)];
     };
-    let _busy = g.busy.lock().await;
-    match crate::evict::keep(&g, &prefix, &d.tracer).await {
-        Ok(_) => vec![said("keep-result", &[("folder", text(&prefix))])],
-        Err(e) if e == "receiving" => vec![problem("receiving", &[], None)],
-        Err(e) => vec![problem("internal-error", &[], Some(e))],
-    }
+    crate::evict::set_target(&g, &prefix, false);
+    wake_soon(d);
+    vec![said("keep-result", &[("folder", text(&prefix))])]
 }
 
 fn machines(d: &Daemon) -> Vec<Response> {

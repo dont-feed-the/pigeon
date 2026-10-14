@@ -1,12 +1,16 @@
-//! Freeing and keeping (08 §8.5, 08 §8.5 and 07 §7.5), and the recovery
-//! of the install journal at start (07 §7.5).
+//! Freeing and keeping (08 §8.5 and 07 §7.5), and the recovery of the
+//! install journal at start (07 §7.5).
 //!
-//! `free` hides each protected file as an install of its absence — journal
+//! A request only records the folder's target and wakes the loops; each
+//! round moves every folder toward its target, so a crash at any point
+//! ends as one transition after the restart. `free` hides each protected
+//! file as an install of its absence — journal
 //! `begin`, move aside, writer scan, check, `proved` — then sets the
 //! skip-worktree bits with the files already absent, so git unlinks
 //! nothing, and drops each key no visible path still names with a verified
 //! drop. `keep` gets every key, stages each file, renames it in without
-//! replacing anything, and clears the bits. The target of each folder is in
+//! replacing anything, and clears the bits; a file saved there meanwhile
+//! wins and is only unhidden, so capture takes it. The target of each folder is in
 //! `<git_dir>/pigeon/freed.json` in the slice, not yet in `wanted`, and the
 //! check hashes the aside against its key (13 §13.12).
 
@@ -115,7 +119,9 @@ fn targets(g: &Group) -> BTreeSet<String> {
         .unwrap_or_default()
 }
 
-fn set_target(g: &Group, prefix: &str, freed: bool) {
+/// Records whether the folder `prefix` is to be freed (`pigeon free`) or
+/// kept (`pigeon keep`); the loops do the rest.
+pub fn set_target(g: &Group, prefix: &str, freed: bool) {
     let mut t = targets(g);
     if freed {
         t.insert(prefix.to_owned());
@@ -290,10 +296,16 @@ fn truncate_if_done(g: &Group) {
     }
 }
 
-/// `pigeon keep PREFIX`: answers the number of files brought back.
-pub async fn keep(g: &Group, prefix: &str, t: &Tracer) -> Result<usize, String> {
+/// Brings back every hidden file outside the folders to free: answers how
+/// many came back. A key that cannot be received yet waits for the next
+/// round, and the folder stays hidden meanwhile (08 §8.5, keep step 1).
+pub async fn keep(g: &Group, t: &Tracer) -> Result<usize, String> {
     let wt = g.worktree.clone().ok_or("not-in-group")?;
-    set_target(g, prefix, false);
+    let freed = targets(g);
+    let mut hidden = hidden_paths(g).await;
+    if hidden.iter().all(|p| freed.iter().any(|f| under(p, f))) {
+        return Ok(0);
+    }
     let main = g.git.rev("refs/heads/main").await.ok_or("not-in-group")?;
     let keys = g.git.keys(&main).await.map_err(|e| e.to_string())?;
     let modes: BTreeMap<String, String> = g
@@ -304,10 +316,9 @@ pub async fn keep(g: &Group, prefix: &str, t: &Tracer) -> Result<usize, String> 
         .into_iter()
         .map(|f| (f.path, f.mode))
         .collect();
-    let mut hidden = hidden_paths(g).await;
     let wanted: Vec<(String, String)> = hidden
         .iter()
-        .filter(|p| under(p, prefix))
+        .filter(|p| !freed.iter().any(|f| under(p, f)))
         .filter_map(|p| Some((p.clone(), keys.get(p)?.clone())))
         .collect();
     let mut objects = BTreeMap::new();
@@ -327,6 +338,7 @@ pub async fn keep(g: &Group, prefix: &str, t: &Tracer) -> Result<usize, String> 
     }
     let mut seq = next_seq(&read(&journal(g)));
     let mut moved = Vec::new();
+    let mut raced = Vec::new();
     for (path, key) in &wanted {
         let stage = g.files.stage(seq);
         let object = objects.get(key).ok_or("receiving")?;
@@ -362,6 +374,7 @@ pub async fn keep(g: &Group, prefix: &str, t: &Tracer) -> Result<usize, String> 
         if lstat(&file).ok().flatten().is_some() {
             record(g, &Record::End(seq, End::Raced))?;
             let _ = std::fs::remove_file(&stage);
+            raced.push(path.clone());
             seq += 1;
             continue;
         }
@@ -370,6 +383,7 @@ pub async fn keep(g: &Group, prefix: &str, t: &Tracer) -> Result<usize, String> 
         if rename_noreplace(&stage, &file).map_err(|e| e.to_string())? != Renamed::Done {
             record(g, &Record::End(seq, End::Raced))?;
             let _ = std::fs::remove_file(&stage);
+            raced.push(path.clone());
             seq += 1;
             continue;
         }
@@ -378,13 +392,14 @@ pub async fn keep(g: &Group, prefix: &str, t: &Tracer) -> Result<usize, String> 
         moved.push((seq, path.clone()));
         seq += 1;
     }
-    if !moved.is_empty() {
-        for (_, p) in &moved {
+    if !moved.is_empty() || !raced.is_empty() {
+        for p in moved.iter().map(|(_, p)| p).chain(&raced) {
             hidden.remove(p);
         }
         write_sparse(g, &hidden);
         let mut args = vec!["update-index", "--no-skip-worktree", "--"];
         args.extend(moved.iter().map(|(_, p)| p.as_str()));
+        args.extend(raced.iter().map(String::as_str));
         g.git.run(&args).await.map_err(|e| e.to_string())?;
         let _ = g.git.run(&["update-index", "-q", "--refresh"]).await;
         for (s, p) in &moved {

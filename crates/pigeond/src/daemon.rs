@@ -1,8 +1,9 @@
 //! `pigeond` itself: its directories, settings and device key, the iroh
 //! endpoint, the local socket, and the rounds of the loops (08 §8.1).
 //!
-//! A round runs, for each group in turn, the settings check, capture (on a
-//! laptop), accept, place and repair; requests that change a repository
+//! A round runs, for each group in turn, the settings check, free and keep
+//! toward each folder's target and capture (on a laptop), accept, place
+//! and repair; requests that change a repository
 //! wait for its round to end. Rounds start every `[loops]
 //! interval_seconds`, or at once after a request or a peer's change notice
 //! (remotedaemon) asks for one (13 §13.12).
@@ -131,6 +132,9 @@ impl Daemon {
         g.reload_roster().await;
         if g.role == Role::Laptop {
             crate::evict::free_targets(g, &self.device, &self.tracer).await;
+            if let Err(e) = crate::evict::keep(g, &self.tracer).await {
+                tracing::info!(group = %g.id, error = %e, "keep-waits");
+            }
             if let Err(e) = crate::capture::capture(g, &self.tracer).await {
                 tracing::warn!(group = %g.id, error = %e, "capture-failed");
             }
