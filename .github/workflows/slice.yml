@@ -2,10 +2,10 @@
 # EDSL, on GitHub's Linux and macOS runners, which replace a run on real
 # hardware. Every push runs the scenario laws and the model on both, checks
 # each runner's isolation (loop-mounted ext4 and mount namespaces with sudo
-# on Linux, APFS disk images on macOS), then runs every scenario and 50
-# random S9 crash schedules against the lab build of pigeond and pigeon,
-# and hands the merged trace logs to TLC. models-full.yml runs 1000 S9
-# schedules. A scenario marked blocked in pigeon-lab's slice.rs reports
+# on Linux, APFS disk images on macOS), then runs every scenario against
+# the lab build of pigeond and pigeon and hands the merged trace logs to
+# TLC. The s9-random job runs 50 random S9 crash schedules per runner, and
+# models-full.yml runs 1000. A scenario marked blocked in pigeon-lab's slice.rs reports
 # its reason and does not fail the job, until it passes.
 name: slice
 
@@ -97,12 +97,6 @@ jobs:
         run: |
           cargo run --locked --release -q -p pigeon-lab -- run --bin target/lab/bin \
             --work /tmp/lab --out target/lab/out
-      - name: 50 random S9 crash schedules
-        env:
-          PIGEON_LAB_BIN: ${{ github.workspace }}/target/lab/bin
-          PIGEON_LAB_OUT: ${{ github.workspace }}/target/lab/out
-          HEGEL_TEST_CASES: "50"
-        run: cargo test --locked --release -p pigeon-lab --test s9_exec
       - name: the merged trace logs, checked by TLC
         run: scripts/check-lab-traces target/lab/out
       - name: summary
@@ -112,5 +106,90 @@ jobs:
         if: always()
         with:
           name: slice-${{ matrix.os }}
+          path: target/lab/out
+          if-no-files-found: ignore
+
+  # 13 §13.12's 50 random S9 crash schedules per push, in two shards of 25
+  # beside the slice job: one schedule takes 50-90 s, which does not fit
+  # the slice job's 90 minutes. While S9-random is blocked (slice::BLOCKED)
+  # the shards run it anyway and only report: a failure does not fail the
+  # push. It leaves BLOCKED once both runners pass.
+  s9-random:
+    name: S9, 25 random crash schedules (${{ matrix.os }}, shard ${{ matrix.shard }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+        shard: [0, 1]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: cached git-annex build (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/git-annex-dist
+          key: git-annex-standalone-${{ env.GIT_ANNEX_SHA256 }}
+      - name: git-annex, standalone build at the pinned checksum (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p ~/.cache/git-annex-dist
+          t=~/.cache/git-annex-dist/git-annex-standalone-amd64.tar.gz
+          [ -f "$t" ] || curl -fsSL -o "$t" \
+            https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
+          echo "$GIT_ANNEX_SHA256  $t" | sha256sum -c - || {
+            echo "::error::upstream moved past git-annex $GIT_ANNEX_VERSION; move the pin deliberately"
+            rm -f "$t"; exit 1; }
+          tar -C ~ -xzf "$t"
+          echo ~/git-annex.linux >> "$GITHUB_PATH"
+      - name: git-annex from Homebrew (macOS)
+        if: runner.os == 'macOS'
+        run: brew install git-annex
+      - name: pigeon's git-annex, once git-annex.yml has built this patch set (ADR 0069)
+        uses: ./.github/actions/git-annex-pigeon
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pigeon
+          key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: slice-${{ matrix.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: slice-${{ matrix.os }}-
+      - name: the pinned toolchain (rust-toolchain.toml)
+        run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
+      - name: versions
+        run: git annex version | head -1 && git --version && uname -a
+      - name: this runner's isolation (sized disks, a custodian's own system directories)
+        run: cargo run --locked --release -q -p pigeon-lab -- spaces --work target/lab/work
+      - name: the lab build of pigeond, pigeon and the transport helper
+        run: |
+          cargo build --locked --release -p pigeond -p pigeon -p git-annex-p2p-iroh \
+            --features pigeond/lab,pigeond/tla-trace
+          mkdir -p target/lab/bin
+          cp target/release/pigeond target/release/pigeon target/release/git-annex-p2p-iroh target/lab/bin/
+      - name: 25 random S9 crash schedules
+        env:
+          PIGEON_LAB_BIN: ${{ github.workspace }}/target/lab/bin
+          PIGEON_LAB_OUT: ${{ github.workspace }}/target/lab/out
+          PIGEON_LAB_WITH_BLOCKED: "1"
+          HEGEL_TEST_CASES: "25"
+        run: cargo test --locked --release -p pigeon-lab --test s9_exec
+      - name: their trace logs, checked by TLC
+        run: scripts/check-lab-traces target/lab/out
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: s9-random-${{ matrix.os }}-${{ matrix.shard }}
           path: target/lab/out
           if-no-files-found: ignore

@@ -1,6 +1,7 @@
 //! S9 with random crash schedules against the real binaries (13 §13.12):
 //! 50 per push, 1000 in models-full, as `HEGEL_TEST_CASES` says. It runs
-//! only when `PIGEON_LAB_BIN` names the lab build's binaries. Each case
+//! only when `PIGEON_LAB_BIN` names the lab build's binaries, and while
+//! `S9-random` is blocked only when `PIGEON_LAB_WITH_BLOCKED` is set. Each case
 //! runs three daemons for a minute or more, so hegel's `TooSlow` health
 //! check, which judges generation by wall time, is suppressed.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -19,8 +20,11 @@ fn random_crash_schedules_lose_and_duplicate_nothing(tc: TestCase) {
     let Ok(bin) = std::env::var("PIGEON_LAB_BIN") else {
         return;
     };
-    // While the random schedules are blocked (slice::BLOCKED), they wait.
-    if slice::blocked("S9-random").is_some() {
+    // While the random schedules are blocked (slice::BLOCKED), they run only
+    // when asked, like `pigeon-lab run --with-blocked`.
+    if slice::blocked("S9-random").is_some()
+        && std::env::var_os("PIGEON_LAB_WITH_BLOCKED").is_none()
+    {
         return;
     }
     let out =
