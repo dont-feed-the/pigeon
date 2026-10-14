@@ -333,8 +333,12 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
         wake: Arc::new(tokio::sync::Notify::new()),
         tracer,
     });
-    for g in daemon.groups() {
-        crate::evict::recover(&g, &daemon.tracer).await;
+    // Each group's install journal is replayed while the socket already
+    // answers: whatever needs the worktree waits on `busy`, held from here.
+    let groups = daemon.groups();
+    let mut held = Vec::new();
+    for g in &groups {
+        held.push(g.busy.lock().await);
     }
     let listener = bind_socket(&socket).map_err(|e| format!("{}: {e}", socket.display()))?;
     let net = Arc::new(Net {
@@ -349,6 +353,10 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     tokio::spawn(serve_socket(net.clone(), listener));
     tokio::spawn(accept_loop(net.clone()));
     tracing::info!(device = %device, socket = %socket.display(), "started");
+    for (g, busy) in groups.iter().zip(held) {
+        crate::evict::recover(g, &daemon.tracer).await;
+        drop(busy);
+    }
     let rounds = daemon.clone();
     tokio::spawn(async move {
         loop {

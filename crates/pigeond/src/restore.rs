@@ -4,9 +4,10 @@
 //! stays in the history.
 //!
 //! Versions are numbered from 1, the oldest, as `history` numbers them. A
-//! version this laptop no longer holds is received first, and refused with
-//! `disk-full` before anything starts when it would not fit above the
-//! laptop's `annex.diskreserve` (08 §8.9, S8).
+//! version this laptop no longer holds is received first. Installing copies
+//! it, so a restore that would not fit above the laptop's
+//! `annex.diskreserve` is refused with `disk-full` before anything starts,
+//! held here or not (08 §8.9, S8).
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -59,6 +60,12 @@ pub async fn restore(d: &Daemon, path: &Path, version: Option<u64>) -> Vec<Respo
         let args = [("path", text(&rel)), ("version", Arg::Number(n as i64))];
         return vec![problem("no-such-version", &args, None)];
     };
+    // Installing copies the content even when its object is here, so the
+    // restore must fit above the reserve either way (S8).
+    if !fits(&g, &key) {
+        let me = crate::status::this_name(&g, &d.device);
+        return vec![problem("disk-full", &[("machine", text(&me))], None)];
+    }
     match bring(&g, &key).await {
         Ok(()) => {}
         Err("disk-full") => {
@@ -81,16 +88,24 @@ pub async fn restore(d: &Daemon, path: &Path, version: Option<u64>) -> Vec<Respo
     }]
 }
 
+/// Whether `key`'s content fits here above the reserve.
+fn fits(g: &Group, key: &str) -> bool {
+    let need = key_size(key).unwrap_or(0) + crate::settings::reserve_bytes(g.role);
+    let room = pigeon_sys::fs::space(&g.git_dir).map(|s| s.available);
+    if room.is_ok_and(|room| room < need) {
+        tracing::info!(group = %g.id, key = %key, need, "restore-disk-full");
+        return false;
+    }
+    true
+}
+
 /// Makes `key`'s content present here: answers a problem code if it does
 /// not fit above the reserve, or cannot be received.
 async fn bring(g: &Group, key: &str) -> Result<(), &'static str> {
     if crate::custody::present(g, key).await.is_some() {
         return Ok(());
     }
-    let need = key_size(key).unwrap_or(0) + crate::settings::reserve_bytes(g.role);
-    let room = pigeon_sys::fs::space(&g.git_dir).map(|s| s.available);
-    if room.is_ok_and(|room| room < need) {
-        tracing::info!(group = %g.id, key = %key, need, "restore-disk-full");
+    if !fits(g, key) {
         return Err("disk-full");
     }
     let args = ["annex", "get", "--json", "--key", key];
