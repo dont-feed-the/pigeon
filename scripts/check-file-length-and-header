@@ -6,8 +6,8 @@ docstring, Rust `//!` comments, or otherwise the first comment block after
 any shebang. Only languages known by extension or shebang need one; empty
 files are exempt. A header over 20 lines fails: it states the mission, and
 detail belongs in the code. With no arguments, every file tracked by Git is
-checked. Skip files with the pre-commit `exclude:` pattern or
-`SKIP=<hook id>`.
+checked. Files a tool generates, such as `Cargo.lock`, are exempt. Skip
+other files with the pre-commit `exclude:` pattern or `SKIP=<hook id>`.
 """
 
 import ast
@@ -129,7 +129,12 @@ def line_count(text):
     return text.count("\n") + (not text.endswith("\n") and text != "")
 
 
+GENERATED = {"Cargo.lock"}
+
+
 def violations(path):
+    if Path(path).name in GENERATED:
+        return []
     text = read_text(path)
     if text is None:
         return []

@@ -11,7 +11,7 @@ pub mod stream;
 pub mod wire;
 
 pub use api::{Arg, Message, Problem, Request, Response};
-pub use wire::{Envelope, LineDecoder, MAX_LINE, encode};
+pub use wire::{Envelope, LineDecoder, MAX_LINE, encode, socket_path};
 
 /// The version of the socket protocol, answered to `Hello` (10.1): a client
 /// of another version refuses with `version-mismatch`.

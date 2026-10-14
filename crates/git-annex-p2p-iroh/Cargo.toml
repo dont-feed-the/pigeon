@@ -9,6 +9,13 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+pigeon-proto.workspace = true
+
+[dev-dependencies]
+pigeon-core.workspace = true
+pigeond = { path = "../pigeond" }
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 [lints]
 workspace = true
