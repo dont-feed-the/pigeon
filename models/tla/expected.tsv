@@ -58,3 +58,16 @@ CaptureInstall_escape	CaptureInstall	fast	violation:NoOverwrite
 CaptureInstall_own3	CaptureInstall	full	pass
 CaptureInstall_other3	CaptureInstall	full	pass
 CaptureInstall_otherlive	CaptureInstall	full	pass
+Repair_design	Repair	fast	pass
+Repair_disk	Repair	fast	pass
+Repair_live	Repair	fast	pass
+Repair_live4	Repair	fast	pass
+Repair_design3	Repair	full	pass
+Repair_design4	Repair	full	pass
+Repair_live2	Repair	full	pass
+Repair_lockonly	Repair	fast	violation:Survival
+Repair_nosync	Repair	fast	violation:Survival
+Repair_nofsck	Repair	fast	violation:Survival
+Repair_noprio	Repair	fast	violation:EndangeredFirst
+Repair_inflight	Repair	fast	violation:ReserveKept
+Repair_wantall	Repair	fast	violation:temporal

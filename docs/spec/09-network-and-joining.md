@@ -130,6 +130,16 @@ every device:
   at once never count each other (ADR 0054). The answer waits for the sync and
   is `FAILURE` while `checking`, as for `LOCKCONTENT`. A probe that meets the
   custodian's own drop starting makes that drop fail, to be retried;
+- on custodians, a `LOCKCONTENT k` from another custodian (its device ID in
+  the roster), and the probe's lock for its `CHECKPRESENT k`, is answered
+  `SUCCESS` only after the filter, holding git-annex's lock, has hashed the
+  object (`git annex contentlocation`, then SHA-256 against the `SHA256E`
+  key). git-annex's lock checks only that the object is present
+  (`lockContentShared` in `Annex/Content.hs`), and a rotten copy must not
+  prove a custodian's drop (ADR 0059). On a mismatch the filter releases the
+  lock, answers `FAILURE` and queues `git annex fsck --key k`. Laptops' locks
+  are not hashed: their copies never count, so their drops leave custody as
+  it was;
 - an unknown message, a malformed `DATA` length or a line over 4096 bytes closes
   the session. A length is checked before anything is forwarded, and a payload
   passes by length, never parsed. The server's output is parsed only for its
@@ -140,7 +150,9 @@ push for any transport (ADR 0043). The filter is a pure state machine with
 property tests (ADR 0012). It never forwards a removal on a custodian, it
 forwards every allowed message unchanged but a custodian's `CHECKPRESENT`, no
 positive answer for a key leaves it before that key's sync has completed, a
-positive `CHECKPRESENT` only for a copy it could lock, and it never loses its
+positive `CHECKPRESENT` only for a copy it could lock, to a custodian a
+positive `LOCKCONTENT` or `CHECKPRESENT` only for a copy whose hash matched,
+and it never loses its
 place across `DATA` boundaries, whatever the read sizes. E13 checks it against
 git-annex, and E23 the probe.
 

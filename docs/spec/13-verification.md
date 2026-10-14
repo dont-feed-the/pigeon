@@ -39,6 +39,17 @@
 | `AnnexDrop_log` | `AnnexDrop` | `violation:INV_K` | counting the location log without checking: a stale log drops the last copies (E5) |
 | `AnnexDrop_storage` | `AnnexDrop` | `violation:INV_K` | counting repositories, as git-annex does: two on one disk count twice (E22.2) |
 | `AnnexDrop_trusted` | `AnnexDrop` | `violation:INV_K` | one custodian marked `trust`: the others count it unasked from a stale log (E23) |
+| `Repair_design` | `Repair` | `pass` (fast set) | placement, repair and rebalancing on custodians (08 §8.3–8.4, §8.8–8.10; ADRs 0046, 0049, 0050, 0054, 0059): custodians 1 and 2 hold key *a*; the joiner 3, with room for one key, comes in empty or on a restored disk; the laptop holds key *b*. Faults (a lost disk, a rotten copy, a removed custodian) stay within F, plus a crash or a partition. A key once protected keeps an intact copy on disk or on the laptop (Survival); no disk crosses its reserve (ReserveKept); no download takes the room of an endangered key (EndangeredFirst); a copy leaves only with its disk or its custodian, by a scrub, by a crash before its sync, or by a drop of an unwanted key backed by K lockable copies in K domains (INV_K, a property of steps). 355 939 distinct states, 27 s on 1 worker |
+| `Repair_disk` | `Repair` | `pass` (fast set) | the same with the joiner on custodian 2's disk, one failure domain for both (ADR 0049): 303 067 distinct states |
+| `Repair_live` | `Repair` | `pass` (fast set) | liveness: under fairness (transfers, syncs, scrubs and heals run; admins remove lost custodians and add the joiner) and with room for K copies of everything, an endangered key gets K domains back (Restores): 19 364 distinct states, 22 s |
+| `Repair_live4` | `Repair` | `pass` (fast set) | four custodians, one key: the joiner is at its reserve yet first in sizebalanced's order, and domain repair chooses custodian 4 |
+| `Repair_design3`, `Repair_design4`, `Repair_live2` | `Repair` | `pass` (full set) | three faults and two crashes or partitions (2 990 176 distinct states, 3.5 minutes); four custodians, two of them joining (515 705, 43 s); liveness with two faults (147 880, 2 minutes) |
+| `Repair_lockonly` | `Repair` | `violation:Survival` | a lock that proves presence only (ADR 0054 alone): custodian 1's copy rots, custodian 2 drops *a* for the joiner and locks 1 and 3, then 3's disk dies. One fault in the epoch, and no intact copy is left (ADR 0059) |
+| `Repair_nosync` | `Repair` | `violation:Survival` | copies counted before their sync (ADR 0046): the laptop drops *b* while both custody copies are still only in memory |
+| `Repair_nofsck` | `Repair` | `violation:Survival` | a restored disk counted before its fsck (09 §9.9): the laptop's drop leans on its bad copy, and the only other copy had rotted |
+| `Repair_noprio` | `Repair` | `violation:EndangeredFirst` | admission without the endangered-first rule (ADR 0050): the joiner starts *b* with the room that *a* needs |
+| `Repair_inflight` | `Repair` | `violation:ReserveKept` | a reserve check that ignores downloads in progress, which git-annex counts (`sizeOfDownloadsInProgress` in `checkDiskSpace'`, `Annex/Content/LowLevel.hs`): two downloads cross the reserve |
+| `Repair_wantall` | `Repair` | `violation:temporal` | domain repair counting a member at its reserve as taking the key (08 §8.3 before ADR 0059): no other custodian is chosen, and the key stays endangered |
 | `Purge_full` | `Purge` | `pass` (fast set) | ADR 0042: a restore or cancel that reaches any custodian before its seal keeps the content (KeepWins); nothing is dropped before the waiting period (WaitingPeriod); a dropped copy returns only for an uncovered reference (NoResurrection); 2 custodians (one holds the key), 2 laptops (one offline with a copy), restarts, any message order |
 | `Purge_full3` | `Purge` | `pass` (full set) | 3 custodians, 2 of them holding the key, and the deciding laptop with a copy: 12.4 million states, 2 minutes |
 | `Purge_seals` | `Purge` | `violation:KeepWins` | accepting every seal without merging the sealers' `main` loses a cancel |
@@ -121,13 +132,29 @@ links and their link count, the resolution of a recovered version (it is
 captured; the model checks only that it is kept), and the scan's retry period
 (a deferred path is retried once its writer has closed).
 
+**`Repair`** ([08 §8.4](08-custody-loops.md)) takes keys of one unit each.
+Each custodian has room above its reserve and a failure domain, and the
+order in which `sizebalanced` and domain repair rank it. A get copies only
+an intact object, since git-annex verifies it on arrival. A get counts as a
+copy only once synced (ADR 0046). A verified drop is one step: `AnnexDrop`
+shows the drop itself is safe behind the probe of ADR 0054. Assumption F
+(02 §2.2) bounds the faults: within a repair epoch fewer than K domains lose
+or corrupt a key. The model counts the epoch on intact copies, so a rot opens
+it when it happens. Each negative configuration removes one safeguard
+(`Off`) and must fail. The model found two flaws, fixed by ADR 0059. A
+rotten copy can prove a custodian's drop, since git-annex's lock checks only
+presence. A custodian at its reserve still wants its share, so domain
+repair, counting it as taking the key, never chose another domain. Not
+modelled: keys of different sizes; `maxsize` apart from real room; stale
+status reports (ADR 0050 shows that they cost space, never safety); the
+seven days before an admin removes a silent custodian; `min_sites`.
+
 ### Planned, before or with the code (ADR 0008)
 
 | Model | Actions | Safety | Liveness (under fairness) |
 |---|---|---|---|
 | `Authority` ([04](04-roster-and-authority.md)) | `Receive`, `Validate`, `Merge`, `Propose`, `Adopt`, `Reject`, roster changes | INV-Valid, INV-Merge: devices with the same commits have the same catalogue | connected devices converge |
 | `Evict` ([08 §8.5](08-custody-loops.md)) | free, keep, verified drop, sparse hide and show | a laptop drops only protected keys; a kept folder never shows pointers | a freed folder's space is freed once its files are protected |
-| `Repair` ([08 §8.4](08-custody-loops.md)) | custodian loss, `dead`, want, get, scrub failure | no protected version is lost while one custody copy remains | K copies are restored when capacity allows |
 
 Bounds start at N ≤ 4 devices, K ≤ 2, a few paths and keys, as now
 (ADR 0008); larger bounds run in the full set. Each model has a negative
@@ -187,7 +214,7 @@ and each law is a `hegeltest` property (pinned to 0.49, a dev-dependency).
 | install journal | replay idempotent; each path ends old or new | [11 §11.5](11-local-state.md) |
 | local files | round trip; newer formats refused | [11 §11.5](11-local-state.md) |
 | compatibility | an older release's verdict is the newer one's or *unknown*; an unknown field or `format` is never ignored; an unreadable status report never raises a state (ADR 0048) | [04 §4.4](04-roster-and-authority.md), [06 §6.3](06-status.md) |
-| append-only filter | never forwards a removal; forwards allowed messages unchanged, but a custodian's `CHECKPRESENT`; keeps `DATA` framing; no positive answer for a key before its sync (ADR 0046); a positive `CHECKPRESENT` only for a copy it could lock (ADR 0054) | [09 §9.4](09-network-and-joining.md) |
+| append-only filter | never forwards a removal; forwards allowed messages unchanged, but a custodian's `CHECKPRESENT`; keeps `DATA` framing; no positive answer for a key before its sync (ADR 0046); a positive `CHECKPRESENT` only for a copy it could lock (ADR 0054); to a custodian, a positive `LOCKCONTENT` or `CHECKPRESENT` only for a copy whose hash matched (ADR 0059) | [09 §9.4](09-network-and-joining.md) |
 | trace merge | Lamport merge associative and commutative; per-device order kept | [12 §12.3](12-observability.md) |
 | work queue | order is a total preorder of the classes of ADR 0037; capture never starves; a key held in fewer failure domains never waits behind one held in more (ADR 0050) | [15 §15.2](15-resource-use.md) |
 | failure domains | domains are the connected components of shared storage, host and declared `domain`; their number is at most the number of custodians; a fingerprint or declaration never raises a state; with one custodian per domain the state is ADR 0002's; a drop's chosen remotes lie in K distinct domains; domain repair is deterministic and wants nothing for a key that spans K domains (ADR 0049) | [06 §6.2](06-status.md), [08 §8.3](08-custody-loops.md) |
@@ -315,7 +342,7 @@ are specified here but not built; the gaps are tracked as GitHub issues
 
 | Guarantee | Now | Planned | Gaps (issues) |
 |---|---|---|---|
-| P1 Survival | E1, E5, E8, E9, E10 (lab, printing); E13 (asserting: pigeon's filter refuses remote `REMOVE`); E21 (asserting: recovery from custodians alone); E22 (asserting: one copy per failure domain, the reserve, disk full); E23 (asserting: over P2P git-annex's verified drop counts a copy locked for removal, two concurrent drops lose the key, pigeon's probe keeps it); `AnnexDrop` model (git-annex's verified drop: safe over a local path or behind the probe, not over P2P; ADR 0054); `CustodyNaive`, `CustodyTokens` (evidence about hand-offs in general and about the earlier token protocol, not about git-annex) | `Repair` model; failure-domain and capacity laws; fault injection; asserting E9, E10 | independence pigeon cannot see (virtual machines, places not declared; ADR 0049); power loss on a custodian (outside the lab; ADR 0046 rests on the git and git-annex sources) |
+| P1 Survival | E1, E5, E8, E9, E10 (lab, printing); E13 (asserting: pigeon's filter refuses remote `REMOVE`); E21 (asserting: recovery from custodians alone); E22 (asserting: one copy per failure domain, the reserve, disk full); E23 (asserting: over P2P git-annex's verified drop counts a copy locked for removal, two concurrent drops lose the key, pigeon's probe keeps it); `AnnexDrop` model (git-annex's verified drop: safe over a local path or behind the probe, not over P2P; ADR 0054); `Repair` model (placement, repair and rebalancing against lost disks, removals, rotten and restored copies, crashes; a rotten copy proving a drop and a full custodian stalling domain repair, ADR 0059); `CustodyNaive`, `CustodyTokens` (evidence about hand-offs in general and about the earlier token protocol, not about git-annex) | failure-domain and capacity laws; the filter's hash law (ADR 0059); fault injection; asserting E9, E10 | independence pigeon cannot see (virtual machines, places not declared; ADR 0049); power loss on a custodian (outside the lab; ADR 0046 rests on the git and git-annex sources) |
 | P2 Capture, no overwrite | E20 (asserting, Linux and macOS: what capture stages and what it never reads); E15b (asserting: no pointer during free and keep); E18 (asserting: offline in-place saves keep every version); E19 (asserting, Linux and macOS: racing saves and `kill -9` during install); `CaptureInstall` model (racing saves, escaping writers, crashes during install and recovery, resolutions; ADR 0055) | install journal laws (hegel-rust), checked against the model | copy-on-write cost of pending history on APFS and btrfs (E18 there); saves from stale memory, and on macOS saves made only through a shared mapping until they are synced (16 §16.4) |
 | P3 Reversible deletion | E2, E4 (lab, printing); `Purge` model (seals against restores, cancels, partitions, restarts and a returning laptop; ADR 0042); E14 (asserting: shared keys, a restore against the seals, per-key transfers, the forced drop, a returning laptop's new generation) | purge laws (hegel-rust); `Purge` trace validation | a custodian clock that jumps forward by more than the waiting period; erased names stay in history (16 §16.4) |
 | P4 Authority | E7 (lab, printing); E12 (asserting: no pushed ref, `remotedaemon` only fetches); `Roster` model (roster forks, ADR 0051) | `Authority` model; roster fold laws; acceptance laws; decision-rights tests (ADR 0038) | format compatibility (#15) |

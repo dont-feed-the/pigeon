@@ -14,9 +14,11 @@
   (ADR 0049); with `min_sites` ≥ 2, the copies also span that many declared
   sites. Those custodians then hold everything needed
   to recover V on a fresh machine ([09 §9.9](09-network-and-joining.md)).
-- A **repair epoch** for V starts when V's verified custody copies span fewer
-  than K failure domains after having spanned K, and ends when they span K
-  again.
+- A **repair epoch** for V starts when V's intact custody copies (on disk,
+  not corrupt, on custodians of the roster) span fewer than K failure domains,
+  and ends when they span K again. A copy that rots opens an epoch when it
+  rots, not when a scrub finds it, and a version whose intact copies have not
+  yet spanned K domains is in one (ADR 0059).
 - A version is **captured** when pigeon has added its content to the local annex
   and recorded it in a signed commit, accepted or proposal ([07](07-capture-and-install.md)).
 - A **saved file** is the content a person or their application left at a path
@@ -113,7 +115,7 @@ test (ADR 0012), "lab" a git-annex experiment.
 
 | Id | Invariant | Carries | Enforced in | Checked by |
 |---|---|---|---|---|
-| INV-K | a custodian's copy is dropped only by its own `pigeond`, and only if K other verified custody copies exist in K failure domains, or by a purge after retention | P1 | [08 §8.4–8.6](08-custody-loops.md), ADR 0014 | E1, E5, E9, E13; model (planned) |
+| INV-K | a custodian's copy is dropped only by its own `pigeond`, and only if K other verified custody copies exist in K failure domains, or by a purge after retention | P1 | [08 §8.4–8.6](08-custody-loops.md), ADR 0014 | E1, E5, E9, E13, E23; `AnnexDrop` and `Repair` models |
 | INV-Named | a custodian counts toward K for a version only if it also has the commit that introduced it, and only for copies synced to its disk | P1, P6 | [06 §6.2](06-status.md), [09 §9.4](09-network-and-joining.md), ADR 0046 | E21 (asserting); status and filter laws |
 | INV-NoCount | a laptop copy never counts toward K | P1 | [03 §3.3](03-repository-and-roles.md) (`untrust`) | E8, E9 |
 | INV-Domain | copies count once per failure domain: a version is protected only if its counted custodians span K domains (and `min_sites` sites), and every verified drop lets git-annex lock only one copy per domain | P1, P6 | [06 §6.2](06-status.md), [08 §8.3, §8.10](08-custody-loops.md), ADR 0049 | E22; status and drop-choice laws |

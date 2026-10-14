@@ -30,6 +30,7 @@
 | ADR 0055: install recovery rolls forward from a journalled proof | Proposed, for issue #1; [07 §7.5–7.6](07-capture-and-install.md), [11 §11.3](11-local-state.md) apply it, the `CaptureInstall` model checks it ([13 §13.2](13-verification.md)) | Guillaume |
 | ADR 0056: every asserting experiment runs on Linux and macOS | Proposed, for issue #10; `lab.yml` runs it; [07 §7.5](07-capture-and-install.md), [08 §8.2, §8.5](08-custody-loops.md), [13 §13.7–13.8](13-verification.md), [14 §14.3](14-platforms-and-packaging.md) apply it | Guillaume |
 | ADR 0057: the first milestone is a safety slice | Proposed, for issue #17; [13 §13.12](13-verification.md) applies it | Guillaume |
+| ADR 0059: a custodian's drop counts only hashed copies; repair counts only members that can take a key | Proposed, for issue #10; [02 §2.1](02-guarantees.md), [08 §8.3, §8.10](08-custody-loops.md) and [09 §9.4](09-network-and-joining.md) apply it; the `Repair` model checks it | Guillaume |
 
 ## 16.2 Where this specification departs from a source
 
@@ -196,6 +197,13 @@ them all.
   (`P2PGeneric.hs`), so the peer's notices stop until it restarts. `pigeond`
   works around it (08 §8.2); to report upstream, with the fix of draining the
   output before `CONNECTDONE`.
+- **Corruption that no scrub has found yet** (ADR 0059). A copy that rots
+  still counts until the next scrub reads it, at most the scrub period
+  (08 §8.8, 30 days by default), so *protected* can overstate in that time.
+  The repair epoch counts the rot from when it happens (02 §2.1), and a
+  custodian's drop no longer leans on such a copy; a laptop's drop may. A
+  shorter period narrows the window at the cost of reading every key more
+  often (ADR 0037).
 - **Erased names.** A purge erases content, but the names, authors and times of
   the erased versions stay in the signed history (ADR 0042). Removing a name
   would need a new history signed again by the admins. Is that ever needed?
@@ -218,7 +226,7 @@ experiments stay listed in [13](13-verification.md) and in the prototype (#17).
 | #7 | decisions by non-admin owners and stewards | [04 §4.3, §4.5](04-roster-and-authority.md) | ADR 0038 (Proposed) |
 | #8 | catalogue merge algorithm and its laws | [05 §5.1–5.3](05-catalogue-and-names.md), [04 §4.4](04-roster-and-authority.md) | ADR 0052 (Proposed); `models/catalogue` checks the laws on every schedule of three devices |
 | #9 | git-annex cannot bypass pigeon | [03 §3.5–3.8](03-repository-and-roles.md), [09 §9.4](09-network-and-joining.md) | ADR 0043 (Proposed); E12 and E13 assert |
-| #10 | models and coverage | [13 §13.2, §13.10](13-verification.md) | coverage map and liveness assumptions written; `AnnexDrop` model and E23 found the P2P drop race (ADR 0054, Proposed) |
+| #10 | models and coverage | [13 §13.2, §13.10](13-verification.md) | coverage map and liveness assumptions written; `AnnexDrop` model and E23 found the P2P drop race (ADR 0054, Proposed); the `Repair` model found a rotten copy proving a drop and a full custodian stalling domain repair (ADR 0059, Proposed) |
 | #11 | recovery onto fresh machines | [09 §9.9](09-network-and-joining.md), [06 §6.2–6.3](06-status.md), [02 §2.1](02-guarantees.md), [04 §4.2–4.3](04-roster-and-authority.md), [09 §9.4](09-network-and-joining.md) | ADRs 0046 and 0047 (Proposed); E21 is the disaster drill |
 | #12 | independent failure domains | [02 §2.1–2.5](02-guarantees.md), [04 §4.2, §4.7](04-roster-and-authority.md), [06 §6.2–6.5](06-status.md), [08 §8.3, §8.10](08-custody-loops.md) | ADR 0049 (Proposed); E22 asserts |
 | #13 | capacity admission and repair priority | [08 §8.4, §8.9](08-custody-loops.md), [15 §15.2, §15.4](15-resource-use.md), [03 §3.4](03-repository-and-roles.md), [07 §7.8](07-capture-and-install.md) | ADR 0050 (Proposed); E22 asserts |

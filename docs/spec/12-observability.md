@@ -112,7 +112,7 @@ specifications ([13 §13.3](13-verification.md)).
 | `Authority` | `Receive`, `Validate`, `Merge`, `Propose`, `Adopt`, `Reject` |
 | `Evict` | `FreeFolder`, `KeepFolder`, `DropVerified` (lock, check, drop) |
 | `Purge` | `Request`, `Cancel`, `Restore`, `Seal`, `Release`, `DropReleased`, `Refetch` |
-| `Repair` | `MarkDead`, `Want`, `Get`, `ScrubFail` |
+| `Repair` | `Join`, `RemoveLost`, `StartGet`, `FinishGet`, `AbortGet`, `Sync`, `Drop`, `LaptopDrop`, `Scrub`, `FsckDone`, `Crash` (logged at restart), `Remove` (a roster change); the faults `LoseDisk` and `Rot`, and `Partition` and `Heal`, are not logged and stay free |
 | `CustodyTokens` (existing) | the hand-off events of the existing model |
 
 - In production the feature is off; a person may turn it on (`PIGEON_TRACE=1`,

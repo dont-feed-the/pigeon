@@ -93,7 +93,9 @@ order-independent; the accepted set is a join (ADR 0012).
   `AnnexDrop` model shows the drop safe with it and unsafe without
   ([13 §13.2](13-verification.md)).
 - **Domain repair.** `sizebalanced` knows nothing of domains. When the
-  custodians that hold or want a key span d < K domains, the custodians of the
+  custodians that hold a key, are downloading it, or want it and have room for
+  it above their reserve span d < K domains (a custodian at its reserve still
+  wants its share but cannot take it, ADR 0059), the custodians of the
   other domains with room for it (free space above `annex.diskreserve`, within
   `maxsize`) rank themselves by SHA-256 of the key and their device ID; the
   best-ranked custodian of each of the first K − d domains wants the key too
@@ -122,7 +124,9 @@ removed automatically: after 7 days its owner and the admins see *Needs you*
 device; a surviving disk is reused under a new UUID and counts only after a
 hashing `git annex fsck --all`, and a repository restored from a backup is
 not counted until the same check ends ([09 §9.9](09-network-and-joining.md),
-ADR 0046).
+ADR 0046). The `Repair` model ([13 §13.2](13-verification.md)) checks this
+loop, placement and rebalancing against lost disks, removed custodians,
+rotten and restored copies, crashes and partitions.
 
 ## 8.5 Freeing and keeping a folder (ADRs 0031, 0039)
 
@@ -322,6 +326,7 @@ At the lowest priority, a custodian drops each key it holds that its `wanted`
 expression no longer matches after the shares moved (a custodian joined or
 changed `maxsize`), and that domain repair does not give it, with a verified
 drop (§8.3): git-annex checks K other custody copies in K domains first, each
-by a lock (ADRs 0014, 0049, 0054). pigeon
+by a lock on a copy its holder has hashed for this drop
+([09 §9.4](09-network-and-joining.md); ADRs 0014, 0049, 0054, 0059). pigeon
 never runs `--rebalance` against a remote. A placement planner may replace
 `sizebalanced` later (ADR 0003).
