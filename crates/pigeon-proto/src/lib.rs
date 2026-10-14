@@ -7,7 +7,9 @@
 //! message ids and arguments, never as text (ADR 0028).
 
 pub mod api;
+pub mod join;
 pub mod stream;
+pub mod time;
 pub mod wire;
 
 pub use api::{Arg, Message, Problem, Request, Response};

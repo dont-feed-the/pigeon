@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 
 use hegel::TestCase;
 use hegel::generators as gs;
-use pigeon_proto::api::{Machine, State, StatusReport, VersionStatus};
+use pigeon_proto::api::{Level, Machine, State, StatusReport, VersionStatus};
 use pigeon_proto::stream::{Refusal, StreamAnswer, StreamHeader};
 use pigeon_proto::{Arg, Envelope, LineDecoder, Message, Problem, Request, Response, encode};
 
@@ -43,6 +43,7 @@ fn request(tc: &TestCase) -> Request {
             person: text(tc),
             admin: flag(tc),
             custodian: flag(tc),
+            name: maybe_text(tc),
         },
         4 => Request::Join {
             invitation: text(tc),
@@ -147,6 +148,13 @@ fn response(tc: &TestCase) -> Response {
         },
         5 => Response::Status(StatusReport {
             headline: message(tc),
+            level: match tc.draw(gs::integers::<u8>().max_value(4)) {
+                0 => Level::NeedsYou,
+                1 => Level::NotSafe,
+                2 => Level::NotChecked,
+                3 => Level::Working,
+                _ => Level::Safe,
+            },
             state: state(tc),
             versions: (0..tc.draw(gs::integers::<u8>().max_value(3)))
                 .map(|_| version(tc))

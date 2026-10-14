@@ -48,6 +48,10 @@ pub enum Request {
         /// As a backup machine (custodian).
         #[serde(default)]
         custodian: bool,
+        /// The new backup machine's name in the roster, with `custodian`;
+        /// its person is then the inviter's (09 §9.6).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
     },
     /// `pigeon join INVITATION [FOLDER]`.
     Join {
@@ -261,11 +265,30 @@ pub struct VersionStatus {
     pub reason: Option<Message>,
 }
 
+/// The level of a headline (06 §6.5), which scripts read from `--json`
+/// (10 §10.2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Level {
+    /// Something only the person can do.
+    NeedsYou,
+    /// A version is not protected, and nothing is under way to fix it.
+    NotSafe,
+    /// The group has not been reached recently.
+    NotChecked,
+    /// Versions are on their way to protection.
+    Working,
+    /// Every version is protected.
+    Safe,
+}
+
 /// The answer to `Status`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StatusReport {
     /// The one sentence that sums it up (06 §6.5).
     pub headline: Message,
+    /// Its level.
+    pub level: Level,
     /// The worst state among the versions listed.
     pub state: State,
     /// Versions not yet protected, and those asked for.
