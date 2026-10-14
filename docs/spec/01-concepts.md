@@ -1,7 +1,6 @@
 # 1. Concepts
 
-> Mission: define every term the other files use, once. The right-hand column
-> says what people see instead (ux.md §2.2, ADR 0027).
+> Mission: every term, once, with what people see instead (ux.md §2.2).
 
 ## 1.1 The group and its members
 
@@ -23,22 +22,20 @@ Decision roles (admin, owner, steward) belong to persons; storage roles
 | **laptop** | a person's computer (desktops too): editable *working copies* of the folders the person keeps, plus pending history ([07 §7.8](07-capture-and-install.md)) | no | computer |
 | **custodian** | a storage machine, Linux only in v1, holding read-only *custody copies* and history (ADRs 0002, 0003, 0032) | yes | backup machine |
 
-A device has exactly one role. **K** is the group's number of custody copies,
-default 2 (ADR 0002); people see "number of safe copies".
+A device has one role. **K**, the number of custody copies, is 2 by default
+(ADR 0002); people see "number of safe copies".
 
 ## 1.3 Folders and their rules
 
-Each path of the tree is governed by exactly one **folder rule** of the roster
-([04 §4.3](04-roster-and-authority.md)):
+Each path has exactly one **folder rule** ([04 §4.3](04-roster-and-authority.md)):
 
 | Rule | Who may add | Who may change or delete | People see |
 |---|---|---|---|
 | **owned** by person P | P | P | "only Paul can change it" |
 | **add-only** with stewards S | every member | S | "everyone can add; Roy decides changes" |
 
-A change the rule does not allow becomes a **proposal** (people see
-*suggestion*), which an owner or steward **accepts** or **rejects** (people see
-*accept* or *decline*).
+A change the rule does not allow is a **proposal** (*suggestion*), which an
+owner or steward **accepts** or **rejects** (*accept*, *decline*).
 
 ## 1.4 Versions and the catalogue
 
@@ -59,8 +56,7 @@ A change the rule does not allow becomes a **proposal** (people see
 
 ## 1.5 Version states
 
-Computed per device from its own observations ([06 §6.2](06-status.md),
-`pigeon-core::state`):
+Per device, from its own observations ([06 §6.2](06-status.md), `pigeon-core::state`):
 
 | State | Definition | People see |
 |---|---|---|
@@ -79,8 +75,7 @@ Computed per device from its own observations ([06 §6.2](06-status.md),
 
 ## 1.7 The two escapes
 
-Every unsafe action is one of two primitives, signed, flagged and recorded
-(proposal §2):
+Every unsafe action is one of two primitives, signed, flagged and recorded:
 
 | Escape | What it does | People see |
 |---|---|---|
@@ -94,7 +89,7 @@ Every unsafe action is one of two primitives, signed, flagged and recorded
 | **`pigeond`** | the one daemon per user: watchers, loops, the iroh endpoint, git and git-annex processes, the web interface (ADR 0011) |
 | **`pigeon`** | the CLI, a thin client of `pigeond` (ADRs 0011, 0024) |
 | **`git-annex-p2p-iroh`** | the transport helper git-annex calls, a thin client of `pigeond` (ADR 0006) |
-| **core** | `pigeon-core`: pure algebras with laws (authority, catalogue, states, headline, journal); [13 §13.13](13-verification.md) lists the laws (ADR 0012) |
+| **core** | `pigeon-core`: pure algebras with laws, without I/O (ADR 0012); [13 §13.13](13-verification.md) lists them |
 | **shell** | the code that does I/O behind traits: git, git-annex, the file system, the network |
 | **loop** | a protocol of `pigeond`: capture, accept, place and repair, free and keep, purge, install |
 | **seal** | a custodian's statement that a purge's waiting period has ended for it ([08 §8.6](08-custody-loops.md)) |
@@ -103,5 +98,4 @@ Every unsafe action is one of two primitives, signed, flagged and recorded
 
 git, annex, commit, merge, branch, remote, key, hash, numcopies, trust, wanted,
 sync, pointer file and ref appear only in `pigeon doctor --details` and logs.
-Every user-facing word comes from the Fluent catalogue (ADR 0028), which
-follows ux.md §2.2.
+Every user-facing word comes from the Fluent catalogue (ADR 0028).
