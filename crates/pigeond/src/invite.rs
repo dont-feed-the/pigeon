@@ -375,11 +375,17 @@ async fn first_fetch(g: &Group, inv: &Invitation, commit: &str, me: &str) -> Res
         inv.inviter.as_str(),
         spec.as_str(),
     ];
+    // The inviter may still be busy with the welcome's round: retry for a
+    // minute, as a P2P fetch can also hang (16 §16.4).
     let mut fetched = false;
-    for _ in 0..5 {
-        if g.git.run_for(&args, Duration::from_secs(60)).await.is_ok() {
-            fetched = true;
-            break;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
+    while tokio::time::Instant::now() < deadline {
+        match g.git.run_for(&args, Duration::from_secs(30)).await {
+            Ok(_) => {
+                fetched = true;
+                break;
+            }
+            Err(e) => tracing::warn!(group = %g.id, error = %e, "first-fetch-failed"),
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }

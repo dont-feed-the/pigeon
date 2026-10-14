@@ -68,7 +68,7 @@ fn git_env<'a>(cmd: &'a mut Command, home: &Path) -> &'a mut Command {
         .env("GIT_CONFIG_NOSYSTEM", "1")
 }
 
-fn start(root: &Path, name: &'static str) -> Daemon {
+fn start(root: &Path, sockets: &Path, name: &'static str) -> Daemon {
     let home = root.join(name);
     std::fs::create_dir_all(home.join("config")).unwrap();
     let config =
@@ -77,17 +77,14 @@ fn start(root: &Path, name: &'static str) -> Daemon {
     let fp = home.join("fingerprints.json");
     let ids = format!(r#"{{"storage":["disk-{name}"],"host":"host-{name}","virtual":null}}"#);
     std::fs::write(&fp, ids).unwrap();
-    // A short path: unix sockets hold about 100 bytes.
-    let socket = std::env::temp_dir()
-        .canonicalize()
-        .unwrap()
-        .join(format!("pgn-{}-{name}.sock", std::process::id()));
+    let socket = sockets.join(format!("{name}.sock"));
     let log = std::fs::File::create(home.join("pigeond.out")).unwrap();
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_pigeond"));
     cmd.arg("--home")
         .arg(&home)
         .env("PIGEON_SOCKET", &socket)
         .env("PIGEON_LAB_FINGERPRINTS", &fp)
+        .env("PIGEON_LOG", "debug")
         .stdin(Stdio::null())
         .stdout(log.try_clone().unwrap())
         .stderr(log)
@@ -101,13 +98,18 @@ fn start(root: &Path, name: &'static str) -> Daemon {
     };
     let deadline = Instant::now() + Duration::from_secs(30);
     while !d.socket.exists() {
-        assert!(Instant::now() < deadline, "{name} did not start");
+        assert!(
+            Instant::now() < deadline,
+            "{name} did not start\n{}",
+            logs(&[&d])
+        );
         std::thread::sleep(Duration::from_millis(100));
     }
     d
 }
 
-/// The last lines of each daemon's log, for a failure's message.
+/// Each daemon's own log lines (not its libraries') and its output, for a
+/// failure's message.
 fn logs(all: &[&Daemon]) -> String {
     let mut out = String::new();
     for d in all {
@@ -115,12 +117,17 @@ fn logs(all: &[&Daemon]) -> String {
         let dir = d.home.join("state/logs");
         for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
             let text = std::fs::read_to_string(entry.path()).unwrap_or_default();
-            let lines: Vec<&str> = text.lines().filter(|l| !l.contains("\"DEBUG\"")).collect();
-            for l in lines.iter().rev().take(25).rev() {
+            let lines: Vec<&str> = text
+                .lines()
+                .filter(|l| l.contains("\"target\":\"pigeond") || l.contains("\"WARN\""))
+                .collect();
+            for l in lines.iter().rev().take(80).rev() {
                 out.push_str(l);
                 out.push('\n');
             }
         }
+        let output = std::fs::read_to_string(d.home.join("pigeond.out")).unwrap_or_default();
+        out.push_str(&output);
     }
     out
 }
@@ -220,7 +227,18 @@ fn local_published_protected_then_free_and_keep() {
     }
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().canonicalize().unwrap();
-    let (lap, c1, c2) = (start(&root, "lap"), start(&root, "c1"), start(&root, "c2"));
+    // Sockets in a short private directory: a unix socket's path holds about
+    // 100 bytes, and macOS's temporary directory is long.
+    let sockets = tempfile::Builder::new()
+        .prefix("pgn")
+        .tempdir_in("/tmp")
+        .unwrap();
+    let s = sockets.path();
+    let (lap, c1, c2) = (
+        start(&root, s, "lap"),
+        start(&root, s, "c1"),
+        start(&root, s, "c2"),
+    );
     let all = [&lap, &c1, &c2];
 
     let folder = root.join("folder");
