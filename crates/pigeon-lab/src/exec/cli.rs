@@ -184,15 +184,18 @@ fn kind_of(state: &str) -> Option<Kind> {
     })
 }
 
-/// The kind of the newest version of `path` in a status report. A path not
-/// listed among the versions takes the report's own state.
+/// The kind of the newest version of `path` in a status report for `path`.
+/// A path not listed among the versions takes the report's own state, the
+/// least safe of the versions under it; a report that lists no version at
+/// all says nothing of it (its state, protected, holds of nothing).
 pub fn version_kind(status: &Value, path: &str) -> Option<Kind> {
     let body = status.get("Status").unwrap_or(status);
-    let newest = body
-        .get("versions")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
+    let versions = body.get("versions").and_then(Value::as_array)?;
+    if versions.is_empty() {
+        return None;
+    }
+    let newest = versions
+        .iter()
         .filter(|v| {
             v.get("path")
                 .and_then(Value::as_str)

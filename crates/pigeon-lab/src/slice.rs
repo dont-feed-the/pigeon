@@ -285,8 +285,10 @@ pub fn s7() -> Scenario {
 /// refuses a restore before it starts.
 pub fn s8() -> Scenario {
     let mut world = World::new("slice", 2);
-    let l = world.laptop_with_disk("laptop", 512);
-    let c1 = world.custodian_with_disk("backup-1", 256);
+    // Each about 0.7 GB above its device's `annex.diskreserve` (03 §3.4),
+    // so that a fill, not the reserve alone, makes it full.
+    let l = world.laptop_with_disk("laptop", 2048);
+    let c1 = world.custodian_with_disk("backup-1", 5632);
     let _c2 = world.custodian("backup-2");
     let docs = world.folder("docs");
     let big = docs.file("big.bin");
@@ -476,27 +478,24 @@ pub fn s11() -> Scenario {
 
 /// The scenarios that do not pass yet against the first build of pigeond
 /// (14 October 2026), with what their last runs showed, on the runners
-/// (slice.yml, run 38556472036) or here (13 §13.12). `pigeon-lab run`
+/// (slice.yml, run 38556472036; models-full.yml, run 38561185580) or here
+/// (13 §13.12). Those runs gave custodians disks below their
+/// `annex.diskreserve`, so nothing reached protected there. `pigeon-lab run`
 /// reports each as blocked without running it, and runs it with
 /// `--with-blocked`, where a pass says to unmark it and a failure does not
 /// fail the run. An id `S9` stands for every S9 point.
 pub const BLOCKED: &[(&str, &str)] = &[
-    ("S1", PUBLISHED),
     ("S2", FREE),
     ("S3", FREE),
-    ("S4", PUBLISHED),
     (
         "S5",
         "no partial object of the 1 GiB file shows on backup-1 within 300 s (both runners)",
     ),
-    (
-        "S6",
-        "protected not reached within 120 s (macOS); free hides nothing within 60 s (Linux)",
-    ),
+    ("S6", FREE),
     (
         "S7",
-        "protected not reached (Linux); the headline stays working, not needs-you, \
-         once a custodian's disk is destroyed (macOS)",
+        "the headline stays working, not needs-you, once a custodian's disk is \
+         destroyed (macOS)",
     ),
     (
         "S8",
@@ -512,8 +511,6 @@ pub const BLOCKED: &[(&str, &str)] = &[
     ),
 ];
 
-const PUBLISHED: &str = "the laptop stays at published after the second custodian accepts \
-     the version (both runners; passes now and then here)";
 const FREE: &str = "free answers free-result but hides no file within 60 s, though \
      status says protected and no install begins (pigeond evict.rs)";
 const S9: &str = "a crash at a point of free or keep falls inside the request, which \

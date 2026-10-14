@@ -170,7 +170,7 @@ impl Space {
                     .arg(&image))?;
                 let owner = format!("root_owner={}:{}", space.ids.0, space.ids.1);
                 run(Command::new("mkfs.ext4")
-                    .args(["-q", "-F", "-E", &owner])
+                    .args(["-q", "-F", "-m", "0", "-E", &owner])
                     .arg(&image))?;
                 run(Command::new("sudo")
                     .args(["-n", "mount", "-o", "loop"])

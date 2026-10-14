@@ -98,19 +98,38 @@ jobs:
         run: cargo test --locked --release -p pigeon-lab --test s9_exec
 
   slice-with-blocked:
-    name: S1-S11 with the blocked ones, against the lab build
-    runs-on: ubuntu-24.04
+    name: S1-S11 with the blocked ones, against the lab build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     env:
       GIT_ANNEX_SHA256: 88ea73c9bb8fb751916e0e4a0a8f489a7476f9b9e861fd2cce2601a77f4f409d
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: git-annex, standalone build at the pinned checksum
+      - name: git-annex, standalone build at the pinned checksum (Linux)
+        if: runner.os == 'Linux'
         run: |
           t=/tmp/git-annex-standalone-amd64.tar.gz
           curl -fsSL -o "$t" https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
           echo "$GIT_ANNEX_SHA256  $t" | sha256sum -c -
           tar -C ~ -xzf "$t" && echo ~/git-annex.linux >> "$GITHUB_PATH"
+      - name: git-annex from Homebrew (macOS)
+        if: runner.os == 'macOS'
+        run: brew install git-annex
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: slice-${{ matrix.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: slice-${{ matrix.os }}-
       - name: the pinned toolchain (rust-toolchain.toml)
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
       - name: the lab build
@@ -120,6 +139,8 @@ jobs:
           mkdir -p target/lab/bin
           cp target/release/pigeond target/release/pigeon target/release/git-annex-p2p-iroh target/lab/bin/
       - name: every scenario, a blocked one's failure reported and not failing
+        env:
+          PIGEON_LOG: debug
         run: |
           cargo run --locked --release -q -p pigeon-lab -- run --with-blocked \
             --bin target/lab/bin --work /tmp/lab --out target/lab/out
@@ -129,6 +150,6 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: slice-with-blocked
+          name: slice-with-blocked-${{ matrix.os }}
           path: target/lab/out
           if-no-files-found: ignore

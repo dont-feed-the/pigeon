@@ -201,8 +201,15 @@ pub struct World {
     pub folders: Vec<String>,
 }
 
-/// The disk of a device unless a scenario asks otherwise, in MiB.
-pub const DEFAULT_DISK_MIB: u32 = 4096;
+/// A laptop's disk unless a scenario asks otherwise, in MiB: room above
+/// the `annex.diskreserve` pigeon sets on a laptop, max(1 GB, 1 %) (03
+/// §3.4), which git-annex and capture refuse to cross.
+pub const LAPTOP_DISK_MIB: u32 = 4096;
+
+/// A custodian's disk unless a scenario asks otherwise, in MiB: room above
+/// its `annex.diskreserve`, max(5 GB, 2 %) (03 §3.4); on a smaller disk
+/// every get and incoming copy is refused (E22). The images are sparse.
+pub const CUSTODIAN_DISK_MIB: u32 = 8192;
 
 impl World {
     /// A world with no device yet.
@@ -221,7 +228,7 @@ impl World {
         self.laptops.push(LaptopSpec {
             name: name.to_owned(),
             present: true,
-            disk_mib: DEFAULT_DISK_MIB,
+            disk_mib: LAPTOP_DISK_MIB,
         });
         Laptop((self.laptops.len() - 1) as u8)
     }
@@ -242,7 +249,7 @@ impl World {
 
     /// Adds a custodian in the group from the start.
     pub fn custodian(&mut self, name: &str) -> Custodian {
-        self.custodian_with_disk(name, DEFAULT_DISK_MIB)
+        self.custodian_with_disk(name, CUSTODIAN_DISK_MIB)
     }
 
     /// Adds a custodian with a disk of `disk_mib` MiB.

@@ -397,6 +397,19 @@ impl Exec {
                 let free = dev.space.free_bytes()?;
                 let mut left = free.saturating_sub(u64::from(*leave_mib) * MIB);
                 let path = dev.space.root.join("ballast");
+                // Allocated, not written, where `fallocate` exists (Linux):
+                // the image behind the disk stays sparse.
+                let had = fs::metadata(&path).map_or(0, |m| m.len());
+                let allocated = Command::new("fallocate")
+                    .arg("-l")
+                    .arg((had + left).to_string())
+                    .arg(&path)
+                    .stderr(Stdio::null())
+                    .status()
+                    .is_ok_and(|s| s.success());
+                if allocated {
+                    return Ok(());
+                }
                 let mut f = fs::OpenOptions::new()
                     .create(true)
                     .append(true)
@@ -749,6 +762,10 @@ impl Interpreter for Exec {
                 (s("PIGEON_NAME"), name.clone()),
                 (s("RUST_LOG"), s("info")),
             ];
+            // `PIGEON_LOG=debug` for the run gives every daemon's debug log.
+            if let Ok(level) = std::env::var("PIGEON_LOG") {
+                env.push((s("PIGEON_LOG"), level));
+            }
             if custodian && self.cfg.isolation.service_seam() {
                 env.push((
                     s("PIGEON_LAB_SERVICE_ROOT"),

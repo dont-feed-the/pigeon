@@ -570,15 +570,17 @@ a restart, changes no outcome (1000 model schedules per push). The workflow
 real binaries on both runners; `models-full.yml` runs 1000. A scenario that
 does not pass yet against the first build is listed in `slice::BLOCKED`
 with what its last runs showed; per push it is reported as blocked, and
-`models-full.yml` runs it (`pigeon-lab run --with-blocked`) without
-failing. On 14 October 2026 every scenario is blocked: on both runners
-the laptop stays at *published* after the second custodian accepts a
-version (S1, S4, S6, S7; S1 passes now and then on one host), `free`
-hides nothing (S2, S3), no partial object shows during S5's transfer, a
-full custodian says nothing (S8), S9's crash points of `free` and `keep`
-fall inside the request where the model frees in its loops, there is no
-recovery sheet yet (S10), and the laptop's disk holds each file twice
-(S11, 2.06 × the content kept).
+`models-full.yml` runs it on both runners (`pigeon-lab run
+--with-blocked`, with pigeond's debug log) without failing. A device's
+disk is sized above the `annex.diskreserve` pigeon sets (03 §3.4): 4 GiB
+for a laptop, 8 GiB (sparse) for a custodian; below it git-annex refuses
+every transfer, which kept the first runs at *published*. On 14 October
+2026 the rest is blocked by pigeond: `free` hid nothing (S2, S3, S6), no
+partial object showed during S5's transfer, a full custodian says
+nothing (S8), S9's crash points of `free` and `keep` fall inside the
+request where the model frees in its loops, there is no recovery sheet
+yet (S10), and the laptop's disk holds each file twice (S11, 2.06 × the
+content kept).
 
 | Scenario | Asserts |
 |---|---|
