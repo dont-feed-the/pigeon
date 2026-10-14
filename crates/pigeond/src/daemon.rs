@@ -255,6 +255,48 @@ fn child_bin(dirs: &Dirs) -> Option<PathBuf> {
     Some(bin)
 }
 
+/// Binds the endpoint. With port 0 it binds the port it picked before, if
+/// that is still free, and keeps the one it now has: peers keep this
+/// device's direct addresses (09 §9.3), and a restart, a crash's included,
+/// must not leave them dialling a port nobody listens on (S9).
+async fn bind_node(
+    dirs: &Dirs,
+    secret: [u8; 32],
+    bind: SocketAddr,
+    mdns: bool,
+) -> Result<Node, String> {
+    let at = |bind| NetConfig {
+        secret_key: secret,
+        bind,
+        mdns,
+    };
+    let kept = std::fs::read_to_string(dirs.port())
+        .ok()
+        .and_then(|t| t.trim().parse::<u16>().ok())
+        .filter(|_| bind.port() == 0);
+    let node = match kept {
+        Some(port) => {
+            let mut again = bind;
+            again.set_port(port);
+            match Node::bind(&at(again)).await {
+                Ok(n) => n,
+                Err(e) => {
+                    tracing::info!(port, error = %e, "kept-port-taken");
+                    Node::bind(&at(bind)).await.map_err(|e| e.to_string())?
+                }
+            }
+        }
+        None => Node::bind(&at(bind)).await.map_err(|e| e.to_string())?,
+    };
+    if bind.port() == 0
+        && let Some(port) = node.bound_addresses().first().map(SocketAddr::port)
+    {
+        let _ = std::fs::create_dir_all(&dirs.state);
+        let _ = pigeon_sys::fs::write_atomic(&dirs.port(), port.to_string().as_bytes());
+    }
+    Ok(node)
+}
+
 /// Runs `pigeond` until it is told to stop.
 pub async fn run(dirs: Dirs) -> Result<(), String> {
     crate::logs::init(dirs.logs());
@@ -265,13 +307,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
         .bind
         .parse()
         .map_err(|e| format!("[network] bind: {e}"))?;
-    let node = Node::bind(&NetConfig {
-        secret_key: secret,
-        bind,
-        mdns: config.network.mdns,
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+    let node = bind_node(&dirs, secret, bind, config.network.mdns).await?;
     let socket = std::env::var_os("PIGEON_SOCKET")
         .filter(|s| !s.is_empty())
         .map_or_else(|| dirs.socket(), PathBuf::from);

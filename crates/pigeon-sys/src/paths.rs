@@ -92,6 +92,12 @@ impl Dirs {
         self.runtime.join("pigeond.lock")
     }
 
+    /// The UDP port the endpoint picked when `[network] bind` names port 0,
+    /// kept so that peers' addresses of this device survive a restart.
+    pub fn port(&self) -> PathBuf {
+        self.state.join("port")
+    }
+
     /// Daily JSON log files (ADR 0022).
     pub fn logs(&self) -> PathBuf {
         self.state.join("logs")
