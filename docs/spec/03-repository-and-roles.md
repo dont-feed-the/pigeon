@@ -170,8 +170,13 @@ capture makes: `WORM` keys, plain blobs, silently excluded files.
 `pigeond` keeps, per repository, one `git cat-file --batch` process and
 long-lived `git annex … --batch --json` processes for the commands it issues
 often (`add`, `whereis`, `matchexpression`, `get`, `copy`, `drop`); it parses their
-JSON with serde (ADR 0004). Each call has a timeout; a failure keeps the
-command, exit status and end of stderr (ADR 0023).
+JSON with serde (ADR 0004). Each call has a timeout, 120 s by default; a
+failure keeps the command, exit status and the last 4 KiB of stderr
+(ADR 0023). A batch process answers a blank line for an input it cannot use,
+which is never read as success; one past its deadline is killed and restarted
+at the next call; it is stopped by closing its input, so that git-annex
+stages what it queued (ADR 0067). Every argument vector is checked against
+this table before a process starts (ADR 0067).
 
 | Allowed | Used for |
 |---|---|
@@ -184,6 +189,8 @@ command, exit status and end of stderr (ADR 0023).
 | `git annex whereis`, `find`, `info`, `matchexpression --key`, `fsck --incremental --time-limit` | observations, wanted keys, scrubs |
 | `git annex numcopies`, `mincopies`, `trust`, `untrust`, `semitrust`, `group`, `wanted`, `maxsize`, `dead` | settings ([§3.5](#35-settings-follow-the-roster-or-drops-stop)) |
 | `git annex merge`, `smudge --update`, `restage`, `remotedaemon`, `version` | branch merge, sparse folders (E15), notifications, checks |
+| `git init`, `config`, `remote`, `git annex init`, `describe` | `create` and `join` (§3.6, ADR 0067) |
+| `git rev-parse`, `ls-files`, `ls-tree`, `show-ref`, `hash-object`, `mktree`, `git annex lookupkey`, `examinekey` | reading the index, trees and keys; writing objects without the working tree (ADR 0067) |
 
 **Never run:** `git annex sync`, `assist` and `assistant` (they commit and
 merge on their own, E9); `git annex move`, `drop --from`, `satisfy`,

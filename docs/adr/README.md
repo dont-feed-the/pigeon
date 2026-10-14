@@ -79,3 +79,4 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0064](0064-pigeon-core-fixes-the-readings-its-laws-need.md) | pigeon-core's first algebras fix the readings of the spec that their laws need | Proposed |
 | [0065](0065-runs-of-the-core-are-checked-by-tlc.md) | Runs of pigeon-core are checked by TLC before the drivers exist | Proposed |
 | [0066](0066-the-helper-names-its-repository-and-the-filter-supplies-the-token.md) | The helper names its repository by path, and the serving filter supplies git-annex's token | Proposed |
+| [0067](0067-the-git-driver-checks-every-command-and-bounds-every-call.md) | The git driver checks every command against the allow-list and bounds every call with a deadline | Proposed |

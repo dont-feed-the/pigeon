@@ -371,7 +371,9 @@ that run it against the minimum supported git (2.38) and git-annex
 parses, the exit status, and the behaviour pigeon relies on (for example that
 `drop` refuses without K live custody copies). A new git-annex version is
 supported only once they pass ([14 §14.3](14-platforms-and-packaging.md)).
-A subset runs on each device as the contract self-test when it first meets a
+They live in `crates/pigeon-git/tests/contract.rs`; CI sets
+`PIGEON_REQUIRE_GIT_ANNEX=1`, so they fail rather than skip when git-annex is
+missing (ADR 0067). A subset runs on each device as the contract self-test when it first meets a
 new version (ADR 0048).
 
 **Format fixtures** (ADR 0048). `fixtures/formats/` holds golden documents and

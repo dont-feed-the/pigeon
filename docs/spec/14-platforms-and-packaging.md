@@ -55,7 +55,7 @@ btrfs, ZFS), since its repository is bare and no person edits it.
 - **Checks at start.** `pigeond` runs `git annex version` and `git --version`
   and refuses to run below the minimum versions CI tests, with
   `git-annex-too-old` ([10 §10.6](10-interfaces.md)). The minimum is the
-  oldest version CI tests on each platform **[no ADR: per platform]**: on
+  oldest version CI tests on each platform (ADR 0067): on
   Linux the pinned standalone build, **10.20261006**; on macOS the version
   Homebrew provides, which was **10.20260901** when E20 ran in `lab.yml`.
 - **Untested versions** (ADR 0048). A git or git-annex newer than the newest

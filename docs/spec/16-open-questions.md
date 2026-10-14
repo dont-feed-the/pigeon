@@ -130,7 +130,8 @@ them all.
   value (§14.4); the Homebrew tap and release signing (§14.5); the crates
   `hmac`, `sha2`, `data-encoding`, `qrcode` (§14.7); `rustix` and the state
   and cache directories went to ADR 0060 (Proposed). The crate
-  layout, edition and pinned toolchain went to ADR 0058 (Proposed).
+  layout, edition and pinned toolchain went to ADR 0058 (Proposed). The
+  per-platform minimum versions (§14.3) went to ADR 0067 (Proposed).
 
 ### I. Resource use ([15](15-resource-use.md)), within ADR 0037
 
