@@ -66,6 +66,9 @@ pub trait Directory: Send + Sync + 'static {
     fn admit(&self, group: &str, device: &str) -> Option<Admitted>;
     /// Direct addresses known for `device`, besides what mDNS finds.
     fn addresses(&self, device: &str) -> Vec<SocketAddr>;
+    /// Keeps the direct addresses that `device`, admitted for `group`,
+    /// gave for itself in its stream header.
+    fn learn(&self, _group: &str, _device: &str, _addresses: Vec<SocketAddr>) {}
 }
 
 /// A boxed future, as the loops answer.
@@ -250,6 +253,27 @@ impl Node {
         device_id(&self.endpoint.id())
     }
 
+    /// The direct addresses this device tells peers: its bound addresses,
+    /// an unspecified one given as loopback (peers elsewhere find it with
+    /// mDNS).
+    pub fn advertised_addresses(&self) -> Vec<SocketAddr> {
+        self.bound_addresses()
+            .into_iter()
+            .map(|a| {
+                if a.ip().is_unspecified() {
+                    let lo = if a.is_ipv4() {
+                        std::net::IpAddr::from([127, 0, 0, 1])
+                    } else {
+                        std::net::IpAddr::from(std::net::Ipv6Addr::LOCALHOST)
+                    };
+                    SocketAddr::new(lo, a.port())
+                } else {
+                    a
+                }
+            })
+            .collect()
+    }
+
     /// The local addresses the endpoint is bound to.
     pub fn bound_addresses(&self) -> Vec<SocketAddr> {
         self.endpoint.bound_sockets()
@@ -279,7 +303,9 @@ impl Node {
         loop {
             tries += 1;
             let connection = self.connection(key, addresses.clone()).await?;
-            match tokio::time::timeout(CONNECT_TIMEOUT, Self::admit(&connection, group)).await {
+            let own = self.advertised_addresses();
+            let admitted = Self::admit(&connection, group, &own);
+            match tokio::time::timeout(CONNECT_TIMEOUT, admitted).await {
                 Ok(Ok(pair)) => {
                     self.note(key, group, None);
                     return Ok(pair);
@@ -322,6 +348,7 @@ impl Node {
     async fn admit(
         connection: &Connection,
         group: &str,
+        own: &[SocketAddr],
     ) -> Result<(iroh::endpoint::SendStream, iroh::endpoint::RecvStream), NetError> {
         let (mut send, mut recv) = connection
             .open_bi()
@@ -331,6 +358,7 @@ impl Node {
             v: pigeon_proto::stream::HEADER_VERSION,
             group: group.to_owned(),
             traceparent: None,
+            addresses: own.iter().map(ToString::to_string).collect(),
         };
         send.write_all(&header.to_line())
             .await

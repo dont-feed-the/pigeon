@@ -262,7 +262,12 @@ pub async fn welcome(d: &Daemon, device: &str, new: &str, join: &Join) -> JoinAn
         tracing::info!(group = %g.id, recovery = %device, peer = %new, commit = %commit, "recovered-device");
         d.wake.notify_one();
         let annex_uuid = g.lock().annex_uuid.clone().unwrap_or_default();
-        return JoinAnswer::Welcome { commit, annex_uuid };
+        let peers = g.known_addresses(new);
+        return JoinAnswer::Welcome {
+            commit,
+            annex_uuid,
+            peers,
+        };
     }
     refused("invite-unknown")
 }
@@ -340,7 +345,8 @@ async fn recover_inner(
         addresses: d.addresses().iter().map(ToString::to_string).collect(),
         new_device: Some(d.device.clone()),
     };
-    let (custodian, commit, their_uuid) = dial(d, &s, &secret, from.as_deref(), &request).await?;
+    let (custodian, commit, their_uuid, peers) =
+        dial(d, &s, &secret, from.as_deref(), &request).await?;
     ensure_remote(&git, &custodian.device, &their_uuid)
         .await
         .map_err(fail)?;
@@ -351,6 +357,7 @@ async fn recover_inner(
     for c in &s.custodians {
         g.set_addresses(&c.device, parse(&c.addresses));
     }
+    g.learn_peers(&peers);
     let g = d.add_group(g, &path).await;
     let theirs =
         crate::invite::fetch_welcome(&g, &custodian.device, &s.group, &commit, &d.device).await?;
@@ -366,6 +373,9 @@ async fn recover_inner(
     Ok(s.name)
 }
 
+/// Direct addresses by device ID, as a welcome gives them.
+type Peers = std::collections::BTreeMap<String, Vec<String>>;
+
 fn parse(addresses: &[String]) -> Vec<SocketAddr> {
     addresses.iter().filter_map(|a| a.parse().ok()).collect()
 }
@@ -378,7 +388,7 @@ async fn dial(
     secret: &[u8; 32],
     from: Option<&str>,
     request: &Join,
-) -> Result<(SheetCustodian, String, String), String> {
+) -> Result<(SheetCustodian, String, String, Peers), String> {
     let mut bind: SocketAddr = d
         .config
         .network
@@ -403,9 +413,13 @@ async fn dial(
     while tokio::time::Instant::now() < deadline {
         for c in &targets {
             match node.join(&c.device, parse(&c.addresses), request).await {
-                Ok(JoinAnswer::Welcome { commit, annex_uuid }) => {
+                Ok(JoinAnswer::Welcome {
+                    commit,
+                    annex_uuid,
+                    peers,
+                }) => {
                     node.close().await;
-                    return Ok(((*c).clone(), commit, annex_uuid));
+                    return Ok(((*c).clone(), commit, annex_uuid, peers));
                 }
                 Ok(JoinAnswer::Refused { code }) => last = code,
                 Err(e) => tracing::info!(peer = %c.device, error = %e, "recover-dial-failed"),

@@ -116,6 +116,12 @@ async fn stream(net: Arc<Net>, device: String, send: SendStream, mut recv: RecvS
         return;
     }
     tracing::info!(peer = %device, group = %header.group, "stream-admitted");
+    let addresses = header
+        .addresses
+        .iter()
+        .filter_map(|a| a.parse().ok())
+        .collect();
+    net.directory.learn(&header.group, &device, addresses);
     relay(&net, &device, &repository, &admitted, send, recv, server).await;
 }
 

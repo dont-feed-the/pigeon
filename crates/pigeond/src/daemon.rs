@@ -103,26 +103,9 @@ impl Daemon {
         g
     }
 
-    /// The direct addresses this device tells peers: its bound addresses,
-    /// an unspecified one given as loopback (peers elsewhere find it with
-    /// mDNS).
+    /// The direct addresses this device tells peers.
     pub fn addresses(&self) -> Vec<SocketAddr> {
-        self.node
-            .bound_addresses()
-            .into_iter()
-            .map(|a| {
-                if a.ip().is_unspecified() {
-                    let lo = if a.is_ipv4() {
-                        std::net::IpAddr::from([127, 0, 0, 1])
-                    } else {
-                        std::net::IpAddr::from(std::net::Ipv6Addr::LOCALHOST)
-                    };
-                    SocketAddr::new(lo, a.port())
-                } else {
-                    a
-                }
-            })
-            .collect()
+        self.node.advertised_addresses()
     }
 
     /// One round of the loops for `g`.
@@ -185,6 +168,15 @@ impl Directory for Daemon {
             annex_uuid: d.annex_uuid.clone(),
             custodian: d.role == DeviceRole::Custodian,
         })
+    }
+
+    fn learn(&self, group: &str, device: &str, addresses: Vec<SocketAddr>) {
+        if let Some(g) = Daemon::group(self, group)
+            && !addresses.is_empty()
+            && g.lock().addresses.get(device) != Some(&addresses)
+        {
+            g.set_addresses(device, addresses);
+        }
     }
 
     fn addresses(&self, device: &str) -> Vec<SocketAddr> {

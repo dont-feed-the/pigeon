@@ -238,7 +238,12 @@ pub async fn welcome(d: &Daemon, device: &str, join: Join) -> JoinAnswer {
         tracing::info!(group = %g.id, peer = %device, commit = %commit, "joined");
         d.wake.notify_one();
         let annex_uuid = g.lock().annex_uuid.clone().unwrap_or_default();
-        return JoinAnswer::Welcome { commit, annex_uuid };
+        let peers = g.known_addresses(device);
+        return JoinAnswer::Welcome {
+            commit,
+            annex_uuid,
+            peers,
+        };
     }
     refused("invite-unknown")
 }
@@ -322,8 +327,12 @@ pub async fn join(d: &Daemon, code: &str, folder: Option<String>) -> Result<Stri
         }
         tokio::time::sleep(Duration::from_secs(2)).await;
     }
-    let (commit, inviter_uuid) = match answer.ok_or("inviter-offline")? {
-        JoinAnswer::Welcome { commit, annex_uuid } => (commit, annex_uuid),
+    let (commit, inviter_uuid, peers) = match answer.ok_or("inviter-offline")? {
+        JoinAnswer::Welcome {
+            commit,
+            annex_uuid,
+            peers,
+        } => (commit, annex_uuid, peers),
         JoinAnswer::Refused { code } => return Err(code),
     };
     ensure_remote(&git, &inv.inviter, &inviter_uuid)
@@ -334,6 +343,7 @@ pub async fn join(d: &Daemon, code: &str, folder: Option<String>) -> Result<Stri
         .ok_or("not-a-repository")?;
     g.set_token(&token);
     g.set_addresses(&inv.inviter, addresses);
+    g.learn_peers(&peers);
     let g = d.add_group(g, &path).await;
     first_fetch(&g, &inv, &commit, &d.device).await?;
     g.reload_roster().await;

@@ -200,6 +200,31 @@ impl Group {
         }
     }
 
+    /// The direct addresses known of the group's devices but `except`, as a
+    /// welcome gives them to a new device.
+    pub fn known_addresses(&self, except: &str) -> BTreeMap<String, Vec<String>> {
+        self.lock()
+            .addresses
+            .iter()
+            .filter(|(d, a)| d.as_str() != except && !a.is_empty())
+            .map(|(d, a)| (d.clone(), a.iter().map(ToString::to_string).collect()))
+            .collect()
+    }
+
+    /// Records the addresses a welcome gave of the group's other devices,
+    /// keeping those this device already has.
+    pub fn learn_peers(&self, peers: &BTreeMap<String, Vec<String>>) {
+        for (device, addresses) in peers {
+            if self.lock().addresses.contains_key(device) {
+                continue;
+            }
+            let parsed: Vec<SocketAddr> = addresses.iter().filter_map(|a| a.parse().ok()).collect();
+            if !parsed.is_empty() {
+                self.set_addresses(device, parsed);
+            }
+        }
+    }
+
     /// Records the token git-annex accepts here.
     pub fn set_token(&self, token: &str) {
         let _ = crate::util::write_private(&self.token_file(), format!("{token}\n").as_bytes());

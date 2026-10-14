@@ -33,6 +33,10 @@ pub struct StreamHeader {
     /// W3C trace context, so one action is one trace across devices.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub traceparent: Option<String>,
+    /// The opener's direct addresses, which the peer keeps for it once the
+    /// stream is admitted (09 §9.3).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub addresses: Vec<String>,
 }
 
 /// The peer's one-line answer to a [`StreamHeader`].

@@ -285,6 +285,9 @@ fn stream_headers_round_trip(tc: TestCase) {
         v: 1,
         group: text(&tc),
         traceparent: maybe_text(&tc),
+        addresses: (0..tc.draw(gs::integers::<u8>().max_value(2)))
+            .map(|_| text(&tc))
+            .collect(),
     };
     let line = header.to_line();
     assert_eq!(line.iter().filter(|&&b| b == b'\n').count(), 1);

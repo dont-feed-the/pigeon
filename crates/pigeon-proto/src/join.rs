@@ -51,6 +51,10 @@ pub enum JoinAnswer {
         commit: String,
         /// The inviter's git-annex UUID, for the new device's remote.
         annex_uuid: String,
+        /// The direct addresses the inviter knows of the group's other
+        /// devices, by device ID, so the new one can reach them (09 §9.3).
+        #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+        peers: std::collections::BTreeMap<String, Vec<String>>,
     },
     /// Refused, with a problem code (10 §10.6).
     Refused {
