@@ -101,9 +101,9 @@ decision is a new ADR that supersedes it.
 | [0036](0036-local-state-in-plain-files.md) | `pigeond` keeps its local state in plain files | Accepted |
 | [0037](0037-background-work-stays-out-of-the-way.md) | Background work stays out of the way: low priority, adaptive limits, priorities, settings | Accepted |
 | [0046](0046-protected-means-content-and-history-on-disk.md) | Protected means K custodians in K failure domains hold the content and the commit that names it, on disk | Proposed |
-| [0047](0047-recover-from-custodians-sheets-refound-export.md) | A group is recovered from its custodians: rejoin, recovery sheets, refounding, and export without pigeon | Proposed |
-| [0048](0048-unknown-formats-and-rules-are-never-guessed.md) | Replicated formats and rules are versioned; what a device does not understand, it never guesses | Proposed |
-| [0051](0051-the-roster-is-a-fold-of-its-changes.md) | Authority is a fold of signed changes: roster forks merge without an admin, and deciders sign decisions on suggestions | Proposed |
+| [0047](0047-recover-from-custodians-sheets-refound-export.md) | A group is recovered from its custodians: rejoin, recovery sheets, refounding, and export without pigeon | Accepted |
+| [0048](0048-unknown-formats-and-rules-are-never-guessed.md) | Replicated formats and rules are versioned; what a device does not understand, it never guesses | Accepted |
+| [0051](0051-the-roster-is-a-fold-of-its-changes.md) | Authority is a fold of signed changes: roster forks merge without an admin, and deciders sign decisions on suggestions | Accepted |
 
 ## Withdrawn
 

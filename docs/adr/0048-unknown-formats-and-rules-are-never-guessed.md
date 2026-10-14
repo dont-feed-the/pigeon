@@ -1,6 +1,7 @@
 # 0048. Replicated formats and rules are versioned; what a device does not understand, it never guesses
 
-- **Status:** Proposed, 14 October 2026, by the agent, for issue #15
+- **Status:** Accepted, 14 October 2026, by Guillaume (chat: the review
+  sheet of the four Proposed ADRs); proposed by the agent for issue #15
   (Guillaume's review: "Specify replicated-format compatibility and rolling
   upgrades").
 

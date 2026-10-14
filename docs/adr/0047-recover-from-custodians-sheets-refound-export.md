@@ -1,6 +1,7 @@
 # 0047. A group is recovered from its custodians: rejoin, recovery sheets, refounding, and export without pigeon
 
-- **Status:** Proposed, 14 October 2026, by the agent, for issue #11
+- **Status:** Accepted, 14 October 2026, by Guillaume (chat: the review
+  sheet of the four Proposed ADRs); proposed by the agent for issue #11
   (Guillaume's review: "Specify and test recovery onto fresh machines from
   surviving custodians"), on the evidence of experiment E21.
 

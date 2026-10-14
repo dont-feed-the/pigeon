@@ -1,6 +1,7 @@
 # 0051. Authority is a fold of signed changes: roster forks merge without an admin, and deciders sign decisions on suggestions
 
-- **Status:** Proposed, 14 October 2026, by the agent, for issues #6
+- **Status:** Accepted, 14 October 2026, by Guillaume (chat: the review
+  sheet of the four Proposed ADRs); proposed by the agent for issues #6
   (Guillaume's review: "Resolve concurrent roster updates with disjoint
   remaining admin sets") and #7 ("Authorize suggestion decisions by non-admin
   owners and stewards"), on the evidence of the `Roster` and `Authority`
