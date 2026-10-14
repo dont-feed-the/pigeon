@@ -92,9 +92,9 @@ Running them on GitHub's runners found:
 
 ## Consequences
 
-- The lab takes about 10 minutes of wall time per push, the time of E19 on
+- The lab takes 6 to 11 minutes of wall time per push, the time of E19 on
   macOS. Per job, on Linux and on macOS: E20–E22 1.5 and 2.5–3.5 minutes,
-  E12–E14 with E23 2.5 and 3, E15–E18 1 and 2, E19 4.5–5.5 and 7.5–10. A
+  E12–E14 with E23 2.5 and 3, E15–E18 1 and 2, E19 4.5–5.5 and 5.5–11. A
   failure names its platform and group.
 - A new Homebrew release can break the macOS jobs before any pigeon change;
   the log records its version (14 §14.3).

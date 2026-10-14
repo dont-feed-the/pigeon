@@ -290,7 +290,7 @@ macOS (ADR 0056).
   licence check (`cargo deny`, ADR 0019), E15 and every asserting experiment.
 - `lab` on every push: every asserting experiment (E12–E15b, E18–E23) on
   Linux and macOS, with the git-annex each installer uses (the standalone
-  build, Homebrew), in four parallel groups, about 10 minutes. A platform
+  build, Homebrew), in four parallel groups, 6 to 11 minutes. A platform
   difference is printed as `SKIP (platform)` with its reason, never a dropped
   check (ADR 0056).
 - `models-full` when a model or the runner changes, weekly, and by hand: every
