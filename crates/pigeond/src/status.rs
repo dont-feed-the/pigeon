@@ -171,6 +171,14 @@ fn reason(s: &State<String>, k: usize, names: &BTreeMap<String, String>) -> Opti
     })
 }
 
+/// The worst of `states`, the lowest in rank (missing, local, published,
+/// …); protected when there is none.
+fn worst<'a>(states: impl Iterator<Item = &'a State<String>>) -> api::State {
+    states
+        .min_by_key(|s| rank(*s))
+        .map_or(api::State::Protected, proto_state)
+}
+
 /// The answer to `Status` for the versions under `prefix`.
 pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> StatusReport {
     let observed = observe(g, me, prefix).await;
@@ -199,10 +207,7 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
         ),
         Level::NotSafeYet | Level::NeedsYou => msg("headline-not-safe", &[("files", files)]),
     };
-    let worst = observed
-        .iter()
-        .max_by_key(|o| rank(&o.state))
-        .map_or(api::State::Protected, |o| proto_state(&o.state));
+    let worst = worst(observed.iter().map(|o| &o.state));
     let asked = !prefix.is_empty();
     let versions = observed
         .iter()
@@ -251,5 +256,23 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
         state: worst,
         versions,
         not_shared,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pigeon_core::state::{Reason, State};
+    use pigeon_core::time::Time;
+    use pigeon_proto::api;
+
+    #[test]
+    fn the_folder_is_as_safe_as_its_least_safe_version() {
+        let protected = State::Protected(Time(5));
+        let published = State::Published(Reason::Sending);
+        assert_eq!(
+            super::worst([&protected, &published, &protected].into_iter()),
+            api::State::Published
+        );
+        assert_eq!(super::worst(std::iter::empty()), api::State::Protected);
     }
 }

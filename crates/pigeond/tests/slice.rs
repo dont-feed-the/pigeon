@@ -43,8 +43,12 @@ impl Drop for Daemon {
         while matches!(self.child.try_wait(), Ok(None)) && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(50));
         }
+        // The group is usually gone by now; `kill` would say so on stderr.
         let group = format!("-{pid}");
-        let _ = Command::new("kill").args(["-KILL", "--", &group]).status();
+        let _ = Command::new("kill")
+            .args(["-KILL", "--", &group])
+            .stderr(Stdio::null())
+            .status();
         let _ = self.child.kill();
         let _ = self.child.wait();
         let _ = std::fs::remove_file(&self.socket);
