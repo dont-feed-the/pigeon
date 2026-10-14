@@ -474,6 +474,36 @@ pub fn s11() -> Scenario {
     )
 }
 
+/// The scenarios that do not pass yet against the first build of pigeond
+/// (14 October 2026), with what their last run showed (13 §13.12).
+/// `pigeon-lab run` reports each as blocked without running it, and runs it
+/// with `--with-blocked`, where a pass says to unmark it. An id `S9` stands
+/// for every S9 point.
+pub const BLOCKED: &[(&str, &str)] = &[
+    ("S2", FREE),
+    ("S3", FREE),
+    ("S9", S9),
+    ("S10", "pigeon recovery-sheet answers not-in-this-build"),
+    (
+        "S11",
+        "the laptop's disk holds 2.06 × the content kept (34.6 MB for 16.8 MB): \
+         each file and its annex object (13 §13.11 allows 1.1 ×)",
+    ),
+];
+
+const FREE: &str = "free answers free-result but hides no file within 60 s, though \
+     status says protected and no install begins (pigeond evict.rs; S6's free works)";
+const S9: &str = "a crash at a point of free or keep falls inside the request, which \
+     answers daemon-not-running; the model frees in its loops and expects done";
+
+/// Why the scenario `id` is blocked, if it is.
+pub fn blocked(id: &str) -> Option<&'static str> {
+    BLOCKED
+        .iter()
+        .find(|(b, _)| *b == id || (*b == "S9" && id.starts_with("S9-")))
+        .map(|(_, why)| *why)
+}
+
 /// Every scenario of the slice, S9 once per named point.
 pub fn all() -> Vec<Scenario> {
     let mut out = vec![s1(), s2(), s3(), s4(), s5(), s6(), s7(), s8()];

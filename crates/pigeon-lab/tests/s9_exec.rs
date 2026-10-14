@@ -17,6 +17,10 @@ fn random_crash_schedules_lose_and_duplicate_nothing(tc: TestCase) {
     let Ok(bin) = std::env::var("PIGEON_LAB_BIN") else {
         return;
     };
+    // While S9 is blocked (slice::BLOCKED), its random schedules wait too.
+    if slice::blocked("S9-random").is_some() {
+        return;
+    }
     let out =
         PathBuf::from(std::env::var("PIGEON_LAB_OUT").unwrap_or_else(|_| "target/lab/s9".into()));
     let plan = common::schedule(&tc);
@@ -29,7 +33,8 @@ fn random_crash_schedules_lose_and_duplicate_nothing(tc: TestCase) {
     );
     let cfg = Config {
         bin: std::fs::canonicalize(bin).unwrap(),
-        work: std::env::temp_dir().join("pigeon-lab-s9"),
+        // Short: unix sockets live under it (pigeon-lab's short_name).
+        work: PathBuf::from("/tmp/lab-s9"),
         out,
         isolation: Isolation::detect(),
     };

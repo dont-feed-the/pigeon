@@ -392,18 +392,17 @@ impl Model {
                 let lm = self.laptop(on);
                 lm.disk.insert(file.clone(), OnDisk::File(key.clone()));
                 lm.content.insert(key, content.len());
-                self.log("CaptureInstall", "WriteAtP", d);
             }
             LaptopOp::Symlink { file, .. } => {
                 self.laptop(on).disk.insert(file.clone(), OnDisk::Link);
             }
             LaptopOp::Free { folder } => {
                 self.laptop(on).freed.insert(*folder);
-                self.log("Evict", "ChooseFree", d);
+                self.log("CaptureInstall", "Start", d);
             }
             LaptopOp::Keep { folder } => {
                 self.laptop(on).freed.remove(folder);
-                self.log("Evict", "ChooseKeep", d);
+                self.log("CaptureInstall", "Start", d);
             }
             LaptopOp::Restore { file, version } => {
                 let ver = self.laptops[on.0 as usize]
@@ -437,18 +436,18 @@ impl Model {
                 let c = &mut self.custodians[custodian.0 as usize];
                 c.present = true;
                 c.daemon.running = true;
-                self.log("Repair", "Join", Device::Custodian(*custodian));
+                self.log("Roster", "Commit", d);
             }
             LaptopOp::RemoveComputer { custodian } => {
                 self.custodians[custodian.0 as usize].present = false;
-                self.log("Repair", "Remove", d);
+                self.log("Roster", "Commit", d);
             }
             LaptopOp::RecoverySheet => self.laptop(on).sheet = true,
             LaptopOp::Recover { .. } => {
                 let lm = self.laptop(on);
                 lm.present = true;
                 lm.daemon.running = true;
-                self.log("Repair", "Join", d);
+                self.log("Roster", "Merge", d);
             }
         }
         Outcome::Done

@@ -566,18 +566,29 @@ generated and shrunk by hegel. Two interpreters fold the same steps:
   and its recovery), in `cargo test`: every scenario must pass there, so its
   expectations are what the specification predicts;
 - the **executor**, with the lab build of `pigeond` and `pigeon --json` per
-  device, supervised as systemd or launchd would; it records disk use, and
-  merges the devices' trace logs, which must contain the scenario's
-  projection in order and which `scripts/check-lab-traces` hands to TLC for
-  every specification with a `*Trace.tla` (the others are listed as not
-  checked yet).
+  device, supervised as systemd or launchd would (a custodian runs
+  `pigeond --service`); it records disk use, and merges the devices' trace
+  logs, where each device's events must contain its part of the scenario's
+  projection in its own order, and which `scripts/check-lab-traces` hands
+  to TLC for every specification with a `*Trace.tla` (the others are
+  listed as not checked yet). A device's paths stay short (`/tmp/lab`, a
+  hashed directory per scenario): unix sockets live under them, and past
+  104 bytes a join fails with `inviter-offline`.
 
 Laws (`crates/pigeon-lab/tests/laws.rs`): steps form a monoid; validation
 and the trace projection are compositional; a prefix runs the same whatever
 follows; settling the model is idempotent; a crash at any named point, then
 a restart, changes no outcome (1000 model schedules per push). The workflow
 `slice.yml` runs them, then S1–S11 and 50 random S9 schedules against the
-real binaries on both runners; `models-full.yml` runs 1000.
+real binaries on both runners; `models-full.yml` runs 1000. A scenario that
+does not pass yet against the first build is listed in `slice::BLOCKED`
+with what its run showed; it is reported as blocked and runs only with
+`pigeon-lab run --with-blocked`. On 14 October 2026 S1, S4 and S6 pass
+locally and S5, S7 and S8 run on the runners; S2 and S3 (`free` hides
+nothing), S9 (a crash point of `free` or `keep` falls inside the request,
+where the model frees in its loops), S10 (no recovery sheet yet) and S11
+(the laptop's disk holds each file twice, 2.06 × the content kept) are
+blocked.
 
 | Scenario | Asserts |
 |---|---|

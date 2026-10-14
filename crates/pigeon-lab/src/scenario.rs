@@ -525,16 +525,23 @@ fn labels_of(s: &Step) -> Vec<Label> {
                 return Vec::new();
             }
             match op {
-                LaptopOp::Write { .. } => vec![l("CaptureInstall", "WriteAtP", d)],
-                LaptopOp::Free { .. } => vec![l("Evict", "ChooseFree", d)],
-                LaptopOp::Keep { .. } => vec![l("Evict", "ChooseKeep", d)],
-                LaptopOp::Restore { .. } => vec![l("CaptureInstall", "Start", d)],
-                LaptopOp::Invite { custodian } => {
-                    vec![l("Repair", "Join", Device::Custodian(*custodian))]
+                // Free journals `begin` before anything can crash.
+                LaptopOp::Free { .. } => vec![l("CaptureInstall", "Start", d)],
+                // The inviter commits the roster that adds the custodian;
+                // a removal is a roster commit too.
+                LaptopOp::Invite { .. } | LaptopOp::RemoveComputer { .. } => {
+                    vec![l("Roster", "Commit", d)]
                 }
-                LaptopOp::RemoveComputer { .. } => vec![l("Repair", "Remove", d)],
-                LaptopOp::Recover { .. } => vec![l("Repair", "Join", d)],
-                LaptopOp::Symlink { .. } | LaptopOp::RecoverySheet => Vec::new(),
+                // A write is the person's, not pigeond's: two writes before a
+                // capture make one version. Keep begins an install, or, when
+                // the person's save got there first, releases (07 §7.5).
+                // pigeond logs no event of its own for the others yet.
+                LaptopOp::Write { .. }
+                | LaptopOp::Keep { .. }
+                | LaptopOp::Restore { .. }
+                | LaptopOp::Recover { .. }
+                | LaptopOp::Symlink { .. }
+                | LaptopOp::RecoverySheet => Vec::new(),
             }
         }
         _ => Vec::new(),
@@ -581,6 +588,33 @@ pub fn embeds(projection: &[Item], trace: &[Label]) -> bool {
         }
     }
     true
+}
+
+/// Whether, for each device, its labels of the projection embed in its
+/// events of the trace. Each device logs on its own clock (12 §12.3), so
+/// only each device's order is checked, never an order across devices.
+pub fn embeds_per_device(projection: &[Item], trace: &[Label]) -> bool {
+    let devices: std::collections::BTreeSet<Device> = projection
+        .iter()
+        .flat_map(|i| match i {
+            Item::One(l) => vec![l.device],
+            Item::AnyOrder(ls) => ls.iter().map(|l| l.device).collect(),
+        })
+        .collect();
+    devices.iter().all(|d| {
+        let mine: Vec<Item> = projection
+            .iter()
+            .filter_map(|i| match i {
+                Item::One(l) => (l.device == *d).then(|| i.clone()),
+                Item::AnyOrder(ls) => {
+                    let ls: Vec<Label> = ls.iter().filter(|l| l.device == *d).cloned().collect();
+                    (!ls.is_empty()).then_some(Item::AnyOrder(ls))
+                }
+            })
+            .collect();
+        let theirs: Vec<Label> = trace.iter().filter(|l| l.device == *d).cloned().collect();
+        embeds(&mine, &theirs)
+    })
 }
 
 fn condition_text(w: &World, c: &Condition) -> String {

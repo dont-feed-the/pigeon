@@ -92,6 +92,32 @@ pub const SERVICE_DIRS: [&str; 4] = [
     "run/pigeon",
 ];
 
+/// Removes `path` and everything under it, git-annex's read-only object
+/// directories included.
+pub fn remove_tree(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    fn open_up(p: &Path) {
+        let Ok(meta) = std::fs::symlink_metadata(p) else {
+            return;
+        };
+        if !meta.is_dir() {
+            return;
+        }
+        let mode = meta.permissions().mode();
+        if mode & 0o700 != 0o700 {
+            let _ = std::fs::set_permissions(p, std::fs::Permissions::from_mode(mode | 0o700));
+        }
+        for e in std::fs::read_dir(p).into_iter().flatten().flatten() {
+            open_up(&e.path());
+        }
+    }
+    open_up(path);
+    match std::fs::remove_dir_all(path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        r => r,
+    }
+}
+
 /// One device's disk and, for a namespaced custodian, its namespace.
 #[derive(Debug)]
 pub struct Space {

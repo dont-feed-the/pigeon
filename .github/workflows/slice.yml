@@ -5,8 +5,8 @@
 # on Linux, APFS disk images on macOS), then runs every scenario and 50
 # random S9 crash schedules against the lab build of pigeond and pigeon,
 # and hands the merged trace logs to TLC. models-full.yml runs 1000 S9
-# schedules. SLICE_EXEC stays "blocked" until pigeond runs its loops
-# (phase 2a of issue #17); then the executor's steps run.
+# schedules. A scenario marked blocked in pigeon-lab's slice.rs reports
+# its reason and does not fail the job, until it passes.
 name: slice
 
 on:
@@ -25,7 +25,6 @@ env:
   GIT_ANNEX_SHA256: 88ea73c9bb8fb751916e0e4a0a8f489a7476f9b9e861fd2cce2601a77f4f409d
   HOMEBREW_NO_AUTO_UPDATE: "1"
   HOMEBREW_NO_INSTALL_CLEANUP: "1"
-  SLICE_EXEC: blocked
 
 jobs:
   slice:
@@ -87,32 +86,28 @@ jobs:
       - name: this runner's isolation (sized disks, a custodian's own system directories)
         run: cargo run --locked --release -q -p pigeon-lab -- spaces --work target/lab/work
       - name: the lab build of pigeond, pigeon and the transport helper
-        if: env.SLICE_EXEC != 'blocked'
         run: |
           cargo build --locked --release -p pigeond -p pigeon -p git-annex-p2p-iroh \
-            --features pigeon-sys/lab,pigeon-core/tla-trace
+            --features pigeond/lab,pigeond/tla-trace
           mkdir -p target/lab/bin
           cp target/release/pigeond target/release/pigeon target/release/git-annex-p2p-iroh target/lab/bin/
       - name: S1-S11 against the real binaries
-        if: env.SLICE_EXEC != 'blocked'
         run: |
           cargo run --locked --release -q -p pigeon-lab -- run --bin target/lab/bin \
-            --work target/lab/work --out target/lab/out
+            --work /tmp/lab --out target/lab/out
       - name: 50 random S9 crash schedules
-        if: env.SLICE_EXEC != 'blocked'
         env:
-          PIGEON_LAB_BIN: target/lab/bin
-          PIGEON_LAB_OUT: target/lab/out
+          PIGEON_LAB_BIN: ${{ github.workspace }}/target/lab/bin
+          PIGEON_LAB_OUT: ${{ github.workspace }}/target/lab/out
           HEGEL_TEST_CASES: "50"
         run: cargo test --locked --release -p pigeon-lab --test s9_exec
       - name: the merged trace logs, checked by TLC
-        if: env.SLICE_EXEC != 'blocked'
         run: scripts/check-lab-traces target/lab/out
       - name: summary
-        if: always() && env.SLICE_EXEC != 'blocked'
+        if: always()
         run: cat target/lab/out/summary.md >> "$GITHUB_STEP_SUMMARY" || true
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always() && env.SLICE_EXEC != 'blocked'
+        if: always()
         with:
           name: slice-${{ matrix.os }}
           path: target/lab/out

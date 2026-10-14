@@ -80,12 +80,11 @@ fn p(path: &Path) -> String {
     path.display().to_string()
 }
 
-/// `pigeon create GROUP --folder DIR --k K --name DEVICE`.
+/// `pigeon create GROUP DIR --k K --name DEVICE`.
 pub fn create(group: &str, folder: &Path, k: u32, device: &str) -> Vec<String> {
     vec![
         s("create"),
         s(group),
-        s("--folder"),
         p(folder),
         s("--k"),
         k.to_string(),

@@ -3,11 +3,11 @@
 //! - `pigeon-lab list`
 //! - `pigeon-lab show ID [--json]`
 //! - `pigeon-lab model [ID…]`: run in the model.
-//! - `pigeon-lab run [--bin DIR] [--work DIR] [--out DIR]
+//! - `pigeon-lab run [--bin DIR] [--work DIR] [--out DIR] [--with-blocked]
 //!   [--isolation auto|namespaces|images|dirs] [ID…]`: run with the real
 //!   binaries, built with `--features lab,tla-trace`; writes one report per
-//!   scenario and `summary.md` to `--out`.
-//!
+//!   scenario and `summary.md` to `--out`. Blocked scenarios (slice.rs)
+//!   are reported, and run only with `--with-blocked`.
 //! - `pigeon-lab spaces [--isolation …]`: checks this host's isolation: a
 //!   sized disk fills, a custodian's system directories land on its disk.
 //!
@@ -33,14 +33,19 @@ fn pick(ids: &[String]) -> Result<Vec<Scenario>, String> {
     if ids.is_empty() {
         return Ok(all);
     }
-    ids.iter()
-        .map(|id| {
-            all.iter()
-                .find(|s| s.id == *id || (id == "S9" && s.id.starts_with("S9-")))
-                .cloned()
-                .ok_or_else(|| format!("no scenario {id}"))
-        })
-        .collect()
+    let mut picked = Vec::new();
+    for id in ids {
+        let mut found: Vec<Scenario> = all
+            .iter()
+            .filter(|s| s.id == *id || (id == "S9" && s.id.starts_with("S9-")))
+            .cloned()
+            .collect();
+        if found.is_empty() {
+            return Err(format!("no scenario {id}"));
+        }
+        picked.append(&mut found);
+    }
+    Ok(picked)
 }
 
 fn line(r: &Report) -> String {
@@ -91,6 +96,7 @@ fn go(args: &[String]) -> Result<bool, String> {
     );
     let mut isolation = Isolation::detect();
     let mut json = false;
+    let mut with_blocked = false;
     let mut it = rest.iter();
     while let Some(a) = it.next() {
         let mut value = || it.next().cloned().ok_or(format!("{a} needs a value"));
@@ -99,6 +105,7 @@ fn go(args: &[String]) -> Result<bool, String> {
             "--work" => work = PathBuf::from(value()?),
             "--out" => outdir = PathBuf::from(value()?),
             "--json" => json = true,
+            "--with-blocked" => with_blocked = true,
             "--isolation" => {
                 isolation = match value()?.as_str() {
                     "auto" => Isolation::detect(),
@@ -152,6 +159,8 @@ fn go(args: &[String]) -> Result<bool, String> {
             for s in pick(&ids)? {
                 let row = if let Some(why) = unrunnable(&s, isolation) {
                     format!("| {} | exec {} | skip | {why} |", s.id, isolation.name())
+                } else if let Some(why) = slice::blocked(&s.id).filter(|_| !with_blocked) {
+                    format!("| {} | exec {} | blocked | {why} |", s.id, isolation.name())
                 } else {
                     let cfg = Config {
                         bin: bin.clone(),
@@ -160,11 +169,21 @@ fn go(args: &[String]) -> Result<bool, String> {
                         isolation,
                     };
                     let r = run(&s, &mut Exec::new(cfg, &s.id));
-                    ok &= r.passed();
+                    let blocked = slice::blocked(&s.id);
+                    ok &= r.passed() || blocked.is_some();
                     let text = serde_json::to_string_pretty(&r).map_err(|e| e.to_string())?;
                     std::fs::write(outdir.join(format!("{}.json", s.id)), text)
                         .map_err(|e| e.to_string())?;
-                    line(&r)
+                    match (r.passed(), blocked) {
+                        (false, Some(why)) => format!(
+                            "{} blocked: {why}",
+                            line(&r).replacen("| FAIL |", "| blocked |", 1)
+                        ),
+                        (true, Some(_)) => {
+                            format!("{} (no longer blocked: unmark it in slice.rs)", line(&r))
+                        }
+                        _ => line(&r),
+                    }
                 };
                 out(&row);
                 summary.push_str(&row);
@@ -185,7 +204,7 @@ fn spaces(isolation: Isolation, work: &std::path::Path) -> Result<bool, String> 
     let work = std::fs::canonicalize(work)
         .map_err(|e| e.to_string())?
         .join("spaces");
-    let _ = std::fs::remove_dir_all(&work);
+    let _ = pigeon_lab::exec::host::remove_tree(&work);
     let mut laptop = Space::create(isolation, &work, "laptop", 64, false)?;
     let mut custodian = Space::create(isolation, &work, "custodian", 64, true)?;
     let mut ok = true;

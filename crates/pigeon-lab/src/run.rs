@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
-use crate::scenario::{Label, Scenario, embeds, project, step_text, validate};
+use crate::scenario::{Label, Scenario, embeds_per_device, project, step_text, validate};
 use crate::step::Step;
 use crate::world::World;
 
@@ -150,7 +150,7 @@ pub fn run<I: Interpreter>(scenario: &Scenario, interp: &mut I) -> Report {
                         }
                     })
                     .collect();
-                if embeds(&wanted, &trace) {
+                if embeds_per_device(&wanted, &trace) {
                     Verdict::Pass
                 } else {
                     Verdict::Fail("the trace lacks an action the scenario performs".into())

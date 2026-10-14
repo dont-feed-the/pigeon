@@ -295,7 +295,7 @@ impl Model {
             return false;
         }
         lm.journal.push(Record::End(seq, End::Done));
-        self.log("Evict", "Hide", Device::Laptop(l));
+        self.log("CaptureInstall", "Done", Device::Laptop(l));
         self.release(l);
         true
     }
@@ -361,7 +361,7 @@ impl Model {
             return false;
         }
         lm.journal.push(Record::End(seq, End::Done));
-        self.log("Evict", "MoveIn", Device::Laptop(l));
+        self.log("CaptureInstall", "Done", Device::Laptop(l));
         self.release(l);
         true
     }

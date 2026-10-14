@@ -144,8 +144,11 @@ impl Exec {
         let pidfile = dev.space.dir.join("pigeond.pid");
         let _ = fs::remove_file(&pidfile);
         let log = dev.space.dir.join("pigeond.log");
+        // A backup machine's pigeond is the system service (09 §9.6).
+        let role = if i >= self.laptops { " --service" } else { "" };
+        let dev = &mut self.devs[i];
         let script = format!(
-            "echo $$ > '{}'; exec '{}' >> '{}' 2>&1",
+            "echo $$ > '{}'; exec '{}'{role} >> '{}' 2>&1",
             pidfile.display(),
             bin.join("pigeond").display(),
             log.display()
@@ -557,7 +560,7 @@ impl Exec {
                     } else {
                         repo
                     };
-                    fs::remove_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+                    host::remove_tree(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
                 }
                 self.start(d)?;
                 Verdict::Pass
@@ -673,6 +676,17 @@ fn s(x: impl AsRef<str>) -> String {
     x.as_ref().to_owned()
 }
 
+/// A short directory name for scenario `id`: the paths under it stay short,
+/// as git-annex's and pigeond's unix sockets live there and a socket's path
+/// holds at most 104 bytes (a join fails with `inviter-offline` past it).
+fn short_name(id: &str) -> String {
+    let mut h: u32 = 0x811c_9dc5;
+    for b in id.bytes() {
+        h = (h ^ u32::from(b)).wrapping_mul(0x0100_0193);
+    }
+    format!("{h:08x}")
+}
+
 fn longest_string(v: &serde_json::Value) -> Option<String> {
     match v {
         serde_json::Value::String(t) => Some(t.clone()),
@@ -693,8 +707,8 @@ impl Interpreter for Exec {
     }
 
     fn begin(&mut self, world: &World) -> Result<(), String> {
-        let work = self.cfg.work.join(&self.id);
-        let _ = fs::remove_dir_all(&work);
+        let work = self.cfg.work.join(short_name(&self.id));
+        let _ = host::remove_tree(&work);
         fs::create_dir_all(self.out_dir()).map_err(|e| e.to_string())?;
         self.laptops = world.laptops.len();
         let specs: Vec<(String, u32, bool)> = world
@@ -745,6 +759,21 @@ impl Interpreter for Exec {
                     root.join("service").display().to_string(),
                 ));
             }
+            // A short socket path (a Unix socket's is at most 104 bytes), in
+            // a directory of the device's own: pigeond links remotedaemon's
+            // sockets beside its own.
+            let sockets = std::env::temp_dir().join(format!(
+                "pgl-{}-{}",
+                std::process::id(),
+                self.devs.len()
+            ));
+            let _ = host::remove_tree(&sockets);
+            fs::create_dir_all(&sockets).map_err(|e| e.to_string())?;
+            let socket = sockets.join("pigeond.sock");
+            env.push((s("PIGEON_SOCKET"), socket.display().to_string()));
+            // git-annex finds `git-annex-p2p-iroh` on the PATH.
+            let path = std::env::var("PATH").unwrap_or_default();
+            env.push((s("PATH"), format!("{}:{path}", self.cfg.bin.display())));
             for d in [home.clone(), root.join("run")] {
                 fs::create_dir_all(&d).map_err(|e| e.to_string())?;
             }
