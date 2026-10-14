@@ -189,7 +189,7 @@ Output follows the same headline-then-detail pattern; colour only on a terminal,
 | `pigeon status [PATH]` | the headline, then what is not safe and why | Home |
 | `pigeon open` | opens the web interface | — |
 | `pigeon create NAME` | creates a group with this computer as first member | Welcome → Create |
-| `pigeon invite [--admin] [--backup-machine] PERSON` | prints a one-time invitation, valid 24 h | People → Invite |
+| `pigeon invite [--admin] PERSON`, `pigeon invite --backup-machine [NAME]` | prints a one-time invitation, valid 24 h | People → Invite |
 | `pigeon join INVITATION [FOLDER]` | joins a group | Welcome → Join |
 | `pigeon keep PATH` · `pigeon free PATH` | keep a folder on this computer · free up its space | Files → switch |
 | `pigeon history PATH` | versions of a file | file page |
