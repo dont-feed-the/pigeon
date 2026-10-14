@@ -98,7 +98,9 @@ socket}`. After a `Connected` or `Listening` reply, the connection
 carries raw bytes only. `PIGEON_SOCKET` overrides the socket's path, for
 tests and the lab; on macOS the per-user temporary directory is `$TMPDIR`. A
 remotedaemon socket path over 100 bytes is reached through a short link next
-to it.
+to it, named after `pigeond`'s socket and the group, so that daemons sharing a
+directory (the lab's, a test's) keep their own links **[no ADR]**. `pigeond`
+makes the socket's directory, mode 0700, only when it does not exist.
 
 `pigeond` refuses a second instance (a lock file next to the socket), and a
 client checks the peer credentials of the socket (`SO_PEERCRED`,

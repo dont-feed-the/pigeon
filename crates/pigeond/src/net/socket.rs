@@ -80,7 +80,11 @@ impl std::fmt::Debug for Net {
 /// Binds the local socket at `path`, readable by the user only.
 pub fn bind_socket(path: &Path) -> std::io::Result<UnixListener> {
     use std::os::unix::fs::PermissionsExt;
-    if let Some(dir) = path.parent() {
+    // A directory made here is the user's only; one that exists, such as
+    // `/tmp` for a `PIGEON_SOCKET` there, is left as it is.
+    if let Some(dir) = path.parent()
+        && !dir.exists()
+    {
         std::fs::create_dir_all(dir)?;
         std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
     }
@@ -119,7 +123,13 @@ fn short_link(own: &Path, group: &str, socket: &Path) -> std::io::Result<Option<
         .filter(char::is_ascii_alphanumeric)
         .take(16)
         .collect();
-    let link = own.with_file_name(format!("annex-{name}.sock"));
+    // Named after this daemon's own socket too: daemons that share a
+    // directory (the lab's, a test's) must not replace each other's link.
+    let stem = own
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let link = own.with_file_name(format!("{stem}-annex-{name}.sock"));
     if link.symlink_metadata().is_ok() {
         std::fs::remove_file(&link)?;
     }
