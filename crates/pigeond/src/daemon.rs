@@ -2,8 +2,8 @@
 //! endpoint, the local socket, and the rounds of the loops (08 §8.1).
 //!
 //! A round runs, for each group in turn, the settings check, free and keep
-//! toward each folder's target and capture (on a laptop), accept, place
-//! and repair; requests that change a repository
+//! toward each folder's target and capture (on a laptop), accept, place,
+//! re-thinning (on a laptop) and repair; requests that change a repository
 //! wait for its round to end. Rounds start every `[loops]
 //! interval_seconds`, or at once after a request or a peer's change notice
 //! (remotedaemon) asks for one (13 §13.12).
@@ -141,6 +141,9 @@ impl Daemon {
         }
         crate::custody::accept(g, &self.device, &self.tracer).await;
         crate::custody::place(g, &self.device).await;
+        if g.role == Role::Laptop {
+            crate::thin::rethin(g, &self.device, &self.tracer).await;
+        }
         crate::repair::repair(g, &self.device).await;
     }
 }

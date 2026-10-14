@@ -26,5 +26,6 @@ pub mod restore;
 pub mod roster_file;
 pub mod settings;
 pub mod status;
+pub mod thin;
 pub mod trace;
 pub mod util;
