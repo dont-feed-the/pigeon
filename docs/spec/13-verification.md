@@ -39,22 +39,22 @@
 | `AnnexDrop_log` | `AnnexDrop` | `violation:INV_K` | counting the location log without checking: a stale log drops the last copies (E5) |
 | `AnnexDrop_storage` | `AnnexDrop` | `violation:INV_K` | counting repositories, as git-annex does: two on one disk count twice (E22.2) |
 | `AnnexDrop_trusted` | `AnnexDrop` | `violation:INV_K` | one custodian marked `trust`: the others count it unasked from a stale log (E23) |
-| `Repair_design` | `Repair` | `pass` (fast set) | placement, repair and rebalancing on custodians (08 §8.3–8.4, §8.8–8.10; ADRs 0046, 0049, 0050, 0054, 0059): custodians 1 and 2 hold key *a*; the joiner 3, with room for one key, comes in empty or on a restored disk; the laptop holds key *b*. Faults (a lost disk, a rotten copy, a removed custodian) stay within F, plus a crash or a partition. A key once protected keeps an intact copy on disk or on the laptop (Survival); no disk crosses its reserve (ReserveKept); no download takes the room of an endangered key (EndangeredFirst); a copy leaves only with its disk or its custodian, by a scrub, by a crash before its sync, or by a drop of an unwanted key backed by K lockable copies in K domains (INV_K, a property of steps). 355 939 distinct states, 27 s on 1 worker |
+| `Repair_design` | `Repair` | `pass` (fast set) | placement, repair and rebalancing on custodians (08 §8.3–8.4, §8.8–8.10; ADRs 0046, 0049, 0050, 0054): custodians 1 and 2 hold key *a*; the joiner 3, with room for one key, comes in empty or on a restored disk; the laptop holds key *b*. Faults (a lost disk, a rotten copy, a removed custodian) stay within F, plus a crash or a partition. A key once protected keeps an intact copy on disk or on the laptop (Survival); no disk crosses its reserve (ReserveKept); no download takes the room of an endangered key (EndangeredFirst); a copy leaves only with its disk or its custodian, by a scrub, by a crash before its sync, or by a drop of an unwanted key backed by K lockable copies in K domains (INV_K, a property of steps). 355 939 distinct states, 27 s on 1 worker |
 | `Repair_disk` | `Repair` | `pass` (fast set) | the same with the joiner on custodian 2's disk, one failure domain for both (ADR 0049): 303 067 distinct states |
 | `Repair_live` | `Repair` | `pass` (fast set) | liveness: under fairness (transfers, syncs, scrubs and heals run; admins remove lost custodians and add the joiner) and with room for K copies of everything, an endangered key gets K domains back (Restores): 19 364 distinct states, 22 s |
 | `Repair_live4` | `Repair` | `pass` (fast set) | four custodians, one key: the joiner is at its reserve yet first in sizebalanced's order, and domain repair chooses custodian 4 |
 | `Repair_design3`, `Repair_design4`, `Repair_live2` | `Repair` | `pass` (full set) | three faults and two crashes or partitions (2 990 176 distinct states, 3.5 minutes); four custodians, two of them joining (515 705, 43 s); liveness with two faults (147 880, 2 minutes) |
-| `Repair_lockonly` | `Repair` | `violation:Survival` | a lock that proves presence only (ADR 0054 alone): custodian 1's copy rots, custodian 2 drops *a* for the joiner and locks 1 and 3, then 3's disk dies. One fault in the epoch, and no intact copy is left (ADR 0059) |
+| `Repair_lockonly` | `Repair` | `violation:Survival` | a lock that proves presence only (ADR 0054 alone): custodian 1's copy rots, custodian 2 drops *a* for the joiner and locks 1 and 3, then 3's disk dies. One fault in the epoch, and no intact copy is left (ADR 0054) |
 | `Repair_nosync` | `Repair` | `violation:Survival` | copies counted before their sync (ADR 0046): the laptop drops *b* while both custody copies are still only in memory |
 | `Repair_nofsck` | `Repair` | `violation:Survival` | a restored disk counted before its fsck (09 §9.9): the laptop's drop leans on its bad copy, and the only other copy had rotted |
 | `Repair_noprio` | `Repair` | `violation:EndangeredFirst` | admission without the endangered-first rule (ADR 0050): the joiner starts *b* with the room that *a* needs |
 | `Repair_inflight` | `Repair` | `violation:ReserveKept` | a reserve check that ignores downloads in progress, which git-annex counts (`sizeOfDownloadsInProgress` in `checkDiskSpace'`, `Annex/Content/LowLevel.hs`): two downloads cross the reserve |
-| `Repair_wantall` | `Repair` | `violation:temporal` | domain repair counting a member at its reserve as taking the key (08 §8.3 before ADR 0059): no other custodian is chosen, and the key stays endangered |
-| `Evict_free` | `Evict` | `pass` (fast set) | issue #10, ADRs 0039, 0041 and 0061: one laptop, folders F = {a, b} and G = {c}, where c has a's key; F switched from kept to freed while the person saves (in place through a handle opened earlier, or by atomic replace), custodians lose a copy, status reports lag and `pigeond` crashes. No save or captured version is lost (NoLoss); no file is ever a pointer (NoPointer); a key is dropped only while K custodians hold it (DropsProtected); capture commits only what the person wrote (CaptureOnlySaves); no path is captured as deleted (NoDeletion): 52 944 distinct states, 5 s on 1 worker |
+| `Repair_wantall` | `Repair` | `violation:temporal` | domain repair counting a member at its reserve as taking the key (08 §8.3 before ADR 0049 counted only members that can take the key): no other custodian is chosen, and the key stays endangered |
+| `Evict_free` | `Evict` | `pass` (fast set) | issue #10, ADRs 0039 and 0041: one laptop, folders F = {a, b} and G = {c}, where c has a's key; F switched from kept to freed while the person saves (in place through a handle opened earlier, or by atomic replace), custodians lose a copy, status reports lag and `pigeond` crashes. No save or captured version is lost (NoLoss); no file is ever a pointer (NoPointer); a key is dropped only while K custodians hold it (DropsProtected); capture commits only what the person wrote (CaptureOnlySaves); no path is captured as deleted (NoDeletion): 52 944 distinct states, 5 s on 1 worker |
 | `Evict_keep` | `Evict` | `pass` (fast set) | F switched from freed to kept while the group changes F's files (the index of hidden paths moves during the keep): 62 744 distinct states, 4 s |
 | `Evict_live`, `Evict_livekeep` | `Evict` | `pass` (fast set) | liveness under fairness: a folder that stays freed ends hidden, nothing aside or staged, its keys gone unless G uses them (FreeLive); a folder that stays kept ends with every file present (KeepLive): 52 944 and 46 596 distinct states, about 20 s each |
 | `Evict_flip`, `Evict_live2`, `Evict_livekeep2` | `Evict` | `pass` (full set) | F switched kept → freed → kept with a group change, a lost copy and a crash (10 612 600 distinct states, 9.5 minutes on 1 worker); FreeLive and KeepLive with two switches (466 952 distinct states, 3 minutes) and with a group change during a keep (1 136 988, 11 minutes) |
-| `Evict_git` | `Evict` | `violation:NoLoss` | hiding with git's own unlink (08 §8.5 before ADR 0061): an editor holds b open, the hide unlinks it, and the next write lands in no file (E24) |
+| `Evict_git` | `Evict` | `violation:NoLoss` | hiding with git's own unlink (08 §8.5 before ADR 0039 hid a file as an install): an editor holds b open, the hide unlinks it, and the next write lands in no file (E24) |
 | `Evict_guard` | `Evict` | `violation:NoPointer` | a free that drops a's key, which G's c also has: git-annex turns c into a pointer file (E24) |
 | `Evict_target` | `Evict` | `violation:NoPointer` | the guard counting visible paths only: F is freed during a keep, after its staged files moved in with their bits set, and the drop turns them into pointers (E24) |
 | `Evict_prune` | `Evict` | `violation:NoPointer` | the drop of old versions (ADR 0041) without the guard: c's old version is a's current one |
@@ -78,9 +78,9 @@
 | `Roster_rebase` | `Roster` | `violation:Agreement` | replaying the other side's changes onto one's own roster depends on who merges: two merges of the same commits disagree |
 | `Roster_table` | `Roster` | `violation:AdminRemains` | merging `roster.toml` per TOML table, a clean merge of the concurrent self-retirements leaves no admin |
 | `Roster_adr0009` | `Roster` | `violation:MergeAlwaysPossible` | ADR 0009's rule (a merge of concurrent roster changes signed by an admin under both parents) leaves the concurrent self-retirements unmergeable: no person is admin on both sides |
-| `Authority_decide` | `Authority` | `pass` (fast set) | issue #10: suggestions made, revised, adopted, rejected and withdrawn between the honest admin a and owner b, who also moves b's folder. Every decider can adopt; every decision is a decider's or the author's; every version entered through an allowed commit; an honest tree is the catalogue of its history; quiet devices agree (ADR 0063): 34 245 states, 20 829 distinct, 7 s |
+| `Authority_decide` | `Authority` | `pass` (fast set) | issue #10: suggestions made, revised, adopted, rejected and withdrawn between the honest admin a and owner b, who also moves b's folder. Every decider can adopt; every decision is a decider's or the author's; every version entered through an allowed commit; an honest tree is the catalogue of its history; quiet devices agree (ADR 0038): 34 245 states, 20 829 distinct, 7 s |
 | `Authority_faulty` | `Authority` | `pass` (fast set) | the same against a faulty member who signs any change, merge or decision on any parent: 370 794 states, 150 479 distinct, 55 s |
-| `Authority_revoke` | `Authority` | `pass` (fast set) | c's laptop, once removed, signs on old parents and adds a key for c. Nothing it signed unseen, and no key it added, counts on any device (ADR 0062): 547 210 states, 188 525 distinct, 66 s |
+| `Authority_revoke` | `Authority` | `pass` (fast set) | c's laptop, once removed, signs on old parents and adds a key for c. Nothing it signed unseen, and no key it added, counts on any device (ADR 0051): 547 210 states, 188 525 distinct, 66 s |
 | `Authority_live` | `Authority` | `pass` (fast set) | `Converge` under fairness of fetches and merges, with the removed laptop signing on old parents: 938 states, 399 distinct, 11 s |
 | `Authority_decide4`, `Authority_faulty2`, `Authority_revoke2` | `Authority` | `pass` (full set) | four changes; two faulty commits, with transfers; saves and the removed laptop's merges: 1 178 047, 1 360 807 and 1 645 961 distinct states, 10, 7 and 6 minutes |
 | `Authority_proposal` | `Authority` | `violation:DecidersCanAdopt` | deciders under the roster at the proposal's parents (ADR 0038's words). a suggests a change in b's folder, then gives the folder to himself. b still decides, but rule 3 rejects b's adoption (3 states) |
@@ -96,14 +96,14 @@
 | `Authority_contentonly` | `Authority` | `violation:RemovalRevokesAdded` | revoking the content but not the keys: the key that the removed laptop added for c stays in the roster |
 | `TraceSample_good` | `TraceSample` | `trace:accepted` (fast set) | the pattern of every trace module (ADR 0053) on a toy save-then-capture spec: a log whose values carry quotes, backslashes, nested tuples and records is explained line by line, and its `ASSUME`s check that TLC reads back what the NDJSON held |
 | `TraceSample_bad` | `TraceSample` | `trace:rejected:2` | a capture of a path never saved: no behaviour explains line 2, and the verdict names it |
-| `RosterTrace_good` | `RosterTrace` | `trace:accepted` (fast set) | a run of pigeon-core's roster fold, written by `crates/pigeon-core/tests/roster_trace.rs` (seed 1): each logged change is one of `Roster`'s `Ops`, and each roster the code computed, at commits and merges, is the model's (ADR 0065) |
+| `RosterTrace_good` | `RosterTrace` | `trace:accepted` (fast set) | a run of pigeon-core's roster fold, written by `crates/pigeon-core/tests/roster_trace.rs` (seed 1): each logged change is one of `Roster`'s `Ops`, and each roster the code computed, at commits and merges, is the model's (ADR 0053) |
 | `RosterTrace_bad` | `RosterTrace` | `trace:rejected:7` | the same run with the roster of its last checked step altered: the verdict names line 7 |
-| `CaptureInstall_own` | `CaptureInstall` | `pass` (fast set) | issue #1, ADRs 0040 and 0055: capture and install of one path while a person writes in place, writes through a handle opened earlier, replaces atomically, creates and deletes at any instant, also while `pigeond` is down; the group changes or deletes the path; one crash. Nothing saved is lost (NoLoss); when idle, the path holds what the index says or the person's content (Journal); the index never calls a changed file clean (IndexHonest); what install moves away was captured (CaptureFirst), is the file it expected, and is written by nobody afterwards (NoOverwrite); a deletion the person made stays (DeletionKept); under fairness every save is captured (SavesCaptured) and the path ends at `current(p)` with no divergence and no kept aside (Converges). Own folder, two person actions: 122 560 states, 61 698 distinct, 9 s on 1 worker |
+| `CaptureInstall_own` | `CaptureInstall` | `pass` (fast set) | issue #1, ADR 0040: capture and install of one path while a person writes in place, writes through a handle opened earlier, replaces atomically, creates and deletes at any instant, also while `pigeond` is down; the group changes or deletes the path; one crash. Nothing saved is lost (NoLoss); when idle, the path holds what the index says or the person's content (Journal); the index never calls a changed file clean (IndexHonest); what install moves away was captured (CaptureFirst), is the file it expected, and is written by nobody afterwards (NoOverwrite); a deletion the person made stays (DeletionKept); under fairness every save is captured (SavesCaptured) and the path ends at `current(p)` with no divergence and no kept aside (Converges). Own folder, two person actions: 122 560 states, 61 698 distinct, 9 s on 1 worker |
 | `CaptureInstall_other` | `CaptureInstall` | `pass` (fast set) | the same in another person's folder: saves become suggestions, which are accepted or rejected, then resolved (*Take the group's version*, *Suggest again*), also while new saves race the choice: 1 240 787 states, 612 281 distinct, 6 s |
 | `CaptureInstall_crash2` | `CaptureInstall` | `pass` (fast set) | two crashes, one during recovery: a second replay decides as the first (ADR 0036's law): 360 940 states, 171 214 distinct, 4 s |
 | `CaptureInstall_hidden` | `CaptureInstall` | `pass` (fast set) | writers that escape the writer scan and close within the keep period: nothing is lost, though NoOverwrite does not hold for them (ADR 0040) |
 | `CaptureInstall_own3`, `CaptureInstall_other3`, `CaptureInstall_otherlive` | `CaptureInstall` | `pass` (full set) | three person actions in the own folder (1 048 763 distinct states, 9 s); three in another's folder with escaping writers (21 968 788 distinct states, 3 minutes); liveness in another's folder (612 281 distinct states, 72 s) |
-| `CaptureInstall_rec07` | `CaptureInstall` | `violation:DeletionKept` | the recovery table of 07 before ADR 0055, which decides from *p* alone: the person deletes the new file after step 7, `pigeond` is killed before step 8, and recovery puts the old file back |
+| `CaptureInstall_rec07` | `CaptureInstall` | `violation:DeletionKept` | the recovery table of 07 before ADR 0040 journalled the proof, which decides from *p* alone: the person deletes the new file after step 7, `pigeond` is killed before step 8, and recovery puts the old file back |
 | `CaptureInstall_rec07del` | `CaptureInstall` | `violation:Journal` | the same table: a deletion killed after step 8 gets its old file back while the index says deleted, so capture would add it again |
 | `CaptureInstall_nocheck` | `CaptureInstall` | `violation:CaptureFirst` | without the check of step 6, a save made after the clean test is moved away before capture has it |
 | `CaptureInstall_noscan` | `CaptureInstall` | `violation:NoOverwrite` | without the writer scan, a write through a handle opened earlier lands in the proved aside |
@@ -150,13 +150,13 @@ the `Purge` model).
 one laptop. Every write makes a new content, so a content names the save that
 made it. A file's stat is its inode and mtime, and a write in the same clock
 tick keeps the mtime, as in racy git. Install's steps 1 to 3 are one action;
-steps 4 to 9, `Crash`, `Recover` (forward or back, ADR 0055) and its end are
+steps 4 to 9, `Crash`, `Recover` (forward or back, ADR 0040) and its end are
 one action each. Capture takes a quiet path, unchanged since the last tick.
 The person acts at any instant, pigeond being up or down; the group
 (`NewVersion`, `Decide`) changes `current(p)` and judges suggestions.
 Each negative configuration removes one safeguard (`Off`) and must fail. The
 model found that the recovery table, which decided from *p* alone, undoes a
-finished deletion and a deletion the person made after step 7; ADR 0055
+finished deletion and a deletion the person made after step 7; ADR 0040
 journals the proof and rolls proved entries forward. Its first repair, which
 decided from the staged file, failed the double replay of
 `CaptureInstall_crash2`. Not modelled: several paths and packages, thin hard
@@ -173,7 +173,7 @@ shows the drop itself is safe behind the probe of ADR 0054. Assumption F
 (02 §2.2) bounds the faults: within a repair epoch fewer than K domains lose
 or corrupt a key. The model counts the epoch on intact copies, so a rot opens
 it when it happens. Each negative configuration removes one safeguard
-(`Off`) and must fail. The model found two flaws, fixed by ADR 0059. A
+(`Off`) and must fail. The model found two flaws, fixed by ADRs 0054 and 0049. A
 rotten copy can prove a custodian's drop, since git-annex's lock checks only
 presence. A custodian at its reserve still wants its share, so domain
 repair, counting it as taking the key, never chose another domain. Not
@@ -199,7 +199,7 @@ Each negative configuration removes one safeguard (`Off`) and must fail. The
 model and E24 found that hiding with git's unlink loses a write through an
 earlier handle, that a drop's guard must count staged and moved-in files and
 cover the drop of old versions, and that a keep can show a version main has
-replaced; ADR 0061 fixes all three. Not modelled: install's own steps (the
+replaced; ADR 0039 fixes all three. Not modelled: install's own steps (the
 `CaptureInstall` model), packages, divergences and conflicts, several
 custodians per domain (`AnnexDrop`, `Repair`), and a writer that escapes the
 scan.
@@ -226,13 +226,13 @@ The model found two things:
 - **A removed device keeps signing.** On an old parent, the removed laptop's
   commits are valid. 09 §9.7's policy of not merging them lets them in
   through a device that has not yet seen the removal (`Authority_tip`). It
-  also keeps accepted commits out of `main` (`Authority_tipquiet`). ADR 0062
+  also keeps accepted commits out of `main` (`Authority_tipquiet`). ADR 0051
   revokes them instead.
 - **Deciders who cannot decide.** ADR 0038 judges deciders on the
   proposal's parents, or on its own diff, so some deciders cannot adopt
   (`Authority_proposal`, `Authority_mixed`). Admins cannot adopt without
   Force (`Authority_noforce`). And a merge that adopts nothing marks a
-  proposal accepted (`Authority_fakeadopt`). ADR 0063 judges deciders at the
+  proposal accepted (`Authority_fakeadopt`). ADR 0038 judges deciders at the
   decision and adds rule 7.
 
 Convergence is checked in two ways. `ConvergedWhenQuiet` is a safety
@@ -282,7 +282,7 @@ assumptions is expected and is not a bug.
   and since every step consumes one line, the depth of its search is the
   first line that no behaviour explains: `trace:rejected:N`, which fails the
   build with that line. `TraceSample` checks the pipeline in CI (13 §13.2).
-- **Runs of the code** (ADR 0065). Before the drivers exist, a test runs
+- **Runs of the code** (ADR 0053). Before the drivers exist, a test runs
   pigeon-core's own functions inside a simulated environment that takes the
   model's steps (`crates/pigeon-core/tests/common/roster_sim.rs` for
   `Roster`), logs each step with what the code computed, and
@@ -316,7 +316,7 @@ and each law is a `hegeltest` property (pinned to 0.49, a dev-dependency).
 | install journal | replay idempotent; each path ends old or new | [11 §11.5](11-local-state.md) |
 | local files | round trip; newer formats refused | [11 §11.5](11-local-state.md) |
 | compatibility | an older release's verdict is the newer one's or *unknown*; an unknown field or `format` is never ignored; an unreadable status report never raises a state (ADR 0048) | [04 §4.4](04-roster-and-authority.md), [06 §6.3](06-status.md) |
-| append-only filter | never forwards a removal; forwards allowed messages unchanged, but a custodian's `CHECKPRESENT`; keeps `DATA` framing; no positive answer for a key before its sync (ADR 0046); a positive `CHECKPRESENT` only for a copy it could lock (ADR 0054); to a custodian, a positive `LOCKCONTENT` or `CHECKPRESENT` only for a copy whose hash matched (ADR 0059) | [09 §9.4](09-network-and-joining.md) |
+| append-only filter | never forwards a removal; forwards allowed messages unchanged, but a custodian's `CHECKPRESENT`; keeps `DATA` framing; no positive answer for a key before its sync (ADR 0046); a positive `CHECKPRESENT` only for a copy it could lock (ADR 0054); to a custodian, a positive `LOCKCONTENT` or `CHECKPRESENT` only for a copy whose hash matched (ADR 0054) | [09 §9.4](09-network-and-joining.md) |
 | trace merge | Lamport merge associative and commutative; per-device order kept | [12 §12.3](12-observability.md) |
 | work queue | order is a total preorder of the classes of ADR 0037; capture never starves; a key held in fewer failure domains never waits behind one held in more (ADR 0050) | [15 §15.2](15-resource-use.md) |
 | failure domains | domains are the connected components of shared storage, host and declared `domain`; their number is at most the number of custodians; a fingerprint or declaration never raises a state; with one custodian per domain the state is ADR 0002's; a drop's chosen remotes lie in K distinct domains; domain repair is deterministic and wants nothing for a key that spans K domains (ADR 0049) | [06 §6.2](06-status.md), [08 §8.3](08-custody-loops.md) |
@@ -373,7 +373,7 @@ parses, the exit status, and the behaviour pigeon relies on (for example that
 supported only once they pass ([14 §14.3](14-platforms-and-packaging.md)).
 They live in `crates/pigeon-git/tests/contract.rs`; CI sets
 `PIGEON_REQUIRE_GIT_ANNEX=1`, so they fail rather than skip when git-annex is
-missing (ADR 0067). A subset runs on each device as the contract self-test when it first meets a
+missing (03 §3.7). A subset runs on each device as the contract self-test when it first meets a
 new version (ADR 0048).
 
 **Format fixtures** (ADR 0048). `fixtures/formats/` holds golden documents and
@@ -393,24 +393,24 @@ from two commits, in one group, are a prototype test (#17).
 | E9 | roles: untrusted laptop, two custodians, K = 2; `--all` needed for history | [03](03-repository-and-roles.md), [08](08-custody-loops.md) |
 | E10 | partial custodians: `sizebalanced` is heuristic (6/10 where 8/10 fit); repair within capacity | ADR 0003, [08 §8.9](08-custody-loops.md) |
 | E15 | freeing per folder: sparse checkout, drop and get by key, `smudge --update` (asserts) | ADR 0031, [08 §8.5](08-custody-loops.md) |
-| E15b | ADR 0031's order shows pointer files (44 887 and 1 306 observations for 100 files); hiding before dropping and staging before showing show none, also under `kill -9`; a `kill -9` inside `git sparse-checkout set` leaves `info/sparse-checkout.lock`, which blocks every later free until it is removed (asserts) | ADRs 0039, 0056, [08 §8.5](08-custody-loops.md) |
+| E15b | ADR 0031's order shows pointer files (44 887 and 1 306 observations for 100 files); hiding before dropping and staging before showing show none, also under `kill -9`; a `kill -9` inside `git sparse-checkout set` leaves `info/sparse-checkout.lock`, which blocks every later free until it is removed (asserts) | ADR 0039, [08 §8.5](08-custody-loops.md) |
 | E18 | five offline saves of one file, failed uploads, reconnection: with `annex.thin` in-place saves lose 4 of 5 versions; capturing a copy keeps all 5, and protection, drop by key and re-thinning return to about one copy; `drop --auto --all` is refused (asserts) | ADR 0041, [07 §7.8](07-capture-and-install.md) |
-| E19 | install against an application acting at every boundary (in place, atomic replace, create, delete, old handle, shared mapping), thin and not thin, 21 `kill -9` points recovered twice, a fuzzing writer: no save lost, the index never calls a changed file clean, recovery idempotent; without the writer scan 9 of 49 writes reach the aside (asserts). On macOS the `libproc` scan sees write handles and mappings and costs 30–50 ms, so the name is absent for a median of 32–50 ms per install (0.5 ms on Linux); a write through a shared mapping leaves the stat unchanged until `msync`, so git calls the file clean, before any install (`SKIP (platform)`; no save is lost) | ADRs 0040, 0056, [07 §7.5](07-capture-and-install.md) |
+| E19 | install against an application acting at every boundary (in place, atomic replace, create, delete, old handle, shared mapping), thin and not thin, 21 `kill -9` points recovered twice, a fuzzing writer: no save lost, the index never calls a changed file clean, recovery idempotent; without the writer scan 9 of 49 writes reach the aside (asserts). On macOS the `libproc` scan sees write handles and mappings and costs 30–50 ms, so the name is absent for a median of 32–50 ms per install (0.5 ms on Linux); a write through a shared mapping leaves the stat unchanged until `msync`, so git calls the file clean, before any install (`SKIP (platform)`; no save is lost) | ADR 0040, [07 §7.5](07-capture-and-install.md) |
 | E14 | purge by references with git and git-annex, two laptops and two bare custodians: two paths sharing a key, current content sharing a key with purged history and a suggestion sharing a key with accepted content keep their key (the suggestion through the seals' `held`); a restore that reached one custodian before its seal holds the purge back at the other until it merges that `main` (trusting the seals alone would release it); per-key transfers never fetch a released key although git-annex's own `wanted` still matches it; `drop --force --key` leaves no copy; a returning laptop drops its covered copy and its offline re-add comes back to both custodians; `matchexpression --key` agrees with git-annex's choices (`balanced` with `satisfy`, 11 keys split between the two; `sizebalanced` with `find --want-get`, which lists nothing in a bare repository); `get --auto --all` and `drop --auto --key` are refused and `satisfy --all` drops from a remote (asserts) | ADR 0042, [08 §8.6](08-custody-loops.md) |
-| E12 | `remotedaemon` over git-annex's generic P2P transport (a lab network): on a change notice it fetches by the remote's refspecs and never moves `main`, `HEAD`, the index or the working tree; by default a peer pushes any ref into a custodian, `main` included, and into a laptop except its checked-out branch; a `pre-receive` hook refuses (asserts). Homebrew's git-annex has no `git-remote-p2p-annex`, which pigeon links on macOS; a fetch or push over P2P can hang when git-annex's relay drops git's last output, which E12 retries and prints as a note (16 §16.4) | ADRs 0043, 0056, [03 §3.6, §3.8](03-repository-and-roles.md) |
+| E12 | `remotedaemon` over git-annex's generic P2P transport (a lab network): on a change notice it fetches by the remote's refspecs and never moves `main`, `HEAD`, the index or the working tree; by default a peer pushes any ref into a custodian, `main` included, and into a laptop except its checked-out branch; a `pre-receive` hook refuses (asserts). Homebrew's git-annex has no `git-remote-p2p-annex`, which pigeon links on macOS; a fetch or push over P2P can hang when git-annex's relay drops git's last output, which E12 retries and prints as a note (16 §16.4) | ADR 0043, [03 §3.6, §3.8](03-repository-and-roles.md) |
 | E13 | `remotedaemon` serves `REMOVE` even with `GIT_ANNEX_SHELL_APPENDONLY`; append-only `git-annex-shell p2pstdio` refuses it but relays no git; pigeon's filter before `remotedaemon`, with random read sizes, passes reads, stores, fetches and change notices, refuses `REMOVE` on the custodian and any push, caps `VERSION`, closes on unknown or malformed input, passes payloads holding protocol lines intact; explicit `--numcopies` outweighs `.gitattributes` and a lowered branch setting, which `drop --key` otherwise obeys (asserts; 30 checks, about 90 s) | ADR 0043, [09 §9.4](09-network-and-joining.md) |
 | E20 | what the folder may hold, on Linux and macOS (`lab.yml`, 53 checks each): links, nested repositories, FIFOs and sockets are never staged when capture takes paths from `git status` and checks `lstat` first, yet `git annex add` stages a link or a nested repository's file it is given; `git annex add` stages an executable file as 100644 and ignores a mode-only change, and `update-index --chmod` restores the bit; extended attributes do not travel; a thin object is hard-linked to one path only, and `fsck` does not notice an object changed through that link; unreadable paths are not reported deleted; a file rewritten while it is added never yields an object that mismatches its key; a person's `~/.gitconfig` (`annex.backend=WORM`, `annex.largefiles=nothing`, `core.excludesFile`) changes keys, tree and listing unless git runs isolated; `--ignored=traditional -uall` lists the files of ignored folders; `.git/info/attributes` overrides nested `.gitattributes`; `add --batch` fails on a name that is not UTF-8 (asserts) | ADRs 0044, 0045, [07 §7.9](07-capture-and-install.md), [03 §3.7](03-repository-and-roles.md) |
 | E21 | the disaster drill (issue #11): content on K custodians before they have its commit is a key without a name once the laptop is lost; after losing every laptop and its key, a fresh machine recovers from custodians alone every name, hash, deleted version and suggestion, and every signature verifies against the roster at its parents; a recovery sheet's roster commit is accepted and nothing else it signs; `git clone` and `git annex get` read the files without pigeon, across partial custodians; a copied repository under a new UUID counts only after a hashing fsck; git's default `core.fsync` syncs neither loose objects nor refs (asserts) | ADRs 0046, 0047, [09 §9.9](09-network-and-joining.md), [06 §6.2](06-status.md) |
 | E22 | failure domains and capacity (issues #12, #13), on Linux and macOS, 7 checks: fingerprints of disks and machines (one volume, one fingerprint; a loop mount or disk image follows its file to its disk; a tmpfs differs, and its mount source alone collides); git-annex counts two repositories on one disk as two copies, even one hard-linked inode; a drop that ignores all but one remote per domain refuses until another domain holds the key; `annex.diskreserve` refuses a get and an incoming copy, local and over `p2pstdio`, with a misleading message at the sender; `sizebalanced` with small `maxsize` leaves keys at one copy and the verified drop refuses to go lower; a real `ENOSPC` (another writer; git-annex alone stops at the free space) fails a get and a fetch cleanly, `git annex fsck` fails until space is freed, the retries succeed; a custodian killed during a copy counts only complete keys, and a deleted one is written into again and still claimed, which only the verified drop catches (asserts). Found on the way: `annex-bwlimit-download` is never read (`Types/GitConfig.hs` maps it to `bwlimit-upload`) | ADRs 0049, 0050, [08 §8.3, §8.9](08-custody-loops.md) |
 | E23 | git-annex's verified drop over its P2P protocol (lab network, 12 checks, about 15 s): a drop counts a copy that another custodian holds locked for its own removal, since `CHECKPRESENT` answers with `inAnnex`; over a local path it refuses; two concurrent drops leave no copy with numcopies 1, and one of three with numcopies = mincopies = 2; behind a filter that answers `CHECKPRESENT` by `LOCKCONTENT` both races keep every copy and a lone drop still succeeds; a stale log is not counted, but is for a custodian marked `trust`; a `dead` one never counts (asserts) | ADR 0054, `AnnexDrop`, [08 §8.3](08-custody-loops.md), [09 §9.4](09-network-and-joining.md) |
-| E24 | what freeing a folder may lose or show, on Linux and macOS: `git sparse-checkout set` unlinks a clean file although a writer holds it open, so the write lands in no file (with `annex.thin`, inside the object, which git-annex then calls absent); a hide that renames the file aside first keeps it; `git annex drop --key` turns every unmodified file of its key into a pointer file with the old mtime, in another kept folder and in a staged, moved-in copy, and `git status` stays clean (asserts) | ADR 0061, [08 §8.5](08-custody-loops.md), `Evict` |
+| E24 | what freeing a folder may lose or show, on Linux and macOS: `git sparse-checkout set` unlinks a clean file although a writer holds it open, so the write lands in no file (with `annex.thin`, inside the object, which git-annex then calls absent); a hide that renames the file aside first keeps it; `git annex drop --key` turns every unmodified file of its key into a pointer file with the old mtime, in another kept folder and in a staged, moved-in copy, and `git status` stays clean (asserts) | ADR 0039, [08 §8.5](08-custody-loops.md), `Evict` |
 
 **Pending:** E11 native Windows (v1.1). **New:** E16 `annex.bwlimit` over the P2P
 transport; E17 the HDD video-editing acceptance test ([15 §15.8](15-resource-use.md)).
 E9 and E10 must be rerun with bare custodian repositories
 ([03](03-repository-and-roles.md)). Each experiment joins CI once its script
 asserts its results (ADR 0026); every asserting one runs in `lab` on Linux and
-macOS (ADR 0056).
+macOS (§13.8).
 
 ## 13.8 Continuous integration (ADR 0026)
 
@@ -424,7 +424,9 @@ macOS (ADR 0056).
   Linux and macOS, with the git-annex each installer uses (the standalone
   build, Homebrew), in four parallel groups, 6 to 11 minutes. A platform
   difference is printed as `SKIP (platform)` with its reason, never a dropped
-  check (ADR 0056).
+  check, and the script still asserts what it can. Every script isolates git
+  from the person's configuration and sets a lab identity, as `pigeond` runs
+  git (03 §3.7).
 - `models-full` when a model or the runner changes, weekly, and by hand: every
   configuration, the full fault-injection set with trace validation, E17 on a
   self-hosted runner with an HDD **[no ADR: runner]**.
@@ -447,10 +449,10 @@ are specified here but not built; the gaps are tracked as GitHub issues
 
 | Guarantee | Now | Planned | Gaps (issues) |
 |---|---|---|---|
-| P1 Survival | E1, E5, E8, E9, E10 (lab, printing); E13 (asserting: pigeon's filter refuses remote `REMOVE`); E21 (asserting: recovery from custodians alone); E22 (asserting: one copy per failure domain, the reserve, disk full); E23 (asserting: over P2P git-annex's verified drop counts a copy locked for removal, two concurrent drops lose the key, pigeon's probe keeps it); `AnnexDrop` model (git-annex's verified drop: safe over a local path or behind the probe, not over P2P; ADR 0054); `Repair` model (placement, repair and rebalancing against lost disks, removals, rotten and restored copies, crashes; a rotten copy proving a drop and a full custodian stalling domain repair, ADR 0059); `Evict` model (a laptop drops only keys K custodians hold, verified when the drop runs; ADR 0061); `CustodyNaive`, `CustodyTokens` (evidence about hand-offs in general and about the earlier token protocol, not about git-annex) | failure-domain and capacity laws; the filter's hash law (ADR 0059); fault injection; asserting E9, E10 | independence pigeon cannot see (virtual machines, places not declared; ADR 0049); power loss on a custodian (outside the lab; ADR 0046 rests on the git and git-annex sources) |
-| P2 Capture, no overwrite | E20 (asserting, Linux and macOS: what capture stages and what it never reads); E15b (asserting: no pointer during free and keep); E24 (asserting, Linux and macOS: git's hide loses a write through an earlier handle, a drop turns other files of its key into pointers; ADR 0061); E18 (asserting: offline in-place saves keep every version); E19 (asserting, Linux and macOS: racing saves and `kill -9` during install); `CaptureInstall` model (racing saves, escaping writers, crashes during install and recovery, resolutions; ADR 0055); `Evict` model (free and keep against saves through earlier handles, group changes, lost copies, crashes and switches: no save lost, no pointer shown, nothing captured that the person did not write; ADR 0061) | install journal laws (hegel-rust), checked against the model | copy-on-write cost of pending history on APFS and btrfs (E18 there); saves from stale memory, and on macOS saves made only through a shared mapping until they are synced (16 §16.4) |
+| P1 Survival | E1, E5, E8, E9, E10 (lab, printing); E13 (asserting: pigeon's filter refuses remote `REMOVE`); E21 (asserting: recovery from custodians alone); E22 (asserting: one copy per failure domain, the reserve, disk full); E23 (asserting: over P2P git-annex's verified drop counts a copy locked for removal, two concurrent drops lose the key, pigeon's probe keeps it); `AnnexDrop` model (git-annex's verified drop: safe over a local path or behind the probe, not over P2P; ADR 0054); `Repair` model (placement, repair and rebalancing against lost disks, removals, rotten and restored copies, crashes; a rotten copy proving a drop and a full custodian stalling domain repair, ADRs 0054 and 0049); `Evict` model (a laptop drops only keys K custodians hold, verified when the drop runs; ADR 0039); `CustodyNaive`, `CustodyTokens` (evidence about hand-offs in general and about the earlier token protocol, not about git-annex) | failure-domain and capacity laws; the filter's hash law (ADR 0054); fault injection; asserting E9, E10 | independence pigeon cannot see (virtual machines, places not declared; ADR 0049); power loss on a custodian (outside the lab; ADR 0046 rests on the git and git-annex sources) |
+| P2 Capture, no overwrite | E20 (asserting, Linux and macOS: what capture stages and what it never reads); E15b (asserting: no pointer during free and keep); E24 (asserting, Linux and macOS: git's hide loses a write through an earlier handle, a drop turns other files of its key into pointers; ADR 0039); E18 (asserting: offline in-place saves keep every version); E19 (asserting, Linux and macOS: racing saves and `kill -9` during install); `CaptureInstall` model (racing saves, escaping writers, crashes during install and recovery, resolutions; ADR 0040); `Evict` model (free and keep against saves through earlier handles, group changes, lost copies, crashes and switches: no save lost, no pointer shown, nothing captured that the person did not write; ADR 0039) | install journal laws (hegel-rust), checked against the model | copy-on-write cost of pending history on APFS and btrfs (E18 there); saves from stale memory, and on macOS saves made only through a shared mapping until they are synced (16 §16.4) |
 | P3 Reversible deletion | E2, E4 (lab, printing); `Purge` model (seals against restores, cancels, partitions, restarts and a returning laptop; ADR 0042); E14 (asserting: shared keys, a restore against the seals, per-key transfers, the forced drop, a returning laptop's new generation) | purge laws (hegel-rust); `Purge` trace validation | a custodian clock that jumps forward by more than the waiting period; erased names stay in history (16 §16.4) |
-| P4 Authority | E7 (lab, printing); E12 (asserting: no pushed ref, `remotedaemon` only fetches); `Roster` model (roster forks, ADR 0051); `Authority` model (acceptance, proposals and decisions against a faulty member, a removed laptop signing on old parents; ADRs 0062, 0063) | roster fold laws; acceptance and revocation laws; decision-rights tests (ADR 0038); `Authority` trace validation | format compatibility (#15) |
+| P4 Authority | E7 (lab, printing); E12 (asserting: no pushed ref, `remotedaemon` only fetches); `Roster` model (roster forks, ADR 0051); `Authority` model (acceptance, proposals and decisions against a faulty member, a removed laptop signing on old parents; ADRs 0051, 0038) | roster fold laws; acceptance and revocation laws; decision-rights tests (ADR 0038); `Authority` trace validation | format compatibility (#15) |
 | P5 Convergence | E3 (lab, printing); `models/catalogue` (every schedule of three devices over eleven cases; the rule before ADR 0052 fails as expected) | merge and name laws (hegel-rust), checked against the reference model | ADR 0052 is Proposed (#8); rename tracking (16 §16.4) |
 | P6 Honest status | E20 (asserting: the kinds pigeon lists as not shared); E21 (asserting: content without its commit is not protected); E22 (asserting: two repositories on one disk are two copies to git-annex, so pigeon counts domains) | observation, domain and headline laws; usability test | — |
 
@@ -471,7 +473,7 @@ correctly; at least 4 of 5 complete tasks 4 and 5 (an old version, a deleted
 folder) without help; **no** participant believes that a file which is not
 safe is safe. The thresholds of [06 §6.7](06-status.md) are tuned from it.
 
-## 13.12 The first milestone: the safety slice (ADR 0057)
+## 13.12 The first milestone: the safety slice
 
 The first code of v2 is a slice that carries the promises and nothing else
 (issue #17). Its group has one person, who is its admin, one laptop (Linux on
@@ -481,26 +483,36 @@ one repository and two folders.
 | Part | In the slice | After it passes |
 |---|---|---|
 | crates ([14 §14.6](14-platforms-and-packaging.md)) | `pigeon-core`, `pigeon-proto`, `pigeon-i18n` (the English bundle), `pigeon-git`, `pigeon-sys`, `pigeond`, `pigeon`, `git-annex-p2p-iroh` | `pigeon-web`, `pigeon-telemetry`, the French bundle (ADR 0028) |
-| loops ([08 §8.1](08-custody-loops.md)) | capture, accept, install with its journal (ADR 0055), place, repair (started by a removed custodian), free and keep, settings check; the filter with its `CHECKPRESENT` probe (ADRs 0043, 0054) | scrub, purge |
+| loops ([08 §8.1](08-custody-loops.md)) | capture, accept, install with its journal (ADR 0040), place, repair (started by a removed custodian), free and keep, settings check; the filter with its `CHECKPRESENT` probe (ADRs 0043, 0054) | scrub, purge |
 | commands ([10](10-interfaces.md)) | `create`, `invite --backup-machine`, `join --backup-machine`, `status`, `machines`, `history`, `restore`, `free`, `keep`, `remove-computer`, `recovery-sheet`, `recover`, `doctor`, `debug bundle` | the rest answer `not-in-this-build` |
-| content | regular files and folders, the executable bit, portable names (ADR 0044) | other file systems: `create` and `join` name the one they refuse (`file-system-not-in-this-build`, ADR 0068) |
+| content | regular files and folders, the executable bit, portable names (ADR 0044) | other file systems: `create` and `join` name the one they refuse (`file-system-not-in-this-build`, 10 §10.5) |
 | network | iroh with direct addresses and mDNS | relays and discovery (ADR 0016) |
 | diagnostics | JSON logs (ADR 0022), trace logs (ADR 0008) | telemetry transport and dashboards (ADR 0025) |
 
-The deferrals concern the order of work only: v1 still meets every accepted
-ADR.
+Also after it: more people and laptops (invitations of people, proposals,
+conflicts between devices, stewards and decisions), purge, erase and the
+scrub, notifications, packaging and service units, adaptive limits (the slice
+keeps only low CPU and I/O priority), the tuning of large and hot files, and
+Windows. A deferred command answers `not-in-this-build`, and the slice holds
+no partial code for it. The deferrals concern the order of work only: v1
+still meets every accepted ADR. **[no ADR: milestone]**
 
 **Setup** (`lab/slice/`). The lab build (`--features lab`) adds two seams to
 `pigeon-sys`, and nothing else:
 
-- fingerprints read from a file, since one host is one failure domain
-  (ADR 0049);
-- named crash points (`PIGEON_LAB_CRASH=point:n`).
+- fingerprints read from a file named by `PIGEON_LAB_FINGERPRINTS`
+  (`{"storage": [...], "host": "...", "virtual": ""}`, `null` for unknown),
+  since one host is one failure domain (ADR 0049); in the slice macOS reports
+  its host (`IOPlatformUUID`) and no storage;
+- named crash points (`PIGEON_LAB_CRASH=point:n`, checked at start): the n-th
+  crossing sends `SIGKILL` to the process itself, so no destructor runs and
+  no buffer is flushed, as with `kill -9`. A release build ignores both
+  variables.
 
 It says so in `doctor`, and its status reports carry `lab = true`, which a
 release build never counts. On one Linux host, each custodian runs in its own
 mount namespace on its own loop-mounted ext4 image, connected over
-127.0.0.1. On GitHub's hosted runners the scenarios run on `ubuntu-24.04`
+127.0.0.1, with direct addresses only. On GitHub's hosted runners the scenarios run on `ubuntu-24.04`
 (this setup) and on `macos-latest`, where the laptop runs on APFS and its
 custodians run as local processes (lab only). These two runners replace a
 run on real hardware (Guillaume, chat, 14 October 2026). Real fingerprints
@@ -536,9 +548,10 @@ content kept (§13.11). The peak is reported with its causes.
 `docs/reports/slice-1.md` marks each promise (P1–P6) and each Proposed ADR it
 exercises as *established* (with its scenarios and traces), *conditional*
 (with the assumption it rests on) or *untested*. Evidence from pigeon's own
-code enters the "now" column of §13.10 only through this ledger.
+code enters the "now" column of §13.10 only through this ledger. Issue #17
+closes when the ledger is published with the slice passing.
 
-## 13.13 The laws in code (ADRs 0012, 0064)
+## 13.13 The laws in code (ADR 0012)
 
 `pigeon-core` states each law in the documentation of its module and checks
 it with a `hegeltest` property in `crates/pigeon-core/tests/` (at least 1000

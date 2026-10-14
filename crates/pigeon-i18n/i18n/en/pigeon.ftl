@@ -56,7 +56,7 @@ time-hours-ago =
        *[other] { $hours } hours ago
     }
 
-## Commands of the safety slice (ADR 0057)
+## Commands of the safety slice (13 §13.12)
 
 cmd-create = Create a group with this computer as its first member
 cmd-invite = Print a one-time invitation, valid 24 hours

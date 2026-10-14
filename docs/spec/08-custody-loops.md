@@ -32,7 +32,7 @@ For each reachable peer *d*:
    wait forever (16 §16.4), so it has a deadline, after which its process
    group is killed and the next notice or period fetches again; a
    remotedaemon whose fetch began (`SYNCING`) and never ended is restarted,
-   since it hears no more notices from that peer (ADR 0056).
+   since it hears no more notices from that peer (E12).
 2. `git annex merge` (the git-annex branch is a union; git-annex merges it).
 3. Settings check ([03 §3.5](03-repository-and-roles.md)).
 4. **Validate** the new commits of the peer's `main` in topological order with
@@ -95,7 +95,7 @@ order-independent; the accepted set is a join (ADR 0012).
 - **Domain repair.** `sizebalanced` knows nothing of domains. When the
   custodians that hold a key, are downloading it, or want it and have room for
   it above their reserve span d < K domains (a custodian at its reserve still
-  wants its share but cannot take it, ADR 0059), the custodians of the
+  wants its share but cannot take it, ADR 0049), the custodians of the
   other domains with room for it (free space above `annex.diskreserve`, within
   `maxsize`) rank themselves by SHA-256 of the key and their device ID; the
   best-ranked custodian of each of the first K − d domains wants the key too
@@ -128,7 +128,7 @@ ADR 0046). The `Repair` model ([13 §13.2](13-verification.md)) checks this
 loop, placement and rebalancing against lost disks, removed custodians,
 rotten and restored copies, crashes and partitions.
 
-## 8.5 Freeing and keeping a folder (ADRs 0031, 0039, 0061)
+## 8.5 Freeing and keeping a folder (ADRs 0031, 0039)
 
 Per top-level folder F, on a laptop. A file of F is always complete or absent,
 never a pointer file, including after a crash at any instant (ADR 0039,
@@ -143,7 +143,7 @@ capture resumes.
 2. Refuse while F has an unresolved divergence ([07 §7.6](07-capture-and-install.md)):
    "Resolve the conflict on *tarte.docx* first".
 3. **Hide** the files of F whose versions are *protected*, each as an install
-   of its absence ([07 §7.5](07-capture-and-install.md), ADR 0061): journal
+   of its absence ([07 §7.5](07-capture-and-install.md), ADR 0039): journal
    `begin`, move aside, writer scan, check against the index entry, `proved`.
    Then `git sparse-checkout` non-cone patterns that exclude F and re-include
    its files not protected yet set the bits, with the files already absent,
@@ -186,7 +186,7 @@ capture resumes.
    its index entry first. A file that main has passed since it was staged
    (the accept loop changes hidden paths in the index), unchanged and without
    a writer, is pigeon's own: it is removed and the current key is staged
-   (ADR 0061, `Evict_stale`). Then update the sparse patterns, clear the
+   (ADR 0039, `Evict_stale`). Then update the sparse patterns, clear the
    skip-worktree bits of F's index entries (`git update-index
    --no-skip-worktree`, then `--refresh`), and run `git annex restage`.
 
@@ -198,7 +198,7 @@ by git's own sparse-checkout file and the device's `wanted` expression;
 `info/sparse-checkout.lock` left by a killed git process of `pigeond` is
 removed at start, since `pigeond` is the only writer of the repository: a
 `kill -9` inside `git sparse-checkout set` leaves the latter, and every later
-free fails until it is gone (E15b, ADR 0056; without the removal a freed
+free fails until it is gone (E15b; without the removal a freed
 folder is never freed, `Evict_lockfile`).
 
 ## 8.6 Purge: erase forever (ADRs 0018, 0042)
@@ -348,6 +348,6 @@ expression no longer matches after the shares moved (a custodian joined or
 changed `maxsize`), and that domain repair does not give it, with a verified
 drop (§8.3): git-annex checks K other custody copies in K domains first, each
 by a lock on a copy its holder has hashed for this drop
-([09 §9.4](09-network-and-joining.md); ADRs 0014, 0049, 0054, 0059). pigeon
+([09 §9.4](09-network-and-joining.md); ADRs 0014, 0049, 0054). pigeon
 never runs `--rebalance` against a remote. A placement planner may replace
 `sizebalanced` later (ADR 0003).

@@ -2,8 +2,10 @@
 
 - **Status:** Proposed, 14 October 2026, by the agent, for issue #10
   (Guillaume's review: "Model the actual Pigeon boundary around annex
-  locking/drop, including failures and durable state"). Refines ADR 0001
-  (E1's result holds over local paths only) and ADR 0043 (the filter).
+  locking/drop, including failures and durable state"); revised 14 October
+  2026 on the evidence of the `Repair` model, absorbing the former ADR 0059
+  (locks for a custodian's drop are hashed). Refines ADR 0001 (E1's result
+  holds over local paths only) and ADR 0043 (the filter).
 
 ## Context
 
@@ -37,6 +39,14 @@ rebalance ([08 §8.10](../spec/08-custody-loops.md)), so the race is
 reachable whenever shares move. The `AnnexDrop` model finds it in 8 steps
 ([13 §13.2](../spec/13-verification.md)).
 
+A lock proves presence, not integrity. `lockContentShared`
+(`Annex/Content.hs`) checks that the object is present and locks it; only a
+scrub (`git annex fsck`, `Command/Fsck.hs`) hashes it, every 30 days by
+default (08 §8.8). The `Repair` model finds a rotten copy proving a drop:
+custodian 1's copy of *a* rots, custodian 2 drops *a* locking 1 and the
+joiner 3, then 3's disk dies, one fault in the epoch, and no intact copy is
+left (`Repair_lockonly`, invariant `Survival`).
+
 ## Decision
 
 **On custodians, pigeon's filter answers `CHECKPRESENT` with a lock**
@@ -54,7 +64,19 @@ sends `UNLOCKCONTENT` and answers `SUCCESS`; otherwise it answers `FAILURE`.
 - The filter's laws gain one (ADR 0012, [13 §13.4](../spec/13-verification.md)):
   a positive `CHECKPRESENT` only for a copy it could lock. It forwards every
   other allowed message unchanged.
-- Laptops keep git-annex's answer: their copies never count (ADR 0002).
+- **A custodian's drop counts only hashed copies.** When the peer is another
+  custodian (its device ID in the roster), the filter answers `LOCKCONTENT k`
+  in three steps: it takes git-annex's lock; while holding it, it hashes the
+  object (`git annex contentlocation`, then SHA-256 against the `SHA256E`
+  key); it answers `SUCCESS` only if the hash matches. The `CHECKPRESENT`
+  probe does the same. On a mismatch the filter releases the lock, answers
+  `FAILURE`, and queues `git annex fsck --key k`, which moves the object out
+  and starts repair (08 §8.4).
+- Laptops keep git-annex's answer and their locks are not hashed: their
+  copies never count (ADR 0002), and a laptop's drop leaves the custody
+  copies as they were. A restored disk still counts only after its fsck
+  (09 §9.9); without it a laptop's unhashed drop can lean on a bad restored
+  copy (`Repair_nofsck`).
 - pigeon reports the bug upstream, with E23 as its reproduction. The probe
   stays until the minimum supported git-annex
   ([14 §14.3](../spec/14-platforms-and-packaging.md)) answers `CHECKPRESENT`
@@ -76,6 +98,13 @@ sends `UNLOCKCONTENT` and answers `SUCCESS`; otherwise it answers `FAILURE`.
   It is removed with the lock, unless another shared lock is held at that
   moment or the server dies; then the custodian's own drops of that key wait
   up to 10 minutes.
+- With the hash, the `Repair` model passes every invariant (Survival,
+  ReserveKept, EndangeredFirst, INV-K) in `Repair_design` and `Repair_disk`;
+  `Repair_lockonly` (no hash) and `Repair_nofsck` fail. A rebalancing drop
+  reads each of its K proofs in full on their holders; rebalancing runs last
+  in the queue (ADR 0037), so the reads are rare. A rotten copy can still
+  make *protected* overstate until a scrub finds it, at most the scrub
+  period; 16 §16.4 records the limit.
 - `git annex copy --to` and `get` still learn whether a peer has a key: a
   present copy can be locked unless it is being dropped, and then it is better
   copied again.
@@ -84,6 +113,8 @@ sends `UNLOCKCONTENT` and answers `SUCCESS`; otherwise it answers `FAILURE`.
 - E1's row in [13 §13.7](../spec/13-verification.md) states that it ran over
   local paths. On acceptance ADR 0001's status gains "drop safety over P2P
   refined by ADR 0054".
+- The filter's laws gain the hash law: to a custodian, a positive
+  `LOCKCONTENT` or `CHECKPRESENT` only for a copy whose hash matched.
 
 ## Alternatives considered
 
@@ -102,3 +133,9 @@ sends `UNLOCKCONTENT` and answers `SUCCESS`; otherwise it answers `FAILURE`.
 - **Serialise drops through one coordinator.** It needs one custodian that
   every other reaches whenever it drops, and a protocol of pigeon's own to
   verify; the probe keeps git-annex's.
+- **Scrub more often** instead of hashing at the drop: a shorter period
+  narrows the window but never closes it, and every scrub reads every key.
+- **Hash for laptops' drops too**: it closes no hole that P1 covers, and
+  reads the whole collection again on K custodians for each laptop.
+- **Let the dropper verify by downloading**: it moves K copies over the
+  network for each drop, where the holder reads only its own disk.

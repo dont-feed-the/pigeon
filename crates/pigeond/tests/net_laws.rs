@@ -1,4 +1,4 @@
-//! Laws of the network's small parsers (09 §9.1, §9.4; ADRs 0012, 0059):
+//! Laws of the network's small parsers (09 §9.1, §9.4; ADRs 0012, 0054):
 //! device IDs round-trip through their hex, the hash a `SHA256E` key names
 //! is read back exactly, and a key from a peer never reaches git-annex as
 //! an option or a path.

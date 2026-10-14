@@ -4,7 +4,8 @@
 Each ADR is a file NNNN-slug.md whose first line is "# NNNN. Title" and which
 holds a "- **Status:** ..." line. Numbers run from 0001 without gaps. The
 index has one row per ADR, linking to the file, with a title that starts with the
-ADR's title and the same first word of status (Proposed, Accepted, Rejected, Superseded).
+ADR's title and the same first word of status (Proposed, Accepted, Rejected,
+Superseded, Withdrawn). Rows may sit in several tables of the index.
 """
 
 import re
@@ -12,7 +13,7 @@ import sys
 from pathlib import Path
 
 ADR = Path(__file__).resolve().parent.parent / "docs" / "adr"
-STATUSES = {"Proposed", "Accepted", "Rejected", "Superseded"}
+STATUSES = {"Proposed", "Accepted", "Rejected", "Superseded", "Withdrawn"}
 ROW = re.compile(r"^\| \[(\d{4})\]\(([^)]+)\) \| (.+?) \| (.+?) \|$")
 
 

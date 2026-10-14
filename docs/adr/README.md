@@ -4,12 +4,62 @@ One file per decision, numbered in order, in the format of Michael Nygard
 (*Context*, *Decision*, *Consequences*). Started on 13 October 2026, at
 Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 
-- **Status** is `Proposed`, `Accepted`, `Rejected` or `Superseded by NNNN`.
-  It also says who decided, when, and where (chat, review, vote).
+## When to write an ADR
+
+An ADR records an *architecturally significant* decision: one that shapes the
+system and that a later reader would need to know, and whose reasons would be
+lost otherwise. Write one when a decision is, at once:
+
+- **costly to reverse**: undoing it means migrating data, breaking peers that
+  run an older version, or rewriting more than one crate;
+- **structural or cross-cutting**: the parts of the system and how they
+  depend on each other, what crosses a boundary between devices or between
+  pigeon and git or git-annex, what stays on disk, the safety and security
+  rules (who may do what, what counts as a copy, what may be lost);
+- **a real choice**: at least two alternatives were viable, and the reasons
+  for the one taken, often an experiment or a model, are worth keeping.
+
+Typical subjects: the engine and the language; a protocol, wire or on-disk
+format; a guarantee and the mechanism that carries it (custody, install,
+authority); a major dependency or toolchain that the rest is built on; a
+platform supported or not; a policy people see (words, notifications).
+
+Do **not** write an ADR for:
+
+- implementation choices inside one crate, which its code documentation
+  explains (a data structure, a module layout, an error enum, a retry count);
+- readings of the specification, or details it leaves open: settle them in
+  the specification itself, marked **[no ADR]** and listed in
+  [16 §16.3](../spec/16-open-questions.md);
+- test plans, milestones, experiment and CI policy: they belong to
+  [13](../spec/13-verification.md) and the lab's README;
+- library picks with no lasting cost, versions and pins: they belong to
+  [14 §14.7](../spec/14-platforms-and-packaging.md);
+- refinements found while modelling or implementing an existing ADR: while it
+  is Proposed, revise it; once it is Accepted, a refinement that changes the
+  decision is a new ADR that supersedes it, and one that does not goes into
+  the specification.
+
+When in doubt, write the specification first; raise a detail to an ADR when
+a reviewer asks for it, or when it turns out costly to reverse.
+
+## Status
+
+- **Status** is `Proposed`, `Accepted`, `Rejected`, `Superseded by NNNN` or
+  `Withdrawn`. It also says who decided, when, and where (chat, review, vote).
 - An accepted ADR is never rewritten. A change of mind is a new ADR that
   supersedes it; the old one only gets its status updated.
-- Evidence is cited by experiment (`E1`–`E10`, see [`lab/git-annex/`](../../lab/git-annex/)) or by
+- A Proposed ADR may be revised until it is decided; its status line says
+  when and why.
+- `Withdrawn` marks a Proposed ADR that is not kept as a record of its own:
+  merged into another ADR, or moved to the specification under the policy
+  above. It keeps its number and file, as a short stub that says where its
+  content went, so that numbers are never reused and old links still lead
+  somewhere.
+- Evidence is cited by experiment (`E1`–`E24`, see [`lab/git-annex/`](../../lab/git-annex/)) or by
   model ([`models/tla/`](../../models/tla/)).
+
+## Index
 
 | # | Decision | Status |
 |---|----------|--------|
@@ -67,17 +117,24 @@ Guillaume's request; ADRs 0001–0004 record decisions taken earlier.
 | [0052](0052-catalogue-from-contributions-and-the-conflicts-they-saw.md) | The catalogue is built from contributions and the conflicts they saw; merge commits never count | Proposed |
 | [0053](0053-trace-logs-as-generated-tla-modules.md) | Trace logs reach TLC as generated TLA+ modules; TLC stays at 1.7.4 | Proposed |
 | [0054](0054-a-copy-counts-only-if-it-can-be-locked.md) | A copy counts only if it can be locked: custodians answer `CHECKPRESENT` with a lock | Proposed |
-| [0055](0055-install-recovery-rolls-forward-from-a-journalled-proof.md) | Install recovery rolls forward from a journalled proof | Proposed |
-| [0056](0056-every-experiment-runs-on-both-platforms.md) | Every asserting experiment runs on Linux and macOS; a platform difference is shown, never hidden | Proposed |
-| [0057](0057-the-first-milestone-is-a-safety-slice.md) | The first milestone is a safety slice: one laptop, two custodians, no proposals or purge | Proposed |
 | [0058](0058-the-rust-workspace-has-a-pure-core-and-a-pinned-toolchain.md) | The Rust workspace has one crate per row of 14 §14.6, a pure core and a pinned toolchain | Proposed |
-| [0059](0059-a-custodians-drop-counts-only-hashed-copies.md) | A custodian's drop counts only copies hashed for it, and repair counts only members that can take a key | Proposed |
-| [0060](0060-the-platform-layer-uses-rustix-and-libproc.md) | The platform layer uses rustix, with libproc on macOS; the lab seams are a self-kill and a file | Proposed |
-| [0061](0061-freeing-hides-as-an-install-and-guards-every-drop.md) | Freeing hides a file as an install of its absence, and no drop takes a key that a kept path uses | Proposed |
-| [0062](0062-a-removal-revokes-what-it-had-not-seen.md) | A removal revokes what the removed device signed that the removal had not seen | Proposed |
-| [0063](0063-a-decision-is-a-merge-by-a-decider-of-its-main.md) | A decision is a merge by a decider of the main it is made on | Proposed |
-| [0064](0064-pigeon-core-fixes-the-readings-its-laws-need.md) | pigeon-core's first algebras fix the readings of the spec that their laws need | Proposed |
-| [0065](0065-runs-of-the-core-are-checked-by-tlc.md) | Runs of pigeon-core are checked by TLC before the drivers exist | Proposed |
-| [0066](0066-the-helper-names-its-repository-and-the-filter-supplies-the-token.md) | The helper names its repository by path, and the serving filter supplies git-annex's token | Proposed |
-| [0067](0067-the-git-driver-checks-every-command-and-bounds-every-call.md) | The git driver checks every command against the allow-list and bounds every call with a deadline | Proposed |
-| [0068](0068-messages-are-listed-with-their-variables-and-checked-in-every-bundle.md) | Messages are listed with their variables and checked in every bundle; the language follows gettext's order | Proposed |
+
+## Withdrawn
+
+Withdrawn on 14 October 2026 at Guillaume's request, under the policy above.
+
+| # | Decision | Status |
+|---|----------|--------|
+| [0055](0055-install-recovery-rolls-forward-from-a-journalled-proof.md) | Install recovery rolls forward from a journalled proof | Withdrawn |
+| [0056](0056-every-experiment-runs-on-both-platforms.md) | Every asserting experiment runs on Linux and macOS; a platform difference is shown, never hidden | Withdrawn |
+| [0057](0057-the-first-milestone-is-a-safety-slice.md) | The first milestone is a safety slice: one laptop, two custodians, no proposals or purge | Withdrawn |
+| [0059](0059-a-custodians-drop-counts-only-hashed-copies.md) | A custodian's drop counts only copies hashed for it, and repair counts only members that can take a key | Withdrawn |
+| [0060](0060-the-platform-layer-uses-rustix-and-libproc.md) | The platform layer uses rustix, with libproc on macOS; the lab seams are a self-kill and a file | Withdrawn |
+| [0061](0061-freeing-hides-as-an-install-and-guards-every-drop.md) | Freeing hides a file as an install of its absence, and no drop takes a key that a kept path uses | Withdrawn |
+| [0062](0062-a-removal-revokes-what-it-had-not-seen.md) | A removal revokes what the removed device signed that the removal had not seen | Withdrawn |
+| [0063](0063-a-decision-is-a-merge-by-a-decider-of-its-main.md) | A decision is a merge by a decider of the main it is made on | Withdrawn |
+| [0064](0064-pigeon-core-fixes-the-readings-its-laws-need.md) | pigeon-core's first algebras fix the readings of the spec that their laws need | Withdrawn |
+| [0065](0065-runs-of-the-core-are-checked-by-tlc.md) | Runs of pigeon-core are checked by TLC before the drivers exist | Withdrawn |
+| [0066](0066-the-helper-names-its-repository-and-the-filter-supplies-the-token.md) | The helper names its repository by path, and the serving filter supplies git-annex's token | Withdrawn |
+| [0067](0067-the-git-driver-checks-every-command-and-bounds-every-call.md) | The git driver checks every command against the allow-list and bounds every call with a deadline | Withdrawn |
+| [0068](0068-messages-are-listed-with-their-variables-and-checked-in-every-bundle.md) | Messages are listed with their variables and checked in every bundle; the language follows gettext's order | Withdrawn |

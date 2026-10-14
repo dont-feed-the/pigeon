@@ -153,7 +153,9 @@ For each path, in this order (a batch shares its fsyncs and its one writer scan)
    shared and writable (Linux `/proc/*/fd`, `fdinfo` and `maps`; macOS
    `libproc`: descriptors with `FWRITE`, and every writable file-backed
    region, private ones included, since the share mode does not tell them
-   apart; ADR 0056). It runs before the check, so no write slips in after it.
+   apart). A scan that could not inspect some processes counts as clear only
+   if the file gives no write permission to group or others; otherwise the
+   path waits (`in-use`). It runs before the check, so no write slips in after it.
    On macOS a write through a shared mapping leaves the stat unchanged until
    `msync` (E19): capture sees such a save only once it is synced, and the
    kept aside (step 9) still keeps it.
@@ -169,7 +171,7 @@ For each path, in this order (a batch shares its fsyncs and its one writer scan)
      version (§7.6), never deleted: `recovered`.
 
    Once the checks of the batch are done, append `proved` for the entries that
-   passed, and fsync (ADR 0055). A creation is proved when *p* is found free.
+   passed, and fsync (ADR 0040). A creation is proved when *p* is found free.
 7. **Rename in.** `renameat2(tmp, p, RENAME_NOREPLACE)` (or `RENAME_EXCL`). If an
    application created *p* since step 4, the call fails. The application's
    file stays, the temporary file is dropped, and the entry ends `raced`. The
@@ -190,10 +192,10 @@ A deletion is the same without steps 1, 2 and 7. A released aside is
 journalled `released`. When every entry has ended and its aside is released,
 the journal is truncated. A staged file that no entry names (a crash between
 steps 2 and 3) is removed at recovery: no name in the folder leads to it
-(ADR 0064).
+(13 §13.13).
 
 **Recovery at start**, before any capture, for each `begin` without an end
-(ADR 0055). An entry with `proved` rolls forward; any other rolls back.
+(ADR 0040). An entry with `proved` rolls forward; any other rolls back.
 
 - *Proved:* if the new file is still at its stage name, do step 7
   (`NOREPLACE`; if *p* exists, `raced`). Then redo step 8 and append `done`.
@@ -210,7 +212,7 @@ An entry ends before its staged file is removed, and only the staged files of
 ended entries are removed. Each path ends at its old content, the new one or
 the person's, and the index agrees with what pigeon left (INV-Journal).
 Replaying twice equals replaying once (a law, ADR 0036). The `CaptureInstall`
-model found that deciding from *p* alone, as this table did before ADR 0055,
+model found that deciding from *p* alone, as this table did before ADR 0040 journalled the proof,
 brings back a finished deletion and undoes a deletion the person made after
 step 7.
 
@@ -222,7 +224,7 @@ Such writers are a process of another user, an `open` in flight across the
 rename, or a mapping macOS cannot see. Its content is kept, but not at its name
 (ADR 0040), if it lands before the aside is released: a write through such a
 handle after the keep period goes to a file with no name, and is lost
-(ADR 0055). The name is absent between steps 4 and 7: E19 measured a median of
+(ADR 0040). The name is absent between steps 4 and 7: E19 measured a median of
 0.55 ms and a maximum of 6.6 ms.
 
 ## 7.6 Divergences and conflicts (ADRs 0034, 0035)
@@ -271,7 +273,7 @@ key and `stat` in the divergence table, which capture has already committed,
 instead of what pigeon last installed. That `stat` comes from a quiet file
 (§7.2), so a later save changes it; one that is racily clean (its mtime not
 older than its capture) defers the resolution until the next capture
-(ADR 0055). A save made after the person chose fails the check. Nothing is
+(ADR 0040). A save made after the person chose fails the check. Nothing is
 replaced, the save extends their proposal, and they are told once: "You saved
 *tarte.docx* again after choosing; nothing was replaced."
 
@@ -315,7 +317,7 @@ suggestions alike. The unprotected versions this laptop captured form its
   (`git annex drop --key`, verified; [08 §8.3](08-custody-loops.md)), with the
   guard of [08 §8.5](08-custody-loops.md) step 4: never a key that a path of
   a kept folder still has, which git-annex would turn into a pointer file
-  (ADR 0061, E24, `Evict_prune`). If the
+  (ADR 0039, E24, `Evict_prune`). If the
   file system has no copy-on-write and the file is still the protected
   version, the laptop re-thins it: an install (§7.5) of the same key, with the
   object as the new file.

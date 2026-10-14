@@ -147,7 +147,7 @@ fn protected_is_observed_within_offline_after(tc: TestCase) {
 }
 
 /// A custodian sharing hardware with two others joins their domains whether
-/// or not it holds the key: its new copy must not lower the state (ADR 0064).
+/// or not it holds the key: its new copy must not lower the state (13 §13.13).
 #[test]
 fn a_bridging_custodian_does_not_merge_domains_by_holding() {
     let c = |i: u8, fps: &[&str], holds: bool| Custodian {

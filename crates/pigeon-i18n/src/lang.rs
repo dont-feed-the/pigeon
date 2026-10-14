@@ -7,7 +7,7 @@ use fluent_langneg::{NegotiationStrategy, negotiate_languages};
 use unic_langid::LanguageIdentifier;
 
 /// The languages this build has a bundle for. English comes first: it is
-/// the fallback, and the only bundle of the slice (ADR 0057).
+/// the fallback, and the only bundle of the slice (13 §13.12).
 pub const AVAILABLE: &[&str] = &["en"];
 
 /// The `language` setting of `config.toml` (11 §11.2).
@@ -142,7 +142,7 @@ mod tests {
         let english = tag("en");
         assert_eq!(choose(&Setting::Auto, &en_gb), english);
         assert_eq!(choose(&Setting::Auto, &[]), english);
-        // No French bundle in the slice (ADR 0057): French falls back.
+        // No French bundle in the slice (13 §13.12): French falls back.
         assert_eq!(choose(&Setting::Auto, &fr), english);
         assert_eq!(choose(&Setting::parse("fr").unwrap(), &en_gb), english);
         assert_eq!(Setting::parse(" Auto "), Some(Setting::Auto));

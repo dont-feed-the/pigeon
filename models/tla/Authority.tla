@@ -1,6 +1,6 @@
 ------------------------------ MODULE Authority ------------------------------
 (* Acceptance of commits, proposals and decisions, and the removal of a device
-   (spec 04 §4.3-4.5, 09 §9.7; ADRs 0009, 0038, 0051, 0062, 0063).
+   (spec 04 §4.3-4.5, 09 §9.7; ADRs 0009, 0038, 0051).
    Persons 1 = a (the admin), 2 = b (owner of folder F), 3 = c (a member).
    Device i is person i's; device 4 is a fresh key that c may add. Devices 1
    and 2 are honest pigeonds. With Hostile, devices 3 and 4 belong to an

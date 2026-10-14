@@ -42,8 +42,7 @@
 `$XDG_STATE_HOME/pigeon` and `~/Library/Logs/pigeon`; `<cache>` is
 `$XDG_CACHE_HOME/pigeon` and `~/Library/Caches/pigeon`; all are found with the
 `dirs` crate (ADR 0036). `<runtime>` is `$XDG_RUNTIME_DIR/pigeon` on Linux
-and `<cache>/run` on macOS, which has no runtime directory (ADR 0060,
-Proposed). On a backup machine `pigeond` runs as a system service and these
+and `<cache>/run` on macOS, which has no runtime directory. On a backup machine `pigeond` runs as a system service and these
 are under `/var/lib/pigeon`, `/var/log/pigeon`, `/var/cache/pigeon` and
 `/run/pigeon`.
 
@@ -117,7 +116,7 @@ One JSON object per line, appended and fsynced before the step it announces:
 
 - `old` is the index entry's `(dev, ino, size, mtime in ns)` that step 6 checks.
   `proved` records that the writer scan and the check passed, before step 7
-  (ADR 0055). An entry ends with one of `done`, `skip`, `raced` or
+  (ADR 0040). An entry ends with one of `done`, `skip`, `raced` or
   `recovered`; `released` records the removal of its aside (ADR 0040). A
   staged file is removed only once its entry has ended.
 - At start, `pigeond` replays every `begin` without an end with the recovery

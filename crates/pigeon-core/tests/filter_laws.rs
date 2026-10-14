@@ -346,7 +346,7 @@ impl Session<'_> {
     }
 }
 
-/// Laws *sync before success*, *probe* and *hash* (ADRs 0054, 0059): on a
+/// Laws *sync before success*, *probe* and *hash* (ADR 0054): on a
 /// custodian, whatever git-annex answers and whenever syncs complete,
 /// (1) a `SUCCESS` or `ALREADY-HAVE` for a key reaches the client only after
 /// a sync of that key asked for after git-annex's answer; (2) `CHECKPRESENT

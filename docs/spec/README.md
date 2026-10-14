@@ -1,7 +1,7 @@
 # pigeon v2 — specification
 
 > **Status:** version 1 of the specification, 13 October 2026. It assembles the
-> decisions recorded in [ADRs 0001–0068](../adr/README.md), the guarantees P1–P6 of the
+> decisions recorded in [ADRs 0001–0068](../adr/README.md) (13 withdrawn), the guarantees P1–P6 of the
 > [proposal](../design/proposal/proposal.pdf), the [UX study](../design/ux.md), the
 > [TLA+ models](../../models/tla/), the [catalogue model](../../models/catalogue/catalogue.py)
 > and the [git-annex experiments](../../lab/git-annex/).
@@ -48,21 +48,22 @@ Each file has one mission. Read them in order the first time.
 | [13-verification.md](13-verification.md) | TLA+ models, trace validation, property-based tests, the lab, CI, the usability test, the safety slice |
 | [14-platforms-and-packaging.md](14-platforms-and-packaging.md) | platforms, delivery of git and git-annex, the Rust workspace, dependencies |
 | [15-resource-use.md](15-resource-use.md) | how background work stays out of the way: priorities, adaptive limits, settings, budgets |
-| [16-open-questions.md](16-open-questions.md) | what is not decided, and the details this specification adds that still need an ADR |
+| [16-open-questions.md](16-open-questions.md) | what is not decided, and the details this specification decides without an ADR |
 
 ## Conventions
 
 - **MUST**, **MUST NOT**, **SHOULD** and **MAY** have their RFC 2119 meaning. Text
   without these words explains.
-- `(ADR NNNN)` cites the decision a rule comes from. A rule that no ADR decides yet is
-  marked **[no ADR]** and listed in [16-open-questions.md](16-open-questions.md), so
-  that Guillaume's rule "an ADR for every choice" stays checkable. If this
+- `(ADR NNNN)` cites the decision a rule comes from. A rule that no ADR decides is
+  marked **[no ADR]** and listed in [16 §16.3](16-open-questions.md): under the
+  [ADR policy](../adr/README.md#when-to-write-an-adr) it is settled here, and
+  raised to an ADR only if it turns out costly to reverse or a reviewer asks. If this
   specification and an accepted ADR disagree, the ADR wins and this file is the bug.
 - Names in code, in `--json` and in this specification are the internal ones
   (*local*, *published*, *protected*, *custodian*, *proposal*). People see the plain
   words of the vocabulary table ([ux.md §2.2](../design/ux.md)), as
   [01-concepts.md](01-concepts.md) recalls.
-- Experiments are cited as E1–E15 ([lab/git-annex/](../../lab/git-annex/)); models by
+- Experiments are cited as E1–E24 ([lab/git-annex/](../../lab/git-annex/)); models by
   configuration name (`T_n42o4`, see [models/tla/expected.tsv](../../models/tla/expected.tsv)).
 - Thresholds written as "default *x*" are settings with tested defaults; the
   usability test may change them (ux.md §11).
@@ -75,7 +76,7 @@ is the bug:
 1. **Accepted ADRs** ([docs/adr/](../adr/README.md)): the decisions. They are
    never rewritten; a change of mind is a new ADR.
 2. **This specification**: the current, normative contract that assembles them.
-   A detail it adds is marked **[no ADR]** until an ADR records it.
+   A detail it decides without an ADR is marked **[no ADR]**.
 3. **Proposed ADRs**: pending decisions. Where this specification assumes one, it
    says so (for example ADR 0040, ADR 0041).
 4. **The UX study** ([ux.md](../design/ux.md)) and the mockups: words, journeys and
@@ -131,9 +132,9 @@ or a collaborative editor), nor real-time sync of hot files (proposal §1).
 | 0031 free per folder | [08](08-custody-loops.md) |
 | 0036 local state | [11](11-local-state.md) |
 | 0037 background work | [15](15-resource-use.md) |
-| 0038 decisions on suggestions (Proposed) | [04](04-roster-and-authority.md) |
-| 0039 pointer-free freeing and keeping (Proposed) | [08](08-custody-loops.md) |
-| 0040 install proves its own file, racing saves win (Proposed) | [07](07-capture-and-install.md), [11](11-local-state.md) |
+| 0038 decisions on suggestions (Proposed) | [04](04-roster-and-authority.md), [02](02-guarantees.md), [13](13-verification.md) |
+| 0039 pointer-free freeing and keeping (Proposed) | [08](08-custody-loops.md), [07](07-capture-and-install.md), [12](12-observability.md), [13](13-verification.md) |
+| 0040 install proves its own file, racing saves win (Proposed) | [07](07-capture-and-install.md), [11](11-local-state.md), [13](13-verification.md) |
 | 0041 captured versions immutable until protected (Proposed) | [07](07-capture-and-install.md), [03](03-repository-and-roles.md), [06](06-status.md) |
 | 0042 purge by references and seals (Proposed) | [08](08-custody-loops.md), [05](05-catalogue-and-names.md), [06](06-status.md), [03](03-repository-and-roles.md) |
 | 0043 serving through a filter, pull only (Proposed) | [09](09-network-and-joining.md), [03](03-repository-and-roles.md), [08](08-custody-loops.md) |
@@ -144,17 +145,7 @@ or a collaborative editor), nor real-time sync of hot files (proposal §1).
 | 0048 versioned formats and rules, unknown never guessed (Proposed) | [04](04-roster-and-authority.md), [06](06-status.md), [08](08-custody-loops.md), [09](09-network-and-joining.md), [10](10-interfaces.md), [13](13-verification.md), [14](14-platforms-and-packaging.md) |
 | 0049 copies count once per failure domain (Proposed) | [02](02-guarantees.md), [04](04-roster-and-authority.md), [06](06-status.md), [08](08-custody-loops.md), [10](10-interfaces.md), [13](13-verification.md) |
 | 0050 capacity budgeted, space reserved, fewest copies first (Proposed) | [03](03-repository-and-roles.md), [06](06-status.md), [07](07-capture-and-install.md), [08](08-custody-loops.md), [09](09-network-and-joining.md), [15](15-resource-use.md) |
-| 0051 the roster is a fold of its changes; forks merge without an admin (Proposed) | [04](04-roster-and-authority.md), [05](05-catalogue-and-names.md), [13](13-verification.md) |
+| 0051 the roster is a fold of its changes; forks merge without an admin (Proposed) | [04](04-roster-and-authority.md), [05](05-catalogue-and-names.md), [13](13-verification.md), [02](02-guarantees.md), [09](09-network-and-joining.md) |
 | 0052 the catalogue is built from contributions and the conflicts they saw (Proposed) | [02](02-guarantees.md), [04](04-roster-and-authority.md), [05](05-catalogue-and-names.md), [08](08-custody-loops.md), [13](13-verification.md), [16](16-open-questions.md) |
 | 0053 trace logs reach TLC as generated TLA+ modules; TLC stays at 1.7.4 (Proposed) | [12](12-observability.md), [13](13-verification.md) |
-| 0054 a copy counts only if it can be locked (Proposed) | [08](08-custody-loops.md), [09](09-network-and-joining.md), [13](13-verification.md), [16](16-open-questions.md) |
-| 0055 install recovery rolls forward from a journalled proof (Proposed) | [07](07-capture-and-install.md), [11](11-local-state.md), [13](13-verification.md) |
-| 0056 every asserting experiment runs on Linux and macOS (Proposed) | [07](07-capture-and-install.md), [08](08-custody-loops.md), [13](13-verification.md), [14](14-platforms-and-packaging.md), [16](16-open-questions.md) |
-| 0057 the first milestone is a safety slice: one laptop, two custodians, no proposals or purge (Proposed) | [13](13-verification.md), [16](16-open-questions.md) |
-| 0059 a custodian's drop counts only copies hashed for it; repair counts only members that can take a key (Proposed) | [02](02-guarantees.md), [08](08-custody-loops.md), [09](09-network-and-joining.md), [13](13-verification.md) |
-| 0060 the platform layer uses rustix, with libproc on macOS; the lab seams are a self-kill and a file (Proposed) | [06](06-status.md), [11](11-local-state.md), [14](14-platforms-and-packaging.md), [16](16-open-questions.md) |
-| 0061 freeing hides a file as an install of its absence; no drop takes a key a kept path uses (Proposed) | [07](07-capture-and-install.md), [08](08-custody-loops.md), [12](12-observability.md), [13](13-verification.md) |
-| 0062 a removal revokes what the removed device signed that the removal had not seen (Proposed) | [02](02-guarantees.md), [04](04-roster-and-authority.md), [05](05-catalogue-and-names.md), [09](09-network-and-joining.md), [13](13-verification.md) |
-| 0063 a decision is a merge by a decider of the main it is made on (Proposed) | [02](02-guarantees.md), [04](04-roster-and-authority.md), [13](13-verification.md) |
-| 0067 the git driver checks every command against the allow-list and bounds every call with a deadline (Proposed) | [03](03-repository-and-roles.md), [13](13-verification.md), [14](14-platforms-and-packaging.md), [16](16-open-questions.md) |
-| 0068 messages are listed with their variables and checked in every bundle; the language follows gettext's order (Proposed) | [10](10-interfaces.md), [13](13-verification.md), [14](14-platforms-and-packaging.md), [16](16-open-questions.md) |
+| 0054 a copy counts only if it can be locked (Proposed) | [08](08-custody-loops.md), [09](09-network-and-joining.md), [13](13-verification.md), [16](16-open-questions.md), [02](02-guarantees.md) |

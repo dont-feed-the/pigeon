@@ -1,4 +1,4 @@
-//! Fluent bundles, language choice and the completeness test (ADRs 0028, 0068).
+//! Fluent bundles, language choice and the completeness test (ADR 0028, 10 §10.5).
 //!
 //! All text meant for people lives in `i18n/<lang>/pigeon.ftl`, embedded at
 //! build time, never in Rust code (ADR 0028). Code names a message by its id

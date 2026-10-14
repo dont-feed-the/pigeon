@@ -30,7 +30,7 @@
 
 git-annex reaches peers through its generic P2P transport: the remote URL
 `p2p-annex::iroh:<device-id>` ([03 §3.6](03-repository-and-roles.md); git-annex's
-format, `P2P/Address.hs`, ADR 0066) makes it
+format, `P2P/Address.hs`) makes it
 run the helper `git-annex-p2p-iroh`, a small Rust binary installed next to
 `pigeon`. The helper is a thin client of `pigeond` (ADR 0011) and has three
 modes, fixed by git-annex:
@@ -45,12 +45,12 @@ modes, fixed by git-annex:
   iroh`, then runs `git annex remotedaemon --foreground` as a child (ADR 0011).
 - The helper identifies its repository from its environment (`GIT_DIR`, else
   its working directory) and sends that absolute path with each request;
-  `pigeond` maps it to the repository and its group (ADR 0066). The helper
+  `pigeond` maps it to the repository and its group. The helper
   cannot read git's configuration: its I/O is the socket and stdio.
 - Each serving repository stores one git-annex token for its own address
   (`git annex p2p --gen-addresses`, once). The filter (§9.4) puts it in the
   client's `AUTH`, whatever token the client sent, so no token travels
-  between devices (ADR 0066).
+  between devices.
 - Without `pigeond`, or for an address that is not a device of the roster, the
   helper exits non-zero at once with its problem code on stderr
   (`git-annex-p2p-iroh: peer-unreachable`); git-annex then reports the remote
@@ -61,7 +61,7 @@ modes, fixed by git-annex:
 ### The iroh endpoint
 
 `pigeond` owns the only iroh endpoint of the device (QUIC, TLS 1.3, hole
-punching, relays). It speaks these ALPN protocols (ADR 0066):
+punching, relays). It speaks these ALPN protocols:
 
 | ALPN | Carries | Accepted from |
 |---|---|---|
@@ -94,11 +94,11 @@ on macOS. Messages are newline-delimited JSON objects, one request and one or
 more responses each, matched by an `id` field. The request types are those of
 the internal API ([10 §10.1](10-interfaces.md)); the helper uses three more:
 `Address {repository}`, `Connect {repository, device}`, `Listen {repository,
-socket}` (ADR 0066). After a `Connected` or `Listening` reply, the connection
+socket}`. After a `Connected` or `Listening` reply, the connection
 carries raw bytes only. `PIGEON_SOCKET` overrides the socket's path, for
 tests and the lab; on macOS the per-user temporary directory is `$TMPDIR`. A
 remotedaemon socket path over 100 bytes is reached through a short link next
-to it (ADR 0066).
+to it.
 
 `pigeond` refuses a second instance (a lock file next to the socket), and a
 client checks the peer credentials of the socket (`SO_PEERCRED`,
@@ -148,14 +148,19 @@ every device:
   object (`git annex contentlocation`, then SHA-256 against the `SHA256E`
   key). git-annex's lock checks only that the object is present
   (`lockContentShared` in `Annex/Content.hs`), and a rotten copy must not
-  prove a custodian's drop (ADR 0059). On a mismatch the filter releases the
+  prove a custodian's drop (ADR 0054). On a mismatch the filter releases the
   lock, answers `FAILURE` and queues `git annex fsck --key k`. Laptops' locks
   are not hashed: their copies never count, so their drops leave custody as
   it was;
 - on custodians, a request sent before the last is answered, and a positive
-  answer from git-annex that answers no request, close the session; once
-  `CONNECT git-upload-pack` is accepted, only `DATA`, `CONNECTDONE` and
-  `ERROR` pass from the client (ADR 0066);
+  answer from git-annex that answers no request, close the session.
+  `ALREADY-HAVE` and `ALREADY-HAVE-PLUS` are held for the sync, as `SUCCESS`
+  is, and a failed sync closes the session, so the held answer is never sent.
+  The probe keeps git-annex's lock until its sync and its hash are done; a
+  lock whose hash fails is released by the filter itself. A key from a peer
+  reaches git-annex only if it is printable ASCII, does not start with `-`
+  and holds no `/`. On every device, once `CONNECT git-upload-pack` is
+  accepted, only `DATA`, `CONNECTDONE` and `ERROR` pass from the client;
 - an unknown message, a malformed `DATA` length or a line over 4096 bytes closes
   the session. A length is checked before anything is forwarded, and a payload
   passes by length, never parsed. The server's output is parsed only for its
@@ -270,7 +275,7 @@ from the roster.
 - Commits the removed device signed that the removal had seen stay valid and
   count. Those it had not seen, signed before or after it on any parent, are
   **revoked** wherever the removal arrives, as are the keys they added and
-  what those keys sign (04 §4.4, ADR 0062). They count in no catalogue and
+  what those keys sign (04 §4.4, ADR 0051). They count in no catalogue and
   no roster; their changes are shown as suggestions of the device's person
   ("3 changes from *Martine's old laptop* arrived after it was removed").
   `pigeond` merges every accepted commit; revocation, not the merge, keeps
@@ -284,13 +289,13 @@ from the roster.
 ## 9.8 The stream header and trace context (ADR 0025)
 
 Each stream that `pigeond` opens to a peer starts with one header line before
-any git-annex byte, of at most 4096 bytes and within 10 seconds (ADR 0066):
+any git-annex byte, of at most 4096 bytes and within 10 seconds:
 
 ```json
 {"v":1,"group":"<group id>","traceparent":"00-<trace-id>-<span-id>-01"}
 ```
 
-- `group` routes the stream to the right repository on the peer (§9.2) and is
+- `group` routes the stream to the right repository on the peer and is
   checked against the roster for admission (§9.3).
 - `traceparent` is W3C trace context, so one action (an upload started by a
   capture, a fetch started by a change notice) is one trace across devices

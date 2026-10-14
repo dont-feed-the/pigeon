@@ -36,7 +36,7 @@ pub struct Repository {
     pub worktree: Option<PathBuf>,
     /// This device's role in the group.
     pub role: Role,
-    /// The token its git-annex accepts (ADR 0066).
+    /// The token its git-annex accepts (09 §9.2).
     pub auth_token: Option<String>,
     /// Whether it is being re-checked (06 §6.3).
     pub checking: bool,
@@ -48,7 +48,7 @@ pub struct Admitted {
     /// Its git-annex UUID in that group, from the roster.
     pub annex_uuid: Option<String>,
     /// Whether it is a custodian of that group: its locks are hashed
-    /// (ADR 0059).
+    /// (ADR 0054).
     pub custodian: bool,
 }
 
@@ -184,7 +184,7 @@ pub enum NetError {
     Io(#[from] std::io::Error),
 }
 
-/// How the endpoint is set up (ADR 0057: direct addresses and mDNS only).
+/// How the endpoint is set up (13 §13.12: direct addresses and mDNS only).
 #[derive(Clone, Debug)]
 pub struct NetConfig {
     /// The device key's 32-byte ed25519 secret.

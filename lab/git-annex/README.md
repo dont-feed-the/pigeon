@@ -29,7 +29,7 @@ in the proposal, §5.
 
 The lab joins CI once its scripts assert (ADR 0026). The `lab` workflow runs every
 asserting script, E12/E13, E14, E15, E15b, E18, E19, E20, E21, E22, E23 and E24, on Linux
-(the pinned standalone build) and macOS (Homebrew), in four parallel groups (ADR 0056).
+(the pinned standalone build) and macOS (Homebrew), in four parallel groups (13 §13.8).
 Each script isolates git from the person's configuration and sets a lab identity;
 a platform difference is printed as `SKIP (platform)` with its reason. Pending:
 E11 native Windows.

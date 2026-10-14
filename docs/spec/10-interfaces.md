@@ -133,14 +133,16 @@ macOS). They are calm:
   build time and loaded with `fluent-bundle` in the `pigeon-i18n` crate;
   `fluent-langneg` picks the language from the `language` setting, then the
   system locale (`LANGUAGE`, then the first of `LC_ALL`, `LC_MESSAGES` and
-  `LANG`, as gettext reads them), then English (ADR 0068).
+  `LANG`, as gettext reads them), then English.
 - Message ids are shared by the CLI, the web interface, notifications and the
   tray. Plural and gender rules are Fluent's.
 - A test checks that every message id exists in every language, that each
   message formats with sample arguments, and that no Rust code holds English
   text meant for people (a lint on string literals in renderers). Every id is
   listed with its variables in `pigeon_i18n::ids`, which the test compares
-  with each bundle (ADR 0068).
+  with each bundle. An argument is wrapped in Unicode isolation marks in the
+  web interface, not in a terminal; an unknown id renders as the id itself
+  and never fails, which the test keeps from happening. **[no ADR: messages]**
 - Times use `jiff`: relative under a day ("4 minutes ago"), absolute beyond
   ("Monday 18:02"), in local time; `--json` gives RFC 3339 instants (ux.md §4).
 - The vocabulary table of ux.md §2.2 is normative for both languages: *safe* /
@@ -162,7 +164,7 @@ An error that reaches a person is a **Problem**:
 
 - `code` is stable, kebab-case, documented in `docs/problems.md`, and part of
   the public interface. People see it as `P-` and the code in capitals
-  (`Code: P-INVITE-EXPIRED`, ux.md §7, ADR 0068).
+  (`Code: P-INVITE-EXPIRED`, ux.md §7).
 - `message` and `hint` are a Fluent id and arguments, rendered at the edge in
   the reader's language; logs and `--json` keep the code and the arguments.
 - `details` is for people helping: the operation, the object, and for a failed
@@ -180,7 +182,7 @@ Problem codes this specification uses include: `invite-expired`,
 `git-annex-untested`, `update-needed`, `pigeon-too-old`, `peer-too-old`,
 `peer-too-new` (ADR 0048),
 `settings-check` ([03 §3.5](03-repository-and-roles.md)), and in the slice
-`not-in-this-build` (ADR 0057) and `file-system-not-in-this-build` (ADR 0068).
+`not-in-this-build` (13 §13.12) and `file-system-not-in-this-build` (13 §13.12).
 
 ## 10.7 Checks before acting
 

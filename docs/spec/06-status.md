@@ -38,8 +38,8 @@ For a version with key *k*, introduced by commit *c*, on this device, at time *n
    components are taken over every custodian of the roster, and D is the set
    of those holding a member of H: a custodian that shares hardware with two
    others joins their domains whether or not it holds the key, so a new copy
-   never lowers the state (ADR 0064). With `min_sites` = 1 sites ask nothing;
-   above it only declared sites count (ADR 0064). If |D| ≥ K
+   never lowers the state (13 §13.13). With `min_sites` = 1 sites ask nothing;
+   above it only declared sites count (13 §13.13). If |D| ≥ K
    and the members of H span at least `min_sites` declared sites: the version
    is **protected**, *observed at* T, the K-th most recent among each domain's
    latest `heard(x)` ("Safe. Checked 3 hours ago").
@@ -114,7 +114,7 @@ admits = "all"                      # custodians: "endangered" while they keep r
 ```
 
 The `[custody]` values are the first 16 bytes of SHA-256 over `pigeon-domain`,
-the group ID and the identifier found, each followed by a zero byte (ADR 0060), recomputed at start and every hour: the
+the group ID and the identifier found, each followed by a zero byte, recomputed at start and every hour: the
 WWN, else the serial, of each whole disk under the repository's file system
 (`lsblk -s`, a loop device followed to its backing file), the server and
 export of a network share, `/etc/machine-id` (ADR 0049, E22). They show
@@ -177,7 +177,7 @@ The headline reduces every item to one of five levels (ADR 0027, ux.md §4):
 Working, then Safe; the first that applies wins. A *protected* version whose
 time T is older than `stale_after` counts as *Not checked recently*; a
 *missing* version (`content-missing`) as *Not safe yet* after the grace
-period; an *erased* one not at all: it was released on purpose (ADR 0064). ADR 0027 lists the levels as
+period; an *erased* one not at all: it was released on purpose (13 §13.13). ADR 0027 lists the levels as
 Needs you, Not safe yet, Working, Safe, Not checked recently; this specification
 reads *Not checked recently* as the honest form of *Working* or *Safe* when
 pigeon cannot confirm, never as better than them **[no ADR]**. A version known to

@@ -146,7 +146,7 @@ accepted and **X(c)** the others. *c* is **accepted** if and only if:
    a plain blob ([07 §7.9](07-capture-and-install.md)).
 7. every parent of *c* outside A(c) is a proposal (§4.5) that *c* adopts: the
    signer of *c* is one of its deciders under R(p) for every *p* in A(c), and
-   `tree(c)` holds the proposal's change (ADR 0063).
+   `tree(c)` holds the proposal's change (ADR 0038).
 
 A commit that breaks rule 6 is **malformed**: it is neither accepted nor kept as
 a proposal, and its keys are not references (ADR 0042).
@@ -176,7 +176,7 @@ Consequences, each a law with a property test (ADR 0012):
   proposal stays outside the catalogue; its content enters through the decision.
 - A commit mixing allowed and disallowed changes is rejected as a whole (P4);
   capture never writes one, because it splits ([07 §7.3](07-capture-and-install.md)).
-- **Revoked commits** (ADR 0062). In a set of commits, an accepted commit *x*
+- **Revoked commits** (ADR 0051). In a set of commits, an accepted commit *x*
   is revoked when the set holds an accepted removal of *x*'s signer that does
   not have *x* as an ancestor, or when *x*'s signer is not a device of the
   roster folded from *x*'s ancestors in the set. The catalogue
@@ -204,7 +204,7 @@ peer's history (a commit rejected here). Each is kept as
   a pending proposal of this device makes a new proposal whose parent is that
   proposal, so the chain keeps every captured save (P2) and people see one
   suggestion that was updated (ADR 0034) **[no ADR: shape]**.
-- **Deciders** (ADRs 0038, 0063), for a decision on `main` *m*: the persons
+- **Deciders** (ADR 0038), for a decision on `main` *m*: the persons
   allowed (§4.3) to make every change of the adoption on *m* (the diff
   between *m* and the tree of *Accept* below) under R(*m*); if nobody may, the
   admins, who adopt with Force (§4.6). Adoption and rejection use this one
@@ -226,7 +226,7 @@ peer's history (a commit rejected here). Each is kept as
 | superseded | a later proposal of the same chain exists |
 
   The state is the first row that holds, in the order accepted, rejected,
-  withdrawn, superseded, pending (ADR 0063). The commits that a removal
+  withdrawn, superseded, pending (ADR 0038). The commits that a removal
   revokes (§4.4) are shown with the suggestions of their signer's person and
   decided in the same way.
 
@@ -266,7 +266,7 @@ accepted parents. Force never waives rule 2 (signature), rule 4 (roster
 validity), rule 6 (well-formed tree) or the `.pigeon/` table. The CLI asks before forcing and the web
 interface says exactly what changes (ux.md §3, principle 5). A forced commit is
 shown in the file's history as "admin override by Roy". An admin's adoption
-of a suggestion that nobody else may make is a Force (§4.5, ADR 0063).
+of a suggestion that nobody else may make is a Force (§4.5, ADR 0038).
 
 The proposal (§2) let *any member* force; ux.md names Force "admin override".
 This specification follows ux.md, the later decision **[no ADR]**.
@@ -313,10 +313,10 @@ sign it, and it recomputes the roster.
   device removals, which always apply (a `remove person` removes the devices
   the person has at that point). The device removals of a skipped change are
   its `remove device` edits; a skipped `remove person` removes nothing, as in
-  the `Roster` model (`Removals = "always"`, ADR 0064). A removal of what is
+  the `Roster` model (`Removals = "always"`, 13 §13.13). A removal of what is
   gone is a no-op. A removal of a device the roster does not hold, its
   addition skipped or not yet folded, still records it as removed, so that
-  a later addition of it is skipped. The change of a revoked commit (§4.4, ADR 0062) is skipped
+  a later addition of it is skipped. The change of a revoked commit (§4.4, ADR 0051) is skipped
   the same way: only its device removals apply. The fold also carries the
   devices ever removed, with their `annex_uuid`, so that neither returns
   (§4.2).

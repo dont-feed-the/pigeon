@@ -8,7 +8,7 @@
 ## Context
 
 14 §14.6 lists ten crates and 14 §14.8 asks for edition 2024 and a pinned
-stable toolchain, both marked **[no ADR]**. The safety slice (ADR 0057)
+stable toolchain, both marked **[no ADR]**. The safety slice (13 §13.12)
 builds eight of them, and several agents write them in parallel, so the
 layout, the lints and the CI job must be fixed before the first line of each
 crate. ADR 0012 wants a pure core whose laws are checked by property tests;
@@ -47,7 +47,7 @@ text for people out of Rust code.
    warnings into errors. Output for people goes through `pigeon-i18n`
    (ADR 0028) and logs through `tracing` (ADR 0022), never `println!`.
 6. **CI.** The `ci` workflow's `rust` job runs on `ubuntu-24.04` and
-   `macos-latest` (ADR 0056): `cargo fmt --check`, `cargo clippy -D
+   `macos-latest` (13 §13.8): `cargo fmt --check`, `cargo clippy -D
    warnings`, `cargo test` (which runs the hegel-rust laws) and
    `scripts/check-core-deps`, all with `--locked`. `cargo deny` (ADR 0019)
    joins the job with the first third-party dependency.

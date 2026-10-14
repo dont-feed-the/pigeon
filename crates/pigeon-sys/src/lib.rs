@@ -8,7 +8,7 @@
 //! - [`pressure`]: the system's I/O pressure (ADR 0037);
 //! - [`paths`]: where pigeon keeps its files (11 §11.2, §11.3);
 //! - [`fingerprint`]: failure-domain fingerprints (ADR 0049);
-//! - [`lab`]: the two seams of the lab build (ADR 0057), inert in a release.
+//! - [`lab`]: the two seams of the lab build (13 §13.12), inert in a release.
 //!
 //! This is the only crate allowed `unsafe`, each block with a `SAFETY:` comment.
 

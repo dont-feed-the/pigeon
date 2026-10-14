@@ -5,7 +5,7 @@
 //! `Connect` opens a stream to a peer and relays it, `Listen` registers
 //! remotedaemon's socket for the repository's group until the helper's
 //! connection ends. Other requests belong to the loops; here they are
-//! answered `not-in-this-build` (ADR 0057). Only the same user may connect.
+//! answered `not-in-this-build` (13 §13.12). Only the same user may connect.
 
 use std::collections::{BTreeMap, HashMap};
 use std::os::unix::fs::MetadataExt;

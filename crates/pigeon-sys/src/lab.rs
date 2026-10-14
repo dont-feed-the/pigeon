@@ -1,4 +1,4 @@
-//! The two seams of the lab build (ADR 0057), and nothing else: failure-domain
+//! The two seams of the lab build (13 §13.12), and nothing else: failure-domain
 //! fingerprints read from a file, and named crash points.
 //!
 //! Without the `lab` feature both are inert: [`crash_point`] does nothing and

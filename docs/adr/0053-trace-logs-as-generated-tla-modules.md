@@ -1,7 +1,9 @@
 # 0053. Trace logs reach TLC as generated TLA+ modules; TLC stays at 1.7.4
 
 - **Status:** Proposed, 14 October 2026, by the agent, for issue #10
-  (Guillaume's review: "an ADR re-pinning TLC with the Json module").
+  (Guillaume's review: "an ADR re-pinning TLC with the Json module");
+  extended 14 October 2026 for issue #17 to runs of `pigeon-core`, absorbing
+  the former ADR 0065.
 
 ## Context
 
@@ -29,6 +31,12 @@ Measured on 14 October 2026 (Java 21, the pinned 1.7.4):
   (`ndJsonDeserialize` under the nightly: 0.7 s). A fault-injection run
   logs far fewer events, and each run is validated on its own.
 
+The fault-injection runs of 13 §13.5 need the drivers and the lab, but
+`pigeon-core` already computes what some models decide (which roster changes
+a device may sign, how they fold). Its hegel laws check the algebra, not that
+it is the model's: a canonical order with the signer before the time passes
+every law of the fold.
+
 ## Decision
 
 - The NDJSON format of 12 §12.3 is unchanged: pigeon logs as ADR 0008 says.
@@ -53,10 +61,29 @@ Measured on 14 October 2026 (Java 21, the pinned 1.7.4):
   refusals; `TraceSample` (a toy save-then-capture spec) accepts a good log
   whose values carry quotes, backslashes and nested values, checked by
   `ASSUME`, and rejects a bad log at line 2.
+- **Runs of the core are checked before the drivers exist.** For a model
+  whose decisions live in `pigeon-core`, a test runs a simulated environment
+  that takes the model's steps, asks the core for every decision and logs
+  each step as trace events of 12 §12.3 (one process, so a step counter is
+  the Lamport clock). The first is `Roster`: `RosterTrace.tla` takes exactly
+  the logged step and requires the model's roster to equal the code's at
+  every commit and merge. `scripts/check-code-traces` converts and checks
+  each run: every run must give `trace:accepted`, and a mutant with its last
+  roster altered `trace:rejected`; `ci` runs 20 seeds, `models-full` 200, and
+  seed 1 and its mutant are committed as `RosterTrace_good` and
+  `RosterTrace_bad`. `CaptureInstall` and `AnnexDrop` follow once their
+  decisions are in the core, and the simulated environments then give way to
+  the lab's real runs (13 §13.5).
 
 ## Consequences
 
 - One TLC for models and traces, pinned by SHA-256, with no nightly in CI.
+- A divergence between the core and a model fails CI with the first line no
+  behaviour explains; the canonical-order mutation above is caught at line 4
+  of one run in 20. The simulated environment is test code that mirrors the
+  model, so an error shared by both passes: the lab's runs against real
+  git-annex remain the evidence for the drivers. Each run costs a TLC start,
+  about 2 seconds.
 - The converter is pigeon's code to keep correct. Its encoding is a law:
   for every value it accepts, TLC reads back what the NDJSON held (13 §13.4,
   encodings). The fixtures and the `ASSUME`s check it.

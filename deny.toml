@@ -4,7 +4,7 @@
 [graph]
 all-features = true
 # The platforms pigeon is built for (ADR 0005); wasm-only crates of iroh's
-# relay client, under the Unlicense, are not built (ADR 0066).
+# relay client, under the Unlicense, are not built (14 §14.8).
 targets = [
     "x86_64-unknown-linux-gnu",
     "aarch64-unknown-linux-gnu",
@@ -16,7 +16,7 @@ targets = [
 version = 2
 ignore = [
     # Unmaintained, not vulnerable: a proc macro of netlink-packet-core,
-    # which iroh's netwatch uses on Linux (ADR 0066).
+    # which iroh's netwatch uses on Linux (14 §14.8).
     { id = "RUSTSEC-2024-0436", reason = "paste: unmaintained proc macro under iroh's netwatch" },
 ]
 yanked = "deny"
@@ -38,7 +38,7 @@ unused-allowed-license = "allow"
 
 # option-ext, under dirs-sys and dirs (ADR 0036): MPL-2.0 is file-level
 # copyleft, so pigeon's own files keep their licence; its source stays
-# available on crates.io (ADR 0060).
+# available on crates.io (14 §14.8).
 [[licenses.exceptions]]
 crate = "option-ext"
 allow = ["MPL-2.0"]
@@ -56,7 +56,7 @@ unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 
-# Mozilla's root certificates as data, through iroh's reqwest (ADR 0066).
+# Mozilla's root certificates as data, through iroh's reqwest (14 §14.8).
 [[licenses.exceptions]]
 crate = "webpki-roots"
 allow = ["CDLA-Permissive-2.0"]

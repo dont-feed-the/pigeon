@@ -3,7 +3,7 @@
 //! A version's state is a function of its key's observations, the spread of
 //! the commit that names it, the failure domains and the present time. The
 //! domains partition all the roster's custodians; D is the set of those that
-//! hold a member of H (ADR 0064).
+//! hold a member of H (13 §13.13).
 //!
 //! Laws (`tests/state.rs`): more presence observations never lower the state
 //! (its [`rank`]); adding a fingerprint or a declaration never raises it; the

@@ -49,7 +49,7 @@ already known to custodians, unless a purge erased it ([08 §8.6](08-custody-loo
 
 `catalogue(S)`, for an ancestor-closed set S of accepted commits, is built
 from **events**: the contributions of S that are not revoked
-([04 §4.4](04-roster-and-authority.md), ADR 0062) and the conflict events
+([04 §4.4](04-roster-and-authority.md), ADR 0051) and the conflict events
 they froze.
 
 1. **Order.** A contribution comes after its ancestors and after the conflict

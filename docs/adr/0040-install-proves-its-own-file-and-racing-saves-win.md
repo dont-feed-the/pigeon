@@ -2,8 +2,10 @@
 
 - **Status:** Proposed, 13 October 2026, by the agent, for issue #1
   (Guillaume's review: "Define an install protocol that preserves application
-  saves racing with incoming updates"), on the evidence of experiment E19.
-  Refines the mechanism of ADR 0034; its rule stands.
+  saves racing with incoming updates"), on the evidence of experiment E19;
+  revised 14 October 2026 on the evidence of the `CaptureInstall` model
+  (issue #10), absorbing the former ADR 0055 (recovery rolls forward from a
+  journalled proof). Refines the mechanism of ADR 0034; its rule stands.
 
 ## Context
 
@@ -60,24 +62,36 @@ Options were:
   rule and the annex clean filter. A racily clean entry (mtime not older
   than the index file) defers the path.
 - **Journal order:** temporary file fsynced; `begin` (with the expected stat
-  and the temporary inode) fsynced; move aside; scan and check; rename in;
-  fsync both directories; index; `done`. Each entry ends with exactly one of
-  `done`, `skip`, `raced` or `recovered`, and the aside's removal is logged
-  as `released`. Recovery decides from what it finds. If *p* has the
-  temporary inode, the rename happened, so the check had passed: redo the
-  index and mark the entry `done`. If *p* is absent and the aside exists,
-  put the aside back. If *p* is another file, hash the aside: the old key
-  means `raced`, anything else is a recovered version. If neither exists,
-  `skip`. Unreferenced staged files are deleted. Replaying twice equals
-  replaying once.
+  and the temporary inode) fsynced; move aside; scan and check; `proved` for
+  the entries of the batch that passed, fsynced, before any rename in; rename
+  in; fsync both directories; index; end record. A creation, where no file is
+  expected at *p*, is proved when *p* is found free. Each entry ends with
+  exactly one of `done`, `skip`, `raced` or `recovered`, appended before its
+  staged file is removed; the aside's removal is logged as `released`.
+- **Recovery rolls forward what was proved, and back what was not.** What is
+  at *p* alone cannot tell whether the proof had passed (see Consequences).
+  - *Proved:* if the new file is still at its stage name, rename it in with
+    `RENAME_NOREPLACE`; if *p* exists, the entry ends `raced`. Then redo the
+    index (git records the stat only if the file at *p* is the new key) and
+    end `done`. Whatever the person did at *p* after the rename is an
+    ordinary save on the new version, captured next.
+  - *Not proved:* if *p* is absent, the aside goes back with
+    `RENAME_NOREPLACE`. If *p* is another file, the aside is kept and hashed
+    at release (`raced` if it holds the old key, `recovered` otherwise).
+    Otherwise the entry ends `skip`.
+  - Only the staged files of ended entries are removed, so replaying twice
+    equals replaying once.
 - **Kept aside.** The moved file is kept until the first full scan at least
   10 minutes after `done` (default). It is unlinked then only if no process
   writes it and its content still hashes to the old key; otherwise it is
-  captured as a recovered version.
+  captured as a recovered version. Writers that escape the scan are assumed
+  to close their handle within this keep period (07 §7.5).
 - **Explicit resolution** (*Take the group's version*) runs the same
   sequence. The proof compares the file with the person's version recorded
-  in the divergence table when they chose, which capture has already
-  committed. A save after the choice fails the proof: nothing is replaced,
+  in the divergence table when they chose (`mine_stat`), which capture has
+  already committed from a quiet file (07 §7.2). A `mine_stat` that is racily
+  clean defers the resolution until the next capture. A save after the choice
+  fails the proof: nothing is replaced,
   the save extends their proposal, and they are told once. *Keep mine as a
   copy* copies from the captured key, never from the live file.
 
@@ -117,9 +131,36 @@ Options were:
     was idempotent. With the scan, no aside changed after its check. Without
     it, 9 of 49 writes landed in the aside and were kept as recovered
     versions.
-- The `CaptureInstall` model (spec 13) gets one action per step, and the
-  journal recovery function gets property tests (idempotence, every path
-  ends old, new or the person's). The writer scan on macOS awaits E19 on a
-  Mac.
+- **The `CaptureInstall` model** ([13 §13.2](../spec/13-verification.md))
+  has one action per step and runs the person acting while `pigeond` is down.
+  A recovery that decided from *p* alone, as the first version of this ADR
+  did, brought a finished deletion back (`CaptureInstall_rec07del`,
+  `Journal`) and undid a deletion the person made after the rename in
+  (`CaptureInstall_rec07`, `DeletionKept`). Deciding from whether the staged
+  file was still at its stage name failed the model's double replay. A
+  racily clean `mine_stat` let a resolution pass over a save not yet captured
+  (`CaptureInstall_quiet`, `CaptureFirst`), and a release after an escaping
+  writer's late write lost it (`CaptureInstall_keep`, `NoLoss`). With the
+  journalled proof, after any crash each path ends at its old content, the
+  new one or the person's, and the index agrees with it
+  (`CaptureInstall_own`, `CaptureInstall_crash2`). The journal recovery
+  function gets property tests (idempotence, every path ends old, new or the
+  person's).
+- Install costs one more journal record and fsync per batch. Rolling forward
+  may run the rename in at start, after `pigeond` was down for a long time,
+  so the proof can be old: a write through a handle opened before the move
+  still lands in the aside, which is hashed at release.
 - If this ADR is accepted, ADR 0034's status line gains "mechanism refined
   by ADR 0040".
+
+## Alternatives considered
+
+- *Check, then rename over*; *swap atomically* (`RENAME_EXCHANGE`); *leases
+  or advisory locks*; *best effort*: see Context.
+- *Decide recovery from the staged file and the index, with no new record.*
+  Deletions have no staged file, and the index can already hold the new key
+  before the index step (a rejected suggestion of a new file resolved by
+  taking the group's deletion).
+- *Always roll back.* Undoing a finished install means two more renames at a
+  name the person may be using, and discards any change made after the
+  rename in.

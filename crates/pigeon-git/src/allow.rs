@@ -1,4 +1,4 @@
-//! The commands pigeon may run, as 03 §3.7 lists them (ADR 0067), checked on every
+//! The commands pigeon may run, as 03 §3.7 lists them (03 §3.7), checked on every
 //! argument vector before a process starts. Anything not allowed is refused,
 //! so a command 03 §3.7 never runs (`sync`, `move`, `drop --from`, `git
 //! push`, …) cannot start by mistake.

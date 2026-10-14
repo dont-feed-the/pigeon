@@ -108,8 +108,8 @@ specifications ([13 §13.3](13-verification.md)).
 
 | Specification | Actions traced |
 |---|---|
-| `CaptureInstall` | the model's actions (ADR 0064): the person's `WriteAtP`, `WriteHandle`, `Replace`, `Delete`, `Open`, `Close`, `Tick` (inferred from the scan); pigeon's `Capture`, `Refresh`, `Start`, `TakeGroup`, `MoveAside`, `Scan`, `Check`, `RenameIn`, `Index`, `Done`, `Release`, `Retry`, `Crash`, `Recover`, `RecoverEnd`; the group's `NewVersion`, `Decide`, `ResolveMine` |
-| `Roster` | `Commit`, `Merge` (ADR 0065: runs of pigeon-core's fold) |
+| `CaptureInstall` | the model's actions (13 §13.13): the person's `WriteAtP`, `WriteHandle`, `Replace`, `Delete`, `Open`, `Close`, `Tick` (inferred from the scan); pigeon's `Capture`, `Refresh`, `Start`, `TakeGroup`, `MoveAside`, `Scan`, `Check`, `RenameIn`, `Index`, `Done`, `Release`, `Retry`, `Crash`, `Recover`, `RecoverEnd`; the group's `NewVersion`, `Decide`, `ResolveMine` |
+| `Roster` | `Commit`, `Merge` (ADR 0053: runs of pigeon-core's fold) |
 | `Authority` | `Capture`, `Revise`, `Adopt`, `Decide`, `Transfer`, `Remove`, `Merge`, `Fetch`, `Served`; the attacker's actions (`HCommit`, `HMerge`, `HAdd`, `HDecide`) log nothing: their commits appear in `Fetch` and `Served` |
 | `Evict` | `ChooseFree`, `ChooseKeep` (the `wanted` target), `Hide`, `HideFinish`, `Release`, `DropFree`, `Prune`, `Get`, `Stage`, `MoveIn`, `Unhide`, `Restage`, `Unstage`, `Capture`, `Crash`, `Restart`; `Replace` and `WriteHandle` inferred from the scan, `GroupChange` from accept, `Observe` from status reports |
 | `Purge` | `Request`, `Cancel`, `Restore`, `Seal`, `Release`, `DropReleased`, `Refetch` |

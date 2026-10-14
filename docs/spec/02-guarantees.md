@@ -18,7 +18,7 @@
   not corrupt, on custodians of the roster) span fewer than K failure domains,
   and ends when they span K again. A copy that rots opens an epoch when it
   rots, not when a scrub finds it, and a version whose intact copies have not
-  yet spanned K domains is in one (ADR 0059).
+  yet spanned K domains is in one (ADR 0049).
 - A version is **captured** when pigeon has added its content to the local annex
   and recorded it in a signed commit, accepted or proposal ([07](07-capture-and-install.md)).
 - A **saved file** is the content a person or their application left at a path
@@ -127,7 +127,7 @@ test (ADR 0012), "lab" a git-annex experiment.
 | INV-Unlink | an unlink changes no preferred content of custodians | P3 | [03 §3.4](03-repository-and-roles.md), ADR 0018 | E2, E4 |
 | INV-Purge | a key is dropped by a purge only if every reference of it known to a custodian when it sealed is covered by an active purge decision, every custodian not `dead` has sealed it, and no current version uses it | P3 | [08 §8.6](08-custody-loops.md), ADR 0042 | `Purge` model (KeepWins, WaitingPeriod, NoResurrection); purge laws; E14 |
 | INV-Valid | a commit is accepted iff one of its parents is accepted and it is valid under the rosters of its accepted parents (a proposal parent only through rule 7: adopted by a decider, with its change) | P4 | [04 §4.4](04-roster-and-authority.md) | laws (homomorphism, determinism); `Authority` model (AuthorisedContent, DecisionsByDeciders, AdoptionHoldsContent) |
-| INV-Revoke | in a history holding the removal of a device, nothing that device signed and the removal had not seen, nor any key it added, counts in the catalogue or the roster | P4 | [04 §4.4](04-roster-and-authority.md), [09 §9.7](09-network-and-joining.md), ADR 0062 | `Authority` model (RemovedSilenced, RemovalRevokesAdded) |
+| INV-Revoke | in a history holding the removal of a device, nothing that device signed and the removal had not seen, nor any key it added, counts in the catalogue or the roster | P4 | [04 §4.4](04-roster-and-authority.md), [09 §9.7](09-network-and-joining.md), ADR 0051 | `Authority` model (RemovedSilenced, RemovalRevokesAdded) |
 | INV-Merge | the tree of a merge is the catalogue of its history: a function of the contributions and of which saw which, never of merge commits (ADR 0052) | P5 | [05 §5.2](05-catalogue-and-names.md) | laws (commutative, associative, idempotent); the reference model `models/catalogue` |
 | INV-Names | portable names are injective within a folder and stable for non-colliding files | P5 | [05 §5.4](05-catalogue-and-names.md) | laws |
 | INV-Observed | a state "protected" is shown only with the time of the observations it rests on; observations older than the staleness threshold give "uncertain" | P6 | [06 §6.2](06-status.md) | laws (monotone, join) |

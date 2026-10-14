@@ -1,5 +1,5 @@
 //! git-annex over iroh through the helper and two `pigeond` endpoints on
-//! one host (09 §9.2–9.4, ADRs 0059, 0066): a laptop copies to a custodian,
+//! one host (09 §9.2–9.4, ADR 0054, 09 §9.2): a laptop copies to a custodian,
 //! drops its copy, gets it back byte for byte, cannot remove the custodian's,
 //! and, as a custodian peer, cannot drop on the proof of a rotten copy; a
 //! device outside the roster and an unknown group are refused. Needs
@@ -283,7 +283,7 @@ async fn annex_copy_get_and_refused_remove_over_iroh() {
     );
 
     // As a custodian peer, L's drop is proved only by a hashed copy on C
-    // (ADR 0059): a sound copy proves it, a rotten one does not, and C's
+    // (ADR 0054): a sound copy proves it, a rotten one does not, and C's
     // fsck then moves the rotten object out.
     custodian.directory.admit_device(
         "g1",

@@ -2,8 +2,10 @@
 
 - **Status:** Proposed, 14 October 2026, by the agent, for issue #12
   (Guillaume's review: "Distinguish independent failure domains from distinct
-  custody repositories"). Refines how ADR 0002 counts its K custody
-  copies.
+  custody repositories"); revised 14 October 2026 on the evidence of the
+  `Repair` model (issue #10), absorbing part of the former ADR 0059 (domain
+  repair counts only members that can take a key; epochs counted on intact
+  copies). Refines how ADR 0002 counts its K custody copies.
 
 ## Context
 
@@ -115,14 +117,22 @@ changes the worst case.
 
 **Domain repair.** `sizebalanced` stays the placement (ADR 0003) and knows
 nothing of domains, so it may give a key to two custodians of one domain.
-When the custodians that hold or want a key span d < K domains, the
+When the custodians that can take a key span d < K domains, the
 custodians of the other domains with room for it (free space above
 `annex.diskreserve`, within `maxsize`) rank themselves by SHA-256 of the key
 and their device ID. The best-ranked custodian of each of the first K − d
 domains in that order wants the key too. This is a pure function of the
 observations, so every custodian computes the same choice. Rebalancing never
 drops a key its custodian wants this way. It is not a planner: it only fills
-the deficit that `sizebalanced` leaves.
+the deficit that `sizebalanced` leaves. The custodians that *can take* a key
+are those that hold it, are downloading it, or want it and have room above
+their reserve for it, as their status reports say: `sizebalanced`'s want
+ignores real free space (`maxsize` is advisory, ADR 0050), and git-annex
+refuses a download past the reserve (`checkDiskSpace'` in
+`Annex/Content/LowLevel.hs`). Counting every member that wants the key, the
+`Repair` model ([13 §13.2](../spec/13-verification.md)) finds a full custodian
+in a missing domain that hides the deficit forever (`Repair_wantall`,
+property `Restores`).
 
 **Telling people.**
 
@@ -143,7 +153,11 @@ the deficit that `sizebalanced` leaves.
 
 **Guarantee.** Assumption F ([02 §2.2](../spec/02-guarantees.md)) is
 restated over failure domains: within a repair epoch of V, fewer than K of
-the failure domains holding V lose it. Failures that take a whole site are
+the failure domains holding V lose or corrupt it. A repair epoch for V
+starts when V's *intact* custody copies span fewer than K domains, from the
+moment a copy rots, not when a scrub finds it; a version not yet protected is
+in an epoch too (02 §2.1). Counted on verified copies, a rot before the epoch
+and one loss within it destroy V while F still holds. Failures that take a whole site are
 inside F only when the group declares sites and sets `min_sites` ≥ 2.
 pigeon never infers geography from the number of machines.
 

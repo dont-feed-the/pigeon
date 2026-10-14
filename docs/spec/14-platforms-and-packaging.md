@@ -51,11 +51,11 @@ btrfs, ZFS), since its repository is bare and no person edits it.
   brings a recent git. Homebrew installs no `git-remote-p2p-annex` (E12), so
   `pigeond` links that name to the `git-annex` it uses, in its own directory
   first in its children's `PATH`; the binary dispatches on its name
-  (`CmdLine/Multicall.hs`, ADR 0056).
+  (`CmdLine/Multicall.hs`).
 - **Checks at start.** `pigeond` runs `git annex version` and `git --version`
   and refuses to run below the minimum versions CI tests, with
   `git-annex-too-old` ([10 §10.6](10-interfaces.md)). The minimum is the
-  oldest version CI tests on each platform (ADR 0067): on
+  oldest version CI tests on each platform: on
   Linux the pinned standalone build, **10.20261006**; on macOS the version
   Homebrew provides, which was **10.20260901** when E20 ran in `lab.yml`.
 - **Untested versions** (ADR 0048). A git or git-annex newer than the newest
@@ -131,7 +131,7 @@ class by `pigeond` itself (ADRs 0032, 0037). On macOS, a **launchd agent**
 |---|---|---|---|
 | `pigeon-core` | lib | the pure core: roster, authority rule, catalogue merge, names, states, headline, queue order, journal replay, filter state machine, trace event enums (ADR 0012) | no |
 | `pigeon-proto` | lib | the request and response types of the API and the socket framing (ADR 0021) | no |
-| `pigeon-i18n` | lib | Fluent bundles, language choice, the completeness test (ADRs 0028, 0068) | reads embedded files only |
+| `pigeon-i18n` | lib | Fluent bundles, language choice, the completeness test (ADR 0028, 10 §10.5) | reads embedded files only |
 | `pigeon-git` | lib | drivers for git and git-annex: batch processes, JSON parsing, contract tests (ADRs 0004, 0010) | yes |
 | `pigeon-sys` | lib | the platform layer: renames, signals, `fadvise`, pressure, battery and metered probes, sockets (ADR 0037) | yes |
 | `pigeon-telemetry` | lib | the only crate depending on `opentelemetry*` (ADR 0025) | yes |
@@ -152,7 +152,7 @@ and upgraded deliberately.
 | Need | Crate | ADR |
 |---|---|---|
 | async runtime | `tokio` 1.53 | 0011 |
-| transport | `iroh` 1.3 (default features off, `tls-ring`), `iroh-mdns-address-lookup` 0.6; `iroh-relay` 1.3 for self-hosting | 0006, 0016, 0066 |
+| transport | `iroh` 1.3 (default features off, `tls-ring`: no relays or global discovery until ADR 0016's work, mDNS when asked), `iroh-mdns-address-lookup` 0.6; `iroh-relay` 1.3 for self-hosting | 0006, 0016 |
 | keys and signatures | `ssh-key` 0.6 (SSHSIG), `ed25519-dalek` 3.0 | 0007 |
 | join proof | `hmac` 0.13, `sha2` 0.11; `data-encoding` 2.11 (base32); `qrcode` 0.14 | 0017 **[no ADR: crates]** |
 | change hints | `notify` 8.2 | 0013 |
@@ -161,11 +161,11 @@ and upgraded deliberately.
 | errors | `thiserror` 2.0 | 0023 |
 | logs | `tracing` 0.1.44, `tracing-subscriber` 0.3, `tracing-appender` 0.2 | 0022 |
 | telemetry | `opentelemetry` 0.33, `tracing-opentelemetry` 0.34 | 0025 |
-| messages | `fluent-bundle` 0.16, `fluent-langneg` 0.13 (the version `fluent-bundle` uses), `fluent-syntax` 0.12 (tests) | 0028, 0068 |
+| messages | `fluent-bundle` 0.16, `fluent-langneg` 0.13 (the version `fluent-bundle` uses, with `unic-langid` 0.9; 0.14 moved to `icu_locid`, which the bundle does not take), `fluent-syntax` 0.12 (tests) | 0028 |
 | notifications, launcher | `notify-rust` 4.18, `open` 5.4; `tray-icon` 0.26 in v1.1 | 0029 |
 | times | `jiff` 0.2 | 0028 |
 | local state | `dirs` 7.0, `tempfile` 3.27, `toml` 1.1, `toml_edit` 0.25, `serde` 1.0, `serde_json` 1.0 | 0036 |
-| platform | `rustix` 1.1 (renames, `fadvise`, signals), `zbus` 5.19 (UPower, NetworkManager) | 0037, 0060 |
+| platform | `rustix` 1.1 (renames, `fsync`, `fadvise`, signals; `unsafe` stays in the macOS writer scan), `libc` 0.2 on macOS only (`libproc`, with the three structures it lacks declared from `<sys/proc_info.h>`), `zbus` 5.19 (UPower, NetworkManager) | 0037 **[no ADR: crates]** |
 | property tests (dev) | `hegeltest` 0.49 | 0012 |
 
 Not used: `gix` (ADR 0010: the git CLI only), `redb` and `rusqlite`
@@ -182,7 +182,12 @@ for [15](15-resource-use.md) if the shaper or the battery probe needs them.
   invariant (ADRs 0023, 0058).
 - `unsafe` only in `pigeon-sys`, each block with a safety comment.
 - English text meant for people never appears in Rust code (ADR 0028).
-- `cargo deny` checks licences and advisories in CI (ADR 0019).
+- `cargo deny` checks licences, advisories and sources in CI (ADR 0019), for
+  the four targets of ADR 0005 only. Beyond the permissive licences it allows
+  MPL-2.0 for `option-ext` alone (through `dirs`; its copyleft covers its own
+  files) and CDLA-Permissive-2.0 for `webpki-roots` and `webpki-root-certs`;
+  `deny.toml` records each exception and each ignored advisory with its
+  reason. `Cargo.lock` is exempt from the 1000-line rule.
 
 ## 14.9 Licence (ADR 0019)
 

@@ -1,7 +1,7 @@
 //! The filter between a peer and git-annex's `remotedaemon` (09 §9.4).
 //!
 //! A pure state machine over the two byte streams of one git-annex P2P
-//! session (ADRs 0014, 0043, 0054, 0059, 0066): the client's messages pass
+//! session (ADRs 0014, 0043, 0054, 09 §9.2): the client's messages pass
 //! an allow-list, `VERSION` is capped, removals are refused on custodians and
 //! pushes everywhere, a custodian answers `CHECKPRESENT` with a lock probe,
 //! a custodian's positive answer for a key waits until that object is synced
@@ -67,14 +67,14 @@ pub struct Config {
     pub role: Role,
     /// The token this repository's git-annex accepts. When set, it replaces
     /// the token of the client's `AUTH`, since `pigeond` has authenticated
-    /// the peer by its device key already (ADR 0066).
+    /// the peer by its device key already (09 §9.2).
     pub auth_token: Option<String>,
     /// The git-annex UUID the roster gives the peer. When set, an `AUTH`
     /// naming another UUID closes the session.
     pub peer_uuid: Option<String>,
     /// Whether the peer is a custodian: then a custodian's lock for it, or
     /// its probe, is granted only for an object whose hash matched
-    /// (ADR 0059).
+    /// (ADR 0054).
     pub peer_custodian: bool,
 }
 
@@ -93,7 +93,7 @@ pub enum Action {
         ticket: u64,
         /// The git-annex key whose object must be durable.
         key: String,
-        /// Whether the object must also be hashed (ADR 0059).
+        /// Whether the object must also be hashed (ADR 0054).
         hash: bool,
     },
     /// The object of `key` failed its hash: queue `git annex fsck --key`,

@@ -1,7 +1,7 @@
 # Checks of every push and pull request: repository rules, the fast set of
 # TLA+ models with their expected verdicts (ADR 0026), the catalogue model on
 # every schedule of its cases (ADR 0052), the Rust workspace on Linux and
-# macOS (ADR 0058), and runs of pigeon-core checked by TLC (ADRs 0008, 0064).
+# macOS (ADR 0058), and runs of pigeon-core checked by TLC (ADR 0008, 13 §13.13).
 name: ci
 
 on:
@@ -111,7 +111,7 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: tests, laws and the git-annex contract tests (13 §13.6)
         run: cargo test --workspace --locked --no-fail-fast
-      - name: the lab build's seams (ADR 0057)
+      - name: the lab build's seams (13 §13.12)
         run: cargo test -p pigeon-sys --features lab --locked
       - name: licences, advisories and sources (cargo deny, ADR 0019)
         if: runner.os == 'Linux'

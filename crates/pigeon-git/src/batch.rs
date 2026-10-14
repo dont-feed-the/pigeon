@@ -2,7 +2,7 @@
 //! ADR 0004). git-annex answers every input line with one JSON line, or a
 //! blank line when it has nothing to do for it; the contract tests pin this.
 //! A call past its deadline kills the process; the next call starts a new
-//! one, so one stuck transfer never blocks the queue (ADR 0056).
+//! one, so one stuck transfer never blocks the queue (03 §3.7).
 
 use std::path::PathBuf;
 use std::process::Stdio;

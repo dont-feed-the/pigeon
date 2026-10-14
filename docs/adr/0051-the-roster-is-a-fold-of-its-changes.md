@@ -2,8 +2,11 @@
 
 - **Status:** Proposed, 14 October 2026, by the agent, for issue #6
   (Guillaume's review: "Resolve concurrent roster updates with disjoint
-  remaining admin sets"). Replaces the merge rule of ADR 0009 for
-  `roster.toml`; the roster stays in the tree.
+  remaining admin sets"); revised 14 October 2026 for issue #10 on the
+  evidence of the `Authority` model, absorbing the former ADR 0062 (a removal
+  revokes what the removed device signed that the removal had not seen).
+  Replaces the merge rule of ADR 0009 for `roster.toml`; the roster stays in
+  the tree. Withdraws the merge policy of 09 §9.7.
 
 ## Context
 
@@ -22,6 +25,21 @@ That drops an authorized change, and it can hold back the removal of a stolen
 laptop until an admin approves it again. Neither is a function of the
 accepted history alone once three branches meet: a three-way merge depends on
 which pairs are merged first.
+
+Forks also let a removed device keep signing. 04 §4.4 judges a commit by the
+rosters at its parents, and a clean merge may be signed by a device of any
+parent's roster, so a stolen laptop can sign on an old parent after its
+removal. 09 §9.7 tried to narrow that with a policy: `pigeond` never merges
+into `main` a commit signed by a device absent from its `main`'s roster. The
+`Authority` model ([13 §13.2](../spec/13-verification.md)), which gives a
+removed laptop to an attacker, shows that the policy does not stop it (the
+laptop merges its backdated change with the removal itself, and a device that
+has not seen the removal fast-forwards: `Authority_tip`), that it leaves
+accepted commits out of `main` so that devices with the same commits show
+different trees (`Authority_tipquiet`, `Authority_tiplive`), that the rule
+alone lets the change in (`Authority_none`), and that the laptop can add a
+fresh key for its person (ADR 0017) that its removal does not name
+(`Authority_contentonly`).
 
 ## Options
 
@@ -101,6 +119,22 @@ removed on one branch is absent from every roster that includes that branch,
 even when the rest of its change is skipped.
 Additions can conflict and be skipped; they are then shown and can be redone.
 
+**Revocation.** In a set of commits, an accepted commit *x* is *revoked* if
+the set holds an accepted removal of *x*'s signer that does not have *x* as an
+ancestor, or if *x*'s signer is not a device of the roster folded from *x*'s
+ancestors in the set (so a key added by a revoked commit signs nothing that
+counts). Revocation does not change the verdict of 04 §4.4, which stays
+local; it acts where a history is read. The fold (04 §4.8) and the catalogue
+([05 §5.2](../spec/05-catalogue-and-names.md), ADR 0052) take the accepted
+commits that are not revoked; of a revoked commit only its device removals
+apply, as with a skipped change, so two concurrent removals of each other's
+devices both apply. Nothing is deleted: a revoked commit's change is shown as
+a suggestion of its signer's person (04 §4.5, ADR 0038), and the People page
+says "3 changes from *Martine's old laptop* arrived after it was removed".
+`pigeond` merges every accepted commit: 09 §9.7's policy is withdrawn. *I lost
+a computer* lists the devices the lost one added, and offers to remove them
+with it.
+
 **Recovery.** If the admins lose their keys, the paths of ADR 0047 apply
 (recovery sheets, refounding). No signature check is relaxed for it.
 
@@ -130,6 +164,21 @@ Additions can conflict and be skipped; they are then shown and can be redone.
   replaying gives different rosters depending on who merges
   (`Roster_rebase`). Computing R costs a walk of the roster-changing commits,
   which are few; `pigeon-core` caches R by canonical prefix.
+- Once a removal is in a device's history, nothing the removed device signed
+  that the removal had not seen reaches that device's catalogue or roster,
+  whatever the order of fetches and merges (`Authority_revoke`:
+  `RemovedSilenced`, `RemovalRevokesAdded`), and devices that stop fetching
+  converge (`ConvergedWhenQuiet`, `Converge` in `Authority_live`). An honest
+  lost laptop's last unseen changes become suggestions that someone decides;
+  removing one's own old laptop after it has synced loses nothing. Two
+  branches that remove each other's devices also revoke each other's unseen
+  work; recovery is ADR 0047.
+- The catalogue stays a function of a set of commits, so its merge laws hold,
+  but it is no longer monotone: a removal arriving can take a change out of
+  it, and a file can leave a laptop. Install treats this as a deletion by the
+  group; the content stays in history and with the custodians (INV-History).
+  Each removal costs one ancestry test per commit of that device
+  (`git merge-base --is-ancestor`, or generation numbers).
 - Laws (property tests, ADR 0012): R depends only on the ancestor set
   (merge order, duplicate delivery, and split and rejoin cycles do not
   matter); R of a linear history is sequential application; every R has an
@@ -137,7 +186,7 @@ Additions can conflict and be skipped; they are then shown and can be redone.
   most once; a skipped change is listed. The `Roster` TLA+ model checks the
   concurrent self-retirement, rotation of a device key during a concurrent
   removal, and merge orders, and shows ADR 0009's rule deadlocking
-  (13 §13.2).
+  (13 §13.2); `Authority` checks revocation with a smaller roster.
 
 ## Alternatives considered
 
@@ -149,3 +198,10 @@ Additions can conflict and be skipped; they are then shown and can be redone.
 - *A CRDT document* (ADR 0009, option 4). The fold is one, with commits as
   operations. A library would add a format beside git, which ADR 0009
   rejected.
+- *Keep 09 §9.7's merge policy*, or *a time cut-off* on a removed device's
+  commits: the model lets the change in through a device that has not seen
+  the removal, and author times are the signer's own claim.
+- *Revoke content but not keys* (`Authority_contentonly`): the key the laptop
+  added keeps signing.
+- *An online authority or a threshold of admins*: v1 has no server and no
+  quorum (ADR 0001).

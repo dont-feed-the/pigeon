@@ -1,5 +1,5 @@
 //! A lab build's crash point kills the process at the n-th crossing, as
-//! `kill -9` would, and not before (ADR 0057). The test runs itself as a
+//! `kill -9` would, and not before (13 §13.12). The test runs itself as a
 //! child with `PIGEON_LAB_CRASH` set and reads how the child ended.
 #![cfg(feature = "lab")]
 

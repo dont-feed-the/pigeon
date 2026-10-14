@@ -9,7 +9,7 @@ repository.workspace = true
 publish.workspace = true
 
 [features]
-# The two seams of the lab build (ADR 0057): fingerprints read from a file and
+# The two seams of the lab build (13 §13.12): fingerprints read from a file and
 # named crash points. A release build never enables it.
 lab = []
 

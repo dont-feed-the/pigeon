@@ -1,5 +1,5 @@
 # The full set of TLA+ models, slow rows included (ADR 0026), and 200 runs of
-# pigeon-core checked by TLC (ADR 0065). Runs when a
+# pigeon-core checked by TLC (ADR 0053). Runs when a
 # model or the runner changes, weekly, and by hand. GitHub runs `schedule`
 # and `workflow_dispatch` only from the default branch, so until v2 is the
 # default branch only the `push` trigger fires.

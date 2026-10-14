@@ -136,7 +136,7 @@ Every other device of the roster is a git remote of this repository:
 
 ```ini
 [remote "pigeon-3f9a0c1d2e4b"]          ; "pigeon-" + first 12 hex digits of the device ID [no ADR]
-    url = p2p-annex::iroh:<device-id>   ; git-annex's generic P2P transport (ADRs 0006, 0066)
+    url = p2p-annex::iroh:<device-id>   ; git-annex's generic P2P transport (ADR 0006, 09 §9.2)
     annex-uuid = <the device's git-annex UUID, from the roster>
     fetch = +refs/heads/main:refs/pigeon/peers/<device-id>/main
     fetch = +refs/heads/git-annex:refs/remotes/pigeon-3f9a0c1d2e4b/git-annex
@@ -175,8 +175,13 @@ failure keeps the command, exit status and the last 4 KiB of stderr
 (ADR 0023). A batch process answers a blank line for an input it cannot use,
 which is never read as success; one past its deadline is killed and restarted
 at the next call; it is stopped by closing its input, so that git-annex
-stages what it queued (ADR 0067). Every argument vector is checked against
-this table before a process starts (ADR 0067).
+stages what it queued, and is killed only after a grace period (git-annex
+stages its queued index updates as it ends, `Annex/Queue.hs`). Every argument
+vector, one-shot or batch, is checked against this table before a process
+starts (`pigeon_git::allow::check`). The check also refuses `get`, `copy` and
+`drop` without explicit keys, `copy` without `--to`, and `drop` without
+`--numcopies` and `--mincopies`, except a purge's `--force`; it guards against
+pigeon's own mistakes and is not a sandbox. **[no ADR: driver]**
 
 | Allowed | Used for |
 |---|---|
@@ -189,8 +194,8 @@ this table before a process starts (ADR 0067).
 | `git annex whereis`, `find`, `info`, `matchexpression --key`, `fsck --incremental --time-limit` | observations, wanted keys, scrubs |
 | `git annex numcopies`, `mincopies`, `trust`, `untrust`, `semitrust`, `group`, `wanted`, `maxsize`, `dead` | settings ([§3.5](#35-settings-follow-the-roster-or-drops-stop)) |
 | `git annex merge`, `smudge --update`, `restage`, `remotedaemon`, `version` | branch merge, sparse folders (E15), notifications, checks |
-| `git init`, `config`, `remote`, `git annex init`, `describe` | `create` and `join` (§3.6, ADR 0067) |
-| `git rev-parse`, `ls-files`, `ls-tree`, `show-ref`, `hash-object`, `mktree`, `git annex lookupkey`, `examinekey`, `contentlocation` | reading the index, trees and keys; writing objects without the working tree (ADR 0067) |
+| `git init`, `config`, `remote`, `git annex init`, `describe` | `create` and `join` (§3.6) |
+| `git rev-parse`, `ls-files`, `ls-tree`, `show-ref`, `hash-object`, `mktree`, `git annex lookupkey`, `examinekey`, `contentlocation` | reading the index, trees and keys; writing objects without the working tree |
 
 **Never run:** `git annex sync`, `assist` and `assistant` (they commit and
 merge on their own, E9); `git annex move`, `drop --from`, `satisfy`,

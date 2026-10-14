@@ -1,6 +1,6 @@
 //! The requests of pigeond's internal API and their responses (10 §10.1).
 //!
-//! The safety slice (ADR 0057) carries the requests of its commands and the
+//! The safety slice (13 §13.12) carries the requests of its commands and the
 //! three of the transport helper (09 §9.3); the others are answered with the
 //! problem `not-in-this-build`. Text for people is a [`Message`]: an id of
 //! the Fluent bundles and its arguments (ADR 0028).
@@ -120,19 +120,19 @@ pub enum Request {
     },
     /// The helper's `address` mode: this device's address for git-annex.
     Address {
-        /// The repository the helper runs for (ADR 0066).
+        /// The repository the helper runs for (09 §9.2).
         repository: String,
     },
     /// The helper's connect mode: a stream to `device` for this repository.
     Connect {
-        /// The repository the helper runs for (ADR 0066).
+        /// The repository the helper runs for (09 §9.2).
         repository: String,
         /// The peer's device ID, 64 hex digits.
         device: String,
     },
     /// The helper's listen mode: serve incoming peers on git-annex's socket.
     Listen {
-        /// The repository the helper runs for (ADR 0066).
+        /// The repository the helper runs for (09 §9.2).
         repository: String,
         /// remotedaemon's unix socket.
         socket: String,

@@ -732,7 +732,7 @@ def main():
     if BLIND:
         print(f'SKIP (platform): in {len(BLIND)} mmap trials git calls the file clean although a shared'
               ' mapping changed it, because its stat data did not change; each save is kept, and git sees'
-              ' the change once the stat changes (ADR 0056)')
+              ' the change once the stat changes (13 §13.8)')
     print('FAILED' if FAILS else 'ok: E19 passed')
     sys.exit(1 if FAILS else 0)
 
