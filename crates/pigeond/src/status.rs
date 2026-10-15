@@ -11,7 +11,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use pigeon_core::headline::{Level, headline, version_level};
+use pigeon_core::headline::{Level, checked_at, headline, version_level};
 use pigeon_core::roster::Role as DeviceRole;
 use pigeon_core::state::{Custodian, Reason, Settings, State, Version, rank, state};
 use pigeon_core::time::{Span, Time};
@@ -298,7 +298,8 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
     } else if !pending.is_empty() && level < Level::Working {
         level = Level::Working;
     }
-    let last = g.lock().heard.values().max().copied().unwrap_or(now);
+    let last =
+        checked_at(observed.iter().map(|o| &o.state).chain(retained.iter())).map_or(now, |at| at.0);
     let full = disk_full(g);
     let (mut lost, shortfall) = {
         let k = g.lock();

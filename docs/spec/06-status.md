@@ -5,6 +5,10 @@
 > (ADR 0036). Normative: `pigeon-core::state` (§6.2) and
 > `pigeon-core::headline` (§6.5), with their laws.
 
+The headline's checked time is the oldest safety observation among its
+versions (`headline::checked_at`, `tests/headline_freshness.rs`). News
+from a laptop never makes a backup machine's safety evidence newer.
+
 ## 6.1 Observations
 
 Each observation carries the time at which it was true (`pigeon-core::time`).

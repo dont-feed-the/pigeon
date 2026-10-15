@@ -119,8 +119,13 @@ jobs:
       - name: the release
         run: |
           d=$RUNNER_TEMP/releases/download/$TAG
-          gh release create "$TAG" --title "pigeon $TAG" --generate-notes --latest "$d"/*
+          case "${TAG#v}" in
+            *-*) set -- --prerelease --latest=false ;;
+            *) set -- --latest ;;
+          esac
+          gh release create "$TAG" --title "pigeon $TAG" --generate-notes "$@" "$d"/*
       - name: update the Homebrew tap after publication
+        if: ${{ !contains(github.ref_name, '-') }}
         run: |
           # Only the formula changes. Preserve concurrent changes on main.
           cp "$RUNNER_TEMP/releases/download/$TAG/pigeon.rb" "$RUNNER_TEMP/pigeon.rb"

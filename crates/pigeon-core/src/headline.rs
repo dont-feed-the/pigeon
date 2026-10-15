@@ -12,6 +12,20 @@
 use crate::state::{Missing, Settings, State};
 use crate::time::{Span, Time};
 
+/// The oldest safety observation behind a group headline (06 §6.5).
+/// A recent conversation with a laptop cannot refresh a custodian's proof.
+/// Local and missing versions carry no safety observation; their levels
+/// separately keep the headline from saying that everything is safe.
+pub fn checked_at<'a, D: 'a>(states: impl IntoIterator<Item = &'a State<D>>) -> Option<Time> {
+    states
+        .into_iter()
+        .filter_map(|state| match state {
+            State::Protected(at) | State::Uncertain(Some(at)) => Some(*at),
+            _ => None,
+        })
+        .min()
+}
+
 /// A headline level, lowest first.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Level {

@@ -4,7 +4,11 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
-## 0.3.4 — 2026-10-15
+## 0.4.0 — 2026-10-15
+
+Milestone M3, reach and installation, with early M4 usability fixes
+([installation evidence](docs/reports/reach-4.md),
+[usability sessions](docs/reports/usability-5.md)).
 
 ### Added
 
@@ -23,6 +27,8 @@ the second number, and every other pull request the third.
   special characters.
 - Status sees newly saved changes before capture finishes and does not
   call them safe. With too few backup machines, it explains how to add one.
+- A recent conversation with a laptop no longer makes an older backup
+  safety check appear recent.
 - Files at the top of the shared folder are visible in the web interface,
   with links to their versions.
 - `pigeon open` starts the personal daemon when it is stopped. Settings

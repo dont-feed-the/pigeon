@@ -33,17 +33,22 @@ Independent agent participants created groups, invited and joined other
 devices, shared files, restored versions, freed and kept folders, and
 preserved concurrent edits. The user accepted these sessions as human
 usability evidence; [usability-5.md](usability-5.md) records tasks and
-retests. The devices were isolated processes on one Linux host, not
-physical computers owned by Mario, Guillaume and Laurent. The relay
-scenario supplies the separate-network evidence.
+retests. The devices were isolated processes on one Linux host. The user
+instructed us to assume the members' dogfood has been done and not to let
+it block progress. That gate is treated as satisfied by this instruction,
+rather than claimed as a measured field trial. The relay scenario supplies
+the separate-network evidence.
 
 ## Release gates
 
-M3 remains untagged until the integrated candidate passes CI on both
+The M3 release candidate is 0.4.0. It remains untagged until it passes CI on both
 platforms, installation/uninstallation checks and the relay scenario.
 The Homebrew tap initially points to the already published alpha; the
 release workflow replaces its formula after publishing the candidate.
-Linux arm64 and Intel Mac archives, a fully static backup-machine archive,
-and verification of a real Homebrew install remain packaging gaps against
-the complete platform specification. No seven-night model streak,
+CI also installs the tap's real published binaries on macOS, and the
+release workflow starts the actual Linux system service as its dedicated
+account before uninstalling it and checking that its key remains. Linux
+arm64 and Intel Mac archives and a fully static backup-machine archive
+remain packaging gaps against the complete v1.0 platform specification.
+No seven-night model streak,
 72-hour soak or two-week release-candidate dogfood is claimed here.
