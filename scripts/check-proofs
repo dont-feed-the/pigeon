@@ -75,14 +75,15 @@ def tlapm_binary(explicit, out):
     installer = download("tlaps-1.5.0-inst.bin", TLAPS_URL, TLAPS_SHA)
     prefix = CACHE / "tlaps-1.5.0"
     binary = prefix / "bin/tlapm"
-    if not (prefix / ".pigeon-installed").exists():
+    stamp = prefix / ".pigeon-installed"
+    if not stamp.exists() or stamp.read_text().strip() != TLAPS_SHA:
         installer.chmod(0o700)
         print("Installing TLAPS (including its Isabelle self-test)...", flush=True)
         done = subprocess.run([str(installer), "-d", str(prefix)], capture_output=True, text=True)
         (out / "tlaps-install.log").write_text(done.stdout + done.stderr)
         if done.returncode:
             raise RuntimeError(f"TLAPS installation failed; see {out / 'tlaps-install.log'}")
-        (prefix / ".pigeon-installed").write_text(TLAPS_SHA + "\n")
+        stamp.write_text(TLAPS_SHA + "\n")
     return binary
 
 
@@ -134,32 +135,52 @@ class Checks:
         print(f"{name}: exit {done.returncode}, {seconds:.3f} s", flush=True)
         return done.returncode, output
 
-    def proof(self, work, module, name=None, reject=False):
+    def proof(self, work, module, name=None, reject=False, bridge=None):
         source = (work / f"{module}.tla").read_text()
         if re.search(r"\b(OMITTED|PROOF\s+OMITTED)\b", source):
             raise RuntimeError(f"{module}: an omitted proof is not evidence")
         if not re.search(r"^THEOREM Safety\s*==", source, re.M):
             raise RuntimeError(f"{module}: missing Safety theorem")
         code, output = self.run(name or module, [str(self.tlapm), "--nofp", "--threads", "2",
-                                                f"{module}.tla"], work)
+                                                f"{bridge or module}.tla"], work)
         if reject:
             # Syntax errors, missing tools and timeouts do not count as a mutant
             # detected. TLAPS must report an actual unproved obligation.
             if code != 3 or not re.search(r"\[ERROR\]: \d+/\d+ obligations failed", output):
                 raise RuntimeError(f"{name}: expected an unproved obligation; inspect its log")
         else:
-            summary = re.search(rf'File "\./{module}\.tla"[^\n]*:\n'
+            target = bridge or module
+            summary = re.search(rf'File "\./{target}\.tla"[^\n]*:\n'
                                 r'\[INFO\]: All ([1-9]\d*) obligations proved\.', output)
             if code or not summary or re.search(r"\b(omitted|unproved|failed)\b", output, re.I):
                 raise RuntimeError(f"{module}: proof incomplete; inspect its log")
+
+    def configuration_theorem(self, work, module, config):
+        cfg = (work / f"{config}.cfg").read_text()
+        if ("<-" in cfg or re.search(r"^\s*(CONSTRAINTS?|ACTION_CONSTRAINTS?|"
+                                      r"SYMMETRY|VIEW|INIT|NEXT|PROPERT(Y|IES))\b", cfg, re.M)):
+            raise RuntimeError(f"{config}: unsupported coverage configuration directive")
+        if not re.search(r"^CHECK_DEADLOCK FALSE\s*$", cfg, re.M):
+            raise RuntimeError(f"{config}: the proof does not establish absence of deadlock")
+        invariants = re.findall(r"^INVARIANT ([A-Za-z_][A-Za-z_0-9]*)\s*$", cfg, re.M)
+        if not invariants or len(invariants) != len(re.findall(r"^INVARIANTS?\b", cfg, re.M)):
+            raise RuntimeError(f"{config}: expected one named safety invariant per directive")
+        # Prove that the actual configured properties follow from Safety.
+        # Checking them in just the initial state would miss a newly added
+        # invariant that fails only after some transitions.
+        bridge = module + "Configuration"
+        conjunction = " /\\ ".join(invariants)
+        (work / f"{bridge}.tla").write_text(
+            f"---- MODULE {bridge} ----\nEXTENDS {module}\n"
+            f"THEOREM ConfigurationSafety == Spec => []({conjunction})\n"
+            "BY Safety, PTL\n====\n")
+        return bridge
 
     def coverage(self, work, module, config, name=None, reject=False):
         # Check the actual cfg constants against the very same expression
         # assumed by the proof, using TLC's constant evaluation. No Python copy
         # of those assumptions can drift away from the theorem.
         cfg = (work / f"{config}.cfg").read_text()
-        if re.search(r"^\s*(CONSTRAINT|ACTION_CONSTRAINT|SYMMETRY|VIEW|INIT|NEXT)\b", cfg, re.M):
-            raise RuntimeError(f"{config}: unsupported coverage configuration directive")
         cfg, count = re.subn(r"^SPECIFICATION Spec\s*$",
                              "INIT Init\nNEXT ProofCoverageNext", cfg, flags=re.M)
         if count != 1:
@@ -185,7 +206,12 @@ class Checks:
             with tempfile.TemporaryDirectory() as temp:
                 work = Path(temp)
                 copy_models(work)
+                bridge = self.configuration_theorem(work, module, config)
+                # TLAPS treats imported theorems as established; checking only
+                # an extending bridge reports zero obligations for its import.
+                # Prove the root itself first, then prove the configured claim.
                 self.proof(work, module)
+                self.proof(work, module, name=f"properties-{config}", bridge=bridge)
                 self.coverage(work, module, config)
 
     def mutants(self):
@@ -209,6 +235,17 @@ class Checks:
                     raise RuntimeError(f"{name}: mutation site changed")
                 path.write_text(text.replace(old, new))
                 self.proof(work, proof, name, reject=True)
+        with tempfile.TemporaryDirectory() as temp:
+            work = Path(temp)
+            copy_models(work)
+            path = work / "CaptureTransaction.tla"
+            path.write_text(path.read_text().replace(
+                "=============================================================================",
+                "IndexNeverMoves == idx = 1\n============================================================================="))
+            cfg = work / "CaptureTransaction_safe.cfg"
+            cfg.write_text(cfg.read_text() + "\nINVARIANT IndexNeverMoves\n")
+            bridge = self.configuration_theorem(work, "CaptureTransactionProof", "CaptureTransaction_safe")
+            self.proof(work, "CaptureTransactionProof", "unproved-config-invariant", reject=True, bridge=bridge)
         for constant, old, new in [("Expiry", "FALSE", "TRUE"),
                                     ("Check", '"safe"', '"p2p"'),
                                     ("Trusted", "{}", "{1}"),
@@ -233,7 +270,7 @@ class Checks:
                                     ("AnnexDrop_design4", "AnnexDrop")]:
                 if module == "AnnexDrop" and not include_slow:
                     continue
-                cmd = [self.java, "-Xmx1g", "-XX:+UseParallelGC", f"-Djava.io.tmpdir={work}",
+                cmd = [self.java, "-Xmx1g", "-Xss16m", "-XX:+UseParallelGC", f"-Djava.io.tmpdir={work}",
                        "-cp", str(self.jar), "tlc2.TLC", "-workers", "1",
                        "-metadir", str(work / config), "-config", config + ".cfg", module]
                 code, output = self.run("tlc-" + config, cmd, work, timeout=1800)
@@ -257,7 +294,8 @@ class Checks:
             cmd = base + ["--inv=CapturedBeforeDisplacement", "--length=6",
                           "--out-dir=" + str(self.out / "unguarded"), "CaptureTransactionSymbolic.tla"]
             code, output = self.run("apalache-unguarded", cmd, work)
-            if not code or "The outcome is: Error" not in output:
+            if (code != 12 or "The outcome is: Error" not in output
+                    or not re.search(r"state invariant \d+ violated", output)):
                 raise RuntimeError("Apalache did not find the unguarded-install counterexample")
 
 
