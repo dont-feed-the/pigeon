@@ -16,7 +16,9 @@ packaging/install-git-annex --stock    # the official git-annex, where pigeon lo
 Then copy the three programs to `bin/` of the directory above
 (`~/.local/share/pigeon/bin`), put it on your `PATH`, and run `pigeond`.
 A release is made by pushing a tag `v` + the workspace's version
-(`.github/workflows/release.yml`).
+(`.github/workflows/release.yml`). Each pull request bumps that version
+and adds its entry to [CHANGELOG.md](../CHANGELOG.md), as
+[AGENTS.md](../AGENTS.md) says.
 
 ## Try it on one computer
 
