@@ -4,6 +4,23 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.3.3 — 2026-10-16
+
+### Added
+
+- Tab completion in zsh, bash and fish: pigeon completes its commands,
+  options and paths, and what the daemon lists (suggestion IDs, held
+  changes, invitations, the group's machines, settings and their values).
+  Add `source <(COMPLETE=zsh pigeon)` (or `bash`; for fish,
+  `COMPLETE=fish pigeon | source`) to your shell's startup file.
+
+### Changed
+
+- The command line checks each command's forms before asking the daemon:
+  `pigeon held ID` needs one of `--share`, `--bring-back` and `--rename`,
+  `pigeon resolve` exactly one choice, and `pigeon invite --list` no
+  person; a wrong form prints that command's usage.
+
 ## 0.3.2 — 2026-10-16
 
 ### Added
