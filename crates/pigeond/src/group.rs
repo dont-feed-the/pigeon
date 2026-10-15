@@ -71,6 +71,11 @@ pub struct Known {
     pub history: Option<pigeon_core::roster::History<String>>,
     /// The verdict on each judged commit that was not accepted (04 §4.4).
     pub verdicts: BTreeMap<String, pigeon_core::authority::Verdict>,
+    /// The paths install lately wrote over another version: when, in
+    /// nanoseconds since the epoch, and the index entry they had. A save
+    /// within [`crate::capture::STALE_SAVE_NS`] of it is concurrent with
+    /// the installed version (ADR 0071); kept in memory only.
+    pub installed: BTreeMap<String, (i64, pigeon_core::authority::Entry)>,
 }
 
 /// How long remotedaemon's fetch of a notice may last before it is

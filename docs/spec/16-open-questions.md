@@ -122,9 +122,6 @@ into 0054; 0065 into 0053.
   and NAS packages (ADR 0032).
 - **Thresholds** of [06 §6.7](06-status.md), from the usability test, and
   `pending_max` ([07 §7.8](07-capture-and-install.md)).
-- **Saves from stale memory** (07 §7.5): an application holding a file's old
-  content that saves after an install replaces the new version, then only in
-  history. Should a save within seconds of an install count as concurrent?
 - **Shared mappings on macOS** change the stat only at `msync` (E19), so
   capture sees them late; the kept aside covers them. Hashing kept files
   periodically would close the gap, at a cost in reads.

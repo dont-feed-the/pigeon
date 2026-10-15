@@ -6,11 +6,16 @@
 //! writing waits for the next round (07 §7.5's writer scan). A version is
 //! added with `-c annex.thin=false`, so it stays an immutable copy in the
 //! annex until it is protected (03 §3.4). pigeon's own paths are never
-//! captured: the roster changes only through `pigeond`.
+//! captured: the roster changes only through `pigeond`. A save within ten
+//! seconds of an install of its path, as an application holding the old
+//! content makes, goes beside the installed version, under its conflict
+//! name, as if the two were concurrent (ADR 0071).
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use pigeon_core::authority::Tree;
+use pigeon_core::names;
 use pigeon_git::status::Entry;
 use pigeon_sys::fs::lstat;
 
@@ -18,6 +23,77 @@ use crate::capture_file::{Intent, Staged};
 use crate::git::{Error, is_pigeon_path};
 use crate::group::Group;
 use crate::trace::{Act, Tracer};
+
+/// How soon after an install a save of its path counts as concurrent with
+/// the installed version (ADR 0071): ten seconds.
+pub const STALE_SAVE_NS: i64 = 10_000_000_000;
+
+/// How much earlier than install's record a save may be: install renames
+/// the file in, then records.
+const STALE_SLACK_NS: i64 = 2_000_000_000;
+
+/// Whether `path`, modified at `mtime_ns`, was saved within
+/// [`STALE_SAVE_NS`] of an install of it.
+fn soon_after_install(g: &Group, path: &str, mtime_ns: i64) -> bool {
+    g.lock()
+        .installed
+        .get(path)
+        .is_some_and(|(at, _)| (at - STALE_SLACK_NS..=at + STALE_SAVE_NS).contains(&mtime_ns))
+}
+
+/// Where each save of `soon` goes (ADR 0071): its first free conflict name
+/// (05 §5.3) in `main`, with this device's person and the time now, when
+/// it changes the path and the person may add that name; the others keep
+/// their path. Each record of an install that a save used is dropped.
+fn beside(
+    g: &Group,
+    me: &str,
+    main: &Tree,
+    index: &Tree,
+    soon: &BTreeSet<String>,
+) -> BTreeMap<String, String> {
+    let mut out = BTreeMap::new();
+    let Some(doc) = g.roster() else {
+        return out;
+    };
+    let Some(person) = doc
+        .roster
+        .devices
+        .get(&pigeon_core::roster::DeviceId(me.to_owned()))
+        .map(|d| d.person.clone())
+    else {
+        return out;
+    };
+    let who = doc
+        .roster
+        .persons
+        .get(&person)
+        .map_or_else(|| person.0.clone(), |p| p.name.clone());
+    let utc = crate::util::now();
+    let when = names::Stamp {
+        utc,
+        offset: pigeon_sys::clock::local_offset_minutes(utc),
+    };
+    let taken: BTreeSet<String> = main.keys().map(|p| names::fold(p)).collect();
+    let none = pigeon_core::authority::Writers::new();
+    for p in soon {
+        if index.get(p).is_none() || index.get(p) == main.get(p) {
+            continue;
+        }
+        g.lock().installed.remove(p);
+        let mut n = 1;
+        let mut name = names::conflict_name(p, &who, when, n);
+        while taken.contains(&names::fold(&name)) || out.values().any(|q| *q == name) {
+            n += 1;
+            name = names::conflict_name(p, &who, when, n);
+        }
+        if pigeon_core::authority::allowed(&doc.roster, &none, &person, &name, true) {
+            tracing::info!(group = %g.id, path = %p, beside = %name, "saved-soon-after-install");
+            out.insert(p.clone(), name);
+        }
+    }
+    out
+}
 
 /// What one round of capture did.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -116,11 +192,16 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
         return Ok(done);
     };
     undo_interrupted(g).await?;
+    let now = crate::util::now_ns();
+    g.lock()
+        .installed
+        .retain(|_, (at, _)| now - *at <= 6 * STALE_SAVE_NS);
     let table = crate::conflicts_file::read(g).unwrap_or_default();
     let head = g.git.rev("refs/heads/main").await;
     let mut main: Option<Tree> = None;
     let (mut add, mut remove, mut not_shared) = (Vec::new(), Vec::new(), Vec::new());
     let (mut behind, mut pending, mut gone) = (false, Vec::new(), Vec::new());
+    let mut soon = BTreeSet::new();
     for (x, y, path) in status(g).await?.into_iter().filter_map(letters) {
         if is_pigeon_path(&path) {
             continue;
@@ -165,6 +246,9 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
                 } else if lagging {
                     pending.push(path);
                 } else {
+                    if x == '.' && soon_after_install(g, &path, st.mtime_ns) {
+                        soon.insert(path.clone());
+                    }
                     add.push(path);
                 }
             }
@@ -208,6 +292,7 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
         head,
         main,
         before,
+        soon,
         add,
         remove,
         pending,
@@ -250,6 +335,8 @@ struct Batch<'a> {
     head: Option<String>,
     main: Option<Tree>,
     before: Tree,
+    /// The paths saved soon after an install of them (ADR 0071).
+    soon: BTreeSet<String>,
     add: Vec<String>,
     remove: Vec<String>,
     pending: Vec<String>,
@@ -270,6 +357,7 @@ async fn commit_batch(
         head,
         mut main,
         before,
+        soon,
         add,
         remove,
         pending,
@@ -321,9 +409,13 @@ async fn commit_batch(
         None => g.git.tree(h).await?,
     };
     let index = g.git.index().await?;
+    let beside = beside(g, me, &main, &index, &soon);
     let changes: crate::suggest::Changes = add
         .iter()
-        .map(|p| (p.clone(), index.get(p).cloned()))
+        .map(|p| {
+            let at = beside.get(p).unwrap_or(p);
+            (at.clone(), index.get(p).cloned())
+        })
         .chain(remove.iter().map(|p| (p.clone(), None)))
         .collect();
     let (allowed, proposals) =

@@ -6,7 +6,10 @@
 //! keeps the name, the other a conflict name, and the laptop whose save
 //! lost the name keeps its file, a divergence in `conflicts.json`, until it
 //! holds `main`'s version. Capture commits on `main`'s tree, never on a
-//! lagging index's. A version whose content is not here waits.
+//! lagging index's. A save within ten seconds of an install, as an
+//! application holding the old content makes, is concurrent with the
+//! installed version too (ADR 0071); a later one replaces it. A version
+//! whose content is not here waits.
 //!
 //! Needs git-annex on PATH; skipped without, unless
 //! `PIGEON_REQUIRE_GIT_ANNEX` is set, as in CI.
@@ -360,6 +363,90 @@ async fn a_save_racing_an_install_is_kept_both_ways() {
             .is_empty()
     );
     assert_eq!(clean(&l).await, "");
+}
+
+#[tokio::test]
+async fn a_save_soon_after_an_install_is_kept_beside_it() {
+    let Some(l) = laptop().await else {
+        return;
+    };
+    write(&l, "a.txt", b"one\n");
+    write(&l, "b.txt", b"bee\n");
+    let c1 = capture::capture(&l.g, &dev(1).0, &l.t)
+        .await
+        .unwrap()
+        .commit
+        .unwrap();
+    let mut tree = l.git.tree(&c1).await.unwrap();
+    let theirs = version(&l, "a.txt", b"two\n", true).await;
+    tree.insert("a.txt".into(), theirs.clone());
+    tree.insert("b.txt".into(), version(&l, "b.txt", b"bee 2\n", true).await);
+    bens(&l, &tree, &c1, 60).await;
+    let done = install::incoming(&l.g, &dev(1).0, &l.t).await.unwrap();
+    assert_eq!(done.written, 2, "{done:?}");
+    assert_eq!(read(&l, "a.txt"), "two\n");
+    // A save of b.txt long after its install replaces the installed version.
+    l.g.lock().installed.get_mut("b.txt").unwrap().0 -= 30 * 1_000_000_000;
+    write(&l, "b.txt", b"bee\n");
+    let c3 = capture::capture(&l.g, &dev(1).0, &l.t)
+        .await
+        .unwrap()
+        .commit
+        .unwrap();
+    let parents = l.git.run(&["rev-list", "--parents", "-n1", &c3]).await;
+    assert_eq!(parents.unwrap().split_whitespace().count(), 2, "one parent");
+    let t3 = l.git.tree(&c3).await.unwrap();
+    assert!(
+        !t3.keys()
+            .any(|q| pigeon_core::names::is_copy_of(q, "b.txt")),
+        "{t3:?}"
+    );
+    // An application that held a.txt's old content saves it at once: the
+    // save goes beside Ben's version, which keeps the name.
+    write(&l, "a.txt", b"one\n");
+    let m = capture::capture(&l.g, &dev(1).0, &l.t)
+        .await
+        .unwrap()
+        .commit
+        .unwrap();
+    let first = l.git.run(&["rev-parse", &format!("{m}^")]).await.unwrap();
+    assert_eq!(first.trim(), c3, "a commit on main");
+    let tm = l.git.tree(&m).await.unwrap();
+    assert_eq!(
+        tm.get("a.txt"),
+        Some(&theirs),
+        "the installed version stays"
+    );
+    let copies: Vec<&String> = tm
+        .keys()
+        .filter(|q| pigeon_core::names::is_copy_of(q, "a.txt"))
+        .collect();
+    let [copy] = copies.as_slice() else {
+        panic!("one copy: {tm:?}");
+    };
+    assert!(copy.starts_with("a (Ana, "), "{copy}");
+    // Install writes the copy and leaves Ana's file, which diverges as one
+    // that lost the name does (07 §7.6).
+    install::incoming(&l.g, &dev(1).0, &l.t).await.unwrap();
+    assert_eq!(read(&l, copy), "one\n", "the save is kept beside it");
+    assert_eq!(read(&l, "a.txt"), "one\n", "Ana's file is not overwritten");
+    let table = pigeond::conflicts_file::read(&l.g).unwrap();
+    assert_eq!(
+        table.paths["a.txt"].kind,
+        pigeond::conflicts_file::Kind::Concurrent
+    );
+    assert!(
+        !l.g.lock().installed.contains_key("a.txt"),
+        "a record is used once"
+    );
+    assert_eq!(
+        capture::capture(&l.g, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .commit,
+        None,
+        "nothing more to capture"
+    );
 }
 
 #[tokio::test]

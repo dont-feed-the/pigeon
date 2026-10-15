@@ -8,6 +8,10 @@
 //! Ana's file is a suggestion she accepts. S15: a declined suggestion
 //! stays Bob's, and concurrent edits keep both versions, never overwriting
 //! (ADR 0034). S16: two roster changes made apart converge (ADR 0051).
+//!
+//! A person saves a file they received only after [`READ`] seconds: a save
+//! sooner after an install goes beside the installed version (ADR 0071),
+//! which the model does not follow.
 
 use crate::scenario::{Handle, Scenario, Steps, all as every, expect, hold, not, wait};
 use crate::step::{Condition, Kind, LaptopOp, Outcome, Step};
@@ -116,6 +120,10 @@ pub fn family() -> Family {
 /// busy runner, each fetching from its peers.
 const FLOW: u32 = 300;
 
+/// How long a person reads a file they received before saving it: more
+/// than ADR 0071's ten seconds.
+const READ: u32 = 12;
+
 fn scenario(id: &str, title: &str, world: World, steps: Vec<Step>) -> Scenario {
     Scenario {
         id: id.to_owned(),
@@ -176,6 +184,7 @@ pub fn s14() -> Scenario {
             FLOW,
         ),
         expect(not(a1.lists_suggestion(&note))),
+        hold(a2.has_text(&plan, "first plan"), READ),
         a2.write_text(&plan, "second plan"),
         wait(
             every(vec![
@@ -184,6 +193,7 @@ pub fn s14() -> Scenario {
             ]),
             FLOW,
         ),
+        hold(b1.has_text(&plan, "second plan"), READ),
         b1.write_text(&plan, "bob's plan"),
         wait(a1.lists_suggestion(&plan), FLOW),
         hold(
@@ -226,6 +236,7 @@ pub fn s15() -> Scenario {
     let (e1, e2) = ("ana-1's edit", "ana-2's edit");
     let mut steps = gather(&f, &[(&a, "first"), (&b, "ana's notes")]);
     steps.extend([
+        hold(b1.has_text(&b, "ana's notes"), READ),
         b1.write_text(&b, "bob's notes"),
         wait(a1.lists_suggestion(&b), FLOW),
         a1.decline(&b),

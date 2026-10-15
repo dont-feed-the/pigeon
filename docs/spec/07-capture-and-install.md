@@ -108,6 +108,17 @@ a handle opened before step 4 that escapes the scan lands in the kept aside
 and is captured at step 9; after the keep period it is lost. The name is
 absent for milliseconds (E19).
 
+**Saves soon after an install** (ADR 0071): an application that kept a
+file's old content saves it over the new version. So capture puts a save
+whose modification time is within 10 seconds after install wrote another
+version of that path (2 seconds before it allowed) beside the installed
+version: at its first free conflict name ([05 §5.3](05-catalogue-and-names.md)),
+with the saver's name and the time of the save, when the person may add
+that name; the installed version keeps the path, and the laptop's file is a
+`concurrent` divergence (§7.6), never overwritten. Install keeps when it
+wrote each path in memory, so a restart forgets them. `pigeond/tests/install.rs`
+checks it (`a_save_soon_after_an_install_is_kept_beside_it`).
+
 ## 7.6 Divergences and conflicts (ADRs 0034, 0035)
 
 A **divergence** is a path the person saved, so its file differs from the
@@ -117,7 +128,7 @@ catalogue's version and from pigeon's last install. The **divergence table**
 | Kind | Starts when | State |
 |---|---|---|
 | `suggestion` | capture made a proposal for the path | *waiting* ("waiting for Paul") |
-| `concurrent` | a merge gave the path to another person's version ([05 §5.3](05-catalogue-and-names.md)), or a save won the name at §7.5 step 7 | *conflict* |
+| `concurrent` | a merge gave the path to another person's version ([05 §5.3](05-catalogue-and-names.md)), a save won the name at §7.5 step 7, or a save soon after an install went beside it (§7.5, ADR 0071) | *conflict* |
 | `recovered` | install moved aside content not its own and could not put it back, or a kept aside changed (§7.5 steps 6 and 9) | *conflict* |
 
 *waiting* ends when the proposal is accepted (only the index changes,

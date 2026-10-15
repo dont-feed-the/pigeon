@@ -376,7 +376,13 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
             },
         };
         match put_or_remove {
-            Ok(Put::Done) if w.is_some() => done.written += 1,
+            Ok(Put::Done) if w.is_some() => {
+                done.written += 1;
+                if let Some(h) = h {
+                    let at = crate::util::now_ns();
+                    g.lock().installed.insert(path.clone(), (at, h.clone()));
+                }
+            }
             Ok(Put::Done) => done.removed += 1,
             Ok(_) => done.deferred += 1,
             Err(e) => {

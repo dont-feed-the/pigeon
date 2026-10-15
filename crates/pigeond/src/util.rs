@@ -70,6 +70,13 @@ pub fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
     out
 }
 
+/// Nanoseconds since the Unix epoch.
+pub fn now_ns() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_nanos()).unwrap_or(i64::MAX))
+}
+
 /// Seconds since the Unix epoch.
 pub fn now() -> i64 {
     std::time::SystemTime::now()

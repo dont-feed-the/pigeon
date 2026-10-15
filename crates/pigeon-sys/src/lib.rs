@@ -7,10 +7,12 @@
 //! - [`signal`]: pausing, resuming and stopping children (ADR 0037);
 //! - [`pressure`]: the system's I/O pressure (ADR 0037);
 //! - [`paths`]: where pigeon keeps its files (11 §11.2, §11.3);
-//! - [`lab`]: the two seams of the lab build (13 §13.12), inert in a release.
+//! - [`lab`]: the two seams of the lab build (13 §13.12), inert in a release;
+//! - [`clock`]: the local time zone's offset, for conflict names (05 §5.3).
 //!
 //! This is the only crate allowed `unsafe`, each block with a `SAFETY:` comment.
 
+pub mod clock;
 pub mod error;
 pub mod fs;
 pub mod lab;

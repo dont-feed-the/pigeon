@@ -347,9 +347,12 @@ locks (11 §11.4).
 
 S14–S16 (`pigeon-lab/src/people.rs`) give laptops persons: a spare laptop
 joins with `pigeon invite PERSON` and `pigeon join … --name`. The model
-follows the default root rule (an admin changes a file, anyone adds one,
-another change is a suggestion); conflict copies are observed by the
-executor only, as `Catalogue.tla` and `Authority.tla` model them.
+follows the default root rule (an admin or the file's only author changes
+a file, anyone adds one, another change is a suggestion); conflict copies
+are observed by the executor only, as `Catalogue.tla` and `Authority.tla`
+model them. A person saves a file they received only after 12 seconds,
+since a save sooner after an install goes beside it (ADR 0071), which the
+model does not follow; `pigeond/tests/install.rs` checks that rule.
 
 S7's repair order and S10's list of what recovery needed are read from the
 run's trace and report, not yet asserted by a condition.
