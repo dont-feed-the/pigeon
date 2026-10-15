@@ -20,7 +20,7 @@ permissions:
 
 concurrency:
   group: lab-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   GIT_ANNEX_VERSION: "10.20261006"
