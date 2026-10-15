@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Checks install-git-annex end to end (ADR 0069, spec 14.3): installs the
+# archive into a fresh prefix, puts pigeond, pigeon and the transport helper
+# from BIN in its bin/, creates a group, and waits for pigeond's status
+# report (06 6.3) to name pigeon's git-annex, while the git-annex first on
+# the PATH pigeond inherits is another one. CI runs it in git-annex.yml.
+#
+#   check-install --archive FILE --sha256 HEX --bin DIR
+set -euo pipefail
+
+here=$(cd "$(dirname "$0")" && pwd)
+archive= sha= bin=
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --archive) archive=${2:?}; shift 2 ;;
+    --sha256) sha=${2:?}; shift 2 ;;
+    --bin) bin=${2:?}; shift 2 ;;
+    *) echo "check-install: unknown argument $1" >&2; exit 2 ;;
+  esac
+done
+[ -n "$archive" ] && [ -n "$sha" ] && [ -n "$bin" ] || { echo "check-install: give --archive, --sha256 and --bin" >&2; exit 2; }
+want=$(sed -n 's/^PIGEON_VERSION=//p' "$here/install-git-annex")
+inherited=$(git annex version --raw 2>/dev/null || echo none)
+[ "$inherited" != "$want" ] || { echo "check-install: PATH already runs $want first; the check would prove nothing" >&2; exit 2; }
+
+t=$(mktemp -d /tmp/pgi.XXXXXX)
+pid=
+cleanup() {
+  if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; fi
+  chmod -R u+w "$t" 2>/dev/null || true
+  rm -rf "$t" || true
+}
+trap cleanup EXIT
+"$here/install-git-annex" --prefix "$t/p" --archive "$archive" --sha256 "$sha"
+mkdir -p "$t/p/bin" "$t/h/config" "$t/f"
+cp "$bin/pigeond" "$bin/pigeon" "$bin/git-annex-p2p-iroh" "$t/p/bin/"
+printf '[network]\nbind = "127.0.0.1:0"\nmdns = false\n\n[loops]\ninterval_seconds = 1\n' > "$t/h/config/config.toml"
+export PIGEON_SOCKET="$t/s.sock" HOME="$t/h" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+"$t/p/bin/pigeond" --home "$t/h" > "$t/pigeond.out" 2>&1 &
+pid=$!
+for _ in $(seq 60); do [ -S "$PIGEON_SOCKET" ] && break; sleep 1; done
+"$t/p/bin/pigeon" --json create Family "$t/f" --k 2 --name lap > "$t/create.out"
+got=
+for _ in $(seq 120); do
+  ref=$(git -C "$t/f" for-each-ref --format='%(refname)' refs/pigeon/status/ | head -1)
+  if [ -n "$ref" ]; then
+    got=$(git -C "$t/f" show "$ref:status.toml" | sed -n 's/^git_annex = "\(.*\)"$/\1/p')
+    break
+  fi
+  sleep 1
+done
+echo "inherited PATH runs git-annex $inherited; pigeond's children run ${got:-nothing}"
+if [ "$got" != "$want" ]; then
+  tail -n 40 "$t/pigeond.out" "$t/create.out" >&2 || true
+  echo "check-install: pigeond's status report names git-annex '${got}', not $want" >&2
+  exit 1
+fi

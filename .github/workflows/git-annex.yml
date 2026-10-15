@@ -6,8 +6,10 @@
 # their copies with pigeon's build and lose them with the stock one, and
 # E25 runs 500 fetches over P2P, none of which may hang with pigeon's build.
 # The stock runs are the negative control: they report, and never fail the
-# job. A cold build takes about an hour; it runs only when the patch set
-# changes.
+# job. The installer job runs packaging/check-install: install-git-annex
+# puts the build in a fresh prefix, and pigeond's children run it although
+# the stock git-annex is first in the PATH they inherit. A cold build takes
+# about an hour; it runs only when the patch set changes.
 name: git-annex
 
 on:
@@ -18,6 +20,8 @@ on:
       - .github/actions/git-annex-pigeon/**
       - lab/git-annex/ga-e23-p2p-drop.py
       - lab/git-annex/ga-e25-relay-stress.py
+      - packaging/install-git-annex
+      - packaging/check-install
   workflow_dispatch:
 
 permissions:
@@ -157,3 +161,64 @@ jobs:
             [ "$got" = "$PIGEON_VERSION" ] || { echo "::error::PATH runs git-annex $got"; exit 1; }
           done
           ls -l "$(command -v git-remote-p2p-annex)" && git --version
+
+  installer:
+    name: install-git-annex, and pigeond's children run what it installed (${{ matrix.os }})
+    needs: git-annex
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: the installer pins the versions this workflow builds and checks
+        run: |
+          . third_party/git-annex/VERSION
+          grep -qx "PIGEON_VERSION=$PIGEON_VERSION" packaging/install-git-annex
+          grep -qx "STOCK_SHA256=$GIT_ANNEX_SHA256" packaging/install-git-annex
+          grep -qx "STOCK_VERSION=$GIT_ANNEX_VERSION" packaging/install-git-annex
+      - id: key
+        run: echo "key=git-annex-pigeon-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/git-annex/VERSION', 'third_party/git-annex/build.sh', 'third_party/git-annex/patches/**') }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pigeon-git-annex-dist
+          key: ${{ steps.key.outputs.key }}
+          fail-on-cache-miss: true
+      - name: the archive, as the git-annex job uploads it
+        run: tar -C ~/.cache/pigeon-git-annex-dist -czf "$RUNNER_TEMP/git-annex-pigeon.tar.gz" bin
+      - name: the stock git-annex first in PATH (Linux, a link, so that the system's git stays)
+        if: runner.os == 'Linux'
+        run: |
+          t=$RUNNER_TEMP/git-annex-standalone-amd64.tar.gz
+          curl -fsSL -o "$t" https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
+          echo "$GIT_ANNEX_SHA256  $t" | sha256sum -c -
+          tar -C ~ -xzf "$t" && mkdir -p ~/stock-first && ln -s ~/git-annex.linux/git-annex ~/stock-first/
+          echo ~/stock-first >> "$GITHUB_PATH"
+      - name: the stock git-annex first in PATH (macOS)
+        if: runner.os == 'macOS'
+        run: brew install git-annex
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: rust-${{ matrix.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: rust-${{ matrix.os }}-
+      - name: the pinned toolchain (rust-toolchain.toml)
+        run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
+      - name: pigeond, pigeon and the transport helper
+        run: cargo build --locked -p pigeond -p pigeon -p git-annex-p2p-iroh
+      - name: install-git-annex installs pigeon's build, and pigeond's children run it
+        run: |
+          a=$RUNNER_TEMP/git-annex-pigeon.tar.gz
+          packaging/check-install --archive "$a" --sha256 "$(shasum -a 256 "$a" | cut -d' ' -f1)" --bin target/debug \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: install-git-annex --stock installs the pinned standalone build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          packaging/install-git-annex --stock --prefix "$RUNNER_TEMP/stock"
+          "$RUNNER_TEMP/stock/git-annex.linux/git-annex" version --raw

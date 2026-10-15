@@ -17,10 +17,11 @@ pub const FIXED: [(&str, &str); 4] = [
 /// How children are started.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GitEnv {
-    /// A directory put first in the children's `PATH`: pigeon's git-annex
-    /// build on Linux, or the directory holding the `git-remote-p2p-annex`
-    /// link on macOS (14 §14.3).
-    pub path_first: Option<PathBuf>,
+    /// Directories put first in the children's `PATH`, in order: the one
+    /// holding the transport helper's link (and the `git-remote-p2p-annex`
+    /// link where Homebrew installs none), then the git-annex the installer
+    /// put in pigeon's directory (14 §14.3).
+    pub path_first: Vec<PathBuf>,
     /// Extra variables, set after the fixed ones (for example by tests).
     pub extra: Vec<(OsString, OsString)>,
 }
@@ -36,17 +37,18 @@ impl GitEnv {
             .into_iter()
             .filter(|(k, _)| !k.to_string_lossy().starts_with("GIT_"))
             .collect();
-        if let Some(dir) = &self.path_first {
+        if !self.path_first.is_empty() {
             let old = out
                 .iter()
                 .position(|(k, _)| k == "PATH")
                 .map(|i| out.remove(i).1);
-            let mut paths = vec![dir.clone()];
-            if let Some(old) = old {
-                paths.extend(std::env::split_paths(&old));
+            let mut paths = self.path_first.clone();
+            if let Some(old) = &old {
+                paths.extend(std::env::split_paths(old));
             }
-            let joined =
-                std::env::join_paths(paths).unwrap_or_else(|_| dir.clone().into_os_string());
+            let joined = std::env::join_paths(paths)
+                .or_else(|_| std::env::join_paths(&self.path_first))
+                .unwrap_or_default();
             out.push(("PATH".into(), joined));
         }
         for (k, v) in FIXED {
@@ -77,7 +79,7 @@ mod tests {
             ("PATH".into(), "/usr/bin".into()),
         ];
         let env = GitEnv {
-            path_first: Some("/opt/annex".into()),
+            path_first: vec!["/opt/bin".into(), "/opt/annex".into()],
             extra: vec![],
         };
         let out = env.child_env(parent);
@@ -90,7 +92,7 @@ mod tests {
         assert_eq!(get("GIT_DIR"), None);
         assert_eq!(get("GIT_CONFIG_GLOBAL"), Some("/dev/null".into()));
         assert_eq!(get("HOME"), Some("/home/m".into()));
-        assert_eq!(get("PATH"), Some("/opt/annex:/usr/bin".into()));
+        assert_eq!(get("PATH"), Some("/opt/bin:/opt/annex:/usr/bin".into()));
         assert_eq!(
             out.iter().filter(|(k, _)| k == "GIT_CONFIG_GLOBAL").count(),
             1

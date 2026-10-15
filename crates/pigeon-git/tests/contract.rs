@@ -44,7 +44,7 @@ fn env_with_home(home: &Path) -> GitEnv {
     .unwrap();
     std::fs::write(home.join(".gitignore_global"), "*.txt\n").unwrap();
     GitEnv {
-        path_first: None,
+        path_first: Vec::new(),
         extra: vec![("HOME".into(), home.as_os_str().to_owned())],
     }
 }

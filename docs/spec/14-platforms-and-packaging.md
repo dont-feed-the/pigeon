@@ -36,13 +36,21 @@ supports (ext4, xfs, btrfs, ZFS): its repository is bare.
   `third_party/git-annex/`, reporting `10.20261006-pigeon1`, built by CI
   for Linux x86-64 (on Ubuntu 24.04, so glibc 2.39 or later) and macOS on
   Apple Silicon, with the names it dispatches on (`git-remote-p2p-annex`
-  among them). The installer puts it in pigeon's directory, first in the
-  `PATH` of `pigeond`'s children. On Linux it runs with the system's git,
+  among them). The installer, `packaging/install-git-annex`, puts it in
+  `git-annex/bin` of pigeon's directory, the one that holds pigeon's `bin/`
+  (`~/.local/share/pigeon`, `/opt/pigeon` on a backup machine,
+  `~/Library/Application Support/pigeon` on macOS until the formula of
+  §14.5), after checking the archive's sha256 and the version it reports.
+  `pigeond` finds it beside its own directory and puts it first in its
+  children's `PATH`, after the directory of its links; `git-annex.yml`
+  checks this on both runners with the stock build first in the `PATH`
+  `pigeond` inherits (`packaging/check-install`). On Linux it runs with the system's git,
   since the standalone build's `git` would put its own git-annex first;
   a distribution with glibc 2.39 ships git 2.38 or later (ADR 0010).
   Linux arm64, macOS on Intel and older C libraries run the stock builds
   below until CI builds them **[no ADR]**.
-- **Linux, stock:** the installer fetches git-annex's standalone build into
+- **Linux, stock:** the installer (`--stock`, or where pigeon's build does
+  not run) fetches git-annex's standalone build at its pinned sha256 into
   `~/.local/share/pigeon/git-annex.linux` (`/opt/pigeon/git-annex.linux` on
   a backup machine) and uses the git it bundles (≥ 2.38, ADR 0010), first
   in the `PATH` of `pigeond`'s children; the person's git is not touched.

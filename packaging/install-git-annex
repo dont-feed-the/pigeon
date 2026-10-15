@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# Installs the git-annex pigeond runs (ADR 0069, spec 14.3) under PREFIX, the
+# directory that holds pigeon's bin/: pigeon's patched build in
+# PREFIX/git-annex/bin where one exists for this machine (Linux x86_64 with
+# glibc 2.39 or later, macOS arm64), else the stock build, git-annex's
+# standalone tarball in PREFIX/git-annex.linux on Linux, Homebrew's on macOS.
+# pigeond puts that directory first in its children's PATH. An archive is
+# checked against its sha256 before it is unpacked; the new directory
+# replaces the old one only once its git-annex reports the expected version.
+#
+#   install-git-annex [--prefix DIR] [--archive FILE|URL --sha256 HEX] [--stock]
+#
+# --archive is git-annex.yml's git-annex-pigeon-<runner>.tar.gz (or a
+# release's copy); --stock installs the stock build even where pigeon's runs.
+set -euo pipefail
+
+PIGEON_VERSION=10.20261006-pigeon1
+STOCK_VERSION=10.20261006
+STOCK_URL=https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
+STOCK_SHA256=88ea73c9bb8fb751916e0e4a0a8f489a7476f9b9e861fd2cce2601a77f4f409d
+
+die() { echo "install-git-annex: $*" >&2; exit 1; }
+sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
+
+case "$(uname -s)" in
+  Darwin) prefix="$HOME/Library/Application Support/pigeon" ;;
+  *) prefix="${XDG_DATA_HOME:-$HOME/.local/share}/pigeon" ;;
+esac
+archive= want_sha= stock=
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --prefix) prefix=${2:?}; shift 2 ;;
+    --archive) archive=${2:?}; shift 2 ;;
+    --sha256) want_sha=${2:?}; shift 2 ;;
+    --stock) stock=1; shift ;;
+    -h|--help) sed -n '2,14s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    *) die "unknown argument $1" ;;
+  esac
+done
+
+# Whether pigeon's build runs here (14.3).
+ours_runs() {
+  case "$(uname -s)-$(uname -m)" in
+    Darwin-arm64) return 0 ;;
+    Linux-x86_64)
+      local glibc
+      glibc=$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $2}') || return 1
+      [ -n "$glibc" ] && [ "$(printf '%s\n2.39\n' "$glibc" | sort -V | head -1)" = 2.39 ] ;;
+    *) return 1 ;;
+  esac
+}
+
+# fetch SRC DEST SHA: copies or downloads SRC to DEST and checks its sha256.
+fetch() {
+  case "$1" in
+    https://*) curl -fsSL --retry 3 -o "$2" "$1" ;;
+    *) cp "$1" "$2" ;;
+  esac
+  [ "$(sha256 "$2")" = "$3" ] || die "$1 does not match sha256 $3"
+}
+
+# swap NEW DIR: DIR becomes NEW, the old DIR is removed once NEW is in place.
+swap() {
+  rm -rf "$2.old"
+  if [ -e "$2" ]; then mv "$2" "$2.old"; fi
+  mv "$1" "$2"
+  rm -rf "$2.old"
+}
+
+mkdir -p "$prefix"
+tmp=$(mktemp -d "$prefix/.install-git-annex.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+
+if [ -z "$stock" ] && ours_runs; then
+  [ -n "$archive" ] || die "pigeon's build runs here: give --archive (git-annex.yml's artifact), or --stock"
+  if [ -z "$want_sha" ] && [ -f "$archive.sha256" ]; then want_sha=$(cut -d' ' -f1 "$archive.sha256"); fi
+  [ -n "$want_sha" ] || die "give --sha256 for $archive"
+  fetch "$archive" "$tmp/a.tar.gz" "$want_sha"
+  mkdir "$tmp/git-annex"
+  tar -C "$tmp/git-annex" -xzf "$tmp/a.tar.gz"
+  got=$("$tmp/git-annex/bin/git-annex" version --raw) || die "the archive's git-annex does not run here"
+  [ "$got" = "$PIGEON_VERSION" ] || die "the archive holds git-annex $got, not $PIGEON_VERSION"
+  [ -e "$tmp/git-annex/bin/git-remote-p2p-annex" ] || die "the archive has no git-remote-p2p-annex"
+  swap "$tmp/git-annex" "$prefix/git-annex"
+  echo "pigeon's git-annex $got in $prefix/git-annex/bin"
+elif [ "$(uname -s)" = Linux ]; then
+  [ "$(uname -m)" = x86_64 ] || die "no stock standalone build is pinned for $(uname -m) yet"
+  fetch "$STOCK_URL" "$tmp/s.tar.gz" "$STOCK_SHA256"
+  mkdir "$tmp/stock"
+  tar -C "$tmp/stock" -xzf "$tmp/s.tar.gz"
+  got=$("$tmp/stock/git-annex.linux/git-annex" version --raw)
+  [ "$got" = "$STOCK_VERSION" ] || die "the standalone build is git-annex $got, not $STOCK_VERSION"
+  swap "$tmp/stock/git-annex.linux" "$prefix/git-annex.linux"
+  rm -rf "$prefix/git-annex"
+  echo "stock git-annex $got in $prefix/git-annex.linux"
+else
+  command -v brew >/dev/null || die "install Homebrew, then run this again"
+  brew list git-annex >/dev/null 2>&1 || brew install git-annex
+  rm -rf "$prefix/git-annex"
+  echo "stock git-annex $(git-annex version --raw) from Homebrew"
+fi

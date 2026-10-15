@@ -207,18 +207,29 @@ pub fn dirs_under(home: &Path) -> Dirs {
     }
 }
 
-/// The directory first in the children's `PATH` (14 §14.3): `<cache>/bin`,
+/// The git-annex the installer put in pigeon's directory, the one above
+/// `pigeond`'s (`packaging/install-git-annex`, 14 §14.3): pigeon's build in
+/// `git-annex/bin`, else the stock standalone build in `git-annex.linux`.
+pub fn annex_dir(exe_dir: &Path) -> Option<PathBuf> {
+    let prefix = exe_dir.parent()?;
+    [prefix.join("git-annex/bin"), prefix.join("git-annex.linux")]
+        .into_iter()
+        .find(|d| d.join("git-annex").is_file())
+}
+
+/// The directories first in the children's `PATH` (14 §14.3): `<cache>/bin`,
 /// with a link to the transport helper next to `pigeond` and, when the
-/// git-annex on `PATH` installs none (Homebrew), a `git-remote-p2p-annex`
-/// link to `git-annex`, which dispatches on its name. Without it, the
-/// directory of `pigeond` itself.
-fn child_bin(dirs: &Dirs) -> Option<PathBuf> {
+/// git-annex they run installs none (Homebrew), a `git-remote-p2p-annex`
+/// link to `git-annex`, which dispatches on its name; then [`annex_dir`].
+/// Without `<cache>/bin`, the directory of `pigeond` itself.
+fn child_path(dirs: &Dirs) -> Vec<PathBuf> {
     let exe_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(Path::to_path_buf));
+    let annex = exe_dir.as_deref().and_then(annex_dir);
     let bin = dirs.cache.join("bin");
     if std::fs::create_dir_all(&bin).is_err() {
-        return exe_dir;
+        return exe_dir.into_iter().chain(annex).collect();
     }
     let link = |name: &str, target: Option<PathBuf>| {
         let at = bin.join(name);
@@ -234,12 +245,13 @@ fn child_bin(dirs: &Dirs) -> Option<PathBuf> {
         .map(|d| d.join("git-annex-p2p-iroh"))
         .filter(|p| p.is_file());
     link("git-annex-p2p-iroh", helper);
-    let path = std::env::var_os("PATH").unwrap_or_default();
-    let find = |name: &str| {
-        std::env::split_paths(&path)
-            .map(|d| d.join(name))
-            .find(|p| p.is_file())
-    };
+    let inherited = std::env::var_os("PATH").unwrap_or_default();
+    let path: Vec<PathBuf> = annex
+        .iter()
+        .cloned()
+        .chain(std::env::split_paths(&inherited))
+        .collect();
+    let find = |name: &str| path.iter().map(|d| d.join(name)).find(|p| p.is_file());
     let remote = find("git-remote-p2p-annex")
         .is_none()
         .then(|| find("git-annex"))
@@ -248,7 +260,10 @@ fn child_bin(dirs: &Dirs) -> Option<PathBuf> {
         tracing::info!("git-remote-p2p-annex-linked");
     }
     link("git-remote-p2p-annex", remote);
-    Some(bin)
+    if let Some(dir) = &annex {
+        tracing::info!(dir = %dir.display(), "git-annex-installed");
+    }
+    std::iter::once(bin).chain(annex).collect()
 }
 
 /// Binds the endpoint. With port 0 it binds the port it picked before, if
@@ -312,7 +327,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
         return Err(format!("pigeond already runs on {}", socket.display()));
     }
     let env = GitEnv {
-        path_first: child_bin(&dirs),
+        path_first: child_path(&dirs),
         extra: vec![("PIGEON_SOCKET".into(), socket.clone().into_os_string())],
     };
     let device = node.device_id();
@@ -401,5 +416,26 @@ async fn stop_signal() {
         Err(_) => {
             let _ = tokio::signal::ctrl_c().await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_installed_git_annex_is_found_beside_pigeond() {
+        let t = tempfile::tempdir().unwrap();
+        let bin = t.path().join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        assert_eq!(annex_dir(&bin), None);
+        let stock = t.path().join("git-annex.linux");
+        std::fs::create_dir_all(&stock).unwrap();
+        std::fs::write(stock.join("git-annex"), "").unwrap();
+        assert_eq!(annex_dir(&bin), Some(stock));
+        let ours = t.path().join("git-annex/bin");
+        std::fs::create_dir_all(&ours).unwrap();
+        std::fs::write(ours.join("git-annex"), "").unwrap();
+        assert_eq!(annex_dir(&bin), Some(ours));
     }
 }
