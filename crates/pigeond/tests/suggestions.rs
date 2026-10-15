@@ -8,7 +8,8 @@
 //! `suggestion`, and the backup machine holds its content. A later save
 //! stacks a new proposal on the first. Ana sees it in `pigeon suggestions`
 //! and accepts it, which Cid may not; the adoption reaches every device,
-//! and Cid's suggestion ends without his file being touched.
+//! and Cid's suggestion ends without his file being touched. Ana declines
+//! his next one, which becomes a conflict on his laptop, his file kept.
 //!
 //! Needs what `tests/slice.rs` needs: git-annex, and `pigeon` and
 //! `git-annex-p2p-iroh` built next to `pigeond`.
@@ -244,4 +245,35 @@ fn a_change_its_person_may_not_make_becomes_a_relayed_suggestion() {
     assert!(listed(&a1).is_empty() && listed(&b1).is_empty());
     let status = git(&b1, &fc, &["status", "--porcelain"]);
     assert!(!status.contains("a.txt"), "{status}");
+
+    // Ana declines the next one: Cid keeps his file, now a conflict.
+    std::fs::write(fc.join("a.txt"), "cid's third edit\n").unwrap();
+    eventually_within(
+        WAIT,
+        || listed(&a1).len() == 1,
+        "Ana never saw the third suggestion",
+        &all,
+    );
+    let third = listed(&a1)[0].id.clone();
+    let declined = pigeon(
+        &a1,
+        &["decline", &third[..12], "--note", "On garde celle-ci."],
+    );
+    assert!(
+        said(&declined, "declined-suggestion", "author").is_some(),
+        "{declined:?}\n{}",
+        logs(&all)
+    );
+    eventually_within(
+        WAIT,
+        || {
+            let t = std::fs::read_to_string(&table).unwrap_or_default();
+            t.contains("\"a.txt\"") && t.contains("\"conflict\"")
+        },
+        "Cid never learned that his suggestion was declined",
+        &all,
+    );
+    assert!(listed(&a1).is_empty() && listed(&b1).is_empty());
+    assert_eq!(text(&fa, "a.txt"), "cid's second edit\n");
+    assert_eq!(text(&fc, "a.txt"), "cid's third edit\n");
 }

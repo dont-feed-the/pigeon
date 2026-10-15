@@ -241,6 +241,7 @@ fn run(seed: u64) -> Vec<Event> {
             after: &after,
             blobs: &blobs,
             new_roster: changed.then_some(&parsed),
+            decisions: &BTreeMap::new(),
         });
         let acc = match &verdict {
             Verdict::Accepted(s, new) => {

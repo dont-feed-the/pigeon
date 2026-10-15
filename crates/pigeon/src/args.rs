@@ -50,6 +50,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("keep PATH", "cmd-keep"),
     ("suggestions", "cmd-suggestions"),
     ("accept ID [--override REASON]", "cmd-accept"),
+    ("decline ID [--note TEXT]", "cmd-decline"),
     ("remove-computer NAME [--yes]", "cmd-remove-computer"),
     ("recovery-sheet", "cmd-recovery-sheet"),
     ("recover SHEET [FOLDER] [--from NAME]", "cmd-recover"),
@@ -222,6 +223,10 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
             proposal: w.first()?.clone(),
             reason: s.value("override").map(str::to_owned),
         }),
+        "decline" if fits(1, 1, &["note"]) => send(Request::Reject {
+            proposal: w.first()?.clone(),
+            note: s.value("note").map(str::to_owned),
+        }),
         "history" if fits(1, 1, &[]) => send(Request::History {
             path: absolute(w.first()?),
         }),
@@ -265,7 +270,7 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
         }
         "create" | "invite" | "join" | "status" | "machines" | "history" | "restore" | "free"
         | "keep" | "remove-computer" | "recovery-sheet" | "recover" | "doctor" | "debug"
-        | "suggestions" | "accept" => None,
+        | "suggestions" | "accept" | "decline" => None,
         other => Some(Action::NotInThisBuild(other.to_owned())),
     }
 }

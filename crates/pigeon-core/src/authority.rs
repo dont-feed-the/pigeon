@@ -1,7 +1,8 @@
 //! The authority rule of 04 §4.4 (`Authority.tla`'s `Judge`) for a commit
 //! with one accepted parent: who signed it, what it may change, and whether
-//! its tree is well formed. Merges, proposals and decisions come with the
-//! catalogue merge (M2); rule 5, portable names, with 05 §5.4's function.
+//! its tree is well formed, with the deciders of a proposal and who may
+//! decline or withdraw it (04 §4.5). Merges and adoptions (rule 7) are
+//! pigeond's `merge`, on `proposal`; rule 5 is 05 §5.4's `names`.
 //!
 //! [`judge`] is a pure function of the commit object, the parent's roster
 //! R(p) and both trees. Laws (`tests/authority.rs`): a commit signed by a
@@ -86,6 +87,34 @@ pub struct Step<'a> {
     pub blobs: &'a BTreeMap<String, Vec<u8>>,
     /// tree(c)'s roster, parsed, when [`delta`] names it.
     pub new_roster: Option<&'a Result<Roster, Unread>>,
+    /// Each decision [`delta`] adds, by path, parsed (04 §4.5).
+    pub decisions: &'a BTreeMap<String, Result<Decision, Unread>>,
+}
+
+/// What a decision of `.pigeon/decisions/` says of a proposal (04 §4.5).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Decided {
+    /// A decider declined it.
+    Rejected,
+    /// Its author took it back.
+    Withdrawn,
+}
+
+/// A decision document, with what its judge needs of the proposal it names.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Decision {
+    /// The proposal's commit, as the document names it.
+    pub proposal: String,
+    /// What it says.
+    pub verdict: Decided,
+    /// The proposal's deciders under R(p) and its author's person; `None`
+    /// when this device does not keep that proposal, and the commit waits.
+    pub about: Option<(Deciders, roster::PersonId)>,
+}
+
+/// The path of the decision on `proposal`.
+pub fn decision_path(proposal: &str) -> String {
+    format!(".pigeon/decisions/{proposal}.toml")
 }
 
 /// Why a `.pigeon/` document was not read (ADR 0048).
@@ -343,6 +372,12 @@ pub fn judge(step: &Step<'_>) -> Verdict {
                 Ok(n) => new_roster = Some(n),
                 Err(v) => return *v,
             }
+        } else if path.starts_with(".pigeon/decisions/")
+            && !path.starts_with(".pigeon/decisions/purge-")
+        {
+            if let Err(v) = decision(step, path, u, recovery) {
+                return *v;
+            }
         } else if path.starts_with(".pigeon/decisions/") || path.starts_with(".pigeon/records/") {
             if !admin {
                 return Verdict::Unknown("decisions");
@@ -356,6 +391,43 @@ pub fn judge(step: &Step<'_>) -> Verdict {
         }
     }
     Verdict::Accepted(signer, new_roster)
+}
+
+/// Whether person `u` may add the decision at `path` (04 §4.3's `.pigeon/`
+/// table): a decider of its proposal to reject it, its author to withdraw
+/// it. A decision is never changed or removed, and never by a recovery key.
+fn decision(
+    step: &Step<'_>,
+    path: &str,
+    u: &roster::PersonId,
+    recovery: bool,
+) -> Result<(), Box<Verdict>> {
+    let refused = |r| Err(Box::new(Verdict::Refused(r)));
+    if step.before.contains_key(path) || !step.after.contains_key(path) || recovery {
+        return refused(Refusal::NotAllowed(path.to_owned()));
+    }
+    let d = match step.decisions.get(path) {
+        Some(Ok(d)) => d,
+        Some(Err(Unread::Unknown(_))) => return Err(Box::new(Verdict::Unknown("format"))),
+        Some(Err(Unread::Malformed(_))) | None => {
+            return refused(Refusal::Malformed(path.to_owned(), "decision"));
+        }
+    };
+    if decision_path(&d.proposal) != path {
+        return refused(Refusal::Malformed(path.to_owned(), "decision"));
+    }
+    let Some(((deciders, _), author)) = &d.about else {
+        return Err(Box::new(Verdict::Unknown("decision")));
+    };
+    let may = match d.verdict {
+        Decided::Rejected => deciders.contains(u),
+        Decided::Withdrawn => author == u,
+    };
+    if may {
+        Ok(())
+    } else {
+        refused(Refusal::NotAllowed(path.to_owned()))
+    }
 }
 
 fn roster_change(step: &Step<'_>, signer: &DeviceId) -> Result<Roster, Box<Verdict>> {

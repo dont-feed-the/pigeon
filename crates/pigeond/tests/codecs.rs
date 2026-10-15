@@ -2,8 +2,8 @@
 //! round-trip, a journal record parses back from its line (07 §7.5), a
 //! roster file parses back to the roster it renders and one a newer release
 //! could write is unknown (ADR 0048), a divergence table parses back, and
-//! an invitation and a recovery sheet decode to what they encode. HMAC-SHA256 matches RFC
-//! 4231.
+//! an invitation and a recovery sheet decode to what they encode, and a
+//! decision file parses back. HMAC-SHA256 matches RFC 4231.
 #![allow(clippy::unwrap_used, clippy::panic, reason = "tests")]
 
 use std::collections::BTreeMap;
@@ -406,4 +406,38 @@ fn hmac_matches_rfc_4231() {
         hex(&mac),
         "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"
     );
+}
+
+/// Law *decision*: a decision file parses back to what it renders, and one
+/// with a key or verdict a newer release could write is unknown (ADR 0048).
+#[hegel::test(test_cases = 1000)]
+fn decisions_round_trip(tc: TestCase) {
+    use pigeon_core::authority::Decided;
+    use pigeond::decision_file::{DecisionDoc, parse, render};
+    let hexes: String = (0..40)
+        .map(|_| char::from(b"0123456789abcdef"[tc.draw(gs::integers::<usize>().max_value(15))]))
+        .collect();
+    let d = DecisionDoc {
+        proposal: hexes,
+        verdict: if tc.draw(gs::booleans()) {
+            Decided::Rejected
+        } else {
+            Decided::Withdrawn
+        },
+        note: maybe(&tc),
+    };
+    let text = render(&d);
+    assert_eq!(parse(&text), Ok(d.clone()), "{text}");
+    let newer = format!("{text}reason = \"x\"\n");
+    assert!(matches!(parse(&newer), Err(Unread::Unknown(_))), "{newer}");
+    let verdict = text.replace("verdict = \"rejected\"", "verdict = \"merged\"");
+    let verdict = verdict.replace("verdict = \"withdrawn\"", "verdict = \"merged\"");
+    assert!(
+        matches!(parse(&verdict), Err(Unread::Unknown(_))),
+        "{verdict}"
+    );
+    assert!(matches!(
+        parse("format = 1\nproposal = 3\n"),
+        Err(Unread::Malformed(_))
+    ));
 }

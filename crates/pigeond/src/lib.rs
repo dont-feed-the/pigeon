@@ -18,6 +18,7 @@ pub mod conflicts_file;
 pub mod custody;
 pub mod daemon;
 pub mod decide;
+pub mod decision_file;
 pub mod evict;
 pub mod git;
 pub mod group;

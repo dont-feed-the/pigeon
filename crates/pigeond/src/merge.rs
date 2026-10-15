@@ -281,6 +281,7 @@ async fn judge_step(
     } else {
         None
     };
+    let decisions = decisions(g, before, after, &changed, rosters).await?;
     let verdicts: Vec<Verdict> = rosters
         .iter()
         .map(|roster| {
@@ -291,10 +292,89 @@ async fn judge_step(
                 after,
                 blobs: &blobs,
                 new_roster: new_roster.as_ref(),
+                decisions: &decisions,
             })
         })
         .collect();
     Ok(combine(verdicts, changed.is_empty()))
+}
+
+/// The decisions that a commit's Δ adds (04 §4.5), each with the deciders
+/// and author of the proposal it names, if this device keeps it, under the
+/// first of `rosters`; deciders are reckoned on `before`, B(c).
+async fn decisions(
+    g: &Group,
+    before: &Tree,
+    after: &Tree,
+    changed: &BTreeSet<String>,
+    rosters: &[Roster],
+) -> Result<BTreeMap<String, Result<authority::Decision, Unread>>, Error> {
+    let mut out = BTreeMap::new();
+    let Some(roster) = rosters.first() else {
+        return Ok(out);
+    };
+    for path in changed {
+        let Some(e) = after.get(path) else {
+            continue;
+        };
+        if !path.starts_with(".pigeon/decisions/") || path.starts_with(".pigeon/decisions/purge-") {
+            continue;
+        }
+        let text = String::from_utf8_lossy(&g.git.object(&e.oid).await?).into_owned();
+        let doc = match crate::decision_file::parse(&text) {
+            Ok(d) => d,
+            Err(u) => {
+                out.insert(path.clone(), Err(u));
+                continue;
+            }
+        };
+        let about = about(g, &doc.proposal, before, roster).await?;
+        let d = authority::Decision {
+            proposal: doc.proposal,
+            verdict: doc.verdict,
+            about,
+        };
+        out.insert(path.clone(), Ok(d));
+    }
+    Ok(out)
+}
+
+/// The deciders on `before` and the author's person of the kept proposal
+/// `x`, under `roster`.
+async fn about(
+    g: &Group,
+    x: &str,
+    before: &Tree,
+    roster: &Roster,
+) -> Result<Option<(authority::Deciders, pigeon_core::roster::PersonId)>, Error> {
+    let kept = crate::proposal::kept(&g.git).await;
+    let Some((device, _)) = kept.into_iter().find(|(_, c)| c == x) else {
+        return Ok(None);
+    };
+    let Some(person) = roster
+        .devices
+        .get(&pigeon_core::roster::DeviceId(device))
+        .map(|d| d.person.clone())
+    else {
+        return Ok(None);
+    };
+    let Some(base) = crate::proposal::base(g, x).await? else {
+        return Ok(None);
+    };
+    let at = g
+        .lock()
+        .engine
+        .base(std::slice::from_ref(&base))
+        .map(|v| v.tree.clone());
+    let Some(at) = at else {
+        return Ok(None);
+    };
+    let paths = authority::delta(&at, &g.git.tree(x).await?);
+    let changes: Vec<(&str, bool)> = paths
+        .iter()
+        .map(|p| (p.as_str(), !before.contains_key(p)))
+        .collect();
+    Ok(Some((authority::deciders(roster, &changes), person)))
 }
 
 /// The verdict on the proposal `raw`, whose tree is `after`, against

@@ -400,8 +400,8 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
 /// Settles the `suggestion`s of `table` against `main`'s tree `want`
 /// (07 §7.6): one whose version `main` now has ends, and only the index
 /// changes (`Decide`); one whose file is clean again ends too, the person
-/// having put a version back; one whose path `main` changed meanwhile
-/// becomes a conflict, told once.
+/// having put a version back; one declined, or whose path `main` changed
+/// meanwhile, becomes a conflict, told once.
 async fn suggestions(
     g: &Group,
     want: &pigeon_core::authority::Tree,
@@ -433,6 +433,14 @@ async fn suggestions(
         } else if !dirty.contains(&p) {
             tracing::info!(group = %g.id, path = %p, "suggestion-dropped");
             table.paths.remove(&p);
+        } else if d.state == State::Waiting
+            && d.proposal
+                .as_ref()
+                .is_some_and(|c| want.contains_key(&pigeon_core::authority::decision_path(c)))
+        {
+            tracing::warn!(group = %g.id, path = %p, "suggestion-declined");
+            d.state = State::Conflict;
+            d.told = false;
         } else if group != d.group && d.state == State::Waiting {
             tracing::warn!(group = %g.id, path = %p, "suggestion-overtaken");
             d.group = group;

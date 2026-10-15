@@ -145,6 +145,7 @@ fn judge(signer: usize, tree: &Tree, force: bool, blobs: &BTreeMap<String, Vec<u
         after: tree,
         blobs,
         new_roster: None,
+        decisions: &BTreeMap::new(),
     })
 }
 
@@ -290,6 +291,70 @@ fn capture_splits_a_batch_into_an_accepted_commit_and_proposals(tc: TestCase) {
     }
 }
 
+#[hegel::test(test_cases = 1000)]
+fn a_decision_is_accepted_iff_its_signer_may_make_it(tc: TestCase) {
+    let signer = int(&tc, 1, 5) as usize;
+    let proposal = "c0ffee".to_owned();
+    let named = if flag(&tc) {
+        proposal.clone()
+    } else {
+        "other".to_owned()
+    };
+    let path = authority::decision_path(&named);
+    let verdict = if flag(&tc) {
+        authority::Decided::Rejected
+    } else {
+        authority::Decided::Withdrawn
+    };
+    let deciders: BTreeSet<PersonId> = (1..=3).filter(|_| flag(&tc)).map(pid).collect();
+    let author = pid(int(&tc, 1, 3) as usize);
+    let known = flag(&tc);
+    let again = flag(&tc);
+    let mut before = base();
+    if again {
+        before.insert(path.clone(), entry("old-decision"));
+    }
+    let mut after = before.clone();
+    after.insert(path.clone(), entry("decision"));
+    let d = authority::Decision {
+        proposal,
+        verdict,
+        about: known.then(|| ((deciders.clone(), false), author.clone())),
+    };
+    let decisions = [(path.clone(), Ok(d))].into();
+    let signed = sig::sign(&raw(false), &key(signer)).unwrap();
+    let r = group();
+    let v = authority::judge(&Step {
+        raw: &signed,
+        roster: &r,
+        before: &before,
+        after: &after,
+        blobs: &BTreeMap::new(),
+        new_roster: None,
+        decisions: &decisions,
+    });
+    let person = pid(if signer == 5 { 1 } else { signer });
+    let may = match verdict {
+        authority::Decided::Rejected => deciders.contains(&person),
+        authority::Decided::Withdrawn => person == author,
+    };
+    match v {
+        Verdict::Refused(Refusal::UnknownSigner(_)) => assert_eq!(signer, 4),
+        Verdict::Refused(Refusal::NotAllowed(p)) => {
+            assert_eq!(p, path);
+            assert!(signer == 5 || again || (named == "c0ffee" && known && !may));
+        }
+        Verdict::Refused(Refusal::Malformed(p, "decision")) => {
+            assert!(p == path && named != "c0ffee" && signer != 5 && !again);
+        }
+        Verdict::Unknown("decision") => assert!(!known && named == "c0ffee" && signer != 5),
+        Verdict::Accepted(..) => {
+            assert!(may && known && !again && signer != 5 && named == "c0ffee");
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
 #[hegel::test(test_cases = 300)]
 fn only_files_and_pointers_are_well_formed(tc: TestCase) {
     let p: &str = pick(&tc, &["r", "new", "S/new"]);
@@ -344,6 +409,7 @@ fn unsigned_and_forged_commits_are_refused() {
             after: &after,
             blobs: &blobs,
             new_roster: None,
+            decisions: &BTreeMap::new(),
         })
     };
     assert_eq!(
@@ -471,6 +537,7 @@ fn a_roster_change_is_accepted_iff_its_signer_may_make_it(tc: TestCase) {
         after: &after,
         blobs: &BTreeMap::new(),
         new_roster: Some(&parsed),
+        decisions: &BTreeMap::new(),
     });
     let Some(delta) = roster::diff(&r, &new) else {
         // A device added and removed in one change: edits cannot say it.
@@ -519,6 +586,7 @@ fn an_invalid_or_unreadable_roster_is_refused_and_an_unknown_one_waits() {
             after: &after,
             blobs: &BTreeMap::new(),
             new_roster: Some(&parsed),
+            decisions: &BTreeMap::new(),
         });
         let got = match v {
             Verdict::Refused(Refusal::RosterUnreadable(_)) => "unreadable",

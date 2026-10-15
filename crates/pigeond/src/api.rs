@@ -166,7 +166,9 @@ async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         Request::Accept { proposal, reason } => {
             crate::decide::accept(d, &proposal, reason.as_deref()).await
         }
-        Request::Reject { .. } => not_in_this_build("decline"),
+        Request::Reject { proposal, note } => {
+            crate::decide::decline(d, &proposal, note.as_deref()).await
+        }
         Request::Hello { .. }
         | Request::Address { .. }
         | Request::Connect { .. }

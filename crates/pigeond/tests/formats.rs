@@ -416,6 +416,7 @@ fn commit_cases_get_their_verdicts() {
             after: &after,
             blobs: &blobs,
             new_roster: new_roster.as_ref(),
+            decisions: &BTreeMap::new(),
         });
         let want = case["verdict"].as_str().unwrap();
         assert_eq!(verdict(&v), want, "commits/{name}: {v:?}");

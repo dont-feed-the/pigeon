@@ -179,7 +179,12 @@ kept proposal stacked on them) with their deciders on the current `main`;
 `tests/proposal.rs`: it holds its proposal's change, keeps what `main`
 changed meanwhile and every path the proposal did not change, adds only
 conflict copies, and is the proposal itself on an unchanged `main`).
-Rejection and withdrawal come next.
+`pigeon decline` commits the decision `rejected`; `authority::judge`
+accepts a new `.pigeon/decisions/<commit>.toml` from a decider of that
+proposal (`rejected`) or its author (`withdrawn`), never a changed one,
+and lets the commit wait when this device does not keep the proposal
+(`a_decision_is_accepted_iff_its_signer_may_make_it`). Nothing writes a
+withdrawal yet: it comes with `pigeon resolve` (07 §7.6).
 
 A rejection or withdrawal is a commit of `.pigeon/decisions/<commit>.toml`:
 
