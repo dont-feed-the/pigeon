@@ -152,15 +152,19 @@ fn go(args: &[String]) -> Result<bool, String> {
             let outdir = std::fs::canonicalize(&outdir).map_err(|e| e.to_string())?;
             let mut ok = true;
             let mut summary = format!(
-                "# Slice scenarios ({}, {})\n\n| Scenario | Interpreter | Verdict | Checks |\n|---|---|---|---|\n",
+                "# Slice scenarios ({}, {})\n\n| Scenario | Interpreter | Verdict | Checks | Time |\n|---|---|---|---|---|\n",
                 isolation.name(),
                 std::env::consts::OS
             );
             for s in pick(&ids)? {
                 let row = if let Some(why) = unrunnable(&s, isolation) {
-                    format!("| {} | exec {} | skip | {why} |", s.id, isolation.name())
+                    format!("| {} | exec {} | skip | {why} | |", s.id, isolation.name())
                 } else if let Some(why) = slice::blocked(&s.id).filter(|_| !with_blocked) {
-                    format!("| {} | exec {} | blocked | {why} |", s.id, isolation.name())
+                    format!(
+                        "| {} | exec {} | blocked | {why} | |",
+                        s.id,
+                        isolation.name()
+                    )
                 } else {
                     let cfg = Config {
                         bin: bin.clone(),
@@ -168,13 +172,16 @@ fn go(args: &[String]) -> Result<bool, String> {
                         out: outdir.clone(),
                         isolation,
                     };
+                    let started = std::time::Instant::now();
                     let r = run(&s, &mut Exec::new(cfg, &s.id));
+                    // How long each scenario takes, for scripts/ci-timings.
+                    let took = format!(" {} s |", started.elapsed().as_secs());
                     let blocked = slice::blocked(&s.id);
                     ok &= r.passed() || blocked.is_some();
                     let text = serde_json::to_string_pretty(&r).map_err(|e| e.to_string())?;
                     std::fs::write(outdir.join(format!("{}.json", s.id)), text)
                         .map_err(|e| e.to_string())?;
-                    match (r.passed(), blocked) {
+                    let row = match (r.passed(), blocked) {
                         (false, Some(why)) => format!(
                             "{} blocked: {why}",
                             line(&r).replacen("| FAIL |", "| blocked |", 1)
@@ -183,6 +190,11 @@ fn go(args: &[String]) -> Result<bool, String> {
                             format!("{} (no longer blocked: unmark it in slice.rs)", line(&r))
                         }
                         _ => line(&r),
+                    };
+                    if row.ends_with('|') {
+                        format!("{row}{took}")
+                    } else {
+                        format!("{row} |{took}")
                     }
                 };
                 out(&row);

@@ -53,7 +53,16 @@ fn random_crash_schedules_lose_and_duplicate_nothing(tc: TestCase) {
         out: out.clone(),
         isolation: Isolation::detect(),
     };
+    let started = std::time::Instant::now();
     let report = run(&slice::s9(&id, &plan), &mut Exec::new(cfg, &id));
+    // How long each schedule takes, for scripts/ci-timings.
+    let took = format!("{id} {}\n", started.elapsed().as_secs());
+    let _ = std::fs::create_dir_all(&out);
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(out.join("timings.txt"))
+        .and_then(|mut f| std::io::Write::write_all(&mut f, took.as_bytes()));
     if !report.passed() {
         let line = format!("{id}: {plan:?}: {:?}\n", report.failure());
         eprint!("FAILED {line}");
