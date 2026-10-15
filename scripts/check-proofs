@@ -1,0 +1,300 @@
+#!/usr/bin/env python3
+"""Check parameterized TLAPS proofs, their configuration coverage and mutants.
+
+Use --benchmark to compare TLC and Apalache as well. Logs and timings go to
+target/formal-proofs by default. No proof fingerprints are reused. Tools are
+pinned and downloaded into ~/.cache/pigeon; --tlapm and --apalache select an
+already installed copy of the same version. Linux x86_64 is required by the
+TLAPS binary distribution. The proofs themselves are platform independent.
+"""
+
+import argparse
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import os
+import platform
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import urllib.request
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+ROOT = Path(__file__).resolve().parent.parent
+MODELS = ROOT / "models" / "tla"
+CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "pigeon"
+TLAPS_VERSION = "1.5.0"
+TLAPS_SHA = "ebb7a3f271bdb564f74cb0a2767ef7b9ff7045621a9be7c50d363a03c2e6f08a"
+TLAPS_URL = ("https://github.com/tlaplus/tlapm/releases/download/202210041448/"
+             "tlaps-1.5.0-x86_64-linux-gnu-inst.bin")
+APALACHE_VERSION = "0.62.4"
+APALACHE_SHA = "b781b53bba32fac14ac2e02b0332e1dc2edc64cb7b850c0608d8142cc7aa2ef4"
+APALACHE_URL = ("https://github.com/apalache-mc/apalache/releases/download/"
+                "v0.62.4/apalache-0.62.4.tgz")
+PROOFS = {"CaptureTransactionProof": "CaptureTransaction_safe",
+          "AnnexDropProof": "AnnexDrop_design4"}
+
+
+def load_tlc():
+    loader = importlib.machinery.SourceFileLoader("proof_tlc", str(ROOT / "scripts/run-tlc"))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def download(name, url, digest):
+    CACHE.mkdir(parents=True, exist_ok=True)
+    path = CACHE / name
+    if not path.exists():
+        with tempfile.NamedTemporaryFile(dir=CACHE, delete=False) as partial:
+            temp = Path(partial.name)
+        try:
+            urllib.request.urlretrieve(url, temp)
+            if hashlib.sha256(temp.read_bytes()).hexdigest() != digest:
+                raise RuntimeError(f"{url}: downloaded SHA-256 differs from pin")
+            temp.replace(path)
+        finally:
+            temp.unlink(missing_ok=True)
+    if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+        raise RuntimeError(f"{path}: cached SHA-256 differs from pin")
+    return path
+
+
+def tlapm_binary(explicit, out):
+    if explicit:
+        return Path(explicit).resolve()
+    if platform.system() != "Linux" or platform.machine() not in ("x86_64", "AMD64"):
+        raise RuntimeError("the pinned TLAPS distribution needs Linux x86_64; use --tlapm")
+    installer = download("tlaps-1.5.0-inst.bin", TLAPS_URL, TLAPS_SHA)
+    prefix = CACHE / "tlaps-1.5.0"
+    binary = prefix / "bin/tlapm"
+    if not (prefix / ".pigeon-installed").exists():
+        installer.chmod(0o700)
+        print("Installing TLAPS (including its Isabelle self-test)...", flush=True)
+        done = subprocess.run([str(installer), "-d", str(prefix)], capture_output=True, text=True)
+        (out / "tlaps-install.log").write_text(done.stdout + done.stderr)
+        if done.returncode:
+            raise RuntimeError(f"TLAPS installation failed; see {out / 'tlaps-install.log'}")
+        (prefix / ".pigeon-installed").write_text(TLAPS_SHA + "\n")
+    return binary
+
+
+def apalache_binary(explicit):
+    if explicit:
+        return Path(explicit).resolve()
+    archive = download("apalache-0.62.4.tgz", APALACHE_URL, APALACHE_SHA)
+    binary = CACHE / "apalache-0.62.4/bin/apalache-mc"
+    if not binary.exists():
+        with tarfile.open(archive) as tar:
+            tar.extractall(CACHE, filter="data")
+    return binary
+
+
+def version(binary, flag, expected):
+    done = subprocess.run([str(binary), flag], capture_output=True, text=True, check=True)
+    if done.stdout.strip() != expected:
+        raise RuntimeError(f"{binary}: expected {expected}, got {done.stdout.strip()!r}")
+
+
+def copy_models(work):
+    for path in MODELS.glob("*.tla"):
+        shutil.copy2(path, work / path.name)
+    for path in MODELS.glob("*.cfg"):
+        shutil.copy2(path, work / path.name)
+
+
+class Checks:
+    def __init__(self, out, tlapm, java):
+        self.out, self.tlapm, self.java = out, tlapm, java
+        self.library = Path(subprocess.check_output([str(tlapm), "--where"], text=True).strip())
+        self.jar = load_tlc().tlc_jar()
+        self.results = []
+        rows = {config: (module, group) for config, module, group, _ in load_tlc().expectations()}
+        for proof, config in PROOFS.items():
+            if rows.get(config, (None,))[0] != proof.removesuffix("Proof"):
+                raise RuntimeError(f"{config}: proof/config module mapping changed")
+        if {config for config, (_, group) in rows.items() if group == "audit"} - set(PROOFS.values()):
+            raise RuntimeError("an audit row has no checked parameterized proof")
+
+    def run(self, name, command, work, timeout=120):
+        start = time.monotonic()
+        done = subprocess.run(command, cwd=work, capture_output=True, text=True, timeout=timeout)
+        seconds = time.monotonic() - start
+        output = done.stdout + done.stderr
+        (self.out / f"{name}.log").write_text(output)
+        self.results.append({"name": name, "seconds": round(seconds, 3),
+                             "exit_code": done.returncode, "command": command})
+        print(f"{name}: exit {done.returncode}, {seconds:.3f} s", flush=True)
+        return done.returncode, output
+
+    def proof(self, work, module, name=None, reject=False):
+        source = (work / f"{module}.tla").read_text()
+        if re.search(r"\b(OMITTED|PROOF\s+OMITTED)\b", source):
+            raise RuntimeError(f"{module}: an omitted proof is not evidence")
+        if not re.search(r"^THEOREM Safety\s*==", source, re.M):
+            raise RuntimeError(f"{module}: missing Safety theorem")
+        code, output = self.run(name or module, [str(self.tlapm), "--nofp", "--threads", "2",
+                                                f"{module}.tla"], work)
+        if reject:
+            # Syntax errors, missing tools and timeouts do not count as a mutant
+            # detected. TLAPS must report an actual unproved obligation.
+            if code != 3 or not re.search(r"\[ERROR\]: \d+/\d+ obligations failed", output):
+                raise RuntimeError(f"{name}: expected an unproved obligation; inspect its log")
+        else:
+            summary = re.search(rf'File "\./{module}\.tla"[^\n]*:\n'
+                                r'\[INFO\]: All ([1-9]\d*) obligations proved\.', output)
+            if code or not summary or re.search(r"\b(omitted|unproved|failed)\b", output, re.I):
+                raise RuntimeError(f"{module}: proof incomplete; inspect its log")
+
+    def coverage(self, work, module, config, name=None, reject=False):
+        # Check the actual cfg constants against the very same expression
+        # assumed by the proof, using TLC's constant evaluation. No Python copy
+        # of those assumptions can drift away from the theorem.
+        cfg = (work / f"{config}.cfg").read_text()
+        if re.search(r"^\s*(CONSTRAINT|ACTION_CONSTRAINT|SYMMETRY|VIEW|INIT|NEXT)\b", cfg, re.M):
+            raise RuntimeError(f"{config}: unsupported coverage configuration directive")
+        cfg, count = re.subn(r"^SPECIFICATION Spec\s*$",
+                             "INIT Init\nNEXT ProofCoverageNext", cfg, flags=re.M)
+        if count != 1:
+            raise RuntimeError(f"{config}: coverage requires SPECIFICATION Spec")
+        (work / "ProofCoverage.tla").write_text(
+            f"---- MODULE ProofCoverage ----\nEXTENDS {module}\n"
+            "ProofCoverageNext == UNCHANGED vars\n====\n")
+        (work / "ProofCoverage.cfg").write_text(cfg + "\nINVARIANT ProofParameters\n")
+        command = [self.java, "-Xmx1g", "-XX:+UseParallelGC", f"-Djava.io.tmpdir={work}",
+                   f"-DTLA-Library={self.library}", "-cp", str(self.jar), "tlc2.TLC",
+                   "-workers", "1", "-metadir", str(work / "states"),
+                   "-config", "ProofCoverage.cfg", "ProofCoverage"]
+        code, output = self.run(name or f"coverage-{config}", command, work)
+        if reject:
+            if not code or "Error: The invariant of ProofParameters is equal to FALSE" not in output:
+                raise RuntimeError(f"{name}: expected a false proof assumption; inspect its log")
+        elif (code or "Model checking completed. No error has been found." not in output
+              or "1 distinct states found" not in output):
+            raise RuntimeError(f"{config}: not covered by {module}; inspect its log")
+
+    def positives(self):
+        for module, config in PROOFS.items():
+            with tempfile.TemporaryDirectory() as temp:
+                work = Path(temp)
+                copy_models(work)
+                self.proof(work, module)
+                self.coverage(work, module, config)
+
+    def mutants(self):
+        cases = [
+            ("capture-no-guard", "CaptureTransaction", "CaptureTransactionProof",
+             'phase = "idle" \\/ "guard" \\in Off', "TRUE"),
+            ("capture-no-commit", "CaptureTransaction", "CaptureTransactionProof",
+             "commits' = commits \\cup {pending}", "commits' = commits"),
+            ("drop-no-copies", "AnnexDrop", "AnnexDropProof",
+             "Cardinality(proof[d]) >= K", "TRUE"),
+            ("drop-no-shared-guard", "AnnexDrop", "AnnexDropProof",
+             "shared[d] = {}", "TRUE"),
+        ]
+        for name, target, proof, old, new in cases:
+            with tempfile.TemporaryDirectory() as temp:
+                work = Path(temp)
+                copy_models(work)
+                path = work / f"{target}.tla"
+                text = path.read_text()
+                if text.count(old) != 1:
+                    raise RuntimeError(f"{name}: mutation site changed")
+                path.write_text(text.replace(old, new))
+                self.proof(work, proof, name, reject=True)
+        for constant, old, new in [("Expiry", "FALSE", "TRUE"),
+                                    ("Check", '"safe"', '"p2p"'),
+                                    ("Trusted", "{}", "{1}"),
+                                    ("LogOnly", "FALSE", "TRUE")]:
+            with tempfile.TemporaryDirectory() as temp:
+                work = Path(temp)
+                copy_models(work)
+                cfg = work / "AnnexDrop_design4.cfg"
+                text, count = re.subn(rf"\b{constant} = {re.escape(old)}",
+                                      f"{constant} = {new}", cfg.read_text())
+                if count != 1:
+                    raise RuntimeError(f"{constant}: coverage mutation site changed")
+                cfg.write_text(text)
+                self.coverage(work, "AnnexDropProof", "AnnexDrop_design4",
+                              f"uncovered-{constant}", reject=True)
+
+    def benchmark(self, apalache, include_slow):
+        with tempfile.TemporaryDirectory() as temp:
+            work = Path(temp)
+            copy_models(work)
+            for config, module in [("CaptureTransaction_safe", "CaptureTransaction"),
+                                    ("AnnexDrop_design4", "AnnexDrop")]:
+                if module == "AnnexDrop" and not include_slow:
+                    continue
+                cmd = [self.java, "-Xmx1g", "-XX:+UseParallelGC", f"-Djava.io.tmpdir={work}",
+                       "-cp", str(self.jar), "tlc2.TLC", "-workers", "1",
+                       "-metadir", str(work / config), "-config", config + ".cfg", module]
+                code, output = self.run("tlc-" + config, cmd, work, timeout=1800)
+                if code or "Model checking completed. No error has been found." not in output:
+                    raise RuntimeError(f"{config}: TLC benchmark failed")
+            base = ["env", "JVM_ARGS=-Xmx1g", str(apalache), "check", "--cinit=ConstInit",
+                    "--config-file=" + str(work / "apalache.json")]
+            (work / "apalache.json").write_text('{}\n')
+            cases = [("bounded-10", "Init", "CapturedBeforeDisplacement", "10"),
+                     ("induction-base", "Init", "Inductive", "0"),
+                     ("induction-step", "Inductive", "Inductive", "1"),
+                     ("induction-property", "Inductive", "CapturedBeforeDisplacement", "0")]
+            for name, init, inv, length in cases:
+                cmd = base + ["--init=" + init, "--inv=" + inv, "--length=" + length,
+                              "--out-dir=" + str(self.out / name), "CaptureTransactionSymbolic.tla"]
+                code, output = self.run("apalache-" + name, cmd, work)
+                if code or "EXITCODE: OK" not in output:
+                    raise RuntimeError(f"{name}: Apalache benchmark failed")
+            path = work / "CaptureTransactionSymbolic.tla"
+            path.write_text(path.read_text().replace("Off = {}", 'Off = {"guard"}'))
+            cmd = base + ["--inv=CapturedBeforeDisplacement", "--length=6",
+                          "--out-dir=" + str(self.out / "unguarded"), "CaptureTransactionSymbolic.tla"]
+            code, output = self.run("apalache-unguarded", cmd, work)
+            if not code or "The outcome is: Error" not in output:
+                raise RuntimeError("Apalache did not find the unguarded-install counterexample")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--out", type=Path, default=ROOT / "target/formal-proofs")
+    parser.add_argument("--tlapm")
+    parser.add_argument("--java", default=os.environ.get("JAVA", "java"))
+    parser.add_argument("--no-mutants", action="store_true", help="local proof-only timing")
+    parser.add_argument("--benchmark", action="store_true", help="also compare TLC and Apalache")
+    parser.add_argument("--include-slow", action="store_true", help="benchmark the large TLC drop graph")
+    parser.add_argument("--apalache")
+    args = parser.parse_args()
+    args.out = args.out.resolve()
+    args.out.mkdir(parents=True, exist_ok=True)
+    checks = None
+    try:
+        tlapm = tlapm_binary(args.tlapm, args.out)
+        version(tlapm, "--version", TLAPS_VERSION)
+        checks = Checks(args.out, tlapm, args.java)
+        checks.positives()
+        if not args.no_mutants:
+            checks.mutants()
+        if args.benchmark:
+            apalache = apalache_binary(args.apalache)
+            version(apalache, "version", APALACHE_VERSION)
+            checks.benchmark(apalache, args.include_slow)
+        return 0
+    except (RuntimeError, subprocess.SubprocessError, OSError) as error:
+        print(f"FAIL: {error}", file=sys.stderr)
+        return 1
+    finally:
+        if checks:
+            (args.out / "timings.json").write_text(json.dumps(
+                {"platform": platform.platform(), "tlaps": TLAPS_VERSION,
+                 "apalache": APALACHE_VERSION, "results": checks.results}, indent=2) + "\n")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

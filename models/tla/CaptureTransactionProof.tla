@@ -3,7 +3,10 @@
    need not be finite; the commit/install guard is enabled. *)
 EXTENDS CaptureTransactionInvariant, TLAPS
 
-ASSUME Parameters == 1 \in Values /\ Off = {}
+ProofParameters == 1 \in Values /\ Off = {}
+
+ASSUME Parameters == ProofParameters
+USE DEF ProofParameters
 
 THEOREM Initial == Init => Inductive
 BY SMT, Parameters DEF Init, Inductive, StateType, CapturedBeforeDisplacement

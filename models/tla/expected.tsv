@@ -1,6 +1,7 @@
 # Expected TLC verdict of each model configuration, checked by scripts/run-tlc.
 # Columns (tab-separated): config, module, set, verdict.
-#   set     fast = every push; full = scheduled or manual run only.
+#   set     fast = every push; full = models-full; audit = scheduled/manual
+#           cross-check of a configuration covered by scripts/check-proofs.
 #   verdict pass | deadlock | violation:<Invariant>; for a trace configuration
 #           (spec 13 §13.3) trace:accepted | trace:rejected:<first line unexplained>
 # The violations and the deadlock are negative tests: they show that the
@@ -45,7 +46,7 @@ AnnexDrop_log	AnnexDrop	fast	violation:INV_K
 AnnexDrop_trusted	AnnexDrop	fast	violation:INV_K
 AnnexDrop_gets2	AnnexDrop	full	pass
 AnnexDrop_ranked4	AnnexDrop	full	pass
-AnnexDrop_design4	AnnexDrop	full	pass
+AnnexDrop_design4	AnnexDrop	audit	pass
 CaptureInstall_own	CaptureInstall	fast	pass
 CaptureInstall_other	CaptureInstall	fast	pass
 CaptureInstall_crash2	CaptureInstall	fast	pass

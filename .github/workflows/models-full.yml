@@ -13,11 +13,13 @@ on:
     paths:
       - "models/tla/**"
       - "scripts/run-tlc"
+      - "scripts/check-proofs"
       - "scripts/check-code-traces"
       - "scripts/check-s9-schedules"
       - "crates/pigeon-core/**"
       - "crates/pigeon-lab/**"
       - ".github/workflows/models-full.yml"
+      - ".github/workflows/proofs.yml"
   schedule:
     - cron: "17 3 * * 1"
   workflow_dispatch:
@@ -30,8 +32,12 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  proofs:
+    uses: ./.github/workflows/proofs.yml
+
   models:
     name: TLA+ models (full set, shard ${{ matrix.shard }})
+    needs: proofs
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     strategy:
@@ -50,7 +56,9 @@ jobs:
           key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
       - name: every configuration gives its expected verdict
         # Partition expected.tsv without reducing TLC's workers per model.
-        run: scripts/run-tlc --full --shard ${{ matrix.shard }} 4
+        # Proof-covered finite instances are audited weekly and by hand;
+        # each push checks their parameterized proofs in the prerequisite job.
+        run: scripts/run-tlc --full ${{ github.event_name != 'push' && '--audit' || '' }} --shard ${{ matrix.shard }} 4
 
   code-traces:
     name: ${{ github.event_name == 'push' && 50 || 200 }} runs of pigeon-core checked by TLC
