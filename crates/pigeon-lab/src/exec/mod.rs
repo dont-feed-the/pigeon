@@ -809,6 +809,8 @@ impl Interpreter for Exec {
                 (s("XDG_RUNTIME_DIR"), root.join("run").display().to_string()),
                 (s("PIGEON_TRACE"), s("1")),
                 (s("PIGEON_NAME"), name.clone()),
+                // Direct addresses and mDNS only (13 §13.12).
+                (s("PIGEON_RELAYS"), s("off")),
                 (s("RUST_LOG"), s("info")),
             ];
             // A laptop's person is its `$USER`: the creator's names them.

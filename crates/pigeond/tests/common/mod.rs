@@ -69,8 +69,7 @@ pub fn git_env<'a>(cmd: &'a mut Command, home: &Path) -> &'a mut Command {
 pub fn start(root: &Path, sockets: &Path, name: &'static str) -> Daemon {
     let home = root.join(name);
     std::fs::create_dir_all(home.join("config")).unwrap();
-    let config =
-        "[network]\nbind = \"127.0.0.1:0\"\nmdns = false\n\n[loops]\ninterval_seconds = 1\n";
+    let config = "[network]\nbind = \"127.0.0.1:0\"\nmdns = false\nrelays = \"off\"\n\n[loops]\ninterval_seconds = 1\n";
     // Kept on a restart: a join adds the group to it.
     let file = home.join("config/config.toml");
     if !file.exists() {

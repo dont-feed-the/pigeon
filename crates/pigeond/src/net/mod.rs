@@ -203,7 +203,20 @@ pub enum NetError {
     Io(#[from] std::io::Error),
 }
 
-/// How the endpoint is set up (13 §13.12: direct addresses and mDNS only).
+/// How the endpoint finds peers beyond its direct addresses and mDNS (09
+/// §9.5, ADR 0016).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Reach {
+    /// Direct addresses and mDNS only, as the lab and the tests run (13
+    /// §13.12).
+    Local,
+    /// n0's public relays and address lookup: the default.
+    N0,
+    /// These relays instead of n0's, with n0's address lookup.
+    Relays(Vec<String>),
+}
+
+/// How the endpoint is set up.
 #[derive(Clone, Debug)]
 pub struct NetConfig {
     /// The device key's 32-byte ed25519 secret.
@@ -212,6 +225,8 @@ pub struct NetConfig {
     pub bind: SocketAddr,
     /// Find peers on the local network with mDNS.
     pub mdns: bool,
+    /// Relays and address lookup.
+    pub reach: Reach,
 }
 
 /// The device's endpoint: it dials peers and accepts their streams.
@@ -224,12 +239,21 @@ pub struct Node {
 }
 
 impl Node {
-    /// Binds the endpoint, without relays or global discovery.
+    /// Binds the endpoint, with the relays and address lookup of
+    /// `config.reach`.
     pub async fn bind(config: &NetConfig) -> Result<Node, NetError> {
-        let mut builder = Endpoint::builder(presets::Minimal)
+        let builder = match &config.reach {
+            Reach::Local => Endpoint::builder(presets::Minimal).relay_mode(RelayMode::Disabled),
+            Reach::N0 => Endpoint::builder(presets::N0),
+            Reach::Relays(urls) => {
+                let map = iroh::RelayMap::try_from_iter(urls.iter().map(String::as_str))
+                    .map_err(|e| NetError::Bind(format!("relay: {e}")))?;
+                Endpoint::builder(presets::N0).relay_mode(RelayMode::Custom(map))
+            }
+        };
+        let mut builder = builder
             .secret_key(SecretKey::from_bytes(&config.secret_key))
             .alpns(vec![ALPN_ANNEX.to_vec(), ALPN_JOIN.to_vec()])
-            .relay_mode(RelayMode::Disabled)
             .clear_ip_transports()
             .bind_addr(config.bind)
             .map_err(|e| NetError::Bind(e.to_string()))?;

@@ -407,6 +407,7 @@ async fn dial(
         secret_key: *secret,
         bind,
         mdns: false,
+        reach: d.config.network.reach().map_err(|e| e.to_string())?,
     })
     .await
     .map_err(|e| e.to_string())?;

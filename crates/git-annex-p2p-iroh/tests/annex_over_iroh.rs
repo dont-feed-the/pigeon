@@ -87,6 +87,7 @@ async fn device(dir: &Path, name: &str) -> Device {
         secret_key: secret(),
         bind: "127.0.0.1:0".parse().unwrap(),
         mdns: false,
+        reach: pigeond::net::Reach::Local,
     };
     let node = Node::bind(&config).await.unwrap();
     let socket = dir.join(format!("{name}-run")).join("pigeond.sock");

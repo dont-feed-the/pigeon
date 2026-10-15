@@ -34,7 +34,7 @@ trap cleanup EXIT
 "$here/install-git-annex" --prefix "$t/p" --archive "$archive" --sha256 "$sha"
 mkdir -p "$t/p/bin" "$t/h/config" "$t/f"
 cp "$bin/pigeond" "$bin/pigeon" "$bin/git-annex-p2p-iroh" "$t/p/bin/"
-printf '[network]\nbind = "127.0.0.1:0"\nmdns = false\n\n[loops]\ninterval_seconds = 1\n' > "$t/h/config/config.toml"
+printf '[network]\nbind = "127.0.0.1:0"\nmdns = false\nrelays = "off"\n\n[loops]\ninterval_seconds = 1\n' > "$t/h/config/config.toml"
 export PIGEON_SOCKET="$t/s.sock" HOME="$t/h" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 "$t/p/bin/pigeond" --home "$t/h" > "$t/pigeond.out" 2>&1 &
 pid=$!

@@ -41,6 +41,10 @@ pub struct Network {
     /// Find peers with mDNS.
     #[serde(default = "yes")]
     pub mdns: bool,
+    /// `n0` (n0's relays and address lookup), `off` (direct addresses and
+    /// mDNS only) or a relay's URL (09 §9.5); `PIGEON_RELAYS` overrides it.
+    #[serde(default = "default_relays")]
+    pub relays: String,
 }
 
 impl Default for Network {
@@ -48,7 +52,34 @@ impl Default for Network {
         Network {
             bind: default_bind(),
             mdns: true,
+            relays: default_relays(),
         }
+    }
+}
+
+impl Network {
+    /// How the endpoint reaches peers: `relays`, or `PIGEON_RELAYS` when
+    /// it is set.
+    pub fn reach(&self) -> Result<crate::net::Reach, ConfigError> {
+        let env = std::env::var("PIGEON_RELAYS")
+            .ok()
+            .filter(|v| !v.is_empty());
+        reach_of(env.as_deref().unwrap_or(&self.relays))
+    }
+}
+
+/// The reach a `relays` value names.
+pub fn reach_of(value: &str) -> Result<crate::net::Reach, ConfigError> {
+    use crate::net::Reach;
+    match value.trim() {
+        "n0" => Ok(Reach::N0),
+        "off" => Ok(Reach::Local),
+        url if url.starts_with("https://") || url.starts_with("http://") => {
+            Ok(Reach::Relays(vec![url.to_owned()]))
+        }
+        other => Err(ConfigError::Invalid(format!(
+            "[network] relays: {other:?} is not n0, off or a relay URL"
+        ))),
     }
 }
 
@@ -66,6 +97,10 @@ impl Default for Loops {
             interval_seconds: default_interval(),
         }
     }
+}
+
+fn default_relays() -> String {
+    "n0".to_owned()
 }
 
 fn default_bind() -> String {

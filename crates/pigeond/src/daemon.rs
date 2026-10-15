@@ -279,12 +279,15 @@ async fn bind_node(
     dirs: &Dirs,
     secret: [u8; 32],
     bind: SocketAddr,
-    mdns: bool,
+    network: &config::Network,
 ) -> Result<Node, String> {
+    let reach = network.reach().map_err(|e| e.to_string())?;
+    tracing::info!(reach = ?reach, "network-reach");
     let at = |bind| NetConfig {
         secret_key: secret,
         bind,
-        mdns,
+        mdns: network.mdns,
+        reach: reach.clone(),
     };
     let kept = std::fs::read_to_string(dirs.port())
         .ok()
@@ -324,7 +327,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
         .bind
         .parse()
         .map_err(|e| format!("[network] bind: {e}"))?;
-    let node = bind_node(&dirs, secret, bind, config.network.mdns).await?;
+    let node = bind_node(&dirs, secret, bind, &config.network).await?;
     let socket = std::env::var_os("PIGEON_SOCKET")
         .filter(|s| !s.is_empty())
         .map_or_else(|| dirs.socket(), PathBuf::from);

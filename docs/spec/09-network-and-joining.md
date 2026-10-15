@@ -103,10 +103,11 @@ filter against git-annex, and E23 the probe.
 
 ## 9.5 Relays and discovery (ADR 0016)
 
-Not yet coded: the slice uses direct addresses and mDNS (13 §13.12).
 By default `pigeond` uses n0's public relays and address lookup, and mDNS
-for one LAN. A roster `relay = "<url>"` ([04 §4.2](04-roster-and-authority.md))
-replaces n0's relays, as an admin change. Without relay or lookup, LAN and
+for one LAN; `[network] relays` ([11 §11.2](11-local-state.md)) names
+another relay, or `off` for direct addresses and mDNS only, as the lab
+runs (13 §13.12). A roster `relay = "<url>"` ([04 §4.2](04-roster-and-authority.md))
+replaces n0's relays, as an admin change (not yet coded). Without relay or lookup, LAN and
 direct connections still work, and versions waiting for a peer carry
 `group-unreachable` ([06 §6.4](06-status.md)). Relays see only metadata
 ([02 §2.4](02-guarantees.md)).

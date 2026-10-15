@@ -58,6 +58,7 @@ paused_until = 2026-10-13T18:00:00+02:00   # written by pigeon pause; absent if 
 [network]                         # 09 §9.5
 bind = "0.0.0.0:0"                # the endpoint's address; the lab binds 127.0.0.1:0
 mdns = true                       # find peers on the local network
+relays = "n0"                     # n0 | off | a relay URL; PIGEON_RELAYS overrides it
 
 [loops]
 interval_seconds = 30             # a round of the loops besides change notices (08 §8.1)
@@ -72,7 +73,8 @@ path = "/home/martine/Famille"    # the folder on this device
 ```
 
 - `[network]` and `[loops]` are **[no ADR]**; the lab and the slice set
-  `bind = "127.0.0.1:0"`, `mdns = false`, `interval_seconds = 1`; an
+  `bind = "127.0.0.1:0"`, `mdns = false`, `relays = "off"` (the lab with
+  `PIGEON_RELAYS=off`), `interval_seconds = 1`; an
   unspecified bind address is told to peers as loopback.
 - Missing keys take defaults; unknown keys are kept and reported by `pigeon
   doctor`. A hand edit applies at once; an invalid one is refused whole with
