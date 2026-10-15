@@ -576,20 +576,15 @@ pub fn s13() -> Scenario {
 }
 
 /// The scenarios that do not pass yet against pigeond on both runners,
-/// with why. S1-S11 and every S9 point passed on both in models-full.yml
-/// run 38620593663, at 767dc0b (13 §13.12). `pigeon-lab run` reports a
-/// blocked one without running it, and runs it with `--with-blocked`,
-/// where a pass says to unmark it and a failure does not fail the run.
-/// An id `S9` would stand for every S9 point; `S9-random` stands for the
-/// random schedules of tests/s9_exec.rs.
-pub const BLOCKED: &[(&str, &str)] = &[(
-    "S9-random",
-    "flaky on macOS: in slice.yml runs 38648627496 (13188f8) and \
-     38654035048 (9b69c2f) one macOS case of 50 failed once, then passed in \
-     hegel's 10 replays; the second kept its logs: a stale .git/index.lock \
-     refused every capture for three minutes. pigeond now removes stale \
-     locks (11 §11.4); blocked until both runners pass every shard",
-)];
+/// with why: none now. S1-S11 and every S9 point passed on both in
+/// models-full.yml run 38620593663, at 767dc0b (13 §13.12); S9-random, the
+/// last, passed every shard on both in slice.yml run 38660637841, at
+/// f5dddd6, once pigeond removed stale git locks (11 §11.4). `pigeon-lab
+/// run` reports a blocked one without running it, and runs it with
+/// `--with-blocked`, where a pass says to unmark it and a failure does not
+/// fail the run. An id `S9` would stand for every S9 point; `S9-random`
+/// stands for the random schedules of tests/s9_exec.rs.
+pub const BLOCKED: &[(&str, &str)] = &[];
 
 /// Why the scenario `id` is blocked, if it is.
 pub fn blocked(id: &str) -> Option<&'static str> {

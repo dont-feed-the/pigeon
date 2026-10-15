@@ -23,7 +23,10 @@ against the TLA+ modules.
 
 At 8f9342b, slice run 38636908664 passes S1–S11, with S9 at every named
 crash point, on both `ubuntu-24.04` and `macos-latest`. The earlier
-models-full runs 38610156407 and 38620593663 agree.
+models-full runs 38610156407 and 38620593663 agree. At f5dddd6, slice run
+38660637841 passes S1–S13 and S9's 50 random crash schedules on both
+runners, and nothing is blocked. v0.1.0 is the commit that empties
+`slice::BLOCKED`, tagged once ci, lab and slice pass on it.
 
 | Scenario | What it shows | ubuntu | macOS |
 |---|---|---|---|
@@ -36,19 +39,21 @@ models-full runs 38610156407 and 38620593663 agree.
 | S7 | a destroyed custodian, its removal and a repair in queue order | pass | pass |
 | S8 | a full custodian refuses admission; a full laptop refuses a restore first | pass | pass |
 | S9 | a crash at each named point loses and duplicates nothing | pass | pass |
-| S9, random | 50 random crash schedules per push, 1000 in models-full | blocked | blocked |
+| S9, random | 50 random crash schedules per push, 1000 in models-full | pass | pass |
 | S10 | a fresh laptop recovers with the recovery sheet | pass | pass |
 | S11 | steady and peak disk use per device | pass | pass |
+| S12 | a custodian short of room takes what fits and says `no-capacity`, and so does the laptop | pass | pass |
+| S13 | a commit signed outside the group is refused, with what follows it | pass | pass |
 
-**Still blocked: the random S9 schedules.** They did not fit the slice job
-beside S1–S11, which take about 35 minutes, so `slice.yml` runs them in a
-job of their own, two shards of 25 per runner: a schedule takes about 10 s
-on Linux and 60 s on macOS. In run 38648627496 (at 13188f8) both Linux
-shards and one macOS shard passed; in the other macOS shard one case failed
-once and passed in hegel's 10 replays, which overwrote its logs, so the
-cause is not known yet. Each case now keeps its logs and prints why it
-fails. They leave `slice::BLOCKED`, and v0.1.0 is tagged, once both runners
-pass.
+**The random S9 schedules** did not fit the slice job beside S1–S11, which
+take about 35 minutes, so `slice.yml` runs them in a job of their own, two
+shards of 25 per runner: a schedule takes about 10 s on Linux and 60 s on
+macOS. They stayed blocked through two runs where one macOS case of 50
+failed once. The second kept its logs (run 38654035048, case 012): a
+graceful stop had killed the git that held `.git/index.lock`, and the stale
+lock refused every capture for three minutes. pigeond now removes git lock
+files left unwritten for 60 s before each round, as git-annex's assistant
+does (cb2474f), and run 38660637841 passed all four shards.
 
 ## What the slice found
 
@@ -81,6 +86,11 @@ In pigeon itself:
   changed port (5d9e740, c163400).
 - Re-thinning raced saves; it now waits 60 s without change and hashes
   before the move-aside, and a mismatch goes to `recovered/` (f68a822).
+- A stale `.git/index.lock` after a stop refused captures (S9 random,
+  cb2474f, above).
+- A custodian that was joining reported its repository lost before its
+  roster copy held its own entry, so the laptop showed *Needs you* for a
+  moment (ci, `tests/slice.rs`, 46430b1).
 
 In the lab: a macOS runner once failed `hdiutil create` with no message, so
 it is retried (9e32f95). A request that met a daemon as its crash plan

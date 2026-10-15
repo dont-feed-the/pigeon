@@ -111,9 +111,9 @@ jobs:
 
   # 13 §13.12's 50 random S9 crash schedules per push, in two shards of 25
   # beside the slice job: one schedule takes 50-90 s, which does not fit
-  # the slice job's 90 minutes. While S9-random is blocked (slice::BLOCKED)
-  # the shards run it anyway and only report: a failure does not fail the
-  # push. It leaves BLOCKED once both runners pass.
+  # the slice job's 90 minutes. S9-random left slice::BLOCKED once both
+  # runners passed every shard (run 38660637841, f5dddd6): a failure fails
+  # the push.
   s9-random:
     name: S9, 25 random crash schedules (${{ matrix.os }}, shard ${{ matrix.shard }})
     strategy:
@@ -123,7 +123,6 @@ jobs:
         shard: [0, 1]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 75
-    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: cached git-annex build (Linux)
@@ -182,7 +181,6 @@ jobs:
         env:
           PIGEON_LAB_BIN: ${{ github.workspace }}/target/lab/bin
           PIGEON_LAB_OUT: ${{ github.workspace }}/target/lab/out
-          PIGEON_LAB_WITH_BLOCKED: "1"
           HEGEL_TEST_CASES: "25"
         run: cargo test --locked --release -p pigeon-lab --test s9_exec
       - name: their trace logs, checked by TLC
