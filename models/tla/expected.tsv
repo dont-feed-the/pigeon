@@ -37,7 +37,7 @@ AdmitTrace_bad	AdmitTrace	fast	trace:rejected:4
 AuthorityTrace_good	AuthorityTrace	fast	trace:accepted
 AuthorityTrace_bad	AuthorityTrace	fast	trace:rejected:21
 CatalogueTrace_good	CatalogueTrace	fast	trace:accepted
-CatalogueTrace_bad	CatalogueTrace	fast	trace:rejected:28
+CatalogueTrace_bad	CatalogueTrace	fast	trace:rejected:37
 AnnexDrop_design	AnnexDrop	fast	pass
 AnnexDrop_ranked	AnnexDrop	fast	pass
 AnnexDrop_p2p	AnnexDrop	fast	violation:INV_K

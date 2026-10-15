@@ -2,8 +2,10 @@
 //! events for TLC (05 §5.2, 13 §13.3). The world is `Catalogue.tla`'s:
 //! devices X, Y and Z of Alice, Bob and Paul; paths in `team/` that anyone
 //! may change, `alice/a.txt` that only Alice may (a proposal otherwise),
-//! the root `a.txt`, add-only with Alice as steward, and a package. Saves
-//! are a minute apart, so conflict names never repeat; no two paths fold
+//! the root `a.txt`, add-only with Alice as steward, and a package. Most
+//! renames carry their `Pigeon-Renamed:` trailer (ADR 0072), logged as the
+//! old slot and the new; some also change the content. Saves are a minute
+//! apart, so conflict names never repeat; no two paths fold
 //! alike. Each commit, merges included, is logged as `catalogue::Engine`
 //! judges it, in abstract slots (a copy is its slot and the commit it
 //! represents), with the verdict, the catalogue and the open conflicts;
@@ -21,13 +23,22 @@ use pigeon_core::names::{Stamp, fold};
 use pigeon_core::trace::{Catalogue, Event, Value};
 
 const DAY: i64 = 1_791_849_600;
-const PATHS: [&str; 6] = [
+const PATHS: [&str; 7] = [
     "team/a.txt",
     "team/b.txt",
     "alice/a.txt",
     "a.txt",
     "team/R.pages/index.xml",
     "team/R.pages/data.bin",
+    "team/c.txt",
+];
+/// Where renames go.
+const MOVES: [&str; 5] = [
+    "team/a.txt",
+    "team/b.txt",
+    "team/c.txt",
+    "alice/a.txt",
+    "a.txt",
 ];
 const PEOPLE: [&str; 3] = ["Alice", "Bob", "Paul"];
 
@@ -112,6 +123,7 @@ impl World {
         parents: Vec<String>,
         tree: Tree<String>,
         resolves: Vec<String>,
+        renames: Vec<(String, String)>,
     ) -> Outcome {
         let id = format!("c{:04}", self.trees.len());
         self.minute += 1;
@@ -126,7 +138,7 @@ impl World {
             device: device.to_owned(),
             who: PEOPLE[d].to_owned(),
             person: pigeon_core::roster::PersonId(PEOPLE[d].to_owned()),
-            renames: Vec::new(),
+            renames: renames.clone(),
             when: Stamp {
                 utc: DAY + 60 * self.minute,
                 offset: 0,
@@ -199,6 +211,10 @@ impl World {
             .filter(|p| self.abs.contains_key(&fold(p)))
             .map(|p| self.slot(&fold(p)))
             .collect();
+        let rn = renames
+            .iter()
+            .map(|(a, b)| rec(vec![("x", self.slot(&fold(a))), ("y", self.slot(&fold(b)))]))
+            .collect();
         let vars = vec![
             ("id".to_owned(), s(&id)),
             (
@@ -212,6 +228,7 @@ impl World {
             ("alice".to_owned(), Value::Bool(person == "Alice")),
             ("tree".to_owned(), Value::List(tree_v)),
             ("res".to_owned(), Value::List(res)),
+            ("rn".to_owned(), Value::List(rn)),
             ("outcome".to_owned(), s(outcome)),
             ("view".to_owned(), Value::List(view)),
             ("open".to_owned(), Value::List(open)),
@@ -223,6 +240,17 @@ impl World {
             self.tips[d] = id;
         }
         out
+    }
+
+    /// Whether `path` is a file of `id`'s catalogue, as a rename's old path
+    /// must be for its trailer to count (a package's is not).
+    fn is_file(&mut self, id: &str, path: &str) -> bool {
+        let view = self.engine.catalogue(&[id.to_owned()]);
+        let units = units(&view.tree);
+        matches!(
+            units.get(&fold(path)).map(|v| &v.content),
+            Some(Content::File(_))
+        )
     }
 
     fn key(&mut self) -> String {
@@ -248,7 +276,8 @@ impl World {
         }
         let parents = vec![ti, tj];
         let tree = self.engine.catalogue(&parents).tree.clone();
-        assert_eq!(self.record(i, parents, tree, vec![]), Outcome::Clean);
+        let out = self.record(i, parents, tree, vec![], vec![]);
+        assert_eq!(out, Outcome::Clean);
     }
 
     fn step(&mut self, rng: &mut Rng) {
@@ -267,6 +296,7 @@ impl World {
                 .find(|p| pigeon_core::names::is_copy_of(c, p))
         };
         let mut resolves = vec![];
+        let mut renames = vec![];
         match rng.below(20) {
             0..=5 => {
                 let p = if rng.below(3) == 0 {
@@ -281,11 +311,17 @@ impl World {
                 let u = rng.pick(&unit_paths).clone();
                 tree.retain(|p, _| *p != u && !p.starts_with(&format!("{u}/")));
             }
-            8 if !unit_paths.is_empty() => {
+            8 | 13 if !unit_paths.is_empty() => {
                 let u = rng.pick(&unit_paths).clone();
-                let to = *rng.pick(&PATHS[..4]);
+                let to = *rng.pick(&MOVES);
+                let edit = rng.below(2) == 0;
                 if let Some(k) = tree.remove(&u) {
+                    let k = if edit { self.key() } else { k };
                     tree.insert(to.to_owned(), k);
+                    let tip = self.tips[d].clone();
+                    if rng.below(4) != 0 && self.is_file(&tip, &u) {
+                        renames.push((u, to.to_owned()));
+                    }
                 }
             }
             9 | 10 if !copies.is_empty() => {
@@ -321,7 +357,7 @@ impl World {
             }
         }
         let parents = vec![self.tips[d].clone()];
-        self.record(d, parents, tree, resolves);
+        self.record(d, parents, tree, resolves, renames);
     }
 }
 
@@ -345,7 +381,7 @@ fn run(seed: u64) -> Vec<Event> {
         ("team/a.txt".to_owned(), "k0".to_owned()),
         ("alice/a.txt".to_owned(), "k0".to_owned()),
     ]);
-    w.record(0, vec![], genesis, vec![]);
+    w.record(0, vec![], genesis, vec![], vec![]);
     w.tips = ["c0000".to_owned(), "c0000".to_owned(), "c0000".to_owned()];
     let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
     for _ in 0..50 {
