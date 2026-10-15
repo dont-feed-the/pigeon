@@ -119,6 +119,13 @@ as a self-test when it first meets a new version (ADR 0048).
 **Format fixtures** (ADR 0048): `fixtures/formats/` holds golden documents
 and signed histories for every supported (`format`, `rules`) pair with
 their verdicts, and next-format fixtures that must be judged *unknown*.
+`crates/pigeond/tests/formats.rs` reads them on every CI run on both
+runners: rosters, status reports and `clock.json` read as their directory
+(`known`, `unknown`, `malformed`) says, and each signed commit of
+`commits/` gets its verdict under its parent's roster. The cases are single
+steps for now; histories of several commits, with merges and proposals, come
+with the catalogue merge (M2). `fixtures/formats/README.md` states the rules:
+a known file is never edited, and the generator only adds missing files.
 
 ## 13.7 The lab (`lab/git-annex/`)
 
@@ -335,7 +342,7 @@ the same way: `pigeond/tests/codecs.rs` and `net_laws.rs`,
 | more presence observations never lower a state; a second entry for one custodian changes nothing; custodian order is irrelevant; protected exactly when K distinct custodians count (ADRs 0002, 0046); a new holder never lowers a state | `state` | `tests/state.rs` | — |
 | the join is a semilattice with *Safe* as identity and *Needs you* absorbing; the headline of a union is the join; adding an item never lowers it; a version only this computer holds is *Not safe yet* after the grace period, even unreachable | `headline` | `tests/headline.rs` | — |
 | a signed commit verifies to its signer; changing any byte of it never does; signing then cutting the signature off gives the commit back | `sig` | `tests/sig.rs` | — |
-| a commit signed by a device of R(p) that changes only what its person may is accepted; one unsigned, forged or signed outside R(p) is refused; a path's change is allowed exactly as §4.3's tables say; a roster change is accepted iff `may_sign` allows it and it applies whole; `diff` is a right inverse of `apply` and says every change of one edit | `authority` | `tests/authority.rs` | `Authority` (`AuthorisedContent`, `DecisionsByDeciders`) for one parent |
+| a commit signed by a device of R(p) that changes only what its person may is accepted; one unsigned, forged or signed outside R(p) is refused; a path's change is allowed exactly as §4.3's tables say; a roster change is accepted iff `may_sign` allows it and it applies whole; `diff` is a right inverse of `apply` and says every change of one edit; a roster of a newer `format`, or with a key, role or folder rule this release does not know, is *unknown*, never refused, and so is every commit under `rules` it does not support (ADR 0048) | `authority` | `tests/authority.rs`; `pigeond/tests/codecs.rs`, and `pigeond/tests/formats.rs` on the fixtures of §13.6 | `Authority` (`AuthorisedContent`, `DecisionsByDeciders`) for one parent |
 | the latest report of each device is a semilattice; the order of arrival does not matter; an older report never replaces a newer; only a report signed by the roster device it names, known and not from the future, counts; relaying what counted changes nothing | `report` | `tests/report.rs` | — |
 | the queue order is total; a higher class goes first; arrival order is irrelevant; a key on fewer custodians never waits behind one on more | `queue` | `tests/queue.rs` | — |
 | admitted bytes never exceed the room; an endangered key is never deferred for one that is not; the plan does not depend on arrival and keeps queue order, each item once; a deferred item says the bytes it misses, and that much more room admits everything; the reserve is a floor or a share; the parts of the need sum to K times each distinct key; capacity counts at most one copy per custodian | `capacity` | `tests/capacity.rs`, `tests/admit_trace.rs` | `Admission` (`ReserveKept`, `EndangeredFirst`) |

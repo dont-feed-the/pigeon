@@ -1,6 +1,7 @@
 //! Laws of `pigeond`'s own codecs (13 §13.12): hex and RFC 3339 times
 //! round-trip, a journal record parses back from its line (07 §7.5), a
-//! roster file parses back to the roster it renders, and an invitation and
+//! roster file parses back to the roster it renders and one a newer release
+//! could write is unknown (ADR 0048), and an invitation and
 //! a recovery sheet decode to what they encode. HMAC-SHA256 matches RFC
 //! 4231.
 #![allow(clippy::unwrap_used, clippy::panic, reason = "tests")]
@@ -9,6 +10,7 @@ use std::collections::BTreeMap;
 
 use hegel::TestCase;
 use hegel::generators as gs;
+use pigeon_core::authority::Unread;
 use pigeon_core::journal::{Begin, End, Record, Stat};
 use pigeon_core::roster::{Device, DeviceId, Person, PersonId, Role, Roster};
 use pigeond::invite::{Invitation, decode, encode};
@@ -160,6 +162,33 @@ fn roster_files_round_trip(tc: TestCase) {
     let doc = roster_doc(&tc);
     let text = render(&doc).unwrap();
     assert_eq!(parse(&text), Ok(doc), "{text}");
+}
+
+/// Law *closed roster* (ADR 0048): a rendered roster with a newer `format`,
+/// or with one key format 1 does not define, at the top or in a person, a
+/// device or a folder, is unknown: never read, and never refused.
+#[hegel::test]
+fn a_roster_a_newer_release_could_write_is_unknown(tc: TestCase) {
+    let doc = roster_doc(&tc);
+    let mut newer: toml_edit::DocumentMut = render(&doc).unwrap().parse().unwrap();
+    let key = format!("x{}", tc.draw(gs::integers::<u16>()));
+    let value = toml_edit::value(tc.draw(gs::integers::<i64>()));
+    match tc.draw(gs::integers::<u8>().max_value(4)) {
+        0 => newer["format"] = toml_edit::value(tc.draw(gs::integers::<i64>().min_value(2))),
+        1 => newer["persons"]["ada"][&key] = value,
+        2 => {
+            let devices = newer["devices"].as_table_mut().unwrap();
+            let (_, first) = devices.iter_mut().next().unwrap();
+            first[&key] = value;
+        }
+        3 if newer.contains_key("folders") => {
+            let folders = newer["folders"].as_array_of_tables_mut().unwrap();
+            folders.get_mut(0).unwrap()[&key] = value;
+        }
+        _ => newer[&key] = value,
+    }
+    let text = newer.to_string();
+    assert!(matches!(parse(&text), Err(Unread::Unknown(_))), "{text}");
 }
 
 /// Law *invitation*: an invitation decodes from its `pgn1-` code, which is

@@ -1,0 +1,53 @@
+rules = 1
+group = "fixture"
+k = 2
+retention_days = 30
+
+[persons.ana]
+name = "Ana"
+admin = true
+
+[persons.ben]
+name = "Ben"
+admin = false
+
+[persons.cleo]
+name = "Cleo"
+admin = false
+
+[devices.6e7a1cdd29b0b78fd13af4c5598feff4ef2a97166e3ca6f2e4fbfccd80505bf1]
+person = "ana"
+name = "Ana's recovery sheet"
+role = "recovery"
+
+[devices.8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394]
+person = "ben"
+name = "Ben's laptop"
+role = "laptop"
+annex_uuid = "4f1c0a52-1b7e-4c4e-9a51-0d3b6a1f2e02"
+
+[devices.8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c]
+person = "ana"
+name = "Ana's laptop"
+role = "laptop"
+annex_uuid = "4f1c0a52-1b7e-4c4e-9a51-0d3b6a1f2e01"
+
+[devices.ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1]
+person = "cleo"
+name = "Cleo's box"
+role = "custodian"
+annex_uuid = "4f1c0a52-1b7e-4c4e-9a51-0d3b6a1f2e03"
+maxsize = 500000000000
+
+[removed]
+fd1724385aa0c75b64fb78cd602fa1d991fdebf76b13c58ed702eac835e9f618 = "4f1c0a52-1b7e-4c4e-9a51-0d3b6a1f2e09"
+
+[[folders]]
+path = "Ana"
+rule = "owned"
+owner = "ana"
+
+[[folders]]
+path = "Shared"
+rule = "add-only"
+stewards = ["cleo"]

@@ -1,0 +1,27 @@
+format = 1
+mood = "calm"
+device = "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+at = 2026-10-13T12:02:00Z
+main = "5d41402abc4b2a76b9719d911017c592ae0b4c2e"
+proposals = []
+checking = false
+
+[versions]
+pigeon = "0.1.0"
+git_annex = "10.20261006"
+git = "2.47.0"
+
+[disk]
+used = 812000000
+free = 41000000000
+maxsize = 0
+reserve = 2000000000
+full = false
+
+[queue]
+bytes_to_send = 3500000
+bytes_to_receive = 0
+paused = ""
+admits = "all"
+deferred = 0
+missing = 0

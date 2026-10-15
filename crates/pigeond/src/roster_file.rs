@@ -1,12 +1,39 @@
 //! `.pigeon/roster.toml` (04 §4.2) as text, to and from pigeon-core's
 //! [`Roster`]. `maxsize` is a number of bytes.
 //!
-//! Law (`tests/codecs.rs`): parsing a rendered roster gives it back.
+//! The schema is closed (ADR 0048): another `format`, a key the schema does
+//! not define, or a role or folder rule this release does not know makes the
+//! file [`Unread::Unknown`]; anything else that does not fit is
+//! [`Unread::Malformed`].
+//!
+//! Laws (`tests/codecs.rs`): parsing a rendered roster gives it back; the
+//! golden files of `fixtures/formats/roster/` read as their directory says
+//! (`tests/formats.rs`).
 
 use std::collections::BTreeMap;
 
+use pigeon_core::authority::Unread;
 use pigeon_core::roster::{DeviceId, Folder, Person, PersonId, Role, Roster, Rule};
 use serde::{Deserialize, Serialize};
+use toml_edit::{Item, TableLike};
+
+/// The format this release reads and writes.
+pub const FORMAT: u32 = 1;
+
+const TOP: &[&str] = &[
+    "format",
+    "rules",
+    "group",
+    "k",
+    "retention_days",
+    "persons",
+    "devices",
+    "removed",
+    "folders",
+];
+const PERSON: &[&str] = &["name", "admin"];
+const DEVICE: &[&str] = &["person", "name", "role", "annex_uuid", "maxsize"];
+const FOLDER: &[&str] = &["path", "rule", "owner", "stewards"];
 
 /// A roster file.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -16,6 +43,7 @@ pub struct RosterDoc {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct FileT {
     format: u32,
     rules: u32,
@@ -34,6 +62,7 @@ struct FileT {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct PersonT {
     name: String,
     #[serde(default)]
@@ -41,6 +70,7 @@ struct PersonT {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct DeviceT {
     person: String,
     name: String,
@@ -52,6 +82,7 @@ struct DeviceT {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct FolderT {
     path: String,
     rule: String,
@@ -83,15 +114,67 @@ pub fn parse_role(s: &str) -> Option<Role> {
     }
 }
 
-/// Parses a roster file.
-pub fn parse(text: &str) -> Result<RosterDoc, String> {
-    let f: FileT = toml_edit::de::from_str(text).map_err(|e| e.to_string())?;
-    if f.format != 1 {
-        return Err(format!("roster format {}", f.format));
+/// The first key of `t` outside `known`, as `at.key`.
+fn extra(t: &dyn TableLike, at: &str, known: &[&str]) -> Option<String> {
+    t.iter()
+        .map(|(k, _)| k)
+        .find(|k| !known.contains(k))
+        .map(|k| format!("{at}{k}"))
+}
+
+/// The first key of `doc` that the schema does not define.
+fn unknown_key(doc: &toml_edit::DocumentMut) -> Option<String> {
+    let top = doc.as_table();
+    if let Some(k) = extra(top, "", TOP) {
+        return Some(k);
     }
+    for (name, known) in [("persons", PERSON), ("devices", DEVICE)] {
+        let Some(t) = top.get(name).and_then(Item::as_table_like) else {
+            continue;
+        };
+        for (id, item) in t.iter() {
+            if let Some(entry) = item.as_table_like()
+                && let Some(k) = extra(entry, &format!("{name}.{id}."), known)
+            {
+                return Some(k);
+            }
+        }
+    }
+    let folders: Vec<&dyn TableLike> = match top.get("folders") {
+        Some(Item::ArrayOfTables(a)) => a.iter().map(|t| t as &dyn TableLike).collect(),
+        Some(Item::Value(toml_edit::Value::Array(a))) => a
+            .iter()
+            .filter_map(|v| v.as_inline_table().map(|t| t as &dyn TableLike))
+            .collect(),
+        _ => Vec::new(),
+    };
+    folders
+        .into_iter()
+        .find_map(|t| extra(t, "folders.", FOLDER))
+}
+
+/// Parses a roster file.
+pub fn parse(text: &str) -> Result<RosterDoc, Unread> {
+    let malformed = |why: String| Err(Unread::Malformed(why));
+    let Ok(doc) = text.parse::<toml_edit::DocumentMut>() else {
+        return malformed("not TOML".to_owned());
+    };
+    match doc.get("format").and_then(Item::as_integer) {
+        Some(n) if n == i64::from(FORMAT) => {}
+        Some(n) => return Err(Unread::Unknown(format!("format {n}"))),
+        None => return malformed("no format".to_owned()),
+    }
+    if let Some(k) = unknown_key(&doc) {
+        return Err(Unread::Unknown(format!("key {k}")));
+    }
+    let f: FileT = match toml_edit::de::from_str(text) {
+        Ok(f) => f,
+        Err(e) => return malformed(e.message().to_owned()),
+    };
     let mut devices = BTreeMap::new();
     for (id, d) in f.devices {
-        let role = parse_role(&d.role).ok_or_else(|| format!("role {}", d.role))?;
+        let role =
+            parse_role(&d.role).ok_or_else(|| Unread::Unknown(format!("role {}", d.role)))?;
         devices.insert(
             DeviceId(id),
             pigeon_core::roster::Device {
@@ -108,7 +191,8 @@ pub fn parse(text: &str) -> Result<RosterDoc, String> {
         let rule = match (x.rule.as_str(), x.owner) {
             ("owned", Some(o)) => Rule::Owned(PersonId(o)),
             ("add-only", None) => Rule::AddOnly(x.stewards.into_iter().map(PersonId).collect()),
-            (r, _) => return Err(format!("folder rule {r}")),
+            ("owned" | "add-only", _) => return malformed(format!("folder {} owner", x.path)),
+            (r, _) => return Err(Unread::Unknown(format!("folder rule {r}"))),
         };
         folders.push(Folder { path: x.path, rule });
     }
@@ -145,7 +229,7 @@ pub fn parse(text: &str) -> Result<RosterDoc, String> {
 pub fn render(doc: &RosterDoc) -> Result<String, String> {
     let r = &doc.roster;
     let f = FileT {
-        format: 1,
+        format: FORMAT,
         rules: r.rules,
         group: r.group.clone(),
         k: r.k,

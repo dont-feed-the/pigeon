@@ -257,13 +257,14 @@ impl Group {
             return;
         }
         let blob = self.git.blob(&format!("{main}:.pigeon/roster.toml")).await;
-        let parsed = blob.and_then(|b| roster_file::parse(&String::from_utf8_lossy(&b)).ok());
+        let parsed = blob.map(|b| roster_file::parse(&String::from_utf8_lossy(&b)));
         match parsed {
-            Some(doc) => {
+            Some(Ok(doc)) => {
                 let mut k = self.lock();
                 k.roster = Some(doc);
                 k.roster_commit = Some(main);
             }
+            Some(Err(why)) => tracing::warn!(group = %self.id, %why, "roster-unreadable"),
             None => tracing::warn!(group = %self.id, "roster-unreadable"),
         }
     }

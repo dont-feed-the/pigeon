@@ -83,7 +83,26 @@ pub struct Step<'a> {
     /// ID; a missing one is too large to be a pointer.
     pub blobs: &'a BTreeMap<String, Vec<u8>>,
     /// tree(c)'s roster, parsed, when [`delta`] names it.
-    pub new_roster: Option<&'a Result<Roster, String>>,
+    pub new_roster: Option<&'a Result<Roster, Unread>>,
+}
+
+/// Why a `.pigeon/` document was not read (ADR 0048).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Unread {
+    /// A format, field or value this release does not know: the commit is
+    /// unknown, never refused, since a newer release may accept it.
+    Unknown(String),
+    /// Not a document of its format: the commit is refused.
+    Malformed(String),
+}
+
+impl std::fmt::Display for Unread {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unknown(what) => write!(f, "unknown {what}"),
+            Self::Malformed(why) => write!(f, "malformed: {why}"),
+        }
+    }
 }
 
 /// Δ for one parent: the paths whose entry differs between the trees.
@@ -230,7 +249,8 @@ fn roster_change(step: &Step<'_>, signer: &DeviceId) -> Result<Roster, Box<Verdi
     let refused = |r| Err(Box::new(Verdict::Refused(r)));
     let new = match step.new_roster {
         Some(Ok(n)) if step.after.contains_key(ROSTER) => n,
-        Some(Err(e)) => return refused(Refusal::RosterUnreadable(e.clone())),
+        Some(Err(Unread::Unknown(_))) => return Err(Box::new(Verdict::Unknown("format"))),
+        Some(Err(Unread::Malformed(e))) => return refused(Refusal::RosterUnreadable(e.clone())),
         _ => return refused(Refusal::RosterUnreadable("missing".to_owned())),
     };
     if new.rules > RULES {

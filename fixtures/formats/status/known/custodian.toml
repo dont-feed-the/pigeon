@@ -1,0 +1,33 @@
+format = 1
+device = "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+at = 2026-10-13T12:02:00Z
+main = "5d41402abc4b2a76b9719d911017c592ae0b4c2e"
+proposals = []
+checking = false
+
+[versions]
+pigeon = "0.1.0"
+git_annex = "10.20261006"
+git = "2.47.0"
+
+[disk]
+used = 812000000
+free = 41000000000
+maxsize = 500000000000
+reserve = 2000000000
+full = false
+
+[custody]
+repository = "ok"
+
+[scrub]
+last_pass_completed = 2026-10-12T12:02:00Z
+keys_failed = 0
+
+[queue]
+bytes_to_send = 0
+bytes_to_receive = 0
+paused = ""
+admits = "all"
+deferred = 0
+missing = 0

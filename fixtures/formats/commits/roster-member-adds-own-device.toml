@@ -1,0 +1,12 @@
+about = "Ben adds his own phone (ADR 0017)."
+verdict = "accepted"
+roster = "known/group.toml"
+signer = 2
+message = "pigeon: roster"
+
+[before]
+"Shared/a.jpg" = "/annex/objects/SHA256E-s7--b236e74d49a5152abeec27d7e176a2e7976aec064f3389ef0b4a69ed1cfc5378.jpg\n"
+"Ana/notes.txt" = "/annex/objects/SHA256E-s5--ab5aa97074c454a0632057e704220d9a6678fbf773a0a5806fc09b8173b07309.txt\n"
+
+[after]
+".pigeon/roster.toml" = { roster = "known/group-ben-phone.toml" }

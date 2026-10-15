@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use common::{flag, index, int, pick};
 use hegel::TestCase;
-use pigeon_core::authority::{self, Entry, Refusal, Step, Tree, Verdict};
+use pigeon_core::authority::{self, Entry, Refusal, Step, Tree, Unread, Verdict};
 use pigeon_core::roster::{
     self, Device, DeviceId, Edit, Field, Folder, Person, PersonId, Role, Roster, Rule, Value,
 };
@@ -403,7 +403,7 @@ fn a_roster_change_is_accepted_iff_its_signer_may_make_it(tc: TestCase) {
 }
 
 #[test]
-fn an_invalid_or_unreadable_roster_is_refused() {
+fn an_invalid_or_unreadable_roster_is_refused_and_an_unknown_one_waits() {
     let r = group();
     let mut after = base();
     after.insert(".pigeon/roster.toml".into(), entry("roster-new"));
@@ -412,7 +412,8 @@ fn an_invalid_or_unreadable_roster_is_refused() {
     let mut no_admin = r.clone();
     no_admin.persons.get_mut(&pid(1)).unwrap().admin = false;
     for (parsed, want) in [
-        (Err("bad toml".to_owned()), "unreadable"),
+        (Err(Unread::Malformed("bad toml".to_owned())), "unreadable"),
+        (Err(Unread::Unknown("format 2".to_owned())), "unknown"),
         (Ok(no_admin), "invalid"),
     ] {
         let v = authority::judge(&Step {
@@ -426,6 +427,7 @@ fn an_invalid_or_unreadable_roster_is_refused() {
         let got = match v {
             Verdict::Refused(Refusal::RosterUnreadable(_)) => "unreadable",
             Verdict::Refused(Refusal::RosterInvalid(_)) => "invalid",
+            Verdict::Unknown("format") => "unknown",
             other => panic!("{other:?}"),
         };
         assert_eq!(got, want);

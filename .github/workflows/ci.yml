@@ -113,6 +113,8 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: tests, laws and the git-annex contract tests (13 §13.6)
         run: cargo test --workspace --locked --no-fail-fast
+      - name: the format fixtures, golden and next-format files (ADR 0048, 13 §13.6)
+        run: cargo test -p pigeond --test formats --locked
       - name: the lab build's seams (13 §13.12)
         run: cargo test -p pigeon-sys --features lab --locked
       - name: the first build of the slice, three daemons on one host (13 §13.12)

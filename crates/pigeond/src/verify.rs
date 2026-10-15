@@ -10,7 +10,7 @@
 
 use std::collections::BTreeMap;
 
-use pigeon_core::authority::{self, ROSTER, Step, Tree, Verdict};
+use pigeon_core::authority::{self, ROSTER, Step, Tree, Unread, Verdict};
 use pigeon_core::roster::Roster;
 
 use crate::git::{Error, Git};
@@ -24,7 +24,7 @@ pub struct Judged {
     pub stopped: Option<(String, Verdict)>,
 }
 
-async fn roster_at(git: &Git, tree: &Tree) -> Option<Result<Roster, String>> {
+async fn roster_at(git: &Git, tree: &Tree) -> Option<Result<Roster, Unread>> {
     let entry = tree.get(ROSTER)?;
     let blob = git.object(&entry.oid).await.ok()?;
     Some(crate::roster_file::parse(&String::from_utf8_lossy(&blob)).map(|d| d.roster))
@@ -68,6 +68,7 @@ async fn judge_one(git: &Git, c: &str, parents: &[String]) -> Result<Verdict, Er
         [] => {
             return Ok(match roster_at(git, &after).await {
                 Some(Ok(r)) => authority::judge_genesis(&raw, &r),
+                Some(Err(Unread::Unknown(_))) => Verdict::Unknown("format"),
                 _ => Verdict::Refused(authority::Refusal::RosterUnreadable("genesis".into())),
             });
         }
@@ -75,10 +76,14 @@ async fn judge_one(git: &Git, c: &str, parents: &[String]) -> Result<Verdict, Er
         _ => return Ok(Verdict::Unknown("merge")),
     };
     let before = git.tree(p).await?;
-    let Some(Ok(roster)) = roster_at(git, &before).await else {
-        return Ok(Verdict::Refused(authority::Refusal::RosterUnreadable(
-            "parent".into(),
-        )));
+    let roster = match roster_at(git, &before).await {
+        Some(Ok(r)) => r,
+        Some(Err(Unread::Unknown(_))) => return Ok(Verdict::Unknown("format")),
+        _ => {
+            return Ok(Verdict::Refused(authority::Refusal::RosterUnreadable(
+                "parent".into(),
+            )));
+        }
     };
     let changed = authority::delta(&before, &after);
     let oids: Vec<String> = changed
