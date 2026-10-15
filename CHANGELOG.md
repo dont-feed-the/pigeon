@@ -4,6 +4,16 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.3.2 — 2026-10-16
+
+### Added
+
+- `pigeon update --main` installs main's latest commit, built on this
+  computer with git and Rust, and builds pigeon's git-annex too when main
+  changed it (taking the official one if that build fails). `pigeon
+  --version` then names the commit, as in `pigeon 0.3.2+g1a2b3c4d5e6f`, and
+  a plain `pigeon update` goes back to the latest release.
+
 ## 0.3.1 — 2026-10-16
 
 The version follows the roadmap: `pigeon --version` says 0.3.1, where the

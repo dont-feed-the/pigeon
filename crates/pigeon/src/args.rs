@@ -83,7 +83,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ),
     ("doctor [--details]", "cmd-doctor"),
     ("debug bundle [--from NAME…]", "cmd-debug-bundle"),
-    ("update [--version TAG | --rollback]", "cmd-update"),
+    ("update [--version TAG | --main | --rollback]", "cmd-update"),
 ];
 
 /// Options that take a value.
@@ -403,12 +403,15 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
                 repos: w.iter().map(Into::into).collect(),
             }))
         }
-        "update" if fits(0, 0, &["version", "rollback"]) => {
-            match (s.value("version"), s.flag("rollback")) {
-                (None, false) => Some(Action::Update(Vec::new())),
-                (Some(tag), false) => Some(Action::Update(vec!["--version".into(), tag.into()])),
-                (None, true) => Some(Action::Update(vec!["--rollback".into()])),
-                (Some(_), true) => None,
+        "update" if fits(0, 0, &["version", "main", "rollback"]) => {
+            match (s.value("version"), s.flag("main"), s.flag("rollback")) {
+                (None, false, false) => Some(Action::Update(Vec::new())),
+                (Some(tag), false, false) => {
+                    Some(Action::Update(vec!["--version".into(), tag.into()]))
+                }
+                (None, true, false) => Some(Action::Update(vec!["--main".into()])),
+                (None, false, true) => Some(Action::Update(vec!["--rollback".into()])),
+                _ => None,
             }
         }
         "create" | "invite" | "join" | "status" | "machines" | "open" | "history" | "restore"
