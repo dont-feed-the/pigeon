@@ -31,7 +31,7 @@ pub(crate) fn operation(e: &pigeon_core::journal::Entry) -> &'static str {
 }
 
 /// A filesystem name, read without following links or changing the index.
-fn file(path: &Path) -> Result<Value, String> {
+fn file(path: &Path, observe_writers: bool) -> Result<Value, String> {
     let Some(stat) = lstat(path).map_err(|e| e.to_string())? else {
         return Ok(json!({"inode": "", "content": "", "writers": false, "stat": ""}));
     };
@@ -44,7 +44,9 @@ fn file(path: &Path) -> Result<Value, String> {
     }
     Ok(json!({
         "inode": format!("{}:{}", stat.id.dev, stat.id.ino),
-        "content": hash, "writers": !crate::asides::writers_clear(&stat),
+        "content": hash, "writers": if observe_writers {
+            json!(!crate::asides::writers_clear(&stat))
+        } else { Value::Null },
         "stat": format!("{}:{}:{}:{}", stat.id.dev, stat.id.ino, stat.size, stat.mtime_ns),
     }))
 }
@@ -70,7 +72,7 @@ async fn pointer(g: &Group, oid: Option<&str>) -> Result<String, String> {
 
 /// The observable projection of one path. An ended aside is a kept inode,
 /// even while its physical name remains in `aside/` until release.
-fn disk(g: &Group, path: &str, seq: u64) -> Result<Value, String> {
+fn disk(g: &Group, path: &str, seq: u64, observe_writers: bool) -> Result<Value, String> {
     let wt = g.worktree.as_ref().ok_or("trace has no worktree")?;
     let journal = entries(&crate::journal_file::read(&g.files.install_journal()));
     let mut active_entries = journal
@@ -81,15 +83,15 @@ fn disk(g: &Group, path: &str, seq: u64) -> Result<Value, String> {
         return Err("more than one active journal entry for a path".into());
     }
     let entry = active_entry.or_else(|| journal.get(&seq));
-    let live = file(&wt.join(path))?;
+    let live = file(&wt.join(path), observe_writers)?;
     let active = entry.filter(|e| e.end.is_none());
     let absent = json!({"inode": "", "content": "", "writers": false, "stat": ""});
     let aside = match active {
-        Some(e) => file(Path::new(&e.begin.aside))?,
+        Some(e) => file(Path::new(&e.begin.aside), observe_writers)?,
         None => absent.clone(),
     };
     let stage = match active.and_then(|e| e.begin.stage.as_deref()) {
-        Some(p) => file(Path::new(p))?,
+        Some(p) => file(Path::new(p), observe_writers)?,
         None => absent.clone(),
     };
     let mut kept = Vec::new();
@@ -103,7 +105,7 @@ fn disk(g: &Group, path: &str, seq: u64) -> Result<Value, String> {
         } else {
             e.preserved.as_deref().map(Path::new).unwrap_or(original)
         };
-        let mut value = file(at)?;
+        let mut value = file(at, observe_writers)?;
         if value["inode"] == "" {
             continue;
         }
@@ -123,7 +125,7 @@ fn disk(g: &Group, path: &str, seq: u64) -> Result<Value, String> {
 
 /// Git facts and the filesystem layout at an observed operation boundary.
 pub async fn snapshot(g: &Group, path: &str, seq: u64) -> Result<Value, String> {
-    let mut state = disk(g, path, seq)?;
+    let mut state = disk(g, path, seq, true)?;
     let index = crate::trace_index::read(g, path)?;
     let hidden = index.hidden;
     let physical_index = pointer(g, index.oid.as_deref()).await?;
@@ -335,6 +337,16 @@ impl<'a> Checkpoint<'a> {
 
     /// Observe the beginning of one synchronous step.
     pub fn begin(&self, action: &'static str) -> DiskSpan<'_> {
+        self.begin_with_scan(action, None)
+    }
+
+    /// Record the actual driver scan input, without repeating a process
+    /// scan for every file at every edge of the rename window.
+    pub fn scan(&self, clear: bool) -> DiskSpan<'_> {
+        self.begin_with_scan("Scan", Some(!clear))
+    }
+
+    fn begin_with_scan(&self, action: &'static str, writers: Option<bool>) -> DiskSpan<'_> {
         let span = Span {
             tracer: self.tracer,
             group: self.group,
@@ -348,6 +360,7 @@ impl<'a> Checkpoint<'a> {
         let step = DiskSpan {
             checkpoint: self,
             span,
+            writers,
         };
         step.record("before", "", true);
         step
@@ -358,6 +371,7 @@ impl<'a> Checkpoint<'a> {
 pub struct DiskSpan<'a> {
     checkpoint: &'a Checkpoint<'a>,
     span: Span<'a>,
+    writers: Option<bool>,
 }
 
 impl DiskSpan<'_> {
@@ -366,7 +380,13 @@ impl DiskSpan<'_> {
             return;
         };
         let observed = base.clone().and_then(|mut base| {
-            let fresh = disk(self.span.group, &self.span.path, self.span.seq)?;
+            let mut fresh = disk(self.span.group, &self.span.path, self.span.seq, false)?;
+            if edge == "before"
+                && let Some(writers) = self.writers
+                && fresh["aside"]["inode"] != ""
+            {
+                fresh["aside"]["writers"] = json!(writers);
+            }
             let index = crate::trace_index::read(self.span.group, &self.span.path)?;
             if base["index_oid"].as_str() != Some(index.oid.as_deref().unwrap_or("")) {
                 return Err("index pointer changed during a filesystem step".to_owned());

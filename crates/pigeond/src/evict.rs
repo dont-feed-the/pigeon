@@ -196,11 +196,11 @@ fn hide(
     }
     moved.finish("aside");
     crash_point("free-after-move-aside");
-    let scan = trace.begin("Scan");
     let clear = lstat(&aside)
         .ok()
         .flatten()
         .is_some_and(|a| crate::asides::writers_clear(&a));
+    let scan = trace.scan(clear);
     if !clear {
         crate::install::rollback(g, seq, &aside, &file, None)?;
         scan.finish("idle");

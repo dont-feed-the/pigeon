@@ -14,7 +14,8 @@ Ev == TraceLog[l]
 Present(v) == {v.p, v.aside, v.stage} \ {0}
 AsKept(v) == { [i |-> x.i, e |-> x.e] : x \in ToSet(v.kept) }
 Files(v) == ToSet(v.files)
-Writers(v) == {x.i : x \in {y \in Files(v) : y.w}}
+Writers(v) == {x.i : x \in {y \in Files(v) : y.known /\ y.w}}
+Clear(v) == {x.i : x \in {y \in Files(v) : y.known /\ ~y.w}}
 Bytes(v) == {x.c : x \in Files(v)} \ {0}
 Projection == [at |-> at, kept |-> kept, fc |-> fc, key |-> idx.key,
                clean |-> Clean, cur |-> cur, store |-> store,
@@ -28,7 +29,7 @@ Match(p, v) ==
      positive clean claim must be justified by the model's cache rule. *)
   /\ p.key = v.index /\ (v.clean => p.clean) /\ p.cur = v.current
   /\ p.store = ToSet(v.signed)
-  /\ p.hnd = Writers(v)
+  /\ Writers(v) \subseteq p.hnd /\ p.hnd \cap Clear(v) = {}
   /\ p.hidden = v.hidden
   /\ (v.open /\ v.operation # "" => p.operation = v.operation)
   /\ p.jr.open = v.open

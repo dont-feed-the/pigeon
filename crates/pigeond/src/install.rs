@@ -152,11 +152,11 @@ pub(crate) async fn put(
         }
         moved.finish("aside");
         pigeon_sys::lab::crash_point("install.after-aside");
-        let scan = trace.begin("Scan");
         let clear = lstat(&aside)
             .ok()
             .flatten()
             .is_some_and(|a| crate::asides::writers_clear(&a));
+        let scan = trace.scan(clear);
         if !clear {
             rollback(g, seq, &aside, &file, Some(&stage))?;
             scan.finish("idle");
@@ -315,11 +315,11 @@ pub(crate) async fn remove(g: &Group, rel: &str, current: &str, t: &Tracer) -> R
     }
     moved.finish("aside");
     pigeon_sys::lab::crash_point("install.after-aside");
-    let scan = trace.begin("Scan");
     let clear = lstat(&aside)
         .ok()
         .flatten()
         .is_some_and(|a| crate::asides::writers_clear(&a));
+    let scan = trace.scan(clear);
     if !clear {
         rollback(g, seq, &aside, &file, None)?;
         scan.finish("idle");

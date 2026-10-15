@@ -65,7 +65,7 @@ def validate(state):
     if not isinstance(state["kept"], list):
         raise Refused("kept inodes must be a list")
     for f in files(state):
-        if not all(isinstance(f[n], str) for n in ("inode", "content", "stat")) or type(f["writers"]) is not bool:
+        if not all(isinstance(f[n], str) for n in ("inode", "content", "stat")) or not (f["writers"] is None or type(f["writers"]) is bool):
             raise Refused("invalid file observation")
         if bool(f["inode"]) != bool(f["content"]) or (not f["inode"] and f["writers"]):
             raise Refused("absent inode has content or writers")
@@ -85,6 +85,8 @@ def pairs(events):
         if "error" in v:
             raise Refused(f"observation failed at clock {event['clock']}: {v['error']}")
         if v["edge"] == "before":
+            if event["action"] == "Scan" and type(v["state"]["aside"]["writers"]) is not bool:
+                raise Refused("missing actual writer-scan input")
             if pending:
                 p = pending["vars"]
                 if p["run"] == v["run"]:
@@ -132,9 +134,13 @@ def normalize(events):
         for f in files(s):
             if not f["inode"]:
                 continue
-            value = {"i": i(f["inode"]), "c": c(f["content"]), "w": f["writers"]}
-            if value["i"] in by_inode and by_inode[value["i"]] != value:
-                raise Refused("inconsistent observations of the same inode")
+            value = {"i": i(f["inode"]), "c": c(f["content"]), "w": f["writers"] is True, "known": f["writers"] is not None}
+            if value["i"] in by_inode:
+                old = by_inode[value["i"]]
+                if old["c"] != value["c"] or old["known"] and value["known"] and old["w"] != value["w"]:
+                    raise Refused("inconsistent observations of the same inode")
+                if old["known"]:
+                    value = old
             by_inode[value["i"]] = value
         result.update({n: i(s[n]["inode"]) for n in ("p", "aside", "stage")})
         result["kept"] = [{"i": i(f["inode"]), "e": c(f["expected"])} for f in s["kept"]]

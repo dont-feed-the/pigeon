@@ -52,6 +52,13 @@ critical rename window; synchronous observations in that window refresh
 files, journal and the raw index, and reject a changed pointer. With tracing
 off, these observations perform no filesystem or Git reads.
 
+Writer facts inside the rename window come from the driver's actual scan
+input. Other critical edges use `writers: null` (unobserved); TLC leaves
+those handles unconstrained. Repeated process-wide scans at every edge
+would lengthen the missing-path window. The adapter refuses a `Scan` event
+without its actual boolean input. Outside that window, snapshots scan for
+writers independently.
+
 The encoder renames inode/content identities while preserving equality.
 It projects signed history onto hashes seen so far in that path, including
 an explicit restore request, so another path's batch capture cannot become
