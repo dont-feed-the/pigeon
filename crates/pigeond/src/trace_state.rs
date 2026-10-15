@@ -452,7 +452,7 @@ impl DiskSpan<'_> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[allow(clippy::unwrap_used, reason = "tests")]
 mod tests {
     #[test]
     fn a_trace_never_hides_a_bad_complete_journal_record() {

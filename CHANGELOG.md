@@ -4,6 +4,17 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.3.5 — 2026-10-15
+
+### Fixed
+
+- After a crash during an incoming install, recovery finishes the intended
+  file index update, including deletions, instead of leaving the old version.
+- Creating or deleting a file while an incoming version is being prepared
+  keeps the person's change for capture instead of replacing it.
+- Restoring a deleted file can finish recovery after a crash without getting
+  stuck on its missing index entry.
+
 ## 0.3.4 — 2026-10-16
 
 ### Changed

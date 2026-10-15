@@ -48,6 +48,26 @@ fn name(i: usize) -> String {
     format!("f{i:03}.txt")
 }
 
+fn delete_files(folder: &Path, all: &[&common::Daemon]) {
+    for i in 0..101 {
+        let path = folder.join(name(i));
+        // Protected copies can be re-thinned while the person deletes.
+        // The original name is briefly absent between aside and rename-in.
+        // Require a successful unlink: ignoring NotFound would leave a file
+        // undeleted when thinning puts its replacement back.
+        eventually_within(
+            5,
+            || match std::fs::remove_file(&path) {
+                Ok(()) => true,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+                Err(e) => panic!("deleting {}: {e}\n{}", path.display(), common::logs(all)),
+            },
+            &format!("{} stayed missing during deletion", path.display()),
+            all,
+        );
+    }
+}
+
 #[test]
 fn a_mass_deletion_waits_for_the_person() {
     let _one = SERIAL
@@ -72,9 +92,7 @@ fn a_mass_deletion_waits_for_the_person() {
     until(&a1, State::Protected, &all);
     assert_eq!(in_main(&fa).len(), 102);
 
-    for i in 0..101 {
-        std::fs::remove_file(fa.join(name(i))).unwrap();
-    }
+    delete_files(&fa, &all);
     eventually_within(
         60,
         || held(&a1).len() == 1,
@@ -107,9 +125,7 @@ fn a_mass_deletion_waits_for_the_person() {
     );
     assert!(held(&a1).is_empty());
 
-    for i in 0..101 {
-        std::fs::remove_file(fa.join(name(i))).unwrap();
-    }
+    delete_files(&fa, &all);
     eventually_within(
         60,
         || held(&a1).len() == 1,
