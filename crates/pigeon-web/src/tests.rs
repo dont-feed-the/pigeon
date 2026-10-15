@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
-use pigeon_proto::api::{Level, Setting, State, StatusReport, Suggestion};
+use pigeon_proto::api::{Level, Machine, Setting, State, StatusReport, Suggestion};
 use pigeon_proto::{Message, Response};
 use tower::ServiceExt;
 
@@ -65,11 +65,35 @@ impl Backend for Fixed {
                     .into(),
                 },
             }],
-            _ => vec![Response::Machines {
-                machines: Vec::new(),
+            pigeon_proto::Request::Machines => vec![Response::Machines {
+                machines: ["mine", "paul-laptop"]
+                    .map(|name| Machine {
+                        name: name.into(),
+                        device: "d".into(),
+                        custodian: false,
+                        heard_at: None,
+                        this_device: name == "mine",
+                    })
+                    .into(),
             }],
+            pigeon_proto::Request::RemoveDevice { name } => {
+                vec![said("removed-computer", "name", name)]
+            }
+            pigeon_proto::Request::Invite { person, .. } => {
+                vec![said("invitation", "code", format!("pgn1-{person}"))]
+            }
+            _ => vec![Response::Done],
         };
         Box::pin(async move { answer })
+    }
+}
+
+fn said(id: &str, arg: &str, value: String) -> Response {
+    Response::Said {
+        message: Message {
+            id: id.into(),
+            args: [(arg.to_owned(), pigeon_proto::Arg::Text(value))].into(),
+        },
     }
 }
 
@@ -275,4 +299,70 @@ async fn a_setting_is_shown_and_saved_with_the_sessions_form_token() {
     assert_eq!(ok.status(), StatusCode::OK);
     let text = body(ok).await;
     assert!(text.contains("language is now fr."), "{text}");
+}
+
+/// The form token of a page.
+fn form_of(page: &str) -> String {
+    let key = "name=\"form\" value=\"";
+    let at = page.find(key).unwrap() + key.len();
+    page[at..at + 64].to_owned()
+}
+
+#[tokio::test]
+async fn a_machine_is_removed_once_confirmed_and_a_person_invited() {
+    let w = web();
+    let app = w.router();
+    let cookie = logged_in(&app, &w).await;
+    let page = app
+        .clone()
+        .oneshot(get("/machines", HOST, Some(&cookie)))
+        .await
+        .unwrap();
+    let page = body(page).await;
+    assert!(page.contains("mine: this computer"), "{page}");
+    assert_eq!(
+        page.matches("action=\"/machines/remove\"").count(),
+        1,
+        "{page}"
+    );
+    let form = form_of(&page);
+    let ask = app
+        .clone()
+        .oneshot(post(
+            "/machines/remove",
+            &cookie,
+            &format!("form={form}&name=paul-laptop"),
+        ))
+        .await
+        .unwrap();
+    let ask = body(ask).await;
+    assert!(ask.contains("Remove paul-laptop from the group?"), "{ask}");
+    assert!(!ask.contains("is removed"), "{ask}");
+    let done = app
+        .clone()
+        .oneshot(post(
+            "/machines/remove",
+            &cookie,
+            &format!("form={form}&name=paul-laptop&yes=true"),
+        ))
+        .await
+        .unwrap();
+    let done = body(done).await;
+    assert!(done.contains("paul-laptop is removed"), "{done}");
+    let forged = app
+        .clone()
+        .oneshot(post("/machines/invite", &cookie, "form=00&person=Ana"))
+        .await
+        .unwrap();
+    assert_eq!(forged.status(), StatusCode::FORBIDDEN);
+    let invited = app
+        .oneshot(post(
+            "/machines/invite",
+            &cookie,
+            &format!("form={form}&person=Ana&admin=true"),
+        ))
+        .await
+        .unwrap();
+    let invited = body(invited).await;
+    assert!(invited.contains("pgn1-Ana"), "{invited}");
 }

@@ -75,9 +75,11 @@ Machines pages read through the same handler as the socket, and an SSE
 headline; Files lists the top-level folders (`Folders`) with *Keep on this
 computer* or *Free up space*; Settings changes `language` and
 `notifications` (`GetSettings`, `SetSettings`, also `pigeon settings`), a
-new language showing at once; *Accept*, *Decline*, keep, free and *Save*
-are `POST`s carrying a per-session form token. Not yet: Deleted files, a
-file's page, pause and the other settings, the other actions, axe-core.
+new language showing at once; People & machines invites a person or a
+backup machine and removes a machine, asking again first; *Accept*,
+*Decline*, keep, free, *Save*, *Invite* and *Remove* are `POST`s carrying
+a per-session form token. Not yet: Deleted files, a file's page, pause and
+the other settings, the other actions, axe-core.
 
 - Served by `pigeond`, rendered on the server; server-sent events refresh
   the headline and activity; pages work without JavaScript. It writes

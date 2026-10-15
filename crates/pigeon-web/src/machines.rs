@@ -1,0 +1,165 @@
+//! People & machines (ux.md §6.4): the group's computers and backup
+//! machines, each but this one with *Remove* (`pigeon remove-computer`,
+//! asked again before it is done), and the forms that invite a person or
+//! a backup machine (`pigeon invite`), whose answer is the invitation.
+
+use std::sync::Arc;
+
+use axum::extract::State;
+use axum::http::StatusCode;
+use axum::response::{Html, IntoResponse, Response};
+use axum::{Extension, Form};
+use maud::{Markup, html};
+use pigeon_i18n::Message;
+use pigeon_i18n::render::Renderer;
+use pigeon_proto::Request;
+use pigeon_proto::api::Machine;
+
+use crate::pages::{list, page};
+use crate::{FormToken, Web, pages};
+
+/// The People & machines page.
+pub async fn machines(
+    State(web): State<Arc<Web>>,
+    Extension(form): Extension<FormToken>,
+) -> Html<String> {
+    let r = web.renderer();
+    let mut rows = Vec::new();
+    let mut other = Vec::new();
+    for answer in web.ask(Request::Machines).await {
+        match answer {
+            pigeon_proto::Response::Machines { machines } => rows = machines,
+            pigeon_proto::Response::Progress { .. } => {}
+            a => other.extend(r.response(&a).0),
+        }
+    }
+    let f = &form.0;
+    let body = html! {
+        (list(&other))
+        @for m in &rows { (machine(&r, m, f)) }
+        h2 { (r.id("web-invite")) }
+        form method="post" action="/machines/invite" {
+            input type="hidden" name="form" value=(f);
+            label for="person" { (r.id("web-invite-person")) " " }
+            input id="person" name="person" required;
+            " "
+            label { input type="checkbox" name="admin" value="true"; " " (r.id("web-invite-admin")) }
+            " "
+            button type="submit" { (r.id("web-invite")) }
+        }
+        form method="post" action="/machines/invite" {
+            input type="hidden" name="form" value=(f);
+            input type="hidden" name="backup" value="true";
+            button type="submit" { (r.id("web-invite-backup")) }
+        }
+    };
+    page(&r, "/machines", &r.id("web-nav-machines"), &body)
+}
+
+/// One machine, and the form that removes it.
+fn machine(r: &Renderer, m: &Machine, form: &str) -> Markup {
+    html! {
+        article {
+            p { (r.machine(m)) }
+            @if !m.this_device {
+                form method="post" action="/machines/remove" {
+                    input type="hidden" name="form" value=(form);
+                    input type="hidden" name="name" value=(m.name);
+                    button type="submit" { (r.id("web-remove")) }
+                }
+            }
+        }
+    }
+}
+
+/// The form that removes a machine; `yes` once the person confirmed.
+#[derive(serde::Deserialize)]
+pub struct RemoveForm {
+    /// The session's form token.
+    form: String,
+    /// The machine's name in the roster.
+    name: String,
+    /// Asked again and confirmed.
+    #[serde(default)]
+    yes: bool,
+}
+
+/// *Remove*: asks again, then `pigeon remove-computer NAME`.
+pub async fn remove(
+    State(web): State<Arc<Web>>,
+    Extension(token): Extension<FormToken>,
+    Form(f): Form<RemoveForm>,
+) -> Response {
+    if let Some(refused) = expired(&web, &token, &f.form) {
+        return refused;
+    }
+    let r = web.renderer();
+    if !f.yes {
+        let question = r
+            .catalogue()
+            .format(&Message::new("web-remove-confirm").arg("name", f.name.as_str()));
+        let body = html! {
+            form method="post" action="/machines/remove" {
+                input type="hidden" name="form" value=(f.form);
+                input type="hidden" name="name" value=(f.name);
+                input type="hidden" name="yes" value="true";
+                button type="submit" { (r.id("web-remove")) }
+            }
+            p { a href="/machines" { (r.id("web-back")) } }
+        };
+        return page(&r, "/machines", &question, &body).into_response();
+    }
+    let lines = pages::lines(&web, &r, Request::RemoveDevice { name: f.name }).await;
+    pages::result(&r, "/machines", lines).into_response()
+}
+
+/// The form that invites a person, or a backup machine with `backup`.
+#[derive(serde::Deserialize)]
+pub struct InviteForm {
+    /// The session's form token.
+    form: String,
+    /// The person's name.
+    #[serde(default)]
+    person: String,
+    /// As an admin.
+    #[serde(default)]
+    admin: bool,
+    /// A backup machine.
+    #[serde(default)]
+    backup: bool,
+}
+
+/// *Invite*: `pigeon invite [--admin] PERSON` or `--backup-machine`.
+pub async fn invite(
+    State(web): State<Arc<Web>>,
+    Extension(token): Extension<FormToken>,
+    Form(f): Form<InviteForm>,
+) -> Response {
+    if let Some(refused) = expired(&web, &token, &f.form) {
+        return refused;
+    }
+    let request = Request::Invite {
+        person: if f.backup {
+            String::new()
+        } else {
+            f.person.trim().to_owned()
+        },
+        admin: f.admin && !f.backup,
+        custodian: f.backup,
+        name: None,
+    };
+    let r = web.renderer();
+    let lines = pages::lines(&web, &r, request).await;
+    pages::result(&r, "/machines", lines).into_response()
+}
+
+/// The refusal of a form without the session's token.
+fn expired(web: &Web, token: &FormToken, form: &str) -> Option<Response> {
+    (token.0.is_empty() || form != token.0).then(|| {
+        (
+            StatusCode::FORBIDDEN,
+            pages::refused(web, "web-form-expired"),
+        )
+            .into_response()
+    })
+}

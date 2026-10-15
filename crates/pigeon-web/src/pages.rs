@@ -128,13 +128,6 @@ pub async fn home(State(web): State<Arc<Web>>) -> Html<String> {
     page(&r, "/", &headline, &list(&rest))
 }
 
-/// People & machines: the group's computers and backup machines.
-pub async fn machines(State(web): State<Arc<Web>>) -> Html<String> {
-    let r = web.renderer();
-    let rows = lines(&web, &r, Request::Machines).await;
-    page(&r, "/machines", &r.id("web-nav-machines"), &list(&rows))
-}
-
 /// Suggestions: those waiting for a decision, with *Accept* and *Decline*
 /// on those this person decides (ux.md §6.3).
 pub async fn suggestions(
