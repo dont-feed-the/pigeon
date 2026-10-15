@@ -254,7 +254,7 @@ impl<'a> Span<'a> {
         requested: Option<&str>,
     ) -> Self {
         let (action, kind) = action_kind;
-        let span = Self {
+        let mut span = Self {
             tracer,
             group,
             path: path.to_owned(),
@@ -262,9 +262,12 @@ impl<'a> Span<'a> {
             action,
             kind,
             requested: requested.map(str::to_owned),
-            finished: false,
+            // Cancellation while collecting the first snapshot has not
+            // entered the driver and must not invent an unmatched event.
+            finished: true,
         };
         span.record("before", "", true).await;
+        span.finished = false;
         span
     }
 
@@ -318,7 +321,7 @@ impl<'a> Span<'a> {
 impl Drop for Span<'_> {
     fn drop(&mut self) {
         if self.tracer.enabled() && !self.finished {
-            self.emit("error", "", json!({"interrupted": true}));
+            self.emit("cancelled", "", json!({"interrupted": true}));
         }
     }
 }

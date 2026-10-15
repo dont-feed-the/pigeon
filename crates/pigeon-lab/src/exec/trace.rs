@@ -104,6 +104,32 @@ fn trace_error(why: &str) -> Line {
     }
 }
 
+/// Whether a live read ends between filesystem operations. This does not
+/// validate the log: errors and malformed pairs remain for the checker.
+pub fn settled(lines: &[Line]) -> bool {
+    let mut pending = BTreeSet::new();
+    for line in lines {
+        let Ok(v) = serde_json::from_str::<Value>(&line.raw) else {
+            continue;
+        };
+        let vars = &v["vars"];
+        let (Some(group), Some(path)) = (vars["group"].as_str(), vars["path"].as_str()) else {
+            continue;
+        };
+        let key = (line.device.clone(), group.to_owned(), path.to_owned());
+        match vars["edge"].as_str() {
+            Some("before") => {
+                pending.insert(key);
+            }
+            Some("after") => {
+                pending.remove(&key);
+            }
+            _ => {}
+        }
+    }
+    pending.is_empty()
+}
+
 /// Writes the merged events, one per line.
 pub fn write(lines: &[Line], path: &Path) -> std::io::Result<()> {
     let mut text = String::new();
@@ -141,4 +167,31 @@ pub fn labels(lines: &[Line], ids: &BTreeMap<String, Device>) -> Vec<Label> {
             })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Line, settled};
+
+    fn edge(edge: &str, clock: u64) -> Line {
+        Line {
+            spec: "CaptureInstall".into(),
+            device: "device".into(),
+            clock,
+            action: "Capture".into(),
+            raw: serde_json::json!({"vars": {"group": "g", "path": "p", "edge": edge}}).to_string(),
+        }
+    }
+
+    #[test]
+    fn collection_waits_for_a_complete_boundary() {
+        assert!(!settled(&[edge("before", 1)]));
+        assert!(!settled(&[edge("before", 1), edge("cancelled", 2)]));
+        assert!(settled(&[edge("before", 1), edge("after", 2)]));
+        assert!(!settled(&[
+            edge("before", 1),
+            edge("after", 2),
+            edge("before", 3)
+        ]));
+    }
 }

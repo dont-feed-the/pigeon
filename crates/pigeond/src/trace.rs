@@ -6,7 +6,7 @@
 //! The Lamport clock is kept in each group's `clock.json` across restarts
 //! (`clock_file`); it is sent to no peer yet (13 §13.12).
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -17,7 +17,14 @@ pub struct Tracer {
     out: Option<Mutex<PathBuf>>,
     clock: AtomicU64,
     device: String,
-    pending: Mutex<BTreeSet<(String, String)>>,
+    pending: Mutex<BTreeMap<(String, String), Pending>>,
+}
+
+#[derive(Debug)]
+struct Pending {
+    seq: u64,
+    kind: &'static str,
+    run: String,
 }
 
 impl Tracer {
@@ -56,7 +63,23 @@ impl Tracer {
                 .pending
                 .lock()
                 .unwrap_or_else(|p| p.into_inner())
-                .contains(&(group.to_owned(), crate::util::hex(path.as_bytes())))
+                .contains_key(&(group.to_owned(), crate::util::hex(path.as_bytes())))
+    }
+
+    /// A restart still needs a real checkpoint when the interrupted step
+    /// already removed its journal entry (creation or final aside release).
+    pub(crate) fn unfinished_paths(&self, group: &str) -> Vec<(String, u64, &'static str)> {
+        let run = std::process::id().to_string();
+        self.pending
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .iter()
+            .filter(|((g, _), p)| g == group && p.run != run)
+            .filter_map(|((_, path), p)| {
+                let path = String::from_utf8(crate::util::unhex(path)?).ok()?;
+                Some((path, p.seq, p.kind))
+            })
+            .collect()
     }
 
     /// A tracer writing to `dir`, if this build and the environment ask it.
@@ -80,7 +103,7 @@ impl Tracer {
         // A crash may precede the clock.json flush. The append log itself
         // keeps this device's clock increasing across that restart.
         let mut clock = 0;
-        let mut pending = BTreeSet::new();
+        let mut pending = BTreeMap::new();
         if on {
             for line in std::fs::read_to_string(&path).unwrap_or_default().lines() {
                 if let Ok(event) = serde_json::from_str::<serde_json::Value>(line) {
@@ -109,7 +132,7 @@ impl Tracer {
     }
 }
 
-fn remember(pending: &mut BTreeSet<(String, String)>, event: &serde_json::Value) {
+fn remember(pending: &mut BTreeMap<(String, String), Pending>, event: &serde_json::Value) {
     let v = &event["vars"];
     let (Some(group), Some(path)) = (v["group"].as_str(), v["path"].as_str()) else {
         return;
@@ -117,7 +140,22 @@ fn remember(pending: &mut BTreeSet<(String, String)>, event: &serde_json::Value)
     let key = (group.to_owned(), path.to_owned());
     match v["edge"].as_str() {
         Some("before") => {
-            pending.insert(key);
+            let kind = match v["kind"].as_str() {
+                Some("free") => "free",
+                Some("keep") => "keep",
+                Some("thin") => "thin",
+                Some("restore") => "restore",
+                Some("resolve") => "resolve",
+                _ => "install",
+            };
+            pending.insert(
+                key,
+                Pending {
+                    seq: v["seq"].as_u64().unwrap_or(0),
+                    kind,
+                    run: v["run"].as_str().unwrap_or_default().to_owned(),
+                },
+            );
         }
         Some("after") => {
             pending.remove(&key);

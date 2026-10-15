@@ -615,6 +615,12 @@ pub async fn recover(g: &Group, t: &Tracer) {
         }
     }
     crate::asides::release(g, t).await;
+    for (path, seq, kind) in t.unfinished_paths(&g.id) {
+        Span::begin(t, g, &path, seq, "Cleanup", kind)
+            .await
+            .finish("idle")
+            .await;
+    }
     let _ = g.git.run(&["update-index", "-q", "--refresh"]).await;
     truncate_if_done(g);
 }

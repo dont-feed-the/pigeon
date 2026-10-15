@@ -24,23 +24,28 @@ async fn install_trace_child() {
 
 #[tokio::test]
 async fn driver_traces_replay_crashes() {
-    for (point, deletion, forward) in [
-        ("install.after-begin", false, false),
-        ("install.after-aside", false, false),
-        ("install.after-proof", false, true),
-        ("install.after-rename", false, true),
-        ("install.before-index-observation", false, true),
-        ("install.after-done", false, true),
-        ("install.before-done-observation", false, true),
-        ("install.after-proof", true, true),
+    for (point, deletion, forward, creation) in [
+        ("install.after-begin", false, false, false),
+        ("install.after-aside", false, false, false),
+        ("install.after-proof", false, true, false),
+        ("install.after-rename", false, true, false),
+        ("install.before-index-observation", false, true, false),
+        ("install.after-done", false, true, false),
+        ("install.before-done-observation", false, true, false),
+        ("install.after-proof", true, true, false),
+        ("install.before-done-observation", false, true, true),
     ] {
         let Some(l) = laptop().await else { return };
-        write(&l, "a.txt", b"old\n");
-        let c1 = capture::capture(&l.g, &dev(1).0, &l.t)
-            .await
-            .unwrap()
-            .commit
-            .unwrap();
+        let c1 = if creation {
+            l.git.rev("refs/heads/main").await.unwrap()
+        } else {
+            write(&l, "a.txt", b"old\n");
+            capture::capture(&l.g, &dev(1).0, &l.t)
+                .await
+                .unwrap()
+                .commit
+                .unwrap()
+        };
         let old = l.git.index().await.unwrap();
         let mut tree = l.git.tree(&c1).await.unwrap();
         if deletion {

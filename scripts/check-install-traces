@@ -75,7 +75,7 @@ def validate(state):
 
 def pairs(events):
     """Pair only actual matching edges; no missing action is synthesized."""
-    out, pending = [], None
+    out, pending, cancelled = [], None, False
     for event in events:
         v = event["vars"]
         if "state" in v:
@@ -84,6 +84,14 @@ def pairs(events):
             raise Refused(f"unknown action {event['action']}")
         if "error" in v:
             raise Refused(f"observation failed at clock {event['clock']}: {v['error']}")
+        if v["edge"] == "cancelled":
+            if not pending or cancelled or v.get("interrupted") is not True:
+                raise Refused("cancellation without an active operation")
+            p = pending["vars"]
+            if (event["action"], v["seq"], v["kind"], v["run"]) != (pending["action"], p["seq"], p["kind"], p["run"]):
+                raise Refused("cancellation identity changed")
+            cancelled = True
+            continue
         if v["edge"] == "before":
             if event["action"] == "Scan" and type(v["state"]["aside"]["writers"]) is not bool:
                 raise Refused("missing actual writer-scan input")
@@ -97,8 +105,9 @@ def pairs(events):
                 out.append(dict(pending, vars={"before": p["state"], "after": v["state"],
                     "phase": "", "ok": False, "crashed": True, "kind": p["kind"], "request": p["request"]}))
             pending = event
+            cancelled = False
             continue
-        if not pending or v["edge"] != "after":
+        if not pending or cancelled or v["edge"] != "after":
             raise Refused(f"unpaired {v['edge']} observation")
         p = pending["vars"]
         if (pending["action"], p["seq"], p["kind"], p["run"]) != (event["action"], v["seq"], v["kind"], v["run"]):

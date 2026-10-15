@@ -927,12 +927,19 @@ impl Interpreter for Exec {
     }
 
     fn trace(&mut self) -> Option<Vec<Label>> {
-        let files: Vec<PathBuf> = self
-            .devs
-            .iter()
-            .flat_map(|d| trace::files(&d.space.root))
-            .collect();
-        let lines = trace::merged(&files);
+        let mut lines = Vec::new();
+        for _ in 0..100 {
+            let files: Vec<PathBuf> = self
+                .devs
+                .iter()
+                .flat_map(|d| trace::files(&d.space.root))
+                .collect();
+            lines = trace::merged(&files);
+            if trace::settled(&lines) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
         let _ = trace::write(&lines, &self.out_dir().join("trace.ndjson"));
         let admin = (0..self.laptops).find(|i| self.devs[*i].daemon.is_some())?;
         let machines = self

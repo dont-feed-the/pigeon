@@ -28,7 +28,7 @@ checker = importlib.util.module_from_spec(spec)
 loader.exec_module(checker)
 CASES = {
     "normal": ("install_writes_the_versions_main_gained", 3),
-    "crashes": ("tracing::driver_traces_replay_crashes", 8),
+    "crashes": ("tracing::driver_traces_replay_crashes", 9),
     "release": ("tracing::driver_traces_release_changed_aside", 1),
     "evict": ("tracing::driver_traces_free_keep_and_thin", 1),
     "roster": ("tracing::driver_traces_roster_forks", 0),
@@ -60,7 +60,7 @@ def coverage(out):
         sys.exit(f"FAIL missing required driver operations: {sorted(missing)}")
     for case in CASES:
         logs = list((out / case).rglob("*.ndjson"))
-        count = 8 if case == "crashes" else 1
+        count = 9 if case == "crashes" else 1
         if len(logs) != count:
             sys.exit(f"FAIL {case}: expected {count} device logs, got {len(logs)}")
         events = [json.loads(line) for log in logs for line in log.read_text().splitlines() if line.strip()]
@@ -152,6 +152,12 @@ def mutations(streams, java):
     events = copy.deepcopy(original)
     del events[j]
     reject(events, java, "missing after snapshot", syntax=True)
+    events = copy.deepcopy(original)
+    v = events[j]["vars"]
+    v.pop("state")
+    v.update(edge="cancelled", interrupted=True)
+    reject(events, java, "cancellation without a restart checkpoint", syntax=True)
+    reject([events[j]], java, "cancellation without a before record", syntax=True)
     events = copy.deepcopy(original)
     events[j]["action"] = "Unknown"
     reject(events, java, "unknown action", syntax=True)

@@ -69,18 +69,24 @@ an explicit restore request, so another path's batch capture cannot become
 this path's capture. Permission and recent-install facts are observed
 inputs. Driver actions cannot be inserted to fill a missing trace step.
 
-A killed process may leave a before record without an after record. Only
+A killed or cancelled process may leave a before record without an after record. Only
 a real checkpoint from a different process run can close that prefix. TLC
 must explain a completed or ineffective prefix followed by recovery.
-Closed journal entries with missing completion observations also produce
-a recovery checkpoint. Event clocks resume from the durable append log.
+Closed or already-truncated journal entries with missing completion
+observations also produce a recovery checkpoint. Cancellation while the
+first snapshot is still being collected emits no driver event. Event
+clocks resume from the durable append log.
 A trailing unmatched record, failed observation or unexplained transition
 fails rather than becoming an unchecked family.
+
+At the end of a lab scenario, collection retries for up to ten seconds to
+read a boundary between operations. It retains every record read; if no
+complete boundary appears, the incomplete trace is saved and fails TLC.
 
 CI requires normal/concurrent/recent captures (including a recent save by
 someone who cannot modify the original name), all six filesystem modes,
 changed-aside release, stale presence races, roster forks, index formats
-and eight real incoming-install SIGKILL cases, including gaps after pointer and journal
+and nine real incoming-install SIGKILL cases, including gaps after pointer and journal
 writes but before their after observations, plus a restore of a deleted
 path interrupted after proof. Negative checks require TLC
 counterexamples for wrong safety outputs, omitted proof/index steps and
