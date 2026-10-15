@@ -71,7 +71,8 @@ result, progress events then a result, or a `Problem` (§10.6).
 Coded so far (`crates/pigeon-web`, `pigeond/src/web.rs`): the binding, the
 login token and cookie, the `Host`/`Origin` check, Home, Suggestions and
 Machines pages read through the same handler as the socket, and an SSE
-headline. Not yet: Files, Settings, `POST` actions and their form token,
+headline; *Accept* and *Decline* are `POST`s carrying a per-session form
+token. Not yet: Files, Settings, the other actions,
 axe-core.
 
 - Served by `pigeond`, rendered on the server; server-sent events refresh

@@ -11,7 +11,7 @@
 //! neither another site (CSRF) nor a name that resolves to 127.0.0.1 (DNS
 //! rebinding) reaches the pages.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -21,9 +21,10 @@ use axum::extract::{Query, Request, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Redirect, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use pigeon_i18n::Catalogue;
 
+mod actions;
 mod pages;
 
 /// What a backend answers a request with: progress, then one result.
@@ -41,7 +42,8 @@ pub struct Web {
     lang: pigeon_i18n::LanguageIdentifier,
     port: u16,
     tokens: Mutex<HashSet<String>>,
-    sessions: Mutex<HashSet<String>>,
+    /// Each session, with its form token.
+    sessions: Mutex<HashMap<String, String>>,
 }
 
 /// Shows the port and language only: tokens and sessions are secrets.
@@ -52,6 +54,13 @@ impl std::fmt::Debug for Web {
             .field("port", &self.port)
             .finish_non_exhaustive()
     }
+}
+
+/// Seconds since the epoch.
+fn now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
 }
 
 /// The cookie that holds a session.
@@ -106,10 +115,7 @@ impl Web {
     }
 
     fn renderer(&self) -> pigeon_i18n::render::Renderer {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX));
-        pigeon_i18n::render::Renderer::new(Catalogue::new(&self.lang, false), now)
+        pigeon_i18n::render::Renderer::new(Catalogue::new(&self.lang, false), now())
     }
 
     async fn ask(&self, request: pigeon_proto::Request) -> Vec<pigeon_proto::Response> {
@@ -123,6 +129,8 @@ impl Web {
             .route("/machines", get(pages::machines))
             .route("/suggestions", get(pages::suggestions))
             .route("/events", get(pages::events))
+            .route("/suggestions/accept", post(actions::accept))
+            .route("/suggestions/decline", post(actions::decline))
             .route_layer(middleware::from_fn_with_state(self.clone(), session))
             .route("/login", get(login))
             .layer(middleware::from_fn_with_state(self.clone(), same_origin))
@@ -151,15 +159,22 @@ async fn same_origin(State(web): State<Arc<Web>>, request: Request, next: Next) 
     }
 }
 
-/// Refuses a request without a session cookie of this server.
-async fn session(State(web): State<Arc<Web>>, request: Request, next: Next) -> Response {
-    let known = cookie(request.headers()).is_some_and(|c| {
+/// A session's form token, which every `POST` must carry (10 §10.3).
+#[derive(Clone, Debug)]
+struct FormToken(String);
+
+/// Refuses a request without a session cookie of this server, and hands
+/// the session's form token to the page.
+async fn session(State(web): State<Arc<Web>>, mut request: Request, next: Next) -> Response {
+    let form = cookie(request.headers()).and_then(|c| {
         web.sessions
             .lock()
             .unwrap_or_else(|p| p.into_inner())
-            .contains(&c)
+            .get(&c)
+            .cloned()
     });
-    if known {
+    if let Some(form) = form {
+        request.extensions_mut().insert(FormToken(form));
         next.run(request).await
     } else {
         (StatusCode::FORBIDDEN, pages::refused(&web, "web-forbidden")).into_response()
@@ -206,7 +221,7 @@ async fn login(State(web): State<Arc<Web>>, Query(q): Query<Login>) -> Response 
     web.sessions
         .lock()
         .unwrap_or_else(|p| p.into_inner())
-        .insert(id.clone());
+        .insert(id.clone(), random_hex());
     let cookie = format!("{COOKIE}={id}; HttpOnly; SameSite=Strict; Path=/");
     ([(header::SET_COOKIE, cookie)], Redirect::to("/")).into_response()
 }

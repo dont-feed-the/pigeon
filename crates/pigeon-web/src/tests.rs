@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
-use pigeon_proto::api::{Level, State, StatusReport};
+use pigeon_proto::api::{Level, State, StatusReport, Suggestion};
 use pigeon_proto::{Message, Response};
 use tower::ServiceExt;
 
@@ -26,6 +26,28 @@ impl Backend for Fixed {
                 versions: Vec::new(),
                 not_shared: Vec::new(),
             })],
+            pigeon_proto::Request::Proposals => vec![Response::Proposals {
+                proposals: vec![Suggestion {
+                    id: "c0ffee".into(),
+                    author: "Paul".into(),
+                    device: "paul-laptop".into(),
+                    saved_at: "2026-10-15T10:00:00Z".into(),
+                    paths: vec!["tarte.docx".into()],
+                    decide: true,
+                    force: false,
+                    mine: false,
+                }],
+            }],
+            pigeon_proto::Request::Reject { proposal, note } => vec![Response::Said {
+                message: Message {
+                    id: "declined-suggestion".into(),
+                    args: [(
+                        "author".to_owned(),
+                        pigeon_proto::Arg::Text(format!("{proposal}/{}", note.unwrap_or_default())),
+                    )]
+                    .into(),
+                },
+            }],
             _ => vec![Response::Machines {
                 machines: Vec::new(),
             }],
@@ -122,4 +144,79 @@ async fn no_cookie_another_host_or_another_origin_is_refused() {
         .await
         .unwrap();
     assert_eq!(unknown.status(), StatusCode::FORBIDDEN);
+}
+
+async fn logged_in(app: &axum::Router, w: &Web) -> String {
+    let token = w.login_token();
+    let r = app
+        .clone()
+        .oneshot(get(&format!("/login?token={token}"), HOST, None))
+        .await
+        .unwrap();
+    let set = r.headers()[header::SET_COOKIE].to_str().unwrap();
+    set.split(';').next().unwrap().to_owned()
+}
+
+const HOST: &str = "127.0.0.1:4321";
+
+fn post(path: &str, cookie: &str, form: &str) -> Request<Body> {
+    Request::post(path)
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, format!("http://{HOST}"))
+        .header(header::COOKIE, cookie)
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(Body::from(form.to_owned()))
+        .unwrap()
+}
+
+#[tokio::test]
+async fn a_suggestion_is_declined_only_with_the_sessions_form_token() {
+    let w = web();
+    let app = w.router();
+    let cookie = logged_in(&app, &w).await;
+    let page = app
+        .clone()
+        .oneshot(get("/suggestions", HOST, Some(&cookie)))
+        .await
+        .unwrap();
+    let page = body(page).await;
+    assert!(
+        page.contains("Paul suggests a change of tarte.docx"),
+        "{page}"
+    );
+    let key = "name=\"form\" value=\"";
+    let at = page.find(key).unwrap() + key.len();
+    let form = page[at..at + 64].to_owned();
+    let forged = app
+        .clone()
+        .oneshot(post(
+            "/suggestions/decline",
+            &cookie,
+            "form=00&id=c0ffee&note=no",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(forged.status(), StatusCode::FORBIDDEN);
+    let other = logged_in(&app, &w).await;
+    let stolen = app
+        .clone()
+        .oneshot(post(
+            "/suggestions/decline",
+            &other,
+            &format!("form={form}&id=c0ffee&note=no"),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(stolen.status(), StatusCode::FORBIDDEN, "another session's");
+    let ok = app
+        .oneshot(post(
+            "/suggestions/decline",
+            &cookie,
+            &format!("form={form}&id=c0ffee&note=too+long"),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(ok.status(), StatusCode::OK);
+    let text = body(ok).await;
+    assert!(text.contains("c0ffee/too long"), "{text}");
 }
