@@ -86,15 +86,18 @@ The supervisor restarts `pigeond` after a panic (`panic = "abort"`, ADR
 endpoint. `MemoryHigh` is a default for the budgets of
 [15 §15.7](15-resource-use.md) to check **[no ADR: value]**. On a person's
 computer `packaging/pigeon-install` writes the unit or the agent and
-(re)starts it (§14.5); the system unit is not yet packaged.
+(re)starts it (§14.5). `--system` installs the system unit through
+`packaging/pigeon-service`, creates the unprivileged `pigeon` account and
+its state directories, and runs `pigeond --service`. Its runtime directory
+is created by systemd; uninstall keeps its account and state.
 
 ## 14.5 Packaging and installation
 
 | Platform | Package | Holds |
 |---|---|---|
 | Linux, people | a tarball and an install script | `pigeon`, `pigeond`, `git-annex-p2p-iroh`, the installers; the script installs pigeon's git-annex, or fetches git-annex's standalone build (§14.3), and enables the user unit; later the `.desktop` launcher and icon, man pages, shell completions |
-| Linux, backup machines | a static tarball and a system unit (ADR 0032) | the same binaries, the system unit, a `pigeon` user created by the script; until then, the people's tarball and `loginctl enable-linger` |
-| macOS | a tarball and the install script; later a Homebrew formula in pigeon's tap **[no ADR]** | the binaries, the launchd agent, pigeon's git-annex (§14.3); the formula adds the small launcher app bundle (ADR 0029) |
+| Linux, backup machines | the tarball and a system unit (ADR 0032) | the same binaries, installed as root with `pigeon-install --system` into `/opt/pigeon`; a dedicated `pigeon` account runs the daemon |
+| macOS | a tarball and the install script, or the Homebrew formula in `Formula/pigeon.rb` **[no ADR]** | the binaries, the launchd agent, pigeon's git-annex (§14.3); the formula adds the small launcher app bundle (ADR 0029) |
 
 Release archives come with SHA-256 checksums, built by CI from a tag
 **[no ADR: signing]**: `release.yml` runs on a tag `v` + the workspace's

@@ -27,6 +27,7 @@ const SECTIONS: &[(&str, &str)] = &[
     ("/suggestions", "web-nav-suggestions"),
     ("/machines", "web-nav-machines"),
     ("/settings", "web-nav-settings"),
+    ("/join", "web-setup"),
 ];
 
 const STYLE: &str = "body{font-family:system-ui,sans-serif;max-width:46rem;margin:2rem auto;\
@@ -99,22 +100,27 @@ pub async fn lines(web: &Web, r: &Renderer, request: Request) -> Vec<String> {
 }
 
 /// The headline and the lines under it of `pigeon status`.
-async fn status(web: &Web, r: &Renderer) -> (String, Vec<String>) {
-    let mut all = lines(
-        web,
-        r,
-        Request::Status {
+async fn status(web: &Web, r: &Renderer) -> (String, Vec<String>, bool) {
+    let answers = web
+        .ask(Request::Status {
             path: None,
             not_shared: false,
-        },
-    )
-    .await;
+        })
+        .await;
+    let no_group = answers
+        .iter()
+        .any(|a| matches!(a, Response::Problem(p) if p.code == "not-in-group"));
+    let mut all: Vec<String> = answers
+        .iter()
+        .filter(|a| !matches!(a, Response::Progress { .. }))
+        .flat_map(|a| r.response(a).0)
+        .collect();
     let rest = if all.is_empty() {
         Vec::new()
     } else {
         all.split_off(1)
     };
-    (all.pop().unwrap_or_default(), rest)
+    (all.pop().unwrap_or_default(), rest, no_group)
 }
 
 pub(crate) fn list(items: &[String]) -> Markup {
@@ -128,9 +134,19 @@ pub async fn home(
     Extension(form): Extension<FormToken>,
 ) -> Html<String> {
     let r = web.renderer();
-    let (headline, rest) = status(&web, &r).await;
-    let held = crate::held::section(&web, &r, &form.0).await;
-    let body = html! { (list(&rest)) (held) };
+    let (headline, rest, no_group) = status(&web, &r).await;
+    let held = if no_group {
+        html! {}
+    } else {
+        crate::held::section(&web, &r, &form.0).await
+    };
+    let body = html! {
+        (list(&rest)) (held)
+        @if no_group {
+            p { (r.id("web-setup-help")) }
+            p { a href="/join" { (r.id("web-setup")) } }
+        }
+    };
     page(&r, "/", &headline, &body)
 }
 
@@ -222,7 +238,7 @@ pub async fn events(
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
         let r = web.renderer();
-        let (headline, _) = status(&web, &r).await;
+        let (headline, _, _) = status(&web, &r).await;
         Some((
             Ok(Event::default().event("headline").data(headline)),
             (web, false),

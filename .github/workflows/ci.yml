@@ -42,6 +42,21 @@ jobs:
       - name: every schedule keeps the merge laws; the old rules fail as expected
         run: python3 models/catalogue/catalogue.py
 
+  packaging:
+    name: install, rollback and uninstall (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: checked archives, supervisor configuration and preserved user data
+        run: python3 -B -m unittest discover -s packaging/tests -v
+      - name: the tap formula parses
+        run: ruby -c Formula/pigeon.rb
+
   models:
     name: TLA+ models (fast set)
     runs-on: ubuntu-24.04

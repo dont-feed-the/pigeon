@@ -170,6 +170,28 @@ fn letters(e: Entry) -> Option<(char, char, String)> {
     }
 }
 
+/// Local changes that have not yet become a captured version. Status reads
+/// these even while a round holds the group lock: the last committed tree
+/// cannot establish that a newly saved file is safe (06 §6.2).
+pub(crate) async fn pending(g: &Group, prefix: &str) -> Result<BTreeSet<String>, Error> {
+    let Some(worktree) = &g.worktree else {
+        return Ok(BTreeSet::new());
+    };
+    let table = crate::conflicts_file::read(g).unwrap_or_default();
+    Ok(status(g)
+        .await?
+        .into_iter()
+        .filter_map(letters)
+        .filter(|(_, y, path)| {
+            !is_pigeon_path(path)
+                && crate::evict::under(path, prefix)
+                && !crate::suggest::unchanged(worktree, &table, path, *y == 'D')
+                && (*y == 'D' || kind(worktree, path).is_none())
+        })
+        .map(|(_, _, path)| path)
+        .collect())
+}
+
 /// The paths whose file differs from the index, untracked ones included:
 /// the person's, which install never writes (07 §7.5).
 pub async fn dirty(g: &Group) -> Result<std::collections::BTreeSet<String>, Error> {

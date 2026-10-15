@@ -5,11 +5,11 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.3.1"
+version = "0.3.2"
 edition = "2024"
 rust-version = "1.99"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/mariogeiger/pigeon"
+repository = "https://github.com/dont-feed-the/pigeon"
 publish = false
 
 [workspace.dependencies]

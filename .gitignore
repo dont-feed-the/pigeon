@@ -2,3 +2,4 @@
 states/
 *.out
 .hegel/
+__pycache__/

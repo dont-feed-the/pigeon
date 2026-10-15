@@ -4,6 +4,30 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.3.2 — 2026-10-15
+
+### Added
+
+- Backup machines can install with `pigeon-install --system`, which runs
+  pigeon as its own account under systemd.
+- `pigeon-install --uninstall` removes the programs and service while
+  keeping shared folders, repositories, settings and the device key.
+- Apple Silicon Macs can install through the Homebrew tap and run pigeon
+  with `brew services start pigeon`.
+- The web interface can create a group or join one by invitation, asking
+  again before joining a refounded history.
+
+### Fixed
+
+- Service configurations handle installation paths containing spaces and
+  special characters.
+- Status sees newly saved changes before capture finishes and does not
+  call them safe. With too few backup machines, it explains how to add one.
+- Files at the top of the shared folder are visible in the web interface,
+  with links to their versions.
+- `pigeon open` starts the personal daemon when it is stopped. Settings
+  confirmations use translated labels and explain when safety checks age.
+
 ## 0.3.1 — 2026-10-16
 
 The version follows the roadmap: `pigeon --version` says 0.3.1, where the

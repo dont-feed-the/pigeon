@@ -11,15 +11,15 @@
 # ~/Applications/pigeon.app on macOS. `pigeon update` runs this script;
 # installing the release already here changes nothing.
 #
-#   curl -fsSL https://github.com/mariogeiger/pigeon/releases/latest/download/pigeon-install | sh
-#   pigeon-install [--version vX.Y.Z] [--rollback] [--prefix DIR] [--no-service]
+#   curl -fsSL https://github.com/dont-feed-the/pigeon/releases/latest/download/pigeon-install | sh
+#   pigeon-install [--version vX.Y.Z] [--rollback | --uninstall] [--system]
 #
 # --rollback puts PREFIX/bin.previous back; --no-service starts nothing.
 # PIGEON_RELEASES names where releases are, a directory laid out as GitHub's
 # (latest, a file holding the tag, and download/<tag>/<asset>) for tests.
 set -eu
 
-releases=${PIGEON_RELEASES:-https://github.com/mariogeiger/pigeon/releases}
+releases=${PIGEON_RELEASES:-https://github.com/dont-feed-the/pigeon/releases}
 
 die() { echo "pigeon-install: $*" >&2; exit 1; }
 say() { echo "pigeon-install: $*"; }
@@ -55,70 +55,38 @@ case "$(uname -m)" in
   arm64 | aarch64) arch=arm64 ;;
   *) arch=$(uname -m) ;;
 esac
-version= rollback= service=1 place=
+version= rollback= uninstall= system= service=1 place= custom_prefix=
 while [ $# -gt 0 ]; do
   case $1 in
     --version) version=${2:?--version needs a tag}; shift 2 ;;
     --rollback) rollback=1; shift ;;
-    --prefix) prefix=${2:?--prefix needs a directory}; shift 2 ;;
+    --uninstall) uninstall=1; shift ;;
+    --system) system=1; shift ;;
+    --prefix) prefix=${2:?--prefix needs a directory}; custom_prefix=1; shift 2 ;;
     --no-service) service=; shift ;;
     --place) place=${2:?}; shift 2 ;;
     -h | --help) sed -n '2,17s/^# \{0,1\}//p' "$0"; exit 0 ;;
     *) die "unknown argument $1" ;;
   esac
 done
+if [ -n "$system" ]; then
+  [ "$os" = linux ] || die "backup services require Linux"
+  [ "$(id -u)" = 0 ] || die "run --system as root"
+  [ -n "$custom_prefix" ] || prefix=/opt/pigeon
+fi
+case $prefix in /*) ;; *) die "--prefix must name an absolute directory" ;; esac
+if [ -d "$prefix" ]; then prefix=$(cd "$prefix" && pwd -P); fi
+case $prefix in / | /usr | /usr/local | /opt | /bin | /sbin) die "use a directory reserved for pigeon" ;; esac
+[ -z "$rollback" ] || [ -z "$uninstall" ] || die "choose --rollback or --uninstall"
 
 # Writes pigeond's unit or agent and (re)starts it (14 §14.4).
 start_service() {
   [ -n "$service" ] || return 0
-  pigeond="$prefix/bin/pigeond"
-  if [ "$os" = macos ]; then
-    plist="$HOME/Library/LaunchAgents/org.pigeon.pigeond.plist"
-    mkdir -p "${plist%/*}"
-    cat >"$plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>org.pigeon.pigeond</string>
-  <key>ProgramArguments</key><array><string>$pigeond</string></array>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-  <key>ProcessType</key><string>Background</string>
-</dict>
-</plist>
-PLIST
-    launchctl bootout "gui/$(id -u)/org.pigeon.pigeond" 2>/dev/null || true
-    launchctl bootstrap "gui/$(id -u)" "$plist" || die "launchctl could not start $plist"
-    say "pigeond runs as the launchd agent org.pigeon.pigeond"
-  elif systemctl --user show-environment >/dev/null 2>&1; then
-    unit="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/pigeond.service"
-    mkdir -p "${unit%/*}"
-    cat >"$unit" <<UNIT
-# Written by pigeon-install (14 §14.4); the next install rewrites it.
-[Unit]
-Description=pigeon, which keeps the files of a group on its computers
-
-[Service]
-ExecStart="$pigeond"
-Restart=on-failure
-RestartSec=5
-Nice=10
-IOSchedulingClass=idle
-CPUWeight=20
-IOWeight=20
-MemoryHigh=512M
-
-[Install]
-WantedBy=default.target
-UNIT
-    systemctl --user daemon-reload
-    systemctl --user enable --quiet pigeond.service
-    systemctl --user restart pigeond.service || die "pigeond did not start: journalctl --user -u pigeond"
-    say "pigeond runs as the systemd user unit pigeond.service"
-  else
-    say "no systemd user session here: start $pigeond yourself"
-  fi
+  if [ -n "$system" ]; then set -- --system; else set --; fi
+  helper="$prefix/bin/pigeon-service"
+  # Releases before the service helper still support rollback.
+  if [ ! -x "$helper" ]; then helper="$prefix/bin.previous/pigeon-service"; fi
+  "$helper" --prefix "$prefix" "$@"
 }
 
 # Writes the launcher named "pigeon", which runs `pigeon open` (ADR 0029).
@@ -139,7 +107,8 @@ add_launcher() {
 </dict>
 </plist>
 PLIST
-    printf '#!/bin/sh\nexec "%s/bin/pigeon" open\n' "$prefix" >"$app/MacOS/pigeon"
+    escaped=$(printf '%s' "$prefix/bin/pigeon" | sed "s/'/'\\\\''/g")
+    printf "#!/bin/sh\nexec '%s' open\n" "$escaped" >"$app/MacOS/pigeon"
     chmod +x "$app/MacOS/pigeon"
     say "the launcher is ~/Applications/pigeon.app"
   else
@@ -173,6 +142,27 @@ link_pigeon() {
     say "$found comes before ~/.local/bin/pigeon in your PATH: remove it, or put ~/.local/bin first"
   fi
 }
+
+if [ -n "$uninstall" ]; then
+  [ -x "$prefix/bin/pigeon" ] && [ -f "$prefix/bin/pigeon-install" ] || die "no pigeon installation in $prefix"
+  if [ -n "$service" ]; then
+    if [ -n "$system" ]; then set -- --system; else set --; fi
+    "$prefix/bin/pigeon-service" --prefix "$prefix" --stop "$@"
+  fi
+  if [ -z "$system" ]; then
+    if [ "$(readlink "$HOME/.local/bin/pigeon" 2>/dev/null || true)" = "$prefix/bin/pigeon" ]; then
+      rm -f "$HOME/.local/bin/pigeon"
+      if [ "$os" = macos ]; then
+        rm -rf "$HOME/Applications/pigeon.app"
+      else
+        rm -f "${XDG_DATA_HOME:-$HOME/.local/share}/applications/pigeon.desktop"
+      fi
+    fi
+  fi
+  rm -rf "$prefix/bin" "$prefix/bin.previous" "$prefix/git-annex" "$prefix/git-annex.linux"
+  say "pigeon is uninstalled; your folders, repositories, settings and device key are kept"
+  exit 0
+fi
 
 if [ -n "$rollback" ]; then
   [ -d "$prefix/bin.previous" ] || die "no previous release in $prefix/bin.previous"
@@ -208,6 +198,7 @@ if [ -z "$place" ]; then
   [ -x "$tmp/release/bin/pigeon-install" ] || die "$archive holds no bin/pigeon-install"
   trap - EXIT
   if [ -n "$service" ]; then set --; else set -- --no-service; fi
+  if [ -n "$system" ]; then set -- "$@" --system; fi
   exec "$tmp/release/bin/pigeon-install" --place "$tmp" --version "$version" --prefix "$prefix" "$@"
 fi
 
@@ -226,7 +217,6 @@ fi
 rm -rf "$prefix/bin.previous"
 if [ -d "$prefix/bin" ]; then mv "$prefix/bin" "$prefix/bin.previous"; fi
 mv "$place/release/bin" "$prefix/bin"
-link_pigeon
-add_launcher
+if [ -z "$system" ]; then link_pigeon; add_launcher; fi
 start_service
 say "pigeon $version is installed in $prefix"

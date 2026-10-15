@@ -36,7 +36,7 @@ guarantees (P1–P6) is in [spec/02-guarantees.md](spec/02-guarantees.md).
 On Linux (x86_64) or macOS (Apple silicon), with git 2.38 or later and curl:
 
 ```sh
-curl -fsSL https://github.com/mariogeiger/pigeon/releases/latest/download/pigeon-install | sh
+curl -fsSL https://github.com/dont-feed-the/pigeon/releases/latest/download/pigeon-install | sh
 ```
 
 This fetches the latest release and checks it against the release's
@@ -53,6 +53,66 @@ pigeon update --rollback    # back to the previous release
 ```
 
 Both restart `pigeond`. `pigeon --version` tells which release runs.
+
+On an Apple Silicon Mac, you can use Homebrew instead:
+
+```sh
+brew tap dont-feed-the/pigeon https://github.com/dont-feed-the/pigeon
+brew install pigeon
+brew services start pigeon
+```
+
+Homebrew installations update with `brew upgrade pigeon`.
+
+On a Linux backup machine, download `pigeon-install` from the release,
+then install the system service as root:
+
+```sh
+sudo sh pigeon-install --system
+sudo /opt/pigeon/bin/pigeon join --backup-machine pgn1-…
+```
+
+The service uses its own `pigeon` account. Group repositories and its key
+live in `/var/lib/pigeon`; logs are in `/var/log/pigeon`.
+
+To uninstall a personal installation, run its `bin/pigeon-install
+--uninstall` (Linux: `~/.local/share/pigeon/bin/pigeon-install --uninstall`;
+macOS: `"$HOME/Library/Application Support/pigeon/bin/pigeon-install"
+--uninstall`). On a backup machine use `sudo /opt/pigeon/bin/pigeon-install
+--system --uninstall`. This stops the service and removes the programs;
+shared folders, repositories, configuration and the device key stay.
+Homebrew installations use `brew services stop pigeon` and
+`brew uninstall pigeon`.
+
+## Open pigeon
+
+Run `pigeon open` to open the web interface. If the personal daemon is
+not running, this starts the copy installed beside the command line.
+The Home page says whether the files are safe. Files lists folders and
+files at the top of the shared folder; each file links to its versions.
+Settings lets you choose English or French. On a new computer, choose
+*Join or create a group*, paste the invitation and choose a local folder.
+The inviter must still be online when you join.
+
+For a source build, run the `pigeon` and `pigeond` from the same `target/debug`
+or `target/release` directory, with git-annex on `PATH`. When using the
+patched git-annex with a stock standalone archive also on `PATH`, put the
+system's git before that archive: the archive's git wrapper selects its
+own git-annex.
+
+## When a safety check gets old
+
+Only *protected* means safe. A new change may show *Sending* for up to
+ten minutes while it reaches the backup machines. With too few backup
+machines configured, pigeon asks you to add one instead.
+
+If no backup machine has been heard from for **one hour**, previously
+safe files show *Not checked recently*. This means pigeon cannot confirm
+their safety now; it does not mean they have been lost. A backup machine
+silent for **24 hours** stops counting toward the required safe copies.
+People & machines shows when each machine was last heard from. Keep
+another copy while the status says anything other than safe. Settings
+also explains these times.
 
 pigeon has its own build of git-annex, with fixes for two bugs in
 git-annex's P2P protocol ([ADR 0069](adr/0069-pigeon-runs-a-pinned-patched-git-annex.md)),
@@ -87,6 +147,10 @@ pigeon join --backup-machine pgn1-…     # on the backup machine
 pigeon invite Laurent                    # on your computer
 pigeon join pgn1-… ~/Family --name laurent-laptop   # on Laurent's computer
 ```
+
+To add another computer for yourself, invite your existing name (as
+`pigeon people` lists it), then join from that computer. This adds a
+computer to the same person rather than creating another person.
 
 Files you put in `~/Family` now reach every computer of the group. The
 computers find each other on the local network, and anywhere else through
@@ -126,10 +190,10 @@ pigeon accept ID            # or: pigeon decline ID --note "why"
 
 pigeon is built milestone by milestone ([roadmap](roadmap.md)):
 
-- **v0.4:** a system service for backup machines, a Homebrew tap, and
-  relays checked between two networks;
-- **v0.5:** a web page with plain words instead of the command line, and a
-  French translation;
+- **v0.4:** installation and relays checked between two networks; the
+  system service and Homebrew tap are implemented in the current source;
+- **v0.5:** the web interface, French translation and usability work;
+  the first two are available in the current source;
 - **v0.6:** deleting for good (purge) and a monthly check of every copy
   (scrub);
 - **v0.7:** large and busy files, and resource limits;

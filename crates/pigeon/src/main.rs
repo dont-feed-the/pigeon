@@ -10,6 +10,7 @@ mod args;
 mod export;
 mod render;
 mod repo;
+mod startup;
 
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
@@ -128,7 +129,15 @@ fn exchange(out: &Renderer, json: bool, request: &Request) -> ExitCode {
         show(out, json, &Response::Problem(p));
         ExitCode::from(1)
     };
-    let Some(mut client) = Client::connect() else {
+    let Some(mut client) = Client::connect().or_else(|| {
+        matches!(request, Request::OpenWeb)
+            .then(crate::startup::connect)
+            .flatten()
+            .map(|stream| Client {
+                stream,
+                decoder: LineDecoder::new(),
+            })
+    }) else {
         return fail(local_problem("daemon-not-running", &[]));
     };
     let hello = Request::Hello {
