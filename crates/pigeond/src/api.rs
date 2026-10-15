@@ -94,7 +94,7 @@ fn group_of(d: &Daemon, path: &Path) -> Option<Arc<Group>> {
     d.group_at(path).or_else(|| d.group_at(path.parent()?))
 }
 
-async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
+pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
     match request {
         Request::Create {
             name,
@@ -170,6 +170,10 @@ async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         Request::Evict { folder } => free(d, Path::new(&folder)).await,
         Request::Keep { folder } => keep(d, Path::new(&folder)).await,
         Request::Machines => machines(d),
+        Request::OpenWeb => match d.web.get() {
+            Some(web) => vec![said("web-login", &[("url", text(&web.login_url()))])],
+            None => not_in_this_build("open"),
+        },
         Request::History { path } => crate::history::history(d, Path::new(&path)).await,
         Request::RemoveDevice { name } => crate::history::remove_device(d, &name).await,
         Request::Doctor { details } => crate::history::doctor(d, details).await,

@@ -44,6 +44,8 @@ pub struct Daemon {
     pub node: Node,
     /// The network part, once it is up.
     pub net: OnceLock<Arc<Net>>,
+    /// The web interface, once it listens (10 §10.3).
+    pub web: OnceLock<Arc<pigeon_web::Web>>,
     /// Starts a round at once: a request, or a peer's change notice.
     pub wake: Arc<tokio::sync::Notify>,
     /// Trace events.
@@ -390,6 +392,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
         groups: RwLock::new(groups),
         node: node.clone(),
         net: OnceLock::new(),
+        web: OnceLock::new(),
         wake: Arc::new(tokio::sync::Notify::new()),
         tracer,
     });
@@ -410,6 +413,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
         loops: Some(Arc::new(crate::api::Api(daemon.clone()))),
     });
     let _ = daemon.net.set(net.clone());
+    crate::web::serve(&daemon).await;
     tokio::spawn(serve_socket(net.clone(), listener));
     tokio::spawn(accept_loop(net.clone()));
     tracing::info!(device = %device, socket = %socket.display(), "started");

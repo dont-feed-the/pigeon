@@ -27,7 +27,7 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(23)) {
+    match tc.draw(gs::integers::<u8>().max_value(24)) {
         0 => Request::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -64,6 +64,7 @@ fn request(tc: &TestCase) -> Request {
             at: maybe_text(tc),
         },
         9 => Request::Machines,
+        24 => Request::OpenWeb,
         10 => Request::RemoveDevice { name: text(tc) },
         11 => Request::RecoverySheet,
         12 => Request::Recover {

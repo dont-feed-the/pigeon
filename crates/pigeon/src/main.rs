@@ -78,8 +78,31 @@ impl Client {
     }
 }
 
+/// Opens `url` in the person's browser, for `pigeon open` (10 §10.3); the
+/// link is printed anyway, for a computer without one.
+fn open_browser(url: &str) {
+    let opener = if cfg!(target_vendor = "apple") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    let _ = std::process::Command::new(opener)
+        .arg(url)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+}
+
 /// Prints `r`; whether it ends the request, and whether it is a problem.
 fn show(out: &Renderer, json: bool, r: &Response) -> (bool, bool) {
+    if !json
+        && let Response::Said { message } = r
+        && message.id == "web-login"
+        && let Some(pigeon_proto::Arg::Text(url)) = message.args.get("url")
+    {
+        open_browser(url);
+    }
     let last = !matches!(r, Response::Progress { .. });
     let problem = matches!(r, Response::Problem(_));
     if json {

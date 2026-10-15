@@ -76,6 +76,7 @@ cmd-invite = Print a one-time invitation, valid 24 hours
 cmd-join = Join a group with an invitation
 cmd-status = Say whether your files are safe, and why not
 cmd-machines = List the group's computers and backup machines
+cmd-open = Open pigeon in your browser
 cmd-history = List the versions of a file
 cmd-restore = Restore a version, or a deleted file
 cmd-free = Free up a folder's space on this computer
@@ -215,3 +216,12 @@ problem-peer-unreachable = The other machine can't be reached right now.
 problem-peer-refused = The other machine refused the connection.
 problem-internal-error = Something went wrong inside pigeon.
 hint-internal-error = Gather the details with: pigeon debug bundle
+
+## The web interface (10 §10.3)
+web-title = pigeon
+web-nav-home = Home
+web-nav-suggestions = Suggestions
+web-nav-machines = People & machines
+web-forbidden = Open pigeon from this computer with: pigeon open
+web-login-used = This link was already used. Open pigeon again with: pigeon open
+web-login = Open pigeon in your browser: { $url }

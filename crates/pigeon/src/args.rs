@@ -49,6 +49,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("join INVITATION [FOLDER] [--name NAME]", "cmd-join"),
     ("status [PATH] [--not-shared]", "cmd-status"),
     ("machines", "cmd-machines"),
+    ("open", "cmd-open"),
     ("history PATH", "cmd-history"),
     ("restore PATH [--version N | --at TIME]", "cmd-restore"),
     ("free PATH", "cmd-free"),
@@ -246,6 +247,7 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
             not_shared: s.flag("not-shared"),
         }),
         "machines" if fits(0, 0, &[]) => send(Request::Machines),
+        "open" if fits(0, 0, &[]) => send(Request::OpenWeb),
         "suggestions" if fits(0, 0, &[]) => send(Request::Proposals),
         "accept" if fits(1, 1, &["override"]) => send(Request::Accept {
             proposal: w.first()?.clone(),
@@ -323,9 +325,11 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
                 (Some(_), true) => None,
             }
         }
-        "create" | "invite" | "join" | "status" | "machines" | "history" | "restore" | "free"
-        | "keep" | "remove-computer" | "recovery-sheet" | "recover" | "doctor" | "debug"
-        | "suggestions" | "accept" | "decline" | "conflicts" | "resolve" | "update" => None,
+        "create" | "invite" | "join" | "status" | "machines" | "open" | "history" | "restore"
+        | "free" | "keep" | "remove-computer" | "recovery-sheet" | "recover" | "doctor"
+        | "debug" | "suggestions" | "accept" | "decline" | "conflicts" | "resolve" | "update" => {
+            None
+        }
         other => Some(Action::NotInThisBuild(other.to_owned())),
     }
 }

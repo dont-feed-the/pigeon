@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 use fluent_bundle::concurrent::FluentBundle;
 use fluent_bundle::{FluentArgs, FluentResource, FluentValue};
 use serde::{Deserialize, Serialize};
-use unic_langid::LanguageIdentifier;
+pub use unic_langid::LanguageIdentifier;
 
 pub use lang::{AVAILABLE, Setting, choose, system_languages};
 

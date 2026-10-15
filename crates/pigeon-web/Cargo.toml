@@ -1,0 +1,26 @@
+[package]
+name = "pigeon-web"
+description = "pigeon's local web interface: axum routes and maud pages (ADR 0021)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+axum.workspace = true
+futures-util.workspace = true
+getrandom.workspace = true
+maud.workspace = true
+pigeon-i18n.workspace = true
+pigeon-proto.workspace = true
+serde.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+tower.workspace = true
+
+[lints]
+workspace = true

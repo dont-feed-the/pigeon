@@ -96,6 +96,9 @@ pub enum Request {
     },
     /// `pigeon machines`.
     Machines,
+    /// `pigeon open`: a link to the web interface holding a single-use
+    /// token (10 §10.3).
+    OpenWeb,
     /// `pigeon remove-computer NAME`.
     RemoveDevice {
         /// The computer's name in the roster.
