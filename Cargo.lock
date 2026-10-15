@@ -2501,10 +2501,12 @@ dependencies = [
 name = "pigeon"
 version = "2.0.0-alpha.0"
 dependencies = [
+ "pigeon-core",
  "pigeon-i18n",
  "pigeon-proto",
  "pigeon-sys",
  "serde_json",
+ "sha2",
  "toml_edit",
 ]
 

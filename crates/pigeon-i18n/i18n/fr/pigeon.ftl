@@ -323,3 +323,25 @@ notify-needs-you = pigeon a besoin de vous : ouvrez-le pour voir quoi faire.
 notify-not-safe-long = Des fichiers ne sont pas en sécurité depuis plus d'un jour.
 notify-waiting = Une suggestion ou un conflit vous attend.
 notify-open = Ouvrir pigeon
+cmd-export = Écrire les fichiers en fichiers ordinaires, sans pigeond, réseau ni clé
+export-done =
+    { $files ->
+        [one] 1 fichier écrit dans { $dir }, à la version { $commit }.
+       *[other] { $files } fichiers écrits dans { $dir }, à la version { $commit }.
+    } Leur liste est MANIFEST.tsv.
+export-deleted =
+    { $files ->
+        [one] 1 fichier supprimé est dans { $folder }.
+       *[other] { $files } fichiers supprimés sont dans { $folder }.
+    }
+export-missing =
+    { $files ->
+        [one] 1 fichier n'est pas dans ces dépôts
+       *[other] { $files } fichiers ne sont pas dans ces dépôts
+    } ({ $damaged } abîmés) ; ils sont peut-être sur d'autres machines de sauvegarde. Leur liste est { $list }.
+problem-export-not-a-repository = { $path } n'est ni un dossier pigeon ni le dépôt d'une machine de sauvegarde.
+hint-export-not-a-repository = Donnez le dossier, ou le dépôt d'une machine de sauvegarde.
+problem-export-no-version = Aucune version « { $at } » dans ces dépôts.
+hint-export-no-version = Donnez un commit, ou une date comme 2026-10-01.
+problem-export-not-empty = { $dir } n'est pas vide.
+hint-export-not-empty = Choisissez un nouveau dossier.

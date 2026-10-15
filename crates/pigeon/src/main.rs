@@ -3,10 +3,13 @@
 //! exits 0 when done, 1 on a problem and 2 when the arguments do not fit.
 //! Text comes from the Fluent catalogue (ADR 0028); `--json` prints each
 //! response as JSON instead. `pigeon update` hands over to the installer
-//! that put this program here (14 §14.5).
+//! that put this program here (14 §14.5); `pigeon export` reads the
+//! repositories itself (09 §9.9).
 
 mod args;
+mod export;
 mod render;
+mod repo;
 
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
@@ -177,6 +180,18 @@ fn main() -> ExitCode {
             show(&out, line.json, &Response::Problem(p));
             ExitCode::from(1)
         }
+        Action::Export(e) => match export::run(e) {
+            Ok(messages) => {
+                for message in messages {
+                    show(&out, line.json, &Response::Said { message });
+                }
+                ExitCode::SUCCESS
+            }
+            Err(p) => {
+                show(&out, line.json, &Response::Problem(*p));
+                ExitCode::from(1)
+            }
+        },
         Action::NotInThisBuild(cmd) => {
             let p = local_problem("not-in-this-build", &[("command", cmd)]);
             show(&out, line.json, &Response::Problem(p));

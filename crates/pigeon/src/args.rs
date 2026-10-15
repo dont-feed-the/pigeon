@@ -1,7 +1,7 @@
 //! The command line of the safety slice (13 §13.12): which request each
 //! command sends to `pigeond`, or why it sends none. A hand parser, as the
-//! slice's commands take few options (13 §13.12); `update` and `--version`
-//! need no daemon, and every other command answers `not-in-this-build`.
+//! slice's commands take few options (13 §13.12); `update`, `export` and
+//! `--version` need no daemon, and every other command answers `not-in-this-build`.
 
 use std::path::Path;
 
@@ -19,6 +19,8 @@ pub enum Action {
     Version,
     /// Run the installer beside this program with these arguments (14 §14.5).
     Update(Vec<String>),
+    /// Write the files without `pigeond` (09 §9.9).
+    Export(crate::export::Export),
     /// A command this build does not have yet.
     NotInThisBuild(String),
     /// The arguments do not fit this command.
@@ -72,6 +74,10 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("leave", "cmd-leave"),
     ("held [ID --share | --bring-back]", "cmd-held"),
     ("deleted", "cmd-deleted"),
+    (
+        "export --to DIR [--at DATE | COMMIT] [--deleted] [REPOSITORY…]",
+        "cmd-export",
+    ),
     ("doctor [--details]", "cmd-doctor"),
     ("debug bundle [--from NAME…]", "cmd-debug-bundle"),
     ("update [--version TAG | --rollback]", "cmd-update"),
@@ -89,6 +95,7 @@ const VALUED: &[&str] = &[
     "note",
     "keep-copy",
     "cancel",
+    "to",
 ];
 
 #[derive(Debug, Default)]
@@ -354,6 +361,14 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
                 peers: s.all("from"),
             })
         }
+        "export" if s.only(&["to", "at", "deleted"]) => {
+            Some(Action::Export(crate::export::Export {
+                to: s.value("to")?.into(),
+                at: s.value("at").map(str::to_owned),
+                deleted: s.flag("deleted"),
+                repos: w.iter().map(Into::into).collect(),
+            }))
+        }
         "update" if fits(0, 0, &["version", "rollback"]) => {
             match (s.value("version"), s.flag("rollback")) {
                 (None, false) => Some(Action::Update(Vec::new())),
@@ -365,7 +380,7 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
         "create" | "invite" | "join" | "status" | "machines" | "open" | "history" | "restore"
         | "pause" | "resume" | "people" | "deleted" | "leave" | "held" | "free" | "keep"
         | "remove-computer" | "recovery-sheet" | "recover" | "doctor" | "debug" | "suggestions"
-        | "accept" | "decline" | "conflicts" | "resolve" | "update" => None,
+        | "accept" | "decline" | "conflicts" | "resolve" | "update" | "export" => None,
         other => Some(Action::NotInThisBuild(other.to_owned())),
     }
 }

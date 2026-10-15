@@ -254,6 +254,14 @@ tools are those of ADR 0047, which fixes their formats:
   ([10 §10.2](10-interfaces.md)) and checks every object's SHA-256. Each
   custodian keeps `RECOVERY.txt` beside its repository
   ([11 §11.3](11-local-state.md)), with the commands E21 runs.
+  Coded so far (`pigeon/src/export.rs`, `repo.rs`, pigeon-core `export`,
+  `pigeon/tests/export.rs`): export reads bare and non-bare repositories,
+  takes the newest `main` or `--at`'s commit (a date gives the last commit of
+  `main` before it), and finds each object in any repository's
+  `annex/objects` or, for an unlocked file, its working tree; a file takes
+  its name only once its SHA-256 matches the key. `--deleted` writes the
+  last version of each deleted file under `.deleted/`; `MISSING.tsv` lists
+  what is missing or damaged. `RECOVERY.txt` is not written yet.
 - **Replacing a custodian:** the failed one is removed (§9.7) and its
   replacement joins as a new device. A surviving disk gets a new UUID and
   counts only after a hashing fsck of everything (E21). A custodian whose
