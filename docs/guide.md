@@ -122,6 +122,18 @@ pigeon accept ID            # or: pigeon decline ID --note "why"
 
 `pigeon --help` lists them all, and `--json` prints any answer as JSON.
 
+### Tab completion
+
+pigeon completes its commands and options, paths, and what the daemon
+lists: suggestion IDs, held batches, invitations, the group's machines,
+settings and their values. Add the line for your shell to its startup file:
+
+```sh
+source <(COMPLETE=zsh pigeon)     # ~/.zshrc
+source <(COMPLETE=bash pigeon)    # ~/.bashrc
+COMPLETE=fish pigeon | source     # ~/.config/fish/config.fish
+```
+
 ## What comes next
 
 pigeon is built milestone by milestone ([roadmap](roadmap.md)):

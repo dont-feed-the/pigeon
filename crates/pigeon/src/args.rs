@@ -1,12 +1,15 @@
-//! The command line of the safety slice (13 §13.12): which request each
-//! command sends to `pigeond`, or why it sends none. A hand parser, as the
-//! slice's commands take few options (13 §13.12); `update`, `export` and
-//! `--version` need no daemon, and every other command answers `not-in-this-build`.
+//! The command line (10 §10.2, ADR 0024): its definition in `clap`, from
+//! which Tab completion comes too, and which request each command sends to
+//! `pigeond`, or why it sends none. `update`, `export` and `--version` need
+//! no daemon, and a command this build lacks answers `not-in-this-build`.
 
 use std::path::Path;
 
+use clap::{ArgGroup, CommandFactory, Parser, Subcommand, ValueHint};
 use pigeon_proto::Request;
-use pigeon_proto::api::Choice;
+use pigeon_proto::api::{Choice, HeldChoice};
+
+use crate::complete;
 
 /// What the command line asks for.
 #[derive(Debug, PartialEq, Eq)]
@@ -86,78 +89,217 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("update [--version TAG | --rollback]", "cmd-update"),
 ];
 
-/// Options that take a value.
-const VALUED: &[&str] = &[
-    "k",
-    "name",
-    "folder",
-    "version",
-    "at",
-    "from",
-    "override",
-    "note",
-    "keep-copy",
-    "cancel",
-    "to",
-];
-
-#[derive(Debug, Default)]
-struct Split {
-    words: Vec<String>,
-    flags: Vec<String>,
-    values: Vec<(String, String)>,
+/// The command line as `clap` reads it. `--help` and `--version` are
+/// pigeon's own: help comes from the catalogue, and `--version` names an
+/// option of `update`, `view` and `restore`.
+#[derive(Parser, Debug)]
+#[command(
+    name = "pigeon",
+    disable_help_flag = true,
+    disable_help_subcommand = true,
+    disable_version_flag = true,
+    allow_external_subcommands = true
+)]
+struct Cli {
+    #[arg(long, global = true)]
+    json: bool,
+    #[arg(long, global = true)]
+    yes: bool,
+    #[arg(long, global = true)]
+    no_input: bool,
+    #[command(subcommand)]
+    command: Option<Command>,
 }
 
-impl Split {
-    fn flag(&self, name: &str) -> bool {
-        self.flags.iter().any(|f| f == name)
-    }
-
-    fn value(&self, name: &str) -> Option<&str> {
-        self.values
-            .iter()
-            .find(|(k, _)| k == name)
-            .map(|(_, v)| v.as_str())
-    }
-
-    fn all(&self, name: &str) -> Vec<String> {
-        self.values
-            .iter()
-            .filter(|(k, _)| k == name)
-            .map(|(_, v)| v.clone())
-            .collect()
-    }
-
-    /// Whether every option given is one of `allowed`.
-    fn only(&self, allowed: &[&str]) -> bool {
-        self.flags
-            .iter()
-            .chain(self.values.iter().map(|(k, _)| k))
-            .all(|f| allowed.contains(&f.as_str()))
-    }
+#[derive(Subcommand, Debug)]
+enum Command {
+    Help,
+    Create {
+        name: String,
+        #[arg(value_name = "FOLDER", value_hint = ValueHint::DirPath, conflicts_with = "folder")]
+        at: Option<String>,
+        #[arg(long, value_hint = ValueHint::DirPath)]
+        folder: Option<String>,
+        #[arg(long, value_parser = clap::value_parser!(u32).range(1..), default_value_t = 2)]
+        k: u32,
+        #[arg(long = "name")]
+        device_name: Option<String>,
+    },
+    Invite {
+        #[arg(
+            value_name = "PERSON",
+            conflicts_with_all = ["list", "cancel"],
+            required_unless_present_any = ["list", "cancel", "backup_machine"]
+        )]
+        who: Option<String>,
+        #[arg(long, conflicts_with_all = ["backup_machine", "list", "cancel"])]
+        admin: bool,
+        #[arg(long, conflicts_with_all = ["list", "cancel"])]
+        backup_machine: bool,
+        #[arg(long, conflicts_with = "cancel")]
+        list: bool,
+        #[arg(long, value_name = "ID", add = complete::invitations())]
+        cancel: Option<String>,
+    },
+    Join {
+        invitation: String,
+        #[arg(value_hint = ValueHint::DirPath)]
+        folder: Option<String>,
+        /// The invitation says the role; the flag is kept for the scripts
+        /// that pass it.
+        #[arg(long)]
+        backup_machine: bool,
+        #[arg(long)]
+        keep: bool,
+        #[arg(long)]
+        name: Option<String>,
+    },
+    Status {
+        #[arg(value_hint = ValueHint::AnyPath)]
+        path: Option<String>,
+        #[arg(long)]
+        not_shared: bool,
+    },
+    Machines,
+    People,
+    Deleted {
+        #[arg(value_hint = ValueHint::AnyPath)]
+        path: Option<String>,
+    },
+    Open,
+    Settings {
+        #[arg(add = complete::setting_keys())]
+        key: Option<String>,
+        #[arg(add = complete::setting_values())]
+        value: Option<String>,
+    },
+    Pause {
+        duration: Option<String>,
+    },
+    Resume,
+    Leave,
+    Refound {
+        #[arg(value_hint = ValueHint::DirPath)]
+        repository: Option<String>,
+    },
+    #[command(group(ArgGroup::new("choice").args(["share", "bring_back", "rename"]).requires("id")))]
+    Held {
+        #[arg(requires = "choice", add = complete::held())]
+        id: Option<String>,
+        #[arg(long)]
+        share: bool,
+        #[arg(long)]
+        bring_back: bool,
+        #[arg(long)]
+        rename: bool,
+    },
+    Suggestions,
+    Accept {
+        #[arg(add = complete::suggestions())]
+        id: String,
+        #[arg(long = "override", value_name = "REASON")]
+        reason: Option<String>,
+    },
+    Decline {
+        #[arg(add = complete::suggestions())]
+        id: String,
+        #[arg(long)]
+        note: Option<String>,
+    },
+    Conflicts,
+    #[command(group(ArgGroup::new("choice").args(["take_group", "keep_copy", "suggest_again"]).required(true)))]
+    Resolve {
+        #[arg(value_hint = ValueHint::AnyPath)]
+        path: String,
+        #[arg(long)]
+        take_group: bool,
+        #[arg(long, value_name = "DEST", value_hint = ValueHint::AnyPath)]
+        keep_copy: Option<String>,
+        #[arg(long)]
+        suggest_again: bool,
+    },
+    View {
+        #[arg(value_hint = ValueHint::AnyPath)]
+        path: String,
+        #[arg(long, value_name = "N", conflicts_with = "group")]
+        version: Option<u64>,
+        #[arg(long)]
+        group: bool,
+    },
+    History {
+        #[arg(value_hint = ValueHint::AnyPath)]
+        path: String,
+    },
+    Restore {
+        #[arg(value_hint = ValueHint::AnyPath)]
+        path: String,
+        #[arg(long, value_name = "N", conflicts_with = "at")]
+        version: Option<u64>,
+        #[arg(long, value_name = "TIME")]
+        at: Option<String>,
+    },
+    Free {
+        #[arg(value_hint = ValueHint::AnyPath)]
+        path: String,
+        #[arg(long)]
+        without_checking: bool,
+    },
+    Keep {
+        #[arg(value_hint = ValueHint::AnyPath)]
+        path: String,
+    },
+    RemoveComputer {
+        #[arg(add = complete::machines())]
+        name: String,
+    },
+    RecoverySheet,
+    Recover {
+        #[arg(value_hint = ValueHint::FilePath)]
+        sheet: String,
+        #[arg(value_hint = ValueHint::DirPath)]
+        folder: Option<String>,
+        #[arg(long, value_name = "NAME")]
+        from: Option<String>,
+    },
+    Doctor {
+        #[arg(long)]
+        details: bool,
+    },
+    Debug {
+        #[command(subcommand)]
+        what: DebugCommand,
+    },
+    Export {
+        #[arg(long, value_hint = ValueHint::DirPath)]
+        to: String,
+        #[arg(long, value_name = "DATE | COMMIT")]
+        at: Option<String>,
+        #[arg(long)]
+        deleted: bool,
+        #[arg(value_name = "REPOSITORY", value_hint = ValueHint::DirPath)]
+        repos: Vec<String>,
+    },
+    Update {
+        #[arg(long, value_name = "TAG", conflicts_with = "rollback")]
+        version: Option<String>,
+        #[arg(long)]
+        rollback: bool,
+    },
+    #[command(external_subcommand)]
+    Other(Vec<String>),
 }
 
-fn split(args: &[String]) -> Option<Split> {
-    let mut out = Split::default();
-    let mut it = args.iter();
-    while let Some(a) = it.next() {
-        if a == "--" {
-            out.words.extend(it.by_ref().cloned());
-        } else if let Some(opt) = a.strip_prefix("--") {
-            match opt.split_once('=') {
-                Some((k, v)) => out.values.push((k.to_owned(), v.to_owned())),
-                None if VALUED.contains(&opt) => {
-                    out.values.push((opt.to_owned(), it.next()?.clone()));
-                }
-                None => out.flags.push(opt.to_owned()),
-            }
-        } else if a == "-h" {
-            out.flags.push("help".to_owned());
-        } else {
-            out.words.push(a.clone());
-        }
-    }
-    Some(out)
+#[derive(Subcommand, Debug)]
+enum DebugCommand {
+    Bundle {
+        #[arg(long = "from", value_name = "NAME", add = complete::machines())]
+        peers: Vec<String>,
+    },
+}
+
+/// The definition of the command line, for completion.
+pub fn command() -> clap::Command {
+    Cli::command()
 }
 
 /// `path` made absolute against the current directory, as `pigeond` runs
@@ -178,244 +320,224 @@ fn hostname() -> String {
         .unwrap_or_else(|| "computer".to_owned())
 }
 
+/// The arguments before `--`, where options are.
+fn options(args: &[String]) -> impl Iterator<Item = &str> {
+    args.iter().map(String::as_str).take_while(|a| *a != "--")
+}
+
 /// Parses the arguments after the program's name.
 pub fn parse(args: &[String]) -> Line {
-    if args == ["--version"] {
-        return Line {
-            action: Action::Version,
-            json: false,
-            yes: false,
-            no_input: false,
-        };
-    }
-    let Some(mut s) = split(args) else {
-        let cmd = args.first().cloned().unwrap_or_default();
-        return Line {
-            action: Action::Usage(cmd),
-            json: false,
-            yes: false,
-            no_input: false,
-        };
-    };
-    let (json, yes, no_input) = (s.flag("json"), s.flag("yes"), s.flag("no-input"));
-    s.flags
-        .retain(|f| !matches!(f.as_str(), "json" | "yes" | "no-input"));
-    let action = if s.flag("help") || s.words.is_empty() {
-        Action::Help
-    } else {
-        let cmd = s.words.remove(0);
-        command(&cmd, &s).unwrap_or(Action::Usage(cmd))
-    };
-    Line {
+    let has = |flag: &str| options(args).any(|a| a == flag);
+    let line = |action| Line {
         action,
-        json,
-        yes,
-        no_input,
+        json: has("--json"),
+        yes: has("--yes"),
+        no_input: has("--no-input"),
+    };
+    if args == ["--version"] {
+        return line(Action::Version);
+    }
+    if has("--help") || has("-h") {
+        return line(Action::Help);
+    }
+    let argv = std::iter::once("pigeon").chain(args.iter().map(String::as_str));
+    match Cli::try_parse_from(argv) {
+        Ok(cli) => {
+            // A command this build lacks keeps its options unparsed.
+            let lacking = matches!(cli.command, Some(Command::Other(_)));
+            let action = cli.command.map_or(Action::Help, action);
+            if lacking {
+                return line(action);
+            }
+            Line {
+                action,
+                json: cli.json,
+                yes: cli.yes,
+                no_input: cli.no_input,
+            }
+        }
+        Err(_) => {
+            let named = options(args).find(|a| !a.starts_with('-'));
+            line(Action::Usage(named.unwrap_or_default().to_owned()))
+        }
     }
 }
 
-/// The action of `cmd`, `None` when its arguments do not fit.
-fn command(cmd: &str, s: &Split) -> Option<Action> {
-    let w = &s.words;
-    let n = w.len();
-    let fits = |lo: usize, hi: usize, allowed: &[&str]| (lo..=hi).contains(&n) && s.only(allowed);
-    let send = |r: Request| Some(Action::Send(r));
-    match cmd {
-        "help" => Some(Action::Help),
-        "create" if fits(1, 2, &["k", "name", "folder"]) => {
-            let k = match s.value("k") {
-                Some(v) => v.parse().ok().filter(|k| *k >= 1)?,
-                None => 2,
-            };
-            send(Request::Create {
-                name: w.first()?.clone(),
-                folder: absolute(
-                    s.value("folder")
-                        .or(w.get(1).map(String::as_str))
-                        .unwrap_or("."),
-                ),
-                k,
-                device_name: s.value("name").map_or_else(hostname, str::to_owned),
-            })
-        }
-        "invite" if n == 0 && s.flag("list") && s.only(&["list"]) => send(Request::Invitations),
-        "invite" if n == 0 && s.only(&["cancel"]) && s.value("cancel").is_some() => {
-            send(Request::CancelInvitation {
-                invitation: s.value("cancel")?.to_owned(),
-            })
-        }
-        "invite" if fits(0, 1, &["backup-machine", "admin"]) => {
-            if s.flag("backup-machine") {
-                return send(Request::Invite {
-                    person: String::new(),
-                    admin: false,
-                    custodian: true,
-                    name: w.first().cloned(),
-                });
-            }
-            send(Request::Invite {
-                person: w.first()?.clone(),
-                admin: s.flag("admin"),
-                custodian: false,
-                name: None,
-            })
-        }
-        "join" if fits(1, 2, &["backup-machine", "keep", "name"]) => send(Request::Join {
-            invitation: w.first()?.clone(),
-            folder: w.get(1).map(|f| absolute(f)),
-            keep: s.flag("keep"),
-            name: s.value("name").map(str::to_owned),
+/// The action of a command whose arguments `clap` has checked.
+fn action(c: Command) -> Action {
+    let send = Action::Send;
+    match c {
+        Command::Help => Action::Help,
+        Command::Create {
+            name,
+            at,
+            folder,
+            k,
+            device_name,
+        } => send(Request::Create {
+            name,
+            folder: absolute(folder.or(at).as_deref().unwrap_or(".")),
+            k,
+            device_name: device_name.unwrap_or_else(hostname),
         }),
-        "status" if fits(0, 1, &["not-shared"]) => send(Request::Status {
-            path: w.first().map(|p| absolute(p)),
-            not_shared: s.flag("not-shared"),
+        Command::Invite { list: true, .. } => send(Request::Invitations),
+        Command::Invite {
+            cancel: Some(invitation),
+            ..
+        } => send(Request::CancelInvitation { invitation }),
+        Command::Invite {
+            who,
+            backup_machine: true,
+            ..
+        } => send(Request::Invite {
+            person: String::new(),
+            admin: false,
+            custodian: true,
+            name: who,
         }),
-        "machines" if fits(0, 0, &[]) => send(Request::Machines),
-        "people" if fits(0, 0, &[]) => send(Request::People),
-        "deleted" if fits(0, 1, &[]) => send(Request::Deleted {
-            path: w.first().map(|p| absolute(p)),
+        Command::Invite { who, admin, .. } => send(Request::Invite {
+            person: who.unwrap_or_default(),
+            admin,
+            custodian: false,
+            name: None,
         }),
-        "open" if fits(0, 0, &[]) => send(Request::OpenWeb),
-        "settings" if fits(0, 1, &[]) => send(Request::GetSettings {
-            key: w.first().cloned(),
+        Command::Join {
+            invitation,
+            folder,
+            backup_machine: _,
+            keep,
+            name,
+        } => send(Request::Join {
+            invitation,
+            folder: folder.map(|f| absolute(&f)),
+            keep,
+            name,
         }),
-        "settings" if fits(2, 2, &[]) => send(Request::SetSettings {
-            key: w.first()?.clone(),
-            value: w.get(1)?.clone(),
+        Command::Status { path, not_shared } => send(Request::Status {
+            path: path.map(|p| absolute(&p)),
+            not_shared,
         }),
-        "pause" if fits(0, 1, &[]) => send(Request::Pause {
-            duration: w.first().cloned(),
+        Command::Machines => send(Request::Machines),
+        Command::People => send(Request::People),
+        Command::Deleted { path } => send(Request::Deleted {
+            path: path.map(|p| absolute(&p)),
         }),
-        "resume" if fits(0, 0, &[]) => send(Request::Resume),
-        "leave" if fits(0, 0, &[]) => send(Request::Leave),
-        "refound" if fits(0, 1, &[]) => send(Request::Refound {
-            repository: w.first().map(|r| absolute(r)),
+        Command::Open => send(Request::OpenWeb),
+        Command::Settings {
+            key: Some(key),
+            value: Some(value),
+        } => send(Request::SetSettings { key, value }),
+        Command::Settings { key, .. } => send(Request::GetSettings { key }),
+        Command::Pause { duration } => send(Request::Pause { duration }),
+        Command::Resume => send(Request::Resume),
+        Command::Leave => send(Request::Leave),
+        Command::Refound { repository } => send(Request::Refound {
+            repository: repository.map(|r| absolute(&r)),
         }),
-        "held" if fits(0, 0, &[]) => send(Request::Held),
-        "held" if fits(1, 1, &["share"]) && s.flag("share") => send(Request::ReleaseHeld {
-            batch: w.first()?.clone(),
-            choice: pigeon_proto::api::HeldChoice::Share,
+        Command::Held { id: None, .. } => send(Request::Held),
+        Command::Held {
+            id: Some(batch),
+            share,
+            bring_back,
+            ..
+        } => send(Request::ReleaseHeld {
+            batch,
+            choice: if share {
+                HeldChoice::Share
+            } else if bring_back {
+                HeldChoice::BringBack
+            } else {
+                HeldChoice::Rename
+            },
         }),
-        "held" if fits(1, 1, &["bring-back"]) && s.flag("bring-back") => {
-            send(Request::ReleaseHeld {
-                batch: w.first()?.clone(),
-                choice: pigeon_proto::api::HeldChoice::BringBack,
-            })
-        }
-        "held" if fits(1, 1, &["rename"]) && s.flag("rename") => send(Request::ReleaseHeld {
-            batch: w.first()?.clone(),
-            choice: pigeon_proto::api::HeldChoice::Rename,
+        Command::Suggestions => send(Request::Proposals),
+        Command::Accept { id, reason } => send(Request::Accept {
+            proposal: id,
+            reason,
         }),
-        "suggestions" if fits(0, 0, &[]) => send(Request::Proposals),
-        "accept" if fits(1, 1, &["override"]) => send(Request::Accept {
-            proposal: w.first()?.clone(),
-            reason: s.value("override").map(str::to_owned),
-        }),
-        "decline" if fits(1, 1, &["note"]) => send(Request::Reject {
-            proposal: w.first()?.clone(),
-            note: s.value("note").map(str::to_owned),
-        }),
-        "conflicts" if fits(0, 0, &[]) => send(Request::Conflicts),
-        "resolve" if fits(1, 1, &["take-group", "keep-copy", "suggest-again"]) => {
-            let choice = match (
-                s.flag("take-group"),
-                s.value("keep-copy"),
-                s.flag("suggest-again"),
-            ) {
-                (true, None, false) => Choice::TakeGroup,
-                (false, Some(dest), false) => Choice::KeepCopy {
-                    dest: absolute(dest),
+        Command::Decline { id, note } => send(Request::Reject { proposal: id, note }),
+        Command::Conflicts => send(Request::Conflicts),
+        Command::Resolve {
+            path,
+            take_group,
+            keep_copy,
+            suggest_again: _,
+        } => send(Request::Resolve {
+            path: absolute(&path),
+            choice: match keep_copy {
+                _ if take_group => Choice::TakeGroup,
+                Some(dest) => Choice::KeepCopy {
+                    dest: absolute(&dest),
                 },
-                (false, None, true) => Choice::SuggestAgain,
-                _ => return None,
-            };
-            send(Request::Resolve {
-                path: absolute(w.first()?),
-                choice,
-            })
-        }
-        "view" if fits(1, 1, &["version", "group"]) => {
-            let version = match s.value("version") {
-                Some(v) => Some(v.parse().ok()?),
-                None => None,
-            };
-            if version.is_some() && s.flag("group") {
-                return None;
-            }
-            send(Request::View {
-                path: absolute(w.first()?),
-                version,
-                group: s.flag("group"),
-            })
-        }
-        "history" if fits(1, 1, &[]) => send(Request::History {
-            path: absolute(w.first()?),
+                None => Choice::SuggestAgain,
+            },
         }),
-        "restore" if fits(1, 1, &["version", "at"]) => {
-            let version = match s.value("version") {
-                Some(v) => Some(v.parse().ok()?),
-                None => None,
-            };
-            send(Request::Restore {
-                path: absolute(w.first()?),
-                version,
-                at: s.value("at").map(str::to_owned),
-            })
-        }
-        "free" if fits(1, 1, &["without-checking"]) && s.flag("without-checking") => {
-            send(Request::Drop {
-                path: absolute(w.first()?),
-                confirmed: false,
-            })
-        }
-        "free" if fits(1, 1, &[]) => send(Request::Evict {
-            folder: absolute(w.first()?),
+        Command::View {
+            path,
+            version,
+            group,
+        } => send(Request::View {
+            path: absolute(&path),
+            version,
+            group,
         }),
-        "keep" if fits(1, 1, &[]) => send(Request::Keep {
-            folder: absolute(w.first()?),
+        Command::History { path } => send(Request::History {
+            path: absolute(&path),
         }),
-        "remove-computer" if fits(1, 1, &[]) => send(Request::RemoveDevice {
-            name: w.first()?.clone(),
+        Command::Restore { path, version, at } => send(Request::Restore {
+            path: absolute(&path),
+            version,
+            at,
         }),
-        "recovery-sheet" if fits(0, 0, &[]) => send(Request::RecoverySheet),
-        "recover" if fits(1, 2, &["from"]) => {
-            let sheet = w.first()?;
-            let text = std::fs::read_to_string(sheet).unwrap_or_else(|_| sheet.clone());
+        Command::Free {
+            path,
+            without_checking: true,
+        } => send(Request::Drop {
+            path: absolute(&path),
+            confirmed: false,
+        }),
+        Command::Free { path, .. } => send(Request::Evict {
+            folder: absolute(&path),
+        }),
+        Command::Keep { path } => send(Request::Keep {
+            folder: absolute(&path),
+        }),
+        Command::RemoveComputer { name } => send(Request::RemoveDevice { name }),
+        Command::RecoverySheet => send(Request::RecoverySheet),
+        Command::Recover {
+            sheet,
+            folder,
+            from,
+        } => {
+            let text = std::fs::read_to_string(&sheet).unwrap_or(sheet);
             send(Request::Recover {
                 sheet: text,
-                folder: w.get(1).map(|f| absolute(f)),
-                from: s.value("from").map(str::to_owned),
+                folder: folder.map(|f| absolute(&f)),
+                from,
             })
         }
-        "doctor" if fits(0, 0, &["details"]) => send(Request::Doctor {
-            details: s.flag("details"),
+        Command::Doctor { details } => send(Request::Doctor { details }),
+        Command::Debug {
+            what: DebugCommand::Bundle { peers },
+        } => send(Request::DebugBundle { peers }),
+        Command::Export {
+            to,
+            at,
+            deleted,
+            repos,
+        } => Action::Export(crate::export::Export {
+            to: to.into(),
+            at,
+            deleted,
+            repos: repos.into_iter().map(Into::into).collect(),
         }),
-        "debug" if n == 1 && w.first().is_some_and(|b| b == "bundle") && s.only(&["from"]) => {
-            send(Request::DebugBundle {
-                peers: s.all("from"),
-            })
+        Command::Update { version, rollback } => Action::Update(match (version, rollback) {
+            (Some(tag), _) => vec!["--version".into(), tag],
+            (None, true) => vec!["--rollback".into()],
+            (None, false) => Vec::new(),
+        }),
+        Command::Other(words) => {
+            Action::NotInThisBuild(words.into_iter().next().unwrap_or_default())
         }
-        "export" if s.only(&["to", "at", "deleted"]) => {
-            Some(Action::Export(crate::export::Export {
-                to: s.value("to")?.into(),
-                at: s.value("at").map(str::to_owned),
-                deleted: s.flag("deleted"),
-                repos: w.iter().map(Into::into).collect(),
-            }))
-        }
-        "update" if fits(0, 0, &["version", "rollback"]) => {
-            match (s.value("version"), s.flag("rollback")) {
-                (None, false) => Some(Action::Update(Vec::new())),
-                (Some(tag), false) => Some(Action::Update(vec!["--version".into(), tag.into()])),
-                (None, true) => Some(Action::Update(vec!["--rollback".into()])),
-                (Some(_), true) => None,
-            }
-        }
-        "create" | "invite" | "join" | "status" | "machines" | "open" | "history" | "restore"
-        | "pause" | "resume" | "people" | "deleted" | "leave" | "held" | "free" | "keep"
-        | "remove-computer" | "recovery-sheet" | "recover" | "doctor" | "debug" | "suggestions"
-        | "accept" | "decline" | "conflicts" | "resolve" | "update" | "export" | "view"
-        | "refound" => None,
-        other => Some(Action::NotInThisBuild(other.to_owned())),
     }
 }
