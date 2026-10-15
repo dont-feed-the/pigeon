@@ -15,6 +15,7 @@ pub mod filter;
 pub mod headline;
 pub mod journal;
 pub mod names;
+pub mod notify;
 pub mod proposal;
 pub mod queue;
 pub mod report;

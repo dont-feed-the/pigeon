@@ -15,6 +15,7 @@ lab = ["pigeon-sys/lab"]
 tla-trace = ["pigeon-core/tla-trace"]
 
 [dependencies]
+notify-rust.workspace = true
 pigeon-core.workspace = true
 pigeon-git.workspace = true
 pigeon-proto.workspace = true

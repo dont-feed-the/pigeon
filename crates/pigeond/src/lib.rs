@@ -33,6 +33,7 @@ pub mod locks;
 pub mod logs;
 pub mod merge;
 pub mod net;
+pub mod notices;
 pub mod prefs;
 pub mod proposal;
 pub mod recovery;

@@ -277,3 +277,7 @@ deleted-none = No file was deleted.
 deleted-row = { $path }, deleted { $deleted }
 web-deleted = Deleted files
 web-restore-deleted = Restore
+notify-needs-you = pigeon needs you: open it to see what to do.
+notify-not-safe-long = Some files have not been safe for more than a day.
+notify-waiting = A suggestion or a conflict waits for you.
+notify-open = Open pigeon

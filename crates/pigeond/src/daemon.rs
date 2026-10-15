@@ -427,6 +427,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
             for g in rounds.groups() {
                 rounds.round(&g).await;
             }
+            crate::notices::check(&rounds).await;
             tokio::select! {
                 () = tokio::time::sleep(interval) => {}
                 () = rounds.wake.notified() => {}

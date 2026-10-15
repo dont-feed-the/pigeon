@@ -115,6 +115,14 @@ answers it; off on headless machines and by the `notifications` setting
 bundle) runs `pigeon open`; the status icon `pigeon-tray`, in v1.1, renders
 only the headline level (ADRs 0027, 0029).
 
+Coded so far: `pigeon-core::notify` decides (laws in
+`tests/notify.rs`: never when off or for an absent kind, one per kind and
+round, a day apart, repeated only for a changed situation, and told once
+the day has passed); `pigeond/src/notices.rs` reads the situation after
+the rounds, at most every five minutes, and shows one grouped notification
+through `notify-rust`, a click opening the web (Linux). Not yet: the
+launcher.
+
 ## 10.5 Messages and languages (ADR 0028)
 
 - All user-facing text is in `crates/pigeon-i18n/i18n/{en,fr}/pigeon.ftl`,

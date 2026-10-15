@@ -222,6 +222,16 @@ fn a_change_its_person_may_not_make_becomes_a_relayed_suggestion() {
     assert_eq!(theirs[0].paths, ["a.txt"]);
     let own = listed(&b1);
     assert!(own.len() == 1 && own[0].mine && !own[0].decide, "{own:?}");
+    // Ana is told that a suggestion waits for her, once; Cid is not, as
+    // it is his own (10 §10.4).
+    let told = |d: &Daemon| {
+        std::fs::read_to_string(d.home.join("notified.log"))
+            .unwrap_or_default()
+            .matches("notify-waiting")
+            .count()
+    };
+    eventually_within(WAIT, || told(&a1) == 1, "Ana was not told", &all);
+    assert_eq!(told(&b1), 0, "Cid was told of his own suggestion");
     let refused = pigeon(&b1, &["accept", &new[..12]]);
     assert!(
         refused

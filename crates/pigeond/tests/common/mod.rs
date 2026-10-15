@@ -84,6 +84,7 @@ pub fn start(root: &Path, sockets: &Path, name: &'static str) -> Daemon {
         .arg(&home)
         .env("PIGEON_SOCKET", &socket)
         .env("PIGEON_LOG", "debug")
+        .env("PIGEON_NOTIFY_LOG", home.join("notified.log"))
         .env("USER", "ana")
         .stdin(Stdio::null())
         .stdout(log.try_clone().unwrap())
