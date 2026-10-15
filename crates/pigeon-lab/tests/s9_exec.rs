@@ -49,7 +49,9 @@ fn random_crash_schedules_lose_and_duplicate_nothing(tc: TestCase) {
     let cfg = Config {
         bin: std::fs::canonicalize(bin).unwrap(),
         // Short: unix sockets live under it (pigeon-lab's short_name).
-        work: PathBuf::from("/tmp/lab-s9"),
+        work: PathBuf::from(
+            std::env::var("PIGEON_LAB_WORK").unwrap_or_else(|_| "/tmp/lab-s9".into()),
+        ),
         out: out.clone(),
         isolation: Isolation::detect(),
     };

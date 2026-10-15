@@ -9,10 +9,10 @@ which third_party/git-annex patch 0002 fixes. Asserted for pigeon's git-annex
 (`-pigeon` in its version): no fetch hangs and each brings its commit. For any
 other git-annex it counts the hangs and asserts only that every fetch that
 ended brought its commit: the negative control of git-annex.yml.
-Usage: ga-e25-relay-stress.py [N] (LAB defaults to ~/ga-lab25). Linux and macOS,
-about 1 min for 200 fetches.
+Usage: ga-e25-relay-stress.py [N] [--stop-after-hangs N] (LAB defaults to ~/ga-lab25). Linux and macOS,
+about 1 min for 200 fetches. The optional hang limit applies only to stock builds.
 """
-import os, shutil, signal, subprocess, sys, time
+import argparse, os, shutil, signal, subprocess, sys, time
 
 LAB = os.path.expanduser(os.environ.get('LAB', '~/ga-lab25'))
 NET, BIN = os.path.join(LAB, 'net'), os.path.join(LAB, 'bin')
@@ -103,8 +103,43 @@ def setup():
     return C, P
 
 
+def positive_int(value):
+    n = int(value)
+    if n <= 0:
+        raise argparse.ArgumentTypeError('must be positive')
+    return n
+
+
+def fetches(custodian, peer, n, stop_after_hangs=None):
+    """Exercise the relay, preserving errors even when the stock hang budget ends."""
+    hangs, wrong, failed, began, done = [], [], [], time.time(), 0
+    for i in range(n):
+        if stop_after_hangs is not None and len(hangs) >= stop_after_hangs:
+            NOTES.append(f'stopped after {done} fetches: {len(hangs)} hangs observed')
+            break
+        if len(hangs) >= 5 and hangs[-5:] == list(range(i - 5, i)):
+            NOTES.append(f'stopped after fetch {i}: five fetches in a row hung')
+            break
+        want, done = commit(custodian, i), i + 1
+        try:
+            r = run(peer, 'git', 'fetch', '-q', 'c', 'main', ok=False, timeout=20)
+        except subprocess.TimeoutExpired:
+            hangs.append(i)
+            continue
+        if r.returncode:
+            failed.append((i, r.stderr.strip()[-200:]))
+        elif git(peer, 'rev-parse', '-q', '--verify', 'refs/remotes/c/main', ok=False) != want:
+            wrong.append(i)
+    return hangs, wrong, failed, time.time() - began, done
+
+
 def main():
-    n = int(sys.argv[1]) if len(sys.argv) > 1 else 200
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('n', nargs='?', type=positive_int, default=200)
+    parser.add_argument('--stop-after-hangs', type=positive_int,
+                        help='stop the stock negative control after this many hangs; ignored for patched builds')
+    args = parser.parse_args()
+    n = args.n
     C, P = setup()
     patched = '-pigeon' in git(LAB, 'annex', 'version', '--raw')
     daemon = subprocess.Popen(['git', 'annex', 'remotedaemon', '--foreground'], cwd=C, env=ENV,
@@ -117,22 +152,8 @@ def main():
         addr = [l for l in run(C, 'git', 'annex', 'p2p', '--gen-addresses').stdout.splitlines()
                 if l.startswith('p2p-annex::')][0]
         run(P, 'git', 'annex', 'p2p', '--link', '--name', 'c', inp=addr + '\n')
-        hangs, wrong, failed, began, done = [], [], [], time.time(), 0
-        for i in range(n):
-            if len(hangs) >= 5 and hangs[-5:] == list(range(i - 5, i)):
-                NOTES.append(f'stopped after fetch {i}: five fetches in a row hung')
-                break
-            want, done = commit(C, i), i + 1
-            try:
-                r = run(P, 'git', 'fetch', '-q', 'c', 'main', ok=False, timeout=20)
-            except subprocess.TimeoutExpired:
-                hangs.append(i)
-                continue
-            if r.returncode:
-                failed.append((i, r.stderr.strip()[-200:]))
-            elif git(P, 'rev-parse', '-q', '--verify', 'refs/remotes/c/main', ok=False) != want:
-                wrong.append(i)
-        took = time.time() - began
+        hangs, wrong, failed, took, done = fetches(
+            C, P, n, None if patched else args.stop_after_hangs)
     finally:
         os.killpg(daemon.pid, signal.SIGKILL)
         daemon.wait()
@@ -144,7 +165,7 @@ def main():
     if patched:
         check(not hangs, f'patched: none of {n} fetches over P2P hangs: {hangs}')
     else:
-        NOTES.append(f'stock: {len(hangs)} of {n} fetches hung (the relay race of 16 §16.4)')
+        NOTES.append(f'stock: {len(hangs)} of {done} attempted fetches hung (the relay race of 16 §16.4)')
     for note in NOTES:
         print('note', note)
     print(f'E25: {len(FAILS)} failure(s)')

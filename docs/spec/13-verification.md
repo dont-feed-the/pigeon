@@ -144,7 +144,8 @@ rerun with bare custodian repositories.
 
 Each workflow of `.github/workflows/` says in its header what it runs:
 `ci.yml` (the `scripts/check-*` rules, clippy, the Fluent check, `cargo
-deny`), `lab.yml` and `slice.yml` (§13.12) on every push; `models-full.yml`
+deny`) on pull requests, main pushes and release tags; `lab.yml` and
+`slice.yml` (§13.12) on every push; `models-full.yml`
 when a model changes, weekly and by hand, with E17 on a self-hosted HDD
 runner **[no ADR: runner]**. A lab
 platform difference prints `SKIP (platform)` with its reason, never a
@@ -310,12 +311,14 @@ and the trace projection are compositional; a prefix runs the same whatever
 follows; settling the model is idempotent; a crash at any named point, then
 a restart, changes no outcome (1000 model schedules per push). The workflow
 `slice.yml` runs them, then S1–S16 and 50 random S9 schedules against the
-real binaries on both runners; `models-full.yml` runs 1000. A scenario that
+real binaries on both runners, with S5 in its own parallel job;
+`models-full.yml` runs 1000. A scenario that
 does not pass yet against the first build is listed in `slice::BLOCKED`
 with what its last runs showed; per push it is reported as blocked, and
 `models-full.yml` runs it on both runners (`pigeon-lab run
---with-blocked`, with pigeond's debug log) without failing. A device's
-disk is sized above the `annex.diskreserve` pigeon sets (03 §3.4): 4 GiB
+--only-blocked`, with pigeond's debug log) without failing. That job
+does not repeat the ordinary slice and skips lab setup when nothing is
+blocked. A device's disk is sized above the `annex.diskreserve` pigeon sets (03 §3.4): 4 GiB
 for a laptop, 8 GiB (sparse) for a custodian; below it git-annex refuses
 every transfer, which kept the first runs at *published*. In `slice.yml`
 run 38660637841 (15 October 2026, at f5dddd6) S1–S13, every S9 point and

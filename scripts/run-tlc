@@ -4,7 +4,8 @@
 The expectations live in models/tla/expected.tsv. The TLC jar is pinned by
 version and SHA-256, downloaded once into a cache directory, and refused when
 its hash differs. Usage: scripts/run-tlc [--full] [config ...]; with no
-configuration named, the fast set runs, or every row with --full.
+configuration named, the fast set runs, or every row with --full. --shard I N
+runs the zero-based shard I of N, partitioning the selected rows in order.
 """
 
 import argparse
@@ -85,7 +86,8 @@ def excerpt(output, size=3000):
     return text if len(text) <= size else text[:size // 2] + "\n...\n" + text[-size // 2:]
 
 
-def run(jar, config, module, java, workers, heap):
+def run(jar, config, module, java, workers, heap, models=None):
+    models = MODELS if models is None else models
     with tempfile.TemporaryDirectory() as metadir:
         memory = [f"-Xmx{heap}"] if heap else []
         # TLC evaluates a recursive operator on Java's stack: the trace specs
@@ -94,8 +96,8 @@ def run(jar, config, module, java, workers, heap):
         command = [java, *memory, "-Xss16m", "-XX:+UseParallelGC", "-cp", str(jar), "tlc2.TLC",
                    "-workers", workers, "-metadir", metadir,
                    "-config", f"{config}.cfg", module]
-        done = subprocess.run(command, cwd=MODELS, capture_output=True, text=True)
-    trace = re.search(r"^INVARIANT\s+TraceNotConsumed\b", (MODELS / f"{config}.cfg").read_text(), re.M)
+        done = subprocess.run(command, cwd=models, capture_output=True, text=True)
+    trace = re.search(r"^INVARIANT\s+TraceNotConsumed\b", (models / f"{config}.cfg").read_text(), re.M)
     return verdict(done.stdout + done.stderr, bool(trace)), done.stdout + done.stderr
 
 
@@ -106,14 +108,20 @@ def main():
     parser.add_argument("--java", default=os.environ.get("JAVA", "java"))
     parser.add_argument("--workers", default="auto")
     parser.add_argument("--heap", help="maximum Java heap, such as 3g; TLC spills to disk beyond it")
+    parser.add_argument("--shard", nargs=2, type=int, metavar=("INDEX", "COUNT"),
+                        help="zero-based shard of the selected configurations")
     arguments = parser.parse_args()
+    if arguments.shard and not 0 <= arguments.shard[0] < arguments.shard[1]:
+        parser.error("--shard requires 0 <= INDEX < COUNT")
     jar = tlc_jar()
     failures = 0
-    for config, module, group, expected in expectations():
-        if arguments.configs and config not in arguments.configs:
-            continue
-        if not arguments.configs and not arguments.full and group != "fast":
-            continue
+    rows = [row for row in expectations()
+            if (row[0] in arguments.configs if arguments.configs
+                else arguments.full or row[2] == "fast")]
+    if arguments.shard:
+        index, count = arguments.shard
+        rows = rows[index::count]
+    for config, module, _, expected in rows:
         start = time.monotonic()
         got, output = run(jar, config, module, arguments.java, arguments.workers, arguments.heap)
         seconds = time.monotonic() - start

@@ -127,12 +127,12 @@ jobs:
           export PATH=$STOCK:$PATH
           git annex version --raw; echo
           python3 lab/git-annex/ga-e23-p2p-drop.py | tee -a "$GITHUB_STEP_SUMMARY"
-      - name: negative control, E25 with the stock git-annex (counts hangs)
+      - name: negative control, E25 with the stock git-annex (up to three hangs)
         continue-on-error: true
-        timeout-minutes: 20
+        timeout-minutes: 5
         run: |
           export PATH=$STOCK:$PATH
-          python3 lab/git-annex/ga-e25-relay-stress.py 500 | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 lab/git-annex/ga-e25-relay-stress.py 500 --stop-after-hangs 3 | tee -a "$GITHUB_STEP_SUMMARY"
 
   consumer:
     name: the cached build as slice.yml gets it (${{ matrix.os }})
