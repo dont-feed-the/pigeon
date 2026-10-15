@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Waits for the artifact NAME of this workflow run, which another job of
+# the run uploads, and unpacks it into DIR (reach.yml). Polls every 10 s
+# for at most SECONDS; needs GH_TOKEN with `actions: read`, and the
+# GITHUB_REPOSITORY and GITHUB_RUN_ID that Actions sets.
+#
+#   reach-artifact NAME DIR SECONDS
+set -euo pipefail
+name=$1 dir=$2 limit=$3
+api="repos/$GITHUB_REPOSITORY/actions"
+id=
+for _ in $(seq $(( limit / 10 + 1 ))); do
+  id=$(gh api "$api/runs/$GITHUB_RUN_ID/artifacts" \
+    --jq ".artifacts[] | select(.name == \"$name\") | .id" | head -1)
+  [ -n "$id" ] && break
+  sleep 10
+done
+[ -n "$id" ] || { echo "::error::no artifact $name in ${limit}s"; exit 1; }
+mkdir -p "$dir"
+gh api "$api/artifacts/$id/zip" > "$dir/$name.zip"
+unzip -o -q "$dir/$name.zip" -d "$dir"
+echo "artifact $name unpacked into $dir"

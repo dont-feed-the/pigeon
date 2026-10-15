@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# The reach scenario of M3 (roadmap; 09 §9.5, ADR 0016): two runners on two
+# networks share a group through n0's relays and address lookup, with no
+# address in common. Each step is one call; the state lives under WORK.
+#
+#   reach-pair BIN WORK inviter-start OUT   a laptop (ubuntu) and its backup
+#        machine create the group; the laptop invites the person Mac, writes
+#        the invitation to OUT and a file for Mac to receive
+#   reach-pair BIN WORK inviter-wait        waits for Mac's file
+#   reach-pair BIN WORK joiner IN           Mac's laptop joins with IN's
+#        invitation, waits for the inviter's file, then writes its own
+#   reach-pair BIN WORK stop                stops the daemons, keeps the logs
+#
+# BIN holds pigeond, pigeon and git-annex-p2p-iroh; git-annex is on PATH.
+set -euo pipefail
+bin=$1 work=$2 step=$3
+mkdir -p "$work"
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+wait_for=${PIGEON_REACH_WAIT:-900}
+
+start() {
+  local d=$work/$1
+  mkdir -p "$d/h/config" "$d/f"
+  printf '[network]\nmdns = false\n\n[loops]\ninterval_seconds = 2\n' > "$d/h/config/config.toml"
+  HOME=$d/h PIGEON_SOCKET=$d/s.sock RUST_LOG=info "$bin/pigeond" --home "$d/h" > "$d/pigeond.log" 2>&1 &
+  echo $! > "$d/pid"
+  for _ in $(seq 60); do [ -S "$d/s.sock" ] && return 0; sleep 1; done
+  echo "reach-pair: $1's pigeond did not start" >&2; tail -n 40 "$d/pigeond.log" >&2; exit 1
+}
+
+pigeon() {
+  local d=$work/$1; shift
+  HOME=$d/h PIGEON_SOCKET=$d/s.sock "$bin/pigeon" --json "$@"
+}
+
+invitation() { grep -o 'pgn1-[a-z2-7]*' | head -1; }
+
+# Waits until $1's file $2 holds the text $3.
+await() {
+  local f=$work/$1/f/$2
+  for _ in $(seq "$wait_for"); do
+    [ -f "$f" ] && [ "$(cat "$f")" = "$3" ] && { echo "$1 has $2"; return 0; }
+    sleep 1
+  done
+  echo "reach-pair: $1 never had $2 = '$3' in ${wait_for}s" >&2
+  for d in "$work"/*/; do echo "== $d" >&2; tail -n 30 "$d/pigeond.log" >&2 || true; done
+  exit 1
+}
+
+case $step in
+  inviter-start)
+    out=$4
+    start ubuntu
+    pigeon ubuntu create Reach "$work/ubuntu/f" --k 1 --name ubuntu
+    start backup
+    code=$(pigeon ubuntu invite --backup-machine backup | invitation)
+    pigeon backup join --backup-machine "$code"
+    pigeon ubuntu invite Mac | invitation > "$out"
+    [ -s "$out" ] || { echo "reach-pair: no invitation" >&2; exit 1; }
+    printf 'hello from ubuntu' > "$work/ubuntu/f/from-ubuntu.txt"
+    ;;
+  inviter-wait)
+    await ubuntu from-mac.txt 'hello from mac'
+    ;;
+  joiner)
+    code=$(cat "$4")
+    start mac
+    pigeon mac join "$code" "$work/mac/f" --name mac
+    await mac from-ubuntu.txt 'hello from ubuntu'
+    printf 'hello from mac' > "$work/mac/f/from-mac.txt"
+    ;;
+  stop)
+    for p in "$work"/*/pid; do kill "$(cat "$p")" 2>/dev/null || true; done
+    sleep 2
+    ;;
+  *) echo "usage: reach-pair BIN WORK inviter-start OUT | inviter-wait | joiner IN | stop" >&2; exit 2 ;;
+esac
