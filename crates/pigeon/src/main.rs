@@ -172,7 +172,12 @@ fn main() -> ExitCode {
             ExitCode::from(2)
         }
         Action::Version => {
-            emit(&[format!("pigeon {}", env!("CARGO_PKG_VERSION"))], false);
+            // A build of main names its commit (14 §14.5).
+            let version = match option_env!("PIGEON_COMMIT") {
+                Some(commit) => format!("pigeon {}+g{commit}", env!("CARGO_PKG_VERSION")),
+                None => format!("pigeon {}", env!("CARGO_PKG_VERSION")),
+            };
+            emit(&[version], false);
             ExitCode::SUCCESS
         }
         Action::Update(args) => {

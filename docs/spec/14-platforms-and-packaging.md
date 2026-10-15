@@ -108,9 +108,16 @@ with `curl -fsSL …/releases/latest/download/pigeon-install | sh`.
 release's own copy of itself, which places it: the programs in `bin/`, the
 ones they replace in `bin.previous/`, a `pigeon` link in `~/.local/bin`,
 git-annex by `install-git-annex`, and the unit or agent of §14.4.
-`pigeon update [--version TAG | --rollback]` runs the `pigeon-install`
-beside it; a release already installed is not fetched again, and
-`--rollback` swaps `bin/` and `bin.previous/`. Paul installs (ux.md §11). Uninstalling keeps the
+`pigeon update [--version TAG | --main | --rollback]` runs the
+`pigeon-install` beside it; a release already installed is not fetched
+again, and `--rollback` swaps `bin/` and `bin.previous/`. `--main` fetches
+main's latest commit into `src/`, a clone only `pigeon-install` touches,
+builds the programs there with `cargo build --release --locked`, and hands
+over to that commit's `pigeon-install`, which places them as a release's;
+`pigeon --version` then says `X.Y.Z+g<commit>`, so a plain `pigeon update`
+installs the latest release again. Its `install-git-annex --build` keeps a
+git-annex that reports the commit's `PIGEON_VERSION`, else builds
+`third_party/git-annex`, else takes the stock build. Paul installs (ux.md §11). Uninstalling keeps the
 folder, the repository and the configuration unless the person asks.
 
 ## 14.6 The Rust workspace
