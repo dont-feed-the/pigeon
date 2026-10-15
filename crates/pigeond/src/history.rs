@@ -281,6 +281,7 @@ pub async fn debug_bundle(d: &Daemon) -> Vec<Response> {
         "lab": pigeon_sys::lab::LAB,
         "groups": groups,
         "log_tail": tail,
+        "telemetry_tail": pigeon_telemetry::tail(&d.dirs.state.join("telemetry"), 500),
     });
     let dir = crate::api::bundle_dir(d);
     let path = dir.join(format!("bundle-{now}.json"));

@@ -95,4 +95,28 @@ fn a_time_between_two_saves_restores_the_first() {
         &[&a1],
     );
     assert_eq!(deleted(&fa.join("sub")), ["sub/b.txt"]);
+
+    // Each round left a trace of spans in the telemetry directory (12 §12.2).
+    let lines = pigeon_telemetry::tail(&a1.home.join("state/telemetry"), 1000);
+    let spans: Vec<serde_json::Value> = lines
+        .iter()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .filter_map(|v| {
+            v["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
+                .as_object()
+                .cloned()
+        })
+        .map(serde_json::Value::Object)
+        .collect();
+    let in_a_round = |s: &serde_json::Value| {
+        spans.iter().any(|r| {
+            r["name"] == "round" && r["traceId"] == s["traceId"] && r["spanId"] == s["parentSpanId"]
+        })
+    };
+    assert!(
+        spans
+            .iter()
+            .any(|s| s["name"] == "capture" && in_a_round(s)),
+        "{lines:?}"
+    );
 }

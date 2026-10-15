@@ -2582,6 +2582,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pigeon-telemetry"
+version = "2.0.0-alpha.0"
+dependencies = [
+ "getrandom 0.4.3",
+ "hegeltest",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "pigeon-web"
 version = "2.0.0-alpha.0"
 dependencies = [
@@ -2613,6 +2623,7 @@ dependencies = [
  "pigeon-i18n",
  "pigeon-proto",
  "pigeon-sys",
+ "pigeon-telemetry",
  "pigeon-web",
  "serde",
  "serde_json",

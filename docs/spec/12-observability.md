@@ -19,7 +19,15 @@
 
 ## 12.2 Telemetry (ADR 0025)
 
-Not yet coded.
+Coded so far (`pigeon-telemetry`, laws in its `tests.rs`): each round of
+the loops is one trace, `round` with `group`, `device` and `lamport`, and a
+child span per step (`capture`, `accept`, `install`, `place`, `repair`,
+`publish`), failed steps with status 2. Spans and gauges are OTLP-JSON
+lines in `<state>/telemetry/pigeond-<µs>.jsonl`, written by hand rather
+than by `opentelemetry-otlp` **[no ADR: hand-written local export]**; files
+rotate at 5 MB and the oldest go above 50 MB. `pigeon debug bundle` carries
+the last 500 lines. Not yet: the metrics below, trace context across
+processes and streams, `telemetry_device`, and the developer dashboards.
 
 - Spans, events and metrics are exported as OTLP by `pigeon-telemetry`, the
   only crate depending on `opentelemetry*`, pinned to one minor version.

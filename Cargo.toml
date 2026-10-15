@@ -20,6 +20,7 @@ pigeon-git = { path = "crates/pigeon-git" }
 pigeon-sys = { path = "crates/pigeon-sys" }
 pigeon-lab = { path = "crates/pigeon-lab" }
 pigeon-web = { path = "crates/pigeon-web" }
+pigeon-telemetry = { path = "crates/pigeon-telemetry" }
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "query", "form"] }
 data-encoding = "2.11"
 dirs = "7.0"

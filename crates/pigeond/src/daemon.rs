@@ -113,6 +113,12 @@ impl Daemon {
     /// One round of the loops for `g`.
     pub async fn round(&self, g: &Arc<Group>) {
         let _busy = g.busy.lock().await;
+        // One trace per round, a span per step (12 §12.2).
+        let mut round = pigeon_telemetry::span("round");
+        round
+            .set("group", g.id.as_str())
+            .set("device", self.device.as_str())
+            .set("lamport", self.tracer.clock());
         crate::locks::clear(&g.git_dir);
         crate::settings::check(g).await;
         g.ensure_remotedaemon(&self.wake).await;
@@ -141,8 +147,10 @@ impl Daemon {
             if let Err(e) = crate::evict::keep(g, &self.tracer).await {
                 tracing::info!(group = %g.id, error = %e, "keep-waits");
             }
+            let mut step = round.child("capture");
             if let Err(e) = crate::capture::capture(g, &self.device, &self.tracer).await {
                 tracing::warn!(group = %g.id, error = %e, "capture-failed");
+                step.fail(&e.to_string());
                 settled = false;
             }
         }
@@ -151,18 +159,36 @@ impl Daemon {
             crate::clock_file::save(g, self.tracer.clock());
             return;
         }
-        crate::custody::accept(g, &self.device, &self.tracer).await;
-        if settled && let Err(e) = crate::install::incoming(g, &self.device, &self.tracer).await {
-            tracing::warn!(group = %g.id, error = %e, "install-failed");
+        {
+            let mut step = round.child("accept");
+            let moved = crate::custody::accept(g, &self.device, &self.tracer).await;
+            step.set("moved", moved);
+        }
+        if settled {
+            let mut step = round.child("install");
+            if let Err(e) = crate::install::incoming(g, &self.device, &self.tracer).await {
+                tracing::warn!(group = %g.id, error = %e, "install-failed");
+                step.fail(&e.to_string());
+            }
         }
         crate::report::receive(g, &self.device).await;
         self.note_lost(g);
-        crate::custody::place(g, &self.device).await;
+        {
+            let mut step = round.child("place");
+            let made = crate::custody::place(g, &self.device).await;
+            step.set("copies", made as u64);
+        }
         if settled && !crate::evict::unsettled(g) {
             crate::thin::rethin(g, &self.device, &self.tracer).await;
         }
-        crate::repair::repair(g, &self.device).await;
-        crate::report::publish(g, &self.device).await;
+        {
+            let _step = round.child("repair");
+            crate::repair::repair(g, &self.device).await;
+        }
+        {
+            let _step = round.child("publish");
+            crate::report::publish(g, &self.device).await;
+        }
         crate::clock_file::save(g, self.tracer.clock());
     }
 }
@@ -385,6 +411,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
         extra: vec![("PIGEON_SOCKET".into(), socket.clone().into_os_string())],
     };
     let device = node.device_id();
+    pigeon_telemetry::init(dirs.state.join("telemetry"), "pigeond", &device);
     let tracer = Tracer::new(dirs.traces(), &device);
     let mut groups = Vec::new();
     for entry in &config.groups {

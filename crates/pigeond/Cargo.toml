@@ -19,6 +19,7 @@ notify-rust.workspace = true
 pigeon-core.workspace = true
 pigeon-git.workspace = true
 pigeon-proto.workspace = true
+pigeon-telemetry.workspace = true
 pigeon-sys.workspace = true
 data-encoding.workspace = true
 getrandom.workspace = true
