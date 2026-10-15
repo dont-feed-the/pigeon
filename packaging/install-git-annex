@@ -89,7 +89,10 @@ elif [ "$(uname -s)" = Linux ]; then
   mkdir "$tmp/stock"
   tar -C "$tmp/stock" -xzf "$tmp/s.tar.gz"
   got=$("$tmp/stock/git-annex.linux/git-annex" version --raw)
-  [ "$got" = "$STOCK_VERSION" ] || die "the standalone build is git-annex $got, not $STOCK_VERSION"
+  case "$got" in
+    "$STOCK_VERSION" | "$STOCK_VERSION"-g*) ;;   # the standalone build adds its commit
+    *) die "the standalone build is git-annex $got, not $STOCK_VERSION" ;;
+  esac
   swap "$tmp/stock/git-annex.linux" "$prefix/git-annex.linux"
   rm -rf "$prefix/git-annex"
   echo "stock git-annex $got in $prefix/git-annex.linux"
