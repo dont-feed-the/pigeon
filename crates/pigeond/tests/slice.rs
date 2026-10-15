@@ -92,6 +92,14 @@ fn local_published_protected_then_free_and_keep() {
         files.contains("sub: Safe, 1 file; its space is freed") && files.contains("/files/keep"),
         "{files}"
     );
+    // The folder's page lists its file; the file's page its version.
+    let listed = common::web::page(&web, &format!("/folder?path={}", sub.display()));
+    assert!(listed.contains("sub/big.bin: Safe"), "{listed}");
+    let file = common::web::page(
+        &web,
+        &format!("/file?path={}", sub.join("big.bin").display()),
+    );
+    assert!(file.contains("Versions") && file.contains("Safe"), "{file}");
     // `pigeon settings` writes config.toml, and the web speaks French at
     // once (11 §11.2).
     let set = pigeon(&lap, &["settings", "language", "fr"]);

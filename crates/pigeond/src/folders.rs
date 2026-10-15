@@ -1,13 +1,14 @@
 //! The answer to `Folders` (ux.md §6.2): the group's top-level folders,
 //! each with its files, those not safe yet, its least safe state, and
 //! whether its space is freed on this computer (08 §8.5). Files at the top
-//! of the group's folder belong to no folder and are not listed.
+//! of the group's folder belong to no folder and are not listed. And the
+//! answer to `Files`: the files under one folder, with their states.
 
 use std::collections::BTreeMap;
 
 use pigeon_core::headline::Level;
 use pigeon_proto::Response;
-use pigeon_proto::api::Folder;
+use pigeon_proto::api::{FileEntry, Folder};
 
 use crate::group::Group;
 
@@ -37,12 +38,33 @@ pub async fn folders(g: &Group, me: &str) -> Response {
             freed: targets.iter().any(|t| crate::evict::under(path, t)),
         })
         .collect();
-    let root = g
-        .worktree
+    Response::Folders {
+        root: root(g),
+        folders,
+    }
+}
+
+/// The files under `prefix`, a folder of the group, as `me` sees them.
+pub async fn files(g: &Group, me: &str, prefix: &str) -> Response {
+    let files = crate::status::observe(g, me, prefix)
+        .await
+        .into_iter()
+        .map(|o| FileEntry {
+            state: crate::status::worst(std::iter::once(&o.state)),
+            path: o.path,
+        })
+        .collect();
+    Response::Files {
+        root: root(g),
+        files,
+    }
+}
+
+fn root(g: &Group) -> String {
+    g.worktree
         .as_ref()
         .map(|w| w.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    Response::Folders { root, folders }
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

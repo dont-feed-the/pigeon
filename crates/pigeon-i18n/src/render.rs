@@ -230,6 +230,22 @@ impl Renderer {
             Response::Folders { folders, .. } => {
                 (folders.iter().map(|f| self.folder(f)).collect(), false)
             }
+            Response::Files { files, .. } if files.is_empty() => {
+                (vec![self.id("files-none")], false)
+            }
+            Response::Files { files, .. } => (
+                files
+                    .iter()
+                    .map(|f| {
+                        self.cat.format(
+                            &crate::Message::new("file-row")
+                                .arg("path", f.path.clone())
+                                .arg("state", self.state(f.state)),
+                        )
+                    })
+                    .collect(),
+                false,
+            ),
             Response::Settings { settings } => (
                 settings
                     .iter()

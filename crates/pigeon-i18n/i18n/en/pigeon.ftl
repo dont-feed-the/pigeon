@@ -269,3 +269,7 @@ web-invite = Invite
 web-invite-person = The person's name
 web-invite-admin = as an admin
 web-invite-backup = Invite a backup machine
+files-none = This folder has no file yet.
+file-row = { $path }: { $state }
+web-restore = Restore this version
+web-versions = Versions

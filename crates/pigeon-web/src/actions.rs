@@ -81,6 +81,35 @@ pub async fn free(
     act(&web, &token, &f.form, request, "/files").await
 }
 
+/// The form that restores a version.
+#[derive(serde::Deserialize)]
+pub struct RestoreForm {
+    /// The session's form token.
+    form: String,
+    /// The file, as an absolute path.
+    path: String,
+    /// The version's number.
+    version: u64,
+}
+
+/// *Restore this version*: `pigeon restore PATH --version N`.
+pub async fn restore(
+    State(web): State<Arc<Web>>,
+    Extension(token): Extension<FormToken>,
+    Form(f): Form<RestoreForm>,
+) -> Response {
+    let back = format!(
+        "/file?path={}",
+        form_urlencoded::byte_serialize(f.path.as_bytes()).collect::<String>()
+    );
+    let request = Request::Restore {
+        path: f.path,
+        version: Some(f.version),
+        at: None,
+    };
+    act(&web, &token, &f.form, request, &back).await
+}
+
 /// Asks `request` if `form` is the session's token, and shows the result.
 async fn act(web: &Web, token: &FormToken, form: &str, request: Request, back: &str) -> Response {
     if token.0.is_empty() || form != token.0 {

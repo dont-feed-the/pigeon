@@ -2449,6 +2449,7 @@ name = "pigeon-web"
 version = "2.0.0-alpha.0"
 dependencies = [
  "axum",
+ "form_urlencoded",
  "futures-util",
  "getrandom 0.4.3",
  "maud",

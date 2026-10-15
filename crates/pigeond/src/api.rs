@@ -178,6 +178,16 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             Some(g) => vec![crate::folders::folders(&g, &d.device).await],
             None => vec![problem("not-in-group", &[], None)],
         },
+        Request::Files { folder } => {
+            let path = Path::new(&folder);
+            match group_of(d, path) {
+                Some(g) => {
+                    let prefix = relative(&g, path).unwrap_or_default();
+                    vec![crate::folders::files(&g, &d.device, &prefix).await]
+                }
+                None => vec![problem("not-in-group", &[], None)],
+            }
+        }
         Request::GetSettings => crate::prefs::get(d),
         Request::SetSettings { key, value } => crate::prefs::set(d, &key, &value),
         Request::History { path } => crate::history::history(d, Path::new(&path)).await,

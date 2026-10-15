@@ -101,6 +101,11 @@ pub enum Request {
     OpenWeb,
     /// The group's folders, for the web's Files page (ux.md §6.2).
     Folders,
+    /// The files under a folder, for the web's folder page (ux.md §6.2).
+    Files {
+        /// The folder.
+        folder: String,
+    },
     /// `pigeon settings`: this computer's settings (11 §11.2).
     GetSettings,
     /// `pigeon settings KEY VALUE`: changes one setting in `config.toml`.
@@ -243,6 +248,13 @@ pub enum Response {
         root: String,
         /// Its top-level folders, by path.
         folders: Vec<Folder>,
+    },
+    /// The answer to `Files`.
+    Files {
+        /// The group's folder on this computer.
+        root: String,
+        /// The files under the folder, by path.
+        files: Vec<FileEntry>,
     },
     /// The answer to `GetSettings`.
     Settings {
@@ -407,6 +419,15 @@ pub struct Folder {
     pub state: State,
     /// Whether its space is freed on this computer (or is being freed).
     pub freed: bool,
+}
+
+/// A file of the group, with the state of its current version.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileEntry {
+    /// Its path in the group's folder.
+    pub path: String,
+    /// The state of its current version.
+    pub state: State,
 }
 
 /// One setting of `config.toml` (11 §11.2).
