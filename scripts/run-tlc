@@ -75,6 +75,16 @@ def verdict(output, trace=False):
     return "error"
 
 
+def excerpt(output, size=3000):
+    """What a failed run says: from its first error on, without Java's stack
+    frames, its start and its end if that is too long."""
+    lines = output.splitlines()
+    start = next((i for i, line in enumerate(lines)
+                  if line.startswith("Error") or "exception" in line.lower()), 0)
+    text = "\n".join(line for line in lines[start:] if not line.lstrip().startswith("at "))
+    return text if len(text) <= size else text[:size // 2] + "\n...\n" + text[-size // 2:]
+
+
 def run(jar, config, module, java, workers, heap):
     with tempfile.TemporaryDirectory() as metadir:
         memory = [f"-Xmx{heap}"] if heap else []
@@ -108,7 +118,7 @@ def main():
         print(f"{status:4} {config:12} expected {expected:26} got {got:26} {seconds:6.1f} s", flush=True)
         if got != expected:
             failures += 1
-            print(output[-4000:], file=sys.stderr)
+            print(excerpt(output, 4000), file=sys.stderr)
     return 1 if failures else 0
 
 

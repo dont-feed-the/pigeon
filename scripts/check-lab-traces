@@ -92,7 +92,7 @@ def main():
                 print(f"{'ok' if ok else 'FAIL':4} {log.parent.name} {spec}: {len(lines)} events: {got}", flush=True)
                 if not ok:
                     failures += 1
-                    print(output[-3000:], file=sys.stderr)
+                    print(tlc.excerpt(output), file=sys.stderr)
     for spec in sorted(unchecked):
         print(f"not checked yet: {spec} has no trace specification in models/tla", flush=True)
     for spec, missing in sorted(partial.items()):

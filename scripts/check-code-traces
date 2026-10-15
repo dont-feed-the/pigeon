@@ -107,7 +107,7 @@ def main():
                     print(f"{'ok' if ok else 'FAIL':4} {log.name} {cfg}: {got}", flush=True)
                     if not ok:
                         failures += 1
-                        print(output[-3000:], file=sys.stderr)
+                        print(tlc.excerpt(output), file=sys.stderr)
     return 1 if failures else 0
 
 
