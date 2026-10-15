@@ -1,2 +1,37 @@
 # Crates pigeon-core may depend on, directly or not: each performs no I/O
 # (14 §14.6, spec 14 §14.6). scripts/check-core-deps enforces this list.
+#
+# SSHSIG commit signatures (ADR 0007, `sig`): ssh-key and what it pulls in,
+# pure encodings and arithmetic. No OS randomness: rand_core comes without
+# getrandom, and signing is deterministic (Ed25519).
+ssh-key             # SSH key and SSHSIG encodings, in memory
+ssh-encoding        # SSH wire encoding, in memory
+ssh-cipher          # cipher names of encrypted keys; pigeon uses none
+pem-rfc7468         # PEM armour, in memory
+base64ct            # constant-time base64
+ed25519             # signature types
+ed25519-dalek       # Ed25519 arithmetic
+curve25519-dalek    # curve arithmetic
+curve25519-dalek-derive  # a proc macro, at build time only
+fiat-crypto         # verified field arithmetic
+signature           # signing traits
+sha2                # SHA-256 and SHA-512
+digest              # hash traits
+block-buffer        # hash block buffers
+crypto-common       # shared traits
+cipher              # block cipher traits
+inout               # in-place buffer types
+hybrid-array        # fixed-size arrays
+typenum             # type-level numbers
+rand_core           # RNG traits only, without getrandom
+subtle              # constant-time comparison
+ctutils             # constant-time helpers
+cmov                # constant-time moves
+zeroize             # wipes secrets in memory
+cfg-if              # a macro
+cpufeatures         # reads CPU features (CPUID, or getauxval/sysctl on aarch64), no files
+libc                # FFI declarations, used by cpufeatures on aarch64 only
+proc-macro2         # proc macros, at build time only
+quote               # proc macros, at build time only
+syn                 # proc macros, at build time only
+unicode-ident       # proc macros, at build time only
