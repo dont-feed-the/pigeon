@@ -56,6 +56,9 @@ fn same_inode(a: &Path, b: &Path) -> bool {
 /// One round: re-thins every visible file whose version is protected and
 /// whose content is still a copy of its object. Answers how many it did.
 pub async fn rethin(g: &Group, me: &str, t: &Tracer) -> usize {
+    if crate::capture_file::pending(g) || crate::evict::unsettled(g) {
+        return 0;
+    }
     let Some(wt) = g.worktree.clone() else {
         return 0;
     };
@@ -138,7 +141,7 @@ fn one(
     let clear = lstat(&aside)
         .ok()
         .flatten()
-        .is_some_and(|a| pigeon_sys::writers::scan(a.id).is_clear());
+        .is_some_and(|a| crate::asides::writers_clear(&a));
     t.event(Act::Scan, &[("path", path)]);
     if !clear || stat_of(&aside) != Some(st) {
         let end = match rename_noreplace(&aside, file).map_err(|e| e.to_string())? {
@@ -161,14 +164,5 @@ fn one(
     tracing::debug!(group = %g.id, path, ms, "rethin-window");
     record(g, &Record::End(seq, End::Done))?;
     t.event(Act::Done, &[("path", path)]);
-    if is_old(&aside, Some(key)) {
-        let _ = std::fs::remove_file(&aside);
-    } else {
-        // Changed without a trace in its stat: kept, as 07 §7.5 step 9 says.
-        tracing::warn!(group = %g.id, path, seq, "rethin-aside-recovered");
-        let _ = std::fs::rename(&aside, g.files.recovered().join(seq.to_string()));
-    }
-    record(g, &Record::Released(seq))?;
-    t.event(Act::Release, &[("path", path)]);
     Ok(true)
 }

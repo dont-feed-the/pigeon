@@ -127,7 +127,14 @@ impl Daemon {
             // before anything reads or writes the folder (07 §7.5).
             crate::evict::recover(g, &self.tracer).await;
         }
-        let settled = g.role == Role::Laptop && !crate::evict::unsettled(g);
+        let mut settled = g.role == Role::Laptop && !crate::evict::unsettled(g);
+        if settled && let Err(e) = crate::capture::recover(g).await {
+            tracing::warn!(group = %g.id, error = %e, "capture-recovery-failed");
+            settled = false;
+        }
+        if settled {
+            crate::asides::release(g, &self.tracer).await;
+        }
         if settled {
             crate::evict::free_targets(g, &self.device, &self.tracer).await;
             if let Err(e) = crate::evict::keep(g, &self.tracer).await {
@@ -135,6 +142,7 @@ impl Daemon {
             }
             if let Err(e) = crate::capture::capture(g, &self.device, &self.tracer).await {
                 tracing::warn!(group = %g.id, error = %e, "capture-failed");
+                settled = false;
             }
         }
         if crate::pause::now(self).is_some() {

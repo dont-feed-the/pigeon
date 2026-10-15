@@ -56,7 +56,7 @@ fn maybe(tc: &TestCase) -> Option<String> {
 
 fn record(tc: &TestCase) -> Record {
     let seq = tc.draw(gs::integers::<u64>().max_value(1 << 40));
-    match tc.draw(gs::integers::<u8>().max_value(3)) {
+    match tc.draw(gs::integers::<u8>().max_value(5)) {
         0 => Record::Begin(Begin {
             seq,
             path: word(tc),
@@ -88,6 +88,8 @@ fn record(tc: &TestCase) -> Record {
             };
             Record::End(seq, end)
         }
+        3 => Record::Kept(seq, tc.draw(gs::integers::<i64>())),
+        4 => Record::Preserved(seq, word(tc)),
         _ => Record::Released(seq),
     }
 }

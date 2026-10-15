@@ -9,6 +9,7 @@
 
 pub mod admission;
 pub mod api;
+pub mod asides;
 pub mod capture;
 pub mod capture_file;
 pub mod change;
@@ -47,6 +48,7 @@ pub mod report;
 pub mod report_file;
 pub mod resolve;
 pub mod restore;
+pub mod retention;
 pub mod roster_file;
 pub mod settings;
 pub mod status;

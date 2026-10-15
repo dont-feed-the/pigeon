@@ -198,7 +198,7 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
         // the next round settles it first (07 §7.5).
         return Ok(done);
     }
-    undo_interrupted(g).await?;
+    recover(g).await?;
     let now = crate::util::now_ns();
     g.lock()
         .installed
@@ -326,8 +326,14 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
 
 /// Puts back the index entries of a batch that a crash interrupted
 /// (`capture.json`), so that this scan redoes it from the files.
-async fn undo_interrupted(g: &Group) -> Result<(), Error> {
+pub async fn recover(g: &Group) -> Result<(), Error> {
     let Some(intent) = crate::capture_file::read(g) else {
+        if crate::capture_file::pending(g) {
+            return Err(Error::Parse {
+                argv: vec!["capture.json".to_owned()],
+                detail: "unreadable or unsupported capture intent".to_owned(),
+            });
+        }
         return Ok(());
     };
     for (p, e) in &intent.before {

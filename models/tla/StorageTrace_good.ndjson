@@ -1,0 +1,4 @@
+{"spec":"StorageBoundary","device":"disk","clock":1,"action":"Capture","vars":{"pending":true,"captured":false,"live":"saved","saved":"saved"}}
+{"spec":"StorageBoundary","device":"disk","clock":2,"action":"Archive","vars":{"saved":["first","second"],"present":["first","second"]}}
+{"spec":"StorageBoundary","device":"disk","clock":3,"action":"Release","vars":{"saved":["changed"],"present":["changed"],"written":true,"released":false}}
+{"spec":"StorageBoundary","device":"disk","clock":4,"action":"Retention","vars":{"expected":["old","current"],"enumerated":["old","current"]}}

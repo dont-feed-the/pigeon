@@ -107,6 +107,13 @@ retried at every scan. A batch shares its fsyncs and one writer scan.
 A deletion skips steps 1, 2 and 7. The journal is truncated once every
 entry has ended and its aside is released.
 
+The driver (`pigeond::asides`) applies this release pass in ordinary rounds
+and after recovery. A changed aside is snapshotted into the annex and
+captured under a deterministic recovered conflict name; the ordinary
+authority split makes it an accepted contribution or a proposal. Its
+preserved file is never renamed over another recovery's file. All capture
+and recovery failures leave their intent or journal entry pending.
+
 **Recovery** (`Recover`, `RecoverEnd`) runs at start, before capture, and
 again at the start of a round after a step failed (a git call that found
 `index.lock`, say), which leaves its entry as a crash would: capture,

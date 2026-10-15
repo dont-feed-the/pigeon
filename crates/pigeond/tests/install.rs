@@ -263,7 +263,17 @@ async fn install_writes_the_versions_main_gained() {
         Installed::default()
     );
     let journal = std::fs::read(l.g.files.install_journal()).unwrap_or_default();
-    assert!(journal.is_empty(), "the journal is truncated");
+    let entries =
+        pigeon_core::journal::entries(&pigeond::journal_file::read(&l.g.files.install_journal()));
+    assert!(
+        !journal.is_empty(),
+        "old asides stay journaled for their keep period"
+    );
+    assert!(
+        entries.values().all(|e| e.end.is_some()),
+        "install ended every entry"
+    );
+    assert!(entries.values().any(|e| !e.released));
     // Ben deletes the only file of `sub/`: the folder goes with it.
     let mut tree = l.git.tree(&c2).await.unwrap();
     tree.remove("sub/n.txt");
@@ -502,3 +512,6 @@ async fn a_renamed_file_is_captured_with_its_trailer() {
     // Same contents pair first, whatever the extension, then similar ones.
     assert_eq!(got, [pair("a.txt", "sub/b.md"), pair("c.txt", "d.txt")]);
 }
+
+#[path = "install/storage.rs"]
+mod storage;

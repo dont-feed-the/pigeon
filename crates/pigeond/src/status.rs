@@ -215,6 +215,14 @@ pub(crate) fn worst<'a>(states: impl Iterator<Item = &'a State<String>>) -> api:
 /// The answer to `Status` for the versions under `prefix`.
 pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> StatusReport {
     let observed = observe(g, me, prefix).await;
+    let retained = if prefix.is_empty() {
+        let current = observed.iter().map(|o| o.key.clone()).collect();
+        crate::retention::states(g, me, &current).await
+    } else {
+        Ok(Vec::new())
+    };
+    let history_unreadable = retained.is_err();
+    let retained = retained.unwrap_or_default();
     let k = settings(g).k;
     let names: BTreeMap<String, String> = g
         .roster()
@@ -227,8 +235,22 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
         })
         .unwrap_or_default();
     let now = crate::util::now();
-    let level = headline(observed.iter().map(|o| o.level));
-    let unsafe_files = observed.iter().filter(|o| o.level != Level::Safe).count();
+    let settings = settings(g);
+    let historical_levels: Vec<Level> = retained
+        .iter()
+        .map(|s| version_level(s, Span::hours(1), GRACE, &settings, Time(now)))
+        .collect();
+    let level = headline(
+        observed
+            .iter()
+            .map(|o| o.level)
+            .chain(historical_levels.iter().copied()),
+    );
+    let unsafe_files = observed.iter().filter(|o| o.level != Level::Safe).count()
+        + historical_levels
+            .iter()
+            .filter(|l| **l != Level::Safe)
+            .count();
     let files = Arg::Number(i64::try_from(unsafe_files).unwrap_or(i64::MAX));
     let last = g.lock().heard.values().max().copied().unwrap_or(now);
     let full = disk_full(g);
@@ -239,7 +261,12 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
     lost.extend(crate::report::lost(g));
     let peers = crate::report::problems(g);
     let held = crate::held_file::read(g).held().len();
-    let level = if full || held > 0 || !lost.is_empty() || shortfall.is_some() || !peers.is_empty()
+    let level = if history_unreadable
+        || full
+        || held > 0
+        || !lost.is_empty()
+        || shortfall.is_some()
+        || !peers.is_empty()
     {
         Level::NeedsYou
     } else {
@@ -284,7 +311,7 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
             Level::NotSafeYet | Level::NeedsYou => msg("headline-not-safe", &[("files", files)]),
         },
     };
-    let worst = worst(observed.iter().map(|o| &o.state));
+    let worst = worst(observed.iter().map(|o| &o.state).chain(retained.iter()));
     let asked = !prefix.is_empty();
     let versions = observed
         .iter()

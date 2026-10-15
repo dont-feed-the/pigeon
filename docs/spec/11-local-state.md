@@ -100,7 +100,7 @@ repository, and git never shares it (ADR 0036).
 | `stage/` | install step 2; keeping a folder ([08 §8.5](08-custody-loops.md)) | new files before they enter the folder | yes: unreferenced files are deleted at start |
 | `held.json` | capture holds a mass deletion; `pigeon held ID` ([07 §7.4](07-capture-and-install.md)) | the held batches (ID, why, since, paths), the paths released for deletion, the last ID given | no: the person's pending choices |
 | `leaving` | `pigeon leave` ([09 §9.7](09-network-and-joining.md)) | the roster commit removing this device, and the peers that refused it before | no: removed with the repository once a peer has the commit |
-| `recovered/` | install steps 6 and 9 | moved-aside content that was not pigeon's, until captured as a recovered version | no ([07 §7.6](07-capture-and-install.md)) |
+| `recovered/` | install steps 6 and 9 | changed asides and capture manifests; retained for manual recovery after capture | no ([07 §7.6](07-capture-and-install.md)) |
 | `RECOVERY.txt` (custodians, in the repository directory) | the roster changes | the group's name, the other custodians, and the git and git-annex commands that read the files without pigeon ([09 §9.9](09-network-and-joining.md), ADR 0047) | yes: written again from the roster |
 
 The first build (13 §13.12) also keeps there `peers.json` (the addresses
@@ -111,7 +111,7 @@ the filter supplies, 09 §9.3), `freed.json` (folders freed here) and
 
 **`install.ndjson`**: one JSON object per line, appended and fsynced before
 the step it announces (`journal_records_round_trip`). Fields: `format`,
-`seq`, `op` (`begin`, `proved`, `done`, `released`: the steps of
+`seq`, `op` (`begin`, `proved`, `done`, `kept`, `preserved`, `released`: the steps of
 [07 §7.5](07-capture-and-install.md)); on `begin` also `path`, `mode`,
 `old_key`, `old` (the index entry's `(dev, ino, size, mtime ns)` that step 6
 checks), `new_key`, `tmp`, `tmp_ino`, `aside`. Recovery replays every
@@ -119,12 +119,24 @@ checks), `new_key`, `tmp`, `tmp_ino`, `aside`. Recovery replays every
 and its aside is released (`journal` laws). A torn last line is ignored;
 any other malformed line stops install with a Problem.
 
+`kept` records the start of the ten-minute keep period as `at` (Unix
+seconds); older ended entries without it start a full period at recovery.
+`preserved` journals a changed aside's destination `path` before moving it
+without replacement. Its recovered file and a same-stem `.json` manifest
+(original path, captured name, key and signed commit) remain available for
+manual recovery. The entry is released only after its content has a signed
+accepted or proposal reference. Replaying a completed capture reuses that
+reference. These records refine the existing journal **[no ADR]**.
+
 **`capture.json`** (`pigeond::capture_file`, `capture_intents_round_trip`)
 **[no ADR]**: `format`, `head` (`main` when the batch began) and `before`,
 each path's index entry (`mode`, `oid`) or `null`. A capture that finds it
 puts those entries back before its scan, so the batch is redone from the
 files, which pigeon never changed; S9's random schedules found the need,
 as a crash before the ref moved left the saves staged and out of `main`.
+An unreadable intent also blocks install, free, keep and re-thinning. A
+round recovers it before free/keep; a capture failure blocks later install
+in that round, even when the staged index calls the save clean.
 
 **`conflicts.json`** (`pigeond::conflicts_file`, written so far for
 `concurrent` and `suggestion` divergences; `recovered` comes with kept

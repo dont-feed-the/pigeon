@@ -139,6 +139,22 @@ custody copies alone. Nor are remote drops (pigeon's filter refuses `REMOVE`,
 E13), or the forced drops of purge and Drop, which skip the check (purge has
 the `Purge` model).
 
+**Storage implementation boundaries** (07 §7.3, 07 §7.5, 08 §8.3).
+`CaptureTransaction` separates staging, commit failure and rollback: a clean
+staged index is not evidence of a committed save. Its unguarded variant
+violates `CapturedBeforeDisplacement`. `RecoveredNames` runs two recovery
+batches with journal sequence reuse: a replacing destination violates
+`EverySaveKept`. `Retention` distinguishes historical references from the
+current tree; its current-only enumerator violates `Complete`.
+
+`StorageTrace` checks observations of the real filesystem driver at those
+boundaries and at aside release. `scripts/check-storage-traces` requires
+all four actions, rejects a corrupted observation of each, and fails on
+missing logs or fields. These are boundary predicates, not a complete
+transition-by-transition refinement of `CaptureInstall`; its full daemon
+trace remains unregistered. Increasing that model's bounds alone would not
+cover staged capture failures or the physical recovery-name namespace.
+
 **`CaptureInstall`** ([07 §7.7](../../docs/spec/07-capture-and-install.md)) models one path on
 one laptop. Every write makes a new content, so a content names the save that
 made it. A file's stat is its inode and mtime, and a write in the same clock

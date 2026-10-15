@@ -113,6 +113,12 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: tests, laws and the git-annex contract tests (13 §13.6)
         run: cargo test --workspace --locked --no-fail-fast
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: real storage boundaries pass TLC and every corrupted observation fails
+        run: python3 scripts/check-storage-traces
       - name: the format fixtures, golden and next-format files (ADR 0048, 13 §13.6)
         run: cargo test -p pigeond --test formats --locked
       - name: the lab build's seams (13 §13.12)

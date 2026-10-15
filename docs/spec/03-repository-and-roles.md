@@ -161,7 +161,7 @@ pigeon's mistakes; it is not a sandbox.
 | `git cat-file --batch`, `rev-list`, `for-each-ref`, `status --porcelain=v2 -z -uall --ignored=traditional` | reading commits, trees, refs and changes |
 | `commit-tree -S`, `update-ref`, `merge-tree --write-tree`, `read-tree`, `update-index`, `write-tree` | commits and merges without touching the working tree |
 | `git fetch <remote>`, `sparse-checkout` | history; kept folders |
-| `git annex add --no-check-gitignore`, `calckey`, `reinject` | capture of regular files only ([07 §7.9](07-capture-and-install.md)) |
+| `git annex add --no-check-gitignore`, `calckey`, `reinject`, `setkey` | capture of regular files only ([07 §7.9](07-capture-and-install.md)); `setkey` imports an immutable snapshot of a kept aside, never the person's live file |
 | `git annex get --key`, `copy --to <custodian> --key` | transfers, in pigeon's order (ADR 0037, [08 §8.6](08-custody-loops.md)) |
 | `git annex drop --key --numcopies K --mincopies K` (local, verified; explicit counts outweigh `.gitattributes` and the branch), `drop --key --force` (purge and Drop only) | freeing space, rebalancing, purge |
 | `git annex whereis`, `find`, `info`, `matchexpression --key`, `fsck --incremental --time-limit` | observations, wanted keys, scrubs |

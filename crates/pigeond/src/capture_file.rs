@@ -54,6 +54,12 @@ fn file(g: &Group) -> std::path::PathBuf {
     g.root().join("capture.json")
 }
 
+/// Whether a batch still owns the index. An unreadable intent is pending
+/// too: callers must not mistake a staged save for an installed version.
+pub fn pending(g: &Group) -> bool {
+    file(g).try_exists().unwrap_or(true)
+}
+
 /// The group's pending intent, if a batch did not finish.
 pub fn read(g: &Group) -> Option<Intent> {
     parse(&std::fs::read_to_string(file(g)).ok()?)

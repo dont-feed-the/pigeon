@@ -115,3 +115,11 @@ Authority_tip	Authority	fast	violation:RemovedSilenced
 Authority_tipquiet	Authority	fast	violation:ConvergedWhenQuiet
 Authority_tiplive	Authority	fast	violation:temporal
 Authority_contentonly	Authority	fast	violation:RemovalRevokesAdded
+CaptureTransaction_safe	CaptureTransaction	fast	pass
+CaptureTransaction_unguarded	CaptureTransaction	fast	violation:CapturedBeforeDisplacement
+RecoveredNames_safe	RecoveredNames	fast	pass
+RecoveredNames_reused	RecoveredNames	fast	violation:EverySaveKept
+Retention_safe	Retention	fast	pass
+Retention_current	Retention	fast	violation:Complete
+StorageTrace_good	StorageTrace	fast	trace:accepted
+StorageTrace_bad	StorageTrace	fast	trace:rejected:1

@@ -143,7 +143,11 @@ pub fn set_target(g: &Group, prefix: &str, freed: bool) {
 }
 
 pub(crate) fn record(g: &Group, r: &Record) -> Result<(), String> {
-    append(&journal(g), r).map_err(|e| e.to_string())
+    append(&journal(g), r).map_err(|e| e.to_string())?;
+    if let Record::End(seq, _) = r {
+        append(&journal(g), &Record::Kept(*seq, crate::util::now())).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 pub(crate) fn is_old(aside: &Path, key: Option<&str>) -> bool {
@@ -183,7 +187,7 @@ fn hide(g: &Group, wt: &Path, seq: u64, path: &str, key: &str, t: &Tracer) -> Re
     let clear = lstat(&aside)
         .ok()
         .flatten()
-        .is_some_and(|a| pigeon_sys::writers::scan(a.id).is_clear());
+        .is_some_and(|a| crate::asides::writers_clear(&a));
     t.event(Act::Scan, &[("path", path)]);
     if !clear || stat_of(&aside) != Some(st) || !is_old(&aside, Some(key)) {
         let end = match rename_noreplace(&aside, &file).map_err(|e| e.to_string())? {
@@ -201,6 +205,9 @@ fn hide(g: &Group, wt: &Path, seq: u64, path: &str, key: &str, t: &Tracer) -> Re
 
 /// Frees the folder `prefix` while it is a target (`pigeon free` records it).
 pub async fn free(g: &Group, me: &str, prefix: &str, t: &Tracer) -> Result<Freed, String> {
+    if crate::capture_file::pending(g) || unsettled(g) {
+        return Err("capture-or-install-pending".to_owned());
+    }
     let wt = g.worktree.clone().ok_or("not-in-group")?;
     let observed = crate::status::observe(g, me, prefix).await;
     let mut hidden = hidden_paths(g).await;
@@ -240,9 +247,6 @@ pub async fn free(g: &Group, me: &str, prefix: &str, t: &Tracer) -> Result<Freed
             t.event(Act::Index, &[("path", p)]);
             record(g, &Record::End(*s, End::Done))?;
             t.event(Act::Done, &[("path", p)]);
-            let _ = std::fs::remove_file(g.files.aside(*s));
-            record(g, &Record::Released(*s))?;
-            t.event(Act::Release, &[("path", p)]);
         }
     }
     done.hidden = observed.iter().filter(|o| hidden.contains(&o.path)).count();
@@ -316,6 +320,9 @@ pub(crate) fn truncate_if_done(g: &Group) {
 /// many came back. A key that cannot be received yet waits for the next
 /// round, and the folder stays hidden meanwhile (08 §8.5, keep step 1).
 pub async fn keep(g: &Group, t: &Tracer) -> Result<usize, String> {
+    if crate::capture_file::pending(g) || unsettled(g) {
+        return Err("capture-or-install-pending".to_owned());
+    }
     let wt = g.worktree.clone().ok_or("not-in-group")?;
     let freed = targets(g);
     let mut hidden = hidden_paths(g).await;
@@ -366,9 +373,11 @@ pub async fn keep(g: &Group, t: &Tracer) -> Result<usize, String> {
         };
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(&stage, std::fs::Permissions::from_mode(mode));
-        if let Ok(f) = std::fs::File::open(&stage) {
-            let _ = f.sync_all();
-        }
+        std::fs::File::open(&stage)
+            .and_then(|f| f.sync_all())
+            .map_err(|e| e.to_string())?;
+        pigeon_sys::fs::fsync_dir(stage.parent().ok_or("no stage parent")?)
+            .map_err(|e| e.to_string())?;
         record(
             g,
             &Record::Begin(Begin {
@@ -493,19 +502,7 @@ pub async fn recover(g: &Group, t: &Tracer) {
             }
         }
     }
-    let records = read(&journal(g));
-    for (seq, e) in entries(&records) {
-        if e.released || e.end.is_none() {
-            continue;
-        }
-        let aside = PathBuf::from(&e.begin.aside);
-        if e.end == Some(End::Recovered) && aside.exists() {
-            let _ = std::fs::rename(&aside, g.files.recovered().join(seq.to_string()));
-        } else {
-            let _ = std::fs::remove_file(&aside);
-        }
-        let _ = record(g, &Record::Released(seq));
-    }
+    crate::asides::release(g, t).await;
     let _ = g.git.run(&["update-index", "-q", "--refresh"]).await;
     truncate_if_done(g);
 }
