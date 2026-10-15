@@ -273,10 +273,12 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
     };
     lost.extend(crate::report::lost(g));
     let peers = crate::report::problems(g);
-    let held = crate::held_file::read(g).held().len();
+    let held_table = crate::held_file::read(g);
+    let (held, held_names) = (held_table.held().len(), held_table.names().len());
     let level = if history_unreadable
         || full
         || held > 0
+        || held_names > 0
         || !lost.is_empty()
         || shortfall.is_some()
         || !peers.is_empty()
@@ -293,6 +295,13 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
             &[(
                 "files",
                 Arg::Number(i64::try_from(held).unwrap_or(i64::MAX)),
+            )],
+        ),
+        _ if held_names > 0 => msg(
+            "headline-held-names",
+            &[(
+                "files",
+                Arg::Number(i64::try_from(held_names).unwrap_or(i64::MAX)),
             )],
         ),
         (_, Some(s)) => msg(

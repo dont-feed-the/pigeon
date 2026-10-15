@@ -211,6 +211,7 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
     let (mut add, mut remove, mut not_shared) = (Vec::new(), Vec::new(), Vec::new());
     let (mut behind, mut pending, mut gone) = (false, Vec::new(), Vec::new());
     let mut soon = BTreeSet::new();
+    let mut fresh = BTreeSet::new();
     for (x, y, path) in status(g).await?.into_iter().filter_map(letters) {
         if is_pigeon_path(&path) {
             continue;
@@ -258,12 +259,25 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
                     if x == '.' && soon_after_install(g, &path, st.mtime_ns) {
                         soon.insert(path.clone());
                     }
+                    if x == '?' {
+                        fresh.insert(path.clone());
+                    }
                     add.push(path);
                 }
             }
         }
     }
     g.lock().not_shared = not_shared;
+    if (!fresh.is_empty() || !held.names().is_empty())
+        && main.is_none()
+        && let Some(h) = &head
+    {
+        main = Some(g.git.tree(h).await?);
+    }
+    let now_s = crate::util::now();
+    if crate::held_names::sift(&worktree, &mut held, main.as_ref(), &mut add, &fresh, now_s) {
+        save_held(g, &held);
+    }
     // A held path whose file is back is held no more (07 §7.4).
     let back: BTreeSet<String> = waiting
         .iter()

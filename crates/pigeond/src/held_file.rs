@@ -1,9 +1,10 @@
-//! `.git/pigeon/held.json`, the held mass deletions (07 §7.4, 11 §11.3):
-//! each batch capture held, with why and since when, and the paths the
-//! person released with *Delete them for everyone*, which the next capture
-//! deletes whatever their number. Written whole, atomically. A held path
-//! whose file is back, or that `main` no longer has, leaves its batch;
-//! an empty batch goes.
+//! `.git/pigeon/held.json`, the held changes (07 §7.4, 11 §11.3): each
+//! batch capture held, with why and since when, and the paths the person
+//! released with *Delete them for everyone*, which the next capture
+//! deletes whatever their number. Written whole, atomically. A held
+//! deletion whose file is back, or that `main` no longer has, leaves its
+//! batch; an empty batch goes. A new path with a non-portable name is a
+//! batch of its own, with the rename suggested (05 §5.4).
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -36,7 +37,7 @@ pub struct Table {
 pub struct Batch {
     /// Its ID, a number this repository never gave before.
     pub id: String,
-    /// `mass-deletion` or `top-folder`.
+    /// `mass-deletion`, `top-folder` or `name`.
     pub why: String,
     /// The removed top-level folder, for `top-folder`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -45,19 +46,38 @@ pub struct Batch {
     pub since: i64,
     /// Its paths.
     pub paths: BTreeSet<String>,
+    /// For `name`, the path's prefix at fault.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
+    /// For `name`, the portable name suggested for `from`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to: Option<String>,
 }
 
+/// The `why` of a non-portable name.
+pub const NAME: &str = "name";
+
 impl Table {
-    /// Every held path.
+    /// Every held deletion.
     pub fn held(&self) -> BTreeSet<String> {
         self.batches
             .iter()
+            .filter(|b| b.why != NAME)
             .flat_map(|b| b.paths.iter().cloned())
             .collect()
     }
 
-    /// Holds `paths`, for `why`, under a new ID.
-    pub fn hold(&mut self, why: &pigeon_core::held::Why, paths: BTreeSet<String>, now: i64) {
+    /// Every new path held back for its name.
+    pub fn names(&self) -> BTreeSet<String> {
+        self.batches
+            .iter()
+            .filter(|b| b.why == NAME)
+            .flat_map(|b| b.paths.iter().cloned())
+            .collect()
+    }
+
+    /// A new ID.
+    fn next(&mut self) -> String {
         let next = self
             .batches
             .iter()
@@ -67,16 +87,38 @@ impl Table {
             .max(self.last)
             + 1;
         self.last = next;
+        next.to_string()
+    }
+
+    /// Holds `paths`, for `why`, under a new ID.
+    pub fn hold(&mut self, why: &pigeon_core::held::Why, paths: BTreeSet<String>, now: i64) {
         let (why, folder) = match why {
             pigeon_core::held::Why::Mass => ("mass-deletion", None),
             pigeon_core::held::Why::TopFolder(f) => ("top-folder", Some(f.clone())),
         };
+        let id = self.next();
         self.batches.push(Batch {
-            id: next.to_string(),
+            id,
             why: why.to_owned(),
             folder,
             since: now,
             paths,
+            from: None,
+            to: None,
+        });
+    }
+
+    /// Holds back the new `path` for its name, under a new ID.
+    pub fn hold_name(&mut self, path: &str, h: pigeon_core::names::HoldBack, now: i64) {
+        let id = self.next();
+        self.batches.push(Batch {
+            id,
+            why: NAME.to_owned(),
+            folder: None,
+            since: now,
+            paths: BTreeSet::from([path.to_owned()]),
+            from: Some(h.from),
+            to: h.to,
         });
     }
 

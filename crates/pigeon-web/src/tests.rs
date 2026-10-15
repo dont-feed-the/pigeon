@@ -91,20 +91,41 @@ impl Backend for Fixed {
                 vec![said("invitation-cancelled", "id", invitation)]
             }
             pigeon_proto::Request::Held => vec![Response::Held {
-                held: vec![pigeon_proto::api::HeldEntry {
-                    id: "h1".into(),
-                    reason: Message {
-                        id: "held-top-folder".into(),
-                        args: [(
-                            "folder".to_owned(),
-                            pigeon_proto::Arg::Text("Photos".into()),
-                        )]
-                        .into(),
+                held: vec![
+                    pigeon_proto::api::HeldEntry {
+                        id: "h1".into(),
+                        reason: Message {
+                            id: "held-top-folder".into(),
+                            args: [(
+                                "folder".to_owned(),
+                                pigeon_proto::Arg::Text("Photos".into()),
+                            )]
+                            .into(),
+                        },
+                        files: 3,
+                        since: "2026-10-15T10:00:00Z".into(),
+                        paths: vec!["Photos/a.jpg".into()],
+                        suggested: None,
                     },
-                    files: 3,
-                    since: "2026-10-15T10:00:00Z".into(),
-                    paths: vec!["Photos/a.jpg".into()],
-                }],
+                    pigeon_proto::api::HeldEntry {
+                        id: "h2".into(),
+                        reason: Message {
+                            id: "held-name".into(),
+                            args: [
+                                ("path".to_owned(), pigeon_proto::Arg::Text("a:b.txt".into())),
+                                (
+                                    "suggested".to_owned(),
+                                    pigeon_proto::Arg::Text("a-b.txt".into()),
+                                ),
+                            ]
+                            .into(),
+                        },
+                        files: 1,
+                        since: "2026-10-15T10:00:00Z".into(),
+                        paths: vec!["a:b.txt".into()],
+                        suggested: Some("a-b.txt".into()),
+                    },
+                ],
             }],
             pigeon_proto::Request::ReleaseHeld { batch, choice } => {
                 vec![said("held-shared", "files", format!("{batch}/{choice:?}"))]
@@ -478,7 +499,7 @@ async fn a_held_deletion_is_shared_once_confirmed_or_brought_back() {
             .unwrap(),
     )
     .await;
-    assert!(home.contains("Deletions waiting for you"), "{home}");
+    assert!(home.contains("Changes waiting for you"), "{home}");
     assert!(home.contains("the folder Photos removed"), "{home}");
     let form = form_of(&home);
     let forged = app
@@ -523,6 +544,32 @@ async fn a_held_deletion_is_shared_once_confirmed_or_brought_back() {
         .unwrap();
     let back = body(back).await;
     assert!(back.contains("h1/BringBack"), "{back}");
+}
+
+#[tokio::test]
+async fn a_held_name_is_renamed_to_the_suggestion() {
+    let w = web();
+    let app = w.router();
+    let cookie = logged_in(&app, &w).await;
+    let home = body(
+        app.clone()
+            .oneshot(get("/", HOST, Some(&cookie)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert!(home.contains("Rename to a-b.txt"), "{home}");
+    let form = form_of(&home);
+    let done = app
+        .oneshot(post(
+            "/held/rename",
+            &cookie,
+            &format!("form={form}&batch=h2"),
+        ))
+        .await
+        .unwrap();
+    let done = body(done).await;
+    assert!(done.contains("h2/Rename"), "{done}");
 }
 
 #[tokio::test]

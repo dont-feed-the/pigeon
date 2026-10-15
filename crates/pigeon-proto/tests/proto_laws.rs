@@ -98,10 +98,10 @@ fn request(tc: &TestCase) -> Request {
         },
         37 => Request::ReleaseHeld {
             batch: text(tc),
-            choice: if flag(tc) {
-                HeldChoice::Share
-            } else {
-                HeldChoice::BringBack
+            choice: match tc.draw(gs::integers::<u8>().max_value(2)) {
+                0 => HeldChoice::Share,
+                1 => HeldChoice::BringBack,
+                _ => HeldChoice::Rename,
             },
         },
         28 => Request::Files { folder: text(tc) },
@@ -258,6 +258,7 @@ fn response(tc: &TestCase) -> Response {
                     paths: (0..tc.draw(gs::integers::<u8>().max_value(2)))
                         .map(|_| text(tc))
                         .collect(),
+                    suggested: flag(tc).then(|| text(tc)),
                 })
                 .collect(),
         },

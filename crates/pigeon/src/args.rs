@@ -75,7 +75,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("people", "cmd-people"),
     ("leave", "cmd-leave"),
     ("refound [REPOSITORY]", "cmd-refound"),
-    ("held [ID --share | --bring-back]", "cmd-held"),
+    ("held [ID --share | --bring-back | --rename]", "cmd-held"),
     ("deleted [PATH]", "cmd-deleted"),
     (
         "export --to DIR [--at DATE | COMMIT] [--deleted] [REPOSITORY…]",
@@ -302,6 +302,10 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
                 choice: pigeon_proto::api::HeldChoice::BringBack,
             })
         }
+        "held" if fits(1, 1, &["rename"]) && s.flag("rename") => send(Request::ReleaseHeld {
+            batch: w.first()?.clone(),
+            choice: pigeon_proto::api::HeldChoice::Rename,
+        }),
         "suggestions" if fits(0, 0, &[]) => send(Request::Proposals),
         "accept" if fits(1, 1, &["override"]) => send(Request::Accept {
             proposal: w.first()?.clone(),

@@ -156,6 +156,7 @@ impl Web {
             .route("/resume", post(settings::resume))
             .route("/held/share", post(held::share))
             .route("/held/bring-back", post(held::bring_back))
+            .route("/held/rename", post(held::rename))
             .route("/leave", post(leave::leave))
             .route("/files/view", post(view::view))
             .route("/suggestions/accept", post(actions::accept))

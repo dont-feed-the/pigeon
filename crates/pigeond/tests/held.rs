@@ -2,6 +2,9 @@
 //! at once; the deletion is held, `main` keeps them and the headline asks
 //! the person. *Bring them back* writes them again; deleted again and
 //! *shared*, they leave `main`. Removing a top-level folder is held too.
+//! A new file with a non-portable name, or respelling a name of `main`, is
+//! held back with a suggested name (05 §5.4); *Rename* or the person's own
+//! rename lets capture add it.
 //!
 //! Needs what `tests/slice.rs` needs: git-annex, and `pigeon` and
 //! `git-annex-p2p-iroh` built next to `pigeond`.
@@ -143,5 +146,73 @@ fn a_mass_deletion_waits_for_the_person() {
             .iter()
             .any(|r| matches!(r, Response::Problem(p) if p.code == "held-unknown")),
         "{unknown:?}"
+    );
+}
+
+fn problem(r: &[Response], code: &str) -> bool {
+    r.iter()
+        .any(|r| matches!(r, Response::Problem(p) if p.code == code))
+}
+
+#[test]
+fn a_non_portable_name_waits_for_a_rename() {
+    let _one = SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some((_tmp, root, sockets)) = dirs() else {
+        return;
+    };
+    let s = sockets.path();
+    let (a1, c1) = (start(&root, s, "a1"), start(&root, s, "c1"));
+    let all = [&a1, &c1];
+    let fa = root.join("ana");
+    std::fs::create_dir_all(&fa).unwrap();
+    std::fs::write(fa.join("ok.txt"), "ok\n").unwrap();
+    let f = fa.to_str().unwrap();
+    let created = pigeon(&a1, &["create", "Family", f, "--k", "1", "--name", "ana-1"]);
+    assert!(said(&created, "created", "group").is_some(), "{created:?}");
+    join(&a1, &c1, &all);
+    until(&a1, State::Protected, &all);
+
+    std::fs::write(fa.join("a:b.txt"), "colon\n").unwrap();
+    std::fs::write(fa.join("Ok.TXT"), "respelt\n").unwrap();
+    eventually_within(
+        60,
+        || held(&a1).len() == 2,
+        "the names were never held back",
+        &all,
+    );
+    let names = held(&a1);
+    let suggested: Vec<Option<&str>> = names.iter().map(|h| h.suggested.as_deref()).collect();
+    assert!(suggested.contains(&Some("a-b.txt")), "{names:?}");
+    assert!(suggested.contains(&Some("Ok 2.TXT")), "{names:?}");
+    assert!(
+        names.iter().all(|h| h.reason.id == "held-name"),
+        "{names:?}"
+    );
+    assert_eq!(in_main(&fa), ["ok.txt"]);
+    let st = status(&a1);
+    assert_eq!(st.level, Level::NeedsYou);
+    assert_eq!(st.headline.id, "headline-held-names");
+
+    let colon = names.iter().find(|h| h.paths == ["a:b.txt"]).unwrap();
+    let refused = pigeon(&a1, &["held", &colon.id, "--share", "--yes"]);
+    assert!(problem(&refused, "held-choice"), "{refused:?}");
+    let renamed = pigeon(&a1, &["held", &colon.id, "--rename"]);
+    assert!(
+        said(&renamed, "held-renamed", "to").is_some(),
+        "{renamed:?}"
+    );
+    std::fs::rename(fa.join("Ok.TXT"), fa.join("other.txt")).unwrap();
+    eventually_within(
+        60,
+        || in_main(&fa) == ["a-b.txt", "ok.txt", "other.txt"],
+        "the renamed files never reached main",
+        &all,
+    );
+    eventually_within(60, || held(&a1).is_empty(), "the names stayed held", &all);
+    assert_eq!(
+        std::fs::read_to_string(fa.join("a-b.txt")).unwrap(),
+        "colon\n"
     );
 }

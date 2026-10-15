@@ -327,3 +327,65 @@ pub fn suggest(name: &str, siblings: &[&str]) -> String {
     }
     out.nfc().collect()
 }
+
+/// Why capture holds a new path back (05 §5.4), and how to rename it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HoldBack {
+    /// The path's first prefix at fault: a name that is not portable, or
+    /// another spelling of a name `main` has.
+    pub from: String,
+    /// The portable name suggested for `from`, beside it; none when only the
+    /// path's length is at fault.
+    pub to: Option<String>,
+}
+
+/// Records every prefix of `path` in `taken`, folded name to spelling, the
+/// first spelling winning.
+pub fn take_prefixes(taken: &mut BTreeMap<String, String>, path: &str) {
+    let mut end = 0;
+    for (i, part) in path.split('/').enumerate() {
+        end += part.len() + usize::from(i > 0);
+        taken
+            .entry(fold(&path[..end]))
+            .or_insert_with(|| path[..end].to_owned());
+    }
+}
+
+/// Whether capture holds back the new `path`, given the spellings `taken`
+/// already has (see [`take_prefixes`]) and the names in each folder
+/// (`siblings`, for a parent such as `a/b/`, or `""` at the root).
+pub fn hold_back(
+    path: &str,
+    taken: &BTreeMap<String, String>,
+    siblings: impl Fn(&str) -> Vec<String>,
+) -> Option<HoldBack> {
+    let mut end = 0;
+    for (i, part) in path.split('/').enumerate() {
+        let start = end + usize::from(i > 0);
+        end = start + part.len();
+        let prefix = &path[..end];
+        let own = i == 0 && fold(part) == ".pigeon";
+        let other = taken.get(&fold(prefix)).filter(|s| s.as_str() != prefix);
+        if component(part).is_err() || own || other.is_some() {
+            let parent = &path[..start];
+            let mut names = siblings(parent);
+            names.retain(|n| n != part);
+            names.extend(other.and_then(|s| s.rsplit('/').next()).map(str::to_owned));
+            let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+            let mut name = suggest(part, &refs);
+            if own {
+                name.insert(0, '_');
+            }
+            let to = format!("{parent}{name}");
+            let whole = format!("{to}{}", &path[end..]);
+            return Some(HoldBack {
+                from: prefix.to_owned(),
+                to: (whole.len() <= MAX_PATH).then_some(to),
+            });
+        }
+    }
+    (path.len() > MAX_PATH).then(|| HoldBack {
+        from: path.to_owned(),
+        to: None,
+    })
+}

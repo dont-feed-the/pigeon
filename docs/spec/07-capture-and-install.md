@@ -77,8 +77,14 @@ folder gone from the disk. They wait in `.git/pigeon/held.json`
 lists the batches; `held ID --share` releases one, deleted at the next
 capture whatever its size; `held ID --bring-back` takes its paths out of
 the index, so that install writes `main`'s versions again. A held file
-that comes back on its own leaves its batch. Not coded: a package counting
-as one, held names and links, and the web's buttons.
+that comes back on its own leaves its batch. Held names
+(`pigeon-core::names::hold_back`, laws in `tests/hold_back.rs`;
+`pigeond/src/held_names.rs`): a new path whose name is not portable, or
+that respells a name of `main` or of another new path, is a batch of its
+own with the suggested name; `held ID --rename` renames its prefix at
+fault on disk, never over a file, and the next capture adds it; a held
+path the person renamed or removed leaves its batch. The web shows each
+batch's buttons. Not coded: a package counting as one, and held links.
 
 ## 7.5 Install
 

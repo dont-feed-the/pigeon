@@ -171,9 +171,9 @@ pub enum Request {
         /// The computer's name in the roster.
         name: String,
     },
-    /// `pigeon held`: the held mass deletions (07 §7.4).
+    /// `pigeon held`: the held mass deletions and names (07 §7.4).
     Held,
-    /// `pigeon held ID --share | --bring-back`.
+    /// `pigeon held ID --share | --bring-back | --rename`.
     ReleaseHeld {
         /// The batch's ID, from `Held` (`id` is the envelope's).
         batch: String,
@@ -604,6 +604,10 @@ pub struct HeldEntry {
     pub since: String,
     /// Its first paths, at most ten.
     pub paths: Vec<String>,
+    /// For a non-portable name, the name pigeon suggests; the choice is
+    /// then `Rename`, or the person renames it themselves.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suggested: Option<String>,
 }
 
 /// What the person does with a held batch (07 §7.4).
@@ -614,6 +618,8 @@ pub enum HeldChoice {
     Share,
     /// *Bring them back*.
     BringBack,
+    /// *Rename to the suggested name*, for a non-portable name (05 §5.4).
+    Rename,
 }
 
 /// A resolution of a divergence (07 §7.6, ux.md §8.8).

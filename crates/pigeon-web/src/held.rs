@@ -1,6 +1,7 @@
-//! Held deletions on Home (07 §7.4, ux.md §6.1): each batch pigeon holds,
+//! Held changes on Home (07 §7.4, ux.md §6.1): each batch pigeon holds,
 //! with *Delete for everyone*, asked again first, and *Bring them back*,
-//! which are `pigeon held ID --share` and `--bring-back`.
+//! which are `pigeon held ID --share` and `--bring-back`; a held name has
+//! *Rename to …* instead, `pigeon held ID --rename` (05 §5.4).
 
 use std::sync::Arc;
 
@@ -34,6 +35,22 @@ pub async fn section(web: &Web, r: &Renderer, form: &str) -> Markup {
 }
 
 fn batch(r: &Renderer, h: &HeldEntry, form: &str) -> Markup {
+    if h.reason.id.starts_with("held-name") {
+        return html! {
+            article {
+                p { (r.held(h)) }
+                @if let Some(s) = &h.suggested {
+                    form method="post" action="/held/rename" {
+                        input type="hidden" name="form" value=(form);
+                        input type="hidden" name="batch" value=(h.id);
+                        button type="submit" {
+                            (r.catalogue().format(&Message::new("web-held-rename").arg("suggested", s.as_str())))
+                        }
+                    }
+                }
+            }
+        };
+    }
     html! {
         article {
             p { (r.held(h)) }
@@ -101,6 +118,18 @@ pub async fn bring_back(
         return refused;
     }
     release(&web, f.batch, HeldChoice::BringBack).await
+}
+
+/// *Rename to …*: `pigeon held ID --rename`.
+pub async fn rename(
+    State(web): State<Arc<Web>>,
+    Extension(token): Extension<FormToken>,
+    Form(f): Form<HeldForm>,
+) -> Response {
+    if let Some(refused) = expired(&web, &token, &f.form) {
+        return refused;
+    }
+    release(&web, f.batch, HeldChoice::Rename).await
 }
 
 async fn release(web: &Web, batch: String, choice: HeldChoice) -> Response {
