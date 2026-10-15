@@ -61,9 +61,10 @@ pub async fn files(g: &Group, me: &str, prefix: &str) -> Response {
     }
 }
 
-/// The files deleted from `main`, newest deletion first: those its last
-/// 1000 commits delete and it does not hold again.
-pub async fn deleted(g: &Group) -> Response {
+/// The files deleted from `main` under `prefix` (all with ""), newest
+/// deletion first: those its last 1000 commits delete and it does not hold
+/// again.
+pub async fn deleted(g: &Group, prefix: &str) -> Response {
     let commits = g
         .git
         .run(&["rev-list", "--max-count=1000", "refs/heads/main"])
@@ -103,7 +104,8 @@ pub async fn deleted(g: &Group) -> Response {
             .unwrap_or(0);
         for path in lines.map(str::trim).filter(|p| !p.is_empty()) {
             let hidden = path.starts_with(".pigeon/") || path == ".gitattributes";
-            if !hidden && !now.contains(path) && seen.insert(path.to_owned()) {
+            let wanted = crate::evict::under(path, prefix);
+            if !hidden && wanted && !now.contains(path) && seen.insert(path.to_owned()) {
                 files.push(DeletedFile {
                     path: path.to_owned(),
                     deleted_at: crate::util::rfc3339(at),

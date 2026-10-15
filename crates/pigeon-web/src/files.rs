@@ -184,7 +184,7 @@ pub async fn deleted_page(
     let mut root = String::new();
     let mut rows = Vec::new();
     let mut other = Vec::new();
-    for answer in web.ask(Request::Deleted).await {
+    for answer in web.ask(Request::Deleted { path: None }).await {
         match answer {
             Response::Deleted { root: here, files } => {
                 root = here;

@@ -137,9 +137,13 @@ pub enum Request {
         /// The folder.
         folder: String,
     },
-    /// The files deleted from the group, for the web's Deleted files
-    /// (ux.md §6.2).
-    Deleted,
+    /// `pigeon deleted [PATH]`: the files deleted from the group, for the
+    /// web's Deleted files (ux.md §6.2).
+    Deleted {
+        /// Only those under this folder.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        path: Option<String>,
+    },
     /// `pigeon settings`: this computer's settings (11 §11.2).
     GetSettings,
     /// `pigeon settings KEY VALUE`: changes one setting in `config.toml`.

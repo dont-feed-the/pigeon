@@ -68,7 +68,9 @@ fn request(tc: &TestCase) -> Request {
         24 => Request::OpenWeb,
         25 => Request::Folders,
         26 => Request::GetSettings,
-        29 => Request::Deleted,
+        29 => Request::Deleted {
+            path: flag(tc).then(|| text(tc)),
+        },
         30 => Request::Pause {
             duration: maybe_text(tc),
         },

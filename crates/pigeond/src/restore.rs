@@ -1,7 +1,9 @@
-//! `pigeon restore PATH --version N` (10 §10.1, 05 §5.1): an older version
+//! `pigeon restore PATH --version N | --at TIME` (10 §10.1, 05 §5.1): an
+//! older version
 //! of a file becomes its current one, as an install (07 §7.5) that capture
 //! then records as a new version naming the old key. The newer version
-//! stays in the history.
+//! stays in the history. `--at` takes the newest version saved at or
+//! before TIME, RFC 3339 or a date (its end, UTC) **[no ADR]**.
 //!
 //! Versions are numbered from 1, the oldest, as `history` numbers them. A
 //! version this laptop no longer holds is received first. Installing copies
@@ -33,8 +35,37 @@ pub fn key_size(key: &str) -> Option<u64> {
         .and_then(|n| n.parse().ok())
 }
 
-/// `pigeon restore PATH --version N`.
-pub async fn restore(d: &Daemon, path: &Path, version: Option<u64>) -> Vec<Response> {
+/// The seconds `at` names: an RFC 3339 time, or the end of a date (UTC).
+pub fn instant(at: &str) -> Option<i64> {
+    let at = at.trim();
+    pigeon_proto::time::parse_rfc3339(at).or_else(|| {
+        (at.len() == 10)
+            .then(|| pigeon_proto::time::parse_rfc3339(&format!("{at}T23:59:59Z")))
+            .flatten()
+    })
+}
+
+/// The version number, from 1 the oldest, of the newest of `versions`
+/// (oldest first, by commit) saved at or before `t`.
+async fn number_at(g: &Group, versions: &[(String, String)], t: i64) -> Option<u64> {
+    let mut found = None;
+    for (i, (commit, _)) in versions.iter().enumerate() {
+        let raw = g.git.object(commit).await.ok()?;
+        let (secs, _) = pigeon_core::authority::author_time(&raw)?;
+        if secs <= t {
+            found = Some(i as u64 + 1);
+        }
+    }
+    found
+}
+
+/// `pigeon restore PATH --version N | --at TIME`.
+pub async fn restore(
+    d: &Daemon,
+    path: &Path,
+    version: Option<u64>,
+    at: Option<&str>,
+) -> Vec<Response> {
     let Some(g) = d.group_at(path).or_else(|| d.group_at(path.parent()?)) else {
         return vec![problem("not-in-group", &[], None)];
     };
@@ -47,6 +78,20 @@ pub async fn restore(d: &Daemon, path: &Path, version: Option<u64>) -> Vec<Respo
     }
     let mut versions = crate::history::versions(&g, &rel).await;
     versions.reverse();
+    let version = match at {
+        None => version,
+        Some(at) => {
+            let found = match instant(at) {
+                Some(t) => number_at(&g, &versions, t).await,
+                None => None,
+            };
+            if found.is_none() {
+                let args = [("path", text(&rel)), ("at", text(at))];
+                return vec![problem("restore-at", &args, None)];
+            }
+            found
+        }
+    };
     let n = version.unwrap_or(1);
     let wanted = usize::try_from(n)
         .ok()
@@ -130,5 +175,12 @@ mod tests {
         assert_eq!(super::key_size("SHA256-s7--ab"), Some(7));
         assert_eq!(super::key_size("WORM-m1-s0--x"), Some(0));
         assert_eq!(super::key_size("nonsense"), None);
+    }
+
+    #[test]
+    fn a_time_or_a_date_names_an_instant() {
+        assert_eq!(super::instant("1970-01-02"), Some(86_400 + 86_399));
+        assert_eq!(super::instant("1970-01-01T01:00:00+01:00"), Some(0));
+        assert_eq!(super::instant("yesterday"), None);
     }
 }

@@ -76,7 +76,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("leave", "cmd-leave"),
     ("refound [REPOSITORY]", "cmd-refound"),
     ("held [ID --share | --bring-back]", "cmd-held"),
-    ("deleted", "cmd-deleted"),
+    ("deleted [PATH]", "cmd-deleted"),
     (
         "export --to DIR [--at DATE | COMMIT] [--deleted] [REPOSITORY…]",
         "cmd-export",
@@ -272,7 +272,9 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
         }),
         "machines" if fits(0, 0, &[]) => send(Request::Machines),
         "people" if fits(0, 0, &[]) => send(Request::People),
-        "deleted" if fits(0, 0, &[]) => send(Request::Deleted),
+        "deleted" if fits(0, 1, &[]) => send(Request::Deleted {
+            path: w.first().map(|p| absolute(p)),
+        }),
         "open" if fits(0, 0, &[]) => send(Request::OpenWeb),
         "settings" if fits(0, 0, &[]) => send(Request::GetSettings),
         "settings" if fits(2, 2, &[]) => send(Request::SetSettings {

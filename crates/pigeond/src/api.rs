@@ -211,10 +211,17 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
                 None => vec![problem("not-in-group", &[], None)],
             }
         }
-        Request::Deleted => match d.default_group() {
-            Some(g) => vec![crate::folders::deleted(&g).await],
+        Request::Deleted { path: None } => match d.default_group() {
+            Some(g) => vec![crate::folders::deleted(&g, "").await],
             None => vec![problem("not-in-group", &[], None)],
         },
+        Request::Deleted { path: Some(path) } => {
+            let path = Path::new(&path);
+            match group_of(d, path).and_then(|g| Some((relative(&g, path)?, g))) {
+                Some((prefix, g)) => vec![crate::folders::deleted(&g, &prefix).await],
+                None => vec![problem("not-in-group", &[], None)],
+            }
+        }
         Request::GetSettings => crate::prefs::get(d),
         Request::SetSettings { key, value } => crate::prefs::set(d, &key, &value),
         Request::Pause { duration } => crate::pause::pause(d, duration.as_deref()),
@@ -234,10 +241,9 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         Request::ReleaseHeld { batch, choice } => crate::held::release(d, &batch, choice).await,
         Request::Doctor { details } => crate::history::doctor(d, details).await,
         Request::DebugBundle { .. } => crate::history::debug_bundle(d).await,
-        Request::Restore { path, version, at } if at.is_none() => {
-            crate::restore::restore(d, Path::new(&path), version).await
+        Request::Restore { path, version, at } => {
+            crate::restore::restore(d, Path::new(&path), version, at.as_deref()).await
         }
-        Request::Restore { .. } => not_in_this_build("restore"),
         Request::RecoverySheet => crate::recovery::sheet(d).await,
         Request::Recover {
             sheet,
