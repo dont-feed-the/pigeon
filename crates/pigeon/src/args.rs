@@ -86,7 +86,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ),
     ("doctor [--details]", "cmd-doctor"),
     ("debug bundle [--from NAME…]", "cmd-debug-bundle"),
-    ("update [--version TAG | --rollback]", "cmd-update"),
+    ("update [--version TAG | --main | --rollback]", "cmd-update"),
 ];
 
 /// The command line as `clap` reads it. `--help` and `--version` are
@@ -280,8 +280,10 @@ enum Command {
         repos: Vec<String>,
     },
     Update {
-        #[arg(long, value_name = "TAG", conflicts_with = "rollback")]
+        #[arg(long, value_name = "TAG", conflicts_with_all = ["main", "rollback"])]
         version: Option<String>,
+        #[arg(long, conflicts_with = "rollback")]
+        main: bool,
         #[arg(long)]
         rollback: bool,
     },
@@ -531,10 +533,15 @@ fn action(c: Command) -> Action {
             deleted,
             repos: repos.into_iter().map(Into::into).collect(),
         }),
-        Command::Update { version, rollback } => Action::Update(match (version, rollback) {
-            (Some(tag), _) => vec!["--version".into(), tag],
-            (None, true) => vec!["--rollback".into()],
-            (None, false) => Vec::new(),
+        Command::Update {
+            version,
+            main,
+            rollback,
+        } => Action::Update(match version {
+            Some(tag) => vec!["--version".into(), tag],
+            None if main => vec!["--main".into()],
+            None if rollback => vec!["--rollback".into()],
+            None => Vec::new(),
         }),
         Command::Other(words) => {
             Action::NotInThisBuild(words.into_iter().next().unwrap_or_default())

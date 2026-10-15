@@ -106,6 +106,18 @@ fn other_commands_are_not_in_this_build_and_bad_arguments_are_usage() {
         line("update --rollback --version v2.0.0").action,
         Action::Usage("update".into())
     );
+    assert_eq!(
+        line("update --main").action,
+        Action::Update(vec!["--main".into()])
+    );
+    assert_eq!(
+        line("update --main --rollback").action,
+        Action::Usage("update".into())
+    );
+    assert_eq!(
+        line("update --main --version v0.3.1").action,
+        Action::Usage("update".into())
+    );
 }
 
 #[test]
