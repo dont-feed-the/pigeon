@@ -183,9 +183,9 @@ fn main() -> ExitCode {
             ExitCode::from(1)
         }
         Action::Send(request) => {
-            if let Request::RemoveDevice { name } = request
+            if let Some(question) = question(request)
                 && !line.yes
-                && !confirm(&out, &line, name)
+                && !confirm(&out, &line, &question)
             {
                 let p = local_problem("needs-confirmation", &[]);
                 show(&out, line.json, &Response::Problem(p));
@@ -210,19 +210,33 @@ fn update(args: &[String]) -> std::io::Error {
     }
 }
 
-/// Asks before removing `name`, on a terminal only (10 §10.2).
-fn confirm(out: &Renderer, line: &args::Line, name: &str) -> bool {
+/// What a request asks before it is sent, if anything (10 §10.2).
+fn question(request: &Request) -> Option<Message> {
+    let ask = |id: &str, args: &[(&str, &str)]| Message {
+        id: id.to_owned(),
+        args: args
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), pigeon_proto::Arg::Text((*v).to_owned())))
+            .collect(),
+    };
+    match request {
+        Request::RemoveDevice { name } => Some(ask("confirm-remove-computer", &[("name", name)])),
+        Request::Leave => Some(ask("confirm-leave", &[])),
+        Request::ReleaseHeld {
+            batch,
+            choice: pigeon_proto::api::HeldChoice::Share,
+        } => Some(ask("confirm-held-share", &[("batch", batch)])),
+        _ => None,
+    }
+}
+
+/// Asks `question`, on a terminal only (10 §10.2).
+fn confirm(out: &Renderer, line: &args::Line, question: &Message) -> bool {
     use std::io::IsTerminal;
     if line.no_input || !std::io::stdin().is_terminal() {
         return false;
     }
-    let question = Message {
-        id: "confirm-remove-computer".to_owned(),
-        args: [("name".to_owned(), pigeon_proto::Arg::Text(name.to_owned()))]
-            .into_iter()
-            .collect(),
-    };
-    let _ = write!(std::io::stderr(), "{} ", out.text(&question));
+    let _ = write!(std::io::stderr(), "{} ", out.text(question));
     let mut answer = String::new();
     if std::io::stdin().read_line(&mut answer).is_err() {
         return false;

@@ -115,7 +115,7 @@ fn a_mass_deletion_waits_for_the_person() {
     );
     let h = held(&a1).remove(0);
     assert_ne!(h.id, "1", "an ID is never given twice");
-    let shared = pigeon(&a1, &["held", &h.id, "--share"]);
+    let shared = pigeon(&a1, &["held", &h.id, "--share", "--yes"]);
     assert!(
         said(&shared, "held-shared", "files").is_some(),
         "{shared:?}"
@@ -137,7 +137,7 @@ fn a_mass_deletion_waits_for_the_person() {
     );
     assert_eq!(held(&a1)[0].reason.id, "held-top-folder");
     assert_eq!(in_main(&fa), ["docs/keep.txt"]);
-    let unknown = pigeon(&a1, &["held", "99", "--share"]);
+    let unknown = pigeon(&a1, &["held", "99", "--share", "--yes"]);
     assert!(
         unknown
             .iter()

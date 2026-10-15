@@ -158,6 +158,8 @@ version-row = { $number }. { $saved } : { $state }
 waiting-row = { $path } : { $state }
 confirm-remove-computer = Retirer { $name } du groupe ? Ses copies ne compteront plus. [o/N]
 confirm-yes = oui
+confirm-leave = Retirer cet ordinateur du groupe ? Ses fichiers restent dans le dossier, mais il cesse de les partager. [o/N]
+confirm-held-share = Supprimer les fichiers de { $batch } pour tout le monde ? Ils restent dans l'historique. [o/N]
 
 ## Problèmes (10 §10.6, ADR 0023) : problem-<code>, et hint-<code> s'il y en a un
 

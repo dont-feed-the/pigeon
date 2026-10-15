@@ -54,7 +54,7 @@ fn a_laptop_leaves_once_a_peer_has_its_removal() {
     let f = fa.to_str().unwrap();
     let created = pigeon(&a1, &["create", "Family", f, "--k", "1", "--name", "ana-1"]);
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
-    let alone = pigeon(&a1, &["leave"]);
+    let alone = pigeon(&a1, &["leave", "--yes"]);
     assert_eq!(
         problem(&alone).as_deref(),
         Some("leave-last-admin"),
@@ -82,9 +82,15 @@ fn a_laptop_leaves_once_a_peer_has_its_removal() {
     );
     assert!(machines(&a1).contains(&"ana-2".to_owned()));
 
-    let leaving = pigeon(&a2, &["leave"]);
+    let unasked = pigeon(&a2, &["leave"]);
+    assert_eq!(
+        problem(&unasked).as_deref(),
+        Some("needs-confirmation"),
+        "{unasked:?}"
+    );
+    let leaving = pigeon(&a2, &["leave", "--yes"]);
     assert!(said(&leaving, "leaving", "name").is_some(), "{leaving:?}");
-    let again = pigeon(&a2, &["leave"]);
+    let again = pigeon(&a2, &["leave", "--yes"]);
     assert!(
         again
             .iter()

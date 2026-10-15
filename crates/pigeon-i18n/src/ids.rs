@@ -252,6 +252,8 @@ pub const MESSAGES: &[Entry] = &[
     e("waiting-row", &["path", "state"]),
     e("confirm-remove-computer", &["name"]),
     e("confirm-yes", &[]),
+    e("confirm-leave", &[]),
+    e("confirm-held-share", &["batch"]),
     e("problem-code", &["code"]),
     e("problem-not-in-this-build", &["command"]),
     e("hint-not-in-this-build", &[]),

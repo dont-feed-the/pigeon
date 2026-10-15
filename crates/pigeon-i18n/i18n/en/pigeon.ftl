@@ -158,6 +158,8 @@ version-row = { $number }. { $saved }: { $state }
 waiting-row = { $path }: { $state }
 confirm-remove-computer = Remove { $name } from the group? Its copies will stop counting. [y/N]
 confirm-yes = yes
+confirm-leave = Remove this computer from the group? Its files stay in the folder, but it stops sharing them. [y/N]
+confirm-held-share = Delete the files of { $batch } for everyone? They stay in the history. [y/N]
 
 ## Problems (10 §10.6, ADR 0023): problem-<code>, and hint-<code> when there is one
 
