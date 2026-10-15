@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""Run S9 crash schedules in independent, seeded processes on one runner.
+
+Build the test once, split --cases across --jobs processes, and keep each
+process's disks, reports and hegel database separate. All processes finish;
+any failure fails the run. PIGEON_LAB_BIN must name the lab build.
+"""
+
+import argparse
+from concurrent.futures import ThreadPoolExecutor
+import json
+import os
+from pathlib import Path
+import subprocess
+import time
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def executable():
+    built = subprocess.run(
+        ["cargo", "test", "--locked", "--release", "-p", "pigeon-lab",
+         "--test", "s9_exec", "--no-run", "--message-format=json"],
+        cwd=ROOT, stdout=subprocess.PIPE, text=True, check=True,
+    )
+    for line in built.stdout.splitlines():
+        item = json.loads(line)
+        if item.get("reason") == "compiler-artifact" and item["target"]["name"] == "s9_exec":
+            if item.get("executable"):
+                return Path(item["executable"]).resolve()
+    raise RuntimeError("cargo produced no s9_exec test executable")
+
+
+def worker(binary, out, index, seed, cases):
+    report = out / f"seed-{seed}"
+    report.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ, HEGEL_SEED=str(seed), HEGEL_TEST_CASES=str(cases),
+               HEGEL_DATABASE=str(report / "hegel"), PIGEON_LAB_OUT=str(report),
+               PIGEON_LAB_WORK=f"/tmp/p9-{os.getpid()}-{index}",
+               PIGEON_LAB_BIN=str(Path(os.environ["PIGEON_LAB_BIN"]).resolve()))
+    start = time.monotonic()
+    print(f"S9 seed {seed}: {cases} cases, reports in {report}", flush=True)
+    with (report / "test.log").open("w") as log:
+        done = subprocess.run([str(binary), "--nocapture"], cwd=ROOT, env=env,
+                              stdout=log, stderr=subprocess.STDOUT)
+    print(f"S9 seed {seed}: exit {done.returncode}, {time.monotonic() - start:.1f} s", flush=True)
+    if done.returncode:
+        print((report / "test.log").read_text(), flush=True)
+    return seed, report, done.returncode
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--cases", type=int, default=100, help="total cases across all workers")
+    parser.add_argument("--jobs", type=int, default=1)
+    parser.add_argument("--seed", type=int, default=0, help="first seed; worker i uses seed + i")
+    parser.add_argument("--out", type=Path, default=ROOT / "target/lab/s9")
+    args = parser.parse_args()
+    if args.cases < 1 or args.jobs < 1 or args.seed < 0:
+        parser.error("--cases and --jobs must be positive; --seed must be nonnegative")
+    bin_dir = os.environ.get("PIGEON_LAB_BIN")
+    if not bin_dir or any(not (Path(bin_dir) / name).is_file()
+                          for name in ["pigeond", "pigeon", "git-annex-p2p-iroh"]):
+        parser.error("PIGEON_LAB_BIN must name the lab build of all three binaries")
+    binary = executable()
+    out = args.out.resolve()
+    jobs = min(args.jobs, args.cases)
+    each, extra = divmod(args.cases, jobs)
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        pending = [pool.submit(worker, binary, out, i, args.seed + i, each + (i < extra))
+                   for i in range(jobs)]
+        results = [future.result() for future in pending]
+    # Keep the top-level timing and failure files consumed by ci-timings.
+    for name in ["timings.txt", "failures.txt"]:
+        lines = []
+        for seed, report, _ in results:
+            path = report / name
+            if path.exists():
+                lines.extend(f"seed-{seed}/{line}" for line in path.read_text().splitlines())
+        if lines:
+            (out / name).write_text("\n".join(lines) + "\n")
+    return int(any(code for _, _, code in results))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

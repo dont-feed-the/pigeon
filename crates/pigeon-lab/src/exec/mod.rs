@@ -8,6 +8,7 @@
 //! restarted without the plan, as systemd or launchd would. Waits poll their
 //! condition until the deadline. At the end the devices' trace logs are
 //! merged for the projection check and for TLC.
+//! Lab devices use one-second rounds; scenario deadlines still bound waits.
 
 pub mod cli;
 mod forge;
@@ -845,6 +846,23 @@ impl Interpreter for Exec {
             for d in [home.clone(), root.join("run")] {
                 fs::create_dir_all(&d).map_err(|e| e.to_string())?;
             }
+            // As in pigeond/tests/common: exercise real rounds without
+            // waiting for the normal 30-second idle interval at every write.
+            // A service reads the directory bound into its namespace; a
+            // person's config follows dirs::config_dir on each platform.
+            let config = if custodian {
+                root.join("service/var/lib/pigeon")
+            } else if cfg!(target_os = "macos") {
+                home.join("Library/Application Support/pigeon")
+            } else {
+                home.join(".config/pigeon")
+            };
+            fs::create_dir_all(&config).map_err(|e| e.to_string())?;
+            fs::write(
+                config.join("config.toml"),
+                "[loops]\ninterval_seconds = 1\n",
+            )
+            .map_err(|e| e.to_string())?;
             let tree = home.join(format!("pigeon-{}", world.group));
             self.devs.push(Dev {
                 name,

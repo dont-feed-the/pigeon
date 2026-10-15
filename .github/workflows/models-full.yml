@@ -1,6 +1,7 @@
 # The full set of TLA+ models, slow rows included (ADR 0026), 200 runs of
 # pigeon-core checked by TLC (spec 13 §13.3), and 1000 random S9 crash schedules
-# of the slice against the lab build, in twenty shards, and every slice scenario,
+# of the slice against the lab build, in twenty shards of four processes,
+# and every slice scenario,
 # blocked ones included (13 §13.12). Runs when a
 # model or the runner changes, weekly, and by hand. GitHub runs `schedule`
 # and `workflow_dispatch` only from the default branch, so until v2 is the
@@ -13,6 +14,7 @@ on:
       - "models/tla/**"
       - "scripts/run-tlc"
       - "scripts/check-code-traces"
+      - "scripts/check-s9-schedules"
       - "crates/pigeon-core/**"
       - "crates/pigeon-lab/**"
       - ".github/workflows/models-full.yml"
@@ -29,9 +31,13 @@ concurrency:
 
 jobs:
   models:
-    name: TLA+ models (full set)
+    name: TLA+ models (full set, shard ${{ matrix.shard }})
     runs-on: ubuntu-24.04
     timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -43,7 +49,8 @@ jobs:
           path: ~/.cache/pigeon
           key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
       - name: every configuration gives its expected verdict
-        run: scripts/run-tlc --full
+        # Partition expected.tsv without reducing TLC's workers per model.
+        run: scripts/run-tlc --full --shard ${{ matrix.shard }} 4
 
   code-traces:
     name: 200 runs of pigeon-core checked by TLC
@@ -62,7 +69,7 @@ jobs:
       - name: the pinned toolchain (rust-toolchain.toml)
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
       - name: every run is accepted by its model, every mutant rejected (13 §13.3)
-        run: scripts/check-code-traces --seeds 200
+        run: scripts/check-code-traces --seeds 200 --jobs 4 --heap 2g
 
   s9-schedules:
     name: S9, 50 crash schedules (shard ${{ matrix.shard }})
@@ -93,16 +100,15 @@ jobs:
       - name: 50 random S9 crash schedules
         env:
           PIGEON_LAB_BIN: ${{ github.workspace }}/target/lab/bin
-          PIGEON_LAB_OUT: ${{ github.workspace }}/target/lab/out
-          HEGEL_TEST_CASES: "50"
-          HEGEL_SEED: ${{ matrix.shard }}
-        run: cargo test --locked --release -p pigeon-lab --test s9_exec
-      # The daemons' logs of each case, kept only when a shard fails.
+          SHARD: ${{ matrix.shard }}
+        # Eighty distinct seeds, 12 or 13 cases apiece: still 1000 cases.
+        # Each process has its own disks and logs.
+        run: scripts/check-s9-schedules --cases 50 --jobs 4 --seed "$((SHARD * 4))"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: failure()
+        if: always()
         with:
-          name: s9-schedules-${{ matrix.shard }}
-          path: target/lab/out
+          name: s9-random-full-${{ matrix.shard }}
+          path: target/lab/s9
           if-no-files-found: ignore
 
   slice-with-blocked:

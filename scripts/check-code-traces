@@ -7,13 +7,15 @@ checks it with its *Trace.tla specification: every run must be accepted. A
 mutant of each run (a logged roster changed, a decision or verdict reversed, a
 version lost) must be rejected, so a check that accepts everything fails. Usage:
 scripts/check-code-traces
-[--seeds N] [--fixtures]. With --fixtures, the committed sample logs of
+[--seeds N] [--jobs N] [--heap SIZE] [--fixtures]. Each parallel worker has
+its own generated log modules. With --fixtures, the committed sample logs of
 models/tla (RosterTrace, AdmitTrace, AuthorityTrace and CatalogueTrace, _good
 and _bad) are rewritten from seed 1 and their modules regenerated, for
 scripts/run-tlc.
 """
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import importlib.machinery
 import importlib.util
 import json
@@ -22,6 +24,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -88,36 +91,58 @@ def traces(target, seeds, out):
                     "--test", target], cwd=ROOT, env=env, check=True)
 
 
+def init_worker(tmp, local):
+    # A worker alone rewrites its log modules. Sharing MODELS or changing
+    # tlc.MODELS while another JVM is reading it can validate the wrong log.
+    local.models = tmp / f"models-{threading.get_ident()}"
+    shutil.copytree(MODELS, local.models)
+    local.tla, local.tlc = load("trace-to-tla"), load("run-tlc")
+
+
+def check_log(log, spec, good, bad, mutant, args, jar, local):
+    lines = log.read_text().splitlines()
+    for lines_of, (module, name), cfg in [
+        (lines, good, f"{spec}_good"),
+        (mutant(lines), bad, f"{spec}_bad"),
+    ]:
+        converted = local.tla.convert(lines_of, module, name)
+        (local.models / f"{module}.tla").write_text(converted)
+        if args.fixtures:
+            (MODELS / f"{cfg}.ndjson").write_text("\n".join(lines_of) + "\n")
+            (MODELS / f"{module}.tla").write_text(converted)
+    results = []
+    for cfg, want in [(f"{spec}_good", "trace:accepted"), (f"{spec}_bad", "trace:rejected")]:
+        got, output = local.tlc.run(jar, cfg, spec, args.java, "1", args.heap, models=local.models)
+        results.append((cfg, got, output, got.startswith(want)))
+    return log.name, results
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--seeds", type=int, default=20)
     parser.add_argument("--fixtures", action="store_true")
     parser.add_argument("--java", default=os.environ.get("JAVA", "java"))
+    parser.add_argument("--jobs", type=int, default=1, help="logs checked at once, each in its own model directory")
+    parser.add_argument("--heap", help="maximum Java heap per worker, such as 2g")
     args = parser.parse_args()
-    tla, tlc = load("trace-to-tla"), load("run-tlc")
+    if args.jobs < 1 or args.seeds < 1:
+        parser.error("--jobs and --seeds must be positive")
+    tlc = load("run-tlc")
     jar = tlc.tlc_jar()
     failures = 0
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp = Path(tmp)
+    local = threading.local()
+    with tempfile.TemporaryDirectory() as tmp, ThreadPoolExecutor(
+        max_workers=args.jobs, initializer=init_worker, initargs=(Path(tmp), local)
+    ) as pool:
         for spec, target, prefix, good, bad, mutant in SPECS:
-            traces(target, 1 if args.fixtures else args.seeds, tmp / "logs")
-            work = tmp / "models"
-            shutil.copytree(MODELS, work, dirs_exist_ok=True)
-            tlc.MODELS = work
-            for log in sorted((tmp / "logs").glob(f"{prefix}-*.ndjson")):
-                lines = log.read_text().splitlines()
-                for lines_of, (module, name), cfg, want in [
-                    (lines, good, f"{spec}_good", "trace:accepted"),
-                    (mutant(lines), bad, f"{spec}_bad", "trace:rejected"),
-                ]:
-                    (work / f"{module}.tla").write_text(tla.convert(lines_of, module, name))
-                    if args.fixtures:
-                        (MODELS / f"{cfg}.ndjson").write_text("\n".join(lines_of) + "\n")
-                        (MODELS / f"{module}.tla").write_text(tla.convert(lines_of, module, name))
-                for cfg, want in [(f"{spec}_good", "trace:accepted"), (f"{spec}_bad", "trace:rejected")]:
-                    got, output = tlc.run(jar, cfg, spec, args.java, "1", None)
-                    ok = got.startswith(want)
-                    print(f"{'ok' if ok else 'FAIL':4} {log.name} {cfg}: {got}", flush=True)
+            logs = Path(tmp) / "logs"
+            traces(target, 1 if args.fixtures else args.seeds, logs)
+            pending = [pool.submit(check_log, log, spec, good, bad, mutant, args, jar, local)
+                       for log in sorted(logs.glob(f"{prefix}-*.ndjson"))]
+            for future in as_completed(pending):
+                name, results = future.result()
+                for cfg, got, output, ok in results:
+                    print(f"{'ok' if ok else 'FAIL':4} {name} {cfg}: {got}", flush=True)
                     if not ok:
                         failures += 1
                         print(tlc.excerpt(output), file=sys.stderr)

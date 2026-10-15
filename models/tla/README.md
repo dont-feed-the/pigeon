@@ -7,6 +7,23 @@ are normative. `scripts/run-tlc` runs the configurations: the fast set in
 `ci`, the full set in `models-full` (ADR 0026). State counts are those of
 the run that last changed a model.
 
+The full workflow partitions `expected.tsv` over four runners using
+`scripts/run-tlc --full --shard INDEX 4` (indices 0–3). Every row runs once;
+each model keeps TLC's automatic worker count. Trace validation uses
+`scripts/check-code-traces --seeds 200 --jobs 4 --heap 2g`: four independent
+JVMs on one runner, each with at most a 2 GiB heap. Trace workers keep separate
+model directories, so rewriting a log cannot change another worker's check.
+The default local runs stay sequential. The configurations, trace seeds and
+mutants checked are the same.
+
+The S9 part of `models-full` keeps twenty runner jobs and 1000 cases: each job
+runs `scripts/check-s9-schedules --cases 50 --jobs 4 --seed BASE`, with
+`BASE = 4 * shard`. The eighty processes use distinct seeds (0–79), disks,
+reports and hegel databases. Their logs and per-case timings are uploaded
+even on failure. Lab devices configure one-second loop intervals instead
+of waiting for the daemon's normal 30-second interval; crash points and
+scenario deadlines stay the same.
+
 ## Configurations
 
 | Configuration | Model | Expected verdict | Shows |
