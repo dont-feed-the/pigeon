@@ -226,10 +226,10 @@ async fn take(
         (None, Some(mine)) => crate::install::remove(g, rel, mine, &d.tracer).await,
         (None, None) => crate::install::index_entry(g, rel, None)
             .await
-            .map(|()| Put::Done),
+            .map(|()| Put::Done(0)),
     };
     match done {
-        Ok(Put::Done) => {
+        Ok(Put::Done(_)) => {
             let span =
                 crate::trace_state::Span::begin(&d.tracer, g, rel, 0, "Withdraw", "resolve").await;
             let result = withdraw(g, div).await;

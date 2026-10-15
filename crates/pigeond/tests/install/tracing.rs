@@ -397,6 +397,42 @@ async fn driver_traces_take_group() {
 }
 
 #[tokio::test]
+async fn driver_traces_recent_foreign_save() {
+    let Some(l) = laptop().await else { return };
+    let mut doc = l.g.roster().unwrap();
+    doc.roster
+        .persons
+        .get_mut(&PersonId("ana".into()))
+        .unwrap()
+        .admin = false;
+    let base = pigeond::change::commit_roster(&l.g, &doc, "retire Ana", &l.t)
+        .await
+        .unwrap();
+    let mut tree = l.git.tree(&base).await.unwrap();
+    tree.insert(
+        "a.txt".into(),
+        version(&l, "a.txt", b"Ben's first\n", true).await,
+    );
+    let first = bens(&l, &tree, &base, 60).await;
+    install::incoming(&l.g, &dev(1).0, &l.t).await.unwrap();
+    let entry = version(&l, "a.txt", b"Ben's second\n", true).await;
+    tree.insert("a.txt".into(), entry.clone());
+    bens(&l, &tree, &first, 120).await;
+    install::incoming(&l.g, &dev(1).0, &l.t).await.unwrap();
+    l.g.lock().installed.get_mut("a.txt").unwrap().0 = pigeond::util::now_ns();
+    write(&l, "a.txt", b"Ana's immediate save\n");
+    capture::capture(&l.g, &dev(1).0, &l.t).await.unwrap();
+    let main = l.git.rev("refs/heads/main").await.unwrap();
+    let captured = l.git.tree(&main).await.unwrap();
+    assert_eq!(captured.get("a.txt"), Some(&entry));
+    assert!(
+        captured
+            .keys()
+            .any(|p| pigeon_core::names::is_copy_of(p, "a.txt"))
+    );
+}
+
+#[tokio::test]
 async fn driver_traces_presence_races() {
     let Some(l) = laptop().await else { return };
     write(&l, "a.txt", b"old\n");

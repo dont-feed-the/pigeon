@@ -117,7 +117,7 @@ pub async fn restore(
     }
     let current = versions.last().map(|(_, k)| k.clone());
     match crate::install::put(&g, &rel, &key, current.as_deref(), None, &d.tracer).await {
-        Ok(Put::Done | Put::Raced) => {}
+        Ok(Put::Done(_) | Put::Raced) => {}
         Ok(Put::InUse) => {
             let e = "the file is being written; try again".to_owned();
             return vec![problem("internal-error", &[], Some(e))];

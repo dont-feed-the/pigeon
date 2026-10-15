@@ -21,6 +21,10 @@ family present. Unknown families, empty logs, malformed observations,
 missing pairs and gaps in a device's local event clock fail the check.
 The lab merger preserves read/parse errors as failing trace records.
 
+For full daemon scenarios, use the release binaries built by `slice.yml`.
+Repeated content hashing in a debug build can lengthen rename windows
+enough to change timing-sensitive scenario observations.
+
 | Emitted family | Checked behavior |
 | --- | --- |
 | `CaptureInstall` | capture, incoming install, retained asides, recovery |
@@ -73,9 +77,10 @@ a recovery checkpoint. Event clocks resume from the durable append log.
 A trailing unmatched record, failed observation or unexplained transition
 fails rather than becoming an unchecked family.
 
-CI requires normal/concurrent/recent captures, all six filesystem modes,
+CI requires normal/concurrent/recent captures (including a recent save by
+someone who cannot modify the original name), all six filesystem modes,
 changed-aside release, stale presence races, roster forks, index formats
-and eight real SIGKILL positions, including gaps after pointer and journal
+and eight real incoming-install SIGKILL cases, including gaps after pointer and journal
 writes but before their after observations, plus a restore of a deleted
 path interrupted after proof. Negative checks require TLC
 counterexamples for wrong safety outputs, omitted proof/index steps and

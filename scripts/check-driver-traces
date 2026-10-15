@@ -35,6 +35,7 @@ CASES = {
     "index": ("tracing::driver_traces_observe_index_without_refreshing_it", 3),
     "concurrent": ("a_save_racing_an_install_is_kept_both_ways", 3),
     "recent": ("a_save_soon_after_an_install_is_kept_beside_it", 3),
+    "recent-foreign": ("tracing::driver_traces_recent_foreign_save", 1),
     "restore": ("tracing::driver_traces_restore", 1),
     "restore-crash": ("tracing::driver_traces_restore_after_deletion_crash", 1),
     "resolve": ("tracing::driver_traces_take_group", 2),
@@ -66,7 +67,7 @@ def coverage(out):
         if any(e["spec"] not in SPECS for e in events):
             sys.exit(f"FAIL {case}: unknown or unchecked trace family")
         roster = [e for e in events if e["spec"] == "Roster"]
-        expected = {"roster": 2, "evict": 1}.get(case, 0)
+        expected = {"roster": 2, "evict": 1, "recent-foreign": 1}.get(case, 0)
         if len(roster) != expected:
             sys.exit(f"FAIL {case}: expected {expected} roster events, got {len(roster)}")
     return streams

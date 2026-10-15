@@ -34,7 +34,7 @@ use crate::trace_state::{Checkpoint, Span};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Put {
     /// The path holds the new version, or is gone.
-    Done,
+    Done(i64), // actual rename time, before post-install observations
     /// A person's file took the path first: theirs stays (`raced`).
     Raced,
     /// A process may be writing the file, or it is not the old version:
@@ -182,6 +182,7 @@ pub(crate) async fn put(
         renamed.finish("idle");
         return Ok(Put::Raced);
     }
+    let installed_at = crate::util::now_ns();
     renamed.finish("renamed");
     pigeon_sys::lab::crash_point("install.after-rename");
     if let Some(e) = entry {
@@ -194,7 +195,7 @@ pub(crate) async fn put(
         index.finish("indexed").await;
     }
     finish(g, seq, rel, &aside, t, kind).await?;
-    Ok(Put::Done)
+    Ok(Put::Done(installed_at))
 }
 
 /// Exercise the real replacement driver without API/network setup in the
@@ -210,7 +211,7 @@ pub async fn replace_for_lab(
 ) -> Result<bool, String> {
     put(g, rel, key, current, entry, tracer)
         .await
-        .map(|out| matches!(out, Put::Done))
+        .map(|out| matches!(out, Put::Done(_)))
 }
 
 pub(crate) fn rollback(
@@ -284,7 +285,7 @@ pub(crate) async fn remove(g: &Group, rel: &str, current: &str, t: &Tracer) -> R
         let observed = Span::begin(t, g, rel, 0, "Adopt", "install").await;
         index_entry(g, rel, None).await?;
         observed.finish("idle").await;
-        return Ok(Put::Done);
+        return Ok(Put::Done(0));
     };
     let kind = trace_kind(g, rel, true);
     let seq = next_seq(&read(&journal(g)));
@@ -351,7 +352,7 @@ pub(crate) async fn remove(g: &Group, rel: &str, current: &str, t: &Tracer) -> R
         }
         dir = d.parent();
     }
-    Ok(Put::Done)
+    Ok(Put::Done(0))
 }
 
 async fn key_of(g: &Group, entry: Option<&Entry>) -> Option<String> {
@@ -497,18 +498,17 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
             }
             None => match &old {
                 Some(old) => remove(g, path, old, t).await,
-                None => index_entry(g, path, None).await.map(|()| Put::Done),
+                None => index_entry(g, path, None).await.map(|()| Put::Done(0)),
             },
         };
         match put_or_remove {
-            Ok(Put::Done) if w.is_some() => {
+            Ok(Put::Done(at)) if w.is_some() => {
                 done.written += 1;
                 if let Some(h) = h {
-                    let at = crate::util::now_ns();
                     g.lock().installed.insert(path.clone(), (at, h.clone()));
                 }
             }
-            Ok(Put::Done) => done.removed += 1,
+            Ok(Put::Done(_)) => done.removed += 1,
             Ok(_) => done.deferred += 1,
             Err(e) => {
                 tracing::warn!(group = %g.id, path = %path, error = %e, "install-failed");

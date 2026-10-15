@@ -77,7 +77,7 @@ NoticeConflict ==
 ConcurrentCapture(recent, allowed) ==
   LET c == IF at.p = 0 THEN Absent ELSE fc[at.p] IN
   /\ pc = "idle" /\ div.k = "none" /\ (at.p = 0 \/ at.p \notin fresh)
-  /\ (idx.key # cur \/ recent) /\ c # idx.key /\ allowed
+  /\ (idx.key # cur \/ recent) /\ c # idx.key /\ (allowed \/ recent)
   /\ store' = store \cup ({c} \ {Absent}) /\ idx' = Record(c) /\ pdel' = FALSE
   /\ cur' \in IF recent THEN {cur} ELSE {cur, c}
   /\ UNCHANGED <<fc, fm, fresh, at, kept, orph, hnd, hid, punl, saved,
