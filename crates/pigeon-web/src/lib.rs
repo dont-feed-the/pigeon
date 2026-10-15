@@ -31,6 +31,7 @@ mod leave;
 mod machines;
 mod pages;
 mod settings;
+mod view;
 
 /// What a backend answers a request with: progress, then one result.
 pub type Answer = Pin<Box<dyn Future<Output = Vec<pigeon_proto::Response>> + Send>>;
@@ -156,6 +157,7 @@ impl Web {
             .route("/held/share", post(held::share))
             .route("/held/bring-back", post(held::bring_back))
             .route("/leave", post(leave::leave))
+            .route("/files/view", post(view::view))
             .route("/suggestions/accept", post(actions::accept))
             .route("/suggestions/decline", post(actions::decline))
             .route_layer(middleware::from_fn_with_state(self.clone(), session))

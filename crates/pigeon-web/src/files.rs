@@ -119,8 +119,8 @@ pub async fn folder_page(State(web): State<Arc<Web>>, Query(at): Query<At>) -> H
     page(&r, "/files", &at.path, &body)
 }
 
-/// A file's page: its versions, newest first, each with *Restore this
-/// version* but the current one.
+/// A file's page: its versions, newest first, each with *Open a
+/// copy*, and *Restore this version* but the current one.
 pub async fn file_page(
     State(web): State<Arc<Web>>,
     Extension(form): Extension<FormToken>,
@@ -151,7 +151,8 @@ pub async fn file_page(
     page(&r, "/files", &at.path, &body)
 }
 
-/// One version, and the form that restores it.
+/// One version, the form that opens a copy of it, and the one that
+/// restores it.
 fn version(r: &Renderer, path: &str, v: &VersionStatus, restore: bool, form: &str) -> Markup {
     html! {
         article {
@@ -163,6 +164,12 @@ fn version(r: &Renderer, path: &str, v: &VersionStatus, restore: bool, form: &st
                     input type="hidden" name="version" value=(v.number);
                     button type="submit" { (r.id("web-restore")) }
                 }
+            }
+            form method="post" action="/files/view" {
+                input type="hidden" name="form" value=(form);
+                input type="hidden" name="path" value=(path);
+                input type="hidden" name="version" value=(v.number);
+                button type="submit" { (r.id("web-view")) }
             }
         }
     }

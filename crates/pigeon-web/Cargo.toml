@@ -17,7 +17,7 @@ maud.workspace = true
 pigeon-i18n.workspace = true
 pigeon-proto.workspace = true
 serde.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["fs"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }

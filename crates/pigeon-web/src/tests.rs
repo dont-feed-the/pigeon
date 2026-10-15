@@ -113,6 +113,35 @@ impl Backend for Fixed {
             pigeon_proto::Request::Invite { person, .. } => {
                 vec![said("invitation", "code", format!("pgn1-{person}"))]
             }
+            pigeon_proto::Request::History { path } => vec![Response::History {
+                versions: [1, 2]
+                    .map(|number| pigeon_proto::api::VersionStatus {
+                        path: path.clone(),
+                        number,
+                        saved_at: "2026-10-15T10:00:00Z".into(),
+                        state: State::Protected,
+                        observed_at: None,
+                        reason: None,
+                    })
+                    .into(),
+            }],
+            pigeon_proto::Request::View {
+                version: Some(1), ..
+            } => {
+                let dir =
+                    std::env::temp_dir().join(format!("pigeon-web-view-{}", std::process::id()));
+                std::fs::create_dir_all(&dir).unwrap();
+                let copy = dir.join("tarte (version 1).docx");
+                std::fs::write(&copy, b"old tarte").unwrap();
+                vec![said(
+                    "view-ready",
+                    "path",
+                    copy.to_string_lossy().into_owned(),
+                )]
+            }
+            pigeon_proto::Request::View { version, .. } => {
+                vec![said("removed-computer", "name", format!("v{version:?}"))]
+            }
             _ => vec![Response::Done],
         };
         Box::pin(async move { answer })
@@ -525,4 +554,59 @@ async fn leaving_from_settings_is_asked_again_first() {
         .unwrap();
     let done = body(done).await;
     assert!(done.contains("mine leaves the group"), "{done}");
+}
+
+#[tokio::test]
+async fn a_version_is_opened_as_a_read_only_download() {
+    let w = web();
+    let app = w.router();
+    let cookie = logged_in(&app, &w).await;
+    let page = app
+        .clone()
+        .oneshot(get("/file?path=%2Fg%2Ftarte.docx", HOST, Some(&cookie)))
+        .await
+        .unwrap();
+    let page = body(page).await;
+    assert_eq!(page.matches("Open a copy").count(), 2, "{page}");
+    assert_eq!(page.matches("Restore this version").count(), 1, "{page}");
+    let form = form_of(&page);
+    let forged = app
+        .clone()
+        .oneshot(post(
+            "/files/view",
+            &cookie,
+            "form=00&path=%2Fg%2Ftarte.docx&version=1",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(forged.status(), StatusCode::FORBIDDEN);
+    let copy = app
+        .clone()
+        .oneshot(post(
+            "/files/view",
+            &cookie,
+            &format!("form={form}&path=%2Fg%2Ftarte.docx&version=1"),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(copy.status(), StatusCode::OK);
+    let disposition = copy.headers()[header::CONTENT_DISPOSITION]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    assert!(
+        disposition.starts_with("attachment; filename=\"tarte (version 1).docx\""),
+        "{disposition}"
+    );
+    assert_eq!(body(copy).await, "old tarte");
+    let other = app
+        .oneshot(post(
+            "/files/view",
+            &cookie,
+            &format!("form={form}&path=%2Fg%2Ftarte.docx&version=2"),
+        ))
+        .await
+        .unwrap();
+    let other = body(other).await;
+    assert!(other.contains("vSome(2) is removed"), "{other}");
 }

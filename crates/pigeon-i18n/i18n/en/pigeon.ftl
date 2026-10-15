@@ -314,6 +314,7 @@ web-cancel-invitation = Cancel
 files-none = This folder has no file yet.
 file-row = { $path }: { $state }
 web-restore = Restore this version
+web-view = Open a copy
 web-versions = Versions
 deleted-none = No file was deleted.
 deleted-row = { $path }, deleted { $deleted }

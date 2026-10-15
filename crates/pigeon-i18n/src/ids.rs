@@ -195,6 +195,7 @@ pub const MESSAGES: &[Entry] = &[
     e("web-restore-deleted", &[]),
     e("file-row", &["path", "state"]),
     e("web-restore", &[]),
+    e("web-view", &[]),
     e("web-versions", &[]),
     e("web-remove", &[]),
     e("web-remove-confirm", &["name"]),
