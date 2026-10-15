@@ -250,6 +250,15 @@ actions! {
     }
 }
 
+actions! {
+    /// The actions of `models/tla/Catalogue.tla` that traces log: one
+    /// commit, its verdict and its catalogue (05 §5.2).
+    Catalogue = "Catalogue" {
+        /// A commit judged by `catalogue::Engine`.
+        Record,
+    }
+}
+
 impl Event {
     /// An event of action `a` of its specification.
     pub fn new<A: Actions>(

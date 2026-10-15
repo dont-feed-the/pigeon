@@ -35,3 +35,8 @@ proc-macro2         # proc macros, at build time only
 quote               # proc macros, at build time only
 syn                 # proc macros, at build time only
 unicode-ident       # proc macros, at build time only
+#
+# Portable names (05 §5.4, `names`): Unicode 16.0 tables in memory.
+caseless            # Unicode full case folding
+unicode-normalization  # NFC
+tinyvec             # small vectors, used by unicode-normalization

@@ -66,7 +66,12 @@ only through a contribution whose base showed it), `seen` (no unseen version
 returns), `names` (portable, injective after folding), `authority` (clean
 merges change nothing; each copy is allowed to its representative's
 person). A wrong clock changes which version keeps the name, never whether
-one is kept. Not yet coded in `pigeon-core`.
+one is kept. `pigeon-core::catalogue` codes the merge (`Engine`): its laws
+are hegel properties on random schedules (`tests/catalogue.rs`, with
+judging in another order for `order`), every commit the oracle reaches gets
+its verdict, tree and open conflicts (`tests/catalogue_oracle.rs`), and
+traces validate against `Catalogue.tla` ([13 §13.3](13-verification.md)).
+`pigeond` does not use it yet (M2).
 
 **Merge commits.** `pigeond` writes a merge *M*'s tree as
 `catalogue(anc*(M))` with plumbing (`merge-tree --write-tree` as a checked
@@ -81,9 +86,11 @@ judged as the decider's change ([04 §4.4](04-roster-and-authority.md)).
 dir/stem (Person, 2026-10-13 14h02).ext
 ```
 
-- *Person*: the representative's display name, made portable; the time: its
+- *Person*: the representative's display name, made portable (NFC, each
+  forbidden or control character and each parenthesis a `-`); the time: its
   author time in the offset recorded in that commit, so every device computes
-  the same name. A colon or a month name would break P5: this differs from
+  the same name. The stem is shortened, at a character boundary, so that the
+  name fits in 255 bytes. A colon or a month name would break P5: this differs from
   ux.md §8.9 **[no ADR]**.
 - A taken name gets ` 2`, ` 3`, … inside the parentheses, in representative
   order; the extension is kept; a package takes the suffix on its folder.
@@ -113,9 +120,14 @@ computed (ADR 0036). The device whose file lost the name keeps it as a
 suggested name and a rename button **[no ADR: hold back]**; **at acceptance**
 it makes a commit invalid (rule 5, [04 §4.4](04-roster-and-authority.md)).
 The Unicode tables are pinned in the core; changing them is a format change
-(issue #15). Every platform can write every name, with no mapping in v1
-(ADR 0005; [16 §16.4](16-open-questions.md)).
+(issue #15): Unicode 16.0, from `caseless` 0.2.2 (full case folding) and
+`unicode-normalization` 0.1.24 (NFC). Every platform can write every name,
+with no mapping in v1 (ADR 0005; [16 §16.4](16-open-questions.md)). The
+suggested name replaces each offending character by `-`, prefixes a
+reserved name with `_`, drops a trailing dot or space, and adds ` 2`,
+` 3`, … before the extension until no sibling folds alike.
 
-Laws, not yet coded: normalisation is idempotent; `portable` accepts every
-conflict name of §5.3; the suggested name is portable and differs from every
-sibling; names that do not collide never change.
+Laws (`pigeon-core::names`, `tests/names.rs`): normalisation is idempotent;
+`portable` accepts every conflict name of §5.3; the suggested name is
+portable and differs from every sibling; names that do not collide never
+change.

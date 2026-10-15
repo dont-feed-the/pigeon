@@ -9,9 +9,11 @@
 
 pub mod authority;
 pub mod capacity;
+pub mod catalogue;
 pub mod filter;
 pub mod headline;
 pub mod journal;
+pub mod names;
 pub mod queue;
 pub mod report;
 pub mod roster;

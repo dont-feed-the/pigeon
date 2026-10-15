@@ -36,7 +36,8 @@ invariants this specification cites are normative.
 | `Roster` | `AdminRemains`, `RemovalWins`, `PersonRemovalWins`, `TreeIsFold`, `Agreement`, `MergeAlwaysPossible`, `SkipsNeedConcurrency`; `NoConcurrentRetirement` is a witness, violated on purpose | [04 §4.8](04-roster-and-authority.md) |
 | `Authority` | `AuthorisedContent`, `AdoptionHoldsContent`, `DecidersCanAdopt`, `DecisionsByDeciders`, `HonestMergesAccepted`, `TreeIsCatalogue`, `RemovalRevokesAdded`, `RemovedSilenced`, `ConvergedWhenQuiet`; `Converge` | [04 §4.3–4.5](04-roster-and-authority.md), [09 §9.7](09-network-and-joining.md) |
 | `CustodyNaive`, `CustodyTokens` | `NoLoss`; `TokensNeverLost`, `TokenHolderHasContent`, `KCopies`, `AtMostOneToken` | evidence about hand-offs in general, not about git-annex |
-| `TraceSample`, `RosterTrace`, `AdmitTrace`, `AuthorityTrace` | `TraceNotConsumed` (§13.3) | [12 §12.3](12-observability.md) |
+| `Catalogue` | none: the merge of the catalogue over abstract slots, which `CatalogueTrace` replays | [05 §5.2](05-catalogue-and-names.md) |
+| `TraceSample`, `RosterTrace`, `AdmitTrace`, `AuthorityTrace`, `CatalogueTrace` | `TraceNotConsumed` (§13.3) | [12 §12.3](12-observability.md) |
 
 Per safeguard, each model has a configuration without it (`Off`) that must
 fail with the verdict `expected.tsv` names (ADR 0026). Bounds start at
@@ -59,7 +60,7 @@ Lamport order. `TraceNotConsumed` is violated exactly when a behaviour
 explains every line (`trace:accepted`); otherwise the depth reached names
 the first unexplained line (`trace:rejected:N`), which fails the build.
 `scripts/check-code-traces` checks pigeon-core's functions (the roster
-fold, admission, the authority rule) run in a simulated environment taking
+fold, admission, the authority rule, the catalogue merge) run in a simulated environment taking
 the model's steps (20 runs in `ci`, 200 in
 `models-full`; a mutant of each must be rejected), and
 `scripts/check-lab-traces` the slice's runs (§13.12). Every fault-injection
@@ -77,8 +78,6 @@ laws, each a `hegeltest` property. The laws coded so far are those of
 |---|---|---|
 | fetched history | a join-semilattice (associative, commutative, idempotent union) | [08 §8.2](08-custody-loops.md) |
 | acceptance | `accepted(S ∪ T) = accepted(S) ∪ accepted(T)`; verdicts depend only on ancestors; a clean merge has Δ = ∅ | [04 §4.4](04-roster-and-authority.md) |
-| catalogue merge | the laws `models/catalogue` checks (below) | [05 §5.1–5.3](05-catalogue-and-names.md) |
-| portable names | normalisation idempotent; injective within a folder; portable names unchanged | [05 §5.4](05-catalogue-and-names.md) |
 | custody observations | latest-observation join per (custodian, key); a custodian counts only with `has_commit` (ADR 0046) | [06 §6.1](06-status.md) |
 | released keys | releasing one reference never releases a key another holds; an uncovered reference keeps its key; monotone in the seals; independent of arrival order; never a current version | [08 §8.6](08-custody-loops.md) |
 | settings | expected git-annex settings are a function of the roster; applying twice changes nothing | [03 §3.5](03-repository-and-roles.md) |
@@ -96,7 +95,10 @@ input) and for the fixed scenarios of this specification.
 every schedule of three devices for each case of [05 §5.2](05-catalogue-and-names.md)
 and checks its laws there (`order`, `tree`, `kept`, `seen`, `names`,
 `authority`) on each reachable state. The earlier rules (`old`, `naive`)
-must fail; the core's laws must agree with it.
+must fail; the core's laws must agree with it. Its `--dump DIR` writes
+every commit it reaches; `pigeon-core/tests/catalogue_oracle.rs` judges
+them again (about 140 000 over the eleven cases) and must agree on every
+verdict, tree and open conflict.
 
 ## 13.5 Stateful tests and fault injection
 
@@ -168,7 +170,7 @@ What carries each guarantee today; gaps are GitHub issues
 | P2 Capture, no overwrite | E15b, E18, E19, E20, E24 (asserting); `CaptureInstall`, `Evict` | journal laws against the model (§13.13) | copy-on-write cost on APFS and btrfs; saves from stale memory or a macOS shared mapping (16 §16.4) |
 | P3 Reversible deletion | E14 (asserting); E2, E4 (printing); `Purge` | purge laws; `Purge` trace validation | a custodian clock jumping beyond the waiting period; erased names stay in history (16 §16.4) |
 | P4 Authority | E12 (asserting); E7 (printing); `Roster`, `Authority` | acceptance and revocation laws; `Authority` trace validation | format compatibility (#15) |
-| P5 Convergence | E3 (printing); `models/catalogue` | merge and name laws | rename tracking (16 §16.4) |
+| P5 Convergence | E3 (printing); `models/catalogue`, `Catalogue` | merges by `pigeond`; the scenarios of two people and three laptops (M2) | rename tracking (16 §16.4) |
 | P6 Honest status | E20, E21 (asserting) | observation laws; usability test | — |
 
 ## 13.11 Going on: technical and human criteria
@@ -352,4 +354,6 @@ the same way: `pigeond/tests/codecs.rs` and `net_laws.rs`,
 | recovery ends every entry and a second does nothing; a crash during recovery ends as one recovery; a person's save is never lost; a deletion after install stays; without a person, the path ends old or new and the index agrees (INV-Journal); pigeon never renames over a name | `journal` | `tests/journal.rs` | `CaptureInstall` (`NoLoss`, `Journal`, `NoOverwrite`, `DeletionKept`) |
 | every tree is the fold of its history; the fold depends only on the set of changes; every fold is valid and removals win, even of a device not yet added; skips need concurrency; a linear history skips nothing; the canonical order is topological; pigeon-core lets a device sign every change of the model's `Ops` | `roster` | `tests/roster.rs` | `Roster` (`TreeIsFold`, `Agreement`, `AdminRemains`, `RemovalWins`, `SkipsNeedConcurrency`), and `RosterTrace` on runs |
 | allowed streams pass unchanged; chunking does not matter; custodians never forward removals or pushes; malformed input closes; a custodian answers only after the sync; an unattributed success closes; `AUTH` is rewritten and checked | `filter` | `tests/filter_laws.rs` | — |
+| the merge's laws of 05 §5.2 (`order`, `tree`, `kept`, `seen`, `names`, `algebra`, `authority`) on random schedules of three devices; judging the same commits in another order gives the same verdicts, catalogues and open conflicts; every commit the oracle reaches gets the oracle's verdict, tree and open conflicts | `catalogue` | `tests/catalogue.rs`, `tests/catalogue_oracle.rs`, `tests/catalogue_trace.rs` | `models/catalogue` (mode `new`); each commit is `Record`'s, with `View`'s catalogue (`CatalogueTrace`) |
+| folding is idempotent; every conflict name of a portable path is portable and recognised as its copy; a suggested name is portable and differs from every sibling; names that do not collide never change; the cases of 05 §5.4 | `names` | `tests/names.rs` | — |
 | a trace line parses back to its event; the Lamport clock orders a receive after its send; every action name is an operator of its `.tla` | `trace` | `tests/trace.rs`, `tests/roster_trace.rs` | every `*Trace.tla` |

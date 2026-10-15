@@ -89,6 +89,8 @@ the run that last changed a model.
 | `AdmitTrace_bad` | `AdmitTrace` | `trace:rejected:4` | the same plan with its last decision reversed: the verdict names line 4 |
 | `AuthorityTrace_good` | `AuthorityTrace` | `trace:accepted` (fast set) | a history judged by pigeon-core's `authority::judge`, written by `crates/pigeon-core/tests/authority_trace.rs` (seed 1): each commit, on one accepted parent and signed by any of four devices, with versions, roster edits (`F` transferred, device 4 added, a device removed) and a Force, gets `Judge`'s verdict in `Authority` (04 §4.4, 13 §13.3) |
 | `AuthorityTrace_bad` | `AuthorityTrace` | `trace:rejected:15` | the same history with the verdict on its last commit reversed: the verdict names line 15 |
+| `CatalogueTrace_good` | `CatalogueTrace` | `trace:accepted` (fast set) | a history of three devices (Alice, Bob, Paul) merged by pigeon-core's `catalogue::Engine`, written by `crates/pigeon-core/tests/catalogue_trace.rs` (seed 1): saves, deletions, renames, *Keep mine*, *Keep both*, edits of copies, suggestions in Alice's folder and pulls. Each commit, merges included, gets `Record`'s verdict, and an accepted one `View`'s catalogue (each version, where it is shown and the commit it represents) and `Open`'s conflicts (05 §5.2–5.3, 13 §13.3) |
+| `CatalogueTrace_bad` | `CatalogueTrace` | `trace:rejected:28` | the same history with one version lost from the catalogue of its last accepted commit: the verdict names line 28 |
 | `CaptureInstall_own` | `CaptureInstall` | `pass` (fast set) | issue #1, [07 §7.5](../../docs/spec/07-capture-and-install.md): capture and install of one path while a person writes in place, writes through a handle opened earlier, replaces atomically, creates and deletes at any instant, also while `pigeond` is down; the group changes or deletes the path; one crash. Nothing saved is lost (NoLoss); when idle, the path holds what the index says or the person's content (Journal); the index never calls a changed file clean (IndexHonest); what install moves away was captured (CaptureFirst), is the file it expected, and is written by nobody afterwards (NoOverwrite); a deletion the person made stays (DeletionKept); under fairness every save is captured (SavesCaptured) and the path ends at `current(p)` with no divergence and no kept aside (Converges). Own folder, two person actions: 122 560 states, 61 698 distinct, 9 s on 1 worker |
 | `CaptureInstall_other` | `CaptureInstall` | `pass` (fast set) | the same in another person's folder: saves become suggestions, which are accepted or rejected, then resolved (*Take the group's version*, *Suggest again*), also while new saves race the choice: 1 240 787 states, 612 281 distinct, 6 s |
 | `CaptureInstall_crash2` | `CaptureInstall` | `pass` (fast set) | two crashes, one during recovery: a second replay decides as the first (ADR 0036's law): 360 940 states, 171 214 distinct, 4 s |
@@ -235,3 +237,17 @@ catalogue of all known commits. It holds in every design configuration.
 Not modelled: several devices per person, persons joining or leaving,
 key rotation, rules 5 and 6 (names, well-formed trees), Drop, and the
 contents of a conflict copy.
+
+**`Catalogue`** ([05 §5.2](../../docs/spec/05-catalogue-and-names.md)) states
+the deterministic merge over abstract slots, the oracle
+`models/catalogue/catalogue.py` without its names: a slot is `<<p>>` for a
+path, and `Append(x, o)` for the copy of slot `x` that commit `o`
+represents, so names never collide and folding is left to the code. Events
+are contributions and the conflict events they freeze, named by keys so
+that one freeze reached twice is one event; `Heads`, `Reps`, `Shown` and
+`View` are steps 2–5, `Freeze` step 6 and `Open` the open conflicts of
+§5.3. It has no `Next` of its own: `CatalogueTrace` replays the code's
+commits through `Record`, which judges each against the catalogue of its
+accepted parents (clean, a proposal when its person may not change a slot,
+or a contribution). Run against a build of `catalogue::Engine` that never
+freezes, it rejects the logs (line 9 to 15 of seeds 2, 6 and 7).

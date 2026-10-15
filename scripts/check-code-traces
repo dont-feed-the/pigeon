@@ -4,11 +4,13 @@
 `cargo test` writes NDJSON traces of pigeon-core's simulated runs (feature
 `tla-trace`); each becomes a TLA+ module through scripts/trace-to-tla, and TLC
 checks it with its *Trace.tla specification: every run must be accepted. A
-mutant of each run (a logged roster changed, a decision or verdict reversed) must be
-rejected, so a check that accepts everything fails. Usage: scripts/check-code-traces
+mutant of each run (a logged roster changed, a decision or verdict reversed, a
+version lost) must be rejected, so a check that accepts everything fails. Usage:
+scripts/check-code-traces
 [--seeds N] [--fixtures]. With --fixtures, the committed sample logs of
-models/tla (RosterTrace, AdmitTrace and AuthorityTrace, _good and _bad) are
-rewritten from seed 1 and their modules regenerated, for scripts/run-tlc.
+models/tla (RosterTrace, AdmitTrace, AuthorityTrace and CatalogueTrace, _good
+and _bad) are rewritten from seed 1 and their modules regenerated, for
+scripts/run-tlc.
 """
 
 import argparse
@@ -60,13 +62,24 @@ def authority_mutant(lines):
     return [json.dumps(e, separators=(",", ":")) for e in events]
 
 
+def catalogue_mutant(lines):
+    """The same history with one version lost from the catalogue of its last
+    accepted commit."""
+    events = [json.loads(line) for line in lines]
+    last = [e for e in events if e["vars"]["view"]][-1]["vars"]
+    last["view"] = last["view"][:-1]
+    return [json.dumps(e, separators=(",", ":")) for e in events]
+
+
 # spec, cargo test target, file prefix, good and bad log modules, mutant.
 SPECS = [("RosterTrace", "roster_trace", "roster", ("RosterCodeLog", "CodeLog"), ("RosterCodeBadLog", "BadLog"),
           roster_mutant),
          ("AdmitTrace", "admit_trace", "admit", ("AdmitCodeLog", "CodeLog"), ("AdmitCodeBadLog", "BadLog"),
           admit_mutant),
          ("AuthorityTrace", "authority_trace", "authority", ("AuthorityCodeLog", "CodeLog"),
-          ("AuthorityCodeBadLog", "BadLog"), authority_mutant)]
+          ("AuthorityCodeBadLog", "BadLog"), authority_mutant),
+         ("CatalogueTrace", "catalogue_trace", "catalogue", ("CatalogueCodeLog", "CodeLog"),
+          ("CatalogueCodeBadLog", "BadLog"), catalogue_mutant)]
 
 
 def traces(target, seeds, out):

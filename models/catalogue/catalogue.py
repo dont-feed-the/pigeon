@@ -16,12 +16,15 @@ catalogue only through a contribution that had it), seen (no version that no
 contribution saw comes back), names (portable, injective after folding),
 algebra (merge idempotent, commutative, associative), authority (clean merges
 change nothing; each copy is allowed to its author). new must pass them all,
-and EXAMPLES; old and naive must fail exactly as EXPECTED says. Standard
-library only. Usage: catalogue.py [--mode M] [--case C] [--pulls N] [-v]
+and EXAMPLES; old and naive must fail exactly as EXPECTED says. --dump DIR
+writes each case's commits (mode new) for pigeon-core's catalogue_oracle.rs.
+Usage: catalogue.py [--mode M] [--case C] [--pulls N] [--dump DIR] [-v]
 """
 
 import argparse
 import hashlib
+import json
+import os
 import re
 import sys
 import time
@@ -754,11 +757,25 @@ EXPECTED = {
 }
 
 
+def dump(ch, path):
+    """Every commit of a case's run, parents first, with the oracle's verdict."""
+    run, eng = ch.run, ch.eng
+    with open(path, "w", encoding="utf-8") as out:
+        for cid, c in run.commits.items():
+            rec = {"id": cid, "parents": list(c.parents), "tree": c.tree, "device": c.device,
+                   "person": c.person, "who": c.who, "when": c.when, "resolve": list(c.resolve),
+                   "accepted": eng.accepted(cid), "contribution": eng.contribution(cid)}
+            if rec["accepted"]:
+                rec["open"] = sorted(eng.notices([cid]))
+            out.write(json.dumps(rec, ensure_ascii=False, sort_keys=True) + "\n")
+
+
 def main():
     ap = argparse.ArgumentParser(description="Check the catalogue laws on every schedule.")
     ap.add_argument("--mode", choices=("new", "old", "naive"), action="append")
     ap.add_argument("--case", action="append", choices=[c.name for c in CASES])
     ap.add_argument("--pulls", type=int, help=f"bound on pulls (default: none, {OLD_PULLS} for old, naive)")
+    ap.add_argument("--dump", metavar="DIR", help="write each case's commits, mode new, to DIR")
     ap.add_argument("-v", action="store_true", help="print a counterexample for each failed law")
     args = ap.parse_args()
     bad = examples()
@@ -771,6 +788,9 @@ def main():
             start = time.time()
             ch = Checker(case, mode, args.pulls if args.pulls or mode == "new" else OLD_PULLS)
             ch.explore()
+            if args.dump and mode == "new":
+                os.makedirs(args.dump, exist_ok=True)
+                dump(ch, os.path.join(args.dump, case.name + ".ndjson"))
             got = set(ch.fails)
             want = set() if mode == "new" else set(EXPECTED[mode].get(case.name, ()))
             ok = got == want if args.pulls is None or mode == "new" else True
