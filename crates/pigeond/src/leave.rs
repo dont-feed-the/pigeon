@@ -1,0 +1,229 @@
+//! `pigeon leave` (09 §9.7): this computer signs its own removal, keeps
+//! serving the group until another machine has it, then forgets the group.
+//!
+//! The removal waits in `<git_dir>/pigeon/leaving`. A peer has it once its
+//! `main`, as last fetched, holds it, or once it refuses this device as
+//! `not-in-roster`, which only a peer that accepted the removal does
+//! (09 §9.3); peers that refused it so before do not count. Meanwhile each
+//! round does nothing else: what this device would capture or install now
+//! its peers would revoke (04 §4.4). Then the group leaves `config.toml`,
+//! its remotedaemon stops and, for a folder, the files it does not hold
+//! (pointer files) go, and `.git` and `.pigeon` move to
+//! `<state>/left/<group>-<time>/`: the folder keeps its files as plain
+//! files. A custodian's repository stays where it is. Once no group is
+//! left, the device key is deleted. The folder itself is never deleted
+//! here **[no ADR]**.
+
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
+
+use pigeon_core::filter::Role;
+use pigeon_core::roster::{DeviceId, Edit, Role as DeviceRole, apply, may_sign};
+use pigeon_proto::Response;
+use pigeon_proto::api::Arg;
+use pigeon_proto::stream::Refusal;
+use serde::{Deserialize, Serialize};
+
+use crate::api::problem;
+use crate::daemon::Daemon;
+use crate::group::Group;
+use crate::status::msg;
+
+/// The removal this device waits to see on a peer.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Leaving {
+    /// The roster commit removing this device.
+    pub commit: String,
+    /// The peers that already refused this device as `not-in-roster`.
+    #[serde(default)]
+    pub refusing: BTreeSet<String>,
+}
+
+fn marker(g: &Group) -> PathBuf {
+    g.files.root.join("leaving")
+}
+
+/// The removal `g` waits on, if this device is leaving it.
+pub fn leaving(g: &Group) -> Option<Leaving> {
+    let bytes = std::fs::read(marker(g)).ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
+fn text(s: &str) -> Arg {
+    Arg::Text(s.to_owned())
+}
+
+/// `pigeon leave`: signs this device's removal from the default group.
+pub async fn leave(d: &Daemon) -> Vec<Response> {
+    let Some(g) = d.default_group() else {
+        return vec![problem("not-in-group", &[], None)];
+    };
+    if leaving(&g).is_some() {
+        return vec![Response::Said {
+            message: msg("leaving-already", &[]),
+        }];
+    }
+    let _busy = g.busy.lock().await;
+    let Some(mut doc) = g.roster() else {
+        return vec![problem("not-in-group", &[], None)];
+    };
+    let me = DeviceId(d.device.clone());
+    let change = [Edit::RemoveDevice(me.clone())];
+    if !may_sign(&doc.roster, &me, &change) {
+        return vec![problem("not-allowed", &[], None)];
+    }
+    let applied = apply(&doc.roster, &change);
+    if let Some(why) = applied.skipped {
+        return vec![problem("not-allowed", &[], Some(format!("{why:?}")))];
+    }
+    if !signs_for_an_admin(&applied.roster) {
+        // No key could sign the group's admin changes any more.
+        return vec![problem("leave-last-admin", &[], None)];
+    }
+    let name = doc
+        .roster
+        .devices
+        .get(&me)
+        .map_or_else(|| d.device.clone(), |x| x.name.clone());
+    let refusing = peers(&doc.roster, &me)
+        .into_iter()
+        .filter(|p| d.node.refusal(p, &g.id) == Some(Refusal::NotInRoster))
+        .collect();
+    doc.roster = applied.roster;
+    let message = format!("pigeon: {name} leaves");
+    let commit = match crate::change::commit_roster(&g, &doc, &message, &d.tracer).await {
+        Ok(c) => c,
+        Err(e) => return vec![problem("internal-error", &[], Some(e))],
+    };
+    let state = Leaving { commit, refusing };
+    let written = serde_json::to_vec(&state)
+        .map_err(|e| e.to_string())
+        .and_then(|b| pigeon_sys::fs::write_atomic(&marker(&g), &b).map_err(|e| e.to_string()));
+    if let Err(e) = written {
+        return vec![problem("internal-error", &[], Some(e))];
+    }
+    tracing::info!(group = %g.id, commit = %state.commit, "leaving");
+    d.wake.notify_one();
+    vec![Response::Said {
+        message: msg("leaving", &[("name", text(&name))]),
+    }]
+}
+
+/// Whether some device of `roster`, a recovery sheet included, belongs to
+/// an admin.
+pub fn signs_for_an_admin(roster: &pigeon_core::roster::Roster) -> bool {
+    roster
+        .devices
+        .values()
+        .any(|x| roster.persons.get(&x.person).is_some_and(|p| p.admin))
+}
+
+/// The devices of `roster` other than `me` that serve git (not recovery
+/// sheets).
+fn peers(roster: &pigeon_core::roster::Roster, me: &DeviceId) -> Vec<String> {
+    roster
+        .devices
+        .iter()
+        .filter(|(id, x)| *id != me && x.role != DeviceRole::Recovery)
+        .map(|(id, _)| id.0.clone())
+        .collect()
+}
+
+/// Whether a peer has the removal `l`: its fetched `main` holds it, or it
+/// refuses this device since. With no peer at all, at once.
+async fn seen(d: &Daemon, g: &Group, l: &Leaving) -> bool {
+    let me = DeviceId(d.device.clone());
+    let Some(doc) = g.roster() else {
+        return true;
+    };
+    let peers = peers(&doc.roster, &me);
+    if peers.is_empty() {
+        return true;
+    }
+    for p in &peers {
+        if !l.refusing.contains(p) && d.node.refusal(p, &g.id) == Some(Refusal::NotInRoster) {
+            return true;
+        }
+        let theirs = format!("refs/pigeon/peers/{p}/main");
+        if g.git
+            .ok(&["merge-base", "--is-ancestor", &l.commit, &theirs])
+            .await
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// A round of a group this device leaves: forgets it once a peer has the
+/// removal. Answers whether `g` is being left, so the round does nothing
+/// else.
+pub async fn round(d: &Daemon, g: &std::sync::Arc<Group>) -> bool {
+    let Some(l) = leaving(g) else {
+        return false;
+    };
+    if seen(d, g, &l).await {
+        finish(d, g).await;
+    }
+    true
+}
+
+/// Forgets `g`: out of `config.toml` and the served groups, its
+/// remotedaemon stopped, a folder's repository moved out of it.
+async fn finish(d: &Daemon, g: &std::sync::Arc<Group>) {
+    if let Err(e) = crate::config::remove_group(&d.dirs.config_file(), &g.id) {
+        tracing::warn!(group = %g.id, error = %e, "config-write-failed");
+        return;
+    }
+    let absent = if g.role == Role::Laptop {
+        absent_files(g).await
+    } else {
+        Vec::new()
+    };
+    g.stop_remotedaemon().await;
+    d.groups
+        .write()
+        .unwrap_or_else(|p| p.into_inner())
+        .retain(|x| x.id != g.id);
+    if let Some(wt) = &g.worktree {
+        for rel in absent {
+            let _ = std::fs::remove_file(wt.join(rel));
+        }
+        let to = d
+            .dirs
+            .state
+            .join("left")
+            .join(format!("{}-{}", g.id, crate::util::now()));
+        if let Err(e) = move_out(wt, &to) {
+            tracing::warn!(group = %g.id, error = %e, "leave-move-failed");
+        }
+    }
+    tracing::info!(group = %g.id, "left-group");
+    if d.groups().is_empty() {
+        let _ = std::fs::remove_file(d.dirs.device_key());
+        tracing::info!("device-key-deleted");
+    }
+}
+
+/// The files of `g`'s folder whose content is not here: pointer files.
+async fn absent_files(g: &Group) -> Vec<String> {
+    let out = g
+        .git
+        .run(&["annex", "find", "--not", "--in=here"])
+        .await
+        .unwrap_or_default();
+    out.lines()
+        .filter(|l| !l.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Moves `.git` and `.pigeon` of the folder `wt` into `to`.
+fn move_out(wt: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    std::fs::rename(wt.join(".git"), to.join("git"))?;
+    if wt.join(".pigeon").exists() {
+        std::fs::rename(wt.join(".pigeon"), to.join("pigeon"))?;
+    }
+    Ok(())
+}

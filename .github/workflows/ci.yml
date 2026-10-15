@@ -117,10 +117,10 @@ jobs:
         run: cargo test -p pigeond --test formats --locked
       - name: the lab build's seams (13 §13.12)
         run: cargo test -p pigeon-sys --features lab --locked
-      - name: the first build of the slice, three daemons on one host (13 §13.12)
+      - name: the first build of the slice, and pigeond's other daemons-on-one-host tests (13 §13.12)
         run: |
           cargo build -p pigeon -p git-annex-p2p-iroh --locked
-          cargo test -p pigeond --features lab --locked --test slice
+          cargo test -p pigeond --features lab --locked --tests
       - name: licences, advisories and sources (cargo deny, ADR 0019)
         if: runner.os == 'Linux'
         uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1

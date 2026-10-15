@@ -63,6 +63,7 @@ pub const PROBLEMS: &[&str] = &[
     "setting-unknown",
     "setting-value",
     "pause-duration",
+    "leave-last-admin",
     "internal-error",
 ];
 
@@ -215,6 +216,9 @@ pub const MESSAGES: &[Entry] = &[
     e("paused-until", &["until"]),
     e("paused-until-resume", &[]),
     e("resumed", &[]),
+    e("cmd-leave", &[]),
+    e("leaving", &["name"]),
+    e("leaving-already", &[]),
     e("web-pause", &[]),
     e("web-resume", &[]),
     e("pause-hour", &[]),
@@ -250,6 +254,8 @@ pub const MESSAGES: &[Entry] = &[
     e("hint-setting-value", &[]),
     e("problem-pause-duration", &["duration"]),
     e("hint-pause-duration", &[]),
+    e("problem-leave-last-admin", &[]),
+    e("hint-leave-last-admin", &[]),
     e("problem-invite-expired", &["until"]),
     e("hint-invite-expired", &["inviter"]),
     e("problem-invite-used", &[]),

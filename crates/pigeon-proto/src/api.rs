@@ -141,6 +141,9 @@ pub enum Request {
         /// The computer's name in the roster.
         name: String,
     },
+    /// `pigeon leave`: this computer signs its own removal and forgets the
+    /// group once another machine has it (09 §9.7).
+    Leave,
     /// `pigeon recovery-sheet`.
     RecoverySheet,
     /// `pigeon recover SHEET [FOLDER] [--from DEVICE]`.

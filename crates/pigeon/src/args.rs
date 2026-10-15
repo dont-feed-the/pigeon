@@ -69,6 +69,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("pause [DURATION]", "cmd-pause"),
     ("resume", "cmd-resume"),
     ("people", "cmd-people"),
+    ("leave", "cmd-leave"),
     ("deleted", "cmd-deleted"),
     ("doctor [--details]", "cmd-doctor"),
     ("debug bundle [--from NAME…]", "cmd-debug-bundle"),
@@ -271,6 +272,7 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
             duration: w.first().cloned(),
         }),
         "resume" if fits(0, 0, &[]) => send(Request::Resume),
+        "leave" if fits(0, 0, &[]) => send(Request::Leave),
         "suggestions" if fits(0, 0, &[]) => send(Request::Proposals),
         "accept" if fits(1, 1, &["override"]) => send(Request::Accept {
             proposal: w.first()?.clone(),

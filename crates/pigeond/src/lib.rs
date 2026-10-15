@@ -29,6 +29,7 @@ pub mod install;
 pub mod invite;
 pub mod join;
 pub mod journal_file;
+pub mod leave;
 pub mod locks;
 pub mod logs;
 pub mod merge;

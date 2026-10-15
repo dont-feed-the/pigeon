@@ -235,6 +235,19 @@ pub fn add_group(path: &Path, entry: &GroupEntry) -> Result<(), ConfigError> {
     write_doc(path, &doc)
 }
 
+/// Removes the `[[groups]]` entry of the group `id` (`pigeon leave`, 09
+/// §9.7), keeping the rest of the file as it is.
+pub fn remove_group(path: &Path, id: &str) -> Result<(), ConfigError> {
+    let mut doc = read_doc(path)?;
+    if let Some(groups) = doc
+        .get_mut("groups")
+        .and_then(toml_edit::Item::as_array_of_tables_mut)
+    {
+        groups.retain(|t| t.get("id").and_then(toml_edit::Item::as_str) != Some(id));
+    }
+    write_doc(path, &doc)
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, reason = "tests")]
@@ -258,5 +271,27 @@ mod tests {
         assert_eq!(c.language.as_deref(), Some("fr"));
         assert_eq!(c.notifications, Some(false));
         assert!(!c.network.mdns);
+    }
+
+    #[test]
+    fn a_group_left_leaves_the_file_and_the_others_stay() {
+        let t = tempfile::tempdir().unwrap();
+        let path = t.path().join("config.toml");
+        std::fs::write(&path, "# mine\nlanguage = \"fr\"\n").unwrap();
+        for id in ["a", "b"] {
+            let entry = GroupEntry {
+                id: id.into(),
+                path: t.path().join(id),
+            };
+            add_group(&path, &entry).unwrap();
+        }
+        remove_group(&path, "a").unwrap();
+        let c = load(&path).unwrap();
+        assert_eq!(
+            c.groups.iter().map(|g| g.id.as_str()).collect::<Vec<_>>(),
+            ["b"]
+        );
+        assert_eq!(c.language.as_deref(), Some("fr"));
+        assert!(std::fs::read_to_string(&path).unwrap().contains("# mine"));
     }
 }

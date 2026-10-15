@@ -98,6 +98,7 @@ repository, and git never shares it (ADR 0036).
 | `invitations.json` | an invitation is created, used, cancelled or expires ([09 §9.6](09-network-and-joining.md)) | each secret and its hash, purpose, expiry, used flag; mode 0600 | no |
 | `aside/` | install step 4 | files moved aside, kept until the first full scan 10 minutes after `done` | no ([07 §7.5](07-capture-and-install.md)) |
 | `stage/` | install step 2; keeping a folder ([08 §8.5](08-custody-loops.md)) | new files before they enter the folder | yes: unreferenced files are deleted at start |
+| `leaving` | `pigeon leave` ([09 §9.7](09-network-and-joining.md)) | the roster commit removing this device, and the peers that refused it before | no: removed with the repository once a peer has the commit |
 | `recovered/` | install steps 6 and 9 | moved-aside content that was not pigeon's, until captured as a recovered version | no ([07 §7.6](07-capture-and-install.md)) |
 | `RECOVERY.txt` (custodians, in the repository directory) | the roster changes | the group's name, the other custodians, and the git and git-annex commands that read the files without pigeon ([09 §9.9](09-network-and-joining.md), ADR 0047) | yes: written again from the roster |
 
