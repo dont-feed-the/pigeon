@@ -406,13 +406,18 @@ def commit_in(repo, msg):
 def notice_fetched(L, C, d, restart, msg):
     """A commit on C, which L's remotedaemon d must fetch into its refspec. Its fetch
     runs inside the notice loop without a deadline (P2PGeneric.hs handlepeer), so one
-    that hangs in the relay race (see p2p) silences C for good: say so, restart, retry."""
-    for attempt in (1, 2):
-        new = commit_in(C, msg)
+    that hangs in the relay race (see p2p) silences C for good: say so, restart, retry.
+    CONNECTED can also come before C's side watches main for this connection, so a
+    first notice is lost now and then (lab, 2a8828b): a later commit sends another;
+    what is asserted is that notices reach L, not that the first one does."""
+    for attempt in (1, 2, 3):
+        new = commit_in(C, msg if attempt == 1 else f'{msg} ({attempt})')
         if wait_for(lambda: ref(L, 'refs/pigeon/peers/C/main') == new):
             return d, new, True
         if not d.hung():
-            break
+            NOTES.append(f"L's remotedaemon fetched nothing within 20 s (attempt {attempt}): "
+                         'the notice was sent again')
+            continue
         NOTES.append(f"L's remotedaemon fetch hung (attempt {attempt}): the relay race of 16 §16.4")
         d.stop()
         d = restart()
@@ -514,7 +519,14 @@ def main():
 
     # Pushes into peers over P2P.
     pc = commit_in(P, 'unvalidated, by P')
-    r = p2p(P, 'push', 'c', '+main:refs/heads/main', ok=False)
+    # The stock relay can end a push with an error (E25), as below; what is
+    # asserted is that nothing refuses it, so a failed push is tried again.
+    for attempt in (1, 2, 3):
+        r = p2p(P, 'push', 'c', '+main:refs/heads/main', ok=False)
+        if r.returncode == 0 and ref(C, 'main') == pc:
+            break
+        NOTES.append(f'push to main of C failed (attempt {attempt}, '
+                     f'exit {r.returncode}): {r.stderr.strip()[-300:]}')
     check(r.returncode == 0 and ref(C, 'main') == pc,
           'by default a peer pushes an unvalidated main into custodian C over P2P')
     git(C, 'update-ref', 'refs/heads/main', new)
