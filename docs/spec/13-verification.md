@@ -62,8 +62,8 @@ explains every line (`trace:accepted`); otherwise the depth reached names
 the first unexplained line (`trace:rejected:N`), which fails the build.
 `scripts/check-code-traces` checks pigeon-core's functions (the roster
 fold, admission, the authority rule, the catalogue merge) run in a simulated environment taking
-the model's steps (20 runs in `ci`, 200 in
-`models-full`; a mutant of each must be rejected), and
+the model's steps (20 runs in `ci`; in `models-full` 50 on a push, 200
+weekly and by hand; a mutant of each must be rejected), and
 `scripts/check-lab-traces` the registered parts of the slice's runs (§13.12).
 An unregistered specification or missing fields are reported as unchecked;
 `--require SPEC` makes missing or partial coverage fail, even when another
@@ -352,7 +352,7 @@ locks (11 §11.4).
 | S6 | a save racing `keep`'s install wins ([07 §7.5](07-capture-and-install.md)) |
 | S7 | a custodian's image destroyed: not safe; `remove-computer`, a new custodian, repair in [08 §8.9](08-custody-loops.md)'s order |
 | S8 | a full custodian refuses admission and says why; a full laptop refuses a restore before it starts |
-| S9 | `pigeond` crashed at each named point of capture, install, place and free: nothing lost or duplicated; 50 random schedules per push, 1000 in `models-full` |
+| S9 | `pigeond` crashed at each named point of capture, install, place and free: nothing lost or duplicated; 50 random schedules per push; `models-full` runs 200 when a model or the runner changes, 1000 weekly and by hand |
 | S10 | a fresh laptop recovers from the custodians with the recovery sheet (ADR 0047); the keys, metadata and authority it needed are listed |
 | S11 | steady and peak disk use per device: folders, `.git`, annex objects, `.git/annex/tmp`, pending history ([07 §7.8](07-capture-and-install.md)), pigeon's state, temporary files |
 | S12 | a nearly full custodian takes what fits in its room above the reserve, says `no-capacity` without being full, and so does the laptop from its status report ([06 §6.3](06-status.md)); it takes the rest once room returns ([08 §8.9](08-custody-loops.md), issue #13) |
