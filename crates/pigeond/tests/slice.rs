@@ -60,6 +60,24 @@ fn local_published_protected_then_free_and_keep() {
     join(&lap, &c2, &all);
     let s = until(&lap, State::Protected, &all);
     assert_eq!(s.headline.id, "headline-safe", "{s:?}");
+    // Each backup machine's RECOVERY.txt names the other (09 §9.9).
+    let note = |c: &common::Daemon| {
+        std::fs::read_dir(c.home.join("config"))
+            .unwrap()
+            .flatten()
+            .map(|e| e.path().join("RECOVERY.txt"))
+            .find(|p| p.is_file())
+            .map(|p| std::fs::read_to_string(p).unwrap())
+    };
+    common::eventually_within(
+        60,
+        || {
+            note(&c1).is_some_and(|t| t.contains("machines: c2."))
+                && note(&c2).is_some_and(|t| t.contains("machines: c1."))
+        },
+        "RECOVERY.txt",
+        &all,
+    );
 
     let machines = pigeon(&lap, &["machines"]);
     match machines.as_slice() {

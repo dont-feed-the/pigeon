@@ -117,6 +117,7 @@ impl Daemon {
         crate::settings::check(g).await;
         g.ensure_remotedaemon(&self.wake).await;
         g.reload_roster().await;
+        crate::recovery_txt::write(g, &self.device);
         if crate::leave::round(self, g).await {
             return;
         }

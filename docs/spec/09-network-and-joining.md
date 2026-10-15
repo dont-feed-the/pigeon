@@ -261,7 +261,8 @@ tools are those of ADR 0047, which fixes their formats:
   `annex/objects` or, for an unlocked file, its working tree; a file takes
   its name only once its SHA-256 matches the key. `--deleted` writes the
   last version of each deleted file under `.deleted/`; `MISSING.tsv` lists
-  what is missing or damaged. `RECOVERY.txt` is not written yet.
+  what is missing or damaged. A backup machine writes `RECOVERY.txt` in its
+  repository directory each round the note changes (`pigeond/src/recovery_txt.rs`).
 - **Replacing a custodian:** the failed one is removed (§9.7) and its
   replacement joins as a new device. A surviving disk gets a new UUID and
   counts only after a hashing fsck of everything (E21). A custodian whose

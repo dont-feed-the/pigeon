@@ -41,6 +41,7 @@ pub mod pause;
 pub mod prefs;
 pub mod proposal;
 pub mod recovery;
+pub mod recovery_txt;
 pub mod renames;
 pub mod repair;
 pub mod report;
