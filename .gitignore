@@ -1,4 +1,6 @@
 /target
 states/
+.tlacache/
+_apalache-out/
 *.out
 .hegel/
