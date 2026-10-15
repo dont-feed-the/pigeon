@@ -132,9 +132,13 @@ fn kind(worktree: &Path, path: &str) -> Option<&'static str> {
 
 /// `git status` of the folder (07 §7.3 step 2).
 async fn status(g: &Group) -> Result<Vec<Entry>, Error> {
-    let out = g
-        .git
-        .repo
+    // Status may run alongside an install. Git must not refresh or lock
+    // the index as a side effect of this observation.
+    let mut repo = g.git.repo.clone();
+    repo.env
+        .extra
+        .push(("GIT_OPTIONAL_LOCKS".into(), "0".into()));
+    let out = repo
         .run(
             &[
                 "status",

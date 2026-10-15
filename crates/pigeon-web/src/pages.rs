@@ -33,7 +33,8 @@ const SECTIONS: &[(&str, &str)] = &[
 const STYLE: &str = "body{font-family:system-ui,sans-serif;max-width:46rem;margin:2rem auto;\
 padding:0 1rem;line-height:1.5;color:#1b1b1b}nav a{margin-right:1.2rem}\
 nav a[aria-current]{font-weight:bold}h1{font-size:1.5rem}li{margin:.3rem 0}\
-article{border-top:1px solid #ccc;padding:.5rem 0}form{display:inline-block;margin-right:1rem}";
+article{border-top:1px solid #ccc;padding:.5rem 0}form{display:inline-block;margin-right:1rem}\
+textarea{max-width:100%;box-sizing:border-box}";
 
 /// Puts each `headline` event's text in the page's headline.
 const SCRIPT: &str = "new EventSource('/events').addEventListener('headline',\
