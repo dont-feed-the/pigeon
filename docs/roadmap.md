@@ -6,7 +6,9 @@ orders the work and says when each part counts as done; what each part does
 is in the [specification](spec/) and the [ADRs](adr/). It is not normative.
 
 The order follows one rule: first what keeps data safe, then what three
-people need to use pigeon on their own machines, then deletion, then polish.
+people need to use pigeon on their own machines, then what people who did
+not build it need, then deletion, then polish (Guillaume, 15 October:
+the interface before purge and scrub).
 
 ## How a milestone ends
 
@@ -85,31 +87,32 @@ Exit:
 - install and uninstall are tested in CI;
 - Mario, Guillaume and Laurent run pigeon on their own machines.
 
-## M4. Deletion and scrub: v0.5
-
-- Purge is reference-aware and handles restores and returning peers
-  ([08 §8.6](spec/08-custody-loops.md), ADR 0018, issues #4, #5). Erase
-  ships with it.
-- The scrub runs every 30 days in the idle I/O class
-  ([08 §8.8](spec/08-custody-loops.md)).
-- `Purge` traces are validated ([13 §13.10](spec/13-verification.md)).
-
-Exit: the purge laws hold, the model checks, and scenarios of a purge racing
-a restore and of an offline peer returning pass.
-
-## M5. For people: v0.6
+## M4. For people: v0.5
 
 - `pigeon-web` (ADR 0021) shows plain words and one headline status
   (ADR 0027).
 - Notifications and a launcher (ADR 0029).
 - The French bundle (ADR 0028).
 - Telemetry to an optional collector, and the two dashboards (ADR 0025).
-- The remaining commands: none answers `not-in-this-build` any more.
+- The remaining commands but purge and erase (M5): none other answers
+  `not-in-this-build` any more.
 - Recovery is complete, including refounding and export without pigeon
   (ADR 0047, [09 §9.9](spec/09-network-and-joining.md)).
 
 Exit: a usability test with people who did not build pigeon, which sets the
 thresholds of [06 §6.7](spec/06-status.md).
+
+## M5. Deletion and scrub: v0.6
+
+- Purge is reference-aware and handles restores and returning peers
+  ([08 §8.6](spec/08-custody-loops.md), ADR 0018, issues #4, #5). Erase
+  ships with it, and no command answers `not-in-this-build` any more.
+- The scrub runs every 30 days in the idle I/O class
+  ([08 §8.8](spec/08-custody-loops.md)).
+- `Purge` traces are validated ([13 §13.10](spec/13-verification.md)).
+
+Exit: the purge laws hold, the model checks, and scenarios of a purge racing
+a restore and of an offline peer returning pass.
 
 ## M6. Resources and content: v0.7
 
@@ -152,7 +155,7 @@ These come in v1.1:
 
 These questions of [16 §16.4](spec/16-open-questions.md) block a milestone:
 
-- rename tracking, own files in add-only folders, and saves from stale
-  memory block M2;
-- expiring declined suggestions blocks M4;
-- the status thresholds block M5.
+- rename tracking and saves from stale memory block M2 (own files in
+  add-only folders: ADR 0070);
+- the status thresholds block M4;
+- expiring declined suggestions blocks M5.
