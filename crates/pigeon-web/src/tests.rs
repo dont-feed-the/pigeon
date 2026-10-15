@@ -90,6 +90,26 @@ impl Backend for Fixed {
             pigeon_proto::Request::CancelInvitation { invitation } => {
                 vec![said("invitation-cancelled", "id", invitation)]
             }
+            pigeon_proto::Request::Held => vec![Response::Held {
+                held: vec![pigeon_proto::api::HeldEntry {
+                    id: "h1".into(),
+                    reason: Message {
+                        id: "held-top-folder".into(),
+                        args: [(
+                            "folder".to_owned(),
+                            pigeon_proto::Arg::Text("Photos".into()),
+                        )]
+                        .into(),
+                    },
+                    files: 3,
+                    since: "2026-10-15T10:00:00Z".into(),
+                    paths: vec!["Photos/a.jpg".into()],
+                }],
+            }],
+            pigeon_proto::Request::ReleaseHeld { batch, choice } => {
+                vec![said("held-shared", "files", format!("{batch}/{choice:?}"))]
+            }
+            pigeon_proto::Request::Leave => vec![said("leaving", "name", "mine".into())],
             pigeon_proto::Request::Invite { person, .. } => {
                 vec![said("invitation", "code", format!("pgn1-{person}"))]
             }
@@ -415,4 +435,94 @@ async fn a_pending_invitation_is_listed_and_cancelled() {
         done.contains("Invitation ab12 can no longer be used."),
         "{done}"
     );
+}
+
+#[tokio::test]
+async fn a_held_deletion_is_shared_once_confirmed_or_brought_back() {
+    let w = web();
+    let app = w.router();
+    let cookie = logged_in(&app, &w).await;
+    let home = body(
+        app.clone()
+            .oneshot(get("/", HOST, Some(&cookie)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert!(home.contains("Deletions waiting for you"), "{home}");
+    assert!(home.contains("the folder Photos removed"), "{home}");
+    let form = form_of(&home);
+    let forged = app
+        .clone()
+        .oneshot(post("/held/share", &cookie, "form=00&batch=h1"))
+        .await
+        .unwrap();
+    assert_eq!(forged.status(), StatusCode::FORBIDDEN);
+    let ask = app
+        .clone()
+        .oneshot(post(
+            "/held/share",
+            &cookie,
+            &format!("form={form}&batch=h1"),
+        ))
+        .await
+        .unwrap();
+    let ask = body(ask).await;
+    assert!(
+        ask.contains("Delete the files of h1 for everyone?"),
+        "{ask}"
+    );
+    assert!(!ask.contains("h1/Share"), "{ask}");
+    let done = app
+        .clone()
+        .oneshot(post(
+            "/held/share",
+            &cookie,
+            &format!("form={form}&batch=h1&yes=true"),
+        ))
+        .await
+        .unwrap();
+    let done = body(done).await;
+    assert!(done.contains("h1/Share"), "{done}");
+    let back = app
+        .oneshot(post(
+            "/held/bring-back",
+            &cookie,
+            &format!("form={form}&batch=h1"),
+        ))
+        .await
+        .unwrap();
+    let back = body(back).await;
+    assert!(back.contains("h1/BringBack"), "{back}");
+}
+
+#[tokio::test]
+async fn leaving_from_settings_is_asked_again_first() {
+    let w = web();
+    let app = w.router();
+    let cookie = logged_in(&app, &w).await;
+    let page = app
+        .clone()
+        .oneshot(get("/settings", HOST, Some(&cookie)))
+        .await
+        .unwrap();
+    let page = body(page).await;
+    assert!(page.contains("Leave the group"), "{page}");
+    let form = form_of(&page);
+    let ask = app
+        .clone()
+        .oneshot(post("/leave", &cookie, &format!("form={form}")))
+        .await
+        .unwrap();
+    let ask = body(ask).await;
+    assert!(
+        ask.contains("Remove this computer from the group?"),
+        "{ask}"
+    );
+    let done = app
+        .oneshot(post("/leave", &cookie, &format!("form={form}&yes=true")))
+        .await
+        .unwrap();
+    let done = body(done).await;
+    assert!(done.contains("mine leaves the group"), "{done}");
 }

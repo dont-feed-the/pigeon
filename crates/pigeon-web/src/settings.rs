@@ -1,7 +1,8 @@
 //! Settings (ux.md §6.5): this computer's settings of `config.toml` (11
 //! §11.2), each a choice and a *Save* button that becomes `SetSettings`.
 //! A new language shows from the answer on. *Pause* and *Share again* are
-//! `pigeon pause` and `pigeon resume` (15 §15.6).
+//! `pigeon pause` and `pigeon resume` (15 §15.6); *Leave the group* is
+//! `pigeon leave` (`leave.rs`).
 
 use std::sync::Arc;
 
@@ -36,6 +37,7 @@ pub async fn settings(
         (list(&other))
         @for s in &rows { (setting(&r, s, &form.0)) }
         (pausing(&r, &form.0))
+        (crate::leave::form(&r, &form.0))
     };
     page(&r, "/settings", &r.id("web-nav-settings"), &body)
 }

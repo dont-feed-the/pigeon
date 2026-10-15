@@ -121,11 +121,17 @@ pub(crate) fn list(items: &[String]) -> Markup {
     html! { ul { @for i in items { li { (i.trim()) } } } }
 }
 
-/// Home: the headline, and what is not safe yet and why.
-pub async fn home(State(web): State<Arc<Web>>) -> Html<String> {
+/// Home: the headline, what is not safe yet and why, and the deletions
+/// pigeon holds (`held.rs`).
+pub async fn home(
+    State(web): State<Arc<Web>>,
+    Extension(form): Extension<FormToken>,
+) -> Html<String> {
     let r = web.renderer();
     let (headline, rest) = status(&web, &r).await;
-    page(&r, "/", &headline, &list(&rest))
+    let held = crate::held::section(&web, &r, &form.0).await;
+    let body = html! { (list(&rest)) (held) };
+    page(&r, "/", &headline, &body)
 }
 
 /// Suggestions: those waiting for a decision, with *Accept* and *Decline*

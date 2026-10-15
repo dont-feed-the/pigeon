@@ -26,6 +26,8 @@ use pigeon_i18n::Catalogue;
 
 mod actions;
 mod files;
+mod held;
+mod leave;
 mod machines;
 mod pages;
 mod settings;
@@ -151,6 +153,9 @@ impl Web {
             .route("/settings", get(settings::settings).post(settings::save))
             .route("/pause", post(settings::pause))
             .route("/resume", post(settings::resume))
+            .route("/held/share", post(held::share))
+            .route("/held/bring-back", post(held::bring_back))
+            .route("/leave", post(leave::leave))
             .route("/suggestions/accept", post(actions::accept))
             .route("/suggestions/decline", post(actions::decline))
             .route_layer(middleware::from_fn_with_state(self.clone(), session))

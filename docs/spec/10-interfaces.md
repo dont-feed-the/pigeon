@@ -89,6 +89,9 @@ People & machines lists the people first (`People`, also `pigeon people`);
 `pigeon deleted` lists Deleted files.
 `pigeon invite --list` and `--cancel ID` (`Invitations`, `CancelInvitation`)
 show and withdraw the invitations not yet used.
+Home lists the held deletions (`Held`) with *Delete for everyone*, asked
+again, and *Bring them back* (`ReleaseHeld`); Settings has *Leave the
+group*, asked again (`Leave`).
 Not yet: the other settings, the other actions, axe-core.
 
 - Served by `pigeond`, rendered on the server; server-sent events refresh

@@ -219,7 +219,7 @@ pub async fn invite(
 }
 
 /// The refusal of a form without the session's token.
-fn expired(web: &Web, token: &FormToken, form: &str) -> Option<Response> {
+pub(crate) fn expired(web: &Web, token: &FormToken, form: &str) -> Option<Response> {
     (token.0.is_empty() || form != token.0).then(|| {
         (
             StatusCode::FORBIDDEN,
