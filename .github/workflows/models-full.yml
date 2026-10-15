@@ -1,6 +1,7 @@
 # The full set of TLA+ models, slow rows included (ADR 0026), 200 runs of
 # pigeon-core checked by TLC (spec 13 §13.3), and 1000 random S9 crash schedules
 # of the slice against the lab build, in twenty shards of four processes,
+# weekly and by hand; a push checks 50 runs and 200 schedules, in four shards,
 # and only the blocked slice scenarios (13 §13.12). Runs when a
 # model or the runner changes, weekly, and by hand. GitHub runs `schedule`
 # and `workflow_dispatch` only from the default branch, so until v2 is the
@@ -53,7 +54,7 @@ jobs:
         run: scripts/run-tlc --full --shard ${{ matrix.shard }} 4
 
   code-traces:
-    name: 200 runs of pigeon-core checked by TLC
+    name: ${{ github.event_name == 'push' && 50 || 200 }} runs of pigeon-core checked by TLC
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
@@ -69,7 +70,7 @@ jobs:
       - name: the pinned toolchain (rust-toolchain.toml)
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
       - name: every run is accepted by its model, every mutant rejected (13 §13.3)
-        run: scripts/check-code-traces --seeds 200 --jobs 4 --heap 2g
+        run: scripts/check-code-traces --seeds ${{ github.event_name == 'push' && 50 || 200 }} --jobs 4 --heap 2g
 
   s9-schedules:
     name: S9, 50 crash schedules (shard ${{ matrix.shard }})
@@ -78,7 +79,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+        # 200 schedules on a push, 1000 weekly and by hand.
+        shard: ${{ fromJSON(github.event_name == 'push' && '[0, 1, 2, 3]' || '[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]') }}
     env:
       GIT_ANNEX_SHA256: 88ea73c9bb8fb751916e0e4a0a8f489a7476f9b9e861fd2cce2601a77f4f409d
     steps:
@@ -101,7 +103,7 @@ jobs:
         env:
           PIGEON_LAB_BIN: ${{ github.workspace }}/target/lab/bin
           SHARD: ${{ matrix.shard }}
-        # Eighty distinct seeds, 12 or 13 cases apiece: still 1000 cases.
+        # Four processes per shard, 12 or 13 cases apiece, each its own seed.
         # Each process has its own disks and logs.
         run: scripts/check-s9-schedules --cases 50 --jobs 4 --seed "$((SHARD * 4))"
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
