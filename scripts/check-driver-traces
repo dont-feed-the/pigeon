@@ -196,6 +196,29 @@ def roster_mutations(out, java):
     refuse(events, "roster commit signed outside its parent roster")
 
 
+def cancelled_prefix(streams, java):
+    """Cancellation is informational: keep the real killed-run checkpoints."""
+    for _, _, original in streams:
+        for j, (before, following) in enumerate(zip(original, original[1:])):
+            b, f = before["vars"], following["vars"]
+            if b["edge"] != "before" or f["edge"] != "before" or b["run"] == f["run"]:
+                continue
+            events = copy.deepcopy(original)
+            marker = copy.deepcopy(events[j])
+            del marker["vars"]["state"]
+            marker["vars"].update(edge="cancelled", interrupted=True)
+            events.insert(j + 1, marker)
+            for clock, event in enumerate(events, 1):
+                event["clock"] = clock
+            if checker.check(events, java, 4) != "trace:accepted":
+                sys.exit("FAIL cancellation changed the real crash-prefix explanation")
+            print("ok   cancellation retains real restart checkpoints: accepted", flush=True)
+            events[j + 1]["vars"]["seq"] += 1
+            reject(events, java, "cancellation of another operation", syntax=True)
+            return
+    sys.exit("FAIL no actual interrupted run to check cancellation")
+
+
 def pipeline_mutations(out, java):
     """A second valid log cannot mask an invalid or incomplete one."""
     original = next((out / "release").rglob("*.ndjson")).read_text()
@@ -241,6 +264,7 @@ def run(out, java, generate=True):
     if result.returncode:
         sys.exit(result.stderr or "FAIL daemon traces did not pass the common lab checker")
     mutations(streams, java)
+    cancelled_prefix(streams, java)
     roster_mutations(out, java)
     pipeline_mutations(out, java)
     # Losing a whole scenario cannot be masked by another valid run.
