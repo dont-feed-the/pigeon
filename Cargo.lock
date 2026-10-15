@@ -1091,7 +1091,7 @@ dependencies = [
 
 [[package]]
 name = "git-annex-p2p-iroh"
-version = "2.0.0-alpha.0"
+version = "0.3.1"
 dependencies = [
  "pigeon-core",
  "pigeon-proto",
@@ -2499,7 +2499,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon"
-version = "2.0.0-alpha.0"
+version = "0.3.1"
 dependencies = [
  "pigeon-core",
  "pigeon-i18n",
@@ -2512,7 +2512,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-core"
-version = "2.0.0-alpha.0"
+version = "0.3.1"
 dependencies = [
  "caseless",
  "hegeltest",
@@ -2523,7 +2523,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-git"
-version = "2.0.0-alpha.0"
+version = "0.3.1"
 dependencies = [
  "rustix",
  "serde",
@@ -2536,7 +2536,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-i18n"
-version = "2.0.0-alpha.0"
+version = "0.3.1"
 dependencies = [
  "fluent-bundle",
  "fluent-langneg",
@@ -2549,7 +2549,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-lab"
-version = "2.0.0-alpha.0"
+version = "0.3.1"
 dependencies = [
  "hegeltest",
  "pigeon-core",
@@ -2561,7 +2561,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-proto"
-version = "2.0.0-alpha.0"
+version = "0.3.1"
 dependencies = [
  "data-encoding",
  "hegeltest",
@@ -2572,7 +2572,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-sys"
-version = "2.0.0-alpha.0"
+version = "0.3.1"
 dependencies = [
  "dirs",
  "libc",
@@ -2583,7 +2583,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-telemetry"
-version = "2.0.0-alpha.0"
+version = "0.3.1"
 dependencies = [
  "getrandom 0.4.3",
  "hegeltest",
@@ -2593,7 +2593,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-web"
-version = "2.0.0-alpha.0"
+version = "0.3.1"
 dependencies = [
  "axum",
  "form_urlencoded",
@@ -2609,7 +2609,7 @@ dependencies = [
 
 [[package]]
 name = "pigeond"
-version = "2.0.0-alpha.0"
+version = "0.3.1"
 dependencies = [
  "axum",
  "data-encoding",
