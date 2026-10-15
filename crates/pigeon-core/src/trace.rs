@@ -241,6 +241,15 @@ actions! {
     }
 }
 
+actions! {
+    /// The actions of `models/tla/Authority.tla` that traces log: one
+    /// commit and its verdict (04 §4.4).
+    Authority = "Authority" {
+        /// A commit judged against its one accepted parent.
+        Judge,
+    }
+}
+
 impl Event {
     /// An event of action `a` of its specification.
     pub fn new<A: Actions>(

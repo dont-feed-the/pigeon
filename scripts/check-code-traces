@@ -4,10 +4,10 @@
 `cargo test` writes NDJSON traces of pigeon-core's simulated runs (feature
 `tla-trace`); each becomes a TLA+ module through scripts/trace-to-tla, and TLC
 checks it with its *Trace.tla specification: every run must be accepted. A
-mutant of each run (a logged roster changed, a decision reversed) must be
+mutant of each run (a logged roster changed, a decision or verdict reversed) must be
 rejected, so a check that accepts everything fails. Usage: scripts/check-code-traces
 [--seeds N] [--fixtures]. With --fixtures, the committed sample logs of
-models/tla (RosterTrace_good and _bad, AdmitTrace_good and _bad) are
+models/tla (RosterTrace, AdmitTrace and AuthorityTrace, _good and _bad) are
 rewritten from seed 1 and their modules regenerated, for scripts/run-tlc.
 """
 
@@ -53,11 +53,20 @@ def admit_mutant(lines):
     return [json.dumps(e, separators=(",", ":")) for e in events]
 
 
+def authority_mutant(lines):
+    """The same history with the verdict on its last commit reversed."""
+    events = [json.loads(line) for line in lines]
+    events[-1]["vars"]["acc"] = not events[-1]["vars"]["acc"]
+    return [json.dumps(e, separators=(",", ":")) for e in events]
+
+
 # spec, cargo test target, file prefix, good and bad log modules, mutant.
 SPECS = [("RosterTrace", "roster_trace", "roster", ("RosterCodeLog", "CodeLog"), ("RosterCodeBadLog", "BadLog"),
           roster_mutant),
          ("AdmitTrace", "admit_trace", "admit", ("AdmitCodeLog", "CodeLog"), ("AdmitCodeBadLog", "BadLog"),
-          admit_mutant)]
+          admit_mutant),
+         ("AuthorityTrace", "authority_trace", "authority", ("AuthorityCodeLog", "CodeLog"),
+          ("AuthorityCodeBadLog", "BadLog"), authority_mutant)]
 
 
 def traces(target, seeds, out):

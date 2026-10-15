@@ -34,6 +34,8 @@ RosterTrace_good	RosterTrace	fast	trace:accepted
 RosterTrace_bad	RosterTrace	fast	trace:rejected:7
 AdmitTrace_good	AdmitTrace	fast	trace:accepted
 AdmitTrace_bad	AdmitTrace	fast	trace:rejected:4
+AuthorityTrace_good	AuthorityTrace	fast	trace:accepted
+AuthorityTrace_bad	AuthorityTrace	fast	trace:rejected:15
 AnnexDrop_design	AnnexDrop	fast	pass
 AnnexDrop_ranked	AnnexDrop	fast	pass
 AnnexDrop_p2p	AnnexDrop	fast	violation:INV_K

@@ -26,7 +26,9 @@ FIXTURES = [("TraceSample_good.ndjson", "TraceSampleGoodLog", "GoodLog"),
             ("RosterTrace_good.ndjson", "RosterCodeLog", "CodeLog"),
             ("RosterTrace_bad.ndjson", "RosterCodeBadLog", "BadLog"),
             ("AdmitTrace_good.ndjson", "AdmitCodeLog", "CodeLog"),
-            ("AdmitTrace_bad.ndjson", "AdmitCodeBadLog", "BadLog")]
+            ("AdmitTrace_bad.ndjson", "AdmitCodeBadLog", "BadLog"),
+            ("AuthorityTrace_good.ndjson", "AuthorityCodeLog", "CodeLog"),
+            ("AuthorityTrace_bad.ndjson", "AuthorityCodeBadLog", "BadLog")]
 IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 RESERVED = set("""ASSUME ASSUMPTION AXIOM CASE CHOOSE CONSTANT CONSTANTS DOMAIN ELSE
     ENABLED EXCEPT EXTENDS IF IN INSTANCE LET LOCAL MODULE OTHER SF_ SUBSET THEN
