@@ -8,6 +8,7 @@
 
 pub mod ids;
 pub mod lang;
+pub mod render;
 
 use std::collections::BTreeMap;
 

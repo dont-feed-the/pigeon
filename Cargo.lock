@@ -2321,6 +2321,7 @@ dependencies = [
  "fluent-bundle",
  "fluent-langneg",
  "fluent-syntax",
+ "pigeon-proto",
  "serde",
  "serde_json",
  "unic-langid",

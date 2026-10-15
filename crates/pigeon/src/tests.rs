@@ -5,7 +5,6 @@ use pigeon_proto::api::{Level, Machine, State, StatusReport, VersionStatus};
 use pigeon_proto::{Message, Request, Response};
 
 use crate::args::{Action, absolute, parse};
-use crate::render::Renderer;
 
 fn line(args: &str) -> crate::args::Line {
     let v: Vec<String> = args.split_whitespace().map(str::to_owned).collect();
@@ -123,7 +122,7 @@ fn version(state: State) -> VersionStatus {
 #[test]
 fn responses_render_without_placeholders() {
     let now = pigeon_proto::time::parse_rfc3339("2026-10-14T12:00:00Z").unwrap_or_default();
-    let r = Renderer::new(now);
+    let r = crate::render::for_person(now);
     let headline = Message {
         id: "headline-safe".into(),
         args: [(
@@ -167,7 +166,7 @@ fn responses_render_without_placeholders() {
     for resp in &responses {
         all.extend(r.response(resp).0);
     }
-    all.extend(r.help());
+    all.extend(crate::render::help(&r));
     let text = all.join("\n");
     assert!(!text.contains('{'), "{text}");
     assert!(text.contains("5 minutes ago"), "{text}");
@@ -201,7 +200,7 @@ fn local_problems_fit_the_catalogue() {
                 .collect(),
         };
         assert_eq!(pigeon_i18n::check(&m), Ok(()), "{code}");
-        let lines = Renderer::new(0).problem(&p);
+        let lines = crate::render::for_person(0).problem(&p);
         assert!(lines.iter().all(|l| !l.contains('{')), "{lines:?}");
     }
 }

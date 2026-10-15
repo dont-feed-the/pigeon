@@ -130,10 +130,10 @@ fn exchange(out: &Renderer, json: bool, request: &Request) -> ExitCode {
 fn main() -> ExitCode {
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let line = args::parse(&argv);
-    let out = Renderer::new(now());
+    let out = render::for_person(now());
     match &line.action {
         Action::Help => {
-            emit(&out.help(), false);
+            emit(&render::help(&out), false);
             ExitCode::SUCCESS
         }
         Action::Usage(cmd) => {

@@ -1,0 +1,218 @@
+//! Turns `pigeond`'s responses into text with the Fluent catalogue (ADR
+//! 0028, 10 §10.5–10.6), for the CLI and the web interface: the daemon
+//! sends message ids and arguments, times in RFC 3339, and this module
+//! renders them in the person's language, with times relative to now.
+
+use crate::{Catalogue, ids};
+use pigeon_proto::api::{Machine, State, StatusReport, VersionStatus};
+use pigeon_proto::{Arg, Message, Problem, Response};
+
+/// The arguments that hold a past time, shown relative to now.
+const PAST: &[&str] = &["ago", "when", "since", "heard", "saved"];
+
+/// Renders responses as lines of text, for the CLI and the web pages.
+pub struct Renderer {
+    cat: Catalogue,
+    now: i64,
+}
+
+impl Renderer {
+    /// The renderer of `cat`'s language at time `now`, in Unix seconds.
+    pub fn new(cat: Catalogue, now: i64) -> Renderer {
+        Renderer { cat, now }
+    }
+
+    /// Its catalogue.
+    pub fn catalogue(&self) -> &Catalogue {
+        &self.cat
+    }
+
+    /// `secs` seconds ago, in words.
+    pub fn ago(&self, secs: i64) -> String {
+        let secs = secs.max(0);
+        let m = if secs < 60 {
+            crate::Message::new("time-just-now")
+        } else if secs < 3600 {
+            crate::Message::new("time-minutes-ago").arg("minutes", secs / 60)
+        } else if secs < 86_400 {
+            crate::Message::new("time-hours-ago").arg("hours", secs / 3600)
+        } else {
+            crate::Message::new("time-days-ago").arg("days", secs / 86_400)
+        };
+        self.cat.format(&m)
+    }
+
+    /// The text of `m`.
+    pub fn text(&self, m: &Message) -> String {
+        let mut out = crate::Message::new(m.id.clone());
+        for (name, value) in &m.args {
+            let v = match value {
+                Arg::Number(n) => crate::Arg::Number(*n),
+                Arg::Text(t) if PAST.contains(&name.as_str()) => {
+                    match pigeon_proto::time::parse_rfc3339(t) {
+                        Some(at) => crate::Arg::Text(self.ago(self.now - at)),
+                        None => crate::Arg::Text(t.clone()),
+                    }
+                }
+                Arg::Text(t) => crate::Arg::Text(t.clone()),
+            };
+            out.args.insert(name.clone(), v);
+        }
+        self.cat.format(&out)
+    }
+
+    /// The text of the message `id`, which takes no argument.
+    pub fn id(&self, id: &str) -> String {
+        self.cat.format(&crate::Message::new(id))
+    }
+
+    /// The text of a state.
+    pub fn state(&self, s: State) -> String {
+        self.id(match s {
+            State::Local => "state-local",
+            State::Published => "state-published",
+            State::Protected => "state-protected",
+            State::Missing => "state-missing",
+            State::Erased => "state-erased",
+        })
+    }
+
+    /// The lines of a problem: what, what to do, and its code.
+    pub fn problem(&self, p: &Problem) -> Vec<String> {
+        let mut out = vec![self.text(&p.message)];
+        if let Some(h) = &p.hint {
+            out.push(self.text(h));
+        } else if let Some(h) = ids::hint_id(&p.code) {
+            let hint = Message {
+                id: h.to_owned(),
+                args: p.message.args.clone(),
+            };
+            out.push(self.text(&hint));
+        }
+        let code = crate::Message::new("problem-code").arg("code", ids::display_code(&p.code));
+        out.push(self.cat.format(&code));
+        out
+    }
+
+    /// The lines of a status report: the headline, then each version waiting.
+    pub fn status(&self, r: &StatusReport) -> Vec<String> {
+        let mut out = vec![self.text(&r.headline)];
+        for v in &r.versions {
+            out.push(format!("  {}", self.waiting(v)));
+            if let Some(reason) = &v.reason {
+                out.push(format!("    {}", self.text(reason)));
+            }
+        }
+        for n in &r.not_shared {
+            out.push(format!("  {}", self.text(&n.reason)));
+        }
+        out
+    }
+
+    /// A version waiting, with its state.
+    pub fn waiting(&self, v: &VersionStatus) -> String {
+        let m = crate::Message::new("waiting-row")
+            .arg("path", v.path.as_str())
+            .arg("state", self.state(v.state));
+        self.cat.format(&m)
+    }
+
+    /// A computer or backup machine, and when it was last heard.
+    pub fn machine(&self, m: &Machine) -> String {
+        if m.this_device {
+            let msg = crate::Message::new("machine-this").arg("name", m.name.as_str());
+            return self.cat.format(&msg);
+        }
+        let kind = if m.custodian {
+            "machine-kind-custodian"
+        } else {
+            "machine-kind-computer"
+        };
+        let heard = m
+            .heard_at
+            .as_deref()
+            .and_then(pigeon_proto::time::parse_rfc3339)
+            .map_or_else(|| self.id("time-never"), |t| self.ago(self.now - t));
+        let msg = crate::Message::new("machine-row")
+            .arg("name", m.name.as_str())
+            .arg("kind", self.id(kind))
+            .arg("heard", heard);
+        self.cat.format(&msg)
+    }
+
+    /// A version in a file's history.
+    pub fn version(&self, v: &VersionStatus) -> String {
+        let saved = pigeon_proto::time::parse_rfc3339(&v.saved_at)
+            .map_or_else(|| v.saved_at.clone(), |t| self.ago(self.now - t));
+        let msg = crate::Message::new("version-row")
+            .arg("number", v.number.to_string())
+            .arg("saved", saved)
+            .arg("state", self.state(v.state));
+        self.cat.format(&msg)
+    }
+
+    /// A suggestion waiting for a decision.
+    pub fn suggestion(&self, p: &pigeon_proto::api::Suggestion) -> String {
+        let saved = pigeon_proto::time::parse_rfc3339(&p.saved_at)
+            .map_or_else(|| p.saved_at.clone(), |t| self.ago(self.now - t));
+        let id = if p.mine {
+            "suggestion-yours"
+        } else if p.decide {
+            "suggestion-decide"
+        } else {
+            "suggestion-other"
+        };
+        let msg = crate::Message::new(id)
+            .arg("id", p.id.get(..12).unwrap_or(&p.id).to_owned())
+            .arg("author", p.author.clone())
+            .arg("paths", p.paths.join(", "))
+            .arg("saved", saved);
+        self.cat.format(&msg)
+    }
+
+    /// The lines of a response, and whether they go to standard error.
+    pub fn response(&self, r: &Response) -> (Vec<String>, bool) {
+        match r {
+            Response::Said { message } => (vec![self.text(message)], false),
+            Response::Progress { message, .. } => (vec![self.text(message)], true),
+            Response::Problem(p) => (self.problem(p), true),
+            Response::Status(s) => (self.status(s), false),
+            Response::Machines { machines } => {
+                (machines.iter().map(|m| self.machine(m)).collect(), false)
+            }
+            Response::History { versions } => {
+                (versions.iter().map(|v| self.version(v)).collect(), false)
+            }
+            Response::Proposals { proposals } if proposals.is_empty() => {
+                (vec![self.id("suggestions-none")], false)
+            }
+            Response::Proposals { proposals } => (
+                proposals.iter().map(|p| self.suggestion(p)).collect(),
+                false,
+            ),
+            Response::Conflicts { conflicts } if conflicts.is_empty() => {
+                (vec![self.id("conflicts-none")], false)
+            }
+            Response::Conflicts { conflicts } => (
+                conflicts
+                    .iter()
+                    .map(|c| {
+                        let id = if c.state == "waiting" {
+                            "conflict-waiting"
+                        } else {
+                            "conflict-choose"
+                        };
+                        self.cat
+                            .format(&crate::Message::new(id).arg("path", c.path.clone()))
+                    })
+                    .collect(),
+                false,
+            ),
+            Response::Done
+            | Response::Hello { .. }
+            | Response::Address { .. }
+            | Response::Connected
+            | Response::Listening => (Vec::new(), false),
+        }
+    }
+}

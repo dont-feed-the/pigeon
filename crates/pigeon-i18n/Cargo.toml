@@ -11,6 +11,7 @@ publish.workspace = true
 [dependencies]
 fluent-bundle.workspace = true
 fluent-langneg.workspace = true
+pigeon-proto.workspace = true
 serde.workspace = true
 unic-langid.workspace = true
 
