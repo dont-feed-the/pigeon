@@ -144,8 +144,12 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         path: Option<String>,
     },
-    /// `pigeon settings`: this computer's settings (11 §11.2).
-    GetSettings,
+    /// `pigeon settings [KEY]`: this computer's settings (11 §11.2).
+    GetSettings {
+        /// Only this one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        key: Option<String>,
+    },
     /// `pigeon settings KEY VALUE`: changes one setting in `config.toml`.
     SetSettings {
         /// The key, such as `language`.

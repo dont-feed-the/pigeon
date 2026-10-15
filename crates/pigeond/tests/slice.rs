@@ -122,6 +122,12 @@ fn local_published_protected_then_free_and_keep() {
     // once (11 §11.2).
     let set = pigeon(&lap, &["settings", "language", "fr"]);
     assert!(said(&set, "setting-changed", "value").is_some(), "{set:?}");
+    let one = pigeon(&lap, &["settings", "language"]);
+    assert!(
+        matches!(&one[..], [Response::Settings { settings }]
+            if settings.len() == 1 && settings[0].value == "fr"),
+        "{one:?}"
+    );
     let settings = common::web::page(&web, "/settings");
     assert!(
         settings.contains("Réglages") && settings.contains("value=\"fr\" selected"),

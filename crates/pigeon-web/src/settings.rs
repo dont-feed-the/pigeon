@@ -26,7 +26,7 @@ pub async fn settings(
     let r = web.renderer();
     let mut rows = Vec::new();
     let mut other = Vec::new();
-    for answer in web.ask(Request::GetSettings).await {
+    for answer in web.ask(Request::GetSettings { key: None }).await {
         match answer {
             pigeon_proto::Response::Settings { settings } => rows = settings,
             pigeon_proto::Response::Progress { .. } => {}

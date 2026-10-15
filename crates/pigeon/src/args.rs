@@ -69,7 +69,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("remove-computer NAME [--yes]", "cmd-remove-computer"),
     ("recovery-sheet", "cmd-recovery-sheet"),
     ("recover SHEET [FOLDER] [--from NAME]", "cmd-recover"),
-    ("settings [KEY VALUE]", "cmd-settings"),
+    ("settings [KEY [VALUE]]", "cmd-settings"),
     ("pause [DURATION]", "cmd-pause"),
     ("resume", "cmd-resume"),
     ("people", "cmd-people"),
@@ -276,7 +276,9 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
             path: w.first().map(|p| absolute(p)),
         }),
         "open" if fits(0, 0, &[]) => send(Request::OpenWeb),
-        "settings" if fits(0, 0, &[]) => send(Request::GetSettings),
+        "settings" if fits(0, 1, &[]) => send(Request::GetSettings {
+            key: w.first().cloned(),
+        }),
         "settings" if fits(2, 2, &[]) => send(Request::SetSettings {
             key: w.first()?.clone(),
             value: w.get(1)?.clone(),

@@ -222,7 +222,7 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
                 None => vec![problem("not-in-group", &[], None)],
             }
         }
-        Request::GetSettings => crate::prefs::get(d),
+        Request::GetSettings { key } => crate::prefs::get(d, key.as_deref()),
         Request::SetSettings { key, value } => crate::prefs::set(d, &key, &value),
         Request::Pause { duration } => crate::pause::pause(d, duration.as_deref()),
         Request::Resume => crate::pause::resume(d),

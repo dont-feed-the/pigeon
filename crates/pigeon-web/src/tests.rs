@@ -48,7 +48,7 @@ impl Backend for Fixed {
                     .into(),
                 },
             }],
-            pigeon_proto::Request::GetSettings => vec![Response::Settings {
+            pigeon_proto::Request::GetSettings { .. } => vec![Response::Settings {
                 settings: vec![Setting {
                     key: "language".into(),
                     value: "auto".into(),

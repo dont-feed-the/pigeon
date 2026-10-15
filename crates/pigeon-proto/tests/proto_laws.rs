@@ -67,7 +67,9 @@ fn request(tc: &TestCase) -> Request {
         9 => Request::Machines,
         24 => Request::OpenWeb,
         25 => Request::Folders,
-        26 => Request::GetSettings,
+        26 => Request::GetSettings {
+            key: flag(tc).then(|| text(tc)),
+        },
         29 => Request::Deleted {
             path: flag(tc).then(|| text(tc)),
         },

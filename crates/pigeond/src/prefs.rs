@@ -22,8 +22,8 @@ fn yes_no() -> Vec<String> {
     vec!["true".to_owned(), "false".to_owned()]
 }
 
-/// `GetSettings`.
-pub fn get(d: &Daemon) -> Vec<Response> {
+/// `GetSettings`: all of them, or only `key`.
+pub fn get(d: &Daemon, key: Option<&str>) -> Vec<Response> {
     let c = match config::load(&d.dirs.config_file()) {
         Ok(c) => c,
         Err(e) => return vec![problem("internal-error", &[], Some(e.to_string()))],
@@ -40,7 +40,17 @@ pub fn get(d: &Daemon) -> Vec<Response> {
             choices: yes_no(),
         },
     ];
-    vec![Response::Settings { settings }]
+    match key {
+        None => vec![Response::Settings { settings }],
+        Some(k) => match settings.into_iter().find(|s| s.key == k) {
+            Some(s) => vec![Response::Settings { settings: vec![s] }],
+            None => vec![problem(
+                "setting-unknown",
+                &[("key", Arg::Text(k.to_owned()))],
+                None,
+            )],
+        },
+    }
 }
 
 /// `SetSettings`: one key, to one of its values.
