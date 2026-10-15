@@ -22,6 +22,18 @@ pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
 /// How long a call past its deadline has to end after `TERM`.
 const GRACE: Duration = Duration::from_secs(10);
 
+/// How long a call runs before the log names it (`git-slow`).
+const SLOW: Duration = Duration::from_secs(20);
+
+/// `argv` as one line for the log, cut after 200 characters.
+fn shown(argv: &[String]) -> String {
+    let line = argv.join(" ");
+    match line.char_indices().nth(200) {
+        Some((at, _)) => format!("{}…", &line[..at]),
+        None => line,
+    }
+}
+
 /// A repository pigeon drives: its directory and the children's environment.
 #[derive(Clone, Debug)]
 pub struct Repo {
@@ -139,7 +151,16 @@ impl Repo {
             child.wait_with_output().await
         };
         tokio::pin!(work);
-        let out = match tokio::time::timeout(timeout, &mut work).await {
+        // A call still running after SLOW is named in the log, so that a
+        // hang shows before its deadline ends it.
+        let done = match tokio::time::timeout(SLOW.min(timeout), &mut work).await {
+            Err(_) if timeout > SLOW => {
+                tracing::info!(argv = %shown(&argv), secs = SLOW.as_secs(), "git-slow");
+                tokio::time::timeout(timeout - SLOW, &mut work).await
+            }
+            done => done,
+        };
+        let out = match done {
             Err(_) => {
                 // Not yet waited for, so the pid is still the child's.
                 if let Some(pid) = pid {
