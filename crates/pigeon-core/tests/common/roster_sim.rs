@@ -58,6 +58,7 @@ pub fn genesis() -> Roster {
         group: "group".into(),
         k: 1,
         retention_days: 30,
+        relay: None,
         persons: (1..=NP)
             .map(|i| {
                 (

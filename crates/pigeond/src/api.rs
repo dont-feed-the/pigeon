@@ -302,6 +302,7 @@ async fn create_inner(
         group: name.to_owned(),
         k,
         retention_days: 30,
+        relay: None,
         persons: BTreeMap::from([(
             PersonId(pid.clone()),
             Person {

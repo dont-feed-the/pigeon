@@ -85,6 +85,8 @@ pub struct Roster {
     pub k: u32,
     /// Waiting period before a purge, in days.
     pub retention_days: u32,
+    /// The group's own relay, which replaces n0's (ADR 0016, 09 §9.5).
+    pub relay: Option<String>,
     /// Persons by ID.
     pub persons: BTreeMap<PersonId, Person>,
     /// Devices by ID.
@@ -106,6 +108,8 @@ pub enum Field {
     RetentionDays,
     /// `rules`.
     Rules,
+    /// The group relay.
+    Relay,
     /// A person's name.
     PersonName(PersonId),
     /// A person's admin flag.
@@ -174,6 +178,8 @@ pub enum Invalid {
     UuidReused(String),
     /// A removed device is in the roster again.
     RemovedDeviceBack(DeviceId),
+    /// The group relay is not an `https://` or `http://` URL.
+    BadRelay(String),
 }
 
 impl Roster {
@@ -184,6 +190,11 @@ impl Roster {
         }
         if self.k == 0 {
             return Err(Invalid::ZeroSetting);
+        }
+        if let Some(url) = &self.relay
+            && !is_relay_url(url)
+        {
+            return Err(Invalid::BadRelay(url.clone()));
         }
         let mut names = BTreeSet::new();
         let mut uuids: BTreeSet<&str> = BTreeSet::new();
@@ -229,6 +240,7 @@ impl Roster {
             Field::K => Value::Number(u64::from(self.k)),
             Field::RetentionDays => Value::Number(u64::from(self.retention_days)),
             Field::Rules => Value::Number(u64::from(self.rules)),
+            Field::Relay => self.relay.clone().map_or(Value::Unset, Value::Text),
             Field::PersonName(p) => Value::Text(self.persons.get(p)?.name.clone()),
             Field::PersonAdmin(p) => Value::Flag(self.persons.get(p)?.admin),
             Field::DeviceName(d) => Value::Text(self.devices.get(d)?.name.clone()),
@@ -259,6 +271,8 @@ impl Roster {
                 Some(n) => self.rules = n,
                 None => return false,
             },
+            (Field::Relay, Value::Text(s)) => self.relay = Some(s.clone()),
+            (Field::Relay, Value::Unset) => self.relay = None,
             (Field::PersonName(p), Value::Text(s)) => match self.persons.get_mut(p) {
                 Some(x) => x.name = s.clone(),
                 None => return false,
@@ -348,6 +362,16 @@ impl Roster {
             }
         }
     }
+}
+
+/// Whether `url` may be a group relay: an `https://` URL, or `http://` for
+/// a relay on the local network, with a host and no space (04 §4.2).
+pub fn is_relay_url(url: &str) -> bool {
+    let host = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"));
+    host.is_some_and(|h| !h.is_empty() && !h.starts_with('/'))
+        && !url.chars().any(char::is_whitespace)
 }
 
 /// Why a change was skipped by the fold.
@@ -549,7 +573,13 @@ pub fn diff(old: &Roster, new: &Roster) -> Option<Vec<Edit>> {
         }
         Some(())
     };
-    for f in [Field::Group, Field::K, Field::RetentionDays, Field::Rules] {
+    for f in [
+        Field::Group,
+        Field::K,
+        Field::RetentionDays,
+        Field::Rules,
+        Field::Relay,
+    ] {
         set(f, &mut out)?;
     }
     for (id, p) in &new.persons {

@@ -58,6 +58,7 @@ fn group() -> Roster {
         group: "g".into(),
         k: 2,
         retention_days: 30,
+        relay: None,
         persons: (1..=3)
             .map(|i| {
                 (
@@ -489,7 +490,7 @@ fn edit(tc: &TestCase, r: &Roster, fresh: &mut usize) -> Edit {
     let persons: Vec<PersonId> = r.persons.keys().cloned().collect();
     let devices: Vec<DeviceId> = r.devices.keys().cloned().collect();
     let p = pick(tc, &persons);
-    match int(tc, 0, 9) {
+    match int(tc, 0, 10) {
         0 => Edit::Set {
             field: Field::K,
             from: Value::Number(u64::from(r.k)),
@@ -537,6 +538,17 @@ fn edit(tc: &TestCase, r: &Roster, fresh: &mut usize) -> Edit {
             path: format!("D{}", int(tc, 0, 2)),
             rule: Rule::Owned(p),
         }),
+        9 => Edit::Set {
+            field: Field::Relay,
+            from: r.get(&Field::Relay).unwrap_or(Value::Unset),
+            // The last is no relay URL: the change is invalid (04 §4.2).
+            to: match int(tc, 0, 3) {
+                0 => Value::Unset,
+                1 => Value::Text("https://relay.example.org".to_owned()),
+                2 => Value::Text("http://192.168.1.2:3340".to_owned()),
+                _ => Value::Text("relay.example.org".to_owned()),
+            },
+        },
         _ => Edit::RemoveFolder(format!("D{}", int(tc, 0, 2))),
     }
 }

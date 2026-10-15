@@ -33,6 +33,7 @@ fn roster() -> Roster {
         group: "g".into(),
         k: 2,
         retention_days: 30,
+        relay: None,
         persons: [(
             PersonId("p".into()),
             Person {

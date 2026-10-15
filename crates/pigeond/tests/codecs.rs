@@ -142,6 +142,9 @@ fn roster_doc(tc: &TestCase) -> RosterDoc {
             group: word(tc),
             k: tc.draw(gs::integers::<u32>().min_value(1).max_value(5)),
             retention_days: tc.draw(gs::integers::<u32>().max_value(3650)),
+            relay: tc
+                .draw(gs::booleans())
+                .then(|| format!("https://{}.example.org", word(tc))),
             persons: BTreeMap::from([(
                 person,
                 Person {
@@ -222,6 +225,9 @@ fn invitations_round_trip(tc: TestCase) {
         .to_owned(),
         device: word(&tc),
         expires: tc.draw(gs::integers::<i64>().min_value(0).max_value(1 << 40)),
+        relay: tc
+            .draw(gs::booleans())
+            .then(|| format!("https://{}.example.org", word(&tc))),
     };
     let code = encode(&inv);
     let body = code.strip_prefix("pgn1-").unwrap();
@@ -283,6 +289,7 @@ fn a_new_persons_id_is_fresh(tc: TestCase) {
         group: "g".into(),
         k: 1,
         retention_days: 30,
+        relay: None,
         persons: BTreeMap::new(),
         devices: BTreeMap::new(),
         removed: BTreeMap::new(),

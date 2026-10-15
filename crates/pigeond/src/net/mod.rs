@@ -9,6 +9,7 @@
 //! ([`serve`]). What the roster says comes from a [`Directory`]; the loops
 //! of `pigeond` provide it, and tests use [`StaticDirectory`].
 
+mod relays;
 pub mod serve;
 pub mod socket;
 pub mod sync;
@@ -233,6 +234,12 @@ pub struct NetConfig {
 #[derive(Clone, Debug)]
 pub struct Node {
     endpoint: Endpoint,
+    /// How it was set up to reach peers.
+    reach: Reach,
+    /// The relays it began with: n0's, under [`Reach::N0`].
+    defaults: Vec<iroh::RelayUrl>,
+    /// The relays it uses now.
+    relays: Arc<tokio::sync::Mutex<Vec<iroh::RelayUrl>>>,
     connections: Arc<tokio::sync::Mutex<HashMap<PublicKey, Slot>>>,
     /// The last refusal of each peer, by group, until a stream is admitted.
     refused: Arc<Mutex<HashMap<(PublicKey, String), Refusal>>>,
@@ -242,15 +249,25 @@ impl Node {
     /// Binds the endpoint, with the relays and address lookup of
     /// `config.reach`.
     pub async fn bind(config: &NetConfig) -> Result<Node, NetError> {
-        let builder = match &config.reach {
-            Reach::Local => Endpoint::builder(presets::Minimal).relay_mode(RelayMode::Disabled),
-            Reach::N0 => Endpoint::builder(presets::N0),
+        let (builder, map) = match &config.reach {
+            Reach::Local => (
+                Endpoint::builder(presets::Minimal).relay_mode(RelayMode::Disabled),
+                iroh::RelayMap::empty(),
+            ),
+            Reach::N0 => (
+                Endpoint::builder(presets::N0),
+                RelayMode::Default.relay_map(),
+            ),
             Reach::Relays(urls) => {
                 let map = iroh::RelayMap::try_from_iter(urls.iter().map(String::as_str))
                     .map_err(|e| NetError::Bind(format!("relay: {e}")))?;
-                Endpoint::builder(presets::N0).relay_mode(RelayMode::Custom(map))
+                (
+                    Endpoint::builder(presets::N0).relay_mode(RelayMode::Custom(map.clone())),
+                    map,
+                )
             }
         };
+        let defaults = map.urls::<Vec<_>>();
         let mut builder = builder
             .secret_key(SecretKey::from_bytes(&config.secret_key))
             .alpns(vec![ALPN_ANNEX.to_vec(), ALPN_JOIN.to_vec()])
@@ -267,6 +284,9 @@ impl Node {
             .map_err(|e| NetError::Bind(e.to_string()))?;
         Ok(Node {
             endpoint,
+            reach: config.reach.clone(),
+            relays: Arc::new(tokio::sync::Mutex::new(defaults.clone())),
+            defaults,
             connections: Arc::default(),
             refused: Arc::default(),
         })

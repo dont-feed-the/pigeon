@@ -48,7 +48,8 @@ A roster is **valid** when it parses, `rules` is not lower than at the
 parents, and `pigeon-core::roster::Roster::validate` passes: an admin, known
 persons, unique names, `k ≥ 1`, an `annex_uuid` never reused (ADR 0046) on
 each laptop and custodian and none on a recovery device, no removed device
-back (ADR 0051). A commit that leaves an invalid roster is invalid.
+back (ADR 0051), and a `relay`, if any, an `https://` URL (`http://` for
+one on the local network). A commit that leaves an invalid roster is invalid.
 
 ## 4.3 Folder rules
 

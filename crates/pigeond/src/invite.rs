@@ -64,6 +64,10 @@ pub struct Invitation {
     pub device: String,
     /// When it stops working, in Unix seconds.
     pub expires: i64,
+    /// The group's own relay, which the new device uses to reach the
+    /// inviter (09 §9.5).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay: Option<String>,
 }
 
 /// Writes an invitation as `pgn1-…`.
@@ -235,6 +239,7 @@ pub fn invite(d: &Daemon, g: &Group, ask: Ask<'_>) -> Result<String, &'static st
         role: role.to_owned(),
         device: name.to_owned(),
         expires,
+        relay: doc.roster.relay.clone(),
     }))
 }
 
@@ -407,6 +412,11 @@ pub async fn join(
     }
     if d.group(&inv.group).is_some() {
         return Err("invite-used".into());
+    }
+    if let Some(relay) = &inv.relay {
+        let mut wanted = d.group_relays();
+        wanted.push(relay.clone());
+        d.use_relays(&wanted).await;
     }
     match inv.role.as_str() {
         "custodian" => join_backup(d, &inv, folder).await,

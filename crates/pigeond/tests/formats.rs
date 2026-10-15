@@ -93,6 +93,7 @@ fn group() -> Roster {
         group: "fixture".into(),
         k: 2,
         retention_days: 30,
+        relay: None,
         persons: [
             (pid("ana"), person("Ana", true)),
             (pid("ben"), person("Ben", false)),
@@ -170,6 +171,8 @@ fn known_rosters() -> Vec<(&'static str, Roster)> {
     );
     let mut k3 = g.clone();
     k3.k = 3;
+    let mut relay = g.clone();
+    relay.relay = Some("https://relay.example.org".into());
     let mut rules2 = g.clone();
     rules2.rules = 2;
     let mut minimal = g.clone();
@@ -182,6 +185,7 @@ fn known_rosters() -> Vec<(&'static str, Roster)> {
         ("group.toml", g),
         ("group-ben-phone.toml", phone),
         ("group-k3.toml", k3),
+        ("group-relay.toml", relay),
         ("group-rules-2.toml", rules2),
         ("minimal.toml", minimal),
     ]

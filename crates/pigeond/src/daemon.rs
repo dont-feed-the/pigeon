@@ -115,6 +115,7 @@ impl Daemon {
         crate::settings::check(g).await;
         g.ensure_remotedaemon(&self.wake).await;
         g.reload_roster().await;
+        self.use_relays(&self.group_relays()).await;
         if g.role == Role::Laptop && crate::evict::unsettled(g) {
             // A step that failed, such as a git call that found a lock,
             // left its transition half done: it ends as after a crash,
@@ -148,6 +149,27 @@ impl Daemon {
 }
 
 impl Daemon {
+    /// The groups' own relays, from their rosters (04 §4.2).
+    pub fn group_relays(&self) -> Vec<String> {
+        self.groups()
+            .iter()
+            .filter_map(|g| g.roster()?.roster.relay)
+            .collect()
+    }
+
+    /// Puts the relays `wanted` in place of n0's, or n0's back when it is
+    /// empty, unless the person chose the relays (09 §9.5).
+    pub async fn use_relays(&self, wanted: &[String]) {
+        match self.node.use_group_relays(wanted).await {
+            Ok(true) => {
+                let relays = self.node.relay_urls().await;
+                tracing::info!(relays = ?relays, "relays-changed");
+            }
+            Ok(false) => {}
+            Err(e) => tracing::warn!(error = %e, "relay-refused"),
+        }
+    }
+
     /// Marks lost each peer of `g` whose last fetch failed because it
     /// answers but serves the group no more (`UnknownGroup`); one that
     /// serves it again is lost no more.
