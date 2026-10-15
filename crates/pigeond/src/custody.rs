@@ -51,6 +51,7 @@ async fn fetch(g: &Group, id: &str) -> Result<(), crate::git::Error> {
     let spec = crate::settings::peer_refspec(id);
     let reports = crate::report::refspec(id);
     let proposals = crate::proposal::refspec(id);
+    let archive = crate::refound::refspec(id);
     let args = [
         "fetch",
         "-q",
@@ -60,6 +61,7 @@ async fn fetch(g: &Group, id: &str) -> Result<(), crate::git::Error> {
         spec.as_str(),
         reports.as_str(),
         proposals.as_str(),
+        archive.as_str(),
     ];
     match g.git.run_for(&args, FETCH_TIMEOUT).await {
         Err(e @ crate::git::Error::Timeout { .. }) => {
@@ -115,6 +117,7 @@ pub async fn accept(g: &Group, me: &str, tracer: &Tracer) -> bool {
     if let Err(e) = g.git.run(&["annex", "merge"]).await {
         tracing::warn!(group = %g.id, error = %e, "annex-merge-failed");
     }
+    crate::refound::adopt(g).await;
     let mut moved = false;
     for id in fetched {
         crate::proposal::take(g, &id).await;

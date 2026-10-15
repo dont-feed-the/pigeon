@@ -74,6 +74,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("resume", "cmd-resume"),
     ("people", "cmd-people"),
     ("leave", "cmd-leave"),
+    ("refound [REPOSITORY]", "cmd-refound"),
     ("held [ID --share | --bring-back]", "cmd-held"),
     ("deleted", "cmd-deleted"),
     (
@@ -283,6 +284,9 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
         }),
         "resume" if fits(0, 0, &[]) => send(Request::Resume),
         "leave" if fits(0, 0, &[]) => send(Request::Leave),
+        "refound" if fits(0, 1, &[]) => send(Request::Refound {
+            repository: w.first().map(|r| absolute(r)),
+        }),
         "held" if fits(0, 0, &[]) => send(Request::Held),
         "held" if fits(1, 1, &["share"]) && s.flag("share") => send(Request::ReleaseHeld {
             batch: w.first()?.clone(),
@@ -402,7 +406,8 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
         "create" | "invite" | "join" | "status" | "machines" | "open" | "history" | "restore"
         | "pause" | "resume" | "people" | "deleted" | "leave" | "held" | "free" | "keep"
         | "remove-computer" | "recovery-sheet" | "recover" | "doctor" | "debug" | "suggestions"
-        | "accept" | "decline" | "conflicts" | "resolve" | "update" | "export" | "view" => None,
+        | "accept" | "decline" | "conflicts" | "resolve" | "update" | "export" | "view"
+        | "refound" => None,
         other => Some(Action::NotInThisBuild(other.to_owned())),
     }
 }

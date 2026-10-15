@@ -249,6 +249,22 @@ tools are those of ADR 0047, which fixes their formats:
   last accepted tree and the refounder as only admin, keeping the old
   history replicated and its keys in `keys()`; existing folders join the new
   group in place, objects reused by key.
+
+  Coded so far (`pigeond/src/refound.rs`, `join_in_place.rs`,
+  `tests/refound.rs`): `Refound {repository?}` asks first (`confirm-refound`),
+  then commits a root whose tree is `main`'s with a roster keeping the
+  group's name, K, retention, relay and folders, and only the refounder's
+  person (admin) and device, with `Pigeon-Refound: <old group> <old main>`.
+  It sets `refs/pigeon/archive/<old group>/main`, forgets the old group and
+  serves the repository as the new one with the same annex UUID and token.
+  Peers fetch `refs/pigeon/archive/*`; a device keeps only the archive its
+  genesis names, and `retention::keys` holds its keys. Invitations carry
+  `refounded {from, by, at}`; `pigeon join` asks `confirm-join-refounded`,
+  and a laptop folder whose root is `from` joins in place: the old group
+  is forgotten, its `main` archived, the index takes the new tree without
+  touching the folder (absent annexed files hidden, other differences
+  captured as saves). Not yet: a backup machine joining in place, and the
+  web asking before a refounded join **[no ADR]**.
 - **Export without pigeon:** `pigeon export --to DIR [--at DATE|COMMIT]
   [--deleted] [REPOSITORY…]` needs no `pigeond`, network or key
   ([10 §10.2](10-interfaces.md)) and checks every object's SHA-256. Each

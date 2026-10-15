@@ -68,6 +68,9 @@ pub struct Invitation {
     /// inviter (09 §9.5).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub relay: Option<String>,
+    /// For a refounded group, what the joiner accepts (ADR 0047).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refounded: Option<pigeon_proto::join::Refounded>,
 }
 
 /// Writes an invitation as `pgn1-…`.
@@ -282,6 +285,7 @@ pub fn invite(d: &Daemon, g: &Group, ask: Ask<'_>) -> Result<String, &'static st
         device: name.to_owned(),
         expires,
         relay: doc.roster.relay.clone(),
+        refounded: crate::refound::described(g),
     }))
 }
 

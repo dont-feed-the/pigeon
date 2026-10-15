@@ -24,6 +24,9 @@ pub async fn laptop(
     let path = folder.map_or_else(|| home.join(&inv.name), PathBuf::from);
     std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
     let path = std::fs::canonicalize(&path).map_err(|e| e.to_string())?;
+    if crate::join_in_place::applies(d, inv, &path).await {
+        return crate::join_in_place::laptop(d, inv, &path).await;
+    }
     if std::fs::read_dir(&path)
         .map_err(|e| e.to_string())?
         .next()

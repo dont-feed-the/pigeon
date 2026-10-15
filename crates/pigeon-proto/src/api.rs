@@ -175,6 +175,13 @@ pub enum Request {
     /// `pigeon leave`: this computer signs its own removal and forgets the
     /// group once another machine has it (09 §9.7).
     Leave,
+    /// `pigeon refound [REPOSITORY]`: signs a new genesis with `main`'s
+    /// tree and this device's person as the only admin (09 §9.9, ADR 0047).
+    Refound {
+        /// The group's repository; the default group when absent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        repository: Option<String>,
+    },
     /// `pigeon recovery-sheet`.
     RecoverySheet,
     /// `pigeon recover SHEET [FOLDER] [--from DEVICE]`.

@@ -1,5 +1,6 @@
 //! Retained content (05 §5.1, 08 §8.3–8.4): placement and repair use every
-//! key in accepted and proposal history, including overwritten/deleted files.
+//! key in accepted, proposal and archived history (ADR 0047), including
+//! overwritten/deleted files.
 //! Purge is not implemented, so no reachable reference is released here.
 
 use std::collections::BTreeSet;
@@ -24,6 +25,7 @@ pub(crate) async fn snapshot(g: &Group) -> Result<Snapshot, Error> {
             "--format=%(refname) %(objectname)",
             "refs/heads/main",
             crate::proposal::PREFIX,
+            crate::refound::ARCHIVE,
         ])
         .await?;
     let mut tips = Vec::new();
@@ -43,6 +45,7 @@ pub(crate) async fn snapshot(g: &Group) -> Result<Snapshot, Error> {
                 .strip_prefix(crate::proposal::PREFIX)
                 .and_then(|r| r.split_once('/'))
                 .is_some_and(|(_, suffix)| suffix == commit)
+            || name.starts_with(crate::refound::ARCHIVE)
         {
             tips.push(commit.to_owned());
         }

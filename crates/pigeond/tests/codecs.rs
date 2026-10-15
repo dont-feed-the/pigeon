@@ -230,8 +230,20 @@ fn invitations_round_trip(tc: TestCase) {
         relay: tc
             .draw(gs::booleans())
             .then(|| format!("https://{}.example.org", word(&tc))),
+        refounded: tc
+            .draw(gs::booleans())
+            .then(|| pigeon_proto::join::Refounded {
+                from: hex(&tc.draw(gs::binary().min_size(20).max_size(20))),
+                by: word(&tc),
+                at: "2026-03-03T10:00:00Z".to_owned(),
+            }),
     };
     let code = encode(&inv);
+    // What the CLI reads of it to ask before joining a refounded group.
+    assert_eq!(
+        pigeon_proto::join::refounded(&code),
+        inv.refounded.clone().map(|r| (inv.name.clone(), r))
+    );
     let body = code.strip_prefix("pgn1-").unwrap();
     assert!(
         body.bytes()

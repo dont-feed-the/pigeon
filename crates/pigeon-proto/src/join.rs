@@ -62,3 +62,28 @@ pub enum JoinAnswer {
         code: String,
     },
 }
+
+/// What an invitation to a refounded group says of it (09 §9.9, ADR 0047):
+/// joining means accepting `by` as its admin.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Refounded {
+    /// The old group's ID.
+    pub from: String,
+    /// The refounder's name.
+    pub by: String,
+    /// When, RFC 3339.
+    pub at: String,
+}
+
+/// The group's name and what the `pgn1-` invitation `code` says of its
+/// refounding, if it is one to a refounded group; for the question the
+/// CLI asks before joining.
+pub fn refounded(code: &str) -> Option<(String, Refounded)> {
+    let body = code.trim().strip_prefix("pgn1-")?;
+    let bytes = data_encoding::BASE32_NOPAD
+        .decode(body.to_ascii_uppercase().as_bytes())
+        .ok()?;
+    let v: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    let r = serde_json::from_value(v.get("refounded")?.clone()).ok()?;
+    Some((v.get("name")?.as_str()?.to_owned(), r))
+}

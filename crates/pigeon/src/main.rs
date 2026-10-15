@@ -267,6 +267,15 @@ fn question(request: &Request) -> Option<Message> {
     match request {
         Request::RemoveDevice { name } => Some(ask("confirm-remove-computer", &[("name", name)])),
         Request::Leave => Some(ask("confirm-leave", &[])),
+        Request::Join { invitation, .. } => {
+            let (group, r) = pigeon_proto::join::refounded(invitation)?;
+            let date = r.at.get(..10).unwrap_or(&r.at);
+            Some(ask(
+                "confirm-join-refounded",
+                &[("group", &group), ("name", &r.by), ("date", date)],
+            ))
+        }
+        Request::Refound { .. } => Some(ask("confirm-refound", &[])),
         Request::ReleaseHeld {
             batch,
             choice: pigeon_proto::api::HeldChoice::Share,

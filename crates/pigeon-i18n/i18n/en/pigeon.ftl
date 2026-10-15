@@ -159,6 +159,8 @@ waiting-row = { $path }: { $state }
 confirm-remove-computer = Remove { $name } from the group? Its copies will stop counting. [y/N]
 confirm-yes = yes
 confirm-leave = Remove this computer from the group? Its files stay in the folder, but it stops sharing them. [y/N]
+confirm-refound = Refound the group with you as its only admin? It becomes a new group: every other member joins it again by an invitation from you, and the old history stays readable. [y/N]
+confirm-join-refounded = { $group } was refounded by { $name } on { $date }: joining it means accepting { $name } as its admin. Join? [y/N]
 confirm-held-share = Delete the files of { $batch } for everyone? They stay in the history. [y/N]
 
 ## Problems (10 §10.6, ADR 0023): problem-<code>, and hint-<code> when there is one
@@ -284,6 +286,8 @@ resumed = Sharing again.
 cmd-leave = Remove this computer from the group; its files stay
 leaving = { $name } leaves the group once another machine has its removal. Its files stay in the folder.
 leaving-already = This computer is already leaving the group.
+cmd-refound = Found the group again with you as its only admin, when no admin can sign
+refounded = { $group } is refounded with { $name } as its only admin. Invite the others again: their folders join in place.
 cmd-held = Deletions pigeon holds until you choose; share or bring them back
 held-none = No deletion is held.
 held-row = { $id }: { $reason } ({ $files } files, since { $since }): { $paths }

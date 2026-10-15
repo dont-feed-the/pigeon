@@ -227,6 +227,9 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         } => crate::view::view(d, Path::new(&path), version, group).await,
         Request::RemoveDevice { name } => crate::history::remove_device(d, &name).await,
         Request::Leave => crate::leave::leave(d).await,
+        Request::Refound { repository } => {
+            crate::refound::refound(d, repository.as_deref().map(Path::new)).await
+        }
         Request::Held => crate::held::list(d),
         Request::ReleaseHeld { batch, choice } => crate::held::release(d, &batch, choice).await,
         Request::Doctor { details } => crate::history::doctor(d, details).await,

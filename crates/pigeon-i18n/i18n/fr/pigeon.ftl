@@ -159,6 +159,8 @@ waiting-row = { $path } : { $state }
 confirm-remove-computer = Retirer { $name } du groupe ? Ses copies ne compteront plus. [o/N]
 confirm-yes = oui
 confirm-leave = Retirer cet ordinateur du groupe ? Ses fichiers restent dans le dossier, mais il cesse de les partager. [o/N]
+confirm-refound = Refonder le groupe avec vous pour seul administrateur ? Il devient un nouveau groupe : chaque autre membre le rejoint à nouveau par une invitation de votre part, et l'ancien historique reste lisible. [o/N]
+confirm-join-refounded = { $group } a été refondé par { $name } le { $date } : le rejoindre, c'est accepter { $name } comme administrateur. Rejoindre ? [o/N]
 confirm-held-share = Supprimer les fichiers de { $batch } pour tout le monde ? Ils restent dans l'historique. [o/N]
 
 ## Problèmes (10 §10.6, ADR 0023) : problem-<code>, et hint-<code> s'il y en a un
@@ -284,6 +286,8 @@ resumed = Le partage reprend.
 cmd-leave = Retirer cet ordinateur du groupe ; ses fichiers restent
 leaving = { $name } quitte le groupe dès qu'une autre machine a son retrait. Ses fichiers restent dans le dossier.
 leaving-already = Cet ordinateur quitte déjà le groupe.
+cmd-refound = Refonder le groupe avec vous pour seul administrateur, quand aucun administrateur ne peut signer
+refounded = { $group } est refondé avec { $name } pour seul administrateur. Invitez à nouveau les autres : leurs dossiers le rejoignent sur place.
 cmd-held = Suppressions que pigeon retient jusqu'à votre choix ; les partager ou les annuler
 held-none = Aucune suppression n'est retenue.
 held-row = { $id } : { $reason } ({ $files } fichiers, depuis { $since }) : { $paths }
