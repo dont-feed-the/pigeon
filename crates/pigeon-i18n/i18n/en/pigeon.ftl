@@ -127,8 +127,16 @@ doctor-lab-build = This is a lab build: its status reports are marked, and no re
 doctor-version = { $program } { $found } (at least { $minimum } is needed)
 doctor-ok = Everything pigeon needs is in place.
 created = The group “{ $group }” is created. Add a backup machine with: pigeon invite --backup-machine
-invitation = On the backup machine, within 24 hours, run: pigeon join --backup-machine { $code }
-joined = This backup machine now keeps copies for “{ $group }”.
+invitation =
+    { $who ->
+        [backup-machine] On the backup machine, within 24 hours, run: pigeon join --backup-machine { $code }
+       *[computer] On the new computer, within 24 hours, run: pigeon join { $code } FOLDER
+    }
+joined =
+    { $who ->
+        [backup-machine] This backup machine now keeps copies for “{ $group }”.
+       *[computer] This computer is now in “{ $group }”. The group's files arrive in its folder.
+    }
 removed-computer = { $name } is removed from the group; its copies no longer count.
 bundle-written = The diagnostics are in { $path }. Nothing was sent.
 machine-row = { $name }: { $kind }, last heard { $heard }

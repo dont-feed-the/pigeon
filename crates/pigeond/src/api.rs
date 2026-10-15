@@ -53,6 +53,15 @@ fn text(s: &str) -> Arg {
     Arg::Text(s.to_owned())
 }
 
+/// The `who` of the `invitation` and `joined` messages: what joins.
+fn who(custodian: bool) -> &'static str {
+    if custodian {
+        "backup-machine"
+    } else {
+        "computer"
+    }
+}
+
 fn number(n: usize) -> Arg {
     Arg::Number(i64::try_from(n).unwrap_or(i64::MAX))
 }
@@ -135,7 +144,10 @@ async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
                 name: name.as_deref().unwrap_or_default(),
             };
             match crate::invite::invite(d, &g, ask) {
-                Ok(code) => vec![said("invitation", &[("code", text(&code))])],
+                Ok(code) => vec![said(
+                    "invitation",
+                    &[("code", text(&code)), ("who", text(who(custodian)))],
+                )],
                 Err(code) => vec![problem(code, &[], None)],
             }
         }
@@ -144,10 +156,17 @@ async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             folder,
             name,
             ..
-        } => match crate::invite::join(d, &invitation, folder, name).await {
-            Ok(group) => vec![said("joined", &[("group", text(&group))])],
-            Err(code) => vec![join_problem(&code, &invitation)],
-        },
+        } => {
+            let custodian =
+                crate::invite::decode(&invitation).is_some_and(|i| i.role == "custodian");
+            match crate::invite::join(d, &invitation, folder, name).await {
+                Ok(group) => vec![said(
+                    "joined",
+                    &[("group", text(&group)), ("who", text(who(custodian)))],
+                )],
+                Err(code) => vec![join_problem(&code, &invitation)],
+            }
+        }
         Request::Evict { folder } => free(d, Path::new(&folder)).await,
         Request::Keep { folder } => keep(d, Path::new(&folder)).await,
         Request::Machines => machines(d),

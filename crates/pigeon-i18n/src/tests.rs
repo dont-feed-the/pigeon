@@ -81,12 +81,17 @@ fn bundle_vars(src: &'static str) -> Vec<(String, BTreeSet<String>)> {
     out
 }
 
+/// The variables that select a variant rather than appear in the text.
+const SELECTORS: &[&str] = &["who"];
+
 fn sample(var: &str) -> Arg {
     // Counts select plural forms; everything else is a text.
     match var {
         "files" | "days" | "have" | "need" | "minutes" | "hours" | "safe" | "total" => {
             Arg::Number(2)
         }
+        // A selector picks a variant and need not appear in it.
+        "who" => Arg::Text("computer".to_owned()),
         _ => Arg::Text(format!("<{var}>")),
     }
 }
@@ -133,7 +138,7 @@ fn every_message_renders_with_sample_arguments() {
                 "{tag}: {}: {text}",
                 entry.id
             );
-            for v in entry.vars {
+            for v in entry.vars.iter().filter(|v| !SELECTORS.contains(v)) {
                 if let Arg::Text(t) = sample(v) {
                     assert!(text.contains(&t), "{tag}: {} drops ${v}: {text}", entry.id);
                 }
