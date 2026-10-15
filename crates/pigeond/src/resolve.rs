@@ -110,7 +110,9 @@ pub async fn resolve(d: &Daemon, path: &Path, choice: &Choice) -> Vec<Response> 
     let Some(div) = table.paths.get(&rel).cloned() else {
         return problem("not-diverging", &shown);
     };
-    if stat_now(&wt, &rel) != div.mine_stat {
+    if stat_now(&wt, &rel) != div.mine_stat
+        && !(g.shared.is_some() && crate::shared::unchanged(&g, &rel, &div))
+    {
         return problem("changed-since", &shown);
     }
     let mut observed = if matches!(choice, Choice::SuggestAgain) {
@@ -164,6 +166,10 @@ pub async fn resolve(d: &Daemon, path: &Path, choice: &Choice) -> Vec<Response> 
         None => crate::trace_state::Span::begin(&d.tracer, &g, &rel, 0, "Resolve", "resolve").await,
     };
     if let Err(e) = crate::conflicts_file::write(&g, &table) {
+        observed.interrupted("idle").await;
+        return internal(e);
+    }
+    if let Err(e) = crate::shared::compact(&g).await {
         observed.interrupted("idle").await;
         return internal(e);
     }

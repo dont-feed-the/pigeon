@@ -1,7 +1,7 @@
 //! Accept's judge over histories with merges (04 §4.4, 05 §5.2): every
-//! commit of the histories it is shown, parents first, is judged once
-//! against B(c), the catalogue of its accepted parents, and recorded in the
-//! group's `catalogue::Engine`; and [`merge`] writes the merge of two
+//! commit of the histories it is shown, parents first, is judged against
+//! B(c), the catalogue of its accepted parents. Conclusive judgements are
+//! recorded in the group's `catalogue::Engine`; [`merge`] merges two
 //! accepted tips, whose tree is the catalogue of both (P5).
 //!
 //! The rules are pigeon-core's `commit::judge`, here given what it needs
@@ -30,7 +30,8 @@ async fn roster_at(git: &Git, tree: &Tree) -> Option<Result<Roster, Unread>> {
 }
 
 /// Judges every commit of the histories of `tips` that the group's engine
-/// has not judged, parents first.
+/// has not conclusively judged, parents first. Unknown decisions wait for
+/// their separately relayed proposals and must be retried when those arrive.
 pub async fn judge_history(g: &Group, tips: &[String]) -> Result<(), Error> {
     if tips.is_empty() {
         return Ok(());
@@ -93,7 +94,13 @@ async fn judge_commit(g: &Group, c: &str, parents: Vec<String>) -> Result<(), Er
     let judgement = match &verdict {
         Verdict::Accepted(..) => Judgement::Accepted,
         Verdict::Refused(r) => Judgement::Refused(authority::code(r).to_owned()),
-        Verdict::Unknown(why) => Judgement::Refused(format!("unknown-{why}")),
+        Verdict::Unknown(_) => {
+            // Unknown is incomplete evidence, not a permanent refusal. In
+            // particular, a decision's proposal may arrive on a later fetch.
+            // Caching it would also freeze every later commit on that parent.
+            g.lock().verdicts.insert(c.to_owned(), verdict.clone());
+            return Ok(());
+        }
     };
     let outcome = {
         let mut known = g.lock();
@@ -101,10 +108,13 @@ async fn judge_commit(g: &Group, c: &str, parents: Vec<String>) -> Result<(), Er
         known.engine.admit(&meta, &after, judgement)
     };
     match (&verdict, &outcome) {
-        (Verdict::Accepted(signer, _), Outcome::Clean | Outcome::Contribution) => match &genesis {
-            Some(r) => crate::fold::genesis(g, c, r),
-            None => crate::fold::record(g, c, &accepted, secs, signer, delta),
-        },
+        (Verdict::Accepted(signer, _), Outcome::Clean | Outcome::Contribution) => {
+            g.lock().verdicts.remove(c);
+            match &genesis {
+                Some(r) => crate::fold::genesis(g, c, r),
+                None => crate::fold::record(g, c, &accepted, secs, signer, delta),
+            }
+        }
         _ => {
             let v = match verdict {
                 Verdict::Accepted(..) => Verdict::Unknown("parent"),

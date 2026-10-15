@@ -67,7 +67,7 @@ pub async fn laptop(
     g.set_token(&token);
     g.set_addresses(&inv.inviter, inviter_addresses(inv));
     g.learn_peers(&peers);
-    let g = d.add_group(g, &path).await;
+    let g = d.add_group(g, &path).await?;
     // No round may capture before every annexed file is hidden: a file of
     // the index missing from the folder would read as a deletion.
     let busy = g.busy.lock().await;

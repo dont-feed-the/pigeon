@@ -76,6 +76,8 @@ impl Syncer for AnnexSyncer {
     fn sync(&self, repository: &Repository, key: &str, hash: bool) -> SyncFuture {
         let repo = Repo::new(directory(repository), GitEnv::default());
         let key = key.to_owned();
+        let provider = (repository.role == pigeon_core::filter::Role::Custodian)
+            .then(|| (repository.git_dir.clone(), repository.group.clone()));
         Box::pin(async move {
             if !plausible_key(&key) {
                 return Err(io::Error::new(io::ErrorKind::InvalidInput, "key"));
@@ -86,6 +88,9 @@ impl Syncer for AnnexSyncer {
                 .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
             let object = repo.dir.join(out.text().trim_end());
             tokio::task::spawn_blocking(move || {
+                if let Some((git_dir, group)) = provider {
+                    crate::shared_pool::received(&git_dir, &group, &key, &object)?;
+                }
                 sync_object(&object)?;
                 if !hash {
                     return Ok(true);

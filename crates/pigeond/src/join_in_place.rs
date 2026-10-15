@@ -46,11 +46,11 @@ pub async fn join(d: &Daemon, inv: &Invitation, path: &Path) -> Result<String, S
         Some(old) => Some(old.busy.lock().await),
         None => None,
     };
-    let g = std::sync::Arc::new(
-        Group::open(&inv.group, path, &d.env)
+    let mut g = Group::open(&inv.group, path, &d.env)
             .await
-            .ok_or("not-a-repository")?,
-    );
+            .ok_or("not-a-repository")?;
+    crate::shared::configure(&mut g, d.config.bridge_storage.as_ref())?;
+    let g = std::sync::Arc::new(g);
     if crate::join_transition::pending(&g) {
         return Err("join-incomplete".into());
     }

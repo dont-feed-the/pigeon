@@ -131,6 +131,7 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         Request::SetFolderRule { folder, rule } => crate::folder_rules::set(d, &folder, rule).await,
         Request::Capacity => crate::capacity_view::report(d).await,
         Request::Health => crate::health::report(d).await,
+        Request::Bridge { operation } => crate::bridge::handle(d, operation).await,
         Request::Create {
             name,
             folder,
@@ -469,7 +470,7 @@ async fn create_inner(
         .ok_or("no repository")?;
     g.set_token(&token);
     tracing::info!(group = %genesis, "created");
-    d.add_group(g, &folder).await;
+    d.add_group(g, &folder).await?;
     Ok(())
 }
 

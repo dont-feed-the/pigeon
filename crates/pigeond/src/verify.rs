@@ -1,9 +1,10 @@
 //! Accept's check (04 §4.4, ADR 0007): the commits a peer's `main` adds to
 //! ours are judged parents first by `crate::merge` against the catalogue
 //! of their accepted parents; accept takes the last accepted one in
-//! topological order. A verdict depends only on a commit's history, so an
-//! accepted commit may hold refused ones, the proposals it adopts (04 §4.4
-//! rule 7); the first commit not accepted is named unless `theirs` is.
+//! topological order. Missing proposal evidence produces a retryable unknown
+//! verdict. An accepted commit may hold refused ones, the proposals it
+//! adopts (04 §4.4 rule 7); the first commit not accepted is named unless
+//! `theirs` is.
 
 use pigeon_core::authority::{self, Verdict};
 

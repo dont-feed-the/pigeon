@@ -87,9 +87,24 @@ impl Daemon {
             .cloned()
     }
 
+    /// A refounding changes main's genesis before replacing the served group.
+    /// An old round must stop even while that replacement is still pending.
+    async fn current_group(&self, g: &Arc<Group>) -> bool {
+        if !self
+            .group(&g.id)
+            .is_some_and(|current| Arc::ptr_eq(&current, g))
+        {
+            return false;
+        }
+        let Some(main) = g.git.rev("refs/heads/main").await else {
+            return false;
+        };
+        g.git.root(&main).await.as_deref() == Some(g.id.as_str())
+    }
+
     /// Serves a new group: records it in `config.toml` and starts its loops.
-    pub async fn add_group(&self, g: impl Into<Arc<Group>>, path: &Path) -> Arc<Group> {
-        let g = g.into();
+    pub async fn add_group(&self, mut g: Group, path: &Path) -> Result<Arc<Group>, String> {
+        crate::shared::configure(&mut g, self.config.bridge_storage.as_ref())?;
         let entry = GroupEntry {
             id: g.id.clone(),
             path: path.to_path_buf(),
@@ -97,8 +112,9 @@ impl Daemon {
         if let Err(e) = config::add_group(&self.dirs.config_file(), &entry) {
             tracing::warn!(error = %e, "config-write-failed");
         }
+        let g = Arc::new(g);
         self.serve_group(g.clone(), None).await;
-        g
+        Ok(g)
     }
 
     /// Serves a group in memory, optionally replacing a suspended one at
@@ -139,8 +155,8 @@ impl Daemon {
     }
 
     async fn round_inner(&self, g: &Arc<Group>, round: &pigeon_telemetry::Span) {
-        let _busy = g.busy.lock().await;
-        if !self.group(&g.id).is_some_and(|live| Arc::ptr_eq(&live, g)) {
+        let busy = g.busy.lock().await;
+        if !self.current_group(g).await {
             return;
         }
         crate::locks::clear(&g.git_dir);
@@ -169,16 +185,26 @@ impl Daemon {
         if settled {
             crate::asides::release(g, &self.tracer).await;
         }
+        if settled && let Err(e) = crate::bridge::recover(self, g).await {
+            tracing::warn!(group = %g.id, error = %e, "bridge-recovery-waits");
+            return;
+        }
         if settled {
-            crate::evict::free_targets(g, &self.device, &self.tracer).await;
-            if let Err(e) = crate::evict::keep(g, &self.tracer).await {
-                tracing::info!(group = %g.id, error = %e, "keep-waits");
+            if g.shared.is_none() {
+                crate::evict::free_targets(g, &self.device, &self.tracer).await;
+                if let Err(e) = crate::evict::keep(g, &self.tracer).await {
+                    tracing::info!(group = %g.id, error = %e, "keep-waits");
+                }
             }
             let mut step = round.child("capture");
             if let Err(e) = crate::capture::capture(g, &self.device, &self.tracer).await {
                 tracing::warn!(group = %g.id, error = %e, "capture-failed");
                 step.fail(&e.to_string());
                 settled = false;
+            }
+            if settled && let Err(e) = crate::shared::compact(g).await {
+                tracing::warn!(group = %g.id, error = %e, "shared-storage-waits");
+                return;
             }
         }
         if crate::pause::now(self).is_some() {
@@ -187,9 +213,31 @@ impl Daemon {
             crate::clock_file::save(g, self.tracer.clock());
             return;
         }
+        let peers = crate::custody::prepare_accept(g, &self.device).await;
+        // Fetch changes objects and peer refs only. Slow or offline peers must
+        // not block conditional bridge writes, capture, or portal decisions.
+        drop(busy);
+        let fetched = {
+            let _step = round.child("fetch");
+            crate::custody::fetch_ready(g, &peers).await
+        };
+        let _busy = g.busy.lock().await;
+        // Refounding can replace this group while its network fetch runs.
+        // The old round must not write through the replacement's repository.
+        if !self.current_group(g).await {
+            return;
+        }
+        if crate::pause::now(self).is_some() || crate::leave::leaving(g).is_some() {
+            return;
+        }
+        let settled = settled && !crate::evict::unsettled(g);
+        if settled && let Err(e) = crate::bridge::recover(self, g).await {
+            tracing::warn!(group = %g.id, error = %e, "bridge-recovery-waits");
+            return;
+        }
         {
             let mut step = round.child("accept");
-            let moved = crate::custody::accept(g, &self.device, &self.tracer).await;
+            let moved = crate::custody::accept(g, fetched, &self.tracer).await;
             step.set("moved", moved);
         }
         if settled {
@@ -199,6 +247,10 @@ impl Daemon {
                 step.fail(&e.to_string());
             }
         }
+        if settled && let Err(e) = crate::shared::compact(g).await {
+            tracing::warn!(group = %g.id, error = %e, "shared-storage-waits");
+            return;
+        }
         crate::report::receive(g, &self.device).await;
         self.note_lost(g);
         {
@@ -206,7 +258,10 @@ impl Daemon {
             let made = crate::custody::place(g, &self.device).await;
             step.set("copies", made as u64);
         }
-        if settled && !crate::evict::unsettled(g) {
+        if let Err(e) = crate::shared::provider_compact(g).await {
+            tracing::warn!(group = %g.id, error = %e, "shared-provider-waits");
+        }
+        if settled && g.shared.is_none() && !crate::evict::unsettled(g) {
             crate::thin::rethin(g, &self.device, &self.tracer).await;
         }
         {
@@ -447,6 +502,13 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     let socket = std::env::var_os("PIGEON_SOCKET")
         .filter(|s| !s.is_empty())
         .map_or_else(|| dirs.socket(), PathBuf::from);
+    if config
+        .bridge_storage
+        .as_ref()
+        .is_some_and(|s| s.source_socket == socket)
+    {
+        return Err("A bridge client cannot use its own socket as a storage provider".into());
+    }
     if std::os::unix::net::UnixStream::connect(&socket).is_ok() {
         return Err(format!("pigeond already runs on {}", socket.display()));
     }
@@ -465,7 +527,8 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     let mut groups = Vec::new();
     for entry in &config.groups {
         match Group::open(&entry.id, &entry.path, &env).await {
-            Some(g) => {
+            Some(mut g) => {
+                crate::shared::configure(&mut g, config.bridge_storage.as_ref())?;
                 if let crate::clock_file::Read::Known(c) = crate::clock_file::read(&g) {
                     tracer.at_least(c.clock);
                 }
@@ -514,6 +577,12 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     tracing::info!(device = %device, socket = %socket.display(), "started");
     for (g, busy) in groups.iter().zip(held) {
         crate::evict::recover(g, &daemon.tracer).await;
+        if g.role == Role::Laptop
+            && !crate::evict::unsettled(g)
+            && let Err(e) = crate::bridge::recover(&daemon, g).await
+        {
+            tracing::warn!(group = %g.id, error = %e, "bridge-recovery-waits");
+        }
         drop(busy);
     }
     let rounds = daemon.clone();

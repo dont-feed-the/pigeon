@@ -9,6 +9,7 @@
 pub mod api;
 pub mod capacity;
 pub mod health;
+pub mod bridge;
 pub mod join;
 pub mod policy;
 pub mod stream;
