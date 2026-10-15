@@ -13,7 +13,7 @@ use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use pigeon_proto::{LineDecoder, PROTOCOL_VERSION, Request, Response, encode, socket_path};
+use pigeon_proto::{LineDecoder, PROTOCOL_VERSION, Request, Response, encode};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -38,12 +38,7 @@ fn repository() -> Result<String, String> {
 }
 
 fn connect() -> Result<UnixStream, String> {
-    let env = |k: &str| std::env::var(k).ok();
-    let path = socket_path(
-        env("PIGEON_SOCKET").as_deref(),
-        env("XDG_RUNTIME_DIR").as_deref(),
-        env("TMPDIR").as_deref(),
-    );
+    let path = pigeon_sys::paths::client_socket();
     UnixStream::connect(path).map_err(|_| "daemon-not-running".to_owned())
 }
 

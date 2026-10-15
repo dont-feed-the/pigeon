@@ -109,6 +109,37 @@ impl Dirs {
     }
 }
 
+/// The socket a client, `pigeon` or the transport helper, reaches `pigeond`
+/// on (09 §9.3): `PIGEON_SOCKET` if set, else the person's daemon's
+/// ([`Dirs::socket`] of [`Role::Person`]), unless only a backup machine's
+/// service answers here, whose socket is under `/run/pigeon`.
+pub fn client_socket() -> PathBuf {
+    let person = Dirs::for_role(Role::Person).ok().map(|d| d.socket());
+    let service = Dirs::for_role(Role::Service).ok().map(|d| d.socket());
+    client_socket_from(std::env::var_os("PIGEON_SOCKET"), person, service, |p| {
+        p.exists()
+    })
+}
+
+/// [`client_socket`] from its inputs: the override, the person's socket,
+/// the service's, and which paths exist.
+pub fn client_socket_from(
+    over: Option<std::ffi::OsString>,
+    person: Option<PathBuf>,
+    service: Option<PathBuf>,
+    exists: impl Fn(&Path) -> bool,
+) -> PathBuf {
+    if let Some(p) = over.filter(|p| !p.is_empty()) {
+        return PathBuf::from(p);
+    }
+    match (person, service) {
+        (Some(p), Some(s)) if !exists(&p) && exists(&s) => s,
+        (Some(p), _) => p,
+        (None, Some(s)) => s,
+        (None, None) => PathBuf::from("/tmp/pigeon/pigeond.sock"),
+    }
+}
+
 /// The per-repository files of 11 §11.3, under `.git/pigeon/` of a
 /// repository with a working tree, or `pigeon/` of a bare one.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -197,6 +228,34 @@ mod tests {
             s.config_file(),
             PathBuf::from("/var/lib/pigeon/config.toml")
         );
+    }
+
+    #[test]
+    fn a_client_reaches_the_daemon_that_runs_here() {
+        let p = PathBuf::from("/me/pigeond.sock");
+        let s = PathBuf::from("/run/pigeon/pigeond.sock");
+        let pick = |over: Option<&str>, running: Option<&Path>| {
+            client_socket_from(
+                over.map(Into::into),
+                Some(p.clone()),
+                Some(s.clone()),
+                |q: &Path| Some(q) == running,
+            )
+        };
+        assert_eq!(
+            pick(Some("/t/s.sock"), Some(&p)),
+            PathBuf::from("/t/s.sock")
+        );
+        assert_eq!(pick(None, Some(&p)), p);
+        assert_eq!(pick(None, Some(&s)), s, "only the service runs");
+        assert_eq!(pick(Some(""), None), p, "neither runs: the person's");
+        if let Ok(d) = Dirs::for_role(Role::Person) {
+            assert_eq!(
+                client_socket_from(None, Some(d.socket()), None, |_| true),
+                d.socket(),
+                "the daemon's own socket"
+            );
+        }
     }
 
     #[test]

@@ -11,6 +11,7 @@ publish.workspace = true
 [dependencies]
 pigeon-i18n.workspace = true
 pigeon-proto.workspace = true
+pigeon-sys.workspace = true
 serde_json.workspace = true
 
 [lints]

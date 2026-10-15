@@ -74,24 +74,3 @@ impl LineDecoder {
         self.buffer
     }
 }
-
-/// The local socket's path (09 §9.3), from the environment's values:
-/// `PIGEON_SOCKET` if set (tests and the lab), else
-/// `$XDG_RUNTIME_DIR/pigeon/pigeond.sock`, else the per-user temporary
-/// directory `$TMPDIR` (macOS), else `/tmp`.
-pub fn socket_path(
-    pigeon_socket: Option<&str>,
-    xdg_runtime_dir: Option<&str>,
-    tmpdir: Option<&str>,
-) -> std::path::PathBuf {
-    if let Some(p) = pigeon_socket.filter(|p| !p.is_empty()) {
-        return p.into();
-    }
-    let base = xdg_runtime_dir
-        .filter(|d| !d.is_empty())
-        .or(tmpdir.filter(|d| !d.is_empty()))
-        .unwrap_or("/tmp");
-    std::path::Path::new(base)
-        .join("pigeon")
-        .join("pigeond.sock")
-}

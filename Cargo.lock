@@ -965,6 +965,7 @@ version = "2.0.0-alpha.0"
 dependencies = [
  "pigeon-core",
  "pigeon-proto",
+ "pigeon-sys",
  "pigeond",
  "tempfile",
  "tokio",
@@ -2285,6 +2286,7 @@ version = "2.0.0-alpha.0"
 dependencies = [
  "pigeon-i18n",
  "pigeon-proto",
+ "pigeon-sys",
  "serde_json",
 ]
 

@@ -67,8 +67,12 @@ punching, relays), with these ALPN protocols:
 ### The local socket
 
 The CLI, the web server and the helper reach `pigeond` over one per-user
-socket, mode 0600 (`$XDG_RUNTIME_DIR/pigeon/pigeond.sock` on Linux, under
-`$TMPDIR` on macOS; `PIGEON_SOCKET` overrides it). It carries one JSON
+socket, mode 0600: `pigeond.sock` in the runtime directory of
+[11 §11.2](11-local-state.md), `$XDG_RUNTIME_DIR/pigeon` on Linux and
+`~/Library/Caches/pigeon/run` on macOS, which the clients take from
+`pigeon-sys` as the daemon does; a client uses a backup machine's
+`/run/pigeon/pigeond.sock` when only that one answers, and `PIGEON_SOCKET`
+overrides both. It carries one JSON
 request or response per line, matched by `id`: the internal API
 ([10 §10.1](10-interfaces.md)) plus the helper's `Address`, `Connect` and
 `Listen`, after whose `Connected` or `Listening` reply only raw bytes pass

@@ -48,13 +48,7 @@ struct Client {
 
 impl Client {
     fn connect() -> Option<Client> {
-        let var = |k: &str| std::env::var(k).ok();
-        let path = pigeon_proto::socket_path(
-            var("PIGEON_SOCKET").as_deref(),
-            var("XDG_RUNTIME_DIR").as_deref(),
-            var("TMPDIR").as_deref(),
-        );
-        let stream = UnixStream::connect(path).ok()?;
+        let stream = UnixStream::connect(pigeon_sys::paths::client_socket()).ok()?;
         Some(Client {
             stream,
             decoder: LineDecoder::new(),
