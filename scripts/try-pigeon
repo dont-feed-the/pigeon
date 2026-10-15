@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# Tries pigeon on one computer: three pigeond side by side in DIR, Alice's
+# laptop, Bob's laptop and a backup machine, in one group where a version is
+# protected once the backup machine holds it (K = 1). They talk over
+# 127.0.0.1 only, as pigeon's tests do. Then DIR/Alice and DIR/Bob are the
+# two laptops' shared folders, and DIR/bin/alice, bob and backup run
+# `pigeon` against each one's daemon.
+#
+#   scripts/try-pigeon [DIR]      sets it up (DIR is /tmp/pigeon-try by default)
+#   scripts/try-pigeon stop [DIR] stops the three daemons and removes DIR
+#
+# pigeond, pigeon and git-annex-p2p-iroh come from PIGEON_BIN, else from
+# target/release, else from the PATH. git-annex comes from the PATH, else
+# from where packaging/install-git-annex puts it.
+set -euo pipefail
+here=$(cd "$(dirname "$0")/.." && pwd)
+stop=
+if [ "${1:-}" = stop ]; then stop=1; shift; fi
+dir=${1:-/tmp/pigeon-try}
+
+if [ -n "$stop" ]; then
+  [ -d "$dir/run" ] || { echo "try-pigeon: $dir holds no try" >&2; exit 1; }
+  for p in "$dir"/run/*/pid; do [ -f "$p" ] && kill "$(cat "$p")" 2>/dev/null || true; done
+  sleep 2
+  # git-annex keeps its objects read-only.
+  chmod -R u+w "$dir" && rm -rf "$dir"
+  echo "stopped, and $dir is removed"
+  exit 0
+fi
+
+die() { echo "try-pigeon: $*" >&2; exit 1; }
+bin=${PIGEON_BIN:-}
+if [ -z "$bin" ]; then
+  if [ -x "$here/target/release/pigeond" ]; then bin=$here/target/release
+  elif command -v pigeond >/dev/null; then bin=$(dirname "$(command -v pigeond)")
+  else die "build pigeon first: cargo build --release -p pigeond -p pigeon -p git-annex-p2p-iroh"
+  fi
+fi
+for b in pigeond pigeon git-annex-p2p-iroh; do
+  [ -x "$bin/$b" ] || die "$bin has no $b: cargo build --release -p pigeond -p pigeon -p git-annex-p2p-iroh"
+done
+if ! command -v git-annex >/dev/null; then
+  case "$(uname -s)" in
+    Darwin) prefix="$HOME/Library/Application Support/pigeon" ;;
+    *) prefix="${XDG_DATA_HOME:-$HOME/.local/share}/pigeon" ;;
+  esac
+  for d in "$prefix/git-annex/bin" "$prefix/git-annex.linux"; do
+    if [ -x "$d/git-annex" ]; then PATH=$d:$PATH; break; fi
+  done
+  command -v git-annex >/dev/null || die "no git-annex: run packaging/install-git-annex --stock"
+fi
+[ ! -e "$dir/run" ] || die "$dir is already in use: scripts/try-pigeon stop $dir first"
+mkdir -p "$dir/bin" "$dir/run"
+dir=$(cd "$dir" && pwd)
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+
+# start NAME: one pigeond with its own home, which listens on 127.0.0.1 only.
+start() {
+  local d=$dir/run/$1
+  mkdir -p "$d/home/config"
+  printf '[network]\nbind = "127.0.0.1:0"\nmdns = false\nrelays = "off"\n\n[loops]\ninterval_seconds = 2\n' \
+    > "$d/home/config/config.toml"
+  HOME=$d/home PIGEON_SOCKET=$d/pigeond.sock "$bin/pigeond" --home "$d/home" > "$d/pigeond.log" 2>&1 &
+  echo $! > "$d/pid"
+  printf '#!/bin/sh\nHOME="%s" PIGEON_SOCKET="%s" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 exec "%s" "$@"\n' \
+    "$d/home" "$d/pigeond.sock" "$bin/pigeon" > "$dir/bin/$1"
+  chmod +x "$dir/bin/$1"
+  for _ in $(seq 60); do [ -S "$d/pigeond.sock" ] && return 0; sleep 1; done
+  tail -n 20 "$d/pigeond.log" >&2
+  die "$1's pigeond did not start"
+}
+invitation() { grep -o 'pgn1-[a-z2-7]*' | head -1; }
+
+echo "starting three pigeond in $dir/run"
+start alice
+start backup
+start bob
+"$dir/bin/alice" create Family "$dir/Alice" --k 1 --name alice-laptop
+code=$("$dir/bin/alice" invite --backup-machine backup | invitation)
+"$dir/bin/backup" join --backup-machine "$code"
+code=$("$dir/bin/alice" invite Bob | invitation)
+"$dir/bin/bob" join "$code" "$dir/Bob" --name bob-laptop
+cat <<MSG
+
+Alice's laptop, Bob's laptop and a backup machine now share the group Family.
+Try:
+
+  echo hello > $dir/Alice/hello.txt
+  $dir/bin/alice status           # "Sending…", then "Everything is safe"
+  ls $dir/Bob                     # hello.txt arrives in a few seconds
+  echo again >> $dir/Bob/hello.txt
+  $dir/bin/alice suggestions      # Bob's change waits for Alice, who runs the group
+  $dir/bin/alice accept ID        # ID as the line above gives it
+  $dir/bin/alice history $dir/Alice/hello.txt
+  $dir/bin/alice machines
+
+Each daemon logs to $dir/run/NAME/pigeond.log.
+Stop them and remove $dir with: scripts/try-pigeon stop $dir
+MSG
