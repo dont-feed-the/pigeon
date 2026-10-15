@@ -123,8 +123,12 @@ mod imp {
     use super::{FileId, Scan};
 
     const PROC_PIDLISTFDS: c_int = 1;
-    const PROC_PIDREGIONPATHINFO: c_int = 8;
-    const PROC_PIDFDVNODEPATHINFO: c_int = 2;
+    /// The next region backed by a file, skipping the others and submaps
+    /// (the shared cache) in the kernel: one call per mapped file, where
+    /// `PROC_PIDREGIONPATHINFO` (8) takes one per region of every map.
+    const PROC_PIDREGIONPATHINFO2: c_int = 22;
+    /// A descriptor's vnode without its path, which the kernel would build.
+    const PROC_PIDFDVNODEINFO: c_int = 1;
     const PROX_FDTYPE_VNODE: u32 = 1;
     const FWRITE: u32 = 0x2;
     const VM_PROT_WRITE: u32 = 0x2;
@@ -142,9 +146,9 @@ mod imp {
 
     #[repr(C)]
     #[derive(Clone, Copy)]
-    struct VnodeFdinfoWithPath {
+    struct VnodeFdinfo {
         pfi: ProcFileinfo,
-        pvip: libc::vnode_info_path,
+        pvi: libc::vnode_info,
     }
 
     #[repr(C)]
@@ -219,29 +223,24 @@ mod imp {
     }
 
     fn fd_writes(pid: c_int, fd: i32, id: FileId) -> bool {
-        let mut info = MaybeUninit::<VnodeFdinfoWithPath>::zeroed();
-        let size = c_int::try_from(size_of::<VnodeFdinfoWithPath>()).unwrap_or(0);
+        let mut info = MaybeUninit::<VnodeFdinfo>::zeroed();
+        let size = c_int::try_from(size_of::<VnodeFdinfo>()).unwrap_or(0);
         // SAFETY: `info` is valid for `size` bytes, and zeroed so any bytes the
         // call leaves unwritten are a valid value of this plain-data struct.
         let got = unsafe {
-            libc::proc_pidfdinfo(
-                pid,
-                fd,
-                PROC_PIDFDVNODEPATHINFO,
-                info.as_mut_ptr().cast(),
-                size,
-            )
+            libc::proc_pidfdinfo(pid, fd, PROC_PIDFDVNODEINFO, info.as_mut_ptr().cast(), size)
         };
         if got != size {
             return false;
         }
         // SAFETY: the call filled the whole struct (got == size).
         let info = unsafe { info.assume_init() };
-        matches(&info.pvip.vip_vi.vi_stat, id) && info.pfi.fi_openflags & FWRITE != 0
+        matches(&info.pvi.vi_stat, id) && info.pfi.fi_openflags & FWRITE != 0
     }
 
     /// The `(protection, inheritance, share mode)` of every region of `pid`
-    /// that maps the file `id`.
+    /// that maps the file `id` (`fill_procregioninfo_onlymappedvnodes` in
+    /// XNU's `osfmk/kern/bsd_kern.c` reports no share mode: 0).
     pub(super) fn regions(pid: c_int, id: FileId) -> Vec<(u32, u32, u32)> {
         let size = c_int::try_from(size_of::<ProcRegionWithPathinfo>()).unwrap_or(0);
         let mut out = Vec::new();
@@ -253,7 +252,7 @@ mod imp {
             let got = unsafe {
                 libc::proc_pidinfo(
                     pid,
-                    PROC_PIDREGIONPATHINFO,
+                    PROC_PIDREGIONPATHINFO2,
                     address,
                     info.as_mut_ptr().cast(),
                     size,
