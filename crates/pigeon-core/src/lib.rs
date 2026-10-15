@@ -13,6 +13,7 @@ pub mod filter;
 pub mod headline;
 pub mod journal;
 pub mod queue;
+pub mod report;
 pub mod roster;
 pub mod sig;
 pub mod state;
