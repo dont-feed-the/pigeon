@@ -140,8 +140,11 @@ async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             }
         }
         Request::Join {
-            invitation, folder, ..
-        } => match crate::invite::join(d, &invitation, folder).await {
+            invitation,
+            folder,
+            name,
+            ..
+        } => match crate::invite::join(d, &invitation, folder, name).await {
             Ok(group) => vec![said("joined", &[("group", text(&group))])],
             Err(code) => vec![join_problem(&code, &invitation)],
         },

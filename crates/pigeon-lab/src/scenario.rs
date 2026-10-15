@@ -356,7 +356,12 @@ fn check_condition(w: &World, p: &Presence, c: &Condition) -> Result<(), String>
         Condition::State { on, file, .. }
         | Condition::Bytes { on, file, .. }
         | Condition::Absent { on, file }
-        | Condition::NotShared { on, file } => laptop(*on).and(check_file(w, file)),
+        | Condition::NotShared { on, file }
+        | Condition::Versions { on, file, .. }
+        | Condition::Kept { on, file, .. }
+        | Condition::Suggested { on, file } => laptop(*on).and(check_file(w, file)),
+        Condition::Knows { on, device } if w.has(*device) => laptop(*on),
+        Condition::Knows { .. } => Err("no such device".into()),
         Condition::Headline { on, .. } | Condition::DiskWithin { on, .. } => laptop(*on),
         Condition::NoPointers { on, folder } => laptop(*on).and(check_file(w, &folder.file("x"))),
         Condition::Says { on, code } => {
@@ -377,6 +382,29 @@ fn check_condition(w: &World, p: &Presence, c: &Condition) -> Result<(), String>
         Condition::Not(c) => check_condition(w, p, c),
         Condition::All(cs) => cs.iter().try_for_each(|c| check_condition(w, p, c)),
     }
+}
+
+/// Checks that `by` may invite the spare laptop `l`, which then joins: a
+/// new person's laptop is an admin's to invite, a known person's their own
+/// or an admin's (09 §9.6).
+fn check_join(w: &World, p: &mut Presence, by: Laptop, l: Laptop) -> Result<(), String> {
+    let j = l.0 as usize;
+    match p.laptops.get(j) {
+        None => return Err(format!("no laptop {j}")),
+        Some(true) => return Err(format!("{} is already in the group", w.name(l.into()))),
+        Some(false) => {}
+    }
+    let person = |x: Laptop| w.laptops[x.0 as usize].person;
+    let known = (0..w.laptops.len()).any(|k| p.laptops[k] && w.laptops[k].person == person(l));
+    if !w.is_admin(by) && !(known && person(by) == person(l)) {
+        return Err(format!(
+            "{} may not invite {}",
+            w.name(by.into()),
+            w.name(l.into())
+        ));
+    }
+    p.laptops[j] = true;
+    Ok(())
 }
 
 /// Checks one step from `p`, and moves `p` past it.
@@ -432,6 +460,8 @@ pub fn check_step(w: &World, p: &mut Presence, s: &Step) -> Result<(), String> {
                     Ok(())
                 }
                 LaptopOp::Recover { .. } => Ok(()),
+                LaptopOp::Join { laptop } => check_join(w, p, *on, *laptop),
+                LaptopOp::Accept { file } | LaptopOp::Decline { file } => check_file(w, file),
             }
         }
         Step::Custodian { on, .. } => match p.custodians.get(on.0 as usize) {
@@ -535,7 +565,9 @@ fn labels_of(s: &Step) -> Vec<Label> {
                 LaptopOp::Free { .. } => vec![l("CaptureInstall", "Start", d)],
                 // The inviter commits the roster that adds the custodian;
                 // a removal is a roster commit too.
-                LaptopOp::Invite { .. } | LaptopOp::RemoveComputer { .. } => {
+                LaptopOp::Invite { .. }
+                | LaptopOp::RemoveComputer { .. }
+                | LaptopOp::Join { .. } => {
                     vec![l("Roster", "Commit", d)]
                 }
                 // A write is the person's, not pigeond's: two writes before a
@@ -548,7 +580,9 @@ fn labels_of(s: &Step) -> Vec<Label> {
                 | LaptopOp::Recover { .. }
                 | LaptopOp::Symlink { .. }
                 | LaptopOp::Forge { .. }
-                | LaptopOp::RecoverySheet => Vec::new(),
+                | LaptopOp::RecoverySheet
+                | LaptopOp::Accept { .. }
+                | LaptopOp::Decline { .. } => Vec::new(),
             }
         }
         _ => Vec::new(),
@@ -661,6 +695,26 @@ fn condition_text(w: &World, c: &Condition) -> String {
                 permille % 1000
             )
         }
+        Condition::Versions { on, file, contents } => format!(
+            "{} has {} and its copies = {{{}}}",
+            n(*on),
+            w.path(file),
+            contents
+                .iter()
+                .map(content_text)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Condition::Kept { on, file, content } => format!(
+            "{} keeps {} = {} or a copy",
+            n(*on),
+            w.path(file),
+            content_text(content)
+        ),
+        Condition::Suggested { on, file } => {
+            format!("{} lists a suggestion for {}", n(*on), w.path(file))
+        }
+        Condition::Knows { on, device } => format!("{} knows {}", n(*on), w.name(*device)),
         Condition::Not(c) => format!("not ({})", condition_text(w, c)),
         Condition::All(cs) => cs
             .iter()
@@ -708,6 +762,13 @@ pub fn step_text(w: &World, s: &Step) -> String {
                 LaptopOp::RecoverySheet => "prints a recovery sheet".to_owned(),
                 LaptopOp::Recover { from } => {
                     format!("recovers with {}'s sheet", w.name((*from).into()))
+                }
+                LaptopOp::Join { laptop } => {
+                    format!("invites {}, which joins", w.name((*laptop).into()))
+                }
+                LaptopOp::Accept { file } => format!("accepts the suggestion for {}", w.path(file)),
+                LaptopOp::Decline { file } => {
+                    format!("declines the suggestion for {}", w.path(file))
                 }
             };
             match expect {

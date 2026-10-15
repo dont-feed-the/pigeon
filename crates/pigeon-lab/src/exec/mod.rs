@@ -13,6 +13,7 @@ pub mod cli;
 mod forge;
 pub mod host;
 pub mod observe;
+mod people;
 pub mod trace;
 
 use std::collections::BTreeMap;
@@ -402,6 +403,9 @@ impl Exec {
                 let tree = self.devs[on.0 as usize].tree.clone();
                 self.pigeon(d, &cli::recover(&sheet, &tree))?.outcome()
             }
+            LaptopOp::Join { laptop } => self.join_laptop(on, *laptop, w)?,
+            LaptopOp::Accept { file } => self.decide(on, file, true, w)?,
+            LaptopOp::Decline { file } => self.decide(on, file, false, w)?,
         })
     }
 
@@ -562,6 +566,10 @@ impl Exec {
                     format!("{used} bytes on disk for {kept} kept"),
                 )
             }
+            Condition::Versions { .. }
+            | Condition::Kept { .. }
+            | Condition::Suggested { .. }
+            | Condition::Knows { .. } => self.people_condition(c, w),
             Condition::Not(c) => match self.condition(c, w) {
                 Verdict::Pass => Verdict::Fail("it holds".into()),
                 Verdict::Fail(_) => Verdict::Pass,
@@ -760,18 +768,22 @@ impl Interpreter for Exec {
         let _ = host::remove_tree(&work);
         fs::create_dir_all(self.out_dir()).map_err(|e| e.to_string())?;
         self.laptops = world.laptops.len();
-        let specs: Vec<(String, u32, bool)> = world
+        let specs: Vec<(String, u32, bool, Option<String>)> = world
             .laptops
             .iter()
-            .map(|l| (l.name.clone(), l.disk_mib, false))
+            .enumerate()
+            .map(|(i, l)| {
+                let person = world.person_of(Laptop(i as u8)).map(|p| p.name.clone());
+                (l.name.clone(), l.disk_mib, false, person)
+            })
             .chain(
                 world
                     .custodians
                     .iter()
-                    .map(|c| (c.name.clone(), c.disk_mib, true)),
+                    .map(|c| (c.name.clone(), c.disk_mib, true, None)),
             )
             .collect();
-        for (name, mib, custodian) in specs {
+        for (name, mib, custodian, person) in specs {
             let space = Space::create(self.cfg.isolation, &work, &name, mib, custodian)?;
             let root = space.root.clone();
             let home = root.join("home");
@@ -798,6 +810,10 @@ impl Interpreter for Exec {
                 (s("PIGEON_NAME"), name.clone()),
                 (s("RUST_LOG"), s("info")),
             ];
+            // A laptop's person is its `$USER`: the creator's names them.
+            if let Some(user) = person {
+                env.push((s("USER"), user));
+            }
             // `PIGEON_LOG=debug` for the run gives every daemon's debug log.
             if let Ok(level) = std::env::var("PIGEON_LOG") {
                 env.push((s("PIGEON_LOG"), level));

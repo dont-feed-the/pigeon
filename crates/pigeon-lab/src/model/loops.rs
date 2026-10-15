@@ -110,7 +110,9 @@ impl Model {
         lm.present && lm.daemon.running
     }
 
-    /// Capture: each regular file whose bytes are not its current version.
+    /// Capture: each regular file whose bytes are not what the laptop last
+    /// captured or installed there. A change of a file that exists, which
+    /// the person may not make, is a suggestion instead (04 §4.5).
     fn capture(&mut self, l: Laptop) {
         if !self.up(l) {
             return;
@@ -124,20 +126,28 @@ impl Model {
                 OnDisk::Link => None,
             })
             .collect();
+        let may_change = self.may_change(l);
         for (f, k) in files {
             let lm = &mut self.laptops[i];
-            if lm.history.get(&f).and_then(|v| v.last()).map(|v| &v.key) == Some(&k) {
+            let current = lm.history.get(&f).and_then(|v| v.last()).map(|v| &v.key);
+            if lm.synced.get(&f) == Some(&k) || current == Some(&k) {
+                lm.synced.insert(f, k);
                 continue;
             }
             if cross(&mut lm.daemon, CrashPoint::CaptureBeforeRef) {
                 return;
             }
             let len = lm.content.get(&k).copied().unwrap_or(0);
+            lm.synced.insert(f.clone(), k.clone());
             let ver = Ver {
                 key: k,
                 len,
                 saved: self.now,
             };
+            if !may_change && lm.history.get(&f).is_some_and(|v| !v.is_empty()) {
+                self.suggest(l, f, ver);
+                continue;
+            }
             lm.history.entry(f.clone()).or_default().push(ver.clone());
             let n = lm.history[&f].len();
             let group = self.group.entry(f).or_default();
@@ -327,19 +337,37 @@ impl Model {
         true
     }
 
-    /// Keep: each file of a kept folder that is absent is fetched, then
-    /// installed through the journal.
+    /// Keep: each file of a kept folder that is absent, or unchanged since
+    /// the laptop last captured or installed it and older than its current
+    /// version, is fetched, then installed through the journal. A file that
+    /// holds its current version is in step again.
     fn keep(&mut self, l: Laptop) {
         let i = l.0 as usize;
         if !self.up(l) {
             return;
         }
+        let lm = &mut self.laptops[i];
+        let current: Vec<(File, Key)> = lm
+            .history
+            .iter()
+            .filter_map(|(f, v)| Some((f.clone(), v.last()?.key.clone())))
+            .filter(|(f, k)| lm.disk.get(f) == Some(&OnDisk::File(k.clone())))
+            .collect();
+        for (f, k) in current {
+            lm.diverged.remove(&f);
+            lm.synced.insert(f, k);
+        }
         let lm = &self.laptops[i];
         let todo: Vec<(File, Ver)> = lm
             .history
             .iter()
-            .filter(|(f, _)| !lm.freed.contains(&f.folder) && !lm.disk.contains_key(*f))
+            .filter(|(f, _)| !lm.freed.contains(&f.folder) && !lm.diverged.contains(*f))
             .filter_map(|(f, v)| v.last().map(|v| (f.clone(), v.clone())))
+            .filter(|(f, v)| match lm.disk.get(f) {
+                None => true,
+                Some(OnDisk::File(k)) => *k != v.key && lm.synced.get(f) == Some(k),
+                Some(OnDisk::Link) => false,
+            })
             .collect();
         for (f, ver) in todo {
             let reachable = self.laptops[i].content.contains_key(&ver.key)
@@ -383,6 +411,7 @@ impl Model {
         }
         lm.journal.push(Record::Proved(vec![seq]));
         lm.disk.insert(f.clone(), OnDisk::File(ver.key.clone()));
+        lm.synced.insert(f.clone(), ver.key.clone());
         lm.stages.remove(&stage);
         if cross(&mut lm.daemon, CrashPoint::KeepAfterRenameIn) {
             return false;

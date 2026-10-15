@@ -41,7 +41,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ),
     ("invite [--admin] PERSON", "cmd-invite-person"),
     ("invite --backup-machine [NAME]", "cmd-invite"),
-    ("join INVITATION [FOLDER]", "cmd-join"),
+    ("join INVITATION [FOLDER] [--name NAME]", "cmd-join"),
     ("status [PATH] [--not-shared]", "cmd-status"),
     ("machines", "cmd-machines"),
     ("history PATH", "cmd-history"),
@@ -208,10 +208,11 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
                 name: None,
             })
         }
-        "join" if fits(1, 2, &["backup-machine", "keep"]) => send(Request::Join {
+        "join" if fits(1, 2, &["backup-machine", "keep", "name"]) => send(Request::Join {
             invitation: w.first()?.clone(),
             folder: w.get(1).map(|f| absolute(f)),
             keep: s.flag("keep"),
+            name: s.value("name").map(str::to_owned),
         }),
         "status" if fits(0, 1, &["not-shared"]) => send(Request::Status {
             path: w.first().map(|p| absolute(p)),

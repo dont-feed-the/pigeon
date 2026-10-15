@@ -72,6 +72,23 @@ pub enum LaptopOp {
         /// The laptop whose recovery sheet is used.
         from: Laptop,
     },
+    /// `pigeon invite [--admin] PERSON` for the spare laptop's person, then
+    /// its `pigeon join INVITATION FOLDER --name NAME` (09 §9.6).
+    Join {
+        /// The spare laptop that joins.
+        laptop: Laptop,
+    },
+    /// `pigeon accept ID` for the newest suggestion that changes `file`
+    /// (04 §4.5).
+    Accept {
+        /// The file.
+        file: File,
+    },
+    /// `pigeon decline ID` for the newest suggestion that changes `file`.
+    Decline {
+        /// The file.
+        file: File,
+    },
 }
 
 /// What only a custodian undergoes.
@@ -225,8 +242,10 @@ pub mod level_name {
 }
 
 /// Something a scenario observes. Conditions about progress
-/// ([`Condition::Transferring`]) are seen by the process executor only; the
-/// model skips them, and a wait for one lets no time pass in the model.
+/// ([`Condition::Transferring`]) and conflict copies
+/// ([`Condition::Versions`], [`Condition::Kept`]) are seen by the process
+/// executor only; the model skips them, and a wait for one lets no time
+/// pass in the model.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Condition {
     /// The laptop reports the file's current version in this state.
@@ -308,6 +327,41 @@ pub enum Condition {
         /// The bound, in thousandths of the content kept.
         permille: u32,
     },
+    /// The file and its conflict copies (05 §5.3) on the laptop's disk
+    /// hold exactly these contents, as a set; observed by the process
+    /// executor only, as conflicts are Authority.tla's and the catalogue's.
+    Versions {
+        /// Who looks.
+        on: Laptop,
+        /// The file.
+        file: File,
+        /// The contents.
+        contents: Vec<Content>,
+    },
+    /// The file or one of its conflict copies holds `content`: what the
+    /// person saved there was not overwritten; process executor only.
+    Kept {
+        /// Who looks.
+        on: Laptop,
+        /// The file.
+        file: File,
+        /// The content.
+        content: Content,
+    },
+    /// `pigeon suggestions` lists a suggestion that changes the file.
+    Suggested {
+        /// Who looks.
+        on: Laptop,
+        /// The file.
+        file: File,
+    },
+    /// `pigeon machines` lists the device: its roster has it.
+    Knows {
+        /// Who looks.
+        on: Laptop,
+        /// The device listed.
+        device: Device,
+    },
     /// The negation.
     Not(Box<Condition>),
     /// Every one of them.
@@ -318,7 +372,9 @@ impl Condition {
     /// Whether only the process executor can observe it.
     pub fn real_only(&self) -> bool {
         match self {
-            Condition::Transferring { .. } => true,
+            Condition::Transferring { .. }
+            | Condition::Versions { .. }
+            | Condition::Kept { .. } => true,
             Condition::Not(c) => c.real_only(),
             Condition::All(cs) => cs.iter().any(Condition::real_only),
             _ => false,

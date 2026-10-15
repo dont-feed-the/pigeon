@@ -391,8 +391,17 @@ fn hostname() -> String {
 }
 
 /// The new device's side: answers a problem code, or the group's name.
-pub async fn join(d: &Daemon, code: &str, folder: Option<String>) -> Result<String, String> {
-    let inv = decode(code).ok_or("invite-unknown")?;
+/// `name`, when given, is the name it asks for, over the invitation's.
+pub async fn join(
+    d: &Daemon,
+    code: &str,
+    folder: Option<String>,
+    name: Option<String>,
+) -> Result<String, String> {
+    let mut inv = decode(code).ok_or("invite-unknown")?;
+    if let Some(name) = name.map(|n| n.trim().to_owned()).filter(|n| !n.is_empty()) {
+        inv.device = name;
+    }
     if inv.expires < now() {
         return Err("invite-expired".into());
     }
@@ -406,8 +415,9 @@ pub async fn join(d: &Daemon, code: &str, folder: Option<String>) -> Result<Stri
     }
 }
 
-/// The name a joining device gives itself: the inviter's choice, else
-/// `<host name>-<6 hex digits of its device ID>` (13 §13.12).
+/// The name a joining device gives itself: its own choice (`join --name`),
+/// else the inviter's, else `<host name>-<6 hex digits of its device ID>`
+/// (13 §13.12).
 pub fn device_name(d: &Daemon, inv: &Invitation) -> String {
     let short = d.device.get(..6).unwrap_or_default();
     if inv.device.is_empty() {

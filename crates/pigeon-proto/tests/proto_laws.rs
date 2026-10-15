@@ -49,6 +49,7 @@ fn request(tc: &TestCase) -> Request {
             invitation: text(tc),
             folder: maybe_text(tc),
             keep: flag(tc),
+            name: maybe_text(tc),
         },
         5 => Request::Keep { folder: text(tc) },
         6 => Request::Evict { folder: text(tc) },

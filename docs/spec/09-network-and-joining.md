@@ -143,7 +143,8 @@ person (ux.md §8) **[no ADR: reading]**, creates a one-time invitation:
   used before the roster commit is signed. `pigeon invite --list` and
   `--cancel` manage pending ones.
 
-`pigeon join INVITATION [FOLDER]` (Welcome → *Join a group*):
+`pigeon join INVITATION [FOLDER] [--name NAME]` (Welcome → *Join a group*;
+`--name` names the computer in the roster **[no ADR]**):
 
 | # | Who | Step |
 |---|---|---|

@@ -104,6 +104,33 @@ pub fn join_custodian(invitation: &str) -> Vec<String> {
     vec![s("join"), s("--backup-machine"), s(invitation), s("--json")]
 }
 
+/// `pigeon invite [--admin] PERSON`.
+pub fn invite_person(person: &str, admin: bool) -> Vec<String> {
+    let mut a = vec![s("invite")];
+    if admin {
+        a.push(s("--admin"));
+    }
+    a.extend([s(person), s("--json")]);
+    a
+}
+
+/// `pigeon join INVITATION FOLDER --name NAME`.
+pub fn join_laptop(invitation: &str, folder: &Path, name: &str) -> Vec<String> {
+    vec![
+        s("join"),
+        s(invitation),
+        p(folder),
+        s("--name"),
+        s(name),
+        s("--json"),
+    ]
+}
+
+/// `pigeon accept ID`, `pigeon decline ID`.
+pub fn decide(verb: &str, id: &str) -> Vec<String> {
+    vec![s(verb), s(id), s("--json")]
+}
+
 /// `pigeon status [PATH] [--not-shared]`.
 pub fn status(path: Option<&Path>, not_shared: bool) -> Vec<String> {
     let mut a = vec![s("status")];
@@ -234,6 +261,26 @@ pub fn not_shared(status: &Value, path: &str) -> bool {
                 .and_then(Value::as_str)
                 .is_some_and(|p| p == path || p.ends_with(&format!("/{path}")))
         })
+}
+
+/// The `(ID, paths)` of each suggestion `pigeon suggestions` lists.
+pub fn suggestions(v: &Value) -> Vec<(String, Vec<String>)> {
+    let body = v.get("Proposals").unwrap_or(v);
+    body.get("proposals")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|p| {
+            let paths = p.get("paths")?.as_array()?;
+            Some((
+                p.get("id")?.as_str()?.to_owned(),
+                paths
+                    .iter()
+                    .filter_map(|x| x.as_str().map(str::to_owned))
+                    .collect(),
+            ))
+        })
+        .collect()
 }
 
 /// The `(name, device ID)` of each machine `pigeon machines` lists.

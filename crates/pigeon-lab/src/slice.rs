@@ -594,10 +594,12 @@ pub fn blocked(id: &str) -> Option<&'static str> {
         .map(|(_, why)| *why)
 }
 
-/// Every scenario of the slice, S9 once per named point.
+/// Every scenario: the slice's, S9 once per named point, then M2's
+/// ([`crate::people`]).
 pub fn all() -> Vec<Scenario> {
     let mut out = vec![s1(), s2(), s3(), s4(), s5(), s6(), s7(), s8()];
     out.extend(CrashPoint::ALL.iter().map(|p| s9_point(*p)));
     out.extend([s10(), s11(), s12(), s13()]);
+    out.extend(crate::people::all());
     out
 }

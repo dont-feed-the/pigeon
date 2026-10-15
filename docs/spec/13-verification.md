@@ -263,8 +263,8 @@ from this specification as follows, each to close before S1–S11 run
   ([06 §6.3](06-status.md)), but a custodian neither refuses `tmpfs` nor
   stops serving once its repository is lost, and reports no proposals,
   scrub or purge;
-- the creator's person ID is `$USER`, and a joining device is named `<host
-  name>-<6 hex digits of its device ID>`;
+- the creator's person ID is `$USER`, and a joining device is named by
+  `join --name`, else `<host name>-<6 hex digits of its device ID>`;
 - the CLI parses its arguments by hand, without completions or colour
   ([10 §10.2](10-interfaces.md));
 - one round runs, per group, the settings check, free and keep toward each
@@ -306,7 +306,7 @@ Laws (`crates/pigeon-lab/tests/laws.rs`): steps form a monoid; validation
 and the trace projection are compositional; a prefix runs the same whatever
 follows; settling the model is idempotent; a crash at any named point, then
 a restart, changes no outcome (1000 model schedules per push). The workflow
-`slice.yml` runs them, then S1–S13 and 50 random S9 schedules against the
+`slice.yml` runs them, then S1–S16 and 50 random S9 schedules against the
 real binaries on both runners; `models-full.yml` runs 1000. A scenario that
 does not pass yet against the first build is listed in `slice::BLOCKED`
 with what its last runs showed; per push it is reported as blocked, and
@@ -338,6 +338,15 @@ locks (11 §11.4).
 | S11 | steady and peak disk use per device: folders, `.git`, annex objects, `.git/annex/tmp`, pending history ([07 §7.8](07-capture-and-install.md)), pigeon's state, temporary files |
 | S12 | a nearly full custodian takes what fits in its room above the reserve, says `no-capacity` without being full, and so does the laptop from its status report ([06 §6.3](06-status.md)); it takes the rest once room returns ([08 §8.9](08-custody-loops.md), issue #13) |
 | S13 | a commit signed outside the group, put on the laptop's `main` beside pigeond, is refused by both custodians with `commit-unknown-signer`, with every commit after it; what came before stays protected ([04 §4.4](04-roster-and-authority.md), ADR 0007) |
+| S14 | two people, three laptops (M2): what each saves reaches every laptop; Bob's change of Ana's file is a suggestion, which he may not accept and she does ([04 §4.5](04-roster-and-authority.md)) |
+| S15 | a declined suggestion stays its author's file alone; edits made apart on two laptops both stay, one under the name and one as its conflict copy, and neither laptop's file is overwritten (ADR 0034) |
+| S16 | two laptops each admit a new person while they cannot reach each other: the roster forks, then every laptop lists every device and the newcomers' files reach everyone (ADR 0051) |
+
+S14–S16 (`pigeon-lab/src/people.rs`) give laptops persons: a spare laptop
+joins with `pigeon invite PERSON` and `pigeon join … --name`. The model
+follows the default root rule (an admin changes a file, anyone adds one,
+another change is a suggestion); conflict copies are observed by the
+executor only, as `Catalogue.tla` and `Authority.tla` model them.
 
 S7's repair order and S10's list of what recovery needed are read from the
 run's trace and report, not yet asserted by a condition.

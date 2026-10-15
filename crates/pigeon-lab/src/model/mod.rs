@@ -5,7 +5,8 @@
 //! point ([`Model::settle`]) and evaluates its condition there. States come
 //! from [`pigeon_core::state::state`], levels from
 //! [`pigeon_core::headline::version_level`], install and free run through
-//! [`pigeon_core::journal`], whose recovery a crash point exercises.
+//! [`pigeon_core::journal`], whose recovery a crash point exercises. Joins
+//! and suggestions follow the default root rule (`people`).
 //!
 //! Laws (`tests/laws.rs`): a run is a fold, so running `a.then(b)` equals
 //! running `b` from where `a` left the model; [`Model::settle`] is
@@ -14,6 +15,9 @@
 //! scenario's projection.
 
 mod loops;
+mod people;
+
+pub use people::Suggestion;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -111,6 +115,14 @@ pub struct LaptopM {
     pub forged: bool,
     /// Problem codes it reports.
     pub says: BTreeSet<String>,
+    /// Its person is an admin.
+    pub admin: bool,
+    /// Per file, the content it last captured or installed there: a file
+    /// on disk that holds it is unchanged.
+    pub synced: BTreeMap<File, Key>,
+    /// Files whose bytes are the person's own suggestion, which no install
+    /// replaces.
+    pub diverged: BTreeSet<File>,
 }
 
 /// A custodian.
@@ -155,6 +167,8 @@ pub struct Model {
     pub trace: Vec<Label>,
     /// The disk measures.
     pub measures: Vec<Measure>,
+    /// The suggestions waiting for a decision, oldest first.
+    pub suggestions: Vec<Suggestion>,
     /// The names of devices, for measures.
     names: Vec<String>,
 }
@@ -169,7 +183,9 @@ impl Model {
         let laptops = world
             .laptops
             .iter()
-            .map(|l| LaptopM {
+            .enumerate()
+            .map(|(i, l)| LaptopM {
+                admin: world.is_admin(Laptop(i as u8)),
                 present: l.present,
                 daemon: Daemon {
                     running: l.present,
@@ -206,6 +222,7 @@ impl Model {
             seq: 0,
             trace: Vec::new(),
             measures: Vec::new(),
+            suggestions: Vec::new(),
             names: world
                 .devices()
                 .into_iter()
@@ -348,8 +365,20 @@ impl Model {
                     "the model's custodian lacks it",
                 )
             }
-            Condition::Transferring { .. } => {
+            Condition::Transferring { .. }
+            | Condition::Versions { .. }
+            | Condition::Kept { .. } => {
                 Verdict::Skip("observed by the process executor only".into())
+            }
+            Condition::Suggested { file, .. } => {
+                yes(self.suggested(file), "no suggestion for it in the model")
+            }
+            Condition::Knows { device, .. } => {
+                let present = match device {
+                    Device::Laptop(l) => self.laptops[l.0 as usize].present,
+                    Device::Custodian(c) => self.custodians[c.0 as usize].present,
+                };
+                yes(present, "not in the model's roster")
             }
             Condition::DiskWithin { on, permille } => {
                 let lm = &self.laptops[on.0 as usize];
@@ -455,6 +484,9 @@ impl Model {
                 lm.daemon.running = true;
                 self.log("Roster", "Merge", d);
             }
+            LaptopOp::Join { laptop } => return self.join(on, *laptop),
+            LaptopOp::Accept { file } => return self.decide(on, file, true),
+            LaptopOp::Decline { file } => return self.decide(on, file, false),
         }
         Outcome::Done
     }

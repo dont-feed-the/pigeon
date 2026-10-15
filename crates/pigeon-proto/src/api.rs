@@ -53,7 +53,7 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         name: Option<String>,
     },
-    /// `pigeon join INVITATION [FOLDER]`.
+    /// `pigeon join INVITATION [FOLDER] [--name NAME]`.
     Join {
         /// The `pgn1-` invitation.
         invitation: String,
@@ -63,6 +63,10 @@ pub enum Request {
         /// Keep the files on this computer.
         #[serde(default)]
         keep: bool,
+        /// This computer's name in the roster: over the invitation's, else
+        /// `<host name>-<6 hex digits of its device ID>`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
     },
     /// `pigeon keep PATH`.
     Keep {

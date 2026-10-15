@@ -4,7 +4,8 @@
 //! and custodians (backup machines). A handle is an index into the world,
 //! typed by role, so an operation a custodian cannot do (such as `free`) has
 //! no way to name one. Spare devices, which join or recover during the
-//! scenario, are declared with `present = false`.
+//! scenario, are declared with `present = false`. A world may name persons,
+//! each laptop being one's; a world without them is the creator's alone.
 
 use std::fmt;
 
@@ -18,6 +19,10 @@ pub struct Laptop(pub u8);
 /// A custodian (backup machine) of the world.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Custodian(pub u8);
+
+/// A person of the world, whose laptops they are.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct Person(pub u8);
 
 /// Any device, for what every device does: start, stop, crash, fill its disk.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -173,6 +178,18 @@ pub struct LaptopSpec {
     pub present: bool,
     /// Its disk, in MiB: the size of the image its home lives on.
     pub disk_mib: u32,
+    /// Its person: an index into [`World::persons`].
+    #[serde(default)]
+    pub person: u8,
+}
+
+/// A person of the world.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersonSpec {
+    /// Their name, which their laptops' `$USER` holds (13 §13.12).
+    pub name: String,
+    /// An admin: the creator is one, and an invitation may make one.
+    pub admin: bool,
 }
 
 /// A custodian of the world.
@@ -199,6 +216,9 @@ pub struct World {
     pub custodians: Vec<CustodianSpec>,
     /// The folders' names.
     pub folders: Vec<String>,
+    /// The persons; with none, every laptop is the creator's, an admin's.
+    #[serde(default)]
+    pub persons: Vec<PersonSpec>,
 }
 
 /// A laptop's disk unless a scenario asks otherwise, in MiB: room above
@@ -220,7 +240,43 @@ impl World {
             laptops: Vec::new(),
             custodians: Vec::new(),
             folders: Vec::new(),
+            persons: Vec::new(),
         }
+    }
+
+    /// Adds a person.
+    pub fn person(&mut self, name: &str, admin: bool) -> Person {
+        self.persons.push(PersonSpec {
+            name: name.to_owned(),
+            admin,
+        });
+        Person((self.persons.len() - 1) as u8)
+    }
+
+    /// Adds a laptop of `p`, in the group from the start.
+    pub fn laptop_of(&mut self, name: &str, p: Person) -> Laptop {
+        let l = self.laptop(name);
+        self.laptops[l.0 as usize].person = p.0;
+        l
+    }
+
+    /// Adds a fresh laptop of `p`, outside the group until it joins.
+    pub fn spare_laptop_of(&mut self, name: &str, p: Person) -> Laptop {
+        let l = self.spare_laptop(name);
+        self.laptops[l.0 as usize].person = p.0;
+        l
+    }
+
+    /// The person of laptop `l`, if the world names persons.
+    pub fn person_of(&self, l: Laptop) -> Option<&PersonSpec> {
+        let i = self.laptops.get(l.0 as usize)?.person;
+        self.persons.get(i as usize)
+    }
+
+    /// Whether laptop `l`'s person is an admin: every laptop is, in a world
+    /// without persons.
+    pub fn is_admin(&self, l: Laptop) -> bool {
+        self.persons.is_empty() || self.person_of(l).is_some_and(|p| p.admin)
     }
 
     /// Adds a laptop in the group from the start.
@@ -229,6 +285,7 @@ impl World {
             name: name.to_owned(),
             present: true,
             disk_mib: LAPTOP_DISK_MIB,
+            person: 0,
         });
         Laptop((self.laptops.len() - 1) as u8)
     }
@@ -353,6 +410,17 @@ impl fmt::Display for World {
             .collect();
         if !spare.is_empty() {
             write!(f, "; spare: {}", spare.join(", "))?;
+        }
+        let persons: Vec<String> = self
+            .persons
+            .iter()
+            .map(|p| {
+                let role = if p.admin { " (admin)" } else { "" };
+                format!("{}{role}", p.name)
+            })
+            .collect();
+        if !persons.is_empty() {
+            write!(f, "; persons: {}", persons.join(", "))?;
         }
         Ok(())
     }

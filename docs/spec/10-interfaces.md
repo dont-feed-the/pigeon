@@ -17,7 +17,7 @@ result, progress events then a result, or a `Problem` (§10.6).
 | `Status {path?, not_shared}` | `pigeon status [PATH] [--not-shared]` | Home; the folder view's *Not shared* list | [06](06-status.md), [07 §7.9](07-capture-and-install.md) |
 | `Create {name, folder, k, device_name}` | `pigeon create NAME` | Welcome → Create | [04 §4.1](04-roster-and-authority.md) |
 | `Invite {person, admin, custodian, name?}` | `pigeon invite [--admin] PERSON`, `pigeon invite --backup-machine [NAME]` | People → Invite someone | [09 §9.6](09-network-and-joining.md) |
-| `Join {invitation, folder, keep}` | `pigeon join INVITATION [FOLDER]` | Welcome → Join | [09 §9.6](09-network-and-joining.md) |
+| `Join {invitation, folder, keep, name?}` | `pigeon join INVITATION [FOLDER] [--name NAME]` | Welcome → Join | [09 §9.6](09-network-and-joining.md) |
 | `Keep {folder}` · `Evict {folder}` | `pigeon keep PATH` · `pigeon free PATH` | Files → *Keep on this computer* | [08 §8.5](08-custody-loops.md) |
 | `Drop {path}` | `pigeon free --without-checking PATH` | — (CLI only, ux.md §2.2) | [08 §8.7](08-custody-loops.md) |
 | `History {path}` | `pigeon history PATH` | a file's page | [05](05-catalogue-and-names.md) |
