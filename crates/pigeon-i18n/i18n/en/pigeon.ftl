@@ -247,3 +247,19 @@ folder-row-freed =
         [one] { $path }: { $state }, 1 file; its space is freed on this computer
        *[other] { $path }: { $state }, { $files } files; their space is freed on this computer
     }
+web-nav-settings = Settings
+web-save = Save
+setting-row = { $key } = { $value }
+setting-changed = { $key } is now { $value }.
+setting-language = Language
+setting-notifications = Notifications
+setting-auto = Same as this computer
+setting-true = On
+setting-false = Off
+language-en = English
+language-fr = Français
+cmd-settings = Show or change this computer's settings
+problem-setting-unknown = “{ $key }” is not a setting pigeon knows.
+hint-setting-unknown = See them with: pigeon settings
+problem-setting-value = “{ $value }” is not a value “{ $key }” takes.
+hint-setting-value = See the values with: pigeon settings

@@ -101,6 +101,15 @@ pub enum Request {
     OpenWeb,
     /// The group's folders, for the web's Files page (ux.md §6.2).
     Folders,
+    /// `pigeon settings`: this computer's settings (11 §11.2).
+    GetSettings,
+    /// `pigeon settings KEY VALUE`: changes one setting in `config.toml`.
+    SetSettings {
+        /// The key, such as `language`.
+        key: String,
+        /// Its new value, as written after `=` without quotes.
+        value: String,
+    },
     /// `pigeon remove-computer NAME`.
     RemoveDevice {
         /// The computer's name in the roster.
@@ -234,6 +243,11 @@ pub enum Response {
         root: String,
         /// Its top-level folders, by path.
         folders: Vec<Folder>,
+    },
+    /// The answer to `GetSettings`.
+    Settings {
+        /// The settings a person may change, in the order shown.
+        settings: Vec<Setting>,
     },
     /// The answer to `Conflicts`.
     Conflicts {
@@ -393,6 +407,17 @@ pub struct Folder {
     pub state: State,
     /// Whether its space is freed on this computer (or is being freed).
     pub freed: bool,
+}
+
+/// One setting of `config.toml` (11 §11.2).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Setting {
+    /// Its key, such as `language`.
+    pub key: String,
+    /// Its value.
+    pub value: String,
+    /// The values it may take.
+    pub choices: Vec<String>,
 }
 
 /// A pending proposal (04 §4.5).

@@ -26,6 +26,7 @@ const SECTIONS: &[(&str, &str)] = &[
     ("/files", "web-nav-files"),
     ("/suggestions", "web-nav-suggestions"),
     ("/machines", "web-nav-machines"),
+    ("/settings", "web-nav-settings"),
 ];
 
 const STYLE: &str = "body{font-family:system-ui,sans-serif;max-width:46rem;margin:2rem auto;\

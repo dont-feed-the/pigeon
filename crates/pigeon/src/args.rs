@@ -65,6 +65,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("remove-computer NAME [--yes]", "cmd-remove-computer"),
     ("recovery-sheet", "cmd-recovery-sheet"),
     ("recover SHEET [FOLDER] [--from NAME]", "cmd-recover"),
+    ("settings [KEY VALUE]", "cmd-settings"),
     ("doctor [--details]", "cmd-doctor"),
     ("debug bundle [--from NAME…]", "cmd-debug-bundle"),
     ("update [--version TAG | --rollback]", "cmd-update"),
@@ -248,6 +249,11 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
         }),
         "machines" if fits(0, 0, &[]) => send(Request::Machines),
         "open" if fits(0, 0, &[]) => send(Request::OpenWeb),
+        "settings" if fits(0, 0, &[]) => send(Request::GetSettings),
+        "settings" if fits(2, 2, &[]) => send(Request::SetSettings {
+            key: w.first()?.clone(),
+            value: w.get(1)?.clone(),
+        }),
         "suggestions" if fits(0, 0, &[]) => send(Request::Proposals),
         "accept" if fits(1, 1, &["override"]) => send(Request::Accept {
             proposal: w.first()?.clone(),

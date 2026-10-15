@@ -230,6 +230,19 @@ impl Renderer {
             Response::Folders { folders, .. } => {
                 (folders.iter().map(|f| self.folder(f)).collect(), false)
             }
+            Response::Settings { settings } => (
+                settings
+                    .iter()
+                    .map(|s| {
+                        self.cat.format(
+                            &crate::Message::new("setting-row")
+                                .arg("key", s.key.clone())
+                                .arg("value", s.value.clone()),
+                        )
+                    })
+                    .collect(),
+                false,
+            ),
             Response::Done
             | Response::Hello { .. }
             | Response::Address { .. }

@@ -16,6 +16,16 @@ impl pigeon_web::Backend for Backend {
     }
 }
 
+/// The web's language: the `language` setting (11 §11.2), else the
+/// system's (10 §10.5).
+pub fn language(setting: Option<&str>) -> pigeon_i18n::LanguageIdentifier {
+    let system = pigeon_i18n::system_languages(|k| std::env::var(k).ok());
+    let setting = setting
+        .and_then(pigeon_i18n::Setting::parse)
+        .unwrap_or(pigeon_i18n::Setting::Auto);
+    pigeon_i18n::choose(&setting, &system)
+}
+
 /// Starts the web interface; without it, `pigeon open` says so.
 pub async fn serve(d: &Arc<Daemon>) {
     let listener = match tokio::net::TcpListener::bind(("127.0.0.1", 0)).await {
@@ -26,15 +36,7 @@ pub async fn serve(d: &Arc<Daemon>) {
         }
     };
     let port = listener.local_addr().map_or(0, |a| a.port());
-    let system = pigeon_i18n::system_languages(|k| std::env::var(k).ok());
-    // The `language` setting (11 §11.2), else the system's (10 §10.5).
-    let setting = d
-        .config
-        .language
-        .as_deref()
-        .and_then(pigeon_i18n::Setting::parse)
-        .unwrap_or(pigeon_i18n::Setting::Auto);
-    let lang = pigeon_i18n::choose(&setting, &system);
+    let lang = language(d.config.language.as_deref());
     let web = pigeon_web::Web::new(Arc::new(Backend(d.clone())), lang, port);
     let _ = std::fs::create_dir_all(&d.dirs.runtime);
     let _ = pigeon_sys::fs::write_atomic(

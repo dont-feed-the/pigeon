@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
-use pigeon_proto::api::{Level, State, StatusReport, Suggestion};
+use pigeon_proto::api::{Level, Setting, State, StatusReport, Suggestion};
 use pigeon_proto::{Message, Response};
 use tower::ServiceExt;
 
@@ -45,6 +45,23 @@ impl Backend for Fixed {
                         "author".to_owned(),
                         pigeon_proto::Arg::Text(format!("{proposal}/{}", note.unwrap_or_default())),
                     )]
+                    .into(),
+                },
+            }],
+            pigeon_proto::Request::GetSettings => vec![Response::Settings {
+                settings: vec![Setting {
+                    key: "language".into(),
+                    value: "auto".into(),
+                    choices: vec!["auto".into(), "en".into(), "fr".into()],
+                }],
+            }],
+            pigeon_proto::Request::SetSettings { key, value } => vec![Response::Said {
+                message: Message {
+                    id: "setting-changed".into(),
+                    args: [
+                        ("key".to_owned(), pigeon_proto::Arg::Text(key)),
+                        ("value".to_owned(), pigeon_proto::Arg::Text(value)),
+                    ]
                     .into(),
                 },
             }],
@@ -219,4 +236,43 @@ async fn a_suggestion_is_declined_only_with_the_sessions_form_token() {
     assert_eq!(ok.status(), StatusCode::OK);
     let text = body(ok).await;
     assert!(text.contains("c0ffee/too long"), "{text}");
+}
+
+#[tokio::test]
+async fn a_setting_is_shown_and_saved_with_the_sessions_form_token() {
+    let w = web();
+    let app = w.router();
+    let cookie = logged_in(&app, &w).await;
+    let page = app
+        .clone()
+        .oneshot(get("/settings", HOST, Some(&cookie)))
+        .await
+        .unwrap();
+    let page = body(page).await;
+    assert!(page.contains("Language"), "{page}");
+    assert!(
+        page.contains("<option value=\"auto\" selected>Same as this computer</option>"),
+        "{page}"
+    );
+    assert!(page.contains(">Français</option>"), "{page}");
+    let key = "name=\"form\" value=\"";
+    let at = page.find(key).unwrap() + key.len();
+    let form = page[at..at + 64].to_owned();
+    let forged = app
+        .clone()
+        .oneshot(post("/settings", &cookie, "form=00&key=language&value=fr"))
+        .await
+        .unwrap();
+    assert_eq!(forged.status(), StatusCode::FORBIDDEN);
+    let ok = app
+        .oneshot(post(
+            "/settings",
+            &cookie,
+            &format!("form={form}&key=language&value=fr"),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(ok.status(), StatusCode::OK);
+    let text = body(ok).await;
+    assert!(text.contains("language is now fr."), "{text}");
 }

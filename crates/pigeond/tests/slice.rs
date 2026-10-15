@@ -92,6 +92,16 @@ fn local_published_protected_then_free_and_keep() {
         files.contains("sub: Safe, 1 file; its space is freed") && files.contains("/files/keep"),
         "{files}"
     );
+    // `pigeon settings` writes config.toml, and the web speaks French at
+    // once (11 §11.2).
+    let set = pigeon(&lap, &["settings", "language", "fr"]);
+    assert!(said(&set, "setting-changed", "value").is_some(), "{set:?}");
+    let settings = common::web::page(&web, "/settings");
+    assert!(
+        settings.contains("Réglages") && settings.contains("value=\"fr\" selected"),
+        "{settings}"
+    );
+    pigeon(&lap, &["settings", "language", "auto"]);
     assert_eq!(status(&lap).state, State::Protected);
 
     let kept = pigeon(&lap, &["keep", sub.to_str().unwrap()]);

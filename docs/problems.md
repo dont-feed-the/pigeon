@@ -50,4 +50,6 @@ are in `crates/pigeon-i18n/i18n/en/pigeon.ftl`; `{ $x }` is an argument.
 | `not-a-pigeon-repository` | `P-NOT-A-PIGEON-REPOSITORY` | This folder is not shared with pigeon. | — | a path that is no group's folder | [10 §10.6](spec/10-interfaces.md) |
 | `peer-unreachable` | `P-PEER-UNREACHABLE` | The other machine can't be reached right now. | — | the transport helper could not reach the peer | [09 §9.3](spec/09-network-and-joining.md) |
 | `peer-refused` | `P-PEER-REFUSED` | The other machine refused the connection. | — | the peer refused the stream | [09 §9.3](spec/09-network-and-joining.md) |
+| `setting-unknown` | `P-SETTING-UNKNOWN` | “{ $key }” is not a setting pigeon knows. | See them with: pigeon settings | `settings KEY VALUE` with a key pigeon does not know | [11 §11.2](spec/11-local-state.md) |
+| `setting-value` | `P-SETTING-VALUE` | “{ $value }” is not a value “{ $key }” takes. | See the values with: pigeon settings | `settings KEY VALUE` with a value the key does not take | [11 §11.2](spec/11-local-state.md) |
 | `internal-error` | `P-INTERNAL-ERROR` | Something went wrong inside pigeon. | Gather the details with: pigeon debug bundle | anything else; details go to the debug bundle | [10 §10.6](spec/10-interfaces.md) |

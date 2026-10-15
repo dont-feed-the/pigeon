@@ -73,9 +73,11 @@ Coded so far (`crates/pigeon-web`, `pigeond/src/web.rs`): the binding, the
 login token and cookie, the `Host`/`Origin` check, Home, Suggestions and
 Machines pages read through the same handler as the socket, and an SSE
 headline; Files lists the top-level folders (`Folders`) with *Keep on this
-computer* or *Free up space*; *Accept*, *Decline*, keep and free are `POST`s
-carrying a per-session form token. Not yet: Deleted files, a file's page,
-Settings, the other actions, axe-core.
+computer* or *Free up space*; Settings changes `language` and
+`notifications` (`GetSettings`, `SetSettings`, also `pigeon settings`), a
+new language showing at once; *Accept*, *Decline*, keep, free and *Save*
+are `POST`s carrying a per-session form token. Not yet: Deleted files, a
+file's page, pause and the other settings, the other actions, axe-core.
 
 - Served by `pigeond`, rendered on the server; server-sent events refresh
   the headline and activity; pages work without JavaScript. It writes

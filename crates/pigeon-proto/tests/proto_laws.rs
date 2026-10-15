@@ -9,7 +9,8 @@ use std::collections::BTreeMap;
 use hegel::TestCase;
 use hegel::generators as gs;
 use pigeon_proto::api::{
-    Choice, Divergence, Folder, Level, Machine, State, StatusReport, Suggestion, VersionStatus,
+    Choice, Divergence, Folder, Level, Machine, Setting, State, StatusReport, Suggestion,
+    VersionStatus,
 };
 use pigeon_proto::stream::{Refusal, StreamAnswer, StreamHeader};
 use pigeon_proto::{Arg, Envelope, LineDecoder, Message, Problem, Request, Response, encode};
@@ -27,7 +28,7 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(25)) {
+    match tc.draw(gs::integers::<u8>().max_value(27)) {
         0 => Request::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -66,6 +67,11 @@ fn request(tc: &TestCase) -> Request {
         9 => Request::Machines,
         24 => Request::OpenWeb,
         25 => Request::Folders,
+        26 => Request::GetSettings,
+        27 => Request::SetSettings {
+            key: text(tc),
+            value: text(tc),
+        },
         10 => Request::RemoveDevice { name: text(tc) },
         11 => Request::RecoverySheet,
         12 => Request::Recover {
@@ -146,7 +152,7 @@ fn version(tc: &TestCase) -> VersionStatus {
 }
 
 fn response(tc: &TestCase) -> Response {
-    match tc.draw(gs::integers::<u8>().max_value(13)) {
+    match tc.draw(gs::integers::<u8>().max_value(14)) {
         0 => Response::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -237,6 +243,17 @@ fn response(tc: &TestCase) -> Response {
                     not_safe: tc.draw(gs::integers::<u64>()),
                     state: state(tc),
                     freed: flag(tc),
+                })
+                .collect(),
+        },
+        13 => Response::Settings {
+            settings: (0..tc.draw(gs::integers::<u8>().max_value(3)))
+                .map(|_| Setting {
+                    key: text(tc),
+                    value: text(tc),
+                    choices: (0..tc.draw(gs::integers::<u8>().max_value(3)))
+                        .map(|_| text(tc))
+                        .collect(),
                 })
                 .collect(),
         },

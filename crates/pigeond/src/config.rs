@@ -2,9 +2,9 @@
 //! `toml_edit`, so that comments, order and keys this build does not know
 //! survive (13 §13.12).
 //!
-//! The slice reads `format`, `language`, `[[groups]]` and two tables the
-//! spec did not have: `[network]` (where the endpoint binds, whether mDNS
-//! runs) and `[loops]` (how often the loops run). A group is a laptop's if
+//! The slice reads `format`, `language`, `notifications`, `[[groups]]`
+//! and two tables the spec did not have: `[network]` (where the endpoint
+//! binds, whether mDNS runs) and `[loops]` (how often the loops run). A group is a laptop's if
 //! its path holds a `.git` directory, a custodian's if it is a bare
 //! repository.
 
@@ -21,6 +21,9 @@ pub struct Config {
     /// `auto`, `en`, …
     #[serde(default)]
     pub language: Option<String>,
+    /// Desktop notifications (ADR 0029); on unless `false`.
+    #[serde(default)]
+    pub notifications: Option<bool>,
     /// The endpoint.
     #[serde(default)]
     pub network: Network,
@@ -147,16 +150,47 @@ pub fn load(path: &Path) -> Result<Config, ConfigError> {
     }
 }
 
-/// Adds a `[[groups]]` entry to the file at `path`, keeping the rest.
-pub fn add_group(path: &Path, entry: &GroupEntry) -> Result<(), ConfigError> {
+/// The document at `path`; a missing file is `format = 1`.
+fn read_doc(path: &Path) -> Result<toml_edit::DocumentMut, ConfigError> {
     let text = match std::fs::read_to_string(path) {
         Ok(t) => t,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => "format = 1\n".to_owned(),
         Err(e) => return Err(e.into()),
     };
-    let mut doc: toml_edit::DocumentMut = text
-        .parse()
-        .map_err(|e: toml_edit::TomlError| ConfigError::Invalid(e.to_string()))?;
+    text.parse()
+        .map_err(|e: toml_edit::TomlError| ConfigError::Invalid(e.to_string()))
+}
+
+/// Writes `doc` to `path` at once.
+fn write_doc(path: &Path, doc: &toml_edit::DocumentMut) -> Result<(), ConfigError> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    pigeon_sys::fs::write_atomic(path, doc.to_string().as_bytes())
+        .map_err(|e| ConfigError::Io(std::io::Error::other(e.to_string())))
+}
+
+/// Sets the top-level `key` of the file at `path` to `value`, keeping the
+/// rest.
+pub fn set_value(path: &Path, key: &str, value: toml_edit::Value) -> Result<(), ConfigError> {
+    let mut doc = read_doc(path)?;
+    match doc.get_mut(key).and_then(toml_edit::Item::as_value_mut) {
+        // In place, so that the comments around it stay.
+        Some(old) => {
+            let decor = old.decor().clone();
+            *old = value;
+            *old.decor_mut() = decor;
+        }
+        None => {
+            doc.insert(key, toml_edit::Item::Value(value));
+        }
+    }
+    write_doc(path, &doc)
+}
+
+/// Adds a `[[groups]]` entry to the file at `path`, keeping the rest.
+pub fn add_group(path: &Path, entry: &GroupEntry) -> Result<(), ConfigError> {
+    let mut doc = read_doc(path)?;
     let mut table = toml_edit::Table::new();
     table.insert("id", toml_edit::value(entry.id.clone()));
     table.insert(
@@ -174,9 +208,31 @@ pub fn add_group(path: &Path, entry: &GroupEntry) -> Result<(), ConfigError> {
             doc.insert("groups", toml_edit::Item::ArrayOfTables(groups));
         }
     }
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
+    write_doc(path, &doc)
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, reason = "tests")]
+
+    use super::*;
+
+    #[test]
+    fn a_setting_is_set_and_the_rest_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            "format = 1\n# mine\nlanguage = \"en\"\n\n[network]\nmdns = false\n",
+        )
+        .unwrap();
+        set_value(&path, "language", "fr".into()).unwrap();
+        set_value(&path, "notifications", false.into()).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("# mine"), "{text}");
+        let c = load(&path).unwrap();
+        assert_eq!(c.language.as_deref(), Some("fr"));
+        assert_eq!(c.notifications, Some(false));
+        assert!(!c.network.mdns);
     }
-    pigeon_sys::fs::write_atomic(path, doc.to_string().as_bytes())
-        .map_err(|e| ConfigError::Io(std::io::Error::other(e.to_string())))
 }

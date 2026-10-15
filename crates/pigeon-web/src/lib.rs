@@ -27,6 +27,7 @@ use pigeon_i18n::Catalogue;
 mod actions;
 mod files;
 mod pages;
+mod settings;
 
 /// What a backend answers a request with: progress, then one result.
 pub type Answer = Pin<Box<dyn Future<Output = Vec<pigeon_proto::Response>> + Send>>;
@@ -40,7 +41,7 @@ pub trait Backend: Send + Sync + 'static {
 /// The web interface of one `pigeond`.
 pub struct Web {
     backend: Arc<dyn Backend>,
-    lang: pigeon_i18n::LanguageIdentifier,
+    lang: Mutex<pigeon_i18n::LanguageIdentifier>,
     port: u16,
     tokens: Mutex<HashSet<String>>,
     /// Each session, with its form token.
@@ -87,7 +88,7 @@ impl Web {
     ) -> Arc<Web> {
         Arc::new(Web {
             backend,
-            lang,
+            lang: Mutex::new(lang),
             port,
             tokens: Mutex::default(),
             sessions: Mutex::default(),
@@ -115,8 +116,14 @@ impl Web {
         )
     }
 
+    /// Shows the pages in `lang` from now on.
+    pub fn set_lang(&self, lang: pigeon_i18n::LanguageIdentifier) {
+        *self.lang.lock().unwrap_or_else(|p| p.into_inner()) = lang;
+    }
+
     fn renderer(&self) -> pigeon_i18n::render::Renderer {
-        pigeon_i18n::render::Renderer::new(Catalogue::new(&self.lang, false), now())
+        let lang = self.lang.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        pigeon_i18n::render::Renderer::new(Catalogue::new(&lang, false), now())
     }
 
     async fn ask(&self, request: pigeon_proto::Request) -> Vec<pigeon_proto::Response> {
@@ -133,6 +140,7 @@ impl Web {
             .route("/files", get(files::files))
             .route("/files/keep", post(actions::keep))
             .route("/files/free", post(actions::free))
+            .route("/settings", get(settings::settings).post(settings::save))
             .route("/suggestions/accept", post(actions::accept))
             .route("/suggestions/decline", post(actions::decline))
             .route_layer(middleware::from_fn_with_state(self.clone(), session))
