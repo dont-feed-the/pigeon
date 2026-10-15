@@ -8,8 +8,11 @@
 # checked against its sha256 before it is unpacked; the new directory
 # replaces the old one only once its git-annex reports the expected version.
 # A build already there that reports it is kept, and nothing is fetched.
+# --build DIR builds pigeon's from DIR (third_party/git-annex) when needed,
+# and takes the stock build if that build fails; given with --archive, it
+# builds only when that archive is not the git-annex this script pins.
 #
-#   install-git-annex [--prefix DIR] [--archive FILE|URL --sha256 HEX] [--stock]
+#   install-git-annex [--prefix DIR] [--archive FILE|URL --sha256 HEX] [--build DIR] [--stock]
 #
 # --archive is git-annex.yml's git-annex-pigeon-<runner>.tar.gz (or a
 # release's copy); --stock installs the stock build even where pigeon's runs.
@@ -27,14 +30,15 @@ case "$(uname -s)" in
   Darwin) prefix="$HOME/Library/Application Support/pigeon" ;;
   *) prefix="${XDG_DATA_HOME:-$HOME/.local/share}/pigeon" ;;
 esac
-archive= want_sha= stock=
+archive= want_sha= stock= build=
 while [ $# -gt 0 ]; do
   case "$1" in
     --prefix) prefix=${2:?}; shift 2 ;;
     --archive) archive=${2:?}; shift 2 ;;
     --sha256) want_sha=${2:?}; shift 2 ;;
     --stock) stock=1; shift ;;
-    -h|--help) sed -n '2,15s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    --build) build=${2:?}; shift 2 ;;
+    -h|--help) sed -n '2,18s/^# \{0,1\}//p' "$0"; exit 0 ;;
     *) die "unknown argument $1" ;;
   esac
 done
@@ -74,6 +78,40 @@ trap 'rm -rf "$tmp"' EXIT
 
 # The version the git-annex in DIR reports, or nothing.
 version_in() { if [ -x "$1/git-annex" ]; then "$1/git-annex" version --raw 2>/dev/null || true; fi; }
+
+# Whether ARCHIVE (sha256 HEX) holds the git-annex this script pins; it is
+# then kept as $tmp/r.tar.gz.
+pinned_in() {
+  case "$1" in
+    https://*) curl -fsSL --retry 3 -o "$tmp/r.tar.gz" "$1" 2>/dev/null || return 1 ;;
+    *) cp "$1" "$tmp/r.tar.gz" 2>/dev/null || return 1 ;;
+  esac
+  [ "$(sha256 "$tmp/r.tar.gz")" = "$2" ] || return 1
+  mkdir "$tmp/r" && tar -C "$tmp/r" -xzf "$tmp/r.tar.gz" || return 1
+  [ "$(version_in "$tmp/r/bin")" = "$PIGEON_VERSION" ]
+}
+
+if [ -n "$build" ] && [ -n "$archive" ] && [ -z "$stock" ] && ours_runs &&
+  [ "$(version_in "$prefix/git-annex/bin")" != "$PIGEON_VERSION" ]; then
+  if pinned_in "$archive" "$want_sha"; then
+    archive=$tmp/r.tar.gz
+  else
+    echo "$archive is not pigeon's git-annex $PIGEON_VERSION; building it"
+    archive= want_sha=
+  fi
+fi
+
+if [ -n "$build" ] && [ -z "$archive$stock" ] && ours_runs &&
+  [ "$(version_in "$prefix/git-annex/bin")" != "$PIGEON_VERSION" ]; then
+  echo "building pigeon's git-annex $PIGEON_VERSION from $build; a cold build takes about an hour"
+  if "$build/build.sh" "$tmp/built/bin" </dev/null; then
+    tar -C "$tmp/built" -czf "$tmp/built.tar.gz" bin
+    archive=$tmp/built.tar.gz want_sha=$(sha256 "$tmp/built.tar.gz")
+  else
+    echo "install-git-annex: pigeon's git-annex did not build; taking the stock build, which pigeon guards against (ADR 0069)" >&2
+    stock=1
+  fi
+fi
 
 if [ -z "$stock" ] && ours_runs && [ "$(version_in "$prefix/git-annex/bin")" = "$PIGEON_VERSION" ]; then
   echo "pigeon's git-annex $PIGEON_VERSION already in $prefix/git-annex/bin"

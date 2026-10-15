@@ -84,6 +84,14 @@ and the ADRs say what pigeon does.
   `~/Library/Caches/pigeon/run` (11 §11.2): the lab and the tests give
   both `PIGEON_SOCKET`. The CLI and the helper now take the path from
   `pigeon-sys`, as the daemon does (ab596eb, 09 §9.3).
+- models-full on 406077a lost 12 of about 1600 trace checks to "Cannot
+  find source file for module Naturals": SANY copies the standard modules
+  into `java.io.tmpdir` and deletes them on exit, and the four parallel
+  TLC runs shared `/tmp`. Each run now has its own (76bd044).
+- S11 failed on `main` once an install's displaced inode was kept ten
+  minutes (23120dc): after re-thinning a laptop held two copies of each
+  new file. An aside that no process writes and that still holds the old
+  key is now unlinked at once; one that changed still waits (601da51).
 - Following renames needed four rules found by the oracle's schedules:
   a write follows a rename only when both build on one version; an event
   replaces what it saw where its own view put it; a pure rename yields to
@@ -110,8 +118,11 @@ and the ADRs say what pigeon does.
 
 ## Release
 
-v0.3.0 is the commit that adds this report, tagged once ci, lab, slice and
-models-full pass on it; v0.2.0 is d6c02d9. It also carries M3's first
+v0.3.0 is the commit that updates this report, tagged once ci, lab and
+slice pass on it; models-full passed on 76bd044, 1000 S9 schedules and 200
+code traces included (run 38810170422). v0.2.0 is d6c02d9. Since then a
+push runs 200 S9 schedules and 50 code traces, and the weekly run keeps
+1000 and 200 (74d55da). It also carries M3's first
 steps: n0's relays and address lookup are on by default (ADR 0016,
 c2944b6), while the lab and the tests stay on their own network, and
 `reach.yml` runs a group between the Linux and the macOS runner over them

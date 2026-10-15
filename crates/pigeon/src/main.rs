@@ -4,9 +4,11 @@
 //! Text comes from the Fluent catalogue (ADR 0028); `--json` prints each
 //! response as JSON instead. `pigeon update` hands over to the installer
 //! that put this program here (14 §14.5); `pigeon export` reads the
-//! repositories itself (09 §9.9).
+//! repositories itself (09 §9.9). Run with `COMPLETE` set to a shell's
+//! name, it answers that shell's Tab completion instead.
 
 mod args;
+mod complete;
 mod export;
 mod render;
 mod repo;
@@ -14,6 +16,7 @@ mod repo;
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
 use std::process::ExitCode;
+use std::time::Duration;
 
 use pigeon_proto::{
     Envelope, LineDecoder, Message, PROTOCOL_VERSION, Problem, Request, Response, encode,
@@ -51,12 +54,29 @@ struct Client {
 }
 
 impl Client {
-    fn connect() -> Option<Client> {
-        let stream = UnixStream::connect(pigeon_sys::paths::client_socket()).ok()?;
-        Some(Client {
+    /// Connects and greets `pigeond`, each read waiting at most `patience`;
+    /// the problem's code otherwise.
+    fn open(patience: Option<Duration>) -> Result<Client, &'static str> {
+        let stream = UnixStream::connect(pigeon_sys::paths::client_socket())
+            .map_err(|_| "daemon-not-running")?;
+        stream
+            .set_read_timeout(patience)
+            .map_err(|_| "daemon-not-running")?;
+        let mut client = Client {
             stream,
             decoder: LineDecoder::new(),
-        })
+        };
+        let hello = Request::Hello {
+            version: PROTOCOL_VERSION,
+        };
+        match client.send(1, &hello).and_then(|()| client.next()) {
+            Ok(Envelope {
+                body: Response::Hello { version },
+                ..
+            }) if version == PROTOCOL_VERSION => Ok(client),
+            Ok(_) => Err("version-mismatch"),
+            Err(_) => Err("daemon-not-running"),
+        }
     }
 
     fn send(&mut self, id: u64, r: &Request) -> std::io::Result<()> {
@@ -128,21 +148,10 @@ fn exchange(out: &Renderer, json: bool, request: &Request) -> ExitCode {
         show(out, json, &Response::Problem(p));
         ExitCode::from(1)
     };
-    let Some(mut client) = Client::connect() else {
-        return fail(local_problem("daemon-not-running", &[]));
+    let mut client = match Client::open(None) {
+        Ok(client) => client,
+        Err(code) => return fail(local_problem(code, &[])),
     };
-    let hello = Request::Hello {
-        version: PROTOCOL_VERSION,
-    };
-    let answered = client.send(1, &hello).and_then(|()| client.next());
-    match answered {
-        Ok(Envelope {
-            body: Response::Hello { version },
-            ..
-        }) if version == PROTOCOL_VERSION => {}
-        Ok(_) => return fail(local_problem("version-mismatch", &[])),
-        Err(_) => return fail(local_problem("daemon-not-running", &[])),
-    }
     if client.send(2, request).is_err() {
         return fail(local_problem("daemon-not-running", &[]));
     }
@@ -158,6 +167,7 @@ fn exchange(out: &Renderer, json: bool, request: &Request) -> ExitCode {
 }
 
 fn main() -> ExitCode {
+    complete::answer();
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let line = args::parse(&argv);
     let out = render::for_person(now());
@@ -172,7 +182,12 @@ fn main() -> ExitCode {
             ExitCode::from(2)
         }
         Action::Version => {
-            emit(&[format!("pigeon {}", env!("CARGO_PKG_VERSION"))], false);
+            // A build of main names its commit (14 §14.5).
+            let version = match option_env!("PIGEON_COMMIT") {
+                Some(commit) => format!("pigeon {}+g{commit}", env!("CARGO_PKG_VERSION")),
+                None => format!("pigeon {}", env!("CARGO_PKG_VERSION")),
+            };
+            emit(&[version], false);
             ExitCode::SUCCESS
         }
         Action::Update(args) => {

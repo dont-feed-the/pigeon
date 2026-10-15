@@ -106,6 +106,137 @@ fn other_commands_are_not_in_this_build_and_bad_arguments_are_usage() {
         line("update --rollback --version v2.0.0").action,
         Action::Usage("update".into())
     );
+    assert_eq!(
+        line("update --main").action,
+        Action::Update(vec!["--main".into()])
+    );
+    assert_eq!(
+        line("update --main --rollback").action,
+        Action::Usage("update".into())
+    );
+    assert_eq!(
+        line("update --main --version v0.3.1").action,
+        Action::Usage("update".into())
+    );
+}
+
+#[test]
+fn the_definition_is_sound_and_has_the_help_s_commands() {
+    let cmd = crate::args::command();
+    cmd.clone().debug_assert();
+    let defined: std::collections::BTreeSet<&str> = cmd
+        .get_subcommands()
+        .map(clap::Command::get_name)
+        .filter(|n| *n != "help")
+        .collect();
+    let helped = crate::args::COMMANDS
+        .iter()
+        .filter_map(|(synopsis, _)| synopsis.split(' ').next())
+        .collect();
+    assert_eq!(defined, helped);
+}
+
+#[test]
+fn each_form_is_checked() {
+    use pigeon_proto::api::HeldChoice;
+    assert_eq!(
+        line("invite --list").action,
+        Action::Send(Request::Invitations)
+    );
+    assert_eq!(
+        line("invite --cancel i1").action,
+        Action::Send(Request::CancelInvitation {
+            invitation: "i1".into()
+        })
+    );
+    assert_eq!(
+        line("invite --list Paul").action,
+        Action::Usage("invite".into())
+    );
+    assert_eq!(
+        line("invite --admin --backup-machine").action,
+        Action::Usage("invite".into())
+    );
+    assert_eq!(line("held").action, Action::Send(Request::Held));
+    assert_eq!(
+        line("held b1 --bring-back").action,
+        Action::Send(Request::ReleaseHeld {
+            batch: "b1".into(),
+            choice: HeldChoice::BringBack,
+        })
+    );
+    assert_eq!(line("held b1").action, Action::Usage("held".into()));
+    assert_eq!(line("held --share").action, Action::Usage("held".into()));
+    assert_eq!(
+        line("held b1 --share --rename").action,
+        Action::Usage("held".into())
+    );
+    assert_eq!(line("resolve a").action, Action::Usage("resolve".into()));
+    assert_eq!(
+        line("resolve a --take-group --suggest-again").action,
+        Action::Usage("resolve".into())
+    );
+    assert_eq!(
+        line("view a --version 2 --group").action,
+        Action::Usage("view".into())
+    );
+    assert_eq!(
+        line("settings language fr").action,
+        Action::Send(Request::SetSettings {
+            key: "language".into(),
+            value: "fr".into(),
+        })
+    );
+    assert_eq!(line("debug").action, Action::Usage("debug".into()));
+    assert_eq!(
+        line("join pgn1-x --backup-machine").action,
+        Action::Send(Request::Join {
+            invitation: "pgn1-x".into(),
+            folder: None,
+            keep: false,
+            name: None,
+        })
+    );
+    let l = line("erase --json");
+    assert!(l.json);
+    assert_eq!(l.action, Action::NotInThisBuild("erase".into()));
+}
+
+/// The candidates for the last word of `typed`, and their help.
+fn completed(typed: &str) -> Vec<(String, String)> {
+    let mut words: Vec<std::ffi::OsString> = typed.split(' ').map(Into::into).collect();
+    words.insert(0, "pigeon".into());
+    let index = words.len() - 1;
+    let mut cmd = crate::complete::described();
+    clap_complete::engine::complete(&mut cmd, words, index, None)
+        .unwrap()
+        .iter()
+        .map(|c| {
+            let help = c.get_help().map(ToString::to_string).unwrap_or_default();
+            (c.get_value().to_string_lossy().into_owned(), help)
+        })
+        .collect()
+}
+
+#[test]
+fn commands_and_options_complete_with_their_help() {
+    let free = completed("fr");
+    assert_eq!(free.len(), 1, "{free:?}");
+    assert_eq!(free[0].0, "free");
+    assert!(!free[0].1.is_empty(), "{free:?}");
+    let options: Vec<String> = completed("resolve a --").into_iter().map(|c| c.0).collect();
+    for o in ["--take-group", "--keep-copy", "--suggest-again", "--json"] {
+        assert!(options.iter().any(|c| c == o), "{o}: {options:?}");
+    }
+    let shared = completed("status --not");
+    assert_eq!(shared.len(), 1, "{shared:?}");
+    assert!(!shared[0].1.is_empty(), "{shared:?}");
+    let debug: Vec<String> = completed("debug ").into_iter().map(|c| c.0).collect();
+    assert_eq!(
+        debug.first().map(String::as_str),
+        Some("bundle"),
+        "{debug:?}"
+    );
 }
 
 fn version(state: State) -> VersionStatus {
