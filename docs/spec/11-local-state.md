@@ -141,6 +141,15 @@ Expired entries are kept 30 days for the "already used / expired" messages
 
 A restart costs one pass over the history and a `git status` (ADR 0013).
 
+A git process killed while it holds a lock file (`index.lock`, a ref's
+`.lock`), as when `pigeond` stops mid-command or the power goes, leaves it
+behind, and every later command that needs it fails. Before each round
+`pigeond` removes the repository's top-level lock files, those under
+`refs/` and git-annex's `annex/index.lock` once none has been written for
+60 seconds, as git-annex's assistant does (`repairStaleGitLocks` in
+`Assistant/Repair.hs`) **[no ADR]**. S9's random schedules found it: a
+stale `index.lock` kept capture failing on macOS until the check timed out.
+
 ## 11.5 Laws (ADR 0012)
 
 - **Replay:** the `journal` laws (`recovery_ends_every_entry_and_a_second_does_nothing`,

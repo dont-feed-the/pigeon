@@ -21,6 +21,7 @@ pub mod group;
 pub mod history;
 pub mod invite;
 pub mod journal_file;
+pub mod locks;
 pub mod logs;
 pub mod net;
 pub mod recovery;

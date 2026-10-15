@@ -111,6 +111,7 @@ impl Daemon {
     /// One round of the loops for `g`.
     pub async fn round(&self, g: &Group) {
         let _busy = g.busy.lock().await;
+        crate::locks::clear(&g.git_dir);
         crate::settings::check(g).await;
         g.ensure_remotedaemon(&self.wake).await;
         g.reload_roster().await;
