@@ -106,6 +106,9 @@ pub enum Request {
         /// The folder.
         folder: String,
     },
+    /// The files deleted from the group, for the web's Deleted files
+    /// (ux.md §6.2).
+    Deleted,
     /// `pigeon settings`: this computer's settings (11 §11.2).
     GetSettings,
     /// `pigeon settings KEY VALUE`: changes one setting in `config.toml`.
@@ -255,6 +258,13 @@ pub enum Response {
         root: String,
         /// The files under the folder, by path.
         files: Vec<FileEntry>,
+    },
+    /// The answer to `Deleted`.
+    Deleted {
+        /// The group's folder on this computer.
+        root: String,
+        /// Newest deletion first.
+        files: Vec<DeletedFile>,
     },
     /// The answer to `GetSettings`.
     Settings {
@@ -428,6 +438,15 @@ pub struct FileEntry {
     pub path: String,
     /// The state of its current version.
     pub state: State,
+}
+
+/// A file deleted from the group, which `Restore` brings back.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeletedFile {
+    /// Its path in the group's folder.
+    pub path: String,
+    /// When it was deleted, RFC 3339.
+    pub deleted_at: String,
 }
 
 /// One setting of `config.toml` (11 §11.2).

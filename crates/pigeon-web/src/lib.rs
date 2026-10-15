@@ -142,6 +142,7 @@ impl Web {
             .route("/events", get(pages::events))
             .route("/files", get(files::files))
             .route("/folder", get(files::folder_page))
+            .route("/deleted", get(files::deleted_page))
             .route("/file", get(files::file_page))
             .route("/files/restore", post(actions::restore))
             .route("/files/keep", post(actions::keep))

@@ -135,6 +135,19 @@ fn local_published_protected_then_free_and_keep() {
         }
         other => panic!("history: {other:?}"),
     }
+    // A deleted file is listed under Deleted files, and restore brings
+    // its last version back (ux.md §6.2).
+    std::fs::remove_file(folder.join("a.txt")).unwrap();
+    eventually(
+        || common::web::page(&web, "/deleted").contains("a.txt, deleted"),
+        "a.txt is not under Deleted files",
+        &all,
+    );
+    let back = pigeon(&lap, &["restore", folder.join("a.txt").to_str().unwrap()]);
+    assert!(
+        std::fs::read(folder.join("a.txt")).is_ok_and(|b| b == b"hello\n"),
+        "{back:?}"
+    );
     match pigeon(&lap, &["pause"]).as_slice() {
         [Response::Problem(p)] => assert_eq!(p.code, "not-in-this-build"),
         other => panic!("pause: {other:?}"),

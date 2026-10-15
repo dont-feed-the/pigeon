@@ -24,6 +24,7 @@ const GIT: &[&str] = &[
     "rev-parse",
     "ls-files",
     "ls-tree",
+    "diff-tree",
     "show-ref",
     "hash-object",
     "mktree",

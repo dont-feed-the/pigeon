@@ -273,3 +273,7 @@ files-none = Ce dossier n'a encore aucun fichier.
 file-row = { $path } : { $state }
 web-restore = Restaurer cette version
 web-versions = Versions
+deleted-none = Aucun fichier n'a été supprimé.
+deleted-row = { $path }, supprimé { $deleted }
+web-deleted = Fichiers supprimés
+web-restore-deleted = Restaurer

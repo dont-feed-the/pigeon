@@ -39,6 +39,7 @@ result, progress events then a result, or a `Problem` (§10.6).
 | `DebugBundle {peers}` | `pigeon debug bundle [--from NAME…]` | Settings → Advanced | [12](12-observability.md) |
 | `Folders` | `pigeon status` (by file) | Files | [08 §8.5](08-custody-loops.md) |
 | `Files {folder}` | `pigeon status FOLDER` | Files → a folder | [06 §6.2](06-status.md) |
+| `Deleted` | `pigeon restore PATH` | Files → Deleted files | [10 §10.3](10-interfaces.md) |
 | `Subscribe` | — | live updates (SSE) | §10.3 |
 
 - Request names are internal (ADR 0024: `evict`, `purge`, `reject`), CLI
@@ -80,8 +81,9 @@ new language showing at once; People & machines invites a person or a
 backup machine and removes a machine, asking again first; *Accept*,
 *Decline*, keep, free, *Save*, *Invite* and *Remove* are `POST`s carrying
 a per-session form token. A folder's page lists its files (`Files`), a file's page
-its versions (`History`) with *Restore this version* (`Restore`). Not
-yet: Deleted files, pause and the other settings, the other actions,
+its versions (`History`) with *Restore this version* (`Restore`);
+Deleted files lists what `main` deleted (`Deleted`), each with *Restore*.
+Not yet: pause and the other settings, the other actions,
 axe-core.
 
 - Served by `pigeond`, rendered on the server; server-sent events refresh

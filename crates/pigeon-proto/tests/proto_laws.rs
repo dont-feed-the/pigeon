@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 use hegel::TestCase;
 use hegel::generators as gs;
 use pigeon_proto::api::{
-    Choice, Divergence, FileEntry, Folder, Level, Machine, Setting, State, StatusReport,
-    Suggestion, VersionStatus,
+    Choice, DeletedFile, Divergence, FileEntry, Folder, Level, Machine, Setting, State,
+    StatusReport, Suggestion, VersionStatus,
 };
 use pigeon_proto::stream::{Refusal, StreamAnswer, StreamHeader};
 use pigeon_proto::{Arg, Envelope, LineDecoder, Message, Problem, Request, Response, encode};
@@ -28,7 +28,7 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(28)) {
+    match tc.draw(gs::integers::<u8>().max_value(29)) {
         0 => Request::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -68,6 +68,7 @@ fn request(tc: &TestCase) -> Request {
         24 => Request::OpenWeb,
         25 => Request::Folders,
         26 => Request::GetSettings,
+        29 => Request::Deleted,
         28 => Request::Files { folder: text(tc) },
         27 => Request::SetSettings {
             key: text(tc),
@@ -153,7 +154,7 @@ fn version(tc: &TestCase) -> VersionStatus {
 }
 
 fn response(tc: &TestCase) -> Response {
-    match tc.draw(gs::integers::<u8>().max_value(15)) {
+    match tc.draw(gs::integers::<u8>().max_value(16)) {
         0 => Response::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -253,6 +254,15 @@ fn response(tc: &TestCase) -> Response {
                 .map(|_| FileEntry {
                     path: text(tc),
                     state: state(tc),
+                })
+                .collect(),
+        },
+        15 => Response::Deleted {
+            root: text(tc),
+            files: (0..tc.draw(gs::integers::<u8>().max_value(3)))
+                .map(|_| DeletedFile {
+                    path: text(tc),
+                    deleted_at: text(tc),
                 })
                 .collect(),
         },

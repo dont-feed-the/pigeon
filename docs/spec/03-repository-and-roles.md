@@ -168,7 +168,7 @@ pigeon's mistakes; it is not a sandbox.
 | `git annex numcopies`, `mincopies`, `trust`, `untrust`, `semitrust`, `group`, `wanted`, `maxsize`, `dead` | settings (§3.5) |
 | `git annex merge`, `smudge --update`, `restage`, `remotedaemon`, `version` | branch merge, sparse folders (E15), notices, checks |
 | `git init`, `config`, `remote`, `git annex init`, `describe` | `create` and `join` (§3.6) |
-| `git rev-parse`, `ls-files`, `ls-tree`, `show-ref`, `hash-object`, `mktree`, `git annex lookupkey`, `examinekey`, `contentlocation` | reading the index, trees and keys; objects without the working tree |
+| `git rev-parse`, `ls-files`, `ls-tree`, `diff-tree`, `show-ref`, `hash-object`, `mktree`, `git annex lookupkey`, `examinekey`, `contentlocation` | reading the index, trees and keys; objects without the working tree |
 
 Before the subcommand, only `-c annex.thin=false` (capture never hard-links,
 [07 §7.8](07-capture-and-install.md)) and `-c remote.<name>.annex-ignore=true`

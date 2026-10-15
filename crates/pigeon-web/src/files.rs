@@ -2,7 +2,8 @@
 //! *Keep on this computer* or *Free up space* button (08 §8.5); a
 //! folder's page lists its files, and a file's page its versions, each
 //! with *Restore this version* (`pigeon restore PATH --version N`), which
-//! makes a new version. Deleted files come later.
+//! makes a new version. *Deleted files* lists the files deleted from the
+//! group, each with *Restore*, which brings back its last version.
 
 use std::sync::Arc;
 
@@ -40,6 +41,7 @@ pub async fn files(
         @if rows.is_empty() && other.is_empty() { p { (r.id("folders-none")) } }
         (list(&other))
         @for f in &rows { (folder(&r, &root, f, &form.0)) }
+        p { a href="/deleted" { (r.id("web-deleted")) } }
     };
     page(&r, "/files", &r.id("web-nav-files"), &body)
 }
@@ -164,4 +166,42 @@ fn version(r: &Renderer, path: &str, v: &VersionStatus, restore: bool, form: &st
             }
         }
     }
+}
+
+/// Deleted files: each with *Restore*, its last version.
+pub async fn deleted_page(
+    State(web): State<Arc<Web>>,
+    Extension(form): Extension<FormToken>,
+) -> Html<String> {
+    let r = web.renderer();
+    let mut root = String::new();
+    let mut rows = Vec::new();
+    let mut other = Vec::new();
+    for answer in web.ask(Request::Deleted).await {
+        match answer {
+            Response::Deleted { root: here, files } => {
+                root = here;
+                rows = files;
+            }
+            Response::Progress { .. } => {}
+            a => other.extend(r.response(&a).0),
+        }
+    }
+    let body = html! {
+        (list(&other))
+        @if rows.is_empty() && other.is_empty() { p { (r.id("deleted-none")) } }
+        @for f in &rows {
+            article {
+                p { (r.deleted(f)) }
+                form method="post" action="/files/restore" {
+                    input type="hidden" name="form" value=(form.0);
+                    input type="hidden" name="path" value=(std::path::Path::new(&root).join(&f.path).to_string_lossy());
+                    input type="hidden" name="version" value="1";
+                    button type="submit" { (r.id("web-restore-deleted")) }
+                }
+            }
+        }
+        p { a href="/files" { (r.id("web-back")) } }
+    };
+    page(&r, "/files", &r.id("web-deleted"), &body)
 }

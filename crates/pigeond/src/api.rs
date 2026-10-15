@@ -188,6 +188,10 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
                 None => vec![problem("not-in-group", &[], None)],
             }
         }
+        Request::Deleted => match d.default_group() {
+            Some(g) => vec![crate::folders::deleted(&g).await],
+            None => vec![problem("not-in-group", &[], None)],
+        },
         Request::GetSettings => crate::prefs::get(d),
         Request::SetSettings { key, value } => crate::prefs::set(d, &key, &value),
         Request::History { path } => crate::history::history(d, Path::new(&path)).await,

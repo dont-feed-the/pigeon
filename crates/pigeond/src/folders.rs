@@ -2,13 +2,14 @@
 //! each with its files, those not safe yet, its least safe state, and
 //! whether its space is freed on this computer (08 §8.5). Files at the top
 //! of the group's folder belong to no folder and are not listed. And the
-//! answer to `Files`: the files under one folder, with their states.
+//! answer to `Files`: the files under one folder, with their states; and
+//! to `Deleted`: the files deleted from `main`.
 
 use std::collections::BTreeMap;
 
 use pigeon_core::headline::Level;
 use pigeon_proto::Response;
-use pigeon_proto::api::{FileEntry, Folder};
+use pigeon_proto::api::{DeletedFile, FileEntry, Folder};
 
 use crate::group::Group;
 
@@ -55,6 +56,62 @@ pub async fn files(g: &Group, me: &str, prefix: &str) -> Response {
         })
         .collect();
     Response::Files {
+        root: root(g),
+        files,
+    }
+}
+
+/// The files deleted from `main`, newest deletion first: those its last
+/// 1000 commits delete and it does not hold again.
+pub async fn deleted(g: &Group) -> Response {
+    let commits = g
+        .git
+        .run(&["rev-list", "--max-count=1000", "refs/heads/main"])
+        .await
+        .unwrap_or_default();
+    let out = g
+        .git
+        .run_in(
+            &[
+                "diff-tree",
+                "--stdin",
+                "-r",
+                "--no-renames",
+                "--diff-filter=D",
+                "--name-only",
+                "--format=%x00%ct",
+            ],
+            commits.as_bytes(),
+        )
+        .await
+        .unwrap_or_default();
+    let now: std::collections::BTreeSet<String> = g
+        .git
+        .run(&["ls-tree", "-r", "--name-only", "refs/heads/main"])
+        .await
+        .unwrap_or_default()
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut files = Vec::new();
+    for commit in out.split('\0').filter(|c| !c.trim().is_empty()) {
+        let mut lines = commit.lines();
+        let at = lines
+            .next()
+            .and_then(|t| t.trim().parse::<i64>().ok())
+            .unwrap_or(0);
+        for path in lines.map(str::trim).filter(|p| !p.is_empty()) {
+            let hidden = path.starts_with(".pigeon/") || path == ".gitattributes";
+            if !hidden && !now.contains(path) && seen.insert(path.to_owned()) {
+                files.push(DeletedFile {
+                    path: path.to_owned(),
+                    deleted_at: crate::util::rfc3339(at),
+                });
+            }
+        }
+    }
+    Response::Deleted {
         root: root(g),
         files,
     }

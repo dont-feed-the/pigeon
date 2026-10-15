@@ -151,6 +151,16 @@ impl Renderer {
         self.cat.format(&msg)
     }
 
+    /// A deleted file's line (ux.md §6.2).
+    pub fn deleted(&self, f: &pigeon_proto::api::DeletedFile) -> String {
+        let when = pigeon_proto::time::parse_rfc3339(&f.deleted_at)
+            .map_or_else(|| f.deleted_at.clone(), |t| self.ago(self.now - t));
+        let msg = crate::Message::new("deleted-row")
+            .arg("path", f.path.clone())
+            .arg("deleted", when);
+        self.cat.format(&msg)
+    }
+
     /// A top-level folder's line (ux.md §6.2).
     pub fn folder(&self, f: &pigeon_proto::api::Folder) -> String {
         let id = if f.freed {
@@ -246,6 +256,12 @@ impl Renderer {
                     .collect(),
                 false,
             ),
+            Response::Deleted { files, .. } if files.is_empty() => {
+                (vec![self.id("deleted-none")], false)
+            }
+            Response::Deleted { files, .. } => {
+                (files.iter().map(|f| self.deleted(f)).collect(), false)
+            }
             Response::Settings { settings } => (
                 settings
                     .iter()
