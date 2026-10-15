@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 use hegel::TestCase;
 use hegel::generators as gs;
 use pigeon_proto::api::{
-    Choice, DeletedFile, Divergence, FileEntry, Folder, InvitationEntry, Level, Machine,
-    PersonEntry, Setting, State, StatusReport, Suggestion, VersionStatus,
+    Choice, DeletedFile, Divergence, FileEntry, Folder, HeldChoice, HeldEntry, InvitationEntry,
+    Level, Machine, PersonEntry, Setting, State, StatusReport, Suggestion, VersionStatus,
 };
 use pigeon_proto::stream::{Refusal, StreamAnswer, StreamHeader};
 use pigeon_proto::{Arg, Envelope, LineDecoder, Message, Problem, Request, Response, encode};
@@ -28,7 +28,7 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(35)) {
+    match tc.draw(gs::integers::<u8>().max_value(37)) {
         0 => Request::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -79,6 +79,15 @@ fn request(tc: &TestCase) -> Request {
             invitation: text(tc),
         },
         35 => Request::Leave,
+        36 => Request::Held,
+        37 => Request::ReleaseHeld {
+            batch: text(tc),
+            choice: if flag(tc) {
+                HeldChoice::Share
+            } else {
+                HeldChoice::BringBack
+            },
+        },
         28 => Request::Files { folder: text(tc) },
         27 => Request::SetSettings {
             key: text(tc),
@@ -164,7 +173,7 @@ fn version(tc: &TestCase) -> VersionStatus {
 }
 
 fn response(tc: &TestCase) -> Response {
-    match tc.draw(gs::integers::<u8>().max_value(18)) {
+    match tc.draw(gs::integers::<u8>().max_value(19)) {
         0 => Response::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -220,6 +229,19 @@ fn response(tc: &TestCase) -> Response {
                     who: text(tc),
                     custodian: flag(tc),
                     expires: text(tc),
+                })
+                .collect(),
+        },
+        19 => Response::Held {
+            held: (0..tc.draw(gs::integers::<u8>().max_value(3)))
+                .map(|_| HeldEntry {
+                    id: text(tc),
+                    reason: message(tc),
+                    files: tc.draw(gs::integers::<u64>()),
+                    since: text(tc),
+                    paths: (0..tc.draw(gs::integers::<u8>().max_value(2)))
+                        .map(|_| text(tc))
+                        .collect(),
                 })
                 .collect(),
         },
@@ -326,7 +348,7 @@ fn chunks(tc: &TestCase, bytes: &[u8]) -> Vec<Vec<u8>> {
 }
 
 /// Law *one line*: an encoded message is one line, its only newline last.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn an_envelope_is_one_line(tc: TestCase) {
     let line = encode(tc.draw(gs::integers::<u64>()), &request(&tc)).unwrap();
     assert_eq!(line.iter().filter(|&&b| b == b'\n').count(), 1);
@@ -335,7 +357,7 @@ fn an_envelope_is_one_line(tc: TestCase) {
 
 /// Law *round trip*: any sequence of requests, encoded and cut into any
 /// reads, decodes to the same requests with the same ids, in order.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn requests_round_trip(tc: TestCase) {
     let sent: Vec<Envelope<Request>> = (0..tc.draw(gs::integers::<u8>().max_value(6)))
         .map(|i| Envelope {
@@ -362,7 +384,7 @@ fn requests_round_trip(tc: TestCase) {
 /// Law *raw rest*: responses up to `Connected`, then raw bytes: the decoder
 /// returns those responses, and what it read past them plus what was not
 /// yet read is exactly the raw stream.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn raw_bytes_after_the_last_line_are_kept(tc: TestCase) {
     let mut sent: Vec<Response> = (0..tc.draw(gs::integers::<u8>().max_value(4)))
         .map(|_| response(&tc))
@@ -396,7 +418,7 @@ fn raw_bytes_after_the_last_line_are_kept(tc: TestCase) {
 }
 
 /// Law *responses round trip*: any response decodes to itself.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn responses_round_trip(tc: TestCase) {
     let r = response(&tc);
     let mut decoder = LineDecoder::new();
@@ -408,7 +430,7 @@ fn responses_round_trip(tc: TestCase) {
 }
 
 /// Law *header*: a stream header and its answer survive their line.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn stream_headers_round_trip(tc: TestCase) {
     let header = StreamHeader {
         v: 1,

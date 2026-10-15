@@ -238,7 +238,9 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
     };
     lost.extend(crate::report::lost(g));
     let peers = crate::report::problems(g);
-    let level = if full || !lost.is_empty() || shortfall.is_some() || !peers.is_empty() {
+    let held = crate::held_file::read(g).held().len();
+    let level = if full || held > 0 || !lost.is_empty() || shortfall.is_some() || !peers.is_empty()
+    {
         Level::NeedsYou
     } else {
         level
@@ -246,6 +248,13 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
     let name = |d: &str| Arg::Text(names.get(d).cloned().unwrap_or_else(|| d.to_owned()));
     let headline = match (level, &shortfall) {
         _ if full => msg("headline-disk-full", &[]),
+        _ if held > 0 => msg(
+            "headline-held",
+            &[(
+                "files",
+                Arg::Number(i64::try_from(held).unwrap_or(i64::MAX)),
+            )],
+        ),
         (_, Some(s)) => msg(
             "headline-no-capacity",
             &crate::admission::no_capacity_args(s),

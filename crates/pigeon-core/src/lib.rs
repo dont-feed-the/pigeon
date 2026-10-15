@@ -13,6 +13,7 @@ pub mod catalogue;
 pub mod commit;
 pub mod filter;
 pub mod headline;
+pub mod held;
 pub mod journal;
 pub mod names;
 pub mod notify;

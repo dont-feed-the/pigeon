@@ -67,6 +67,19 @@ person chooses (ux.md §8.6):
 | non-portable name | *Rename to the suggested name* / rename it themselves | pigeon renames it and capture adds it / an ordinary capture |
 | a shared file became a link or a repository (§7.9) | *Delete it for everyone* / *Bring it back* | the deletion is captured / pigeon renames the link or folder to a free name beside it, and install restores the file |
 
+Coded so far (`pigeon-core::held`, laws in `tests/held.rs`;
+`pigeond/src/held.rs`, `held_file.rs`, `tests/held.rs`): mass deletions.
+A deletion paired by content with a new path of the same round is a rename
+and goes through; the others of the round are held together when, with
+those already held, they are more than 100, or when one is in a top-level
+folder gone from the disk. They wait in `.git/pigeon/held.json`
+([11 §11.3](11-local-state.md)); the headline is *Needs you*. `pigeon held`
+lists the batches; `held ID --share` releases one, deleted at the next
+capture whatever its size; `held ID --bring-back` takes its paths out of
+the index, so that install writes `main`'s versions again. A held file
+that comes back on its own leaves its batch. Not coded: a package counting
+as one, held names and links, and the web's buttons.
+
 ## 7.5 Install
 
 Install runs when `main` moves and when a folder is kept again

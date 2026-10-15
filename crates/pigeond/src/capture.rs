@@ -204,6 +204,8 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
         .installed
         .retain(|_, (at, _)| now - *at <= 6 * STALE_SAVE_NS);
     let table = crate::conflicts_file::read(g).unwrap_or_default();
+    let mut held = crate::held_file::read(g);
+    let waiting: BTreeSet<String> = held.held().difference(&held.released).cloned().collect();
     let head = g.git.rev("refs/heads/main").await;
     let mut main: Option<Tree> = None;
     let (mut add, mut remove, mut not_shared) = (Vec::new(), Vec::new(), Vec::new());
@@ -237,7 +239,7 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
         if y == 'D' {
             if lagging {
                 gone.push(path);
-            } else {
+            } else if !waiting.contains(&path) {
                 remove.push(path);
             }
             continue;
@@ -262,6 +264,16 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
         }
     }
     g.lock().not_shared = not_shared;
+    // A held path whose file is back is held no more (07 §7.4).
+    let back: BTreeSet<String> = waiting
+        .iter()
+        .filter(|p| lstat(&worktree.join(p.as_str())).is_ok_and(|s| s.is_some()))
+        .cloned()
+        .collect();
+    if !back.is_empty() {
+        held.forget(&back);
+        save_held(g, &held);
+    }
     if behind
         && main.is_none()
         && let Some(h) = &head
@@ -294,6 +306,7 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
         source,
     })?;
     let batch = Batch {
+        held,
         me,
         table,
         head,
@@ -337,6 +350,8 @@ async fn undo_interrupted(g: &Group) -> Result<(), Error> {
 
 /// What one batch stages and commits.
 struct Batch<'a> {
+    /// The held deletions (07 §7.4).
+    held: crate::held_file::Table,
     me: &'a str,
     table: crate::conflicts_file::Table,
     head: Option<String>,
@@ -359,6 +374,7 @@ async fn commit_batch(
     mut done: Captured,
 ) -> Result<Captured, Error> {
     let Batch {
+        mut held,
         me,
         mut table,
         head,
@@ -371,6 +387,7 @@ async fn commit_batch(
         gone,
         all,
     } = b;
+    let remove = hold_mass_deletions(g, &mut held, &before, &add, remove).await?;
     for chunk in all.chunks(64) {
         let mut args = vec![
             "-c",
@@ -558,6 +575,60 @@ async fn settle(
         done.diverging.push(p.clone());
     }
     Ok(done)
+}
+
+/// Holds the deletions of a batch that 07 §7.3 step 3 holds, once its
+/// additions are in the index: a deletion whose content a new path holds
+/// is a rename (ADR 0072) and goes through. Answers the deletions that do.
+async fn hold_mass_deletions(
+    g: &Group,
+    held: &mut crate::held_file::Table,
+    before: &Tree,
+    add: &[String],
+    remove: Vec<String>,
+) -> Result<Vec<String>, Error> {
+    use pigeon_core::held::{MASS_DELETION, split, top};
+    if remove.is_empty() {
+        return Ok(remove);
+    }
+    let index = g.git.index().await?;
+    let added: BTreeSet<&str> = add
+        .iter()
+        .filter_map(|p| index.get(p))
+        .map(|e| e.oid.as_str())
+        .collect();
+    let (mut through, rest): (Vec<String>, Vec<String>) = remove.into_iter().partition(|p| {
+        before
+            .get(p)
+            .is_some_and(|e| added.contains(e.oid.as_str()))
+    });
+    let worktree = g.worktree.clone().unwrap_or_default();
+    let gone: BTreeSet<String> = rest
+        .iter()
+        .filter_map(|p| top(p))
+        .filter(|t| !worktree.join(t).exists())
+        .map(str::to_owned)
+        .collect();
+    let rest: BTreeSet<String> = rest.into_iter().collect();
+    let s = split(MASS_DELETION, &rest, &held.held(), &held.released, &gone);
+    through.extend(s.delete.iter().cloned());
+    let mut changed = !s.delete.is_disjoint(&held.released);
+    held.released.retain(|p| !s.delete.contains(p));
+    if let Some(why) = &s.why {
+        tracing::warn!(group = %g.id, files = s.hold.len(), why = ?why, "deletions-held");
+        held.hold(why, s.hold, crate::util::now());
+        changed = true;
+    }
+    if changed {
+        save_held(g, held);
+    }
+    Ok(through)
+}
+
+fn save_held(g: &Group, held: &crate::held_file::Table) {
+    if let Err(e) = crate::held_file::write(g, held) {
+        tracing::warn!(group = %g.id, error = %e, "held-write-failed");
+    }
 }
 
 fn note_diverging(g: &Group, paths: Vec<String>) {

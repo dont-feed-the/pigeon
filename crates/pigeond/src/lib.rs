@@ -24,6 +24,8 @@ pub mod fold;
 pub mod folders;
 pub mod git;
 pub mod group;
+pub mod held;
+pub mod held_file;
 pub mod history;
 pub mod install;
 pub mod invite;

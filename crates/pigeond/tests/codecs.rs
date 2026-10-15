@@ -18,7 +18,7 @@ use pigeond::roster_file::{RosterDoc, parse, render};
 use pigeond::util::{date, hex, hmac_sha256, parse_rfc3339, rfc3339, unhex};
 
 /// Law *hex*: bytes round-trip through their lower-case hex.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn hex_round_trips(tc: TestCase) {
     let bytes = tc.draw(gs::binary().max_size(64));
     let h = hex(&bytes);
@@ -32,7 +32,7 @@ fn hex_round_trips(tc: TestCase) {
 
 /// Law *time*: a time from 1970 to 9999 round-trips through RFC 3339, and
 /// its date is the text's first ten characters.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn rfc3339_round_trips(tc: TestCase) {
     let t = tc.draw(
         gs::integers::<i64>()
@@ -94,7 +94,7 @@ fn record(tc: &TestCase) -> Record {
 
 /// Law *journal*: every record parses back from its line, which is one
 /// line.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn journal_records_round_trip(tc: TestCase) {
     let r = record(&tc);
     let line = pigeond::journal_file::line(&r);
@@ -160,7 +160,7 @@ fn roster_doc(tc: &TestCase) -> RosterDoc {
 }
 
 /// Law *roster file*: a roster parses back from the text it renders to.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn roster_files_round_trip(tc: TestCase) {
     let doc = roster_doc(&tc);
     let text = render(&doc).unwrap();
@@ -170,7 +170,7 @@ fn roster_files_round_trip(tc: TestCase) {
 /// Law *closed roster* (ADR 0048): a rendered roster with a newer `format`,
 /// or with one key format 1 does not define, at the top or in a person, a
 /// device or a folder, is unknown: never read, and never refused.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn a_roster_a_newer_release_could_write_is_unknown(tc: TestCase) {
     let doc = roster_doc(&tc);
     let mut newer: toml_edit::DocumentMut = render(&doc).unwrap().parse().unwrap();
@@ -372,7 +372,7 @@ fn conflict_tables_round_trip(tc: TestCase) {
 /// Law *sheet*: a recovery sheet reads back from its `pgr1-` code wherever
 /// it stands in the sheet's text, and a code with any character changed
 /// reads as nothing (09 §9.9).
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn recovery_sheets_round_trip(tc: TestCase) {
     use pigeond::recovery::{Sheet, SheetCustodian, decode, encode};
     let n = tc.draw(gs::integers::<u8>().max_value(3));

@@ -70,6 +70,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("resume", "cmd-resume"),
     ("people", "cmd-people"),
     ("leave", "cmd-leave"),
+    ("held [ID --share | --bring-back]", "cmd-held"),
     ("deleted", "cmd-deleted"),
     ("doctor [--details]", "cmd-doctor"),
     ("debug bundle [--from NAME…]", "cmd-debug-bundle"),
@@ -273,6 +274,17 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
         }),
         "resume" if fits(0, 0, &[]) => send(Request::Resume),
         "leave" if fits(0, 0, &[]) => send(Request::Leave),
+        "held" if fits(0, 0, &[]) => send(Request::Held),
+        "held" if fits(1, 1, &["share"]) && s.flag("share") => send(Request::ReleaseHeld {
+            batch: w.first()?.clone(),
+            choice: pigeon_proto::api::HeldChoice::Share,
+        }),
+        "held" if fits(1, 1, &["bring-back"]) && s.flag("bring-back") => {
+            send(Request::ReleaseHeld {
+                batch: w.first()?.clone(),
+                choice: pigeon_proto::api::HeldChoice::BringBack,
+            })
+        }
         "suggestions" if fits(0, 0, &[]) => send(Request::Proposals),
         "accept" if fits(1, 1, &["override"]) => send(Request::Accept {
             proposal: w.first()?.clone(),
@@ -351,9 +363,9 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
             }
         }
         "create" | "invite" | "join" | "status" | "machines" | "open" | "history" | "restore"
-        | "pause" | "resume" | "people" | "deleted" | "free" | "keep" | "remove-computer"
-        | "recovery-sheet" | "recover" | "doctor" | "debug" | "suggestions" | "accept"
-        | "decline" | "conflicts" | "resolve" | "update" => None,
+        | "pause" | "resume" | "people" | "deleted" | "leave" | "held" | "free" | "keep"
+        | "remove-computer" | "recovery-sheet" | "recover" | "doctor" | "debug" | "suggestions"
+        | "accept" | "decline" | "conflicts" | "resolve" | "update" => None,
         other => Some(Action::NotInThisBuild(other.to_owned())),
     }
 }

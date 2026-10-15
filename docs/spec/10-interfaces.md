@@ -32,7 +32,7 @@ result, progress events then a result, or a `Problem` (§10.6).
 | `Refound {repository?}` | `pigeon refound [REPOSITORY]` | — (CLI only) | [09 §9.9](09-network-and-joining.md) |
 | — | `pigeon export --to DIR [--at DATE\|COMMIT] [--deleted] [REPOSITORY…]` | — (without `pigeond`) | [09 §9.9](09-network-and-joining.md) |
 | `Purge {path}` · `CancelPurge {id}` | `pigeon erase PATH` · `pigeon erase --cancel ID` | *Erase forever* | [08 §8.6](08-custody-loops.md) |
-| `Held` · `ReleaseHeld {id, choice}` | `pigeon held` · `pigeon held ID --share \| --bring-back \| --rename` | Home → Needs you | [07 §7.4](07-capture-and-install.md) |
+| `Held` · `ReleaseHeld {batch, choice}` | `pigeon held` · `pigeon held ID --share \| --bring-back \| --rename` | Home → Needs you | [07 §7.4](07-capture-and-install.md) |
 | `Pause {duration?}` · `Resume` | `pigeon pause [DURATION]` · `pigeon resume` | Settings | [15](15-resource-use.md) |
 | `GetSettings` · `SetSettings {…}` | `pigeon settings [KEY [VALUE]]` | Settings | [11 §11.2](11-local-state.md) |
 | `Doctor {details}` | `pigeon doctor [--details]` | Settings → Advanced | §10.7 |

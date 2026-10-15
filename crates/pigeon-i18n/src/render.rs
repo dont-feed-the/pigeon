@@ -117,6 +117,18 @@ impl Renderer {
         self.cat.format(&m)
     }
 
+    /// A held batch: its ID, why, how many files and its first paths.
+    pub fn held(&self, h: &pigeon_proto::api::HeldEntry) -> String {
+        let files = i64::try_from(h.files).unwrap_or(i64::MAX);
+        let msg = crate::Message::new("held-row")
+            .arg("id", h.id.as_str())
+            .arg("reason", self.text(&h.reason).as_str())
+            .arg("files", files)
+            .arg("since", h.since.as_str())
+            .arg("paths", h.paths.join(", ").as_str());
+        self.cat.format(&msg)
+    }
+
     /// A pending invitation: its ID, who it is for, and when it expires.
     pub fn invitation(&self, i: &pigeon_proto::api::InvitationEntry) -> String {
         let id = if i.custodian {
@@ -241,6 +253,8 @@ impl Renderer {
                 invitations.iter().map(|i| self.invitation(i)).collect(),
                 false,
             ),
+            Response::Held { held } if held.is_empty() => (vec![self.id("held-none")], false),
+            Response::Held { held } => (held.iter().map(|h| self.held(h)).collect(), false),
             Response::People { people } => (people.iter().map(|p| self.person(p)).collect(), false),
             Response::History { versions } => {
                 (versions.iter().map(|v| self.version(v)).collect(), false)

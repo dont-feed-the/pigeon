@@ -132,7 +132,7 @@ fn lines(stream: &[u8]) -> Vec<Vec<u8>> {
 
 /// Law *passthrough*: on a laptop, a stream of allowed messages reaches
 /// git-annex unchanged, byte for byte, whatever its chunking.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn allowed_streams_pass_unchanged(tc: TestCase) {
     let stream: Vec<u8> = (0..tc.draw(gs::integers::<u8>().max_value(12)))
         .flat_map(|_| allowed_message(&tc))
@@ -148,7 +148,7 @@ fn allowed_streams_pass_unchanged(tc: TestCase) {
 
 /// Law *chunking*: what the filter does to a client stream does not depend
 /// on how the stream is cut into reads.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn chunking_does_not_matter(tc: TestCase) {
     let role = if tc.draw(gs::booleans()) {
         Role::Custodian
@@ -173,7 +173,7 @@ fn chunking_does_not_matter(tc: TestCase) {
 /// Law *no removal, no push*: on a custodian, no `REMOVE`, `REMOVE-BEFORE`
 /// or `CONNECT` other than `git-upload-pack` ever reaches git-annex, and
 /// every allowed `VERSION` that reaches it is at most 4.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn custodians_never_forward_removals_or_pushes(tc: TestCase) {
     let stream: Vec<u8> = (0..tc.draw(gs::integers::<u8>().max_value(12)))
         .flat_map(|_| {
@@ -214,7 +214,7 @@ fn custodians_never_forward_removals_or_pushes(tc: TestCase) {
 
 /// Law *bounded lines*: a line over 4096 bytes or a malformed `DATA` length
 /// closes the session, and nothing of it reaches git-annex.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn malformed_input_closes(tc: TestCase) {
     let bad = if tc.draw(gs::booleans()) {
         vec![b'A'; 4097 + usize::from(tc.draw(gs::integers::<u8>()))]
@@ -357,7 +357,7 @@ impl Session<'_> {
 /// laptop's is never hashed; (4) while checking, no lock or probe reaches
 /// git-annex and both answer `FAILURE`; (5) every request is answered once
 /// its syncs complete; (6) no removal reaches git-annex.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn custodian_answers_only_after_sync(tc: TestCase) {
     let checking = tc.draw(gs::booleans());
     let peer_custodian = tc.draw(gs::booleans());
@@ -478,7 +478,7 @@ fn custodian_answers_only_after_sync(tc: TestCase) {
 
 /// Law *no unattributed success*: a custodian closes, rather than pass on,
 /// a positive answer from git-annex that answers no request.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn unattributed_success_closes(tc: TestCase) {
     let line: &[u8] = if tc.draw(gs::booleans()) {
         b"SUCCESS\n"
@@ -494,7 +494,7 @@ fn unattributed_success_closes(tc: TestCase) {
 
 /// Law *AUTH*: the client's token is replaced by the repository's own, and
 /// an `AUTH` for another UUID than the roster's closes the session.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn auth_is_rewritten_and_checked(tc: TestCase) {
     let honest = tc.draw(gs::booleans());
     let mut f = Filter::new(

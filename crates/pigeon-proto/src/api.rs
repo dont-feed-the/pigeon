@@ -141,6 +141,15 @@ pub enum Request {
         /// The computer's name in the roster.
         name: String,
     },
+    /// `pigeon held`: the held mass deletions (07 §7.4).
+    Held,
+    /// `pigeon held ID --share | --bring-back`.
+    ReleaseHeld {
+        /// The batch's ID, from `Held` (`id` is the envelope's).
+        batch: String,
+        /// What the person chose.
+        choice: HeldChoice,
+    },
     /// `pigeon leave`: this computer signs its own removal and forgets the
     /// group once another machine has it (09 §9.7).
     Leave,
@@ -255,6 +264,11 @@ pub enum Response {
     Machines {
         /// The roster's devices.
         machines: Vec<Machine>,
+    },
+    /// The answer to `Held`.
+    Held {
+        /// Oldest first.
+        held: Vec<HeldEntry>,
     },
     /// The answer to `Invitations`.
     Invitations {
@@ -538,6 +552,31 @@ pub struct Suggestion {
     /// Whether it is this person's.
     #[serde(default)]
     pub mine: bool,
+}
+
+/// A held batch of deletions (07 §7.4).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HeldEntry {
+    /// Its ID, for `ReleaseHeld`.
+    pub id: String,
+    /// Why it is held, in words.
+    pub reason: Message,
+    /// How many files.
+    pub files: u64,
+    /// Since when, RFC 3339.
+    pub since: String,
+    /// Its first paths, at most ten.
+    pub paths: Vec<String>,
+}
+
+/// What the person does with a held batch (07 §7.4).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HeldChoice {
+    /// *Delete them for everyone*.
+    Share,
+    /// *Bring them back*.
+    BringBack,
 }
 
 /// A resolution of a divergence (07 §7.6, ux.md §8.8).

@@ -15,7 +15,7 @@ fn hex(bytes: &[u8]) -> String {
 
 /// Law *device ID*: a public key's ID is 64 lowercase hex digits and parses
 /// back to the same key; anything else is not an ID.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn device_ids_round_trip(tc: TestCase) {
     let seed: Vec<u8> = tc.draw(gs::binary().min_size(32).max_size(32));
     let secret = iroh::SecretKey::from_bytes(&seed.clone().try_into().unwrap());
@@ -34,7 +34,7 @@ fn device_ids_round_trip(tc: TestCase) {
 
 /// Law *key hash*: the SHA-256 of a `SHA256E` or `SHA256` key is its hex
 /// field, whatever its size and extension; other backends name none.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn sha256_keys_name_their_hash(tc: TestCase) {
     let digest = hex(&tc.draw(gs::binary().min_size(32).max_size(32)));
     let size = tc.draw(gs::integers::<u64>());
@@ -50,7 +50,7 @@ fn sha256_keys_name_their_hash(tc: TestCase) {
 
 /// Law *plausible key*: a key that starts with `-`, holds a `/`, a space or
 /// a control character is never passed to git-annex.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn implausible_keys_are_refused(tc: TestCase) {
     let key = tc.draw(gs::text().max_size(40));
     if plausible_key(&key) {
