@@ -87,7 +87,13 @@ fn annex_present() -> bool {
         .is_ok_and(|o| o.status.success())
 }
 
+/// One laptop at a time: these tests share the process, and timing-bound
+/// steps (the quiet window, the asides' keep time) flake when 15 laptops
+/// run git-annex at once.
+static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 struct Laptop {
+    _serial: tokio::sync::MutexGuard<'static, ()>,
     dir: tempfile::TempDir,
     wt: PathBuf,
     git: Git,
@@ -97,6 +103,7 @@ struct Laptop {
 
 /// Ana's laptop, created as `pigeon create` makes one, without the network.
 async fn laptop() -> Option<Laptop> {
+    let serial = SERIAL.lock().await;
     if !annex_present() {
         assert!(
             std::env::var_os("PIGEON_REQUIRE_GIT_ANNEX").is_none(),
@@ -136,7 +143,14 @@ async fn laptop() -> Option<Laptop> {
     drop(pending);
     let g = Group::open(&genesis, &wt, &env).await.unwrap();
     let t = Tracer::new(dir.path().join("traces"), &dev(1).0);
-    Some(Laptop { dir, wt, git, g, t })
+    Some(Laptop {
+        _serial: serial,
+        dir,
+        wt,
+        git,
+        g,
+        t,
+    })
 }
 
 /// A version Ben saved: its pointer blob, and its content in this annex
