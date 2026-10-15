@@ -18,6 +18,9 @@ status everybody can read.
 > binaries or built from source ([roadmap](roadmap.md)). Try it, but
 > keep another copy of anything you care about.
 
+To start a new group on a custodian server and connect Nextcloud apps, follow
+the [first custodian and bridge quick start](nextcloud-quick-start.md).
+
 ## What "safe" means
 
 A version of a file goes through three states, and pigeon always says which:

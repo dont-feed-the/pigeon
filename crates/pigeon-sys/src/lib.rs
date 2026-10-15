@@ -19,6 +19,7 @@ pub mod lab;
 pub mod paths;
 pub mod pressure;
 pub mod signal;
+pub mod snapshot;
 pub mod writers;
 
 pub use error::{Error, Result};

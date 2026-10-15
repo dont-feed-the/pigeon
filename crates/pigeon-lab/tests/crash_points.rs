@@ -1,8 +1,6 @@
-//! The executor's crash points are pigeond's (13 §13.12): every
-//! `crash_point("…")` in pigeond's sources names a [`CrashPoint`] or an
-//! install-driver trace regression. A renamed point fails here instead of
-//! leaving a scenario waiting for a crash that never comes.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+//! Inventory all daemon crash checkpoints: slice, install-driver and bridge
+//! recovery regressions exercise their respective seams.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, reason = "tests")]
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -49,5 +47,13 @@ fn the_crash_points_are_pigeonds() {
         assert!(driver.contains(&format!("\"{point}\"")));
         ours.insert(point.to_owned());
     }
+    ours.extend(
+        [
+            "bridge-before-capture",
+            "bridge-hide-after-flag",
+            "bridge-hide-after-remove",
+        ]
+        .map(str::to_owned),
+    );
     assert_eq!(ours, theirs);
 }

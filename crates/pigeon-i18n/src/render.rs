@@ -326,6 +326,7 @@ impl Renderer {
                 false,
             ),
             Response::Done
+            | Response::Bridge { .. }
             | Response::Hello { .. }
             | Response::Address { .. }
             | Response::Connected

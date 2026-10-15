@@ -96,6 +96,7 @@ pub(crate) fn group_of(d: &Daemon, path: &Path) -> Option<Arc<Group>> {
 
 pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
     match request {
+        Request::Bridge { operation } => crate::bridge::handle(d, operation).await,
         Request::Create {
             name,
             folder,
@@ -417,7 +418,7 @@ async fn create_inner(
         .ok_or("no repository")?;
     g.set_token(&token);
     tracing::info!(group = %genesis, "created");
-    d.add_group(g, &folder).await;
+    d.add_group(g, &folder).await?;
     Ok(())
 }
 

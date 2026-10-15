@@ -246,7 +246,13 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
             behind |= x != '.';
             continue;
         }
-        if crate::suggest::unchanged(&worktree, &table, &path, y == 'D') {
+        if crate::suggest::unchanged(&worktree, &table, &path, y == 'D')
+            || g.shared.is_some()
+                && table.paths.get(&path).is_some_and(|d| {
+                    d.kind == crate::conflicts_file::Kind::Suggestion
+                        && crate::shared::unchanged(g, &path, d)
+                })
+        {
             continue;
         }
         let lagging = match x {

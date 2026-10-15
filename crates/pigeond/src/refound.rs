@@ -224,7 +224,9 @@ async fn switch(d: &Daemon, old: &std::sync::Arc<Group>, new: &str) {
     match Group::open(new, &path, &d.env).await {
         Some(g) => {
             remember(&g).await;
-            d.add_group(g, &path).await;
+            if let Err(error) = d.add_group(g, &path).await {
+                tracing::warn!(group = %new, %error, "refound-serve-failed");
+            }
         }
         None => tracing::warn!(group = %new, "refound-open-failed"),
     }

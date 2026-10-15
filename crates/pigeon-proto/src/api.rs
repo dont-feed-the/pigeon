@@ -13,6 +13,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Request {
+    /// Local file operations for the Nextcloud bridge, serialized by the daemon.
+    Bridge {
+        /// The operation on this daemon's default group.
+        operation: crate::bridge::Operation,
+    },
     /// The first request of a connection: the client's protocol version.
     Hello {
         /// The client's [`crate::PROTOCOL_VERSION`].
@@ -270,6 +275,11 @@ pub enum Request {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Response {
+    /// A bridge operation's result; never sent over the peer protocol.
+    Bridge {
+        /// The result, or a normal `Problem` on failure.
+        result: crate::bridge::Reply,
+    },
     /// The answer to `Hello`.
     Hello {
         /// `pigeond`'s [`crate::PROTOCOL_VERSION`].

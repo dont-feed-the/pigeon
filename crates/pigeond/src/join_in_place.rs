@@ -45,7 +45,7 @@ pub async fn laptop(d: &Daemon, inv: &Invitation, path: &Path) -> Result<String,
         .map_err(fail)?;
     g.set_addresses(&inv.inviter, inviter_addresses(inv));
     g.learn_peers(&peers);
-    let g = d.add_group(g, path).await;
+    let g = d.add_group(g, path).await?;
     let busy = g.busy.lock().await;
     let theirs = fetch_welcome(&g, &inv.inviter, &inv.group, &commit, &d.device).await?;
     let ours = g.git.rev("refs/heads/main").await.ok_or("no main")?;

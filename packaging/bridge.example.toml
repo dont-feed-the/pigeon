@@ -1,0 +1,27 @@
+# A Nextcloud bridge with one Pigeon peer per app authorization. Copy this
+# outside the repository, replace the paths/hash, and run pigeon-bridge --config.
+# For a reverse proxy, use an HTTPS public_url and preserve its Host header.
+
+listen = "127.0.0.1:8787"
+public_url = "http://127.0.0.1:8787"
+state_dir = "/srv/pigeon-bridge"
+# Optional; defaults to state_dir/content. Must share a filesystem with peers.
+# content_dir = "/srv/pigeon-content"
+pigeond = "/opt/pigeon/bin/pigeond"
+max_upload_bytes = 10737418240
+max_clients_per_user = 20
+peer_network = "n0"
+
+[users.alice]
+# Generate with: pigeon-bridge hash-password < a-private-password-file
+password_hash = "$argon2id$replace-with-the-generated-hash"
+# This existing peer must belong to Alice in the group she wants to expose.
+control_socket = "/srv/pigeon/alice/run/pigeond.sock"
+# Optional existing custodian/laptop of the same group; defaults to control_socket.
+# Put its annex on the pool's filesystem for direct sharing without body copies.
+# storage_socket = "/srv/pigeon/storage/run/pigeond.sock"
+
+# Add another user only with their own personal control peer/socket.
+# [users.bob]
+# password_hash = "$argon2id$replace-with-bobs-hash"
+# control_socket = "/srv/pigeon/bob/run/pigeond.sock"

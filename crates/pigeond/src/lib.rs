@@ -10,6 +10,7 @@
 pub mod admission;
 pub mod api;
 pub mod asides;
+pub mod bridge;
 pub mod capture;
 pub mod capture_file;
 pub mod change;
@@ -56,6 +57,10 @@ pub mod restore;
 pub mod retention;
 pub mod roster_file;
 pub mod settings;
+mod shared;
+mod shared_overlay;
+mod shared_pool;
+mod shared_rpc;
 pub mod status;
 pub mod suggest;
 pub mod thin;

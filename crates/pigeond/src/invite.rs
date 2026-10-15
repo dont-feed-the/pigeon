@@ -589,7 +589,7 @@ async fn join_backup(
     g.set_token(&token);
     g.set_addresses(&inv.inviter, inviter_addresses(inv));
     g.learn_peers(&peers);
-    let g = d.add_group(g, &path).await;
+    let g = d.add_group(g, &path).await?;
     first_fetch(&g, inv, &commit, &d.device).await?;
     g.reload_roster().await;
     d.wake.notify_one();

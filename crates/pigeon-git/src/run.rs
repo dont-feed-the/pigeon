@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
 
 use crate::env::GitEnv;
@@ -139,16 +139,40 @@ impl Repo {
             source,
         })?;
         let stdin = child.stdin.take();
+        let no_pipe = || Error::Pipe {
+            argv: argv.clone(),
+            source: std::io::Error::other("no output pipe"),
+        };
+        let mut stdout = child.stdout.take().ok_or_else(no_pipe)?;
+        let mut stderr = child.stderr.take().ok_or_else(no_pipe)?;
         let pid = child
             .id()
             .and_then(|p| i32::try_from(p).ok())
             .and_then(rustix::process::Pid::from_raw);
         let work = async {
-            if let (Some(mut pipe), Some(bytes)) = (stdin, input) {
-                pipe.write_all(bytes).await?;
-                pipe.shutdown().await?;
-            }
-            child.wait_with_output().await
+            let feed = async {
+                if let (Some(mut pipe), Some(bytes)) = (stdin, input) {
+                    pipe.write_all(bytes).await?;
+                    pipe.shutdown().await?;
+                }
+                Ok::<_, std::io::Error>(())
+            };
+            let (mut out, mut err) = (Vec::new(), Vec::new());
+            // A batch may produce more than a pipeful of output before it
+            // consumes all its input. Drain both streams while feeding it.
+            tokio::try_join!(
+                feed,
+                stdout.read_to_end(&mut out),
+                stderr.read_to_end(&mut err)
+            )?;
+            // Reap only after all I/O completes, so timeout signalling still
+            // refers to this child rather than a potentially reused PID.
+            let status = child.wait().await?;
+            Ok::<_, std::io::Error>(std::process::Output {
+                status,
+                stdout: out,
+                stderr: err,
+            })
         };
         tokio::pin!(work);
         // A call still running after SLOW is named in the log, so that a

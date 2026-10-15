@@ -1,0 +1,75 @@
+# Exercise the bridge with real native peers and the Nextcloud command client.
+# Shared-storage checks cover both an existing laptop and a custodian, including
+# per-client identities, retained versions, in-place saves and provider loss.
+name: nextcloud-bridge
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nextcloud-bridge-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  bridge:
+    name: Nextcloud bridge (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GIT_ANNEX_VERSION: "10.20261006"
+      GIT_ANNEX_SHA256: 88ea73c9bb8fb751916e0e4a0a8f489a7476f9b9e861fd2cce2601a77f4f409d
+      NEXTCLOUDCMD: nextcloudcmd
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/git-annex-dist
+          key: git-annex-standalone-${{ env.GIT_ANNEX_SHA256 }}
+      - name: git-annex at the repository's pinned checksum
+        run: |
+          mkdir -p ~/.cache/git-annex-dist
+          t=~/.cache/git-annex-dist/git-annex-standalone-amd64.tar.gz
+          [ -f "$t" ] || curl -fsSL -o "$t" \
+            https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
+          echo "$GIT_ANNEX_SHA256  $t" | sha256sum -c - || {
+            echo "::error::upstream moved past git-annex $GIT_ANNEX_VERSION; move the pin deliberately"
+            rm -f "$t"; exit 1; }
+          tar -C ~ -xzf "$t"
+          echo ~/git-annex.linux >> "$GITHUB_PATH"
+      - name: the real Nextcloud command client
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends nextcloud-desktop-cmd
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: rust-ubuntu-24.04-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: rust-ubuntu-24.04-
+      - name: the pinned toolchain (rust-toolchain.toml)
+        run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
+      - name: matching bridge, daemon, CLI and transport binaries
+        id: build
+        run: |
+          cargo build --locked -p pigeon-bridge -p pigeond -p pigeon -p git-annex-p2p-iroh \
+            --features pigeond/lab
+      - name: share an existing laptop's storage
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: python3 scripts/check-nextcloud-shared-storage --provider laptop
+      - name: decisions arriving before their proposals do not freeze later edits
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: cargo test --locked -p pigeond --features lab --test decision_retry
+      - name: share an existing custodian's storage
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: python3 scripts/check-nextcloud-shared-storage --provider custodian
+      - name: portal, WebDAV and real Nextcloud synchronization
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: python3 scripts/check-nextcloud-bridge

@@ -67,7 +67,12 @@ pub async fn rethin_for_lab(g: &Group, me: &str, t: &Tracer) -> usize {
 }
 
 async fn rethin_after(g: &Group, me: &str, t: &Tracer, quiet_seconds: i64) -> usize {
-    if crate::capture_file::pending(g) || crate::evict::unsettled(g) {
+        if crate::capture_file::pending(g)
+        || crate::evict::unsettled(g)
+        || g.shared.is_some()
+        || !matches!(crate::shared_pool::registration(&g.git_dir), Ok(None))
+    {
+
         return 0;
     }
     let Some(wt) = g.worktree.clone() else {
@@ -113,6 +118,11 @@ fn one(
     trace: &Checkpoint<'_>,
     quiet_seconds: i64,
 ) -> Result<bool, String> {
+    // Another immutable reference may outlive this working tree. Do not thaw
+    // that inode, even if its pool registration is temporarily unreadable.
+    if std::fs::metadata(object).is_ok_and(|m| m.nlink() > 1) {
+        return Ok(false);
+    }
     let Some(st) = stat_of(file) else {
         return Ok(false);
     };

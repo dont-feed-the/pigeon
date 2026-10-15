@@ -7,6 +7,7 @@
 //! message ids and arguments, never as text (ADR 0028).
 
 pub mod api;
+pub mod bridge;
 pub mod join;
 pub mod stream;
 pub mod time;

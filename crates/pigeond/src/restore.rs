@@ -148,6 +148,16 @@ fn fits(g: &Group, key: &str) -> bool {
 /// not fit above the reserve, or cannot be received.
 pub(crate) async fn bring(g: &Group, key: &str) -> Result<(), &'static str> {
     if crate::custody::present(g, key).await.is_some() {
+        crate::shared::adopt(g, key)
+            .await
+            .map_err(|_| "receiving")?;
+        return Ok(());
+    }
+    if g.shared.is_some()
+        && crate::shared::hydrate(g, key)
+            .await
+            .map_err(|_| "receiving")?
+    {
         return Ok(());
     }
     if !fits(g, key) {
@@ -156,6 +166,9 @@ pub(crate) async fn bring(g: &Group, key: &str) -> Result<(), &'static str> {
     let args = ["annex", "get", "--json", "--key", key];
     g.git
         .run_for(&args, Duration::from_secs(600))
+        .await
+        .map_err(|_| "receiving")?;
+    crate::shared::adopt(g, key)
         .await
         .map_err(|_| "receiving")?;
     crate::custody::present(g, key)

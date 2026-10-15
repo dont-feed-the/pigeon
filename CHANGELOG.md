@@ -4,6 +4,21 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## Unreleased
+
+### Added
+
+- Nextcloud desktop and mobile clients can connect through `pigeon-bridge`.
+  Each authorization creates its own Pigeon peer. The bridge's web portal
+  lets users review suggestions, resolve conflicts and revoke a client.
+- A bridge can reuse a laptop or custodian's immutable file storage. The
+  first-custodian quick start explains server setup and client connections.
+
+### Fixed
+
+- A decision received before its suggestion no longer prevents that peer
+  from receiving later edits once the suggestion arrives.
+
 ## 0.4.3 — 2026-10-16
 
 ### Added
