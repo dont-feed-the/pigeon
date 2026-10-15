@@ -31,7 +31,7 @@ import time
 import unicodedata
 from collections import defaultdict, deque
 
-DAY = "2026-10-13"
+from catalogue_cases import CASES, DAY, EXAMPLES, EXPECTED, OLD_PULLS
 
 
 def hid(*parts):
@@ -131,21 +131,23 @@ def may(person, path, before):
 
 
 class Commit:
-    __slots__ = ("id", "parents", "tree", "device", "person", "who", "when", "op", "resolve", "seq")
+    __slots__ = ("id", "parents", "tree", "device", "person", "who", "when", "op", "resolve", "seq",
+                 "renames")
 
-    def __init__(self, cid, parents, tree, device, person, who, when, op, resolve, seq):
+    def __init__(self, cid, parents, tree, device, person, who, when, op, resolve, seq, renames=()):
         self.id, self.parents, self.tree, self.device = cid, parents, tree, device
         self.person, self.who, self.when, self.op = person, who, when, op
-        self.resolve, self.seq = resolve, seq
+        self.resolve, self.seq, self.renames = resolve, seq, renames
 
 
 class Event:
-    """A contribution, or a conflict event; writes maps slot -> (value, origin)."""
-    __slots__ = ("id", "past", "writes", "resolves", "conflict")
+    """A contribution, or a conflict event; writes maps slot -> (value, origin); renames
+    maps a slot the contribution renamed to (its new slot, whether the content is unchanged)."""
+    __slots__ = ("id", "past", "writes", "resolves", "conflict", "renames")
 
-    def __init__(self, eid, past, writes, resolves=frozenset(), conflict=False):
+    def __init__(self, eid, past, writes, resolves=frozenset(), conflict=False, renames=None):
         self.id, self.past, self.writes, self.resolves = eid, past, writes, resolves
-        self.conflict = conflict
+        self.conflict, self.renames = conflict, renames or {}
 
 
 class New:
@@ -174,7 +176,7 @@ class New:
         return self.info[cid]
 
     def extend(self, c, state):
-        tree, shown, unsettled, heads = self.present(state)
+        tree, shown, unsettled, heads, eff, _, via = self.present(state)
         old, new = units(tree), units(c.tree)
         delta = [x for x in sorted(old.keys() | new.keys()) if old.get(x) != new.get(x)]
         resolves = frozenset(fold(p) for p in c.resolve  # Keep both, from whoever may change p
@@ -184,38 +186,139 @@ class New:
         allowed = all(may(c.person, (new.get(x) or old.get(x))[0], old.get(x)) for x in delta)
         if clashes(c.tree) or not allowed:
             return (False, False, state, tree)  # a proposal (spec 04 §4.5)
-        frozen = frozenset(self.freeze(x, heads[x], shown[x]) for x in unsettled)
+        frozen = frozenset(self.freeze(x, heads[x], shown[x], via) for x in unsettled)
         writes = {x: (new.get(x), c.id) for x in delta}
-        self.events[c.id] = Event(c.id, state | frozen, writes, resolves)
+        # A rename (Pigeon-Renamed, ADR 0072) counts when it deletes a file of the base and
+        # adds one the base lacks, packages aside; it is pure when the content did not change.
+        # It keeps the versions it moved: the events heading the old slot with a version, a
+        # pure rename standing for the versions it moved in turn.
+        def moved(x):
+            return frozenset().union(*(next((h for y, p, h in e.renames.values() if y == x and p), {e.id})
+                                       for e in heads.get(x, ()) if eff[e.id][x][0]))
+        renames = {fold(a): (fold(b), new[fold(b)][1] == old[fold(a)][1], moved(fold(a)))
+                   for a, b in c.renames
+                   if unit(a) == a and unit(b) == b and fold(a) in old and fold(a) not in new
+                   and fold(b) in new and fold(b) not in old
+                   and not isinstance(old[fold(a)][1], frozenset) and not isinstance(new[fold(b)][1], frozenset)}
+        self.events[c.id] = Event(c.id, state | frozen, writes, resolves, renames=renames)
         return (True, True, state | frozen | {c.id}, tree)
 
-    def freeze(self, x, hs, shown):
-        """The conflict event that keeps the versions of slot x where they were shown."""
+    def freeze(self, x, hs, shown, via):
+        """The conflict event that keeps the versions of slot x where they were shown: it saw
+        their writers, and the renames that moved them there (ADR 0072)."""
         writes = {fold(path): ((path, v[1]), o) for v, path, o in shown}
         writes.setdefault(x, (None, None))
-        eid = ("v", x, frozenset(e.id for e in hs), frozenset((y, w[0]) for y, w in writes.items()))
+        saw = frozenset(e.id for e in hs).union(*(via.get((e.id, x), (frozenset(),))[0] for e in hs))
+        eid = ("v", x, saw, frozenset((y, w[0]) for y, w in writes.items()))
         if eid not in self.events:
-            past = frozenset().union(*({e.id} | e.past for e in hs))
+            past = frozenset().union(*({i} | self.events[i].past for i in saw))
             self.events[eid] = Event(eid, past, writes, conflict=conflicted(shown))
             for value, o in writes.values():
-                if value and not may(self.run.commits[o].person, value[0], None):
+                # allowed where it is, or, if a rename moved it, where its author wrote it (ADR 0072)
+                wrote = next((v[0] for v, _ in self.events[o].writes.values() if v and v[1] == value[1]),
+                             value[0]) if value else None
+                if value and not (may(self.run.commits[o].person, value[0], None)
+                                  or may(self.run.commits[o].person, wrote, None)):
                     self.unauthorised.append((value[0], o))
         return eid
+
+    def knew(self, e, x):
+        """Whether event e saw a rename of slot x: its x is a new file (ADR 0072)."""
+        return any(x in self.events[p].renames for p in e.past)
+
+    def effective(self, state):
+        """Each event's writes in a state, renames followed (ADR 0072): a write of a slot
+        that a contribution renamed, which neither saw the other, goes to the new slot (the
+        earliest such rename by representative order, then the next, until none), unless the
+        event writes that slot itself or saw an event write it, or saw a rename of the slot
+        it is at; a rename's deletion of the slot it renamed stays. Answers the writes by event,
+        the renames each moved write followed, and where each conflict event's frozen slot is."""
+        evs = {eid: self.events[eid] for eid in state}
+        renames = sorted((self.order(eid), eid, x, y) for eid, e in evs.items()
+                         for x, (y, _, _) in e.renames.items())
+
+        def conc(a, b):
+            return a.id != b.id and a.id not in b.past and b.id not in a.past
+
+        def saw(e, y):  # an event e has seen wrote y: y is another file to e
+            return any(y in self.events[p].writes for p in e.past)
+
+        knew = self.knew
+
+        def shared(r, e, x, used):  # r and e build on one version of x
+            return any(w in e.past or w in used for w in r.past if x in self.events[w].writes)
+
+        def target(e, x, within=None):  # among the renames of a past, else of the state
+            used, seen = [], {x}
+            while x not in e.renames and not knew(e, x):
+                nxt = next(((rid, y) for _, rid, rx, y in renames if rx == x and (within is None or rid in within)
+                            and conc(evs[rid], e) and shared(evs[rid], e, x, used)), None)
+                if nxt is None or nxt[1] in seen or nxt[1] in e.writes or saw(e, nxt[1]):
+                    return x, used
+                used.append(nxt[0])
+                x = nxt[1]
+                seen.add(x)
+            return x, used
+
+        eff, via, fslot = {}, {}, {}
+        for eid, e in evs.items():
+            w = {}
+            for x, (v, o) in e.writes.items():
+                y, used = target(e, x)
+                if used:
+                    v = v and (evs[used[-1]].writes[y][0][0], v[1])
+                    via[eid, y] = (frozenset(used), x)
+                w[y] = (v, o)
+                if isinstance(eid, tuple) and x == eid[1]:
+                    fslot[eid] = y
+            eff[eid] = w
+        return eff, via, fslot, target
+
+    def heads(self, state):
+        """Step 2 with renames (ADR 0072): the writers of each slot that nothing replaced. An
+        event replaces a write it saw if it wrote the slot where that write was in its own
+        view: where the renames it saw took it. So a version people saw and changed never
+        comes back, wherever later renames take it. Then a pure rename's write of its new
+        slot yields to a version that followed it there and saw every version it moved, so
+        that a concurrent edit wins over a mere move and loses nothing."""
+        eff, via, fslot, target = self.effective(state)
+        evs = [self.events[eid] for eid in state]
+        none = (frozenset(), None)
+
+        def over(w, e, s):  # w saw e's write of slot s, and wrote where it saw it
+            return e.id in w.past and target(e, s, w.past)[0] in w.writes
+
+        def heads_of(ws, x):
+            return [e for e in ws if not any(over(w, e, via.get((e.id, x), none)[1] or x)
+                                             for w in evs if w is not e)]
+
+        writers = defaultdict(list)
+        for eid in state:
+            for x in eff[eid]:
+                writers[x].append(self.events[eid])
+        heads = {x: heads_of(ws, x) for x, ws in writers.items()}
+        for x, hs in list(heads.items()):
+            def yields(r, e):  # e moved here through r and saw every version r moved
+                return r.id in via.get((e.id, x), none)[0] and eff[e.id][x][0] is not None and any(
+                    y == x and pure and seen <= e.past for y, pure, seen in r.renames.values())
+            gone = [r for r in hs if any(yields(r, e) for e in hs)]
+            if gone:
+                writers[x] = [e for e in writers[x] if e not in gone]
+                for e in gone:
+                    eff[e.id] = {y: w for y, w in eff[e.id].items() if y != x}
+                heads[x] = heads_of(writers[x], x)
+        return eff, via, fslot, {x: hs for x, hs in heads.items() if hs}
 
     def present(self, state):
         """Tree of the catalogue of a state, where each version is shown, unsettled slots."""
         if state in self.memo:
             return self.memo[state]
-        writers = defaultdict(list)
-        for eid in state:
-            for x in self.events[eid].writes:
-                writers[x].append(self.events[eid])
-        heads = {x: [e for e in ws if not any(e.id in w.past for w in ws)] for x, ws in writers.items()}
+        eff, via, fslot, heads = self.heads(state)
         versions = []
         for x, hs in heads.items():
             best = {}  # one version per content: names that differ only in case agree
             for e in hs:
-                v, o = e.writes[x]
+                v, o = eff[e.id][x]
                 if v is not None and (v[1] not in best or self.order(o) < self.order(best[v[1]][1])):
                     best[v[1]] = (v, o)
             versions += [(self.order(o), x, repr(v), v, o) for v, o in best.values()]
@@ -235,7 +338,7 @@ class New:
             return "/".join(folders_ + parts[-1:])
 
         # The versions a conflict event placed at one of their slot's copies (step 5).
-        copied = {(eid[1], o) for eid in state if isinstance(eid, tuple)
+        copied = {(fslot.get(eid, eid[1]), o) for eid in state if isinstance(eid, tuple)
                   for y, (v, o) in self.events[eid].writes.items() if y != eid[1] and v}
         placed, shown, later = set(), defaultdict(list), []
         for _, x, _, v, o in versions:
@@ -255,7 +358,7 @@ class New:
             shown[x].append((v, conflict_name(path, c.who, c.when, n), o))
         unsettled = sorted(x for x, s in shown.items() if len(s) > 1 or s[0][1] != s[0][0][0])  # moved
         tree = expand((path, v[1]) for s in shown.values() for v, path, _ in s)
-        self.memo[state] = (tree, shown, unsettled, heads)
+        self.memo[state] = (tree, shown, unsettled, heads, eff, fslot, via)
         return self.memo[state]
 
     def accepted(self, cid):
@@ -273,14 +376,15 @@ class New:
     def notices(self, cids):
         """Open conflicts: not yet seen by a contribution, or seen and not yet resolved."""
         state = frozenset().union(*(self.judge(c)[2] for c in cids if self.judge(c)[0]))
-        shown = self.present(state)[1]
-        out = {x for x in self.present(state)[2] if conflicted(shown[x])}
+        _, shown, unsettled, _, eff, fslot, _ = self.present(state)
+        out = {x for x in unsettled if conflicted(shown[x])}
         for eid in state:
             ev = self.events[eid]
             if ev.conflict:
-                if not any(eid in e.past and (e.resolves & {eid[1]} or e.writes.keys() & ev.writes.keys())
+                x = fslot.get(eid, eid[1])
+                if not any(eid in e.past and (e.resolves & {x} or eff[e.id].keys() & eff[eid].keys())
                            for e in map(self.events.get, state) if not isinstance(e.id, tuple)):
-                    out.add(eid[1])
+                    out.add(x)
         return out
 
 
@@ -367,19 +471,6 @@ class Old:
         return min((commits[c].when, commits[c].device, c) for c in plain)
 
 
-class Op:
-    def __init__(self, device, when, kind, *args, needs=(), conflict=None):
-        self.device, self.when, self.kind, self.args = device, when, kind, args
-        self.needs, self.conflict = set(needs), conflict
-
-
-class Case:
-    def __init__(self, name, devices, genesis, ops, shows):
-        self.name, self.devices, self.genesis, self.ops, self.shows = name, devices, genesis, ops, shows
-        self.names = [d for d, _ in devices]
-        self.person = dict(devices)
-
-
 class Run:
     """One case in one mode: the commit graph that every schedule shares."""
 
@@ -398,12 +489,12 @@ class Run:
             self.vals[cid] = units(self.commits[cid].tree, key=str)
         return self.vals[cid]
 
-    def commit(self, cid, parents, tree, device, person, who, when, op=None, resolve=()):
+    def commit(self, cid, parents, tree, device, person, who, when, op=None, resolve=(), renames=()):
         if cid not in self.commits:
             past = frozenset().union(*(self.anc(p) for p in parents))
             seq = sum(1 for a in past if self.commits[a].device == device and self.commits[a].op)
             self.commits[cid] = Commit(cid, parents, tree, device, person, who, when, op, resolve,
-                                       seq + (1 if op else 0))
+                                       seq + (1 if op else 0), renames)
         return cid
 
     def merge(self, device, a, b):
@@ -436,16 +527,18 @@ class Run:
             return False
         if op.conflict and not copies_of(self.commits[t].tree, op.conflict):
             return False
+        if op.kind == "rename" and op.args[0] not in self.commits[t].tree:
+            return False  # nothing to rename on this device's main
         return not clashes(self.edit(st, name)[0])  # else capture holds the save back
 
     def act(self, st, name):
         devs, done = st
         i = self.case.names.index(self.case.ops[name].device)
         s, t = devs[i]
-        view, parents, who, when, resolve = self.edit(st, name)
+        view, parents, who, when, resolve, renames = self.edit(st, name)
         op = self.case.ops[name]
         cid = self.commit(hid("op", name, parents), parents, view, op.device, self.case.person[op.device],
-                          who, when, name, resolve)
+                          who, when, name, resolve, renames)
         tip = t if op.kind == "propose" else cid
         return (devs[:i] + ((s | {cid}, tip),) + devs[i + 1:], done | {(name, cid)})
 
@@ -456,12 +549,13 @@ class Run:
         s, t = devs[self.case.names.index(op.device)]
         view, parents = dict(self.commits[t].tree), (t,)
         person = self.case.person[op.device]
-        who, when, resolve, a = person, op.when, (), op.args
+        who, when, resolve, renames, a = person, op.when, (), (), op.args
         if op.kind in ("set", "propose"):
             for path, key in a:
                 drop(view, path) if key is None else view.__setitem__(path, key)
-        elif op.kind == "rename":
-            view[a[1]] = view.pop(a[0])
+        elif op.kind == "rename":  # capture saw a[0] go and a[1] come alike (ADR 0072)
+            view[a[1]] = view.pop(a[0]) if len(a) == 2 else (view.pop(a[0]), a[2])[1]
+            renames = ((a[0], a[1]),)
         elif op.kind == "keep":  # Keep mine / Keep Paul's: one version, no copies
             for u in copies_of(view, a[0]) + [u for x, (u, _) in units(view).items() if x == fold(a[0])]:
                 drop(view, u)
@@ -487,7 +581,7 @@ class Run:
                     while conflict_name(path, who, when, n) in view:
                         n += 1
                     view[conflict_name(path, who, when, n)] = p.tree[path]
-        return view, parents, who, when, resolve
+        return view, parents, who, when, resolve, renames
 
 
 class Checker:
@@ -630,104 +724,6 @@ def show(tree):
     return "{" + ", ".join(f"{p}: {k}" for p, k in sorted(tree.items())) + "}"
 
 
-def t(h, m):
-    return 60 * h + m
-
-
-TEAM = (("X", "Alice"), ("Y", "Bob"), ("Z", "Paul"))
-ALICE2 = (("X", "Alice"), ("Y", "Alice"), ("Z", "Bob"))
-A, B, P = "team/a.txt", "team/b.txt", "team/R.pages"
-CASES = [
-    Case("add-add", TEAM, {}, {
-        "A": Op("X", t(14, 1), "set", (A, "kA")),
-        "B": Op("Y", t(14, 2), "set", (A, "kB")),
-        "C": Op("Z", t(14, 2), "set", (A, "kC"))},
-        "three adds of one name: the first keeps it, the others get copies"),
-    Case("edit-edit", ALICE2, {A: "k0"}, {
-        "A": Op("X", t(14, 2), "set", (A, "kA")),
-        "B": Op("Y", t(14, 2), "set", (A, "kB")),
-        "C": Op("Z", t(14, 1), "set", (A, "kC"))},
-        "three edits; Alice's two copies of one minute are told apart by ' 2'"),
-    Case("edit-delete", TEAM, {A: "k0", B: "k1"}, {
-        "A": Op("X", t(14, 1), "set", (A, "kA")),
-        "B": Op("Y", t(14, 2), "set", (A, None), (B, "kB")),
-        "C": Op("Z", t(14, 3), "set", (B, None))},
-        "on two paths, a modification survives a concurrent deletion"),
-    Case("rename-edit", TEAM, {A: "k0"}, {
-        "A": Op("X", t(14, 1), "rename", A, B),
-        "B": Op("Y", t(14, 2), "set", (A, "kB")),
-        "C": Op("Z", t(14, 3), "set", (B, "kC"))},
-        "no rename tracking: the edit stays at the old name, the rename adds the new one"),
-    Case("case", TEAM, {}, {
-        "A": Op("X", t(14, 1), "set", ("team/Photo.jpg", "kA")),
-        "B": Op("Y", t(14, 2), "set", ("team/photo.jpg", "kB")),
-        "C": Op("Z", t(14, 3), "set", ("team/PHOTO.jpg", "kA"))},
-        "names equal after folding are one slot; one content under two spellings is one version"),
-    Case("unicode", TEAM, {}, {
-        "A": Op("X", t(14, 1), "set", ("team/Straße/a.txt", "kA")),
-        "B": Op("Y", t(14, 2), "set", ("team/STRASSE/b.txt", "kB")),
-        "C": Op("Z", t(14, 3), "set", ("team/strasse", "kC"))},
-        "full case folding: one folder under the first spelling; a file gives way to a folder"),
-    Case("package", TEAM, {P + "/index.xml": "k0", P + "/data/p.bin": "k1"}, {
-        "A": Op("X", t(14, 1), "set", (P + "/index.xml", "kA")),
-        "B": Op("Y", t(14, 2), "set", (P + "/data/p.bin", "kB")),
-        "C": Op("Z", t(14, 3), "set", (P, None))},
-        "a package is one slot: two whole packages, never a mix; the deletion yields"),
-    Case("supersede", TEAM, {A: "k0"}, {
-        "A": Op("X", t(14, 1), "set", (A, "kA")),
-        "B": Op("Y", t(14, 2), "set", (A, "kB")),
-        "C": Op("Z", t(14, 3), "set", (A, "kC")),
-        "D": Op("X", t(14, 4), "set", (A, "kD"), needs="AB")},
-        "an edit made after seeing a conflict replaces the name and keeps the copies it saw"),
-    Case("keep-mine", TEAM, {A: "k0"}, {
-        "A": Op("X", t(14, 1), "set", (A, "kA")),
-        "B": Op("Y", t(14, 2), "set", (A, "kB")),
-        "K": Op("Y", t(14, 5), "keep", A, "kB", needs="AB", conflict=A),
-        "E": Op("X", t(14, 6), "set", (A, "kE"), needs="AB")},
-        "Keep mine races a new edit of the name"),
-    Case("keep-both", TEAM, {A: "k0"}, {
-        "A": Op("X", t(14, 1), "set", (A, "kA")),
-        "B": Op("Y", t(14, 2), "set", (A, "kB")),
-        "K": Op("X", t(14, 5), "keepboth", A, needs="AB", conflict=A),
-        "E": Op("Y", t(14, 6), "edit_copy", A, "kB", "kE", needs="AB", conflict=A),
-        "C": Op("Z", t(14, 7), "set", (A, "kC"), needs="AB")},
-        "Keep both races an edit of the copy and an edit of the name"),
-    Case("decision", (("X", "Alice"), ("Y", "Alice"), ("Z", "Paul")), {"alice/a.txt": "k0", B: "k1"}, {
-        "P": Op("Z", t(14, 1), "propose", ("alice/a.txt", "kP")),
-        "D": Op("X", t(14, 3), "adopt", "P", needs="P"),
-        "E": Op("Y", t(14, 2), "set", ("alice/a.txt", "kE")),
-        "F": Op("Z", t(14, 4), "set", (B, "kF"))},
-        "Alice adopts Paul's suggestion while her phone edits the file"),
-]
-
-# Fixed histories (spec 05 §5.2 case table): steps, device X's tree, open conflicts.
-C1, C2, C3 = (f" (Bob, {DAY} 14h02)", f" (Paul, {DAY} 14h02)", f" (Paul, {DAY} 14h03)")
-EXAMPLES = [
-    ("add-add", "A B C X<Y X<Z", {A: "kA", f"team/a{C1}.txt": "kB", f"team/a{C2}.txt": "kC"}, {A}),
-    ("edit-edit", "A B C X<Y X<Z", {A: "kC", f"team/a (Alice, {DAY} 14h02).txt": "kA",
-                                    f"team/a (Alice, {DAY} 14h02 2).txt": "kB"}, {A}),
-    ("edit-delete", "A B C X<Y X<Z", {A: "kA", B: "kB"}, set()),
-    ("rename-edit", "A B C X<Y X<Z", {A: "kB", B: "k0", f"team/b{C3}.txt": "kC"}, {B}),
-    ("case", "A B C X<Y X<Z", {"team/Photo.jpg": "kA", f"team/photo{C1}.jpg": "kB"}, {"team/photo.jpg"}),
-    ("unicode", "A B C X<Y X<Z", {"team/Straße/a.txt": "kA", "team/Straße/b.txt": "kB",
-                                  f"team/strasse{C3}": "kC"}, {"team/strasse"}),
-    ("package", "A B C X<Y X<Z", {P + "/index.xml": "kA", P + "/data/p.bin": "k1",
-                                  f"team/R{C1}.pages/index.xml": "k0", f"team/R{C1}.pages/data/p.bin": "kB"},
-     {"team/r.pages"}),
-    ("supersede", "A B C Z<X X<Y D X<Z", {A: "kC", f"team/a{C1}.txt": "kB",
-                                          f"team/a (Alice, {DAY} 14h04).txt": "kD"}, {A}),
-    ("keep-mine", "A B Y<X K X<Y", {A: "kB"}, set()),
-    ("keep-mine", "A B Y<X X<Y K E X<Y", {A: "kB", f"team/a (Alice, {DAY} 14h06).txt": "kE"}, {A}),
-    ("keep-both", "A B X<Y", {A: "kA", f"team/a{C1}.txt": "kB"}, {A}),
-    ("keep-both", "A B X<Y K", {A: "kA", f"team/a{C1}.txt": "kB"}, set()),
-    ("keep-both", "A B X<Y Y<X E X<Y", {A: "kA", f"team/a{C1}.txt": "kE"}, set()),
-    ("decision", "P E F X<Z D X<Y", {"alice/a.txt": "kP", f"alice/a (Alice, {DAY} 14h02).txt": "kE",
-                                     B: "kF"}, {"alice/a.txt"}),
-    ("decision", "P E F X<Y X<Z D", {"alice/a.txt": "kE", f"alice/a (Paul, {DAY} 14h01).txt": "kP",
-                                     B: "kF"}, set()),
-]
-
-
 def examples():
     """Replay each fixed history in the new mode; return the mismatches."""
     bad = []
@@ -749,19 +745,6 @@ def examples():
     return bad
 
 
-# Laws that old and naive fail, on every schedule of at most OLD_PULLS pulls (spec 05 §5.2).
-# old: merge commits are changes (weaknesses a, c); naive: copies vanish (b); both: no folding (d).
-OLD_PULLS = 5
-MERGES_AS_CHANGES = ("algebra", "order", "seen", "tree")
-EXPECTED = {
-    "old": dict({c.name: MERGES_AS_CHANGES for c in CASES}, case=("names",), unicode=("names",)),
-    "naive": {"add-add": ("kept", "order", "tree"), "edit-edit": ("kept", "order", "tree"),
-              "case": ("names",), "unicode": ("names",), "package": ("kept", "order", "tree"),
-              "supersede": ("kept", "order", "tree"), "keep-mine": ("kept", "tree"),
-              "keep-both": ("kept", "order", "seen", "tree")},
-}
-
-
 def dump(ch, path):
     """Every commit of a case's run, parents first, with the oracle's verdict."""
     run, eng = ch.run, ch.eng
@@ -769,6 +752,7 @@ def dump(ch, path):
         for cid, c in run.commits.items():
             rec = {"id": cid, "parents": list(c.parents), "tree": c.tree, "device": c.device,
                    "person": c.person, "who": c.who, "when": c.when, "resolve": list(c.resolve),
+                   "renames": [list(r) for r in c.renames],
                    "accepted": eng.accepted(cid), "contribution": eng.contribution(cid)}
             if rec["accepted"]:
                 rec["open"] = sorted(eng.notices([cid]))

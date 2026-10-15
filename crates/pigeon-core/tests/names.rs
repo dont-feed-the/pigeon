@@ -120,6 +120,7 @@ fn names_that_do_not_collide_never_change(tc: TestCase) {
         device: "G".to_owned(),
         who: "Alice".to_owned(),
         person: pigeon_core::roster::PersonId("alice".to_owned()),
+        renames: vec![],
         when: Stamp { utc: 0, offset: 0 },
         resolves: vec![],
     };

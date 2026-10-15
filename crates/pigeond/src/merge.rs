@@ -63,6 +63,7 @@ async fn judge_commit(g: &Group, c: &str, parents: Vec<String>) -> Result<(), Er
         device: String::new(),
         who: String::new(),
         person: pigeon_core::roster::PersonId(String::new()),
+        renames: Vec::new(),
         when: Stamp { utc: secs, offset },
         resolves: Vec::new(),
     };

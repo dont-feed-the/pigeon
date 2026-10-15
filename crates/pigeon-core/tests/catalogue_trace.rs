@@ -126,6 +126,7 @@ impl World {
             device: device.to_owned(),
             who: PEOPLE[d].to_owned(),
             person: pigeon_core::roster::PersonId(PEOPLE[d].to_owned()),
+            renames: Vec::new(),
             when: Stamp {
                 utc: DAY + 60 * self.minute,
                 offset: 0,

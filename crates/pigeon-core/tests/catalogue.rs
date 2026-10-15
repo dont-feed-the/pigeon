@@ -1,5 +1,6 @@
 //! Laws of the catalogue merge (05 §5.2; ADR 0012), as hegel-rust property
-//! tests on random schedules of three devices: saves, deletions, renames,
+//! tests on random schedules of three devices: saves, deletions, renames
+//! (recorded or not, ADR 0072),
 //! *Keep mine*, *Keep both*, edits of copies and pulls, over names that
 //! fold alike, packages and folders. Laws: `tree` (an accepted commit's
 //! tree is the catalogue of its ancestry), `names`, `kept`, `seen`,
@@ -108,19 +109,41 @@ impl Sim {
         out
     }
 
+    /// The history, one commit a line, for a failed law's message.
+    fn history(&self) -> String {
+        let mut out = String::new();
+        for id in &self.order {
+            let c = &self.commits[id];
+            out.push_str(&format!(
+                "\n  {id} on {:?} by {} at {}{}: {:?} ({:?})",
+                c.meta.parents,
+                c.meta.device,
+                c.meta.when.utc - DAY,
+                if c.meta.renames.is_empty() {
+                    String::new()
+                } else {
+                    format!(" renaming {:?}", c.meta.renames)
+                },
+                c.tree,
+                self.engine.outcome(id),
+            ));
+        }
+        out
+    }
+
     fn tree(&self, d: usize) -> &Tree<String> {
         &self.commits[&self.tips[d]].tree
     }
 
-    /// Device `d` saves `tree` (with `resolves`), unless capture would hold
-    /// it back; it keeps a proposal beside its main.
+    /// Device `d` saves `tree` (with `resolves` and `renames`), unless
+    /// capture would hold it back; it keeps a proposal beside its main.
     fn save(
         &mut self,
         d: usize,
         tree: Tree<String>,
         when: i64,
         offset: i32,
-        resolves: Vec<String>,
+        (resolves, renames): (Vec<String>, Vec<(String, String)>),
     ) {
         if portable_tree(tree.keys().map(String::as_str)).is_err() {
             return;
@@ -130,6 +153,7 @@ impl Sim {
         let device = ["X", "Y", "Z"][d];
         let mut m = meta(&id, vec![self.tips[d].clone()], device, who, when, resolves);
         m.when.offset = offset;
+        m.renames = renames;
         let out = self.add(m, tree, who);
         self.known[d].insert(id.clone());
         if out != Outcome::Proposal {
@@ -190,9 +214,24 @@ impl Sim {
                 tree.remove(&paths[int(tc, 255) % paths.len()]);
             }
             3 if !paths.is_empty() => {
-                let from = &paths[int(tc, 255) % paths.len()];
-                let k = tree.remove(from).unwrap();
-                tree.insert(PATHS[int(tc, 13)].to_owned(), k);
+                // A rename, its content kept or changed, which capture
+                // records when the new name is free (ADR 0072).
+                let from = paths[int(tc, 255) % paths.len()].clone();
+                let k = tree.remove(&from).unwrap();
+                let to = PATHS[int(tc, 13)].to_owned();
+                let k = if int(tc, 3) == 0 {
+                    format!("k{}", int(tc, 3))
+                } else {
+                    k
+                };
+                let fresh = !tree.contains_key(&to) && to != from;
+                tree.insert(to.clone(), k);
+                let renames = if fresh && int(tc, 3) > 0 {
+                    vec![(from, to)]
+                } else {
+                    vec![]
+                };
+                return self.save(d, tree, when, offset, (vec![], renames));
             }
             4 if !copies.is_empty() => {
                 // Keep mine: one version at the name, no copies.
@@ -215,7 +254,7 @@ impl Sim {
                     .find(|p| !p.contains(" (") && is_copy_of(copy, p))
                 {
                     let p = p.clone();
-                    return self.save(d, tree, when, offset, vec![p]);
+                    return self.save(d, tree, when, offset, (vec![p], vec![]));
                 }
                 return;
             }
@@ -230,7 +269,7 @@ impl Sim {
                 return self.pull(d, j);
             }
         }
-        self.save(d, tree, when, offset, vec![]);
+        self.save(d, tree, when, offset, (vec![], vec![]));
     }
 }
 
@@ -248,6 +287,7 @@ fn meta(
         device: device.to_owned(),
         who: who.to_owned(),
         person: pigeon_core::roster::PersonId(who.to_owned()),
+        renames: Vec::new(),
         when: Stamp {
             utc: when,
             offset: 0,
@@ -295,7 +335,12 @@ fn check_views(sim: &mut Sim) {
         let known: Vec<String> = sim.known[d].iter().cloned().collect();
         let view = sim.engine.catalogue(&known);
         let cat = view.tree.clone();
-        assert_eq!(&cat, sim.tree(d), "law tree: device {d} shows its main");
+        assert_eq!(
+            &cat,
+            sim.tree(d),
+            "law tree: device {d} shows its main{}",
+            sim.history()
+        );
         assert!(
             portable_tree(cat.keys().map(String::as_str)).is_ok(),
             "law names: {cat:?}"
@@ -323,7 +368,8 @@ fn check_views(sim: &mut Sim) {
             for k in mine.difference(&bases[*c]) {
                 assert!(
                     cur.contains(k) || removed.contains(k),
-                    "law kept: {k:?} of {c} left {cat:?}"
+                    "law kept: {k:?} of {c} left {cat:?}{}",
+                    sim.history()
                 );
             }
         }
@@ -337,7 +383,8 @@ fn check_views(sim: &mut Sim) {
         let unseen: Vec<_> = cur.difference(&seen).collect();
         assert!(
             unseen.is_empty(),
-            "law seen: {unseen:?} are in {cat:?} but in no newest contribution"
+            "law seen: {unseen:?} are in {cat:?} but in no newest contribution{}",
+            sim.history()
         );
     }
 }
@@ -356,11 +403,12 @@ fn the_catalogue_keeps_its_laws_on_every_schedule(tc: TestCase) {
             );
         }
     }
-    for (path, origin) in sim.engine.copies() {
+    for (path, origin, wrote) in sim.engine.copies() {
         let person = &sim.commits[&origin].person;
         assert!(
-            may(person, &path, true),
-            "law authority: copy {path} is not allowed to {person}"
+            may(person, &path, true) || may(person, &wrote, true),
+            "law authority: copy {path} is not allowed to {person}{}",
+            sim.history()
         );
     }
     for (i, j) in [(0, 1), (0, 2), (1, 0), (2, 0)] {

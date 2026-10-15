@@ -11,13 +11,17 @@
 //! `tests/catalogue_oracle.rs`): order, tree, kept, seen, names, algebra
 //! and authority of 05 §5.2. `.pigeon/` slots never get conflict names:
 //! the first version keeps the name (the roster's is the fold of 04 §4.8,
-//! which pigeond writes).
+//! which pigeond writes). A contribution's renames (`Pigeon-Renamed:`,
+//! ADR 0072) carry the writes of the old slot made concurrently with them
+//! to the new one ([`Engine::effective`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use crate::names::{self, Stamp};
 use crate::roster::PersonId;
+
+mod rename;
 
 /// The most catalogues an engine keeps computed.
 const MEMO: usize = 256;
@@ -109,6 +113,8 @@ pub struct Meta {
     pub when: Stamp,
     /// The paths of its `Pigeon-Resolved:` trailers (*Keep both*).
     pub resolves: Vec<String>,
+    /// Its renames, old path and new, from its `Pigeon-Renamed:` trailers.
+    pub renames: Vec<(String, String)>,
 }
 
 /// Representative order (05 §5.2 step 4): author time, device, that
@@ -149,6 +155,32 @@ pub struct View<K> {
     /// events that wrote or deleted it, a copy's being its version's.
     pub writers: BTreeMap<String, BTreeSet<PersonId>>,
     heads: BTreeMap<String, Vec<usize>>,
+    eff: Effective<K>,
+}
+
+/// The writes of a state's events with renames followed (ADR 0072): those
+/// of the events whose writes moved, the renames each moved write followed,
+/// and where each conflict event's frozen slot went.
+#[derive(Clone, Debug)]
+struct Effective<K> {
+    writes: BTreeMap<usize, BTreeMap<String, Write<K>>>,
+    /// For each moved write, by event and new slot: the renames it
+    /// followed, and the slot it was written at.
+    via: BTreeMap<(usize, String), (BTreeSet<usize>, String)>,
+    fslot: BTreeMap<usize, String>,
+    /// The pure renames' writes of their new slot that yielded.
+    yielded: BTreeSet<(usize, String)>,
+}
+
+impl<K> Default for Effective<K> {
+    fn default() -> Self {
+        Self {
+            writes: BTreeMap::new(),
+            via: BTreeMap::new(),
+            fslot: BTreeMap::new(),
+            yielded: BTreeSet::new(),
+        }
+    }
 }
 
 /// How a commit was judged.
@@ -200,6 +232,9 @@ struct Event<K> {
     resolves: BTreeSet<String>,
     /// For a conflict event, the slot it froze and whether people are told.
     frozen: Option<(String, bool)>,
+    /// For a contribution, each slot it renamed: the new slot, whether the
+    /// content stayed the same, and the events whose versions it moved.
+    renames: BTreeMap<String, (String, bool, BTreeSet<usize>)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -318,6 +353,7 @@ impl<K: Clone + Ord> Engine<K> {
             writes,
             resolves: BTreeSet::new(),
             frozen: None,
+            renames: BTreeMap::new(),
         };
         let e = self.add(Key::Commit(meta.id.clone()), event);
         self.set(&meta.id, Outcome::Contribution, BTreeSet::from([e]))
@@ -457,12 +493,44 @@ impl<K: Clone + Ord> Engine<K> {
             .collect();
         let past: BTreeSet<usize> = state.union(&frozen).copied().collect();
         self.origin(meta, &past);
+        // A rename counts when it deletes a file of the base and adds one the
+        // base lacks, packages aside; it is pure when the content did not
+        // change (ADR 0072). It keeps the versions it moved: the events that
+        // head the old slot with a version, a pure rename standing for the
+        // versions it moved in turn.
+        let moved = |x: &str| -> BTreeSet<usize> {
+            let hs = view.heads.get(x).into_iter().flatten().copied();
+            hs.filter(|&h| matches!(self.writes_of(&view.eff, h).get(x), Some(Some(_))))
+                .flat_map(|h| {
+                    let mut rs = self.events[h].renames.values();
+                    rs.find(|(y, pure, _)| y == x && *pure)
+                        .map_or_else(|| BTreeSet::from([h]), |r| r.2.clone())
+                })
+                .collect()
+        };
+        let renames = meta
+            .renames
+            .iter()
+            .filter(|(a, b)| names::unit(a) == a && names::unit(b) == b)
+            .map(|(a, b)| (names::fold(a), names::fold(b)))
+            .filter_map(|(x, y)| {
+                let (from, to) = (old.get(&x)?, new.get(&y)?);
+                let files = matches!(
+                    (&from.content, &to.content),
+                    (Content::File(_), Content::File(_))
+                );
+                let ok = files && !new.contains_key(&x) && !old.contains_key(&y);
+                ok.then(|| (moved(&x), (y, from.content == to.content)))
+                    .map(|(seen, (y, pure))| (x, (y, pure, seen)))
+            })
+            .collect();
         let event = Event {
             commit: Some(meta.id.clone()),
             past: past.clone(),
             writes,
             resolves,
             frozen: None,
+            renames,
         };
         let e = self.add(Key::Commit(meta.id.clone()), event);
         let mut out = past;
@@ -485,7 +553,14 @@ impl<K: Clone + Ord> Engine<K> {
             })
             .collect();
         writes.entry(x.to_owned()).or_insert(None);
-        let heads: BTreeSet<usize> = view.heads.get(x).into_iter().flatten().copied().collect();
+        // It saw the heads, and the renames that moved them here (ADR 0072).
+        let mut heads: BTreeSet<usize> = BTreeSet::new();
+        for &h in view.heads.get(x).into_iter().flatten() {
+            heads.insert(h);
+            if let Some((used, _)) = view.eff.via.get(&(h, x.to_owned())) {
+                heads.extend(used.iter().copied());
+            }
+        }
         let values = writes
             .iter()
             .map(|(y, w)| (y.clone(), w.as_ref().map(|w| w.0.clone())))
@@ -506,6 +581,7 @@ impl<K: Clone + Ord> Engine<K> {
             writes,
             resolves: BTreeSet::new(),
             frozen,
+            renames: BTreeMap::new(),
         };
         self.add(key, event)
     }
@@ -534,24 +610,19 @@ impl<K: Clone + Ord> Engine<K> {
             })
     }
 
+    /// An event's writes as `eff` moved them, else its own.
+    fn writes_of<'a>(&'a self, eff: &'a Effective<K>, e: usize) -> &'a BTreeMap<String, Write<K>> {
+        eff.writes.get(&e).unwrap_or(&self.events[e].writes)
+    }
+
     fn compute(&self, state: &BTreeSet<usize>) -> View<K> {
-        let mut writers: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
-        for &e in state {
-            for x in self.events[e].writes.keys() {
-                writers.entry(x).or_default().push(e);
-            }
-        }
-        let mut heads = BTreeMap::new();
+        let mut eff = self.effective(state);
+        let heads = self.heads(state, &mut eff);
         let mut versions: Vec<(Rank, String, Version<K>, String)> = Vec::new();
-        for (x, ws) in &writers {
-            let hs: Vec<usize> = ws
-                .iter()
-                .copied()
-                .filter(|e| !ws.iter().any(|w| self.events[*w].past.contains(e)))
-                .collect();
+        for (x, hs) in &heads {
             let mut best: BTreeMap<&Content<K>, (Rank, &Version<K>, &str)> = BTreeMap::new();
-            for &e in &hs {
-                if let Some(Some((v, o))) = self.events[e].writes.get(*x) {
+            for &e in hs {
+                if let Some(Some((v, o))) = self.writes_of(&eff, e).get(x) {
                     let r = self.order(o);
                     let better = best.get(&v.content).is_none_or(|b| (&r, v) < (&b.0, b.1));
                     if better {
@@ -561,9 +632,8 @@ impl<K: Clone + Ord> Engine<K> {
             }
             versions.extend(
                 best.into_values()
-                    .map(|(r, v, o)| (r, (*x).to_owned(), v.clone(), o.to_owned())),
+                    .map(|(r, v, o)| (r, x.clone(), v.clone(), o.to_owned())),
             );
-            heads.insert((*x).to_owned(), hs);
         }
         versions.sort();
         let mut spell: BTreeMap<String, String> = BTreeMap::new();
@@ -595,17 +665,19 @@ impl<K: Clone + Ord> Engine<K> {
         };
         // The versions a conflict event placed at one of their slot's copies:
         // that copy holds them, or what a person who saw them saved there.
+        // The slot is where the frozen one went, if a rename moved it.
         let copied: BTreeSet<(&str, &str)> = state
             .iter()
             .filter_map(|&e| {
                 let ev = &self.events[e];
-                Some((ev, ev.frozen.as_ref()?.0.as_str()))
+                let x = ev.frozen.as_ref()?.0.as_str();
+                Some((ev, x, eff.fslot.get(&e).map_or(x, String::as_str)))
             })
-            .flat_map(|(ev, x)| {
+            .flat_map(|(ev, x, at)| {
                 ev.writes
                     .iter()
                     .filter(move |(y, _)| y.as_str() != x)
-                    .filter_map(move |(_, w)| Some((x, w.as_ref()?.1.as_str())))
+                    .filter_map(move |(_, w)| Some((at, w.as_ref()?.1.as_str())))
             })
             .collect();
         let mut placed: BTreeSet<String> = BTreeSet::new();
@@ -662,22 +734,28 @@ impl<K: Clone + Ord> Engine<K> {
                 .flatten()
                 .map(|s| (s.path.as_str(), &s.version.content)),
         );
+        let writers = self.writers(state, &eff);
         View {
             tree,
             shown,
             unsettled,
-            writers: self.writers(state),
+            writers,
             heads,
+            eff,
         }
     }
 
-    /// The persons who wrote each slot in `state`: a write's version's
-    /// author, a deletion's contribution's.
-    fn writers(&self, state: &BTreeSet<usize>) -> BTreeMap<String, BTreeSet<PersonId>> {
+    /// The persons who wrote each slot in `state`, renames followed: a
+    /// write's version's author, a deletion's contribution's.
+    fn writers(
+        &self,
+        state: &BTreeSet<usize>,
+        eff: &Effective<K>,
+    ) -> BTreeMap<String, BTreeSet<PersonId>> {
         let mut out: BTreeMap<String, BTreeSet<PersonId>> = BTreeMap::new();
         for &e in state {
             let ev = &self.events[e];
-            for (x, w) in &ev.writes {
+            for (x, w) in self.writes_of(eff, e) {
                 let origin = match w {
                     Some((_, o)) => Some(o),
                     None => ev.commit.as_ref(),
@@ -702,17 +780,23 @@ impl<K: Clone + Ord> Engine<K> {
             .filter(|x| view.shown.get(*x).is_some_and(|s| conflicted(s)))
             .cloned()
             .collect();
+        let eff = &view.eff;
+        let slots = |e: usize| {
+            self.writes_of(eff, e)
+                .keys()
+                .filter(move |y| !eff.yielded.contains(&(e, (*y).clone())))
+        };
         for &f in &state {
-            let ev = &self.events[f];
-            let Some((x, true)) = &ev.frozen else {
+            let Some((x, true)) = &self.events[f].frozen else {
                 continue;
             };
+            let x = eff.fslot.get(&f).unwrap_or(x);
+            let frozen: BTreeSet<&String> = slots(f).collect();
             let closed = state.iter().any(|&e| {
                 let c = &self.events[e];
                 c.commit.is_some()
                     && c.past.contains(&f)
-                    && (c.resolves.contains(x)
-                        || c.writes.keys().any(|y| ev.writes.contains_key(y)))
+                    && (c.resolves.contains(x) || slots(e).any(|y| frozen.contains(y)))
             });
             if !closed {
                 out.insert(x.clone());
@@ -721,17 +805,24 @@ impl<K: Clone + Ord> Engine<K> {
         out
     }
 
-    /// Every version a conflict event placed, with the commit it
-    /// represents: the `authority` law asks that each be allowed to it.
-    pub fn copies(&self) -> Vec<(String, String)> {
+    /// Every version a conflict event placed, with the commit it represents
+    /// and the path that commit wrote it at: the `authority` law asks that
+    /// each be allowed to it where it is, or, if a rename moved it, where
+    /// it was written (ADR 0072).
+    pub fn copies(&self) -> Vec<(String, String, String)> {
+        let wrote = |v: &Version<K>, o: &String| {
+            let e = self.keys.get(&Key::Commit(o.clone()))?;
+            let mut ws = self.events[*e].writes.values().flatten();
+            ws.find(|w| w.0.content == v.content)
+                .map(|w| w.0.path.clone())
+        };
         self.events
             .iter()
             .filter(|e| e.frozen.is_some())
-            .flat_map(|e| {
-                e.writes
-                    .values()
-                    .flatten()
-                    .map(|(v, o)| (v.path.clone(), o.clone()))
+            .flat_map(|e| e.writes.values().flatten())
+            .map(|(v, o)| {
+                let at = wrote(v, o).unwrap_or_else(|| v.path.clone());
+                (v.path.clone(), o.clone(), at)
             })
             .collect()
     }
