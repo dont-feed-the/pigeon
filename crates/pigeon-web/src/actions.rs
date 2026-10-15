@@ -52,6 +52,35 @@ pub async fn decline(
     act(&web, &token, &d.form, request, "/suggestions").await
 }
 
+/// The form that keeps or frees a folder.
+#[derive(serde::Deserialize)]
+pub struct FolderForm {
+    /// The session's form token.
+    form: String,
+    /// The folder, as an absolute path.
+    folder: String,
+}
+
+/// *Keep on this computer*: `pigeon keep FOLDER`.
+pub async fn keep(
+    State(web): State<Arc<Web>>,
+    Extension(token): Extension<FormToken>,
+    Form(f): Form<FolderForm>,
+) -> Response {
+    let request = Request::Keep { folder: f.folder };
+    act(&web, &token, &f.form, request, "/files").await
+}
+
+/// *Free up space*: `pigeon free FOLDER`.
+pub async fn free(
+    State(web): State<Arc<Web>>,
+    Extension(token): Extension<FormToken>,
+    Form(f): Form<FolderForm>,
+) -> Response {
+    let request = Request::Evict { folder: f.folder };
+    act(&web, &token, &f.form, request, "/files").await
+}
+
 /// Asks `request` if `form` is the session's token, and shows the result.
 async fn act(web: &Web, token: &FormToken, form: &str, request: Request, back: &str) -> Response {
     if token.0.is_empty() || form != token.0 {

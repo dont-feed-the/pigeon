@@ -99,6 +99,8 @@ pub enum Request {
     /// `pigeon open`: a link to the web interface holding a single-use
     /// token (10 §10.3).
     OpenWeb,
+    /// The group's folders, for the web's Files page (ux.md §6.2).
+    Folders,
     /// `pigeon remove-computer NAME`.
     RemoveDevice {
         /// The computer's name in the roster.
@@ -225,6 +227,13 @@ pub enum Response {
     Proposals {
         /// Oldest first.
         proposals: Vec<Suggestion>,
+    },
+    /// The answer to `Folders`.
+    Folders {
+        /// The group's folder on this computer.
+        root: String,
+        /// Its top-level folders, by path.
+        folders: Vec<Folder>,
     },
     /// The answer to `Conflicts`.
     Conflicts {
@@ -369,6 +378,21 @@ pub struct Machine {
     /// Whether it is this computer.
     #[serde(default)]
     pub this_device: bool,
+}
+
+/// A top-level folder of the group (ux.md §6.2).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Folder {
+    /// Its path in the group's folder.
+    pub path: String,
+    /// The files under it.
+    pub files: u64,
+    /// Those not safe yet.
+    pub not_safe: u64,
+    /// The least safe state of its files.
+    pub state: State,
+    /// Whether its space is freed on this computer (or is being freed).
+    pub freed: bool,
 }
 
 /// A pending proposal (04 §4.5).

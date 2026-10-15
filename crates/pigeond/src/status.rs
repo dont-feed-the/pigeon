@@ -206,7 +206,7 @@ fn reason(s: &State<String>, k: usize, names: &BTreeMap<String, String>) -> Opti
 
 /// The worst of `states`, the lowest in rank (missing, local, published,
 /// …); protected when there is none.
-fn worst<'a>(states: impl Iterator<Item = &'a State<String>>) -> api::State {
+pub(crate) fn worst<'a>(states: impl Iterator<Item = &'a State<String>>) -> api::State {
     states
         .min_by_key(|s| rank(*s))
         .map_or(api::State::Protected, proto_state)

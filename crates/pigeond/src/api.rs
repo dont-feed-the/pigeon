@@ -174,6 +174,10 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             Some(web) => vec![said("web-login", &[("url", text(&web.login_url()))])],
             None => not_in_this_build("open"),
         },
+        Request::Folders => match d.default_group() {
+            Some(g) => vec![crate::folders::folders(&g, &d.device).await],
+            None => vec![problem("not-in-group", &[], None)],
+        },
         Request::History { path } => crate::history::history(d, Path::new(&path)).await,
         Request::RemoveDevice { name } => crate::history::remove_device(d, &name).await,
         Request::Doctor { details } => crate::history::doctor(d, details).await,

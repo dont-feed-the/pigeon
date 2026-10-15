@@ -233,3 +233,17 @@ web-decline = Refuser
 web-decline-note = Pourquoi (facultatif)
 web-back = Retour
 web-form-expired = Cette page n'est plus à jour. Rechargez-la et réessayez.
+web-nav-files = Fichiers
+web-keep = Garder sur cet ordinateur
+web-free = Libérer l'espace
+folders-none = Le groupe n'a encore aucun dossier.
+folder-row =
+    { $files ->
+        [one] { $path } : { $state }, { $files } fichier
+       *[other] { $path } : { $state }, { $files } fichiers
+    }
+folder-row-freed =
+    { $files ->
+        [one] { $path } : { $state }, { $files } fichier ; son espace est libéré sur cet ordinateur
+       *[other] { $path } : { $state }, { $files } fichiers ; leur espace est libéré sur cet ordinateur
+    }

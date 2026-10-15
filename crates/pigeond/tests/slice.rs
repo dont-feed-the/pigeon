@@ -85,6 +85,13 @@ fn local_published_protected_then_free_and_keep() {
         "big.bin is still here",
         &all,
     );
+    // The web's Files page says so, and offers to keep it (10 §10.3).
+    let web = common::web::login(&lap);
+    let files = common::web::page(&web, "/files");
+    assert!(
+        files.contains("sub: Safe, 1 file; its space is freed") && files.contains("/files/keep"),
+        "{files}"
+    );
     assert_eq!(status(&lap).state, State::Protected);
 
     let kept = pigeon(&lap, &["keep", sub.to_str().unwrap()]);

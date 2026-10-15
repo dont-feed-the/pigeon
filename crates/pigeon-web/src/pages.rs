@@ -20,9 +20,10 @@ use pigeon_proto::{Request, Response};
 
 use crate::{FormToken, Web};
 
-/// The sections, as (path, message id); Files and Settings come later.
+/// The sections, as (path, message id); Settings comes later.
 const SECTIONS: &[(&str, &str)] = &[
     ("/", "web-nav-home"),
+    ("/files", "web-nav-files"),
     ("/suggestions", "web-nav-suggestions"),
     ("/machines", "web-nav-machines"),
 ];
@@ -36,7 +37,7 @@ article{border-top:1px solid #ccc;padding:.5rem 0}form{display:inline-block;marg
 const SCRIPT: &str = "new EventSource('/events').addEventListener('headline',\
 e=>{document.getElementById('headline').textContent=e.data})";
 
-fn page(r: &Renderer, here: &str, headline: &str, body: &Markup) -> Html<String> {
+pub(crate) fn page(r: &Renderer, here: &str, headline: &str, body: &Markup) -> Html<String> {
     let lang = r.catalogue().lang().to_string();
     Html(
         html! {
@@ -115,7 +116,7 @@ async fn status(web: &Web, r: &Renderer) -> (String, Vec<String>) {
     (all.pop().unwrap_or_default(), rest)
 }
 
-fn list(items: &[String]) -> Markup {
+pub(crate) fn list(items: &[String]) -> Markup {
     html! { ul { @for i in items { li { (i.trim()) } } } }
 }
 

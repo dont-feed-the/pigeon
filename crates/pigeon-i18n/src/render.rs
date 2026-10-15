@@ -151,6 +151,22 @@ impl Renderer {
         self.cat.format(&msg)
     }
 
+    /// A top-level folder's line (ux.md §6.2).
+    pub fn folder(&self, f: &pigeon_proto::api::Folder) -> String {
+        let id = if f.freed {
+            "folder-row-freed"
+        } else {
+            "folder-row"
+        };
+        let files = i64::try_from(f.files).unwrap_or(i64::MAX);
+        self.cat.format(
+            &crate::Message::new(id)
+                .arg("path", f.path.clone())
+                .arg("state", self.state(f.state))
+                .arg("files", files),
+        )
+    }
+
     /// A suggestion waiting for a decision.
     pub fn suggestion(&self, p: &pigeon_proto::api::Suggestion) -> String {
         let saved = pigeon_proto::time::parse_rfc3339(&p.saved_at)
@@ -208,6 +224,12 @@ impl Renderer {
                     .collect(),
                 false,
             ),
+            Response::Folders { folders, .. } if folders.is_empty() => {
+                (vec![self.id("folders-none")], false)
+            }
+            Response::Folders { folders, .. } => {
+                (folders.iter().map(|f| self.folder(f)).collect(), false)
+            }
             Response::Done
             | Response::Hello { .. }
             | Response::Address { .. }

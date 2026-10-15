@@ -27,7 +27,14 @@ pub async fn serve(d: &Arc<Daemon>) {
     };
     let port = listener.local_addr().map_or(0, |a| a.port());
     let system = pigeon_i18n::system_languages(|k| std::env::var(k).ok());
-    let lang = pigeon_i18n::choose(&pigeon_i18n::Setting::Auto, &system);
+    // The `language` setting (11 §11.2), else the system's (10 §10.5).
+    let setting = d
+        .config
+        .language
+        .as_deref()
+        .and_then(pigeon_i18n::Setting::parse)
+        .unwrap_or(pigeon_i18n::Setting::Auto);
+    let lang = pigeon_i18n::choose(&setting, &system);
     let web = pigeon_web::Web::new(Arc::new(Backend(d.clone())), lang, port);
     let _ = std::fs::create_dir_all(&d.dirs.runtime);
     let _ = pigeon_sys::fs::write_atomic(

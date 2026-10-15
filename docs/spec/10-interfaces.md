@@ -37,6 +37,7 @@ result, progress events then a result, or a `Problem` (§10.6).
 | `GetSettings` · `SetSettings {…}` | `pigeon settings [KEY [VALUE]]` | Settings | [11 §11.2](11-local-state.md) |
 | `Doctor {details}` | `pigeon doctor [--details]` | Settings → Advanced | §10.7 |
 | `DebugBundle {peers}` | `pigeon debug bundle [--from NAME…]` | Settings → Advanced | [12](12-observability.md) |
+| `Folders` | `pigeon status` (by file) | Files | [08 §8.5](08-custody-loops.md) |
 | `Subscribe` | — | live updates (SSE) | §10.3 |
 
 - Request names are internal (ADR 0024: `evict`, `purge`, `reject`), CLI
@@ -71,9 +72,10 @@ result, progress events then a result, or a `Problem` (§10.6).
 Coded so far (`crates/pigeon-web`, `pigeond/src/web.rs`): the binding, the
 login token and cookie, the `Host`/`Origin` check, Home, Suggestions and
 Machines pages read through the same handler as the socket, and an SSE
-headline; *Accept* and *Decline* are `POST`s carrying a per-session form
-token. Not yet: Files, Settings, the other actions,
-axe-core.
+headline; Files lists the top-level folders (`Folders`) with *Keep on this
+computer* or *Free up space*; *Accept*, *Decline*, keep and free are `POST`s
+carrying a per-session form token. Not yet: Deleted files, a file's page,
+Settings, the other actions, axe-core.
 
 - Served by `pigeond`, rendered on the server; server-sent events refresh
   the headline and activity; pages work without JavaScript. It writes

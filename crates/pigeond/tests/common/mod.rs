@@ -11,6 +11,8 @@
 )]
 #![allow(clippy::print_stderr, reason = "tests")]
 
+pub mod web;
+
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};

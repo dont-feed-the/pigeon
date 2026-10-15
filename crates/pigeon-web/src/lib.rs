@@ -25,6 +25,7 @@ use axum::routing::{get, post};
 use pigeon_i18n::Catalogue;
 
 mod actions;
+mod files;
 mod pages;
 
 /// What a backend answers a request with: progress, then one result.
@@ -129,6 +130,9 @@ impl Web {
             .route("/machines", get(pages::machines))
             .route("/suggestions", get(pages::suggestions))
             .route("/events", get(pages::events))
+            .route("/files", get(files::files))
+            .route("/files/keep", post(actions::keep))
+            .route("/files/free", post(actions::free))
             .route("/suggestions/accept", post(actions::accept))
             .route("/suggestions/decline", post(actions::decline))
             .route_layer(middleware::from_fn_with_state(self.clone(), session))

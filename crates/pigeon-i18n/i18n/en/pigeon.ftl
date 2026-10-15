@@ -233,3 +233,17 @@ web-decline = Decline
 web-decline-note = Why (optional)
 web-back = Back
 web-form-expired = This page is out of date. Reload it and try again.
+web-nav-files = Files
+web-keep = Keep on this computer
+web-free = Free up space
+folders-none = The group has no folder yet.
+folder-row =
+    { $files ->
+        [one] { $path }: { $state }, 1 file
+       *[other] { $path }: { $state }, { $files } files
+    }
+folder-row-freed =
+    { $files ->
+        [one] { $path }: { $state }, 1 file; its space is freed on this computer
+       *[other] { $path }: { $state }, { $files } files; their space is freed on this computer
+    }
