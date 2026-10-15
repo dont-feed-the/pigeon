@@ -75,11 +75,16 @@ async fn one(g: &Group, t: &Tracer, now: i64, seq: u64, e: &Entry) -> Result<(),
         return record(g, &Record::Kept(seq, now));
     };
     let long_enough = now.saturating_sub(at) >= KEEP_SECONDS;
-    if !long_enough {
-        return Ok(());
-    }
     let written = !writers_clear(&st);
-    let old = long_enough && !written && is_old(&file, e.begin.old_key.as_deref());
+    // An aside of the old size is hashed; one of another size changed, and
+    // waits for the keep period without being read each round.
+    let same_size = e
+        .begin
+        .old_key
+        .as_deref()
+        .and_then(pigeon_core::capacity::key_size)
+        == Some(st.size);
+    let old = !written && same_size && is_old(&file, e.begin.old_key.as_deref());
     match decision(long_enough, written, false, old) {
         Release::Wait => return Ok(()),
         Release::Unlink if e.preserved.is_none() => {

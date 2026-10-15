@@ -27,6 +27,42 @@ fn seed_recovered(l: &Laptop, bytes: &[u8]) {
     }
 }
 
+/// An aside nobody writes that still holds the old key goes at once, not
+/// after the keep period (S11: steady disk use after re-thinning); one
+/// that changed waits for it.
+#[tokio::test]
+async fn an_unchanged_aside_is_released_before_the_keep_period() {
+    let Some(l) = laptop().await else { return };
+    let bytes = b"the old version, unchanged";
+    let seq = 1;
+    let aside = l.g.files.aside(seq);
+    std::fs::write(&aside, bytes).unwrap();
+    let sha = pigeond::net::sync::sha256_file(&aside).unwrap();
+    let key = format!("SHA256E-s{}--{sha}.txt", bytes.len());
+    let now = pigeond::util::now();
+    for r in [
+        Record::Begin(Begin {
+            seq,
+            path: "a.txt".into(),
+            old_key: Some(key),
+            new_key: None,
+            stat: None,
+            stage: None,
+            aside: aside.to_string_lossy().into(),
+        }),
+        Record::End(seq, End::Done),
+        Record::Kept(seq, now),
+    ] {
+        pigeond::journal_file::append(&l.g.files.install_journal(), &r).unwrap();
+    }
+    pigeond::asides::release_at(&l.g, &l.t, now).await;
+    assert!(
+        !aside.exists(),
+        "an unchanged aside waited for the keep period"
+    );
+    assert!(pigeond::journal_file::read(&l.g.files.install_journal()).is_empty());
+}
+
 #[tokio::test]
 async fn a_crash_before_preserving_cannot_adopt_a_colliding_file() {
     let Some(l) = laptop().await else { return };

@@ -235,14 +235,16 @@ pub enum Release {
     Capture,
 }
 
-/// The release rule of step 9: after the keep period, an aside nobody
-/// writes is unlinked if it is *linked* or still holds the old key, and
-/// captured otherwise.
+/// The release rule of step 9: an aside nobody writes is unlinked at once
+/// if it is *linked* or still holds the old key, as nothing then holds
+/// what it alone has; one that changed is captured after the keep period.
 pub fn release(kept_long_enough: bool, written: bool, linked: bool, holds_old: bool) -> Release {
-    if !kept_long_enough || written {
+    if written {
         Release::Wait
     } else if linked || holds_old {
         Release::Unlink
+    } else if !kept_long_enough {
+        Release::Wait
     } else {
         Release::Capture
     }
