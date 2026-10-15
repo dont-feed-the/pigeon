@@ -147,10 +147,14 @@ pub async fn relay(
     let mut client_buf = vec![0u8; 64 * 1024];
     let mut server_buf = vec![0u8; 64 * 1024];
     let mut client_open = true;
+    let mut seen = Seen::new();
     'session: loop {
         let actions = tokio::select! {
             n = recv.read(&mut client_buf), if client_open => match n {
-                Ok(Some(n)) if n > 0 => filter.from_client(&client_buf[..n]),
+                Ok(Some(n)) if n > 0 => {
+                    seen.up(&client_buf[..n]);
+                    filter.from_client(&client_buf[..n])
+                }
                 _ => {
                     client_open = false;
                     let _ = to_server.shutdown().await;
@@ -158,7 +162,10 @@ pub async fn relay(
                 }
             },
             n = from_server.read(&mut server_buf) => match n {
-                Ok(n) if n > 0 => filter.from_server(&server_buf[..n]),
+                Ok(n) if n > 0 => {
+                    seen.down(&server_buf[..n]);
+                    filter.from_server(&server_buf[..n])
+                }
                 _ => break 'session,
             },
             Some(done) = syncs.join_next(), if !syncs.is_empty() => match done {
@@ -202,7 +209,50 @@ pub async fn relay(
         }
     }
     syncs.abort_all();
+    seen.log(device);
     let _ = to_server.shutdown().await;
     let _ = send.finish();
     let _ = tokio::time::timeout(Duration::from_secs(5), send.stopped()).await;
+}
+
+/// What one relayed session carried, for the debug log: its length, its
+/// bytes each way and the tail of each direction.
+struct Seen {
+    started: std::time::Instant,
+    up: (usize, Vec<u8>),
+    down: (usize, Vec<u8>),
+}
+
+impl Seen {
+    const TAIL: usize = 96;
+
+    fn new() -> Self {
+        Seen {
+            started: std::time::Instant::now(),
+            up: (0, Vec::new()),
+            down: (0, Vec::new()),
+        }
+    }
+
+    fn keep(side: &mut (usize, Vec<u8>), bytes: &[u8]) {
+        side.0 += bytes.len();
+        side.1.extend_from_slice(bytes);
+        let excess = side.1.len().saturating_sub(Self::TAIL);
+        side.1.drain(..excess);
+    }
+
+    fn up(&mut self, bytes: &[u8]) {
+        Self::keep(&mut self.up, bytes);
+    }
+
+    fn down(&mut self, bytes: &[u8]) {
+        Self::keep(&mut self.down, bytes);
+    }
+
+    fn log(&self, device: &str) {
+        tracing::debug!(peer = %device, ms = self.started.elapsed().as_millis(),
+            up = self.up.0, down = self.down.0,
+            up_tail = %String::from_utf8_lossy(&self.up.1),
+            down_tail = %String::from_utf8_lossy(&self.down.1), "relay-ended");
+    }
 }

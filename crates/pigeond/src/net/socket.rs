@@ -214,21 +214,24 @@ async fn client(net: Arc<Net>, stream: UnixStream) -> Result<(), NetError> {
                     }
                 };
                 reply(&mut wr, id, &Response::Connected).await?;
+                let started = std::time::Instant::now();
                 let rest = std::mem::take(&mut decoder).into_rest();
                 let up = async {
                     if !rest.is_empty() {
                         send.write_all(&rest).await.map_err(std::io::Error::other)?;
                     }
-                    tokio::io::copy(&mut rd, &mut send).await?;
+                    let n = tokio::io::copy(&mut rd, &mut send).await?;
                     send.finish().map_err(std::io::Error::other)?;
-                    Ok::<_, std::io::Error>(())
+                    Ok::<_, std::io::Error>(n)
                 };
                 let down = async {
-                    tokio::io::copy(&mut recv, &mut wr).await?;
+                    let n = tokio::io::copy(&mut recv, &mut wr).await?;
                     wr.shutdown().await?;
-                    Ok::<_, std::io::Error>(())
+                    Ok::<_, std::io::Error>(n)
                 };
                 let (a, b) = tokio::join!(up, down);
+                tracing::debug!(peer = %device, ms = started.elapsed().as_millis(),
+                    up = ?a, down = ?b, "connect-ended");
                 a?;
                 b?;
                 return Ok(());
