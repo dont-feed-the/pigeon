@@ -88,7 +88,10 @@ def excerpt(output, size=3000):
 def run(jar, config, module, java, workers, heap):
     with tempfile.TemporaryDirectory() as metadir:
         memory = [f"-Xmx{heap}"] if heap else []
-        command = [java, *memory, "-XX:+UseParallelGC", "-cp", str(jar), "tlc2.TLC",
+        # TLC evaluates a recursive operator on Java's stack: the trace specs
+        # recurse over a whole history, and a 1 MiB thread stack overflowed on
+        # CI now and then (AuthorityTrace, seeds 11 and 19 of v0.2's runs).
+        command = [java, *memory, "-Xss16m", "-XX:+UseParallelGC", "-cp", str(jar), "tlc2.TLC",
                    "-workers", workers, "-metadir", metadir,
                    "-config", f"{config}.cfg", module]
         done = subprocess.run(command, cwd=MODELS, capture_output=True, text=True)
