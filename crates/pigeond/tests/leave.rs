@@ -114,6 +114,13 @@ fn a_laptop_leaves_once_a_peer_has_its_removal() {
         "the leaver never forgot the group",
         &all,
     );
+    // Config removal starts cleanup; it does not acknowledge its end.
+    eventually_within(
+        180,
+        || !fa2.join(".git").exists() && !a2.home.join("config/device-key").exists(),
+        "the leaver never finished repository and key cleanup",
+        &all,
+    );
     assert_eq!(
         std::fs::read_to_string(fa2.join("a.txt")).unwrap(),
         "first\n"
