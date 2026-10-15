@@ -130,8 +130,9 @@ Coded so far: `pigeon-core::notify` decides (laws in
 round, a day apart, repeated only for a changed situation, and told once
 the day has passed); `pigeond/src/notices.rs` reads the situation after
 the rounds, at most every five minutes, and shows one grouped notification
-through `notify-rust`, a click opening the web (Linux). Not yet: the
-launcher.
+through `notify-rust`, a click opening the web (Linux). `pigeon-install`
+writes the launcher: `<data>/applications/pigeon.desktop` on Linux,
+`~/Applications/pigeon.app` on macOS, each running `pigeon open`.
 
 ## 10.5 Messages and languages (ADR 0028)
 

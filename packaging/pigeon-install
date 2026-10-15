@@ -6,8 +6,10 @@
 # places it: the programs in PREFIX/bin, the one they replace kept in
 # PREFIX/bin.previous, git-annex by install-git-annex (14 §14.3), a link to
 # `pigeon` in ~/.local/bin, and pigeond started as the systemd user unit or
-# the launchd agent of 14 §14.4, restarted when it ran. `pigeon update` runs
-# this script; installing the release already here changes nothing.
+# the launchd agent of 14 §14.4, restarted when it ran, and the launcher
+# that runs `pigeon open` (10 §10.4, ADR 0029): an XDG `.desktop` entry, or
+# ~/Applications/pigeon.app on macOS. `pigeon update` runs this script;
+# installing the release already here changes nothing.
 #
 #   curl -fsSL https://github.com/mariogeiger/pigeon/releases/latest/download/pigeon-install | sh
 #   pigeon-install [--version vX.Y.Z] [--rollback] [--prefix DIR] [--no-service]
@@ -119,6 +121,45 @@ UNIT
   fi
 }
 
+# Writes the launcher named "pigeon", which runs `pigeon open` (ADR 0029).
+add_launcher() {
+  if [ "$os" = macos ]; then
+    app="$HOME/Applications/pigeon.app/Contents"
+    mkdir -p "$app/MacOS"
+    cat >"$app/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>pigeon</string>
+  <key>CFBundleIdentifier</key><string>org.pigeon.launcher</string>
+  <key>CFBundleExecutable</key><string>pigeon</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>LSUIElement</key><true/>
+</dict>
+</plist>
+PLIST
+    printf '#!/bin/sh\nexec "%s/bin/pigeon" open\n' "$prefix" >"$app/MacOS/pigeon"
+    chmod +x "$app/MacOS/pigeon"
+    say "the launcher is ~/Applications/pigeon.app"
+  else
+    apps="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+    mkdir -p "$apps"
+    cat >"$apps/pigeon.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=pigeon
+Comment=See whether the group's files are safe
+Comment[fr]=Voir si les fichiers du groupe sont en sécurité
+Exec="$prefix/bin/pigeon" open
+Icon=folder-remote
+Terminal=false
+Categories=Utility;FileTools;
+DESKTOP
+    say "the launcher is $apps/pigeon.desktop"
+  fi
+}
+
 # Puts ~/.local/bin/pigeon on PREFIX/bin/pigeon and says whether it is the one found.
 link_pigeon() {
   mkdir -p "$HOME/.local/bin"
@@ -186,5 +227,6 @@ rm -rf "$prefix/bin.previous"
 if [ -d "$prefix/bin" ]; then mv "$prefix/bin" "$prefix/bin.previous"; fi
 mv "$place/release/bin" "$prefix/bin"
 link_pigeon
+add_launcher
 start_service
 say "pigeon $version is installed in $prefix"

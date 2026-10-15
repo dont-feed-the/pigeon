@@ -90,6 +90,7 @@ jobs:
           [ "$("$p/bin/pigeon" --version)" = "pigeon ${TAG#v}" ]
           . third_party/git-annex/VERSION
           [ "$("$p/git-annex/bin/git-annex" version --raw)" = "$PIGEON_VERSION" ]
+          grep -qx "Exec=\"$p/bin/pigeon\" open" ~/.local/share/applications/pigeon.desktop
           sh "$PIGEON_RELEASES/download/$TAG/pigeon-install" --prefix "$p" --no-service | grep -q 'already installed'
       - name: the release
         run: |
