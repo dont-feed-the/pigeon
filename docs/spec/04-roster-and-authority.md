@@ -99,7 +99,7 @@ A commit *c* other than the genesis, with **A(c)** its accepted parents and
 | 4 | if Δ changes the roster, the new roster is valid (§4.2) |
 | 5 | every path Δ adds is portable ([05 §5.4](05-catalogue-and-names.md)) |
 | 6 | `tree(c)` is **well formed** ([07 §7.9](07-capture-and-install.md)): folders and files of mode 100644 or 100755 only; outside `.pigeon/` and the root `.gitattributes`, each file a git-annex pointer to a `SHA256E` key with its size; inside them, plain blobs |
-| 7 | every parent in X(c) is a proposal (§4.5) that *c* adopts: `signer(c)` is one of its deciders under R(p) for every *p* in A(c), and `tree(c)` holds its change (ADR 0051) |
+| 7 | every parent in X(c) is a proposal (§4.5) that *c* adopts: `signer(c)` is one of its deciders under R(p) for every *p* in A(c), or an admin with Force (§4.6) **[no ADR]**, and `tree(c)` holds its change: each version it wrote, and no path it deleted unless B changed it since (ADR 0051) |
 
 A commit breaking rule 6 is **malformed**: neither accepted nor a proposal,
 and its keys are not references ([08 §8.6](08-custody-loops.md)). A commit is
@@ -130,13 +130,16 @@ Consequences, checked by `Authority.tla` (`AuthorisedContent`,
   roster change applies to the *children* of its commit.
 - **In code:** `pigeon-core::sig` signs and verifies (`tests/sig.rs`) and
   `authority::judge` gives the verdict for one roster R(p)
-  (`tests/authority.rs`, against an oracle of §4.3's tables). `pigeond`
-  (`merge.rs`) judges every commit once, parents first, against
-  B = `catalogue::Engine`'s catalogue of its accepted parents, under each
-  accepted parent's roster (rules 2 and 3) and with rule 5, and a parent
-  outside A(c) must be a proposal it adopts (rule 7, `proposal::adopts`);
-  a merge of parents whose rosters differ (§4.8) must hold their fold,
-  after which its roster leaves Δ. Capture splits a batch with `authority::split`
+  (`tests/authority.rs`, against an oracle of §4.3's tables).
+  `commit::judge` gives it for any parents: under each accepted parent's
+  roster (rules 2 and 3), with rule 5, and a parent outside A(c) must be a
+  proposal it adopts (rule 7, `proposal::adopts`). Its verdicts on random
+  histories of commits, decisions and adoptions are `Authority.tla`'s
+  (`tests/authority_trace.rs`, `AuthorityTrace`). `pigeond` (`merge.rs`)
+  judges every commit once, parents first, with it, against
+  B = `catalogue::Engine`'s catalogue of its accepted parents; a merge of
+  parents whose rosters differ (§4.8) must hold their fold, after which its
+  roster leaves Δ. Capture splits a batch with `authority::split`
   (§4.5). `pigeond` signs every commit it writes with the device key, and
   accept takes the last accepted of a peer's commits in topological order:
   by locality, an accepted commit may hold refused ones, the proposals it
@@ -156,7 +159,7 @@ adoption and concurrent decisions are ADR 0051, checked by `Authority.tla`
 | Point | Rule |
 |---|---|
 | shape **[no ADR]** | one proposal per capture batch and set of deciders, on the `main` it captured on; a later save of a path in a pending proposal of this device stacks a new one on it, shown as one suggestion (ADR 0034) |
-| deciders | the persons allowed (§4.3) to make every change of its adoption on `main`; if nobody, the admins, with Force; recomputed when `main` moves |
+| deciders | the persons allowed (§4.3) to make every change of its adoption on `main`, where a conflict copy is a new file; if nobody, the admins, with Force; recomputed when `main` moves |
 | revisions | a decision names one commit: adopting it adopts its ancestors in the chain; rejecting it leaves later ones pending |
 | state (computed) | the first that holds: *accepted* (an accepted commit descends), *rejected* or *withdrawn* (a decision, [07 §7.6](07-capture-and-install.md)), *superseded*, *pending*; revoked commits alike |
 | accept | on a `main` holding all it builds on, merge (`main`, proposal) with its change; a path changed meanwhile keeps both, the proposal's under its conflict name ([05 §5.2–5.3](05-catalogue-and-names.md)) |
@@ -181,9 +184,10 @@ changed meanwhile and every path the proposal did not change, adds only
 conflict copies, and is the proposal itself on an unchanged `main`).
 `pigeon decline` commits the decision `rejected`; `authority::judge`
 accepts a new `.pigeon/decisions/<commit>.toml` from a decider of that
-proposal (`rejected`) or its author (`withdrawn`), never a changed one,
-and lets the commit wait when this device does not keep the proposal
-(`a_decision_is_accepted_iff_its_signer_may_make_it`). Nothing writes a
+proposal (`rejected`) or its author, the person of its signer under the
+roster of its base (`withdrawn`), never a changed one, and lets the commit
+wait when this device does not keep the proposal
+(`a_decision_is_accepted_iff_its_signer_may_make_it`; `commit::about`). Nothing writes a
 withdrawal yet: it comes with `pigeon resolve` (07 §7.6).
 
 A rejection or withdrawal is a commit of `.pigeon/decisions/<commit>.toml`:

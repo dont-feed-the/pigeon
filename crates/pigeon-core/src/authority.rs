@@ -2,7 +2,7 @@
 //! with one accepted parent: who signed it, what it may change, and whether
 //! its tree is well formed, with the deciders of a proposal and who may
 //! decline or withdraw it (04 §4.5). Merges and adoptions (rule 7) are
-//! pigeond's `merge`, on `proposal`; rule 5 is 05 §5.4's `names`.
+//! `commit`'s, on `proposal`; rule 5 is 05 §5.4's `names`.
 //!
 //! [`judge`] is a pure function of the commit object, the parent's roster
 //! R(p) and both trees. Laws (`tests/authority.rs`): a commit signed by a

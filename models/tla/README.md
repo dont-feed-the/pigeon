@@ -66,12 +66,12 @@ the run that last changed a model.
 | `Roster_table` | `Roster` | `violation:AdminRemains` | merging `roster.toml` per TOML table, a clean merge of the concurrent self-retirements leaves no admin |
 | `Roster_adr0009` | `Roster` | `violation:MergeAlwaysPossible` | ADR 0009's rule (a merge of concurrent roster changes signed by an admin under both parents) leaves the concurrent self-retirements unmergeable: no person is admin on both sides |
 | `Authority_decide` | `Authority` | `pass` (fast set) | issue #10: suggestions made, revised, adopted, rejected and withdrawn between the honest admin a and owner b, who also moves b's folder. Every decider can adopt; every decision is a decider's or the author's; every version entered through an allowed commit; an honest tree is the catalogue of its history; quiet devices agree (ADR 0051): 34 245 states, 20 829 distinct, 7 s |
-| `Authority_faulty` | `Authority` | `pass` (fast set) | the same against a faulty member who signs any change, merge or decision on any parent: 370 794 states, 150 479 distinct, 55 s |
+| `Authority_faulty` | `Authority` | `pass` (fast set) | the same against a faulty member who signs any change, merge or decision on any parent: 371 002 states, 150 579 distinct, 55 s |
 | `Authority_revoke` | `Authority` | `pass` (fast set) | c's laptop, once removed, signs on old parents and adds a key for c. Nothing it signed unseen, and no key it added, counts on any device (ADR 0051): 547 210 states, 188 525 distinct, 66 s |
 | `Authority_live` | `Authority` | `pass` (fast set) | `Converge` under fairness of fetches and merges, with the removed laptop signing on old parents: 938 states, 399 distinct, 11 s |
 | `Authority_decide4`, `Authority_faulty2`, `Authority_revoke2` | `Authority` | `pass` (full set) | four changes; two faulty commits, with transfers; saves and the removed laptop's merges: 1 178 047, 1 360 807 and 1 645 961 distinct states, 10, 7 and 6 minutes |
 | `Authority_proposal` | `Authority` | `violation:DecidersCanAdopt` | deciders under the roster at the proposal's parents (ADR 0051's words). a suggests a change in b's folder, then gives the folder to himself. b still decides, but rule 3 rejects b's adoption (3 states) |
-| `Authority_mixed` | `Authority` | `violation:DecidersCanAdopt` | the proposal's own diff under today's roster. a adds the root file; c suggests adding it and a file in F. b decides, but adopting keeps both versions of the root file, which modifies it, and only the admins may |
+| `Authority_mixed` | `Authority` | `pass` (fast set) | the proposal's own diff under today's roster. It used to fail: a adds the root file, c suggests adding it and a file in F, b decides, and adopting keeps both versions of the root file, which the model took for a change only the admins may make. A version beside the old ones is a conflict copy, a new file that anyone may add at the root, as the code judges it (`AuthorityTrace`): in this world the proposal's diff now gives deciders who can adopt, 240 s on 2 workers |
 | `Authority_noforce` | `Authority` | `violation:DecidersCanAdopt` | a suggestion that nobody may make falls to the admins, whose adoption folder rules reject without Force |
 | `Authority_fakeadopt` | `Authority` | `violation:AdoptionHoldsContent` | without rule 7, c's clean merge of `main` with a's suggestion marks it accepted with none of its content |
 | `Authority_base` | `Authority` | `violation:AuthorisedContent` | proposals counted in a merge's base, without rule 7: a suggestion's content enters with no decider |
@@ -87,8 +87,8 @@ the run that last changed a model.
 | `RosterTrace_bad` | `RosterTrace` | `trace:rejected:7` | the same run with the roster of its last checked step altered: the verdict names line 7 |
 | `AdmitTrace_good` | `AdmitTrace` | `trace:accepted` (fast set) | a plan of pigeon-core's `capacity::admit`, written by `crates/pigeon-core/tests/admit_trace.rs` (seed 1): the instance it planned, then each admission or deferral in the code's order, is a behaviour of `Admission` (13 §13.3) |
 | `AdmitTrace_bad` | `AdmitTrace` | `trace:rejected:4` | the same plan with its last decision reversed: the verdict names line 4 |
-| `AuthorityTrace_good` | `AuthorityTrace` | `trace:accepted` (fast set) | a history judged by pigeon-core's `authority::judge`, written by `crates/pigeon-core/tests/authority_trace.rs` (seed 1): each commit, on one accepted parent and signed by any of four devices, with versions, roster edits (`F` transferred, device 4 added, a device removed) and a Force, gets `Judge`'s verdict in `Authority` (04 §4.4, 13 §13.3) |
-| `AuthorityTrace_bad` | `AuthorityTrace` | `trace:rejected:15` | the same history with the verdict on its last commit reversed: the verdict names line 15 |
+| `AuthorityTrace_good` | `AuthorityTrace` | `trace:accepted` (fast set) | a history judged by pigeon-core's `commit::judge`, written by `crates/pigeon-core/tests/authority_trace.rs` (seed 1): each commit, on one accepted parent and signed by any of four devices with or without a Force, writes versions with roster edits (`F` transferred, device 4 added, a device removed), or rejects or withdraws a proposal the code keeps, or adopts one (as `proposal::adoption` writes it, or with a change dropped or one more), and gets `Judge`'s verdict in `Authority` (04 §4.4, §4.5, 13 §13.3) |
+| `AuthorityTrace_bad` | `AuthorityTrace` | `trace:rejected:21` | the same history with the verdict on its last commit reversed: the verdict names line 21 |
 | `CatalogueTrace_good` | `CatalogueTrace` | `trace:accepted` (fast set) | a history of three devices (Alice, Bob, Paul) merged by pigeon-core's `catalogue::Engine`, written by `crates/pigeon-core/tests/catalogue_trace.rs` (seed 1): saves, deletions, renames, *Keep mine*, *Keep both*, edits of copies, suggestions in Alice's folder and pulls. Each commit, merges included, gets `Record`'s verdict, and an accepted one `View`'s catalogue (each version, where it is shown and the commit it represents) and `Open`'s conflicts (05 §5.2–5.3, 13 §13.3) |
 | `CatalogueTrace_bad` | `CatalogueTrace` | `trace:rejected:28` | the same history with one version lost from the catalogue of its last accepted commit: the verdict names line 28 |
 | `CaptureInstall_own` | `CaptureInstall` | `pass` (fast set) | issue #1, [07 §7.5](../../docs/spec/07-capture-and-install.md): capture and install of one path while a person writes in place, writes through a handle opened earlier, replaces atomically, creates and deletes at any instant, also while `pigeond` is down; the group changes or deletes the path; one crash. Nothing saved is lost (NoLoss); when idle, the path holds what the index says or the person's content (Journal); the index never calls a changed file clean (IndexHonest); what install moves away was captured (CaptureFirst), is the file it expected, and is written by nobody afterwards (NoOverwrite); a deletion the person made stays (DeletionKept); under fairness every save is captured (SavesCaptured) and the path ends at `current(p)` with no divergence and no kept aside (Converges). Own folder, two person actions: 122 560 states, 61 698 distinct, 9 s on 1 worker |
@@ -211,7 +211,12 @@ when the commit is written. A path's value is the set of versions that the
 newest changes of that path wrote: a conflict keeps several. This is the
 abstraction of the catalogue that `models/catalogue` checks in full
 ([05 §5.2](../../docs/spec/05-catalogue-and-names.md)). Increasing commit ids give the canonical order; `Roster` checks
-the fold's order and its edits.
+the fold's order and its edits. A value that keeps every version of the
+old one only adds to the path: in the code the new version is a conflict
+copy, a new file, which anyone may add at the root. A decision is never
+changed, and an admin may adopt with Force what its deciders would; rule 7
+holds a deletion unless the base changed the path since. `AuthorityTrace`
+found these three, where the code was right.
 
 The model found two things:
 
@@ -221,8 +226,9 @@ The model found two things:
   also keeps accepted commits out of `main` (`Authority_tipquiet`). ADR 0051
   revokes them instead.
 - **Deciders who cannot decide.** ADR 0051 judges deciders on the
-  proposal's parents, or on its own diff, so some deciders cannot adopt
-  (`Authority_proposal`, `Authority_mixed`). Admins cannot adopt without
+  proposal's parents, so some deciders cannot adopt (`Authority_proposal`;
+  on its own diff, `Authority_mixed` failed too until a conflict copy
+  counted as a new file). Admins cannot adopt without
   Force (`Authority_noforce`). And a merge that adopts nothing marks a
   proposal accepted (`Authority_fakeadopt`). ADR 0051 judges deciders at the
   decision and adds rule 7.

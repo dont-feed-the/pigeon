@@ -110,8 +110,11 @@ Cat(S) == [q \in CPaths |-> UNION {cm[x].tree[q] : x \in Newest(S, q)}]
 TreeOf(X) == Cat(Counting(HistSet(X)))
 R(x) == RosterOf(HistSet({x}))           \* the roster in force for x's children
 
-(* Folder rules (04 §4.3) for person u changing q from old. *)
-AllowedC(u, q, old, Ro) == IF q = "f" THEN u = Ro.own ELSE old = {} \/ u \in Ro.adm
+(* Folder rules (04 §4.3) for person u changing q from old to new: F is
+   b's; at the root anyone adds, and only the admins, its stewards, change
+   or delete. A value that keeps every version of old only adds: a version
+   beside them is a conflict copy, a new file (05 §5.3). *)
+AllowedC(u, q, old, new, Ro) == IF q = "f" THEN u = Ro.own ELSE old \subseteq new \/ u \in Ro.adm
 
 (* Proposals (04 §4.5). The adoption on main x: a path the proposal changed
    gets its value, or both values if x changed it meanwhile. *)
@@ -127,12 +130,22 @@ Deciders(p, x) ==
   LET Ro == IF DecidersAt = "proposal" THEN R(cm[p].cbase) ELSE R(x)
       diff == IF DecidersAt = "decision" THEN ADiff(x, p) ELSE PDiff(p)
       old(q) == IF DecidersAt = "decision" THEN cm[x].tree[q] ELSE cm[cm[p].cbase].tree[q]
-      D == {u \in Persons : \A q \in diff : AllowedC(u, q, old(q), Ro)}
+      new(q) == IF DecidersAt = "decision" THEN AdoptTree(x, p)[q] ELSE cm[p].tree[q]
+      D == {u \in Persons : \A q \in diff : AllowedC(u, q, old(q), new(q), Ro)}
   IN IF D = {} THEN Ro.adm ELSE D
 Author(p) == R(cm[p].cbase).dev[cm[p].signer]
+(* tree holds the change of p on a base BT (rule 7): each version it wrote,
+   and nothing where it deleted a path that BT has not changed since. *)
+Holds(p, BT, tree) ==
+  \A q \in PDiff(p) : IF cm[p].tree[q] = {}
+                     THEN tree[q] = {} \/ BT[q] # cm[cm[p].cbase].tree[q]
+                     ELSE cm[p].tree[q] \subseteq tree[q]
 
 (* The verdict of a commit with parents P, signer s, tree, decisions D,
-   roster edits RE and Force F (04 §4.4 rules 1-4, and DecisionMerge). *)
+   roster edits RE and Force F (04 §4.4 rules 1-4, and DecisionMerge). A
+   decision is never changed: none names a proposal its base decided. A
+   parent outside A must be a proposal whose change the tree holds, adopted
+   by a decider or, with Force, an admin. *)
 Judge(P, s, tree, D, RE, F) ==
   LET A == {p \in P : cm[p].acc}
       BS == IF BaseOf = "accepted" THEN HistSet(A) ELSE Hist(P)
@@ -144,8 +157,9 @@ Judge(P, s, tree, D, RE, F) ==
                ELSE \A p \in A : s \in Present(R(p))
       rule3 == \A p \in AR :
                  LET Ro == R(p)  u == Ro.dev[s] IN
-                 /\ (\A q \in delta : AllowedC(u, q, BT[q], Ro)) \/ (F /\ u \in Ro.adm)
+                 /\ (\A q \in delta : AllowedC(u, q, BT[q], tree[q], Ro)) \/ (F /\ u \in Ro.adm)
                  /\ \A e \in D : /\ IsProposal(e.p)
+                                 /\ ~\E y \in Counting(BS) : \E o \in cm[y].dec : o.p = e.p
                                  /\ \/ DecisionRule = "members"
                                     \/ IF e.v = "rejected" THEN u \in Deciders(e.p, p)
                                        ELSE u = Author(e.p)
@@ -155,8 +169,9 @@ Judge(P, s, tree, D, RE, F) ==
       rule4 == Change(RosterOf(BS), RE).ok
       ruleX == \/ ~DecisionMerge
                \/ \A p \in P \ A : /\ IsProposal(p)
-                                   /\ \A a \in A : R(a).dev[s] \in Deciders(p, a)
-                                   /\ \A q \in PDiff(p) : cm[p].tree[q] \subseteq tree[q]
+                                   /\ \A a \in A : LET u == R(a).dev[s] IN
+                                                   u \in Deciders(p, a) \/ (F /\ u \in R(a).adm)
+                                   /\ Holds(p, BT, tree)
   IN [acc |-> A # {} /\ rule2 /\ rule3 /\ rule4 /\ ruleX, delta |-> delta]
 
 New(P, s, kind, tree, D, RE, F, cb) ==
@@ -203,7 +218,7 @@ Revise(d, p, q) ==
                   cm[p].cbase))
 Pending(d, p) == /\ p \in has[d] /\ IsProposal(p) /\ State(p, d) = "pending"
                  /\ HistSet({p}) \subseteq cm[head[d]].anc   \* pigeond merges its base first
-NeedsForce(u, x, p) == ~\A q \in ADiff(x, p) : AllowedC(u, q, cm[x].tree[q], R(x))
+NeedsForce(u, x, p) == ~\A q \in ADiff(x, p) : AllowedC(u, q, cm[x].tree[q], AdoptTree(x, p)[q], R(x))
 Adopt(d, p) ==
   LET x == head[d]
       c == New({x, p}, d, "adopt", AdoptTree(x, p), {}, {},
@@ -300,7 +315,7 @@ AuthorisedAt(y, q) ==
   /\ A # {}
   /\ \A p \in A : LET Ro == R(p)  u == Ro.dev[cm[y].signer] IN
                   /\ cm[y].signer \in Present(Ro)
-                  /\ AllowedC(u, q, old, Ro) \/ (cm[y].force /\ u \in Ro.adm)
+                  /\ AllowedC(u, q, old, cm[y].tree[q], Ro) \/ (cm[y].force /\ u \in Ro.adm)
 AuthorisedContent ==
   \A d \in Honest : LET S == Main(d)  T == Cat(S) IN
     \A q \in CPaths : \A v \in T[q] :
@@ -313,7 +328,7 @@ DecisionsByDeciders ==
       LET u == R(p).dev[cm[x].signer] IN
       IF e.v = "rejected" THEN u \in Deciders(e.p, p) ELSE u = Author(e.p)
 (* Each decider of a pending proposal can make a valid adoption of it. *)
-MayAdopt(u, x, p) == \A q \in ADiff(x, p) : AllowedC(u, q, cm[x].tree[q], R(x))
+MayAdopt(u, x, p) == \A q \in ADiff(x, p) : AllowedC(u, q, cm[x].tree[q], AdoptTree(x, p)[q], R(x))
                                            \/ (ForceAdopt /\ u \in R(x).adm)
 DecidersCanAdopt ==
   \A d \in Honest : \A p \in Ids : Pending(d, p) =>

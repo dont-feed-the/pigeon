@@ -4,19 +4,20 @@
 //! group's `catalogue::Engine`; and [`merge`] writes the merge of two
 //! accepted tips, whose tree is the catalogue of both (P5).
 //!
-//! A commit with several accepted parents is judged under each parent's
-//! roster R(p): with Δ = ∅ one roster that accepts its signer suffices;
-//! otherwise every one must accept it (rules 2 and 3). A parent that is not
-//! accepted must be a proposal the commit adopts (rule 7, [`adopted`]); a
+//! The rules are pigeon-core's `commit::judge`, here given what it needs
+//! from git and the engine: R(p) of each accepted parent, B(c), and for a
+//! parent that is not accepted, which must be a proposal the commit adopts
+//! (rule 7), its verdict against its base and both trees ([`adopted`]). A
 //! merge of parents whose rosters differ (a roster fork, 04 §4.8) must
-//! hold their fold (`fold`), which then leaves Δ. Rule 5 refuses a tree
-//! whose names Δ adds are not portable. [`adopt`] writes an adoption.
+//! hold their fold (`fold`), which then leaves Δ. [`adopt`] writes an
+//! adoption.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use pigeon_core::authority::{self, Entry, ROSTER, Refusal, Step, Tree, Unread, Verdict};
+use pigeon_core::authority::{self, Entry, ROSTER, Refusal, Tree, Unread, Verdict};
 use pigeon_core::catalogue::{Judgement, Meta, Outcome};
-use pigeon_core::names::{self, Stamp};
+use pigeon_core::commit;
+use pigeon_core::names::Stamp;
 use pigeon_core::roster::Roster;
 
 use crate::git::{Error, Git};
@@ -49,26 +50,6 @@ pub async fn judge_history(g: &Group, tips: &[String]) -> Result<(), Error> {
         judge_commit(g, &c, parents).await?;
     }
     Ok(())
-}
-
-/// The verdict of a commit judged under each roster in `steps`: with no
-/// change, one acceptance is enough; with one, all must accept.
-fn combine(verdicts: Vec<Verdict>, clean: bool) -> Verdict {
-    let first_ok = verdicts
-        .iter()
-        .position(|v| matches!(v, Verdict::Accepted(..)));
-    let first_not = verdicts
-        .iter()
-        .position(|v| !matches!(v, Verdict::Accepted(..)));
-    let pick = match (clean, first_ok, first_not) {
-        (true, Some(i), _) | (false, Some(i), None) => i,
-        (_, _, Some(i)) => i,
-        (_, None, None) => return Verdict::Unknown("no-parent"),
-    };
-    verdicts
-        .into_iter()
-        .nth(pick)
-        .unwrap_or(Verdict::Unknown("no-parent"))
 }
 
 async fn judge_commit(g: &Group, c: &str, parents: Vec<String>) -> Result<(), Error> {
@@ -177,13 +158,14 @@ async fn judge_parents(
     let Some(mut before) = g.lock().engine.base(accepted).map(|v| v.tree.clone()) else {
         return none(Verdict::Unknown("parent"));
     };
-    let mut author = None;
+    let mut views = Vec::new();
     for x in others {
-        match adopted(g, x, &before, after).await? {
-            Ok(a) => author = author.or(Some(a)),
+        match adopted(g, x).await? {
+            Ok(v) => views.push(v),
             Err(v) => return none(v),
         }
     }
+    let author = views.first().map(|v| v.author.clone());
     let mut rosters = Vec::new();
     for p in accepted {
         match roster_at(git, &git.tree(p).await?).await {
@@ -210,7 +192,15 @@ async fn judge_parents(
             before.insert(ROSTER.to_owned(), e.clone());
         }
     }
-    let verdict = judge_step(g, raw, &before, after, &rosters).await?;
+    let adopted: Vec<commit::Adopted<'_>> = views
+        .iter()
+        .map(|v| commit::Adopted {
+            verdict: &v.verdict,
+            base: &v.base,
+            tree: &v.tree,
+        })
+        .collect();
+    let verdict = judge_step(g, raw, &before, after, &rosters, &adopted).await?;
     let refs: Vec<&Roster> = rosters.iter().collect();
     name(meta, &verdict, &refs);
     if let (Verdict::Accepted(..), Some((device, when))) = (&verdict, author) {
@@ -246,17 +236,19 @@ async fn judge_parents(
     Ok((verdict, delta))
 }
 
-/// Rule 7 for the parent `x` of a commit outside A(c), whose tree is
-/// `after` and B(c) `before`: `x` must be a proposal, signed by a device
-/// and refused for folder rules alone against its base, and `after` must
-/// hold its change (`proposal::adopts`). Answers its signer and author
-/// time, or the verdict on the commit.
-async fn adopted(
-    g: &Group,
-    x: &str,
-    before: &Tree,
-    after: &Tree,
-) -> Result<Result<(String, Stamp), Verdict>, Error> {
+/// A parent outside A(c), as rule 7 judges it (`commit::Adopted`), with
+/// its signer and author time.
+struct View {
+    verdict: Verdict,
+    base: Tree,
+    tree: Tree,
+    author: (String, Stamp),
+}
+
+/// The parent `x` of a commit outside A(c): its verdict against its base,
+/// the base's tree and its own, or the verdict on the commit when `x` is
+/// unsigned or builds on no accepted commit.
+async fn adopted(g: &Group, x: &str) -> Result<Result<View, Verdict>, Error> {
     let raw = g.git.object(x).await?;
     let Ok(signer) = pigeon_core::sig::verify(&raw) else {
         return Ok(Err(Verdict::Unknown("parent")));
@@ -264,11 +256,8 @@ async fn adopted(
     let Some(base) = crate::proposal::base(g, x).await? else {
         return Ok(Err(Verdict::Unknown("parent")));
     };
-    let mine = g.git.tree(x).await?;
-    match judge_proposal(g, &raw, &base, &mine).await? {
-        Verdict::Refused(Refusal::NotAllowed(_)) => {}
-        _ => return Ok(Err(Verdict::Unknown("parent"))),
-    }
+    let tree = g.git.tree(x).await?;
+    let verdict = judge_proposal(g, &raw, &base, &tree).await?;
     let Some(at) = g
         .lock()
         .engine
@@ -277,38 +266,27 @@ async fn adopted(
     else {
         return Ok(Err(Verdict::Unknown("parent")));
     };
-    if let Err(path) = pigeon_core::proposal::adopts(&at, &mine, before, after) {
-        return Ok(Err(Verdict::Refused(Refusal::NotAllowed(path))));
-    }
     let (utc, offset) = authority::author_time(&raw).unwrap_or((0, 0));
-    Ok(Ok((signer.0, Stamp { utc, offset })))
+    Ok(Ok(View {
+        verdict,
+        base: at,
+        tree,
+        author: (signer.0, Stamp { utc, offset }),
+    }))
 }
 
-/// The verdict of rules 2–6 on `raw`, whose tree is `after`, against
-/// `before` under each of `rosters`, with rule 5's portable names.
+/// The verdict of 04 §4.4 on `raw`, whose tree is `after`, against
+/// `before` under each of `rosters`, adopting `adopted` (`commit::judge`).
 async fn judge_step(
     g: &Group,
     raw: &[u8],
     before: &Tree,
     after: &Tree,
     rosters: &[Roster],
+    adopted: &[commit::Adopted<'_>],
 ) -> Result<Verdict, Error> {
     let git = &g.git;
     let changed = authority::delta(before, after);
-    for path in changed.iter().filter(|p| after.contains_key(*p)) {
-        if let Err(why) = names::portable(path) {
-            return Ok(Verdict::Refused(Refusal::Malformed(
-                path.clone(),
-                why.code(),
-            )));
-        }
-    }
-    if let Some(f) = names::clashes(after.keys().map(String::as_str))
-        .into_iter()
-        .next()
-    {
-        return Ok(Verdict::Refused(Refusal::Malformed(f, "collision")));
-    }
     let oids: Vec<String> = changed
         .iter()
         .filter(|path| !authority::is_pigeon_path(path))
@@ -328,21 +306,16 @@ async fn judge_step(
         None
     };
     let decisions = decisions(g, before, after, &changed, rosters).await?;
-    let verdicts: Vec<Verdict> = rosters
-        .iter()
-        .map(|roster| {
-            authority::judge(&Step {
-                raw,
-                roster,
-                before,
-                after,
-                blobs: &blobs,
-                new_roster: new_roster.as_ref(),
-                decisions: &decisions,
-            })
-        })
-        .collect();
-    Ok(combine(verdicts, changed.is_empty()))
+    Ok(commit::judge(&commit::Commit {
+        raw,
+        rosters,
+        before,
+        after,
+        blobs: &blobs,
+        new_roster: new_roster.as_ref(),
+        decisions: &decisions,
+        adopted,
+    }))
 }
 
 /// The decisions that a commit's Δ adds (04 §4.5), each with the deciders
@@ -385,8 +358,8 @@ async fn decisions(
     Ok(out)
 }
 
-/// The deciders on `before` and the author's person of the kept proposal
-/// `x`, under `roster`.
+/// The deciders on `before` under `roster` and the author's person of
+/// the kept proposal `x` (`commit::about`).
 async fn about(
     g: &Group,
     x: &str,
@@ -395,13 +368,6 @@ async fn about(
 ) -> Result<Option<(authority::Deciders, pigeon_core::roster::PersonId)>, Error> {
     let kept = crate::proposal::kept(&g.git).await;
     let Some((device, _)) = kept.into_iter().find(|(_, c)| c == x) else {
-        return Ok(None);
-    };
-    let Some(person) = roster
-        .devices
-        .get(&pigeon_core::roster::DeviceId(device))
-        .map(|d| d.person.clone())
-    else {
         return Ok(None);
     };
     let Some(base) = crate::proposal::base(g, x).await? else {
@@ -415,9 +381,14 @@ async fn about(
     let Some(at) = at else {
         return Ok(None);
     };
-    let adoption = pigeon_core::proposal::adoption_changes(&at, &g.git.tree(x).await?, before);
-    let changes: Vec<(&str, bool)> = adoption.iter().map(|(p, a)| (p.as_str(), *a)).collect();
-    Ok(Some((authority::deciders(roster, &changes), person)))
+    let Some(Ok(at_roster)) = roster_at(&g.git, &g.git.tree(&base).await?).await else {
+        return Ok(None);
+    };
+    let signer = pigeon_core::roster::DeviceId(device);
+    let tree = g.git.tree(x).await?;
+    Ok(commit::about(
+        roster, &at_roster, &signer, &at, &tree, before,
+    ))
 }
 
 /// The verdict on the proposal `raw`, whose tree is `after`, against
@@ -442,7 +413,7 @@ pub async fn judge_proposal(
         Some(Err(Unread::Unknown(_))) => return Ok(Verdict::Unknown("format")),
         _ => return Ok(Verdict::Refused(Refusal::RosterUnreadable("parent".into()))),
     };
-    judge_step(g, raw, &before, after, &[roster]).await
+    judge_step(g, raw, &before, after, &[roster], &[]).await
 }
 
 /// Whether `theirs` brings a contribution that `ours` lacks (05 §5.2):

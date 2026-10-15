@@ -35,7 +35,7 @@ RosterTrace_bad	RosterTrace	fast	trace:rejected:7
 AdmitTrace_good	AdmitTrace	fast	trace:accepted
 AdmitTrace_bad	AdmitTrace	fast	trace:rejected:4
 AuthorityTrace_good	AuthorityTrace	fast	trace:accepted
-AuthorityTrace_bad	AuthorityTrace	fast	trace:rejected:15
+AuthorityTrace_bad	AuthorityTrace	fast	trace:rejected:21
 CatalogueTrace_good	CatalogueTrace	fast	trace:accepted
 CatalogueTrace_bad	CatalogueTrace	fast	trace:rejected:28
 AnnexDrop_design	AnnexDrop	fast	pass
@@ -104,7 +104,7 @@ Authority_decide4	Authority	full	pass
 Authority_faulty2	Authority	full	pass
 Authority_revoke2	Authority	full	pass
 Authority_proposal	Authority	fast	violation:DecidersCanAdopt
-Authority_mixed	Authority	fast	violation:DecidersCanAdopt
+Authority_mixed	Authority	fast	pass
 Authority_noforce	Authority	fast	violation:DecidersCanAdopt
 Authority_fakeadopt	Authority	fast	violation:AdoptionHoldsContent
 Authority_base	Authority	fast	violation:AuthorisedContent
