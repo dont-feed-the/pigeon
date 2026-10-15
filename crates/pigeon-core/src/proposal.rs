@@ -43,6 +43,22 @@ pub fn adoption(base: &Tree, proposal: &Tree, main: &Tree, who: &str, when: Stam
     out
 }
 
+/// The changes the adoption of `proposal` on `base` makes on `main`: each
+/// path whose entry differs, and whether it adds it. Its deciders are those
+/// allowed every one (04 §4.5; `Authority.tla`'s `ADiff`, with
+/// `DecidersAt = "decision"`); a conflict copy is an addition in the folder
+/// of its path, whatever its name.
+pub fn adoption_changes(base: &Tree, proposal: &Tree, main: &Tree) -> Vec<(String, bool)> {
+    let a = adoption(base, proposal, main, "-", Stamp { utc: 0, offset: 0 });
+    delta(main, &a)
+        .into_iter()
+        .map(|p| {
+            let added = !main.contains_key(&p);
+            (p, added)
+        })
+        .collect()
+}
+
 /// Whether `tree` holds the change of `proposal` on `base`, adopted on
 /// `main` (rule 7): each changed path has the proposal's version, or
 /// `main` changed it meanwhile and, unless the proposal deletes it, a

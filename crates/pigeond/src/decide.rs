@@ -71,13 +71,10 @@ pub async fn pending(g: &Group) -> Result<Vec<Pending>, Error> {
         let Some(at) = at else {
             continue;
         };
-        let paths: Vec<String> = authority::delta(&at, &g.git.tree(c).await?)
-            .into_iter()
-            .collect();
-        let changes: Vec<(&str, bool)> = paths
-            .iter()
-            .map(|p| (p.as_str(), !main_tree.contains_key(p)))
-            .collect();
+        let mine = g.git.tree(c).await?;
+        let paths: Vec<String> = authority::delta(&at, &mine).into_iter().collect();
+        let adoption = pigeon_core::proposal::adoption_changes(&at, &mine, &main_tree);
+        let changes: Vec<(&str, bool)> = adoption.iter().map(|(p, a)| (p.as_str(), *a)).collect();
         let raw = g.git.object(c).await?;
         out.push(Pending {
             id: c.clone(),

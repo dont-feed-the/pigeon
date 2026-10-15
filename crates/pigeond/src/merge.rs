@@ -415,11 +415,8 @@ async fn about(
     let Some(at) = at else {
         return Ok(None);
     };
-    let paths = authority::delta(&at, &g.git.tree(x).await?);
-    let changes: Vec<(&str, bool)> = paths
-        .iter()
-        .map(|p| (p.as_str(), !before.contains_key(p)))
-        .collect();
+    let adoption = pigeon_core::proposal::adoption_changes(&at, &g.git.tree(x).await?, before);
+    let changes: Vec<(&str, bool)> = adoption.iter().map(|(p, a)| (p.as_str(), *a)).collect();
     Ok(Some((authority::deciders(roster, &changes), person)))
 }
 
