@@ -8,9 +8,9 @@
 //! roster R(p): with Δ = ∅ one roster that accepts its signer suffices;
 //! otherwise every one must accept it (rules 2 and 3). A parent that is not
 //! accepted must be a proposal the commit adopts (rule 7, [`adopted`]); a
-//! merge of parents whose rosters differ (a roster fork, 04 §4.8) waits as
-//! unknown until M2 brings the fold. Rule 5 refuses a tree whose names Δ
-//! adds are not portable. [`adopt`] writes an adoption.
+//! merge of parents whose rosters differ (a roster fork, 04 §4.8) must
+//! hold their fold (`fold`), which then leaves Δ. Rule 5 refuses a tree
+//! whose names Δ adds are not portable. [`adopt`] writes an adoption.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -84,16 +84,19 @@ async fn judge_commit(g: &Group, c: &str, parents: Vec<String>) -> Result<(), Er
         when: Stamp { utc: secs, offset },
         resolves: Vec::new(),
     };
-    let verdict = if parents.is_empty() {
-        match roster_at(git, &after).await {
+    let mut genesis = None;
+    let (verdict, accepted, delta) = if parents.is_empty() {
+        let v = match roster_at(git, &after).await {
             Some(Ok(r)) => {
                 let v = authority::judge_genesis(&raw, &r);
                 name(&mut meta, &v, &[&r]);
+                genesis = Some(r);
                 v
             }
             Some(Err(Unread::Unknown(_))) => Verdict::Unknown("format"),
             _ => Verdict::Refused(Refusal::RosterUnreadable("genesis".into())),
-        }
+        };
+        (v, Vec::new(), Vec::new())
     } else {
         judge_child(g, &raw, &after, &mut meta).await?
     };
@@ -102,17 +105,26 @@ async fn judge_commit(g: &Group, c: &str, parents: Vec<String>) -> Result<(), Er
         Verdict::Refused(r) => Judgement::Refused(authority::code(r).to_owned()),
         Verdict::Unknown(why) => Judgement::Refused(format!("unknown-{why}")),
     };
-    let mut k = g.lock();
-    let outcome = k.engine.admit(&meta, &after, judgement);
-    if !matches!(outcome, Outcome::Clean | Outcome::Contribution) {
-        let v = match verdict {
-            Verdict::Accepted(..) => Verdict::Unknown("parent"),
-            v => v,
-        };
-        k.verdicts.insert(c.to_owned(), v);
+    let outcome = g.lock().engine.admit(&meta, &after, judgement);
+    match (&verdict, &outcome) {
+        (Verdict::Accepted(signer, _), Outcome::Clean | Outcome::Contribution) => match &genesis {
+            Some(r) => crate::fold::genesis(g, c, r),
+            None => crate::fold::record(g, c, &accepted, secs, signer, delta),
+        },
+        _ => {
+            let v = match verdict {
+                Verdict::Accepted(..) => Verdict::Unknown("parent"),
+                v => v,
+            };
+            g.lock().verdicts.insert(c.to_owned(), v);
+        }
     }
     Ok(())
 }
+
+/// A verdict, the accepted parents it was judged under, and the roster
+/// change δ of 04 §4.8 the commit makes.
+type Judged = (Verdict, Vec<String>, Vec<pigeon_core::roster::Edit>);
 
 /// Sets the signer's device and display name in `meta` from the first
 /// roster that knows it.
@@ -137,8 +149,7 @@ async fn judge_child(
     raw: &[u8],
     after: &Tree,
     meta: &mut Meta,
-) -> Result<Verdict, Error> {
-    let git = &g.git;
+) -> Result<Judged, Error> {
     let (accepted, others): (Vec<String>, Vec<String>) = {
         let k = g.lock();
         meta.parents
@@ -146,29 +157,58 @@ async fn judge_child(
             .cloned()
             .partition(|p| k.engine.accepted(p))
     };
+    let (verdict, delta) = judge_parents(g, raw, after, meta, &accepted, &others).await?;
+    Ok((verdict, accepted, delta))
+}
+
+async fn judge_parents(
+    g: &Group,
+    raw: &[u8],
+    after: &Tree,
+    meta: &mut Meta,
+    accepted: &[String],
+    others: &[String],
+) -> Result<(Verdict, Vec<pigeon_core::roster::Edit>), Error> {
+    let git = &g.git;
+    let none = |v| Ok((v, Vec::new()));
     if accepted.is_empty() {
-        return Ok(Verdict::Unknown("parent"));
+        return none(Verdict::Unknown("parent"));
     }
-    let Some(before) = g.lock().engine.base(&accepted).map(|v| v.tree.clone()) else {
-        return Ok(Verdict::Unknown("parent"));
+    let Some(mut before) = g.lock().engine.base(accepted).map(|v| v.tree.clone()) else {
+        return none(Verdict::Unknown("parent"));
     };
     let mut author = None;
-    for x in &others {
+    for x in others {
         match adopted(g, x, &before, after).await? {
             Ok(a) => author = author.or(Some(a)),
-            Err(v) => return Ok(v),
+            Err(v) => return none(v),
         }
     }
     let mut rosters = Vec::new();
-    for p in &accepted {
+    for p in accepted {
         match roster_at(git, &git.tree(p).await?).await {
             Some(Ok(r)) => rosters.push(r),
-            Some(Err(Unread::Unknown(_))) => return Ok(Verdict::Unknown("format")),
-            _ => return Ok(Verdict::Refused(Refusal::RosterUnreadable("parent".into()))),
+            Some(Err(Unread::Unknown(_))) => return none(Verdict::Unknown("format")),
+            _ => return none(Verdict::Refused(Refusal::RosterUnreadable("parent".into()))),
         }
     }
     if rosters.windows(2).any(|w| w[0] != w[1]) {
-        return Ok(Verdict::Unknown("roster-fork"));
+        // A merge of roster forks holds their fold, and changes no roster
+        // itself (04 §4.8): its roster leaves Δ.
+        let Some(folded) = crate::fold::of_merge(g, accepted) else {
+            return none(Verdict::Unknown("roster-fork"));
+        };
+        match roster_at(git, after).await {
+            Some(Ok(r)) if r == folded.roster => {}
+            Some(Err(Unread::Unknown(_))) => return none(Verdict::Unknown("format")),
+            _ => return none(Verdict::Refused(Refusal::RosterNotAChange)),
+        }
+        if !folded.skipped.is_empty() {
+            tracing::info!(group = %g.id, commit = %meta.id, skipped = ?folded.skipped, "roster-skipped");
+        }
+        if let Some(e) = after.get(ROSTER) {
+            before.insert(ROSTER.to_owned(), e.clone());
+        }
     }
     let verdict = judge_step(g, raw, &before, after, &rosters).await?;
     let refs: Vec<&Roster> = rosters.iter().collect();
@@ -197,7 +237,13 @@ async fn judge_child(
             })
             .collect();
     }
-    Ok(verdict)
+    let delta = match (&verdict, rosters.first()) {
+        (Verdict::Accepted(_, Some(new)), Some(old)) => {
+            pigeon_core::roster::diff(old, new).unwrap_or_default()
+        }
+        _ => Vec::new(),
+    };
+    Ok((verdict, delta))
 }
 
 /// Rule 7 for the parent `x` of a commit outside A(c), whose tree is
@@ -471,9 +517,35 @@ pub async fn write_tree(git: &Git, tree: &Tree) -> Result<String, Error> {
 /// key, and it must be accepted as clean.
 pub async fn merge(g: &Group, ours: &str, theirs: &str) -> Result<Option<String>, Error> {
     let parents = [ours.to_owned(), theirs.to_owned()];
-    let Some(tree) = g.lock().engine.base(&parents).map(|v| v.tree.clone()) else {
+    let Some(mut tree) = g.lock().engine.base(&parents).map(|v| v.tree.clone()) else {
         return Ok(None);
     };
+    let (a, b) = (g.git.tree(ours).await?, g.git.tree(theirs).await?);
+    let fork = a.get(ROSTER) != b.get(ROSTER);
+    if fork {
+        // Roster forks merge by the fold (04 §4.8), never a file merge.
+        let Some(folded) = crate::fold::of_merge(g, &parents) else {
+            return Ok(None);
+        };
+        let doc = crate::roster_file::RosterDoc {
+            roster: folded.roster,
+        };
+        let Ok(text) = crate::roster_file::render(&doc) else {
+            return Ok(None);
+        };
+        let blob = g
+            .git
+            .run_in(&["hash-object", "-w", "--stdin"], text.as_bytes())
+            .await?;
+        tree.insert(
+            ROSTER.to_owned(),
+            Entry {
+                mode: "100644".to_owned(),
+                kind: "blob".to_owned(),
+                oid: blob.trim().to_owned(),
+            },
+        );
+    }
     let oid = write_tree(&g.git, &tree).await?;
     let commit = g
         .git
@@ -481,7 +553,8 @@ pub async fn merge(g: &Group, ours: &str, theirs: &str) -> Result<Option<String>
         .await?;
     judge_history(g, std::slice::from_ref(&commit)).await?;
     let outcome = g.lock().engine.outcome(&commit).cloned();
-    Ok((outcome == Some(Outcome::Clean)).then_some(commit))
+    let ok = outcome == Some(Outcome::Clean) || fork && outcome == Some(Outcome::Contribution);
+    Ok(ok.then_some(commit))
 }
 
 /// Writes and judges the adoption of the proposal `x` on `main` (04 §4.5):

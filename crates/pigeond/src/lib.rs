@@ -20,6 +20,7 @@ pub mod daemon;
 pub mod decide;
 pub mod decision_file;
 pub mod evict;
+pub mod fold;
 pub mod git;
 pub mod group;
 pub mod history;

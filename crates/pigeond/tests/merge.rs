@@ -2,8 +2,8 @@
 //! repository: two laptops edit one file from the genesis; `merge` judges
 //! both sides, writes the merge whose tree is the catalogue of both, signed
 //! by the custodian, and judges it clean; a commit signed outside the
-//! roster is refused, and so are a merge of roster forks' heads (it waits)
-//! and a non-portable name.
+//! roster is refused, and so are a non-portable name and a merge of roster
+//! forks that does not hold their fold; forks merge by the fold (04 §4.8).
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,
@@ -13,8 +13,7 @@
 
 use std::collections::BTreeMap;
 
-use pigeon_core::authority::{Entry, ROSTER, Tree, Verdict};
-use pigeon_core::catalogue::Outcome;
+use pigeon_core::authority::{Entry, ROSTER, Tree};
 use pigeon_core::roster::{Device, DeviceId, Folder, Person, PersonId, Role, Roster, Rule};
 use pigeon_core::sig;
 use pigeon_git::GitEnv;
@@ -222,7 +221,8 @@ async fn refused_and_waiting_commits_are_named() {
     let named = commit(&w.git, &bad, &[&w.genesis], 70, 1).await;
     let judged = verify::judge(&w.g, Some(&w.genesis), &named).await.unwrap();
     assert_eq!(verify::code(&judged.stopped.unwrap().1), "commit-malformed");
-    // Two sides whose rosters differ: their merge waits for the fold (M2).
+    // Two sides whose rosters differ: a merge holding another roster than
+    // their fold is refused (04 §4.8).
     let mut r3 = w.base.clone();
     let text = roster_file::render(&RosterDoc { roster: roster(3) }).unwrap();
     r3.insert(ROSTER.into(), blob(&w.git, text.as_bytes()).await);
@@ -230,15 +230,74 @@ async fn refused_and_waiting_commits_are_named() {
     let mut e = w.base.clone();
     e.insert("Shared/e.txt".into(), pointer(&w.git, 5).await);
     let e1 = commit(&w.git, &e, &[&w.genesis], 90, 2).await;
-    let mut both = r3.clone();
+    let mut both = e.clone();
     both.insert("Shared/e.txt".into(), pointer(&w.git, 5).await);
     let fork = commit(&w.git, &both, &[&k3, &e1], 100, 1).await;
     let judged = verify::judge(&w.g, Some(&w.genesis), &fork).await.unwrap();
     let (c, v) = judged.stopped.unwrap();
-    assert_eq!((c, v), (fork.clone(), Verdict::Unknown("roster-fork")));
+    assert_eq!((c, verify::code(&v)), (fork.clone(), "commit-malformed"));
     assert!(w.g.lock().engine.accepted(&k3) && w.g.lock().engine.accepted(&e1));
+    // The merge holding the fold is accepted.
+    let mut folded = r3.clone();
+    folded.insert("Shared/e.txt".into(), pointer(&w.git, 5).await);
+    let good = commit(&w.git, &folded, &[&k3, &e1], 110, 2).await;
+    let judged = verify::judge(&w.g, Some(&w.genesis), &good).await.unwrap();
     assert_eq!(
-        w.g.lock().engine.outcome(&fork),
-        Some(&Outcome::Refused("unknown-roster-fork".into()))
+        judged.accepted.as_deref(),
+        Some(good.as_str()),
+        "{judged:?}"
     );
+}
+
+/// Ana raises K on one side while Ben adds his second laptop on the other
+/// (04 §4.8, ADR 0051): the custodian merges the forks, and the merge's
+/// roster is their fold, both changes applied, judged as a clean merge;
+/// the next change is judged under that roster.
+#[tokio::test]
+async fn roster_forks_merge_by_the_fold() {
+    let w = world().await;
+    pigeond::git::set_signer(key(3));
+    let with = |r: &Roster| roster_file::render(&RosterDoc { roster: r.clone() }).unwrap();
+    let mut a = w.base.clone();
+    a.insert(
+        ROSTER.into(),
+        blob(&w.git, with(&roster(3)).as_bytes()).await,
+    );
+    let k3 = commit(&w.git, &a, &[&w.genesis], 60, 1).await;
+    let mut more = roster(2);
+    more.devices.insert(
+        dev(4),
+        Device {
+            person: PersonId("ben".into()),
+            name: "ben's device 4".into(),
+            role: Role::Laptop,
+            annex_uuid: Some("4f1c0a52-1b7e-4c4e-9a51-0d3b6a1f2e04".into()),
+            maxsize: None,
+        },
+    );
+    let mut b = w.base.clone();
+    b.insert(ROSTER.into(), blob(&w.git, with(&more).as_bytes()).await);
+    let d4 = commit(&w.git, &b, &[&w.genesis], 120, 2).await;
+    let judged = verify::judge(&w.g, Some(&k3), &d4).await.unwrap();
+    assert_eq!(judged.accepted.as_deref(), Some(d4.as_str()), "{judged:?}");
+    let m = merge::merge(&w.g, &k3, &d4)
+        .await
+        .unwrap()
+        .expect("forks always merge");
+    let tree = w.git.tree(&m).await.unwrap();
+    let text = w.git.object(&tree[ROSTER].oid).await.unwrap();
+    let r = roster_file::parse(&String::from_utf8_lossy(&text))
+        .unwrap()
+        .roster;
+    assert_eq!(r.k, 3, "Ana's change is in the fold");
+    assert!(
+        r.devices.contains_key(&dev(4)),
+        "Ben's change is in the fold"
+    );
+    // Ben's new laptop signs under the merged roster.
+    let mut c = tree.clone();
+    c.insert("Shared/c.txt".into(), pointer(&w.git, 6).await);
+    let c1 = commit(&w.git, &c, &[&m], 180, 4).await;
+    let judged = verify::judge(&w.g, Some(&m), &c1).await.unwrap();
+    assert_eq!(judged.accepted.as_deref(), Some(c1.as_str()), "{judged:?}");
 }

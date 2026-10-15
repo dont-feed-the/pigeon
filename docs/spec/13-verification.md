@@ -225,8 +225,9 @@ from this specification as follows, each to close before S1–S11 run
 - every commit is signed with the device key, and a custodian moves `main`
   only as far as the authority rule accepts each commit against the
   catalogue of its accepted parents ([04 §4.4](04-roster-and-authority.md)),
-  merging two accepted heads ([05 §5.2](05-catalogue-and-names.md)); a
-  merge of roster forks and an adoption wait; a laptop moves `main` the
+  merging two accepted heads ([05 §5.2](05-catalogue-and-names.md)), roster
+  forks by their fold ([04 §4.8](04-roster-and-authority.md)), and an
+  adoption by rule 7; a laptop moves `main` the
   same way, then installs each clean path's new version through the journal
   ([07 §7.5](07-capture-and-install.md)); a save racing an install becomes
   a contribution concurrent with `main`'s version, merged into `main`, and

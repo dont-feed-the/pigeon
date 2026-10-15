@@ -135,8 +135,8 @@ Consequences, checked by `Authority.tla` (`AuthorisedContent`,
   B = `catalogue::Engine`'s catalogue of its accepted parents, under each
   accepted parent's roster (rules 2 and 3) and with rule 5, and a parent
   outside A(c) must be a proposal it adopts (rule 7, `proposal::adopts`);
-  a merge of parents whose rosters differ (§4.8) waits as *unknown* until
-  M2 codes the fold. Capture splits a batch with `authority::split`
+  a merge of parents whose rosters differ (§4.8) must hold their fold,
+  after which its roster leaves Δ. Capture splits a batch with `authority::split`
   (§4.5). `pigeond` signs every commit it writes with the device key, and
   accept takes the last accepted of a peer's commits in topological order:
   by locality, an accepted commit may hold refused ones, the proposals it
@@ -240,3 +240,13 @@ of two concurrent removals that would leave no admin the later is skipped
 admins and the author see *Needs you* ("Alice and Bob gave up their admin
 role at the same time. One admin must remain: Bob stays admin."). *Apply
 again* writes a new change.
+
+**In code** (M2): `pigeond::fold` records each accepted commit's δ — the
+edits from its one parent roster to its tree's, none for a merge — in a
+`roster::History` beside the catalogue engine. A merge of parents whose
+rosters differ must hold exactly `History::fold` of its history (else
+`commit-malformed`); its roster then leaves Δ, so it is judged as a clean
+merge that any parent's roster may sign, and accept writes such merges
+with the fold (`pigeond/tests/merge.rs`, `roster_forks_merge_by_the_fold`).
+Skipped changes are logged (`roster-skipped`), not yet shown; revoked
+commits are not yet skipped.

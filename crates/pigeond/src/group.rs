@@ -67,6 +67,8 @@ pub struct Known {
     /// Every commit judged so far and the catalogue of each (05 §5.2):
     /// accept's memory, rebuilt from the genesis after a restart.
     pub engine: pigeon_core::catalogue::Engine<pigeon_core::authority::Entry>,
+    /// The roster changes of the accepted commits, for the fold (`fold`).
+    pub history: Option<pigeon_core::roster::History<String>>,
     /// The verdict on each judged commit that was not accepted (04 §4.4).
     pub verdicts: BTreeMap<String, pigeon_core::authority::Verdict>,
 }
