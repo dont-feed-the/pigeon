@@ -11,7 +11,9 @@
 //! - `pigeon-lab spaces [--isolation …]`: checks this host's isolation: a
 //!   sized disk fills, a custodian's system directories land on its disk.
 //!
-//! No ID means every scenario. The exit status is 1 when a check fails.
+//! No ID means every scenario; `--exclude ID` removes one (or the S9 family).
+//! `--only-blocked` selects and enables only blocked scenarios. These filters
+//! also apply to list, show and model. Exit status is 1 when a check fails.
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -46,6 +48,26 @@ fn pick(ids: &[String]) -> Result<Vec<Scenario>, String> {
         picked.append(&mut found);
     }
     Ok(picked)
+}
+
+/// Filters used by both CI partitions and the blocked-only full run.
+fn select(
+    ids: &[String],
+    excluded: &[String],
+    only_blocked: bool,
+    blocked: impl Fn(&str) -> bool,
+) -> Result<Vec<Scenario>, String> {
+    // Validate exclusions too: a typo must not silently repeat a partition.
+    let excluded = if excluded.is_empty() {
+        Vec::new()
+    } else {
+        pick(excluded)?
+    };
+    Ok(pick(ids)?
+        .into_iter()
+        .filter(|s| !excluded.iter().any(|e| e.id == s.id))
+        .filter(|s| !only_blocked || blocked(&s.id))
+        .collect())
 }
 
 fn line(r: &Report) -> String {
@@ -89,6 +111,8 @@ fn go(args: &[String]) -> Result<bool, String> {
         .split_first()
         .ok_or("usage: pigeon-lab list|show|model|run …")?;
     let mut ids = Vec::new();
+    let mut excluded = Vec::new();
+    let mut only_blocked = false;
     let (mut bin, mut work, mut outdir) = (
         PathBuf::from("target/lab/bin"),
         PathBuf::from("target/lab/work"),
@@ -105,6 +129,11 @@ fn go(args: &[String]) -> Result<bool, String> {
             "--work" => work = PathBuf::from(value()?),
             "--out" => outdir = PathBuf::from(value()?),
             "--json" => json = true,
+            "--exclude" => excluded.push(value()?),
+            "--only-blocked" => {
+                only_blocked = true;
+                with_blocked = true;
+            }
             "--with-blocked" => with_blocked = true,
             "--isolation" => {
                 isolation = match value()?.as_str() {
@@ -118,15 +147,20 @@ fn go(args: &[String]) -> Result<bool, String> {
             id => ids.push(id.to_owned()),
         }
     }
+    let selected = || {
+        select(&ids, &excluded, only_blocked, |id| {
+            slice::blocked(id).is_some()
+        })
+    };
     match cmd.as_str() {
         "list" => {
-            for s in slice::all() {
+            for s in selected()? {
                 out(&format!("{:<28} {}", s.id, s.title));
             }
             Ok(true)
         }
         "show" => {
-            for s in pick(&ids)? {
+            for s in selected()? {
                 if json {
                     out(&serde_json::to_string_pretty(&s).map_err(|e| e.to_string())?);
                 } else {
@@ -137,7 +171,7 @@ fn go(args: &[String]) -> Result<bool, String> {
         }
         "model" => {
             let mut ok = true;
-            for s in pick(&ids)? {
+            for s in selected()? {
                 let r = run(&s, &mut ModelRun::default());
                 ok &= r.passed();
                 out(&line(&r));
@@ -145,7 +179,16 @@ fn go(args: &[String]) -> Result<bool, String> {
             Ok(ok)
         }
         "run" => {
+            let scenarios = selected()?;
             std::fs::create_dir_all(&outdir).map_err(|e| e.to_string())?;
+            if scenarios.is_empty() {
+                std::fs::write(
+                    outdir.join("summary.md"),
+                    "# Slice scenarios\n\nNo scenarios selected.\n",
+                )
+                .map_err(|e| e.to_string())?;
+                return Ok(true);
+            }
             let bin = std::fs::canonicalize(&bin).map_err(|e| format!("{}: {e}", bin.display()))?;
             std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
             let work = std::fs::canonicalize(&work).map_err(|e| e.to_string())?;
@@ -156,7 +199,7 @@ fn go(args: &[String]) -> Result<bool, String> {
                 isolation.name(),
                 std::env::consts::OS
             );
-            for s in pick(&ids)? {
+            for s in scenarios {
                 let row = if let Some(why) = unrunnable(&s, isolation) {
                     format!("| {} | exec {} | skip | {why} | |", s.id, isolation.name())
                 } else if let Some(why) = slice::blocked(&s.id).filter(|_| !with_blocked) {
@@ -281,4 +324,39 @@ fn spaces(isolation: Isolation, work: &std::path::Path) -> Result<bool, String> 
     laptop.teardown();
     custodian.teardown();
     Ok(ok)
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+
+    #[test]
+    fn s5_and_rest_cover_every_scenario_once() {
+        let s5 = select(&["S5".into()], &[], false, |_| false).unwrap();
+        let rest = select(&[], &["S5".into()], false, |_| false).unwrap();
+        assert_eq!(s5.len(), 1);
+        assert_eq!(s5.len() + rest.len(), slice::all().len());
+        assert!(rest.iter().all(|s| s.id != "S5"));
+    }
+
+    #[test]
+    fn blocked_selection_filters_and_can_be_empty() {
+        let blocked = select(&[], &[], true, |id| id == "S5").unwrap();
+        assert_eq!(blocked.len(), 1);
+        assert_eq!(blocked[0].id, "S5");
+        assert!(select(&[], &[], true, |_| false).unwrap().is_empty());
+        assert!(
+            select(&[], &["S5".into()], true, |id| id == "S5")
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn exclusions_support_families_and_reject_typos() {
+        let rest = select(&[], &["S9".into()], false, |_| false).unwrap();
+        assert!(rest.iter().all(|s| !s.id.starts_with("S9-")));
+        assert!(rest.len() < slice::all().len());
+        assert!(select(&[], &["S55".into()], false, |_| false).is_err());
+    }
 }

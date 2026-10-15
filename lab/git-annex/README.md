@@ -36,7 +36,11 @@ asserting script, E12/E13, E14, E15, E15b, E18, E19, E20, E21, E22, E23 and E24,
 Each script isolates git from the person's configuration and sets a lab identity;
 a platform difference is printed as `SKIP (platform)` with its reason. The
 `git-annex` workflow builds pigeon's git-annex and runs E23 and E25 against it
-and, as a negative control that reports without failing, against the stock build. Pending:
+and, as a negative control that reports without failing, against the stock build.
+E25 keeps all 500 fetches for the patched build; the stock control uses
+`500 --stop-after-hangs 3` to stop after three hangs, including nonconsecutive
+ones. Omit the flag for the longer stock measurement. The flag never shortens
+a patched run. Pending:
 E11 native Windows.
 
 ## Results

@@ -1,11 +1,13 @@
-# Checks of every push and pull request: repository rules, the fast set of
-# TLA+ models with their expected verdicts (ADR 0026), the catalogue model on
+# Checks of main and release-tag pushes and pull requests: repository rules,
+# the fast TLA+ models with their expected verdicts (ADR 0026), the catalogue model on
 # every schedule of its cases (spec 05 §5.2), the Rust workspace on Linux (and
 # macOS on tags, 14 §14.6), and runs of pigeon-core checked by TLC (ADR 0008, 13 §13.13).
 name: ci
 
 on:
   push:
+    branches: [main]
+    tags: ["v*"]
   pull_request:
 
 permissions:
@@ -28,6 +30,8 @@ jobs:
         run: scripts/check-adr-index
       - name: every cited section of the spec exists
         run: scripts/check-spec-refs
+      - name: E25 stock hang budget and patched trial count
+        run: python3 -B -m unittest discover -s lab/git-annex/tests
 
   catalogue:
     name: catalogue model
@@ -131,7 +135,11 @@ jobs:
       - name: pigeon-core with its trace events (feature tla-trace, 12 §12.3)
         run: |
           cargo clippy -p pigeon-core --all-targets --features tla-trace --locked -- -D warnings
-          cargo test -p pigeon-core --features tla-trace --locked
+          # Keep feature-specific tests on both platforms; the workspace already
+          # runs the full core suite. code-traces also checks these logs with TLC.
+          cargo test -p pigeon-core --features tla-trace --locked \
+            --test trace --test roster_trace --test admit_trace \
+            --test authority_trace --test catalogue_trace
 
   code-traces:
     name: runs of pigeon-core checked by TLC

@@ -4,8 +4,9 @@
 # each runner's isolation (loop-mounted ext4 and mount namespaces with sudo
 # on Linux, APFS disk images on macOS), then runs every scenario against
 # the lab build of pigeond and pigeon and hands the merged trace logs to
-# TLC. The s9-random job runs 50 random S9 crash schedules per runner, and
-# models-full.yml runs 1000. A scenario marked blocked in pigeon-lab's slice.rs reports
+# TLC. S5 runs separately from the remaining scenarios. The s9-random job
+# runs 50 random S9 crash schedules per runner, and models-full.yml runs 1000.
+# A scenario marked blocked in pigeon-lab's slice.rs reports
 # its reason and does not fail the job, until it passes.
 name: slice
 
@@ -28,11 +29,12 @@ env:
 
 jobs:
   slice:
-    name: slice (${{ matrix.os }})
+    name: slice (${{ matrix.os }}, ${{ matrix.scenarios }})
     strategy:
       fail-fast: false
       matrix:
         os: ${{ fromJSON(startsWith(github.ref, 'refs/tags/v') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
+        scenarios: [rest, S5]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
@@ -93,10 +95,16 @@ jobs:
             --features pigeond/lab,pigeond/tla-trace
           mkdir -p target/lab/bin
           cp target/release/pigeond target/release/pigeon target/release/git-annex-p2p-iroh target/lab/bin/
-      - name: S1-S12 against the real binaries
+      - name: selected scenarios against the real binaries
+        env:
+          SCENARIOS: ${{ matrix.scenarios }}
         run: |
+          args=(--exclude S5)
+          if [ "$SCENARIOS" = S5 ]; then args=(S5); fi
+          # target is cached; reports must contain only this partition's run.
+          rm -rf target/lab/out
           cargo run --locked --release -q -p pigeon-lab -- run --bin target/lab/bin \
-            --work /tmp/lab --out target/lab/out
+            --work /tmp/lab --out target/lab/out "${args[@]}"
       - name: the merged trace logs, checked by TLC
         run: scripts/check-lab-traces target/lab/out
       - name: summary
@@ -105,7 +113,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: slice-${{ matrix.os }}
+          name: slice-${{ matrix.os }}-${{ matrix.scenarios }}
           path: target/lab/out
           if-no-files-found: ignore
 

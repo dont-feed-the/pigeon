@@ -1,8 +1,7 @@
 # The full set of TLA+ models, slow rows included (ADR 0026), 200 runs of
 # pigeon-core checked by TLC (spec 13 §13.3), and 1000 random S9 crash schedules
 # of the slice against the lab build, in twenty shards of four processes,
-# and every slice scenario,
-# blocked ones included (13 §13.12). Runs when a
+# and only the blocked slice scenarios (13 §13.12). Runs when a
 # model or the runner changes, weekly, and by hand. GitHub runs `schedule`
 # and `workflow_dispatch` only from the default branch, so until v2 is the
 # default branch only the `push` trigger fires.
@@ -112,7 +111,7 @@ jobs:
           if-no-files-found: ignore
 
   slice-with-blocked:
-    name: S1-S12 with the blocked ones, against the lab build (${{ matrix.os }})
+    name: blocked slice scenarios (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -125,18 +124,6 @@ jobs:
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: git-annex, standalone build at the pinned checksum (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          t=/tmp/git-annex-standalone-amd64.tar.gz
-          curl -fsSL -o "$t" https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
-          echo "$GIT_ANNEX_SHA256  $t" | sha256sum -c -
-          tar -C ~ -xzf "$t" && echo ~/git-annex.linux >> "$GITHUB_PATH"
-      - name: git-annex from Homebrew (macOS)
-        if: runner.os == 'macOS'
-        run: brew install git-annex
-      - name: pigeon's git-annex, once git-annex.yml has built this patch set (ADR 0069)
-        uses: ./.github/actions/git-annex-pigeon
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -148,23 +135,49 @@ jobs:
           restore-keys: slice-${{ matrix.os }}-
       - name: the pinned toolchain (rust-toolchain.toml)
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
+      - name: select blocked scenarios before installing the lab dependencies
+        id: blocked
+        run: |
+          cargo run --locked --release -q -p pigeon-lab -- list --only-blocked > "$RUNNER_TEMP/blocked-scenarios"
+          if [ -s "$RUNNER_TEMP/blocked-scenarios" ]; then
+            cat "$RUNNER_TEMP/blocked-scenarios"
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'No blocked slice scenarios; the ordinary slice runs in slice.yml.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: git-annex, standalone build at the pinned checksum (Linux)
+        if: steps.blocked.outputs.run == 'true' && runner.os == 'Linux'
+        run: |
+          t=/tmp/git-annex-standalone-amd64.tar.gz
+          curl -fsSL -o "$t" https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
+          echo "$GIT_ANNEX_SHA256  $t" | sha256sum -c -
+          tar -C ~ -xzf "$t" && echo ~/git-annex.linux >> "$GITHUB_PATH"
+      - name: git-annex from Homebrew (macOS)
+        if: steps.blocked.outputs.run == 'true' && runner.os == 'macOS'
+        run: brew install git-annex
+      - name: pigeon's git-annex, once git-annex.yml has built this patch set (ADR 0069)
+        if: steps.blocked.outputs.run == 'true'
+        uses: ./.github/actions/git-annex-pigeon
       - name: the lab build
+        if: steps.blocked.outputs.run == 'true'
         run: |
           cargo build --locked --release -p pigeond -p pigeon -p git-annex-p2p-iroh \
             --features pigeond/lab,pigeond/tla-trace
           mkdir -p target/lab/bin
           cp target/release/pigeond target/release/pigeon target/release/git-annex-p2p-iroh target/lab/bin/
-      - name: every scenario, a blocked one's failure reported and not failing
+      - name: only blocked scenarios, failures reported without failing
+        if: steps.blocked.outputs.run == 'true'
         env:
           PIGEON_LOG: debug
         run: |
-          cargo run --locked --release -q -p pigeon-lab -- run --with-blocked \
+          rm -rf target/lab/out
+          cargo run --locked --release -q -p pigeon-lab -- run --only-blocked \
             --bin target/lab/bin --work /tmp/lab --out target/lab/out
       - name: summary
-        if: always()
+        if: always() && steps.blocked.outputs.run == 'true'
         run: cat target/lab/out/summary.md >> "$GITHUB_STEP_SUMMARY" || true
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
+        if: always() && steps.blocked.outputs.run == 'true'
         with:
           name: slice-with-blocked-${{ matrix.os }}
           path: target/lab/out
