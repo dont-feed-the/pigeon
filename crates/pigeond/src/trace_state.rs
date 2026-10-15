@@ -70,11 +70,31 @@ async fn pointer(g: &Group, oid: Option<&str>) -> Result<String, String> {
     digest(Some(&key))
 }
 
+// Unlike the driver's legacy reader, observations must not silently drop
+// an unreadable journal or a malformed complete record.
+fn journal(path: &Path) -> Result<Vec<pigeon_core::journal::Record>, String> {
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e.to_string()),
+    };
+    bytes
+        .split_inclusive(|b| *b == b'\n')
+        .filter(|line| line.ends_with(b"\n")) // a torn last record is not durable
+        .map(|line| {
+            std::str::from_utf8(line)
+                .ok()
+                .and_then(crate::journal_file::parse)
+                .ok_or_else(|| "invalid complete journal record in trace observation".to_owned())
+        })
+        .collect()
+}
+
 /// The observable projection of one path. An ended aside is a kept inode,
 /// even while its physical name remains in `aside/` until release.
 fn disk(g: &Group, path: &str, seq: u64, observe_writers: bool) -> Result<Value, String> {
     let wt = g.worktree.as_ref().ok_or("trace has no worktree")?;
-    let journal = entries(&crate::journal_file::read(&g.files.install_journal()));
+    let journal = entries(&journal(&g.files.install_journal())?);
     let mut active_entries = journal
         .values()
         .filter(|e| e.begin.path == path && e.end.is_none());
@@ -420,5 +440,26 @@ impl DiskSpan<'_> {
     pub fn finish(mut self, phase: &str) {
         self.record("after", phase, true);
         self.span.finished = true;
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    #[test]
+    fn a_trace_never_hides_a_bad_complete_journal_record() {
+        use pigeon_core::journal::{End, Record};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("journal");
+        let record = Record::End(1, End::Done);
+        let valid = crate::journal_file::line(&record);
+        std::fs::write(&path, format!("{valid}\n{{\"torn\":")).unwrap();
+        assert_eq!(super::journal(&path).unwrap(), vec![record]);
+        std::fs::write(&path, format!("{valid}\n{{\"bad\":true}}\n")).unwrap();
+        assert!(super::journal(&path).is_err());
+        assert!(
+            super::journal(dir.path()).is_err(),
+            "read errors are observations"
+        );
     }
 }

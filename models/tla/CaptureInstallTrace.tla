@@ -37,8 +37,9 @@ Match(p, v) ==
   /\ (v.open => /\ ((p.jr.st = p.stats[v.aside]) = v.proof_matches)
                  /\ ((p.jr.st = p.stats[v.p]) = v.path_matches))
   /\ p.div.k = v.divergence /\ p.div.key = v.mine
-Safety == DriverSafety
-          /\ (Hidden \/ NoOverwrite)
+(* A hidden writer may change a retained inode after proof. Check the
+   bytes displaced at proof, and let NoLoss govern those later writes. *)
+Safety == DriverSafety /\ \A d \in disp : d.c = d.e
 
 (* A trace may begin at a checkpoint, not at the group's genesis. The
    observed state fixes the checkpoint; invariants are checked there too. *)
