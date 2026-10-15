@@ -126,6 +126,11 @@ pub fn join_laptop(invitation: &str, folder: &Path, name: &str) -> Vec<String> {
     ]
 }
 
+/// `pigeon resolve PATH --take-group`.
+pub fn take_group(path: &Path) -> Vec<String> {
+    vec![s("resolve"), p(path), s("--take-group"), s("--json")]
+}
+
 /// `pigeon accept ID`, `pigeon decline ID`.
 pub fn decide(verb: &str, id: &str) -> Vec<String> {
     vec![s(verb), s(id), s("--json")]

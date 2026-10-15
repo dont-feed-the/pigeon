@@ -78,6 +78,18 @@ impl Model {
         Outcome::Done
     }
 
+    /// *Take the group's version*: the file is no longer the person's own,
+    /// so keep installs the current version over it; a suggestion of theirs
+    /// for it is withdrawn.
+    pub(crate) fn take_group(&mut self, on: Laptop, file: &File) -> Outcome {
+        if !self.laptops[on.0 as usize].diverged.remove(file) {
+            return Outcome::Refused("not-diverging".into());
+        }
+        self.suggestions
+            .retain(|s| !(s.by == on && s.file == *file));
+        Outcome::Done
+    }
+
     /// Whether a suggestion for `file` waits.
     pub(crate) fn suggested(&self, file: &File) -> bool {
         self.suggestions.iter().any(|s| s.file == *file)

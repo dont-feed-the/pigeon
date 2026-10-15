@@ -487,6 +487,7 @@ impl Model {
             LaptopOp::Join { laptop } => return self.join(on, *laptop),
             LaptopOp::Accept { file } => return self.decide(on, file, true),
             LaptopOp::Decline { file } => return self.decide(on, file, false),
+            LaptopOp::TakeGroup { file } => return self.take_group(on, file),
         }
         Outcome::Done
     }

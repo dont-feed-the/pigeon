@@ -461,7 +461,9 @@ pub fn check_step(w: &World, p: &mut Presence, s: &Step) -> Result<(), String> {
                 }
                 LaptopOp::Recover { .. } => Ok(()),
                 LaptopOp::Join { laptop } => check_join(w, p, *on, *laptop),
-                LaptopOp::Accept { file } | LaptopOp::Decline { file } => check_file(w, file),
+                LaptopOp::Accept { file }
+                | LaptopOp::Decline { file }
+                | LaptopOp::TakeGroup { file } => check_file(w, file),
             }
         }
         Step::Custodian { on, .. } => match p.custodians.get(on.0 as usize) {
@@ -582,7 +584,8 @@ fn labels_of(s: &Step) -> Vec<Label> {
                 | LaptopOp::Forge { .. }
                 | LaptopOp::RecoverySheet
                 | LaptopOp::Accept { .. }
-                | LaptopOp::Decline { .. } => Vec::new(),
+                | LaptopOp::Decline { .. }
+                | LaptopOp::TakeGroup { .. } => Vec::new(),
             }
         }
         _ => Vec::new(),
@@ -769,6 +772,9 @@ pub fn step_text(w: &World, s: &Step) -> String {
                 LaptopOp::Accept { file } => format!("accepts the suggestion for {}", w.path(file)),
                 LaptopOp::Decline { file } => {
                     format!("declines the suggestion for {}", w.path(file))
+                }
+                LaptopOp::TakeGroup { file } => {
+                    format!("takes the group's version of {}", w.path(file))
                 }
             };
             match expect {

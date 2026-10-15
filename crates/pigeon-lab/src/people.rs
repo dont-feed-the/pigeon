@@ -33,6 +33,10 @@ impl Laptop {
     pub fn decline(self, file: &File) -> Step {
         self.asks(LaptopOp::Decline { file: file.clone() })
     }
+    /// `pigeon resolve FILE --take-group`.
+    pub fn take_group(self, file: &File) -> Step {
+        self.asks(LaptopOp::TakeGroup { file: file.clone() })
+    }
     /// `file` and its conflict copies hold exactly `texts`, as a set.
     pub fn shows(self, file: &File, texts: &[&str]) -> Condition {
         Condition::Versions {
@@ -201,9 +205,10 @@ pub fn s14() -> Scenario {
     )
 }
 
-/// S15: a declined suggestion stays Bob's alone; edits made apart on Ana's
-/// two laptops both stay, one under the name and one as its conflict copy,
-/// and neither laptop's file is overwritten (ADR 0034).
+/// S15: a declined suggestion stays Bob's alone until he takes the group's
+/// version (07 §7.6); edits made apart on Ana's two laptops both stay, one
+/// under the name and one as its conflict copy, and neither laptop's file
+/// is overwritten (ADR 0034).
 pub fn s15() -> Scenario {
     let f = family();
     let (a1, a2, b1) = (f.a1, f.a2, f.b1);
@@ -223,6 +228,9 @@ pub fn s15() -> Scenario {
             ]),
             20,
         ),
+        b1.take_group(&b),
+        wait(b1.has_text(&b, "ana's notes"), 60),
+        b1.take_group(&b).refused("not-diverging"),
         a2.stop(),
         a1.write_text(&a, e1),
         wait(b1.has_text(&a, e1), FLOW),

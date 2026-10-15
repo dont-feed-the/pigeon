@@ -89,6 +89,12 @@ pub enum LaptopOp {
         /// The file.
         file: File,
     },
+    /// `pigeon resolve FILE --take-group`: the group's version replaces the
+    /// person's diverging file (07 §7.6).
+    TakeGroup {
+        /// The file.
+        file: File,
+    },
 }
 
 /// What only a custodian undergoes.

@@ -342,7 +342,7 @@ locks (11 §11.4).
 | S12 | a nearly full custodian takes what fits in its room above the reserve, says `no-capacity` without being full, and so does the laptop from its status report ([06 §6.3](06-status.md)); it takes the rest once room returns ([08 §8.9](08-custody-loops.md), issue #13) |
 | S13 | a commit signed outside the group, put on the laptop's `main` beside pigeond, is refused by both custodians with `commit-unknown-signer`, with every commit after it; what came before stays protected ([04 §4.4](04-roster-and-authority.md), ADR 0007) |
 | S14 | two people, three laptops (M2): what each saves reaches every laptop; Bob's change of Ana's file is a suggestion, which he may not accept and she does ([04 §4.5](04-roster-and-authority.md)) |
-| S15 | a declined suggestion stays its author's file alone; edits made apart on two laptops both stay, one under the name and one as its conflict copy, and neither laptop's file is overwritten (ADR 0034) |
+| S15 | a declined suggestion stays its author's file alone until `pigeon resolve --take-group` ([07 §7.6](07-capture-and-install.md)); edits made apart on two laptops both stay, one under the name and one as its conflict copy, and neither laptop's file is overwritten (ADR 0034) |
 | S16 | two laptops each admit a new person while they cannot reach each other: the roster forks, then every laptop lists every device and the newcomers' files reach everyone (ADR 0051) |
 
 S14–S16 (`pigeon-lab/src/people.rs`) give laptops persons: a spare laptop

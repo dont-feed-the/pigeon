@@ -95,6 +95,19 @@ impl Exec {
             .outcome())
     }
 
+    /// `pigeon resolve FILE --take-group` on `on`.
+    pub(super) fn take_group(
+        &mut self,
+        on: Laptop,
+        file: &File,
+        w: &World,
+    ) -> Result<Outcome, String> {
+        let path = self.path(on, file, w);
+        Ok(self
+            .pigeon(Device::Laptop(on), &cli::take_group(&path))?
+            .outcome())
+    }
+
     /// The file and its conflict copies on `on`'s disk, by name, with the
     /// SHA-256 of each.
     fn copies(&self, on: Laptop, file: &File, w: &World) -> BTreeMap<String, String> {

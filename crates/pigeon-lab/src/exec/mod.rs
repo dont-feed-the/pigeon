@@ -406,6 +406,7 @@ impl Exec {
             LaptopOp::Join { laptop } => self.join_laptop(on, *laptop, w)?,
             LaptopOp::Accept { file } => self.decide(on, file, true, w)?,
             LaptopOp::Decline { file } => self.decide(on, file, false, w)?,
+            LaptopOp::TakeGroup { file } => self.take_group(on, file, w)?,
         })
     }
 
