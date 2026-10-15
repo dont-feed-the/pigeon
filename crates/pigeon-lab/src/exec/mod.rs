@@ -927,6 +927,13 @@ impl Interpreter for Exec {
     }
 
     fn trace(&mut self) -> Option<Vec<Label>> {
+        let files: Vec<PathBuf> = self
+            .devs
+            .iter()
+            .flat_map(|d| trace::files(&d.space.root))
+            .collect();
+        let lines = trace::merged(&files);
+        let _ = trace::write(&lines, &self.out_dir().join("trace.ndjson"));
         let admin = (0..self.laptops).find(|i| self.devs[*i].daemon.is_some())?;
         let machines = self
             .pigeon(Device::Laptop(Laptop(admin as u8)), &cli::plain("machines"))
@@ -942,13 +949,6 @@ impl Interpreter for Exec {
                 ids.insert(id, self.device_of(i));
             }
         }
-        let files: Vec<PathBuf> = self
-            .devs
-            .iter()
-            .flat_map(|d| trace::files(&d.space.root))
-            .collect();
-        let lines = trace::merged(&files);
-        let _ = trace::write(&lines, &self.out_dir().join("trace.ndjson"));
         if lines.is_empty() {
             return None;
         }

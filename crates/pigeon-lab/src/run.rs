@@ -136,8 +136,10 @@ pub fn run<I: Interpreter>(scenario: &Scenario, interp: &mut I) -> Report {
             verdict,
         });
     }
+    // Preserve the observations even when a behavioral check failed.
+    let trace = interp.trace();
     if !failed {
-        let verdict = match interp.trace() {
+        let verdict = match trace {
             None => Verdict::Skip("no trace".into()),
             Some(trace) => {
                 let wanted = project(&scenario.steps);

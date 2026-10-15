@@ -60,9 +60,9 @@ pub async fn laptop(d: &Daemon, inv: &Invitation, path: &Path) -> Result<String,
         .update_ref("refs/heads/main", &theirs, Some(&ours))
         .await
         .map_err(fail)?;
-    d.tracer
-        .event(crate::trace::Act::Merge, &[("commit", &theirs)]);
     g.reload_roster().await;
+    // Refounding starts a new accepted history, as a fresh join does.
+    crate::trace_roster::moved(&d.tracer, &g, "Merge", None).await;
     take_tree(&g, &theirs).await?;
     crate::refound::remember(&g).await;
     drop(busy);
