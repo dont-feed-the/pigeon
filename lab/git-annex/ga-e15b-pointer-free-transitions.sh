@@ -133,16 +133,27 @@ ok "stage-then-show: no pointer observed, all $N photos complete, status clean"
 # 5. Crashes: kill -9 each sequence (its whole process group) at a random instant,
 # check, rerun, check.
 export -f free_new keep_new; export N
+# A rerun right after kill -9 can find the killed transfer's lock still held
+# by a child that has not exited yet: try again for up to 10 s, saying so.
+rerun() {
+  local i
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    bash -ec "$1" > ../rerun.log 2>&1 && return 0
+    grep -q "transfer already in progress" ../rerun.log || return 1
+    echo "note: trial $t: $1 found the transfer lock held, retry $i"; sleep 1
+  done
+  return 1
+}
 for t in $(seq 1 "$TRIALS"); do
   d=$(python3 -c 'import random; print(round(random.uniform(0, 1.5), 2))')
   watch_start . ../obs5.log
   "${SETSID[@]}" bash -c free_new & P=$!; sleep "$d"; kill -9 -- -"$P" 2>/dev/null || true; wait "$P" 2>/dev/null || true
   complete_or_absent || fail "trial $t: free killed at ${d}s left a bad file"
-  bash -ec free_new > ../rerun.log 2>&1 || fail "trial $t: rerun of free_new failed: $(tail -3 ../rerun.log)"
+  rerun free_new || fail "trial $t: rerun of free_new failed: $(tail -3 ../rerun.log)"
   [ ! -e Photos ] || fail "trial $t: rerun of free left Photos"
   "${SETSID[@]}" bash -c keep_new & P=$!; sleep "$d"; kill -9 -- -"$P" 2>/dev/null || true; wait "$P" 2>/dev/null || true
   complete_or_absent || fail "trial $t: keep killed at ${d}s left a bad file"
-  bash -ec keep_new > ../rerun.log 2>&1 || fail "trial $t: rerun of keep_new failed: $(tail -3 ../rerun.log)"
+  rerun keep_new || fail "trial $t: rerun of keep_new failed: $(tail -3 ../rerun.log)"
   n=$(watch_stop ../obs5.log)
   [ "$n" = 0 ] || fail "trial $t: $n pointers observed"
   complete_or_absent || fail "trial $t: bad content after rerun"
