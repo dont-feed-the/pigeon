@@ -18,6 +18,7 @@ pub mod trace;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
+use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -155,7 +156,8 @@ impl Exec {
             log.display()
         );
         let mut env = dev.env.clone();
-        if let Some(plan) = dev.plan.take() {
+        let planned = dev.plan.take();
+        if let Some(plan) = planned.clone() {
             env.push((s("PIGEON_LAB_CRASH"), plan));
         }
         let child = dev
@@ -186,9 +188,15 @@ impl Exec {
             let exited = self.devs[i]
                 .daemon
                 .as_mut()
-                .is_some_and(|dm| dm.child.try_wait().ok().flatten().is_some());
-            if exited {
+                .and_then(|dm| dm.child.try_wait().ok().flatten());
+            if let Some(status) = exited {
                 self.devs[i].daemon = None;
+                // The armed crash came in the first round, before the first
+                // answer: it is the crash asked for; restart as supervise does.
+                if planned.is_some() && matches!(status.signal(), Some(6 | 9)) {
+                    self.devs[i].restarts += 1;
+                    return self.start(d);
+                }
                 return Err(format!(
                     "pigeond of {} exited at start; see {}",
                     self.devs[i].name,

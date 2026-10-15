@@ -362,6 +362,9 @@ async fn recover_inner(
     }
     g.learn_peers(&peers);
     let g = d.add_group(g, &path).await;
+    // No round may capture before every annexed file is hidden: a file of
+    // the index missing from the folder would read as a deletion (S10).
+    let busy = g.busy.lock().await;
     let theirs =
         crate::invite::fetch_welcome(&g, &custodian.device, &s.group, &commit, &d.device).await?;
     g.git
@@ -372,6 +375,7 @@ async fn recover_inner(
         .event(crate::trace::Act::Merge, &[("commit", &theirs)]);
     g.reload_roster().await;
     hide_all(&g, &theirs).await?;
+    drop(busy);
     d.wake.notify_one();
     Ok(s.name)
 }
