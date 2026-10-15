@@ -1,7 +1,9 @@
 //! Accept's check (04 §4.4, ADR 0007): the commits a peer's `main` adds to
 //! ours are judged parents first by `crate::merge` against the catalogue
-//! of their accepted parents; accept takes them in topological order up to
-//! the first that is not accepted, which waits with every commit after it.
+//! of their accepted parents; accept takes the last accepted one in
+//! topological order. A verdict depends only on a commit's history, so an
+//! accepted commit may hold refused ones, the proposals it adopts (04 §4.4
+//! rule 7); the first commit not accepted is named unless `theirs` is.
 
 use pigeon_core::authority::{self, Verdict};
 
@@ -38,11 +40,13 @@ pub async fn judge(g: &Group, ours: Option<&str>, theirs: &str) -> Result<Judged
     for c in list.lines().filter(|l| !l.is_empty()) {
         if k.engine.accepted(c) {
             out.accepted = Some(c.to_owned());
-        } else {
+        } else if out.stopped.is_none() {
             let v = k.verdicts.get(c).cloned();
             out.stopped = Some((c.to_owned(), v.unwrap_or(Verdict::Unknown("parent"))));
-            break;
         }
+    }
+    if out.accepted.as_deref() == Some(theirs) {
+        out.stopped = None;
     }
     Ok(out)
 }

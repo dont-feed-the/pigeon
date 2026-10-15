@@ -133,13 +133,15 @@ Consequences, checked by `Authority.tla` (`AuthorisedContent`,
   (`tests/authority.rs`, against an oracle of §4.3's tables). `pigeond`
   (`merge.rs`) judges every commit once, parents first, against
   B = `catalogue::Engine`'s catalogue of its accepted parents, under each
-  accepted parent's roster (rules 2 and 3) and with rule 5; a merge of
-  parents whose rosters differ (§4.8) and a commit with a parent outside
-  A(c) (rule 7) wait as *unknown* until M2 codes them. Capture splits a
-  batch with `authority::split` (§4.5). `pigeond` signs every
-  commit it writes with the device key, and accept takes a peer's commits
-  in topological order up to the first not accepted, which `doctor` names
-  with its problem code: `commit-unsigned`, `commit-forged`,
+  accepted parent's roster (rules 2 and 3) and with rule 5, and a parent
+  outside A(c) must be a proposal it adopts (rule 7, `proposal::adopts`);
+  a merge of parents whose rosters differ (§4.8) waits as *unknown* until
+  M2 codes the fold. Capture splits a batch with `authority::split`
+  (§4.5). `pigeond` signs every commit it writes with the device key, and
+  accept takes the last accepted of a peer's commits in topological order:
+  by locality, an accepted commit may hold refused ones, the proposals it
+  adopts. Unless the peer's `main` is accepted, the first commit not
+  accepted is named by `doctor` with its problem code: `commit-unsigned`, `commit-forged`,
   `commit-unknown-signer`, `commit-not-allowed`, `commit-malformed` or
   `commit-waits` ([10 §10.6](10-interfaces.md)).
 
@@ -170,9 +172,14 @@ alone). `pigeond::proposal` writes and keeps them; accept keeps a peer's
 only if its ref names its commit, the signature is the named device's, and,
 judged as one commit on the first accepted commit it builds on by first
 parents, it is refused for folder rules alone (`commit-not-allowed`). Place
-moves their content like `main`'s, and status reports list them. Deciding
-(adoption, rejection, withdrawal) comes next; until then an adoption waits
-as *unknown* (§4.4).
+moves their content like `main`'s, and status reports list them.
+`pigeon suggestions` lists the pending ones (not in `main`, and no other
+kept proposal stacked on them) with their deciders on the current `main`;
+`pigeon accept` writes the adoption, `proposal::adoption` (laws in
+`tests/proposal.rs`: it holds its proposal's change, keeps what `main`
+changed meanwhile and every path the proposal did not change, adds only
+conflict copies, and is the proposal itself on an unchanged `main`).
+Rejection and withdrawal come next.
 
 A rejection or withdrawal is a commit of `.pigeon/decisions/<commit>.toml`:
 

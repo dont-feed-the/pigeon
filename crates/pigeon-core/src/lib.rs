@@ -14,6 +14,7 @@ pub mod filter;
 pub mod headline;
 pub mod journal;
 pub mod names;
+pub mod proposal;
 pub mod queue;
 pub mod report;
 pub mod roster;

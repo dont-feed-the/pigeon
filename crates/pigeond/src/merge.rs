@@ -6,10 +6,11 @@
 //!
 //! A commit with several accepted parents is judged under each parent's
 //! roster R(p): with Δ = ∅ one roster that accepts its signer suffices;
-//! otherwise every one must accept it (rules 2 and 3). Until M2 brings them,
-//! a merge of parents whose rosters differ (a roster fork, 04 §4.8) and a
-//! commit with a parent that is not accepted (an adoption, 04 §4.5) wait as
-//! unknown. Rule 5 refuses a tree whose names Δ adds are not portable.
+//! otherwise every one must accept it (rules 2 and 3). A parent that is not
+//! accepted must be a proposal the commit adopts (rule 7, [`adopted`]); a
+//! merge of parents whose rosters differ (a roster fork, 04 §4.8) waits as
+//! unknown until M2 brings the fold. Rule 5 refuses a tree whose names Δ
+//! adds are not portable. [`adopt`] writes an adoption.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -148,12 +149,16 @@ async fn judge_child(
     if accepted.is_empty() {
         return Ok(Verdict::Unknown("parent"));
     }
-    if !others.is_empty() {
-        return Ok(Verdict::Unknown("proposal"));
-    }
     let Some(before) = g.lock().engine.base(&accepted).map(|v| v.tree.clone()) else {
         return Ok(Verdict::Unknown("parent"));
     };
+    let mut author = None;
+    for x in &others {
+        match adopted(g, x, &before, after).await? {
+            Ok(a) => author = author.or(Some(a)),
+            Err(v) => return Ok(v),
+        }
+    }
     let mut rosters = Vec::new();
     for p in &accepted {
         match roster_at(git, &git.tree(p).await?).await {
@@ -168,6 +173,16 @@ async fn judge_child(
     let verdict = judge_step(g, raw, &before, after, &rosters).await?;
     let refs: Vec<&Roster> = rosters.iter().collect();
     name(meta, &verdict, &refs);
+    if let (Verdict::Accepted(..), Some((device, when))) = (&verdict, author) {
+        // An adoption shows the proposal's author and time (05 §5.3).
+        let signer = Verdict::Accepted(pigeon_core::roster::DeviceId(device), None);
+        let decider = std::mem::take(&mut meta.who);
+        name(meta, &signer, &refs);
+        if meta.who.is_empty() {
+            meta.who = decider;
+        }
+        meta.when = when;
+    }
     if let Verdict::Accepted(signer, _) = &verdict {
         let person = rosters
             .iter()
@@ -183,6 +198,44 @@ async fn judge_child(
             .collect();
     }
     Ok(verdict)
+}
+
+/// Rule 7 for the parent `x` of a commit outside A(c), whose tree is
+/// `after` and B(c) `before`: `x` must be a proposal, signed by a device
+/// and refused for folder rules alone against its base, and `after` must
+/// hold its change (`proposal::adopts`). Answers its signer and author
+/// time, or the verdict on the commit.
+async fn adopted(
+    g: &Group,
+    x: &str,
+    before: &Tree,
+    after: &Tree,
+) -> Result<Result<(String, Stamp), Verdict>, Error> {
+    let raw = g.git.object(x).await?;
+    let Ok(signer) = pigeon_core::sig::verify(&raw) else {
+        return Ok(Err(Verdict::Unknown("parent")));
+    };
+    let Some(base) = crate::proposal::base(g, x).await? else {
+        return Ok(Err(Verdict::Unknown("parent")));
+    };
+    let mine = g.git.tree(x).await?;
+    match judge_proposal(g, &raw, &base, &mine).await? {
+        Verdict::Refused(Refusal::NotAllowed(_)) => {}
+        _ => return Ok(Err(Verdict::Unknown("parent"))),
+    }
+    let Some(at) = g
+        .lock()
+        .engine
+        .base(std::slice::from_ref(&base))
+        .map(|v| v.tree.clone())
+    else {
+        return Ok(Err(Verdict::Unknown("parent")));
+    };
+    if let Err(path) = pigeon_core::proposal::adopts(&at, &mine, before, after) {
+        return Ok(Err(Verdict::Refused(Refusal::NotAllowed(path))));
+    }
+    let (utc, offset) = authority::author_time(&raw).unwrap_or((0, 0));
+    Ok(Ok((signer.0, Stamp { utc, offset })))
 }
 
 /// The verdict of rules 2–6 on `raw`, whose tree is `after`, against
@@ -349,6 +402,59 @@ pub async fn merge(g: &Group, ours: &str, theirs: &str) -> Result<Option<String>
     judge_history(g, std::slice::from_ref(&commit)).await?;
     let outcome = g.lock().engine.outcome(&commit).cloned();
     Ok((outcome == Some(Outcome::Clean)).then_some(commit))
+}
+
+/// Writes and judges the adoption of the proposal `x` on `main` (04 §4.5):
+/// a merge of both whose tree is `proposal::adoption`, signed with the
+/// device key, with the Force trailer when `force` gives a reason (04 §4.6).
+/// Answers it if it is accepted.
+pub async fn adopt(
+    g: &Group,
+    main: &str,
+    x: &str,
+    force: Option<&str>,
+) -> Result<Option<String>, Error> {
+    judge_history(g, &[main.to_owned(), x.to_owned()]).await?;
+    let Some(base) = crate::proposal::base(g, x).await? else {
+        return Ok(None);
+    };
+    let (at, ours) = {
+        let mut k = g.lock();
+        let at = k
+            .engine
+            .base(std::slice::from_ref(&base))
+            .map(|v| v.tree.clone());
+        let ours = k.engine.base(&[main.to_owned()]).map(|v| v.tree.clone());
+        (at, ours)
+    };
+    let (Some(at), Some(ours)) = (at, ours) else {
+        return Ok(None);
+    };
+    let raw = g.git.object(x).await?;
+    let (utc, offset) = authority::author_time(&raw).unwrap_or((0, 0));
+    let who = pigeon_core::sig::verify(&raw)
+        .ok()
+        .and_then(|signer| {
+            let doc = g.roster()?;
+            let d = doc.roster.devices.get(&signer)?;
+            doc.roster.persons.get(&d.person).map(|p| p.name.clone())
+        })
+        .unwrap_or_else(|| "?".to_owned());
+    let mine = g.git.tree(x).await?;
+    let tree = pigeon_core::proposal::adoption(&at, &mine, &ours, &who, Stamp { utc, offset });
+    let oid = write_tree(&g.git, &tree).await?;
+    let message = match force {
+        Some(why) => format!("pigeon: accept a suggestion\n\n{} {why}", authority::FORCE),
+        None => "pigeon: accept a suggestion".to_owned(),
+    };
+    let commit = g.git.commit_tree(&oid, &[main, x], &message).await?;
+    judge_history(g, std::slice::from_ref(&commit)).await?;
+    let accepted = g.lock().engine.accepted(&commit);
+    if !accepted {
+        let v = g.lock().verdicts.get(&commit).cloned();
+        tracing::warn!(group = %g.id, commit = %commit, verdict = ?v, "adoption-refused");
+    }
+    Ok(accepted.then_some(commit))
 }
 
 /// Makes a save of `path` that `head` changed meanwhile a contribution

@@ -24,7 +24,7 @@ result, progress events then a result, or a `Problem` (§10.6).
 | `View {path, version \| group}` | `pigeon view PATH [--version N \| --group]` | *Open a copy*, *Open Paul's version* | [07 §7.6](07-capture-and-install.md) |
 | `Restore {path, version \| at}` | `pigeon restore PATH [--version N \| --at TIME]` | *Restore this version*, Deleted files | [05 §5.1](05-catalogue-and-names.md) |
 | `Deleted {path?}` | `pigeon deleted [PATH]` | Files → Deleted files | [05 §5.1](05-catalogue-and-names.md) |
-| `Proposals` · `Accept {id, override?}` · `Reject {id, note?}` | `pigeon suggestions` · `pigeon accept ID [--override REASON]` · `pigeon decline ID [--note TEXT]` | Suggestions | [04 §4.5, §4.6](04-roster-and-authority.md) |
+| `Proposals` · `Accept {proposal, override?}` · `Reject {proposal, note?}` | `pigeon suggestions` · `pigeon accept ID [--override REASON]` · `pigeon decline ID [--note TEXT]` | Suggestions | [04 §4.5, §4.6](04-roster-and-authority.md) |
 | `Conflicts` · `Resolve {path, choice}` | `pigeon conflicts` · `pigeon resolve PATH --take-group \| --keep-copy DEST \| --suggest-again` | Suggestions → Yours, Home | [07 §7.6](07-capture-and-install.md) |
 | `People` · `Machines` | `pigeon people` · `pigeon machines` | People & machines | [04 §4.2](04-roster-and-authority.md) |
 | `RemoveDevice {name}` · `Leave` | `pigeon remove-computer NAME` · `pigeon leave` | *I lost a computer* · Settings | [09 §9.7](09-network-and-joining.md) |

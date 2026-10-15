@@ -6,7 +6,9 @@
 //! `refs/pigeon/proposals/<device>/<commit>` and relayed to every device;
 //! `main` keeps Ana's version everywhere, Cid keeps his file as a waiting
 //! `suggestion`, and the backup machine holds its content. A later save
-//! stacks a new proposal on the first.
+//! stacks a new proposal on the first. Ana sees it in `pigeon suggestions`
+//! and accepts it, which Cid may not; the adoption reaches every device,
+//! and Cid's suggestion ends without his file being touched.
 //!
 //! Needs what `tests/slice.rs` needs: git-annex, and `pigeon` and
 //! `git-annex-p2p-iroh` built next to `pigeond`.
@@ -21,6 +23,7 @@ use std::process::Command;
 use common::{
     Daemon, SERIAL, dirs, eventually_within, git_env, join, logs, pigeon, said, start, until,
 };
+use pigeon_proto::Response;
 use pigeon_proto::api::State;
 
 /// How long a change may take to reach every device.
@@ -184,4 +187,61 @@ fn a_change_its_person_may_not_make_becomes_a_relayed_suggestion() {
     let main = git(&a1, &fa, &["rev-parse", "main:a.txt"]);
     let mains = git(&b1, &fc, &["rev-parse", "main:a.txt"]);
     assert_eq!(main, mains, "Cid's main differs from Ana's at a.txt");
+
+    // Ana decides; Cid may not.
+    let listed = |d: &Daemon| match pigeon(d, &["suggestions"]).as_slice() {
+        [Response::Proposals { proposals }] => proposals.clone(),
+        other => panic!("suggestions: {other:?}"),
+    };
+    eventually_within(
+        WAIT,
+        || listed(&a1).iter().any(|p| p.id == new),
+        "Ana never saw the stacked suggestion",
+        &all,
+    );
+    let theirs = listed(&a1);
+    assert_eq!(theirs.len(), 1, "{theirs:?}");
+    assert!(
+        theirs[0].decide && !theirs[0].mine && !theirs[0].force,
+        "{theirs:?}"
+    );
+    assert_eq!(theirs[0].paths, ["a.txt"]);
+    let own = listed(&b1);
+    assert!(own.len() == 1 && own[0].mine && !own[0].decide, "{own:?}");
+    let refused = pigeon(&b1, &["accept", &new[..12]]);
+    assert!(
+        refused
+            .iter()
+            .any(|r| matches!(r, Response::Problem(p) if p.code == "not-allowed")),
+        "{refused:?}\n{}",
+        logs(&all)
+    );
+    let accepted = pigeon(&a1, &["accept", &new[..12]]);
+    assert!(
+        said(&accepted, "accepted-suggestion", "author").is_some(),
+        "{accepted:?}\n{}",
+        logs(&all)
+    );
+
+    // The adoption reaches everyone; Cid's suggestion ends, his file untouched.
+    eventually_within(
+        WAIT,
+        || text(&fa, "a.txt") == "cid's second edit\n",
+        "Ana's folder never took the accepted suggestion",
+        &all,
+    );
+    eventually_within(
+        WAIT,
+        || {
+            !std::fs::read_to_string(&table)
+                .unwrap_or_default()
+                .contains("\"a.txt\"")
+        },
+        "Cid's suggestion never ended",
+        &all,
+    );
+    assert_eq!(text(&fc, "a.txt"), "cid's second edit\n");
+    assert!(listed(&a1).is_empty() && listed(&b1).is_empty());
+    let status = git(&b1, &fc, &["status", "--porcelain"]);
+    assert!(!status.contains("a.txt"), "{status}");
 }

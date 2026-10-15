@@ -110,6 +110,25 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         from: Option<String>,
     },
+    /// `pigeon suggestions`: the pending proposals (04 §4.5).
+    Proposals,
+    /// `pigeon accept ID [--override REASON]`: adopt a proposal.
+    Accept {
+        /// The proposal's commit, or a prefix of it (`id` names the
+        /// envelope's request).
+        proposal: String,
+        /// The Force reason (04 §4.6), when nobody may make the change.
+        #[serde(default, rename = "override", skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+    },
+    /// `pigeon decline ID [--note TEXT]`: reject a proposal.
+    Reject {
+        /// The proposal's commit, or a prefix of it.
+        proposal: String,
+        /// Why, for its author.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        note: Option<String>,
+    },
     /// `pigeon doctor [--details]`.
     Doctor {
         /// Show every check.
@@ -183,6 +202,11 @@ pub enum Response {
     History {
         /// Newest first.
         versions: Vec<VersionStatus>,
+    },
+    /// The answer to `Proposals`.
+    Proposals {
+        /// Oldest first.
+        proposals: Vec<Suggestion>,
     },
     /// The answer to `Address`.
     Address {
@@ -322,4 +346,28 @@ pub struct Machine {
     /// Whether it is this computer.
     #[serde(default)]
     pub this_device: bool,
+}
+
+/// A pending proposal (04 §4.5).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Suggestion {
+    /// Its commit.
+    pub id: String,
+    /// Its author's name.
+    pub author: String,
+    /// The name of the computer it was saved on.
+    pub device: String,
+    /// When it was saved, RFC 3339.
+    pub saved_at: String,
+    /// The paths it changes.
+    pub paths: Vec<String>,
+    /// Whether this computer's person decides it.
+    #[serde(default)]
+    pub decide: bool,
+    /// Whether adopting it needs an admin's override (04 §4.6).
+    #[serde(default)]
+    pub force: bool,
+    /// Whether it is this person's.
+    #[serde(default)]
+    pub mine: bool,
 }

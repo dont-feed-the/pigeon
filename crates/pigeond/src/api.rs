@@ -43,7 +43,7 @@ pub fn problem(code: &str, args: &[(&str, Arg)], details: Option<String>) -> Res
     })
 }
 
-fn said(id: &str, args: &[(&str, Arg)]) -> Response {
+pub(crate) fn said(id: &str, args: &[(&str, Arg)]) -> Response {
     Response::Said {
         message: msg(id, args),
     }
@@ -162,6 +162,11 @@ async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             folder,
             from,
         } => crate::recovery::recover(d, &sheet, folder, from).await,
+        Request::Proposals => crate::decide::list(d).await,
+        Request::Accept { proposal, reason } => {
+            crate::decide::accept(d, &proposal, reason.as_deref()).await
+        }
+        Request::Reject { .. } => not_in_this_build("decline"),
         Request::Hello { .. }
         | Request::Address { .. }
         | Request::Connect { .. }
@@ -321,7 +326,7 @@ async fn create_inner(
 
 /// Starts a round shortly after the answer is on its way, so that a crash
 /// in the round never takes the answer with it (13 §13.12, S9).
-fn wake_soon(d: &Daemon) {
+pub(crate) fn wake_soon(d: &Daemon) {
     let wake = d.wake.clone();
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;

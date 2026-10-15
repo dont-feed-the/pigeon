@@ -48,6 +48,8 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("restore PATH [--version N | --at TIME]", "cmd-restore"),
     ("free PATH", "cmd-free"),
     ("keep PATH", "cmd-keep"),
+    ("suggestions", "cmd-suggestions"),
+    ("accept ID [--override REASON]", "cmd-accept"),
     ("remove-computer NAME [--yes]", "cmd-remove-computer"),
     ("recovery-sheet", "cmd-recovery-sheet"),
     ("recover SHEET [FOLDER] [--from NAME]", "cmd-recover"),
@@ -56,7 +58,9 @@ pub const COMMANDS: &[(&str, &str)] = &[
 ];
 
 /// Options that take a value.
-const VALUED: &[&str] = &["k", "name", "folder", "version", "at", "from"];
+const VALUED: &[&str] = &[
+    "k", "name", "folder", "version", "at", "from", "override", "note",
+];
 
 #[derive(Debug, Default)]
 struct Split {
@@ -213,6 +217,11 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
             not_shared: s.flag("not-shared"),
         }),
         "machines" if fits(0, 0, &[]) => send(Request::Machines),
+        "suggestions" if fits(0, 0, &[]) => send(Request::Proposals),
+        "accept" if fits(1, 1, &["override"]) => send(Request::Accept {
+            proposal: w.first()?.clone(),
+            reason: s.value("override").map(str::to_owned),
+        }),
         "history" if fits(1, 1, &[]) => send(Request::History {
             path: absolute(w.first()?),
         }),
@@ -255,7 +264,8 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
             })
         }
         "create" | "invite" | "join" | "status" | "machines" | "history" | "restore" | "free"
-        | "keep" | "remove-computer" | "recovery-sheet" | "recover" | "doctor" | "debug" => None,
+        | "keep" | "remove-computer" | "recovery-sheet" | "recover" | "doctor" | "debug"
+        | "suggestions" | "accept" => None,
         other => Some(Action::NotInThisBuild(other.to_owned())),
     }
 }

@@ -70,7 +70,7 @@ pub async fn write(g: &Group, me: &str, parent: &str, tree: &Tree) -> Result<Str
 }
 
 /// The first accepted commit `commit` builds on, by first parents.
-async fn base(g: &Group, commit: &str) -> Result<Option<String>, Error> {
+pub async fn base(g: &Group, commit: &str) -> Result<Option<String>, Error> {
     let list = g.git.run(&["rev-list", "--first-parent", commit]).await?;
     let k = g.lock();
     Ok(list

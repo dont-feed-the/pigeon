@@ -149,6 +149,24 @@ impl Renderer {
         self.cat.format(&msg)
     }
 
+    fn suggestion(&self, p: &pigeon_proto::api::Suggestion) -> String {
+        let saved = pigeon_proto::time::parse_rfc3339(&p.saved_at)
+            .map_or_else(|| p.saved_at.clone(), |t| self.ago(self.now - t));
+        let id = if p.mine {
+            "suggestion-yours"
+        } else if p.decide {
+            "suggestion-decide"
+        } else {
+            "suggestion-other"
+        };
+        let msg = pigeon_i18n::Message::new(id)
+            .arg("id", p.id.get(..12).unwrap_or(&p.id).to_owned())
+            .arg("author", p.author.clone())
+            .arg("paths", p.paths.join(", "))
+            .arg("saved", saved);
+        self.cat.format(&msg)
+    }
+
     /// The lines of a response, and whether they go to standard error.
     pub fn response(&self, r: &Response) -> (Vec<String>, bool) {
         match r {
@@ -162,6 +180,13 @@ impl Renderer {
             Response::History { versions } => {
                 (versions.iter().map(|v| self.version(v)).collect(), false)
             }
+            Response::Proposals { proposals } if proposals.is_empty() => {
+                (vec![self.id("suggestions-none")], false)
+            }
+            Response::Proposals { proposals } => (
+                proposals.iter().map(|p| self.suggestion(p)).collect(),
+                false,
+            ),
             Response::Done
             | Response::Hello { .. }
             | Response::Address { .. }
