@@ -194,10 +194,19 @@ pub async fn capture(g: &Group, tracer: &Tracer) -> Result<Captured, Error> {
         args.extend(chunk.iter().map(String::as_str));
         g.git.run(&args).await?;
     }
-    let diverging = settle(g, main.as_ref(), &before, &pending, &gone).await?;
-    note_diverging(g, diverging);
+    let settled = settle(g, head.as_deref(), main.as_ref(), &before, &pending, &gone).await?;
+    note_diverging(g, settled.diverging);
     done.added = add.len();
     done.removed = remove.len();
+    let head = match settled.moved {
+        Some(m) => {
+            main = Some(g.git.tree(&m).await?);
+            behind = true;
+            done.commit = Some(m.clone());
+            Some(m)
+        }
+        None => head,
+    };
     if done.added + done.removed == 0 {
         return Ok(done);
     }
@@ -236,53 +245,86 @@ pub async fn capture(g: &Group, tracer: &Tracer) -> Result<Captured, Error> {
     Ok(done)
 }
 
+/// What [`settle`] did.
+struct Settled {
+    /// The paths that diverge still.
+    diverging: Vec<String>,
+    /// `main` after the merges of the person's saves, if it moved.
+    moved: Option<String>,
+}
+
 /// Settles the paths changed where the index lags `main`: one that now
 /// holds `main`'s version, or is gone as `main` has it gone, takes it in
-/// the index; any other diverges and keeps its index entry, its content
-/// added to the annex. Answers the diverging paths.
+/// the index. Any other save becomes a contribution concurrent with
+/// `main`'s version, merged into `main` (`merge::concurrent`), so the
+/// catalogue keeps both (05 §5.2); if that merge is not accepted, the path
+/// diverges and keeps its index entry, its content added to the annex.
 async fn settle(
     g: &Group,
+    head: Option<&str>,
     main: Option<&Tree>,
     before: &Tree,
     pending: &[String],
     gone: &[String],
-) -> Result<Vec<String>, Error> {
+) -> Result<Settled, Error> {
+    let mut done = Settled {
+        diverging: Vec::new(),
+        moved: None,
+    };
     if pending.is_empty() && gone.is_empty() {
-        return Ok(Vec::new());
+        return Ok(done);
     }
     let empty = Tree::new();
     let main = main.unwrap_or(&empty);
     let index = g.git.index().await?;
-    let mut diverging = Vec::new();
-    for p in pending {
-        if index.contains_key(p) && index.get(p) == main.get(p) {
+    let mut tip = head.map(str::to_owned);
+    for p in pending.iter().chain(gone) {
+        let deleted = gone.contains(p);
+        let mine = if deleted { None } else { index.get(p) };
+        if mine.is_some() && mine == main.get(p) || deleted && !main.contains_key(p) {
+            if deleted {
+                g.git
+                    .run(&["update-index", "--force-remove", "--", p])
+                    .await?;
+            }
             continue;
         }
-        let args: Vec<String> = match before.get(p) {
-            Some(e) => ["update-index", "--cacheinfo"]
-                .map(str::to_owned)
-                .into_iter()
-                .chain([format!("{},{},{p}", e.mode, e.oid)])
-                .collect(),
-            None => ["update-index", "--force-remove", "--", p.as_str()]
-                .map(str::to_owned)
-                .into_iter()
-                .collect(),
-        };
-        let args: Vec<&str> = args.iter().map(String::as_str).collect();
-        g.git.run(&args).await?;
-        diverging.push(p.clone());
-    }
-    for p in gone {
-        if main.contains_key(p) {
-            diverging.push(p.clone());
-        } else {
-            g.git
-                .run(&["update-index", "--force-remove", "--", p])
-                .await?;
+        if let Some(t) = tip.clone() {
+            match crate::merge::concurrent(g, &t, p, before.get(p), mine).await {
+                Ok(Some(m)) => {
+                    g.git.update_ref("refs/heads/main", &m, Some(&t)).await?;
+                    tracing::info!(group = %g.id, path = %p, commit = %m, "concurrent-save");
+                    if deleted {
+                        g.git
+                            .run(&["update-index", "--force-remove", "--", p])
+                            .await?;
+                    }
+                    tip = Some(m.clone());
+                    done.moved = Some(m);
+                    continue;
+                }
+                Ok(None) => {}
+                Err(e) => tracing::warn!(group = %g.id, path = %p, error = %e, "concurrent-failed"),
+            }
         }
+        if !deleted {
+            let args: Vec<String> = match before.get(p) {
+                Some(e) => ["update-index", "--cacheinfo"]
+                    .map(str::to_owned)
+                    .into_iter()
+                    .chain([format!("{},{},{p}", e.mode, e.oid)])
+                    .collect(),
+                None => ["update-index", "--force-remove", "--", p.as_str()]
+                    .map(str::to_owned)
+                    .into_iter()
+                    .collect(),
+            };
+            let args: Vec<&str> = args.iter().map(String::as_str).collect();
+            g.git.run(&args).await?;
+        }
+        done.diverging.push(p.clone());
     }
-    Ok(diverging)
+    Ok(done)
 }
 
 fn note_diverging(g: &Group, paths: Vec<String>) {

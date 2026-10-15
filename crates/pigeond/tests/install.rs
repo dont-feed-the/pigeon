@@ -1,10 +1,12 @@
 //! Install on a laptop (07 §7.5): `main` moves past the index, with another
 //! laptop's versions, and install writes each clean path through the
 //! journal without a commit: a changed file, a new one in a new folder, a
-//! deletion. A path the person changed meanwhile is never written; capture
-//! keeps it out of `main` while it diverges, commits the person's other
-//! changes on `main`'s tree, and settles the path once it holds `main`'s
-//! version. A version whose content is not here waits (`receiving`).
+//! deletion. A save racing an install becomes a contribution concurrent
+//! with the version install did not write, merged into `main`: the earlier
+//! keeps the name, the other a conflict name, and the laptop whose save
+//! lost the name keeps its file, a divergence in `conflicts.json`, until it
+//! holds `main`'s version. Capture commits on `main`'s tree, never on a
+//! lagging index's. A version whose content is not here waits.
 //!
 //! Needs git-annex on PATH; skipped without, unless
 //! `PIGEON_REQUIRE_GIT_ANNEX` is set, as in CI.
@@ -222,7 +224,7 @@ async fn install_writes_the_versions_main_gained() {
         l.git.rev("refs/heads/main").await.as_deref(),
         Some(c2.as_str())
     );
-    let done = install::incoming(&l.g, &l.t).await.unwrap();
+    let done = install::incoming(&l.g, &dev(1).0, &l.t).await.unwrap();
     let want = Installed {
         written: 2,
         removed: 1,
@@ -242,7 +244,7 @@ async fn install_writes_the_versions_main_gained() {
     assert_eq!(clean(&l).await, "");
     assert_eq!(capture::capture(&l.g, &l.t).await.unwrap().commit, None);
     assert_eq!(
-        install::incoming(&l.g, &l.t).await.unwrap(),
+        install::incoming(&l.g, &dev(1).0, &l.t).await.unwrap(),
         Installed::default()
     );
     let journal = std::fs::read(l.g.files.install_journal()).unwrap_or_default();
@@ -251,14 +253,14 @@ async fn install_writes_the_versions_main_gained() {
     let mut tree = l.git.tree(&c2).await.unwrap();
     tree.remove("sub/n.txt");
     bens(&l, &tree, &c2, 120).await;
-    let done = install::incoming(&l.g, &l.t).await.unwrap();
+    let done = install::incoming(&l.g, &dev(1).0, &l.t).await.unwrap();
     assert_eq!(done.removed, 1, "{done:?}");
     assert!(!l.wt.join("sub").exists());
     assert_eq!(clean(&l).await, "");
 }
 
 #[tokio::test]
-async fn a_path_the_person_changed_is_never_written() {
+async fn a_save_racing_an_install_is_kept_both_ways() {
     let Some(l) = laptop().await else {
         return;
     };
@@ -268,37 +270,67 @@ async fn a_path_the_person_changed_is_never_written() {
     let theirs = version(&l, "a.txt", b"two\n", true).await;
     tree.insert("a.txt".into(), theirs.clone());
     let c2 = bens(&l, &tree, &c1, 60).await;
+    // Ana saves before install wrote Ben's version: her save is a
+    // contribution concurrent with his, merged into `main`.
     write(&l, "a.txt", b"mine\n");
-    let none = capture::capture(&l.g, &l.t).await.unwrap();
-    assert_eq!(none.commit, None, "{none:?}");
-    assert_eq!(l.g.lock().diverging, ["a.txt".to_owned()].into());
-    let done = install::incoming(&l.g, &l.t).await.unwrap();
-    assert_eq!((done.written, done.deferred), (0, 1), "{done:?}");
+    let m = capture::capture(&l.g, &l.t).await.unwrap().commit.unwrap();
+    assert!(l.g.lock().diverging.is_empty());
+    let parents = l
+        .git
+        .run(&["rev-parse", &format!("{m}^1"), &format!("{m}^2")])
+        .await;
+    assert_eq!(parents.unwrap().lines().next(), Some(c2.as_str()));
+    let tm = l.git.tree(&m).await.unwrap();
+    assert_eq!(
+        tm.get("a.txt"),
+        Some(&theirs),
+        "the earlier save keeps the name"
+    );
+    let copies: Vec<&String> = tm
+        .keys()
+        .filter(|q| pigeon_core::names::is_copy_of(q, "a.txt"))
+        .collect();
+    let [copy] = copies.as_slice() else {
+        panic!("one copy: {tm:?}");
+    };
+    assert!(copy.starts_with("a (Ana, "), "{copy}");
+    // Install writes the copy and leaves Ana's file: she lost the name, and
+    // the path diverges (`concurrent`) until she chooses.
+    let done = install::incoming(&l.g, &dev(1).0, &l.t).await.unwrap();
+    assert_eq!((done.written, done.deferred), (1, 1), "{done:?}");
     assert_eq!(read(&l, "a.txt"), "mine\n");
+    assert_eq!(read(&l, copy), "mine\n");
+    let table = pigeond::conflicts_file::read(&l.g).unwrap();
+    let d = &table.paths["a.txt"];
+    assert_eq!(d.kind, pigeond::conflicts_file::Kind::Concurrent);
+    assert!(
+        d.mine.is_some() && d.group.is_some() && d.mine != d.group,
+        "{d:?}"
+    );
     // Another save is committed on `main`'s tree, not the index's.
     write(&l, "c.txt", b"sea\n");
     let c3 = capture::capture(&l.g, &l.t).await.unwrap().commit.unwrap();
     let t3 = l.git.tree(&c3).await.unwrap();
     assert_eq!(t3.get("a.txt"), Some(&theirs), "Ben's version stays");
-    assert!(t3.contains_key("c.txt"));
-    assert_eq!(l.git.run(&["rev-parse", "main^"]).await.unwrap().trim(), c2);
-    // The person's version is in the annex.
-    let mine = l.dir.path().join("mine.txt");
-    std::fs::write(&mine, b"mine\n").unwrap();
-    let k = l
-        .git
-        .run(&["annex", "calckey", mine.to_str().unwrap()])
-        .await
-        .unwrap();
-    let held = l.git.run(&["annex", "contentlocation", k.trim()]).await;
-    assert!(
-        held.is_ok_and(|p| !p.trim().is_empty()),
-        "kept in the annex"
+    assert!(t3.contains_key("c.txt") && t3.contains_key(copy.as_str()));
+    assert_eq!(
+        install::incoming(&l.g, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .written,
+        0
     );
-    // Once the file holds Ben's version, the path settles.
+    assert_eq!(read(&l, "a.txt"), "mine\n", "never written");
+    // Once the file holds Ben's version, the divergence ends.
     write(&l, "a.txt", b"two\n");
     assert_eq!(capture::capture(&l.g, &l.t).await.unwrap().commit, None);
-    assert!(l.g.lock().diverging.is_empty());
+    install::incoming(&l.g, &dev(1).0, &l.t).await.unwrap();
+    assert!(
+        pigeond::conflicts_file::read(&l.g)
+            .unwrap()
+            .paths
+            .is_empty()
+    );
     assert_eq!(clean(&l).await, "");
 }
 
@@ -312,7 +344,7 @@ async fn a_version_whose_content_is_not_here_waits() {
     let mut tree = l.git.tree(&c1).await.unwrap();
     tree.insert("a.txt".into(), version(&l, "a.txt", b"far\n", false).await);
     bens(&l, &tree, &c1, 60).await;
-    let done = install::incoming(&l.g, &l.t).await.unwrap();
+    let done = install::incoming(&l.g, &dev(1).0, &l.t).await.unwrap();
     assert_eq!((done.receiving, done.written), (1, 0), "{done:?}");
     assert_eq!(read(&l, "a.txt"), "one\n");
     assert_eq!(capture::capture(&l.g, &l.t).await.unwrap().commit, None);

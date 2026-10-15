@@ -73,7 +73,9 @@ its verdict, tree and open conflicts (`tests/catalogue_oracle.rs`), and
 traces validate against `Catalogue.tla` ([13 §13.3](13-verification.md)).
 `pigeond`'s accept judges with it, and a custodian writes the merge of two
 accepted heads (`pigeond::merge`, `tests/merge.rs`) with `mktree`, without
-the `merge-tree` fast path yet; laptops install no merge yet (M2).
+the `merge-tree` fast path yet. A laptop merges the same way, and a save
+racing an install is merged as a contribution concurrent with the version
+it was not shown (`merge::concurrent`, `pigeond/tests/install.rs`).
 
 **Merge commits.** `pigeond` writes a merge *M*'s tree as
 `catalogue(anc*(M))` with plumbing (`merge-tree --write-tree` as a checked

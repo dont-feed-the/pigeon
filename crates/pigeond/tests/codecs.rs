@@ -1,8 +1,8 @@
 //! Laws of `pigeond`'s own codecs (13 §13.12): hex and RFC 3339 times
 //! round-trip, a journal record parses back from its line (07 §7.5), a
 //! roster file parses back to the roster it renders and one a newer release
-//! could write is unknown (ADR 0048), and an invitation and
-//! a recovery sheet decode to what they encode. HMAC-SHA256 matches RFC
+//! could write is unknown (ADR 0048), a divergence table parses back, and
+//! an invitation and a recovery sheet decode to what they encode. HMAC-SHA256 matches RFC
 //! 4231.
 #![allow(clippy::unwrap_used, clippy::panic, reason = "tests")]
 
@@ -224,6 +224,57 @@ fn invitations_round_trip(tc: TestCase) {
         Some(inv)
     );
     assert_eq!(decode(body), None);
+}
+
+/// Law *round trip* (11 §11.5): a divergence table (`conflicts.json`, 07
+/// §7.6) parses back to the table it renders, and one of a newer format
+/// reads as nothing, so it is never rewritten.
+#[hegel::test(test_cases = 1000)]
+fn conflict_tables_round_trip(tc: TestCase) {
+    use pigeond::conflicts_file::{Divergence, FORMAT, Kind, State, Table, parse, render};
+    let n = tc.draw(gs::integers::<u8>().max_value(4));
+    let mut paths = BTreeMap::new();
+    for _ in 0..n {
+        let kinds = [Kind::Suggestion, Kind::Concurrent, Kind::Recovered];
+        let kind = kinds[tc.draw(gs::integers::<usize>().max_value(2))];
+        let state = if tc.draw(gs::booleans()) {
+            State::Waiting
+        } else {
+            State::Conflict
+        };
+        let stat = tc.draw(gs::booleans()).then(|| {
+            let u = |tc: &TestCase| i128::from(tc.draw(gs::integers::<u64>()));
+            [
+                u(&tc),
+                u(&tc),
+                u(&tc),
+                i128::from(tc.draw(gs::integers::<i64>())),
+            ]
+        });
+        let since = tc.draw(gs::integers::<i64>().min_value(0).max_value(4_000_000_000));
+        let d = Divergence {
+            kind,
+            since: rfc3339(since),
+            state,
+            mine: maybe(&tc),
+            mine_stat: stat,
+            proposal: maybe(&tc),
+            group: maybe(&tc),
+            installed: maybe(&tc),
+            told: tc.draw(gs::booleans()),
+        };
+        paths.insert(word(&tc), d);
+    }
+    let t = Table {
+        format: FORMAT,
+        paths,
+    };
+    assert_eq!(parse(&render(&t)), Some(t.clone()));
+    let newer = Table {
+        format: FORMAT + 1,
+        ..t
+    };
+    assert_eq!(parse(&render(&newer)), None);
 }
 
 /// Law *sheet*: a recovery sheet reads back from its `pgr1-` code wherever

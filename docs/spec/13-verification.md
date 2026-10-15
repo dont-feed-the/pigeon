@@ -228,10 +228,13 @@ from this specification as follows, each to close before S1–S11 run
   merging two accepted heads ([05 §5.2](05-catalogue-and-names.md)); a
   merge of roster forks and an adoption wait; a laptop moves `main` the
   same way, then installs each clean path's new version through the journal
-  ([07 §7.5](07-capture-and-install.md)), and a path its person changed
-  meanwhile diverges: capture keeps it out of `main` until it holds `main`'s
-  version, without `conflicts.json` yet ([07 §7.6](07-capture-and-install.md));
-  no laptop joins yet, so the group has one laptop;
+  ([07 §7.5](07-capture-and-install.md)); a save racing an install becomes
+  a contribution concurrent with `main`'s version, merged into `main`, and
+  the laptop whose version lost the name keeps its file, a `concurrent`
+  divergence in `conflicts.json` that install leaves alone
+  ([07 §7.6](07-capture-and-install.md)); a save that does not merge clean
+  stays out of `main`, its content in the annex; no laptop joins yet, so
+  the group has one laptop;
 - place follows the queue order with admission
   ([08 §8.9](08-custody-loops.md)) but reads no introduction time; repair
   marks a removed device's UUID `dead`, after which place copies again;

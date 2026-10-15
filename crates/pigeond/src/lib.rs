@@ -13,6 +13,7 @@ pub mod capture;
 pub mod change;
 pub mod clock_file;
 pub mod config;
+pub mod conflicts_file;
 pub mod custody;
 pub mod daemon;
 pub mod evict;

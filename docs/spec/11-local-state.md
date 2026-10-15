@@ -114,7 +114,9 @@ checks), `new_key`, `tmp`, `tmp_ino`, `aside`. Recovery replays every
 and its aside is released (`journal` laws). A torn last line is ignored;
 any other malformed line stops install with a Problem.
 
-**`conflicts.json`** (not yet written by `pigeond`): `format`, and per path
+**`conflicts.json`** (`pigeond::conflicts_file`, written so far for
+`concurrent` divergences; `suggestion` and `recovered` come with proposals
+and kept asides): `format`, and per path
 `kind` (`suggestion`), `since`, `state` (`waiting`), `mine` (key),
 `mine_stat` (the stat of the person's file when `mine` was captured, which
 *Take the group's version* checks), `proposal` (the chain's latest),
@@ -159,7 +161,8 @@ stale `index.lock` kept capture failing on macOS until the check timed out.
   format N is read by every later format. Coded so far for journal records,
   roster files and invitations (`pigeond/tests/codecs.rs`:
   `journal_records_round_trip`, `roster_files_round_trip`,
-  `invitations_round_trip`) and the socket protocol
+  `invitations_round_trip`), the divergence table (`conflict_tables_round_trip`,
+  which also reads a newer format as nothing) and the socket protocol
   (`pigeon-proto/tests/proto_laws.rs`).
 - Not yet coded as laws: **atomicity** (a crash during a write leaves the
   old value or the new one); **refusal** (a file of a newer format is never

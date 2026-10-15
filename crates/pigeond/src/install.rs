@@ -11,16 +11,19 @@
 //! stat only if the file holds the new key (step 8, E19). A deletion moves
 //! the file aside, checks that it holds the old key, and removes it with
 //! the folders it emptied. pigeon's own blobs (`.pigeon/`, the root
-//! `.gitattributes`) are checked out by git.
+//! `.gitattributes`) are written as they are.
 
 use std::collections::BTreeSet;
 use std::path::Path;
 
 use pigeon_core::authority::Entry;
+use pigeon_core::catalogue::Content;
 use pigeon_core::journal::{Begin, End, Record};
+use pigeon_core::names;
 use pigeon_sys::fs::{Renamed, lstat, rename_noreplace};
 use pigeon_sys::lab::crash_point;
 
+use crate::conflicts_file::{Divergence, Kind, State, Table};
 use crate::evict::{is_old, journal, next_seq, record, stat_of, truncate_if_done};
 use crate::git::{Error, is_pigeon_path, pointer_key};
 use crate::group::Group;
@@ -236,8 +239,34 @@ async fn key_of(g: &Group, entry: Option<&Entry>) -> Option<String> {
     pointer_key(&blob)
 }
 
-/// One round of install: every path whose index entry is not `main`'s.
-pub async fn incoming(g: &Group, t: &Tracer) -> Result<Installed, Error> {
+/// Whether `main` shows this device's version of `path`, which the index
+/// still has there, under a conflict name of it: a merge gave the path to
+/// another version, and the device keeps its file (05 §5.3, 07 §7.6).
+async fn lost_the_name(g: &Group, me: &str, main: &str, path: &str, mine: &Entry) -> bool {
+    if crate::merge::judge_history(g, &[main.to_owned()])
+        .await
+        .is_err()
+    {
+        return false;
+    }
+    let view = g.lock().engine.catalogue(&[main.to_owned()]);
+    let mine = Content::File(mine.clone());
+    let origin = view
+        .shown
+        .values()
+        .flatten()
+        .find(|s| s.path != path && names::is_copy_of(&s.path, path) && s.version.content == mine)
+        .map(|s| s.origin.clone());
+    let Some(origin) = origin else {
+        return false;
+    };
+    let raw = g.git.object(&origin).await.unwrap_or_default();
+    pigeon_core::sig::verify(&raw).is_ok_and(|d| d.0 == me)
+}
+
+/// One round of install: every path whose index entry is not `main`'s,
+/// but those of the divergence table (`conflicts.json`), which it updates.
+pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Error> {
     let mut done = Installed::default();
     if g.worktree.is_none() {
         return Ok(done);
@@ -245,14 +274,21 @@ pub async fn incoming(g: &Group, t: &Tracer) -> Result<Installed, Error> {
     let Some(main) = g.git.rev("refs/heads/main").await else {
         return Ok(done);
     };
+    let Some(mut table) = crate::conflicts_file::read(g) else {
+        tracing::warn!(group = %g.id, "conflicts-unreadable");
+        return Ok(done);
+    };
+    let known = table.clone();
     let want = g.git.tree(&main).await?;
     let have = g.git.index().await?;
+    table.paths.retain(|p, _| want.get(p) != have.get(p));
     let paths: BTreeSet<&String> = want.keys().chain(have.keys()).collect();
     let changed: Vec<&String> = paths
         .into_iter()
         .filter(|p| want.get(*p) != have.get(*p))
         .collect();
     if changed.is_empty() {
+        save(g, &known, &table);
         return Ok(done);
     }
     let dirty = crate::capture::dirty(g).await?;
@@ -262,7 +298,13 @@ pub async fn incoming(g: &Group, t: &Tracer) -> Result<Installed, Error> {
     for path in changed {
         let (w, h) = (want.get(path), have.get(path));
         if is_pigeon_path(path) || path == ".gitattributes" {
-            own(g, &main, path, w.is_some()).await;
+            own(g, path, w).await;
+            continue;
+        }
+        let group = key_of(g, w).await;
+        if let Some(d) = table.paths.get_mut(path) {
+            d.group = group;
+            done.deferred += 1;
             continue;
         }
         if dirty.contains(path.as_str()) {
@@ -270,6 +312,29 @@ pub async fn incoming(g: &Group, t: &Tracer) -> Result<Installed, Error> {
             continue;
         }
         let old = key_of(g, h).await;
+        if let (Some(h), Some(_)) = (h, w)
+            && lost_the_name(g, me, &main, path, h).await
+        {
+            let stat = g.worktree.as_ref().and_then(|wt| stat_of(&wt.join(path)));
+            table.paths.insert(
+                path.clone(),
+                Divergence {
+                    kind: Kind::Concurrent,
+                    since: crate::util::rfc3339(crate::util::now()),
+                    state: State::Conflict,
+                    mine: old.clone(),
+                    mine_stat: stat
+                        .map(|s| [s.dev.into(), s.ino.into(), s.size.into(), s.mtime_ns]),
+                    proposal: None,
+                    group,
+                    installed: None,
+                    told: false,
+                },
+            );
+            tracing::warn!(group = %g.id, path = %path, "conflict");
+            done.deferred += 1;
+            continue;
+        }
         if hidden.contains(path) || freed.iter().any(|f| crate::evict::under(path, f)) {
             let ok = index_entry(g, path, w).await.is_ok();
             if ok && w.is_some() {
@@ -314,6 +379,7 @@ pub async fn incoming(g: &Group, t: &Tracer) -> Result<Installed, Error> {
     if hidden != before {
         crate::evict::write_sparse(g, &hidden);
     }
+    save(g, &known, &table);
     let _ = g.git.run(&["update-index", "-q", "--refresh"]).await;
     if done != Installed::default() {
         tracing::info!(group = %g.id, written = done.written, removed = done.removed,
@@ -322,20 +388,39 @@ pub async fn incoming(g: &Group, t: &Tracer) -> Result<Installed, Error> {
     Ok(done)
 }
 
-/// Checks out pigeon's own blob at `path` from `main`, or removes it.
-async fn own(g: &Group, main: &str, path: &str, present: bool) {
-    let spec = format!(":(literal){path}");
-    let out = if present {
-        g.git.run(&["checkout", "-q", main, "--", &spec]).await
-    } else {
-        let out = g
-            .git
-            .run(&["rm", "-q", "--cached", "--ignore-unmatch", "--", &spec])
-            .await;
-        if let Some(wt) = &g.worktree {
-            let _ = std::fs::remove_file(wt.join(path));
-        }
-        out
+fn save(g: &Group, known: &Table, table: &Table) {
+    if known != table
+        && let Err(e) = crate::conflicts_file::write(g, table)
+    {
+        tracing::warn!(group = %g.id, error = %e, "conflicts-write-failed");
+    }
+}
+
+/// Writes pigeon's own blob `entry` at `path`, or removes it: the person
+/// never edits these (capture skips them), so nothing of theirs is there.
+async fn own(g: &Group, path: &str, entry: Option<&Entry>) {
+    let Some(wt) = &g.worktree else {
+        return;
+    };
+    let file = wt.join(path);
+    let wrote = match entry {
+        Some(e) => match g.git.object(&e.oid).await {
+            Ok(bytes) => {
+                if let Some(dir) = file.parent() {
+                    let _ = std::fs::create_dir_all(dir);
+                }
+                pigeon_sys::fs::write_atomic(&file, &bytes).map_err(|e| e.to_string())
+            }
+            Err(e) => Err(e.to_string()),
+        },
+        None => match std::fs::remove_file(&file) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+            _ => Ok(()),
+        },
+    };
+    let out = match wrote {
+        Ok(()) => index_entry(g, path, entry).await,
+        Err(e) => Err(e),
     };
     if let Err(e) = out {
         tracing::warn!(group = %g.id, path = %path, error = %e, "install-own-failed");

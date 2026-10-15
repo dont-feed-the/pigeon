@@ -126,7 +126,7 @@ impl Daemon {
         }
         crate::custody::accept(g, &self.device, &self.tracer).await;
         if g.role == Role::Laptop
-            && let Err(e) = crate::install::incoming(g, &self.tracer).await
+            && let Err(e) = crate::install::incoming(g, &self.device, &self.tracer).await
         {
             tracing::warn!(group = %g.id, error = %e, "install-failed");
         }

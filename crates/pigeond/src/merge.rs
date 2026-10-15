@@ -13,7 +13,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use pigeon_core::authority::{self, ROSTER, Refusal, Step, Tree, Unread, Verdict};
+use pigeon_core::authority::{self, Entry, ROSTER, Refusal, Step, Tree, Unread, Verdict};
 use pigeon_core::catalogue::{Judgement, Meta, Outcome};
 use pigeon_core::names::{self, Stamp};
 use pigeon_core::roster::Roster;
@@ -311,4 +311,50 @@ pub async fn merge(g: &Group, ours: &str, theirs: &str) -> Result<Option<String>
     judge_history(g, std::slice::from_ref(&commit)).await?;
     let outcome = g.lock().engine.outcome(&commit).cloned();
     Ok((outcome == Some(Outcome::Clean)).then_some(commit))
+}
+
+/// Makes a save of `path` that `head` changed meanwhile a contribution
+/// concurrent with `head`'s version (07 §7.6, ADR 0034): a commit of
+/// `mine` (`None`: a deletion) on the latest commit of `head`'s history
+/// whose `path` is `before`, the version the person saved over, merged with
+/// `head`. Answers the merge if it is accepted clean, else nothing.
+pub async fn concurrent(
+    g: &Group,
+    head: &str,
+    path: &str,
+    before: Option<&Entry>,
+    mine: Option<&Entry>,
+) -> Result<Option<String>, Error> {
+    let list = g.git.run(&["rev-list", "--topo-order", head]).await?;
+    let ids: Vec<&str> = list.lines().collect();
+    let mut input = String::new();
+    for c in &ids {
+        input.push_str(&format!("{c}:{path}\n"));
+    }
+    let out = g
+        .git
+        .run_in(
+            &["cat-file", "--batch-check=%(objectname)"],
+            input.as_bytes(),
+        )
+        .await?;
+    let base = ids.iter().zip(out.lines()).find_map(|(c, line)| {
+        let at = (!line.ends_with(" missing")).then_some(line);
+        (at == before.map(|e| e.oid.as_str())).then_some(*c)
+    });
+    let Some(base) = base else {
+        return Ok(None);
+    };
+    let mut tree = g.git.tree(base).await?;
+    match mine {
+        Some(e) => tree.insert(path.to_owned(), e.clone()),
+        None => tree.remove(path),
+    };
+    let oid = write_tree(&g.git, &tree).await?;
+    let side = g.git.commit_tree(&oid, &[base], "pigeon: capture").await?;
+    judge_history(g, &[head.to_owned(), side.clone()]).await?;
+    if g.lock().engine.outcome(&side) != Some(&Outcome::Contribution) {
+        return Ok(None);
+    }
+    merge(g, head, &side).await
 }
