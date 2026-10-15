@@ -22,9 +22,11 @@ pub const RULES: u32 = 1;
 pub const ROSTER: &str = ".pigeon/roster.toml";
 /// The trailer of a Force (04 §4.6).
 pub const FORCE: &str = "Pigeon-Force:";
+/// The trailer of *Keep both* (05 §5.3).
+pub const RESOLVED: &str = "Pigeon-Resolved:";
 
 /// One entry of a tree, as `ls-tree -r` lists it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Entry {
     /// Its mode, such as `100644`.
     pub mode: String,
@@ -152,12 +154,51 @@ pub fn is_pointer(blob: &[u8]) -> bool {
         && !key.contains(['/', '\n', '\r'])
 }
 
-/// Whether the message of a commit object carries the Force trailer.
-pub fn forced(raw: &[u8]) -> bool {
+/// The trailer lines of a commit object's message: its last paragraph.
+fn trailers(raw: &[u8]) -> Vec<String> {
     let text = String::from_utf8_lossy(raw);
     let message = text.split_once("\n\n").map_or("", |(_, m)| m);
     let last = message.trim_end().rsplit("\n\n").next().unwrap_or_default();
-    last.lines().any(|l| l.starts_with(FORCE))
+    last.lines().map(str::to_owned).collect()
+}
+
+/// Whether the message of a commit object carries the Force trailer.
+pub fn forced(raw: &[u8]) -> bool {
+    trailers(raw).iter().any(|l| l.starts_with(FORCE))
+}
+
+/// The paths a commit object's `Pigeon-Resolved:` trailers name.
+pub fn resolved(raw: &[u8]) -> Vec<String> {
+    trailers(raw)
+        .iter()
+        .filter_map(|l| l.strip_prefix(RESOLVED))
+        .map(|p| p.trim().to_owned())
+        .filter(|p| !p.is_empty())
+        .collect()
+}
+
+/// The author time of a commit object, and its recorded offset in minutes
+/// east of UTC (05 §5.3).
+pub fn author_time(raw: &[u8]) -> Option<(i64, i32)> {
+    let text = String::from_utf8_lossy(raw);
+    let line = text
+        .lines()
+        .take_while(|l| !l.is_empty())
+        .find(|l| l.starts_with("author "))?;
+    let mut words = line.rsplit(' ');
+    let zone = words.next()?;
+    let secs: i64 = words.next()?.parse().ok()?;
+    let (sign, digits) = match zone.split_at_checked(1)? {
+        ("+", d) => (1, d),
+        ("-", d) => (-1, d),
+        _ => return None,
+    };
+    if digits.len() != 4 || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let hours: i32 = digits.get(..2)?.parse().ok()?;
+    let minutes: i32 = digits.get(2..)?.parse().ok()?;
+    Some((secs, sign * (hours * 60 + minutes)))
 }
 
 /// The rule of `path` under `roster`: the folder entry with the longest

@@ -222,10 +222,12 @@ from this specification as follows, each to close before S1–S11 run
   has checked that the recovery device may add the machine (`may_sign`):
   the others accept it while the backup machine's person may add it (an
   admin in the slice), where ADR 0047 has the sheet key sign;
-- every commit is signed with the device key, and a custodian fast-forwards
-  `main` only as far as the authority rule accepts each commit against its
-  one parent ([04 §4.4](04-roster-and-authority.md)); a merge waits: a
-  laptop installs no incoming version, so the group has one laptop;
+- every commit is signed with the device key, and a custodian moves `main`
+  only as far as the authority rule accepts each commit against the
+  catalogue of its accepted parents ([04 §4.4](04-roster-and-authority.md)),
+  merging two accepted heads ([05 §5.2](05-catalogue-and-names.md)); a
+  merge of roster forks and an adoption wait, and a laptop installs no
+  incoming version, so the group has one laptop;
 - place follows the queue order with admission
   ([08 §8.9](08-custody-loops.md)) but reads no introduction time; repair
   marks a removed device's UUID `dead`, after which place copies again;

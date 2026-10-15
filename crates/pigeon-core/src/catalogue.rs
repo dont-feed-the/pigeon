@@ -14,9 +14,12 @@
 //! which pigeond writes).
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::names::{self, Stamp};
+
+/// The most catalogues an engine keeps computed.
+const MEMO: usize = 256;
 
 /// A tree: path → leaf (a key, or an entry of `ls-tree`).
 pub type Tree<K> = BTreeMap<String, K>;
@@ -155,6 +158,30 @@ pub enum Outcome {
     Refused(String),
 }
 
+/// The caller's verdict on a commit (04 §4.4), for [`Engine::admit`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Judgement {
+    /// It may make its change.
+    Accepted,
+    /// A member signed a change that its person may not make (04 §4.5).
+    Proposal,
+    /// Refused, and why.
+    Refused(String),
+}
+
+/// The slots whose value differs between two trees' units.
+fn slot_delta<'a, K: PartialEq>(
+    old: &'a BTreeMap<String, Version<K>>,
+    new: &'a BTreeMap<String, Version<K>>,
+) -> Vec<&'a String> {
+    old.keys()
+        .chain(new.keys())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .filter(|x| old.get(*x) != new.get(*x))
+        .collect()
+}
+
 /// A slot's value in an event, and the commit it represents.
 type Write<K> = Option<(Version<K>, String)>;
 
@@ -182,7 +209,7 @@ enum Key<K> {
 #[derive(Clone, Debug)]
 struct Info {
     outcome: Outcome,
-    state: Rc<BTreeSet<usize>>,
+    state: Arc<BTreeSet<usize>>,
 }
 
 /// The catalogue of every commit judged so far.
@@ -192,7 +219,7 @@ pub struct Engine<K> {
     keys: BTreeMap<Key<K>, usize>,
     info: BTreeMap<String, Info>,
     origins: BTreeMap<String, (Rank, String, Stamp)>,
-    memo: BTreeMap<Rc<BTreeSet<usize>>, Rc<View<K>>>,
+    memo: BTreeMap<Arc<BTreeSet<usize>>, Arc<View<K>>>,
 }
 
 impl<K: Clone + Ord> Default for Engine<K> {
@@ -289,7 +316,7 @@ impl<K: Clone + Ord> Engine<K> {
     fn set(&mut self, id: &str, outcome: Outcome, state: BTreeSet<usize>) -> Outcome {
         let info = Info {
             outcome: outcome.clone(),
-            state: Rc::new(state),
+            state: Arc::new(state),
         };
         self.info.insert(id.to_owned(), info);
         outcome
@@ -311,14 +338,16 @@ impl<K: Clone + Ord> Engine<K> {
 
     /// The catalogue of the accepted commits among `ids` (05 §5.2): B(c)
     /// for a commit's parents, a device's view for its main's ancestry.
-    pub fn catalogue(&mut self, ids: &[String]) -> Rc<View<K>> {
+    pub fn catalogue(&mut self, ids: &[String]) -> Arc<View<K>> {
         let state = self.state(ids).unwrap_or_default();
         self.present(state)
     }
 
-    /// Judges commit `meta` with tree `tree` (04 §4.4 with 05 §5.1): its
-    /// parents must have been judged; `may(path, added)` says whether its
-    /// person may add (`added`) or change the unit at `path` (04 §4.3).
+    /// Judges commit `meta` with tree `tree` by the folder rules alone, as
+    /// the oracle does (04 §4.4 with 05 §5.1): its parents must have been
+    /// judged; `may(path, added)` says whether its person may add (`added`)
+    /// or change the unit at `path` (04 §4.3). A clean merge is accepted
+    /// whoever signs it; a change its person may not make is a proposal.
     pub fn record(
         &mut self,
         meta: &Meta,
@@ -328,44 +357,79 @@ impl<K: Clone + Ord> Engine<K> {
         if meta.parents.is_empty() {
             return self.genesis(meta, tree);
         }
-        let Some(state) = self.state(&meta.parents) else {
-            return self.set(
-                &meta.id,
-                Outcome::Refused("no-accepted-parent".to_owned()),
-                BTreeSet::new(),
-            );
+        let Some(view) = self.base(&meta.parents) else {
+            return self.admit(meta, tree, Judgement::Accepted);
         };
-        let view = self.present(state.clone());
         let (old, new) = (units(&view.tree), units(tree));
-        let delta: Vec<&String> = old
-            .keys()
-            .chain(new.keys())
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .filter(|x| old.get(*x) != new.get(*x))
-            .collect();
-        let resolves: BTreeSet<String> = meta
-            .resolves
-            .iter()
-            .filter(|p| old.contains_key(&names::fold(p)) && may(p, false))
-            .map(|p| names::fold(p))
-            .collect();
-        if delta.is_empty() && resolves.is_empty() {
-            return self.set(&meta.id, Outcome::Clean, state);
+        let delta = slot_delta(&old, &new);
+        let mut meta = meta.clone();
+        meta.resolves
+            .retain(|p| old.contains_key(&names::fold(p)) && may(p, false));
+        if delta.is_empty() && meta.resolves.is_empty() {
+            return self.admit(&meta, tree, Judgement::Accepted);
         }
         if let Err((p, why)) = names::portable_tree(tree.keys().map(String::as_str)) {
-            return self.set(
-                &meta.id,
-                Outcome::Refused(format!("{p}: {}", why.code())),
-                state,
-            );
+            let why = Judgement::Refused(format!("{p}: {}", why.code()));
+            return self.admit(&meta, tree, why);
         }
         let allowed = delta.iter().all(|x| {
             let v = new.get(*x).or_else(|| old.get(*x));
             v.is_some_and(|v| may(&v.path, !old.contains_key(*x)))
         });
-        if !allowed {
-            return self.set(&meta.id, Outcome::Proposal, state);
+        let judgement = if allowed {
+            Judgement::Accepted
+        } else {
+            Judgement::Proposal
+        };
+        self.admit(&meta, tree, judgement)
+    }
+
+    /// B(c) for a commit with these parents: the catalogue of the accepted
+    /// ones, or `None` when none is (rule 1 of 04 §4.4).
+    pub fn base(&mut self, parents: &[String]) -> Option<Arc<View<K>>> {
+        let state = self.state(parents)?;
+        Some(self.present(state))
+    }
+
+    /// Records commit `meta`, which the caller judged against [`base`]
+    /// (04 §4.4): an accepted commit is clean when its tree is B(c)'s and
+    /// it resolves nothing, else a contribution, which freezes every
+    /// unsettled slot of B(c) (05 §5.2 step 6). `meta.resolves` must hold
+    /// only paths its person may change; those B(c) lacks count for
+    /// nothing. Its parents must have been recorded; a commit with none
+    /// accepted is refused whatever the judgement.
+    ///
+    /// [`base`]: Engine::base
+    pub fn admit(&mut self, meta: &Meta, tree: &Tree<K>, judgement: Judgement) -> Outcome {
+        if meta.parents.is_empty() {
+            return match judgement {
+                Judgement::Accepted => self.genesis(meta, tree),
+                Judgement::Proposal => self.set(&meta.id, Outcome::Proposal, BTreeSet::new()),
+                Judgement::Refused(why) => {
+                    self.set(&meta.id, Outcome::Refused(why), BTreeSet::new())
+                }
+            };
+        }
+        let Some(state) = self.state(&meta.parents) else {
+            let why = Outcome::Refused("no-accepted-parent".to_owned());
+            return self.set(&meta.id, why, BTreeSet::new());
+        };
+        match judgement {
+            Judgement::Accepted => {}
+            Judgement::Proposal => return self.set(&meta.id, Outcome::Proposal, state),
+            Judgement::Refused(why) => return self.set(&meta.id, Outcome::Refused(why), state),
+        }
+        let view = self.present(state.clone());
+        let (old, new) = (units(&view.tree), units(tree));
+        let delta = slot_delta(&old, &new);
+        let resolves: BTreeSet<String> = meta
+            .resolves
+            .iter()
+            .map(|p| names::fold(p))
+            .filter(|x| old.contains_key(x))
+            .collect();
+        if delta.is_empty() && resolves.is_empty() {
+            return self.set(&meta.id, Outcome::Clean, state);
         }
         let frozen: BTreeSet<usize> = view
             .unsettled
@@ -436,12 +500,15 @@ impl<K: Clone + Ord> Engine<K> {
         self.add(key, event)
     }
 
-    fn present(&mut self, state: BTreeSet<usize>) -> Rc<View<K>> {
+    fn present(&mut self, state: BTreeSet<usize>) -> Arc<View<K>> {
         if let Some(v) = self.memo.get(&state) {
-            return Rc::clone(v);
+            return Arc::clone(v);
         }
-        let view = Rc::new(self.compute(&state));
-        self.memo.insert(Rc::new(state), Rc::clone(&view));
+        let view = Arc::new(self.compute(&state));
+        if self.memo.len() >= MEMO {
+            self.memo.clear(); // a cache: dropping it changes no result
+        }
+        self.memo.insert(Arc::new(state), Arc::clone(&view));
         view
     }
 

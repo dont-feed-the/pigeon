@@ -433,3 +433,23 @@ fn an_invalid_or_unreadable_roster_is_refused_and_an_unknown_one_waits() {
         assert_eq!(got, want);
     }
 }
+
+#[test]
+fn trailers_and_author_times_are_read_from_the_commit() {
+    let raw = b"tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904\n\
+        author A <a@x> 1791892920 -0130\n\
+        committer A <a@x> 1791892999 +0200\n\n\
+        pigeon: keep both\n\nPigeon-Resolved: Shared/a.txt\nPigeon-Resolved:  \n";
+    assert_eq!(authority::resolved(raw), vec!["Shared/a.txt".to_owned()]);
+    assert_eq!(authority::author_time(raw), Some((1_791_892_920, -90)));
+    assert!(!authority::forced(raw));
+    let early = b"tree x\nauthor A <a@x> 12 +0000\n\nPigeon-Resolved: a\n\nlater text\n";
+    assert!(
+        authority::resolved(early).is_empty(),
+        "only the last paragraph holds trailers"
+    );
+    assert_eq!(
+        authority::author_time(b"tree x\nauthor A <a@x> 12 +2\n\n"),
+        None
+    );
+}

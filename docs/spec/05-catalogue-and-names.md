@@ -71,7 +71,9 @@ are hegel properties on random schedules (`tests/catalogue.rs`, with
 judging in another order for `order`), every commit the oracle reaches gets
 its verdict, tree and open conflicts (`tests/catalogue_oracle.rs`), and
 traces validate against `Catalogue.tla` ([13 §13.3](13-verification.md)).
-`pigeond` does not use it yet (M2).
+`pigeond`'s accept judges with it, and a custodian writes the merge of two
+accepted heads (`pigeond::merge`, `tests/merge.rs`) with `mktree`, without
+the `merge-tree` fast path yet; laptops install no merge yet (M2).
 
 **Merge commits.** `pigeond` writes a merge *M*'s tree as
 `catalogue(anc*(M))` with plumbing (`merge-tree --write-tree` as a checked

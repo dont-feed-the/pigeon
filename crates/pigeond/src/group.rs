@@ -61,6 +61,11 @@ pub struct Known {
     /// The bytes place left to send (a laptop) or to receive (a custodian)
     /// in its last round.
     pub queue_bytes: u64,
+    /// Every commit judged so far and the catalogue of each (05 §5.2):
+    /// accept's memory, rebuilt from the genesis after a restart.
+    pub engine: pigeon_core::catalogue::Engine<pigeon_core::authority::Entry>,
+    /// The verdict on each judged commit that was not accepted (04 §4.4).
+    pub verdicts: BTreeMap<String, pigeon_core::authority::Verdict>,
 }
 
 /// How long remotedaemon's fetch of a notice may last before it is

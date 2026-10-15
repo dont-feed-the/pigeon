@@ -121,20 +121,29 @@ pub async fn accept(g: &Group, me: &str, tracer: &Tracer) -> bool {
             Some(o) if *o == theirs => false,
             Some(o) => g.git.contains(&theirs, o).await,
         };
-        if !forward {
-            if let Some(o) = &ours
-                && !g.git.contains(o, &theirs).await
-            {
-                tracing::warn!(group = %g.id, peer = %id, "accept-diverged");
+        if g.role == Role::Laptop {
+            if forward {
+                tracing::info!(group = %g.id, peer = %id, "accept-install-not-in-this-build");
             }
             continue;
         }
-        if g.role == Role::Laptop {
-            tracing::info!(group = %g.id, peer = %id, "accept-install-not-in-this-build");
+        if let Some(o) = &ours
+            && g.git.contains(o, &theirs).await
+        {
             continue;
         }
         let Some(target) = judged(g, &id, ours.as_deref(), &theirs).await else {
             continue;
+        };
+        let target = match &ours {
+            Some(o) if g.git.contains(o, &target).await => continue,
+            Some(o) if !g.git.contains(&target, o).await => {
+                match merged(g, &id, o, &target).await {
+                    Some(m) => m,
+                    None => continue,
+                }
+            }
+            _ => target,
         };
         match g
             .git
@@ -153,10 +162,37 @@ pub async fn accept(g: &Group, me: &str, tracer: &Tracer) -> bool {
     moved
 }
 
+/// The merge of our `main` with a peer's accepted `target` that diverged
+/// from it (05 §5.2), if `target` brings a contribution we lack.
+async fn merged(g: &Group, peer: &str, ours: &str, target: &str) -> Option<String> {
+    match crate::merge::brings(g, ours, target).await {
+        Ok(true) => {}
+        Ok(false) => return None,
+        Err(e) => {
+            tracing::warn!(group = %g.id, peer = %peer, error = %e, "merge-failed");
+            return None;
+        }
+    }
+    match crate::merge::merge(g, ours, target).await {
+        Ok(Some(m)) => {
+            tracing::info!(group = %g.id, peer = %peer, commit = %m, "merged");
+            Some(m)
+        }
+        Ok(None) => {
+            tracing::warn!(group = %g.id, peer = %peer, "merge-not-accepted");
+            None
+        }
+        Err(e) => {
+            tracing::warn!(group = %g.id, peer = %peer, error = %e, "merge-failed");
+            None
+        }
+    }
+}
+
 /// The last commit of `theirs` that the authority rule accepts after
 /// `ours` (04 §4.4); the first it refuses is kept, by peer, for `doctor`.
 async fn judged(g: &Group, peer: &str, ours: Option<&str>, theirs: &str) -> Option<String> {
-    let judged = match crate::verify::judge(&g.git, ours, theirs).await {
+    let judged = match crate::verify::judge(g, ours, theirs).await {
         Ok(j) => j,
         Err(e) => {
             tracing::warn!(group = %g.id, peer = %peer, error = %e, "accept-judge-failed");
