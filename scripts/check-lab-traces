@@ -24,7 +24,10 @@ sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parent.parent
 MODELS = ROOT / "models" / "tla"
 # spec of the events: trace specification, its log module and name, config.
-SPECS = {"Roster": ("RosterTrace", ("RosterCodeLog", "CodeLog"), "RosterTrace_good")}
+SPECS = {
+    "Roster": ("RosterTrace", ("RosterCodeLog", "CodeLog"), "RosterTrace_good"),
+    "StorageBoundary": ("StorageTrace", ("StorageCodeLog", "CodeLog"), "StorageTrace_good"),
+}
 # The variables each action of a trace specification reads. RosterTrace was
 # written for pigeon-core's simulated group, which logs the replica, the
 # operation and the roster; pigeond logs a commit ID only.
@@ -32,7 +35,13 @@ FIELDS = {
     "Roster": {
         "Commit": {"r", "t", "op", "edits", "ros"},
         "Merge": {"r", "y", "ff", "ros"},
-    }
+    },
+    "StorageBoundary": {
+        "Capture": {"pending", "live", "saved", "captured"},
+        "Archive": {"saved", "present"},
+        "Release": {"saved", "present", "written", "released"},
+        "Retention": {"expected", "enumerated"},
+    },
 }
 
 
@@ -60,10 +69,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("out")
     parser.add_argument("--java", default=os.environ.get("JAVA", "java"))
+    parser.add_argument("--require", action="append", default=[], help="fail unless this specification was checked")
     args = parser.parse_args()
     tla, tlc = load("trace-to-tla"), load("run-tlc")
     jar = tlc.tlc_jar()
-    failures, unchecked, partial = 0, set(), {}
+    failures, unchecked, partial, checked = 0, set(), {}, set()
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp) / "models"
         shutil.copytree(MODELS, work)
@@ -93,10 +103,16 @@ def main():
                 if not ok:
                     failures += 1
                     print(tlc.excerpt(output), file=sys.stderr)
+                else:
+                    checked.add(spec)
     for spec in sorted(unchecked):
         print(f"not checked yet: {spec} has no trace specification in models/tla", flush=True)
     for spec, missing in sorted(partial.items()):
         print(f"not checked yet: {spec}: {'; '.join(sorted(missing))}", flush=True)
+    for spec in sorted(set(args.require)):
+        if spec not in checked or spec in partial or spec in unchecked:
+            print(f"FAIL required trace specification was not checked: {spec}", flush=True)
+            failures += 1
     return 1 if failures else 0
 
 

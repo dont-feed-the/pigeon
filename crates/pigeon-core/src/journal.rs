@@ -68,6 +68,10 @@ pub enum Record {
     Proved(Vec<u64>),
     /// An entry ends.
     End(u64, End),
+    /// The aside's keep period started, in seconds since the Unix epoch.
+    Kept(u64, i64),
+    /// A changed aside is preserved at this non-replacing destination.
+    Preserved(u64, String),
     /// An entry's aside was unlinked or captured.
     Released(u64),
 }
@@ -83,6 +87,10 @@ pub struct Entry {
     pub end: Option<End>,
     /// Whether its aside was released.
     pub released: bool,
+    /// The durable start of the keep period, absent in older journals.
+    pub kept_at: Option<i64>,
+    /// Where a changed aside is preserved before capturing it.
+    pub preserved: Option<String>,
 }
 
 /// Fold records into entries by sequence number. Records about an unknown
@@ -97,6 +105,8 @@ pub fn entries(records: &[Record]) -> BTreeMap<u64, Entry> {
                     proved: false,
                     end: None,
                     released: false,
+                    kept_at: None,
+                    preserved: None,
                 });
             }
             Record::Proved(seqs) => {
@@ -114,6 +124,16 @@ pub fn entries(records: &[Record]) -> BTreeMap<u64, Entry> {
             Record::Released(s) => {
                 if let Some(e) = out.get_mut(s) {
                     e.released = true;
+                }
+            }
+            Record::Kept(s, at) => {
+                if let Some(e) = out.get_mut(s) {
+                    e.kept_at.get_or_insert(*at);
+                }
+            }
+            Record::Preserved(s, path) => {
+                if let Some(e) = out.get_mut(s) {
+                    e.preserved = Some(path.clone());
                 }
             }
         }

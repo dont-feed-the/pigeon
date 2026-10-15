@@ -251,14 +251,16 @@ pub async fn present(g: &Group, key: &str) -> Option<std::path::PathBuf> {
 /// laptop sends each key to the custodians lacking it, whose own reserve
 /// refuses what does not fit (E22).
 pub async fn place(g: &Group, me: &str) -> usize {
-    let Some(main) = g.git.rev("refs/heads/main").await else {
-        return 0;
+    let keys = match crate::retention::keys(g).await {
+        Ok(keys) => keys,
+        Err(e) => {
+            tracing::warn!(group = %g.id, error = %e, "retained-history-unreadable");
+            return 0;
+        }
     };
-    let Ok(keys) = g.git.keys(&main).await else {
+    if keys.is_empty() {
         return 0;
-    };
-    let mut keys: BTreeSet<String> = keys.into_values().collect();
-    keys.extend(crate::proposal::keys(g).await);
+    }
     let mut made = 0;
     let mut left = 0;
     match g.role {

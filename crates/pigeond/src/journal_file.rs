@@ -35,6 +35,10 @@ pub fn line(r: &Record) -> String {
         Record::Proved(seqs) => json!({"format": 1, "op": "proved", "seqs": seqs}),
         Record::End(seq, e) => json!({"format": 1, "seq": seq, "op": end_name(*e)}),
         Record::Released(seq) => json!({"format": 1, "seq": seq, "op": "released"}),
+        Record::Kept(seq, at) => json!({"format": 1, "seq": seq, "op": "kept", "at": at}),
+        Record::Preserved(seq, path) => {
+            json!({"format": 1, "seq": seq, "op": "preserved", "path": path})
+        }
     };
     format!("{v}\n")
 }
@@ -85,6 +89,8 @@ pub fn parse(line: &str) -> Option<Record> {
         "raced" => Record::End(seq?, End::Raced),
         "recovered" => Record::End(seq?, End::Recovered),
         "released" => Record::Released(seq?),
+        "kept" => Record::Kept(seq?, v.get("at")?.as_i64()?),
+        "preserved" => Record::Preserved(seq?, text(&v, "path")?),
         _ => return None,
     })
 }

@@ -35,6 +35,7 @@ const ANNEX: &[&str] = &[
     "add",
     "calckey",
     "reinject",
+    "setkey",
     "get",
     "copy",
     "drop",

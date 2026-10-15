@@ -46,6 +46,7 @@ asks for none. Grouped by file, so that a few ADRs could cover them.
 | 06 | naming the custodians that would hold a key through `find --want-get` (§6.4); the headline precedence (§6.5, §16.2) |
 | [07](07-capture-and-install.md) | the aside kept until the first full scan 10 minutes after `done` (§7.5, [11 §11.3](11-local-state.md)); a save of a diverging path is a proposal of its own (§7.6) |
 | 07 | the first build's departures, each to close before the slice's scenarios run ([13 §13.12](13-verification.md)), and its files `peers.json`, `p2p-token`, `freed.json`, `dead.json` (11 §11.3) |
+| 07, 11 | durable `kept` and `preserved` journal records; non-replacing recovery names and capture manifests retained for manual recovery (07 §7.5, 11 §11.3) |
 | [08](08-custody-loops.md) | fetching every 5 minutes besides change notices; repair in the protect class of the queue (§8.1, [15 §15.2](15-resource-use.md), issue #13) |
 | 08 | the deadline of a P2P fetch or push (§8.2); `free --without-checking` and its record (§8.7); a full scrub every 30 days (§8.8) |
 | [09](09-network-and-joining.md) | the invitation encoding `pgn1-` + base32; the inviter keeps each secret, which checking the proof needs (a correction) (§9.6) |
@@ -57,6 +58,7 @@ asks for none. Grouped by file, so that a few ADRs could cover them.
 | [12](12-observability.md) | telemetry bounded to 50 MB; `debug bundle` asks each peer's person; the `PIGEON_TRACE` switch (§12.2, §12.3) |
 | [13](13-verification.md) | the E17 runner with a hard disk (§13.8); the first milestone's scope, deferrals and `not-in-this-build` (§13.12) |
 | 13 | the first build's port kept in `<state>/port`, direct addresses in a stream's header and a join's welcome, re-thinning by hard link on every file system, of a file unchanged for a minute and hashed before it is moved aside, `disk-full` when free space is below `annex.diskreserve`; a backup machine writes and signs a recovery's roster commit itself, where ADR 0047 has the sheet key sign (§13.12) |
+| 13 | mandatory storage-boundary observations, their corrupted variants and missing-coverage checks; these do not claim full filesystem-driver refinement (§13.3) |
 | [14](14-platforms-and-packaging.md) | minimum OS versions (§14.1); the file-system list (§14.2); minimum git and git-annex per platform, and the platforms pigeon's git-annex is built for (§14.3); the `MemoryHigh` value (§14.4) |
 | 14 | the Homebrew tap and release signing (§14.5); the crate layout, edition and pinned toolchain (§14.6); `hmac`, `sha2`, `data-encoding`, `qrcode`, `rustix`, `libc` (§14.7) |
 | [15](15-resource-use.md), within ADR 0037 | the shaper's constants and history exchange on metered networks (§15.3); disk-busy thresholds and back-off (§15.4); presets (§15.6); the reference tree and memory budget (§15.7) |

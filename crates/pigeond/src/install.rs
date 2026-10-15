@@ -77,6 +77,12 @@ pub(crate) async fn put(
     entry: Option<&Entry>,
     t: &Tracer,
 ) -> Result<Put, String> {
+    if crate::capture_file::pending(g) {
+        return Err("capture-pending".to_owned());
+    }
+    if crate::evict::unsettled(g) {
+        return Err("install-pending".to_owned());
+    }
     let wt = g.worktree.clone().ok_or("not-in-group")?;
     let object = crate::custody::present(g, key).await.ok_or("receiving")?;
     let file = wt.join(rel);
@@ -89,9 +95,11 @@ pub(crate) async fn put(
         let mode = std::fs::Permissions::from_mode(mode_bits(entry, &file));
         let _ = std::fs::set_permissions(&stage, mode);
     }
-    if let Ok(f) = std::fs::File::open(&stage) {
-        let _ = f.sync_all();
-    }
+    std::fs::File::open(&stage)
+        .and_then(|f| f.sync_all())
+        .map_err(|e| e.to_string())?;
+    pigeon_sys::fs::fsync_dir(stage.parent().ok_or("no stage parent")?)
+        .map_err(|e| e.to_string())?;
     let st = stat_of(&file);
     record(
         g,
@@ -116,7 +124,7 @@ pub(crate) async fn put(
         let clear = lstat(&aside)
             .ok()
             .flatten()
-            .is_some_and(|a| pigeon_sys::writers::scan(a.id).is_clear());
+            .is_some_and(|a| crate::asides::writers_clear(&a));
         t.event(Act::Scan, &[("path", rel)]);
         if !clear || stat_of(&aside) != st || !is_old(&aside, current) {
             let end = match rename_noreplace(&aside, &file).map_err(|e| e.to_string())? {
@@ -149,9 +157,10 @@ pub(crate) async fn put(
 fn finish(g: &Group, seq: u64, rel: &str, aside: &Path, t: &Tracer) -> Result<(), String> {
     record(g, &Record::End(seq, End::Done))?;
     t.event(Act::Done, &[("path", rel)]);
-    let _ = std::fs::remove_file(aside);
-    record(g, &Record::Released(seq))?;
-    t.event(Act::Release, &[("path", rel)]);
+    if !aside.exists() {
+        record(g, &Record::Released(seq))?;
+        t.event(Act::Release, &[("path", rel)]);
+    }
     truncate_if_done(g);
     Ok(())
 }
@@ -177,6 +186,12 @@ pub(crate) async fn index_entry(g: &Group, rel: &str, entry: Option<&Entry>) -> 
 /// Removes `rel`, whose version is `current`, as an install of its absence
 /// (steps 3–6, 8 and 9), and the folders it emptied.
 pub(crate) async fn remove(g: &Group, rel: &str, current: &str, t: &Tracer) -> Result<Put, String> {
+    if crate::capture_file::pending(g) {
+        return Err("capture-pending".to_owned());
+    }
+    if crate::evict::unsettled(g) {
+        return Err("install-pending".to_owned());
+    }
     let wt = g.worktree.clone().ok_or("not-in-group")?;
     let file = wt.join(rel);
     let Some(st) = stat_of(&file) else {
@@ -206,7 +221,7 @@ pub(crate) async fn remove(g: &Group, rel: &str, current: &str, t: &Tracer) -> R
     let clear = lstat(&aside)
         .ok()
         .flatten()
-        .is_some_and(|a| pigeon_sys::writers::scan(a.id).is_clear());
+        .is_some_and(|a| crate::asides::writers_clear(&a));
     t.event(Act::Scan, &[("path", rel)]);
     if !clear || stat_of(&aside) != Some(st) || !is_old(&aside, Some(current)) {
         let end = match rename_noreplace(&aside, &file).map_err(|e| e.to_string())? {
@@ -265,7 +280,7 @@ async fn lost_the_name(g: &Group, me: &str, main: &str, path: &str, mine: &Entry
 /// but those of the divergence table (`conflicts.json`), which it updates.
 pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Error> {
     let mut done = Installed::default();
-    if g.worktree.is_none() {
+    if g.worktree.is_none() || crate::capture_file::pending(g) || crate::evict::unsettled(g) {
         return Ok(done);
     }
     let Some(main) = g.git.rev("refs/heads/main").await else {

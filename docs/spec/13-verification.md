@@ -30,6 +30,7 @@ invariants this specification cites are normative.
 | `CaptureInstall` | `NoLoss`, `Journal`, `IndexHonest`, `CaptureFirst`, `NoOverwrite`, `DeletionKept`; `SavesCaptured`, `Converges` | [07 §7.5](07-capture-and-install.md), [07 §7.7](07-capture-and-install.md) |
 | `Evict` | `NoLoss`, `NoPointer`, `DropsProtected`, `CaptureOnlySaves`, `NoDeletion`; `FreeLive`, `KeepLive` | [08 §8.5](08-custody-loops.md) |
 | `Repair` | `Survival`, `INV_K` (of steps), `ReserveKept`, `EndangeredFirst`; `Restores` | [08 §8.3–8.4](08-custody-loops.md), [08 §8.9](08-custody-loops.md) |
+| `CaptureTransaction`, `RecoveredNames`, `Retention` | `CapturedBeforeDisplacement`, `EverySaveKept`, `Complete` | capture's partial-failure states, recovery names across batches, the retained-key input to repair |
 | `Admission` | `ReserveKept`, `EndangeredFirst`, `DeferredStays` | [08 §8.9](08-custody-loops.md) |
 | `AnnexDrop` | `INV_K`, `LockedStays` | [08 §8.3](08-custody-loops.md), [09 §9.4](09-network-and-joining.md) |
 | `Purge` | `KeepWins`, `WaitingPeriod`, `NoResurrection` | [08 §8.6](08-custody-loops.md) |
@@ -63,9 +64,21 @@ the first unexplained line (`trace:rejected:N`), which fails the build.
 fold, admission, the authority rule, the catalogue merge) run in a simulated environment taking
 the model's steps (20 runs in `ci`, 200 in
 `models-full`; a mutant of each must be rejected), and
-`scripts/check-lab-traces` the slice's runs (§13.12). Every fault-injection
-run is trace-validated. This shows that observed runs conform; it is not a
+`scripts/check-lab-traces` the registered parts of the slice's runs (§13.12).
+An unregistered specification or missing fields are reported as unchecked;
+`--require SPEC` makes missing or partial coverage fail, even when another
+run of that specification passed. The daemon's full `CaptureInstall` trace
+is not yet registered, so its action names alone are not conformance
+evidence. Checked observations show those runs conform; they are not a
 proof of the code.
+
+`scripts/check-storage-traces` is mandatory in the Rust CI job. Real Git/
+git-annex tests observe live files, kept/recovered content, and retained
+keys, and check those observations against `StorageTrace` with required
+coverage. Every boundary has a corrupted observation that must be rejected;
+missing logs, actions and fields must fail too. The independent retained-key
+oracle unions the fixture's historical trees. These are targeted boundary
+checks, not full `CaptureInstall` refinement **[no ADR]**.
 
 ## 13.4 Laws and property tests (ADR 0012)
 

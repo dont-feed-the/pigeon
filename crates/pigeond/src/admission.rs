@@ -84,10 +84,9 @@ pub fn endangered(g: &Group) -> BTreeSet<String> {
 }
 
 /// Records `keys` as endangered, with those already recorded.
-pub fn save_endangered(g: &Group, keys: &BTreeSet<String>) {
-    if let Ok(text) = serde_json::to_vec(keys) {
-        let _ = pigeon_sys::fs::write_atomic(&endangered_file(g), &text);
-    }
+pub fn save_endangered(g: &Group, keys: &BTreeSet<String>) -> Result<(), String> {
+    let text = serde_json::to_vec(keys).map_err(|e| e.to_string())?;
+    pigeon_sys::fs::write_atomic(&endangered_file(g), &text).map_err(|e| e.to_string())
 }
 
 /// The protect items of `keys` this device lacks (a custodian) or that some
@@ -149,8 +148,10 @@ pub async fn items(g: &Group, me: &str, keys: &BTreeSet<String>) -> Vec<(Work, V
         };
         out.push((work, lacking));
     }
-    if endangered.len() != recorded {
-        save_endangered(g, &endangered);
+    if endangered.len() != recorded
+        && let Err(error) = save_endangered(g, &endangered)
+    {
+        tracing::warn!(group = %g.id, %error, "endangered-save-failed");
     }
     out.sort_by(|a, b| pigeon_core::queue::compare(&a.0, &b.0));
     out

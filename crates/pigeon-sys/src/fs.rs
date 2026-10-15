@@ -126,7 +126,13 @@ pub fn space(path: &Path) -> Result<Space> {
 /// never renames over a name (spec 07 §7.5).
 pub fn rename_noreplace(from: &Path, to: &Path) -> Result<Renamed> {
     match renameat_with(CWD, from, CWD, to, RenameFlags::NOREPLACE) {
-        Ok(()) => Ok(Renamed::Done),
+        Ok(()) => {
+            fsync_dir(&parent_of(from))?;
+            if parent_of(from) != parent_of(to) {
+                fsync_dir(&parent_of(to))?;
+            }
+            Ok(Renamed::Done)
+        }
         Err(rustix::io::Errno::EXIST) => Ok(Renamed::TargetExists),
         Err(rustix::io::Errno::NOENT) if lstat(from)?.is_none() => Ok(Renamed::SourceMissing),
         Err(e) => Err(Error::path("rename-noreplace", to, e.into())),

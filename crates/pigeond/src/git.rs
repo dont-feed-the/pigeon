@@ -7,7 +7,7 @@
 //! `git commit -S` with `gpg.format=ssh` would sign it (ADR 0007), then
 //! written back with `hash-object -t commit`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -39,6 +39,11 @@ static SIGNER: OnceLock<[u8; 32]> = OnceLock::new();
 /// changes nothing.
 pub fn set_signer(secret: [u8; 32]) {
     let _ = SIGNER.set(secret);
+}
+
+/// The device whose key this daemon uses for local contributions.
+pub(crate) fn signer_device() -> Option<String> {
+    SIGNER.get().map(|key| pigeon_core::sig::device_id(key).0)
 }
 
 /// A repository, as the loops call git in it.
@@ -328,6 +333,72 @@ impl Git {
             .zip(blobs)
             .filter_map(|(f, b)| Some((f.path, pointer_key(&b?.1)?)))
             .collect())
+    }
+
+    /// Keys reachable from every tree in `tips`' histories, including
+    /// overwritten and deleted files. No purge is implemented yet, so all
+    /// these references retain content. Inspect small blobs only: user
+    /// content is represented by annex pointers, never large Git blobs.
+    pub async fn retained_keys(&self, tips: &[String]) -> Result<BTreeSet<String>, Error> {
+        if tips.is_empty() {
+            return Ok(BTreeSet::new());
+        }
+        let input = format!("{}\n", tips.join("\n"));
+        let list = self
+            .run_in(
+                &["rev-list", "--objects", "--no-object-names", "--stdin"],
+                input.as_bytes(),
+            )
+            .await?;
+        let ids: Vec<String> = list.lines().map(str::to_owned).collect();
+        let mut keys = BTreeSet::new();
+        for chunk in ids.chunks(256) {
+            let input = format!("{}\n", chunk.join("\n"));
+            let checked = self
+                .run_in(
+                    &[
+                        "cat-file",
+                        "--batch-check=%(objectname) %(objecttype) %(objectsize)",
+                    ],
+                    input.as_bytes(),
+                )
+                .await?;
+            let mut blobs = Vec::new();
+            for line in checked.lines() {
+                let fields: Vec<&str> = line.split_whitespace().collect();
+                match fields.as_slice() {
+                    [oid, "blob", size] if size.parse::<usize>().is_ok_and(|n| n <= 2048) => {
+                        blobs.push((*oid).to_owned());
+                    }
+                    [_, "blob" | "tree" | "commit" | "tag", _] => {}
+                    _ => {
+                        return Err(Error::Parse {
+                            argv: vec!["cat-file".to_owned()],
+                            detail: format!("retained history has an unreadable object: {line}"),
+                        });
+                    }
+                }
+            }
+            let objects = self.objects(&blobs).await?;
+            if objects.len() != blobs.len() {
+                return Err(Error::Parse {
+                    argv: vec!["cat-file".to_owned()],
+                    detail: "incomplete retained-history response".to_owned(),
+                });
+            }
+            for object in objects {
+                let Some((_, bytes)) = object else {
+                    return Err(Error::Parse {
+                        argv: vec!["cat-file".to_owned()],
+                        detail: "retained history has a missing pointer".to_owned(),
+                    });
+                };
+                if let Some(key) = pointer_key(&bytes) {
+                    keys.insert(key);
+                }
+            }
+        }
+        Ok(keys)
     }
 
     /// The committer time of `commit`, in seconds.
