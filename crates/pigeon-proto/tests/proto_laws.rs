@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 use hegel::TestCase;
 use hegel::generators as gs;
 use pigeon_proto::api::{
-    Choice, DeletedFile, Divergence, FileEntry, Folder, Level, Machine, Setting, State,
-    StatusReport, Suggestion, VersionStatus,
+    Choice, DeletedFile, Divergence, FileEntry, Folder, Level, Machine, PersonEntry, Setting,
+    State, StatusReport, Suggestion, VersionStatus,
 };
 use pigeon_proto::stream::{Refusal, StreamAnswer, StreamHeader};
 use pigeon_proto::{Arg, Envelope, LineDecoder, Message, Problem, Request, Response, encode};
@@ -28,7 +28,7 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(31)) {
+    match tc.draw(gs::integers::<u8>().max_value(32)) {
         0 => Request::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -73,6 +73,7 @@ fn request(tc: &TestCase) -> Request {
             duration: maybe_text(tc),
         },
         31 => Request::Resume,
+        32 => Request::People,
         28 => Request::Files { folder: text(tc) },
         27 => Request::SetSettings {
             key: text(tc),
@@ -158,7 +159,7 @@ fn version(tc: &TestCase) -> VersionStatus {
 }
 
 fn response(tc: &TestCase) -> Response {
-    match tc.draw(gs::integers::<u8>().max_value(16)) {
+    match tc.draw(gs::integers::<u8>().max_value(17)) {
         0 => Response::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -204,6 +205,17 @@ fn response(tc: &TestCase) -> Response {
                     custodian: flag(tc),
                     heard_at: maybe_text(tc),
                     this_device: flag(tc),
+                })
+                .collect(),
+        },
+        17 => Response::People {
+            people: (0..tc.draw(gs::integers::<u8>().max_value(3)))
+                .map(|_| PersonEntry {
+                    name: text(tc),
+                    admin: flag(tc),
+                    machines: (0..tc.draw(gs::integers::<u8>().max_value(2)))
+                        .map(|_| text(tc))
+                        .collect(),
                 })
                 .collect(),
         },

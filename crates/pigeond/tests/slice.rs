@@ -148,6 +148,19 @@ fn local_published_protected_then_free_and_keep() {
         std::fs::read(folder.join("a.txt")).is_ok_and(|b| b == b"hello\n"),
         "{back:?}"
     );
+    match pigeon(&lap, &["people"]).as_slice() {
+        [Response::People { people }] => {
+            assert!(
+                people.iter().any(|p| p.admin && !p.machines.is_empty()),
+                "{people:?}"
+            );
+        }
+        other => panic!("people: {other:?}"),
+    }
+    match pigeon(&lap, &["deleted"]).as_slice() {
+        [Response::Deleted { .. }] => {}
+        other => panic!("deleted: {other:?}"),
+    }
     let paused = pigeon(&lap, &["pause", "2h"]);
     assert!(
         said(&paused, "paused-until", "until").is_some(),

@@ -85,6 +85,8 @@ its versions (`History`) with *Restore this version* (`Restore`);
 Deleted files lists what `main` deleted (`Deleted`), each with *Restore*.
 Settings also pauses for an hour, a day or until *Share again* (`Pause`,
 `Resume`, also `pigeon pause` and `pigeon resume`, 15 §15.6).
+People & machines lists the people first (`People`, also `pigeon people`);
+`pigeon deleted` lists Deleted files.
 Not yet: the other settings, the other actions, axe-core.
 
 - Served by `pigeond`, rendered on the server; server-sent events refresh

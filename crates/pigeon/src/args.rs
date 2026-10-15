@@ -68,6 +68,8 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("settings [KEY VALUE]", "cmd-settings"),
     ("pause [DURATION]", "cmd-pause"),
     ("resume", "cmd-resume"),
+    ("people", "cmd-people"),
+    ("deleted", "cmd-deleted"),
     ("doctor [--details]", "cmd-doctor"),
     ("debug bundle [--from NAME…]", "cmd-debug-bundle"),
     ("update [--version TAG | --rollback]", "cmd-update"),
@@ -250,6 +252,8 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
             not_shared: s.flag("not-shared"),
         }),
         "machines" if fits(0, 0, &[]) => send(Request::Machines),
+        "people" if fits(0, 0, &[]) => send(Request::People),
+        "deleted" if fits(0, 0, &[]) => send(Request::Deleted),
         "open" if fits(0, 0, &[]) => send(Request::OpenWeb),
         "settings" if fits(0, 0, &[]) => send(Request::GetSettings),
         "settings" if fits(2, 2, &[]) => send(Request::SetSettings {
@@ -338,9 +342,9 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
             }
         }
         "create" | "invite" | "join" | "status" | "machines" | "open" | "history" | "restore"
-        | "pause" | "resume" | "free" | "keep" | "remove-computer" | "recovery-sheet"
-        | "recover" | "doctor" | "debug" | "suggestions" | "accept" | "decline" | "conflicts"
-        | "resolve" | "update" => None,
+        | "pause" | "resume" | "people" | "deleted" | "free" | "keep" | "remove-computer"
+        | "recovery-sheet" | "recover" | "doctor" | "debug" | "suggestions" | "accept"
+        | "decline" | "conflicts" | "resolve" | "update" => None,
         other => Some(Action::NotInThisBuild(other.to_owned())),
     }
 }

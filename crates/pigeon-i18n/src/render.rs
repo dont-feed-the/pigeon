@@ -118,6 +118,20 @@ impl Renderer {
     }
 
     /// A computer or backup machine, and when it was last heard.
+    pub fn person(&self, p: &pigeon_proto::api::PersonEntry) -> String {
+        let role = if p.admin {
+            "person-admin"
+        } else {
+            "person-member"
+        };
+        let msg = crate::Message::new("person-row")
+            .arg("name", p.name.as_str())
+            .arg("role", self.id(role))
+            .arg("machines", p.machines.join(", "));
+        self.cat.format(&msg)
+    }
+
+    /// A machine of the roster.
     pub fn machine(&self, m: &Machine) -> String {
         if m.this_device {
             let msg = crate::Message::new("machine-this").arg("name", m.name.as_str());
@@ -206,6 +220,7 @@ impl Renderer {
             Response::Machines { machines } => {
                 (machines.iter().map(|m| self.machine(m)).collect(), false)
             }
+            Response::People { people } => (people.iter().map(|p| self.person(p)).collect(), false),
             Response::History { versions } => {
                 (versions.iter().map(|v| self.version(v)).collect(), false)
             }

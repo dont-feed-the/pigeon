@@ -176,6 +176,7 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         Request::Evict { folder } => free(d, Path::new(&folder)).await,
         Request::Keep { folder } => keep(d, Path::new(&folder)).await,
         Request::Machines => machines(d),
+        Request::People => people(d),
         Request::OpenWeb => match d.web.get() {
             Some(web) => vec![said("web-login", &[("url", text(&web.login_url()))])],
             None => not_in_this_build("open"),
@@ -463,6 +464,29 @@ fn machines(d: &Daemon) -> Vec<Response> {
         })
         .collect();
     vec![Response::Machines { machines }]
+}
+
+/// `pigeon people`: each person of the roster, with their machines.
+fn people(d: &Daemon) -> Vec<Response> {
+    let Some(doc) = d.default_group().and_then(|g| g.roster()) else {
+        return vec![problem("not-in-group", &[], None)];
+    };
+    let r = &doc.roster;
+    let people = r
+        .persons
+        .iter()
+        .map(|(id, p)| pigeon_proto::api::PersonEntry {
+            name: p.name.clone(),
+            admin: p.admin,
+            machines: r
+                .devices
+                .values()
+                .filter(|x| x.person == *id && x.role != DeviceRole::Recovery)
+                .map(|x| x.name.clone())
+                .collect(),
+        })
+        .collect();
+    vec![Response::People { people }]
 }
 
 /// The message of a text, for the modules that answer with one.

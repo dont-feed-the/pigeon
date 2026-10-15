@@ -33,9 +33,22 @@ pub async fn machines(
             a => other.extend(r.response(&a).0),
         }
     }
+    // The people first, each with their machines (ux.md §6.4).
+    let people: Vec<String> = web
+        .ask(Request::People)
+        .await
+        .iter()
+        .flat_map(|a| match a {
+            pigeon_proto::Response::People { people } => {
+                people.iter().map(|p| r.person(p)).collect()
+            }
+            _ => Vec::new(),
+        })
+        .collect();
     let f = &form.0;
     let body = html! {
         (list(&other))
+        (list(&people))
         @for m in &rows { (machine(&r, m, f)) }
         h2 { (r.id("web-invite")) }
         form method="post" action="/machines/invite" {

@@ -96,6 +96,8 @@ pub enum Request {
     },
     /// `pigeon machines`.
     Machines,
+    /// `pigeon people`: the group's members, with their computers (04 §4.2).
+    People,
     /// `pigeon open`: a link to the web interface holding a single-use
     /// token (10 §10.3).
     OpenWeb,
@@ -243,6 +245,11 @@ pub enum Response {
     Machines {
         /// The roster's devices.
         machines: Vec<Machine>,
+    },
+    /// The answer to `People`.
+    People {
+        /// The roster's persons.
+        people: Vec<PersonEntry>,
     },
     /// The answer to `History`.
     History {
@@ -406,6 +413,17 @@ pub struct NotShared {
     pub path: String,
     /// Why, such as a symbolic link.
     pub reason: Message,
+}
+
+/// A person of the roster.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersonEntry {
+    /// Their name in the roster.
+    pub name: String,
+    /// Whether they are an admin.
+    pub admin: bool,
+    /// The names of their computers and backup machines.
+    pub machines: Vec<String>,
 }
 
 /// A device of the roster.
