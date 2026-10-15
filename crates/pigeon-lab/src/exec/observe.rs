@@ -34,6 +34,19 @@ pub fn sha256_file(path: &Path) -> Option<String> {
     Some(hex(&h.finalize()))
 }
 
+/// [`sha256_file`] once `path` holds a file: an install, or a re-thin,
+/// moves a file aside for an instant (07 §7.5), so an absence is looked at
+/// again for up to a second before it counts.
+pub fn sha256_settled(path: &Path) -> Option<String> {
+    for _ in 0..5 {
+        if let Some(s) = sha256_file(path) {
+            return Some(s);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+    None
+}
+
 /// Whether `path` is a git-annex pointer: a link into the annex, or a small
 /// file that starts with `/annex/objects/`.
 pub fn is_pointer(path: &Path) -> bool {

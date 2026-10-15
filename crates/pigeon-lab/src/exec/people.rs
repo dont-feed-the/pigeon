@@ -116,6 +116,8 @@ impl Exec {
             return BTreeMap::new();
         };
         let name = name.to_string_lossy().into_owned();
+        // The file is away for an instant while an install moves it.
+        let _ = observe::sha256_settled(&path);
         fs::read_dir(dir)
             .into_iter()
             .flatten()
@@ -125,7 +127,7 @@ impl Exec {
                 if n != name && !is_copy_of(&n, &name) {
                     return None;
                 }
-                Some((n, observe::sha256_file(&e.path())?))
+                Some((n, observe::sha256_settled(&e.path())?))
             })
             .collect()
     }

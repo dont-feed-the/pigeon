@@ -505,7 +505,7 @@ impl Exec {
             },
             Condition::Bytes { on, file, content } => {
                 let want = self.sha(content);
-                let got = observe::sha256_file(&self.path(*on, file, w));
+                let got = observe::sha256_settled(&self.path(*on, file, w));
                 yes(
                     got.as_deref() == Some(want.as_str()),
                     format!("sha256 {got:?}"),
