@@ -20,7 +20,8 @@ people need to use pigeon on their own machines, then deletion, then polish.
 ## M0. The safety slice: v0.1
 
 One person, one laptop, two custodians on a LAN, K = 2 (issue #17).
-Exit: S1–S11 pass on both runners; `docs/reports/slice-1.md`.
+Exit: S1–S11 pass on both runners; `docs/reports/slice-1.md`. Done:
+v0.1.0, at 905353b.
 
 ## M1. Trust and durability: v0.2
 
@@ -38,13 +39,16 @@ Exit: S1–S11 pass on both runners; `docs/reports/slice-1.md`.
 - pigeon runs a pinned git-annex carrying the fixes for the P2P removal lock
   and the relay race (`third_party/git-annex/`). ADR 0069, which records
   this decision, supersedes ADR 0020's official builds. Its build and its
-  proof run in CI (`git-annex.yml`); the installers that ship it remain.
+  proof run in CI (`git-annex.yml`), and `packaging/install-git-annex`
+  installs it beside pigeon's `bin/`, checked end to end on both runners.
 
 Exit:
 
 - an unsigned or forged commit is refused (a new scenario);
 - the format fixtures are checked in CI;
 - the slice is still green.
+
+Report: `docs/reports/trust-2.md`.
 
 ## M2. Several laptops and several people: v0.3
 
