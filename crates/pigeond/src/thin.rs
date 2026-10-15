@@ -29,21 +29,22 @@ use pigeon_sys::fs::{Renamed, lstat, rename_noreplace};
 use crate::evict::{hidden_paths, is_old, journal, next_seq, record, stat_of, truncate_if_done};
 use crate::group::Group;
 use crate::journal_file::read;
-use crate::trace::{Act, Tracer};
+use crate::trace::Tracer;
+use crate::trace_state::Checkpoint;
 
 /// How long a file stays unchanged (content and metadata) before it is
 /// re-thinned.
 const QUIET_S: i64 = 60;
 
 /// Whether `file` has not changed for [`QUIET_S`] seconds.
-fn quiet(file: &Path) -> bool {
+fn quiet(file: &Path, seconds: i64) -> bool {
     let Ok(m) = std::fs::symlink_metadata(file) else {
         return false;
     };
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX));
-    now.saturating_sub(m.ctime().max(m.mtime())) >= QUIET_S
+    now.saturating_sub(m.ctime().max(m.mtime())) >= seconds
 }
 
 fn same_inode(a: &Path, b: &Path) -> bool {
@@ -56,6 +57,16 @@ fn same_inode(a: &Path, b: &Path) -> bool {
 /// One round: re-thins every visible file whose version is protected and
 /// whose content is still a copy of its object. Answers how many it did.
 pub async fn rethin(g: &Group, me: &str, t: &Tracer) -> usize {
+    rethin_after(g, me, t, QUIET_S).await
+}
+
+/// Exercise the real thinning driver without a minute's delay in the lab.
+#[cfg(feature = "lab")]
+pub async fn rethin_for_lab(g: &Group, me: &str, t: &Tracer) -> usize {
+    rethin_after(g, me, t, 0).await
+}
+
+async fn rethin_after(g: &Group, me: &str, t: &Tracer, quiet_seconds: i64) -> usize {
     if crate::capture_file::pending(g) || crate::evict::unsettled(g) {
         return 0;
     }
@@ -76,7 +87,9 @@ pub async fn rethin(g: &Group, me: &str, t: &Tracer) -> usize {
         if same_inode(&file, &object) {
             continue;
         }
-        match one(g, &file, &object, &o.path, &o.key, t) {
+        let seq = next_seq(&read(&journal(g)));
+        let trace = Checkpoint::new(t, g, &o.path, seq, "thin").await;
+        match one(g, &file, &object, &o.path, &o.key, &trace, quiet_seconds) {
             Ok(true) => done += 1,
             Ok(false) => {}
             Err(e) => tracing::warn!(group = %g.id, path = %o.path, error = %e, "rethin-failed"),
@@ -97,12 +110,13 @@ fn one(
     object: &Path,
     path: &str,
     key: &str,
-    t: &Tracer,
+    trace: &Checkpoint<'_>,
+    quiet_seconds: i64,
 ) -> Result<bool, String> {
     let Some(st) = stat_of(file) else {
         return Ok(false);
     };
-    if crate::restore::key_size(key).is_some_and(|n| n != st.size) || !quiet(file) {
+    if crate::restore::key_size(key).is_some_and(|n| n != st.size) || !quiet(file, quiet_seconds) {
         return Ok(false);
     }
     // The content is proved in place; in the window only the stat is.
@@ -115,6 +129,7 @@ fn one(
     let seq = next_seq(&read(&journal(g)));
     let stage = g.files.stage(seq);
     let aside = g.files.aside(seq);
+    let start = trace.begin("Start");
     std::fs::hard_link(object, &stage).map_err(|e| e.to_string())?;
     std::fs::set_permissions(&stage, std::fs::Permissions::from_mode(mode | 0o200))
         .map_err(|e| e.to_string())?;
@@ -130,39 +145,48 @@ fn one(
             aside: aside.to_string_lossy().into_owned(),
         }),
     )?;
-    t.event(Act::Start, &[("path", path)]);
+    record(g, &Record::Operation(seq, "thin".into()))?;
+    start.finish("begun");
+    let moved = trace.begin("MoveAside");
     let window = Instant::now();
     if rename_noreplace(file, &aside).map_err(|e| e.to_string())? != Renamed::Done {
         record(g, &Record::End(seq, End::Skip))?;
         let _ = std::fs::remove_file(&stage);
+        moved.finish("idle");
         return Ok(false);
     }
-    t.event(Act::MoveAside, &[("path", path)]);
+    moved.finish("aside");
+    let scan = trace.begin("Scan");
     let clear = lstat(&aside)
         .ok()
         .flatten()
         .is_some_and(|a| crate::asides::writers_clear(&a));
-    t.event(Act::Scan, &[("path", path)]);
-    if !clear || stat_of(&aside) != Some(st) {
-        let end = match rename_noreplace(&aside, file).map_err(|e| e.to_string())? {
-            Renamed::Done | Renamed::SourceMissing => End::Skip,
-            Renamed::TargetExists => End::Recovered,
-        };
-        record(g, &Record::End(seq, end))?;
-        let _ = std::fs::remove_file(&stage);
+    if !clear {
+        crate::install::rollback(g, seq, &aside, file, Some(&stage))?;
+        scan.finish("idle");
+        return Ok(false);
+    }
+    scan.finish("scanned");
+    let check = trace.begin("Check");
+    if stat_of(&aside) != Some(st) {
+        crate::install::rollback(g, seq, &aside, file, Some(&stage))?;
+        check.finish("idle");
         return Ok(false);
     }
     record(g, &Record::Proved(vec![seq]))?;
-    t.event(Act::Check, &[("path", path)]);
+    check.finish("checked");
+    let renamed = trace.begin("RenameIn");
     if rename_noreplace(&stage, file).map_err(|e| e.to_string())? != Renamed::Done {
         record(g, &Record::End(seq, End::Raced))?;
         let _ = std::fs::remove_file(&stage);
+        renamed.finish("idle");
         return Ok(false);
     }
-    t.event(Act::RenameIn, &[("path", path)]);
+    renamed.finish("renamed");
     let ms = window.elapsed().as_millis();
     tracing::debug!(group = %g.id, path, ms, "rethin-window");
+    let done = trace.begin("Done");
     record(g, &Record::End(seq, End::Done))?;
-    t.event(Act::Done, &[("path", path)]);
+    done.finish("idle");
     Ok(true)
 }

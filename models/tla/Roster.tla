@@ -47,6 +47,10 @@ Apply1(S, e) ==
   CASE e.k = "admin" -> IF e.p \notin S.mem THEN [ok |-> FALSE, s |-> S]
                         ELSE [ok |-> TRUE, s |-> [S EXCEPT !.adm =
                                 IF e.new THEN @ \cup {e.p} ELSE @ \ {e.p}]]
+    [] e.k = "addp"  -> IF e.p \in S.mem
+                        THEN [ok |-> (e.new = (e.p \in S.adm)), s |-> S]
+                        ELSE [ok |-> TRUE, s |-> [S EXCEPT !.mem = @ \cup {e.p},
+                              !.adm = IF e.new THEN @ \cup {e.p} ELSE @]]
     [] e.k = "add"   -> IF S.dev[e.d] = e.p THEN [ok |-> TRUE, s |-> S]
                         ELSE IF S.dev[e.d] = 0 /\ e.d \notin S.gone
                              THEN [ok |-> TRUE, s |-> [S EXCEPT !.dev[e.d] = e.p]]

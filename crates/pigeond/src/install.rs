@@ -27,7 +27,8 @@ use crate::evict::{is_old, journal, next_seq, record, stat_of, truncate_if_done}
 use crate::git::{Error, is_pigeon_path, pointer_key};
 use crate::group::Group;
 use crate::journal_file::read;
-use crate::trace::{Act, Tracer};
+use crate::trace::Tracer;
+use crate::trace_state::{Checkpoint, Span};
 
 /// How the install of one path ended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -65,6 +66,18 @@ fn mode_bits(entry: Option<&Entry>, file: &Path) -> u32 {
     if exec { 0o755 } else { 0o644 }
 }
 
+// Restore and explicit resolution have additional semantics absent from
+// CaptureInstall.Start. Keep their observations separately identified.
+fn trace_kind(g: &Group, rel: &str, indexed: bool) -> &'static str {
+    if !indexed {
+        "restore"
+    } else if crate::conflicts_file::read(g).is_some_and(|t| t.paths.contains_key(rel)) {
+        "resolve"
+    } else {
+        "install"
+    }
+}
+
 /// Installs `key`'s content at `rel`, moving the file aside first if there
 /// is one, whose version is `current`; a file saved meanwhile wins. With
 /// `entry`, the index takes it once the file is in (step 8); without, the
@@ -86,9 +99,11 @@ pub(crate) async fn put(
     let wt = g.worktree.clone().ok_or("not-in-group")?;
     let object = crate::custody::present(g, key).await.ok_or("receiving")?;
     let file = wt.join(rel);
+    let kind = trace_kind(g, rel, entry.is_some());
     let seq = next_seq(&read(&journal(g)));
     let stage = g.files.stage(seq);
     let aside = g.files.aside(seq);
+    let start = Span::begin_request(t, g, rel, seq, ("Start", kind), Some(key)).await;
     std::fs::copy(&object, &stage).map_err(|e| e.to_string())?;
     {
         use std::os::unix::fs::PermissionsExt;
@@ -101,6 +116,13 @@ pub(crate) async fn put(
     pigeon_sys::fs::fsync_dir(stage.parent().ok_or("no stage parent")?)
         .map_err(|e| e.to_string())?;
     let st = stat_of(&file);
+    // The caller's dirty scan precedes staging. A creation/deletion in
+    // that gap must reach capture, rather than become a new install.
+    if entry.is_some() && current.is_some() != st.is_some() {
+        std::fs::remove_file(&stage).map_err(|e| e.to_string())?;
+        start.interrupted("idle").await;
+        return Ok(Put::Raced);
+    }
     record(
         g,
         &Record::Begin(Begin {
@@ -113,55 +135,119 @@ pub(crate) async fn put(
             aside: aside.to_string_lossy().into_owned(),
         }),
     )?;
-    t.event(Act::Start, &[("path", rel)]);
+    if let Some(entry) = entry {
+        record(g, &Record::InstallIndex(seq, Some(entry.clone())))?;
+    }
+    record(g, &Record::Operation(seq, kind.to_owned()))?;
+    start.finish("begun").await;
+    pigeon_sys::lab::crash_point("install.after-begin");
+    let trace = Checkpoint::new(t, g, rel, seq, kind).await;
     if st.is_some() {
+        let moved = trace.begin("MoveAside");
         if rename_noreplace(&file, &aside).map_err(|e| e.to_string())? != Renamed::Done {
             record(g, &Record::End(seq, End::Raced))?;
             let _ = std::fs::remove_file(&stage);
+            moved.finish("idle");
             return Ok(Put::Raced);
         }
-        t.event(Act::MoveAside, &[("path", rel)]);
+        moved.finish("aside");
+        pigeon_sys::lab::crash_point("install.after-aside");
+        let scan = trace.begin("Scan");
         let clear = lstat(&aside)
             .ok()
             .flatten()
             .is_some_and(|a| crate::asides::writers_clear(&a));
-        t.event(Act::Scan, &[("path", rel)]);
-        if !clear || stat_of(&aside) != st || !is_old(&aside, current) {
-            let end = match rename_noreplace(&aside, &file).map_err(|e| e.to_string())? {
-                Renamed::Done | Renamed::SourceMissing => End::Skip,
-                Renamed::TargetExists => End::Recovered,
-            };
-            record(g, &Record::End(seq, end))?;
-            let _ = std::fs::remove_file(&stage);
+        if !clear {
+            rollback(g, seq, &aside, &file, Some(&stage))?;
+            scan.finish("idle");
             return Ok(Put::InUse);
         }
+        scan.finish("scanned");
     } else if let Some(dir) = file.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
+    let check = trace.begin(if st.is_some() { "Check" } else { "MoveAside" });
+    if st.is_some() && (stat_of(&aside) != st || !is_old(&aside, current)) {
+        rollback(g, seq, &aside, &file, Some(&stage))?;
+        check.finish("idle");
+        return Ok(Put::InUse);
+    }
     record(g, &Record::Proved(vec![seq]))?;
-    t.event(Act::Check, &[("path", rel)]);
+    check.finish("checked");
+    pigeon_sys::lab::crash_point("install.after-proof");
+    let renamed = trace.begin("RenameIn");
     if rename_noreplace(&stage, &file).map_err(|e| e.to_string())? != Renamed::Done {
         record(g, &Record::End(seq, End::Raced))?;
         let _ = std::fs::remove_file(&stage);
+        renamed.finish("idle");
         return Ok(Put::Raced);
     }
-    t.event(Act::RenameIn, &[("path", rel)]);
+    renamed.finish("renamed");
+    pigeon_sys::lab::crash_point("install.after-rename");
     if let Some(e) = entry {
-        index_entry(g, rel, Some(e)).await?;
-        t.event(Act::Index, &[("path", rel)]);
+        let index = Span::begin(t, g, rel, seq, "Index", kind).await;
+        if let Err(error) = index_entry(g, rel, Some(e)).await {
+            index.interrupted("renamed").await;
+            return Err(error);
+        }
+        pigeon_sys::lab::crash_point("install.before-index-observation");
+        index.finish("indexed").await;
     }
-    finish(g, seq, rel, &aside, t)?;
+    finish(g, seq, rel, &aside, t, kind).await?;
     Ok(Put::Done)
 }
 
-fn finish(g: &Group, seq: u64, rel: &str, aside: &Path, t: &Tracer) -> Result<(), String> {
+/// Exercise the real replacement driver without API/network setup in the
+/// lab. `None` selects restore; an entry selects install or resolution.
+#[cfg(feature = "lab")]
+pub async fn replace_for_lab(
+    g: &Group,
+    rel: &str,
+    key: &str,
+    current: Option<&str>,
+    entry: Option<&Entry>,
+    tracer: &Tracer,
+) -> Result<bool, String> {
+    put(g, rel, key, current, entry, tracer)
+        .await
+        .map(|out| matches!(out, Put::Done))
+}
+
+pub(crate) fn rollback(
+    g: &Group,
+    seq: u64,
+    aside: &Path,
+    file: &Path,
+    stage: Option<&Path>,
+) -> Result<(), String> {
+    let end = match rename_noreplace(aside, file).map_err(|e| e.to_string())? {
+        Renamed::Done | Renamed::SourceMissing => End::Skip,
+        Renamed::TargetExists => End::Recovered,
+    };
+    record(g, &Record::End(seq, end))?;
+    if let Some(stage) = stage {
+        let _ = std::fs::remove_file(stage);
+    }
+    Ok(())
+}
+
+async fn finish(
+    g: &Group,
+    seq: u64,
+    rel: &str,
+    aside: &Path,
+    t: &Tracer,
+    kind: &'static str,
+) -> Result<(), String> {
+    let done = Span::begin(t, g, rel, seq, "Done", kind).await;
     record(g, &Record::End(seq, End::Done))?;
-    t.event(Act::Done, &[("path", rel)]);
     if !aside.exists() {
         record(g, &Record::Released(seq))?;
-        t.event(Act::Release, &[("path", rel)]);
     }
     truncate_if_done(g);
+    pigeon_sys::lab::crash_point("install.before-done-observation");
+    done.finish("idle").await;
+    pigeon_sys::lab::crash_point("install.after-done");
     Ok(())
 }
 
@@ -195,11 +281,15 @@ pub(crate) async fn remove(g: &Group, rel: &str, current: &str, t: &Tracer) -> R
     let wt = g.worktree.clone().ok_or("not-in-group")?;
     let file = wt.join(rel);
     let Some(st) = stat_of(&file) else {
+        let observed = Span::begin(t, g, rel, 0, "Adopt", "install").await;
         index_entry(g, rel, None).await?;
+        observed.finish("idle").await;
         return Ok(Put::Done);
     };
+    let kind = trace_kind(g, rel, true);
     let seq = next_seq(&read(&journal(g)));
     let aside = g.files.aside(seq);
+    let start = Span::begin(t, g, rel, seq, "Start", kind).await;
     record(
         g,
         &Record::Begin(Begin {
@@ -212,30 +302,48 @@ pub(crate) async fn remove(g: &Group, rel: &str, current: &str, t: &Tracer) -> R
             aside: aside.to_string_lossy().into_owned(),
         }),
     )?;
-    t.event(Act::Start, &[("path", rel)]);
+    record(g, &Record::InstallIndex(seq, None))?;
+    record(g, &Record::Operation(seq, kind.to_owned()))?;
+    start.finish("begun").await;
+    pigeon_sys::lab::crash_point("install.after-begin");
+    let trace = Checkpoint::new(t, g, rel, seq, kind).await;
+    let moved = trace.begin("MoveAside");
     if rename_noreplace(&file, &aside).map_err(|e| e.to_string())? != Renamed::Done {
         record(g, &Record::End(seq, End::Skip))?;
+        moved.finish("idle");
         return Ok(Put::Raced);
     }
-    t.event(Act::MoveAside, &[("path", rel)]);
+    moved.finish("aside");
+    pigeon_sys::lab::crash_point("install.after-aside");
+    let scan = trace.begin("Scan");
     let clear = lstat(&aside)
         .ok()
         .flatten()
         .is_some_and(|a| crate::asides::writers_clear(&a));
-    t.event(Act::Scan, &[("path", rel)]);
-    if !clear || stat_of(&aside) != Some(st) || !is_old(&aside, Some(current)) {
-        let end = match rename_noreplace(&aside, &file).map_err(|e| e.to_string())? {
-            Renamed::Done | Renamed::SourceMissing => End::Skip,
-            Renamed::TargetExists => End::Recovered,
-        };
-        record(g, &Record::End(seq, end))?;
+    if !clear {
+        rollback(g, seq, &aside, &file, None)?;
+        scan.finish("idle");
+        return Ok(Put::InUse);
+    }
+    scan.finish("scanned");
+    let check = trace.begin("Check");
+    if stat_of(&aside) != Some(st) || !is_old(&aside, Some(current)) {
+        rollback(g, seq, &aside, &file, None)?;
+        check.finish("idle");
         return Ok(Put::InUse);
     }
     record(g, &Record::Proved(vec![seq]))?;
-    t.event(Act::Check, &[("path", rel)]);
-    index_entry(g, rel, None).await?;
-    t.event(Act::Index, &[("path", rel)]);
-    finish(g, seq, rel, &aside, t)?;
+    check.finish("checked");
+    pigeon_sys::lab::crash_point("install.after-proof");
+    let renamed = trace.begin("RenameIn");
+    renamed.finish("renamed");
+    let index = Span::begin(t, g, rel, seq, "Index", kind).await;
+    if let Err(error) = index_entry(g, rel, None).await {
+        index.interrupted("renamed").await;
+        return Err(error);
+    }
+    index.finish("indexed").await;
+    finish(g, seq, rel, &aside, t, kind).await?;
     let mut dir = file.parent();
     while let Some(d) = dir.filter(|d| *d != wt.as_path()) {
         if std::fs::remove_dir(d).is_err() {
@@ -290,7 +398,7 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
         tracing::warn!(group = %g.id, "conflicts-unreadable");
         return Ok(done);
     };
-    let known = table.clone();
+    let mut known = table.clone();
     let want = g.git.tree(&main).await?;
     let mut have = g.git.index().await?;
     table
@@ -300,7 +408,9 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
     let mut dirty = None;
     if suggested {
         let d = crate::capture::dirty(g).await?;
-        suggestions(g, &want, &mut have, &mut table, &d).await;
+        let spans = suggestions(g, &want, &mut have, &mut table, &d, t).await;
+        save(g, &known, &table, t, spans).await;
+        known = table.clone();
         dirty = Some(d);
     }
     let paths: BTreeSet<&String> = want.keys().chain(have.keys()).collect();
@@ -309,7 +419,7 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
         .filter(|p| want.get(*p) != have.get(*p))
         .collect();
     if changed.is_empty() {
-        save(g, &known, &table);
+        save(g, &known, &table, t, Vec::new()).await;
         return Ok(done);
     }
     let dirty = match dirty {
@@ -409,7 +519,7 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
     if hidden != before {
         crate::evict::write_sparse(g, &hidden);
     }
-    save(g, &known, &table);
+    save(g, &known, &table, t, Vec::new()).await;
     let _ = g.git.run(&["update-index", "-q", "--refresh"]).await;
     if done != Installed::default() {
         tracing::info!(group = %g.id, written = done.written, removed = done.removed,
@@ -423,13 +533,15 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
 /// changes (`Decide`); one whose file is clean again ends too, the person
 /// having put a version back; one declined, or whose path `main` changed
 /// meanwhile, becomes a conflict, told once.
-async fn suggestions(
-    g: &Group,
+async fn suggestions<'a>(
+    g: &'a Group,
     want: &pigeon_core::authority::Tree,
     have: &mut pigeon_core::authority::Tree,
     table: &mut Table,
     dirty: &BTreeSet<String>,
-) {
+    tracer: &'a Tracer,
+) -> Vec<(String, Span<'a>)> {
+    let mut spans = Vec::new();
     let paths: Vec<String> = table
         .paths
         .iter()
@@ -437,6 +549,10 @@ async fn suggestions(
         .map(|(p, _)| p.clone())
         .collect();
     for p in paths {
+        spans.push((
+            p.clone(),
+            Span::begin(tracer, g, &p, 0, "Decide", "install").await,
+        ));
         let w = want.get(&p);
         let group = key_of(g, w).await;
         let Some(d) = table.paths.get_mut(&p) else {
@@ -469,13 +585,38 @@ async fn suggestions(
             d.told = false;
         }
     }
+    spans
 }
 
-fn save(g: &Group, known: &Table, table: &Table) {
-    if known != table
-        && let Err(e) = crate::conflicts_file::write(g, table)
-    {
-        tracing::warn!(group = %g.id, error = %e, "conflicts-write-failed");
+async fn save<'a>(
+    g: &'a Group,
+    known: &Table,
+    table: &Table,
+    tracer: &'a Tracer,
+    mut spans: Vec<(String, Span<'a>)>,
+) {
+    if known != table {
+        let paths: BTreeSet<_> = known.paths.keys().chain(table.paths.keys()).collect();
+        for path in paths {
+            if known.paths.get(path) != table.paths.get(path)
+                && !spans.iter().any(|(p, _)| p == path)
+            {
+                spans.push((
+                    path.clone(),
+                    Span::begin(tracer, g, path, 0, "Reconcile", "install").await,
+                ));
+            }
+        }
+        if let Err(e) = crate::conflicts_file::write(g, table) {
+            for (_, span) in spans {
+                span.interrupted("idle").await;
+            }
+            tracing::warn!(group = %g.id, error = %e, "conflicts-write-failed");
+            return;
+        }
+    }
+    for (_, span) in spans {
+        span.finish("idle").await;
     }
 }
 

@@ -1,0 +1,260 @@
+#!/usr/bin/env python3
+"""Require real CaptureInstall runs, canonical TLA actions and negative checks.
+
+The daemon emits snapshots; the encoder only renames identities. Corrupt
+each safety-relevant boundary and remove proof/index steps: TLC must refuse
+them. Missing scenarios, fields and incomplete observations also fail.
+"""
+
+import argparse
+import copy
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+# The scripts intentionally have executable names without a .py suffix.
+import importlib.machinery
+import importlib.util
+
+loader = importlib.machinery.SourceFileLoader("install_traces", str(ROOT / "scripts/check-install-traces"))
+spec = importlib.util.spec_from_loader(loader.name, loader)
+checker = importlib.util.module_from_spec(spec)
+loader.exec_module(checker)
+CASES = {
+    "normal": ("install_writes_the_versions_main_gained", 3),
+    "crashes": ("tracing::driver_traces_replay_crashes", 8),
+    "release": ("tracing::driver_traces_release_changed_aside", 1),
+    "evict": ("tracing::driver_traces_free_keep_and_thin", 1),
+    "roster": ("tracing::driver_traces_roster_forks", 0),
+    "index": ("tracing::driver_traces_observe_index_without_refreshing_it", 3),
+    "concurrent": ("a_save_racing_an_install_is_kept_both_ways", 3),
+    "recent": ("a_save_soon_after_an_install_is_kept_beside_it", 3),
+    "restore": ("tracing::driver_traces_restore", 1),
+    "restore-crash": ("tracing::driver_traces_restore_after_deletion_crash", 1),
+    "resolve": ("tracing::driver_traces_take_group", 2),
+    "presence": ("tracing::driver_traces_presence_races", 2),
+}
+REQUIRED = {"Capture", "Start", "MoveAside", "Scan", "Check", "RenameIn", "Index",
+            "Done", "Recover", "RecoverEnd", "Cleanup", "Release", "Reconcile"}
+KINDS = {"thin", "free", "keep", "restore", "resolve", "install"}
+SPECS = checker.FILESYSTEM_SPECS | {"Roster"}
+
+
+def coverage(out):
+    streams = []
+    for case, (_, count) in CASES.items():
+        found = list(checker.streams(out / case))
+        if len(found) != count:
+            sys.exit(f"FAIL {case}: expected {count} path streams, got {len(found)}")
+        streams += found
+    if missing := REQUIRED - {e["action"] for _, _, events in streams for e in events}:
+        sys.exit(f"FAIL missing required driver actions: {sorted(missing)}")
+    if missing := KINDS - {e["vars"]["kind"] for _, _, events in streams for e in events}:
+        sys.exit(f"FAIL missing required driver operations: {sorted(missing)}")
+    for case in CASES:
+        logs = list((out / case).rglob("*.ndjson"))
+        count = 8 if case == "crashes" else 1
+        if len(logs) != count:
+            sys.exit(f"FAIL {case}: expected {count} device logs, got {len(logs)}")
+        events = [json.loads(line) for log in logs for line in log.read_text().splitlines() if line.strip()]
+        if any(e["spec"] not in SPECS for e in events):
+            sys.exit(f"FAIL {case}: unknown or unchecked trace family")
+        roster = [e for e in events if e["spec"] == "Roster"]
+        expected = {"roster": 2, "evict": 1}.get(case, 0)
+        if len(roster) != expected:
+            sys.exit(f"FAIL {case}: expected {expected} roster events, got {len(roster)}")
+    return streams
+
+
+def reject(events, java, name, syntax=False, model=False):
+    try:
+        if syntax:
+            checker.pairs(events)
+            verdict = "trace:accepted"
+        else:
+            verdict = checker.check(events, java, 4, diagnostics=False)
+    except (checker.Refused, KeyError, TypeError, ValueError):
+        verdict = "refused"
+    if verdict == "trace:accepted":
+        sys.exit(f"FAIL {name}: corrupted observations were accepted")
+    if model and verdict == "refused":
+        sys.exit(f"FAIL {name}: malformed mutant instead of a model counterexample")
+    if verdict != "refused" and not verdict.startswith("trace:rejected:"):
+        sys.exit(f"FAIL {name}: checker error instead of a verdict: {verdict}")
+    print(f"ok   {name}: rejected", flush=True)
+
+
+def mutations(streams, java):
+    def choose(action, predicate=lambda before, after: True):
+        for _, _, events in streams:
+            for j, e in enumerate(events):
+                if e["action"] == action and e["vars"]["edge"] == "after":
+                    before, after = events[j - 1]["vars"]["state"], e["vars"]["state"]
+                    if predicate(before, after):
+                        return copy.deepcopy(events), j
+        sys.exit(f"FAIL no suitable {action} observation to corrupt")
+
+    for action in ("Capture", "MoveAside", "Check", "Index", "Done", "RecoverEnd", "Release"):
+        if action in {"Capture", "Release"}:
+            events, j = choose(action, lambda b, a: set(a["signed"]) - set(b["signed"]))
+        elif action in {"Index", "RecoverEnd"}:
+            events, j = choose(action, lambda b, a: a["index"] != b["index"])
+        elif action == "Done":
+            events, j = choose(action, lambda b, a: a["kept"])
+        else:
+            events, j = choose(action)
+        before, after = events[j - 1]["vars"]["state"], events[j]["vars"]["state"]
+        if action in {"Capture", "Release"}:
+            after["signed"] = before["signed"]
+        elif action in {"Index", "RecoverEnd"}:
+            after["index"] = before["index"]
+            after["physical_index"] = before["physical_index"]
+        elif action == "Check":
+            after["proved"] = False
+        elif action == "Done":
+            after["kept"] = []
+        else:
+            after["aside"] = {"inode": "", "content": "", "writers": False, "stat": ""}
+        reject(events, java, f"{action} wrong output", model=True)
+
+    events, j = choose("Check")
+    events[j]["vars"]["state"]["expected_stat"] += "1"
+    reject(events, java, "journal stat does not justify proof", model=True)
+    events, j = choose("Start", lambda b, a: not a["open"])
+    events[j]["vars"]["ok"] = True
+    reject(events, java, "presence race incorrectly reported as an install", model=True)
+
+    for action in ("Check", "Index"):
+        events, j = choose(action)
+        del events[j - 1:j + 1]
+        reject(events, java, f"missing {action} step", model=True)
+    original, j = choose("Capture")
+    for field in sorted(checker.FIELDS):
+        events = copy.deepcopy(original)
+        del events[j]["vars"]["state"][field]
+        reject(events, java, f"missing {field}", syntax=True)
+    events = copy.deepcopy(original)
+    del events[j]
+    reject(events, java, "missing after snapshot", syntax=True)
+    events = copy.deepcopy(original)
+    events[j]["action"] = "Unknown"
+    reject(events, java, "unknown action", syntax=True)
+    events = copy.deepcopy(original)
+    events[j]["vars"] = {"error": "observation failed"}
+    reject(events, java, "failed observation", syntax=True)
+    reject([], java, "empty stream")
+
+
+def roster_mutations(out, java):
+    roster = checker.load("check-roster-traces")
+    log = next((out / "roster").rglob("*.ndjson"))
+    original = [json.loads(line) for line in log.read_text().splitlines() if line.strip()]
+
+    def refuse(events, name):
+        got = roster.check(events, java, diagnostics=False)
+        if not got.startswith("trace:rejected:"):
+            sys.exit(f"FAIL {name}: expected a model rejection, got {got}")
+        print(f"ok   {name}: rejected", flush=True)
+
+    events = copy.deepcopy(original)
+    events[-1]["vars"]["loaded"] = events[-1]["vars"]["commits"][0]["roster"]
+    refuse(events, "wrong daemon-loaded roster")
+    events = copy.deepcopy(original)
+    v = events[-1]["vars"]
+    for c in v["commits"]:
+        if c["id"] == v["head"]:
+            c["roster"] = v["commits"][0]["roster"]
+            v["loaded"] = c["roster"]
+    refuse(events, "wrong roster merge tree and matching loaded roster")
+    events = copy.deepcopy(original)
+    v = events[0]["vars"]
+    for c in v["commits"]:
+        if c["id"] == v["head"]:
+            c["signer"] = "f" * 64
+    refuse(events, "roster commit signed outside its parent roster")
+
+
+def pipeline_mutations(out, java):
+    """A second valid log cannot mask an invalid or incomplete one."""
+    original = next((out / "release").rglob("*.ndjson")).read_text()
+    events = [json.loads(line) for line in original.splitlines() if line.strip()]
+    with tempfile.TemporaryDirectory(prefix="pigeon-trace-negative-") as tmp:
+        root = Path(tmp)
+        (root / "good").mkdir()
+        (root / "bad").mkdir()
+        (root / "good/trace.ndjson").write_text(original)
+        path = root / "bad/trace.ndjson"
+        for name in ("unknown family", "missing field", "missing first event", "empty log"):
+            bad = copy.deepcopy(events)
+            if name == "unknown family":
+                for e in bad: e["spec"] = "Unregistered"
+            elif name == "missing field":
+                del bad[-1]["vars"]["state"]["signed"]
+            elif name == "missing first event":
+                del bad[0]
+            else:
+                bad = []
+            path.write_text("".join(json.dumps(e) + "\n" for e in bad))
+            got = subprocess.run([sys.executable, str(ROOT / "scripts/check-lab-traces"), str(root),
+                                  "--java", java, "--require", "CaptureInstall"],
+                                 capture_output=True, text=True, cwd=ROOT)
+            if got.returncode == 0 or "FAIL" not in got.stdout:
+                sys.exit(f"FAIL {name}: another checked log masked the error\n{got.stdout}{got.stderr}")
+            print(f"ok   {name} with another valid log: rejected", flush=True)
+
+
+def run(out, java, generate=True):
+    for case, (test, _) in (CASES.items() if generate else []):
+        directory = out / case
+        directory.mkdir(parents=True)
+        env = dict(os.environ, PIGEON_TRACE="1", PIGEON_TRACE_DIR=str(directory), PIGEON_REQUIRE_GIT_ANNEX="1")
+        subprocess.run(["cargo", "test", "--locked", "-p", "pigeond", "--test", "install",
+                        "--features", "tla-trace,lab", test, "--", "--exact", "--test-threads=1"],
+                       cwd=ROOT, env=env, check=True)
+    streams = coverage(out)
+    result = subprocess.run([sys.executable, str(ROOT / "scripts/check-lab-traces"), str(out),
+                             "--java", java, *[item for s in sorted(SPECS) for item in ("--require", s)]],
+                            capture_output=True, text=True, cwd=ROOT)
+    print(result.stdout, end="", flush=True)
+    if result.returncode:
+        sys.exit(result.stderr or "FAIL daemon traces did not pass the common lab checker")
+    mutations(streams, java)
+    roster_mutations(out, java)
+    pipeline_mutations(out, java)
+    # Losing a whole scenario cannot be masked by another valid run.
+    with tempfile.TemporaryDirectory() as empty:
+        partial = Path(empty)
+        for case in CASES:
+            if case != "presence":
+                (partial / case).symlink_to(out / case, target_is_directory=True)
+        try:
+            coverage(partial)
+        except SystemExit:
+            print("ok   missing scenario logs: rejected", flush=True)
+        else:
+            sys.exit("FAIL missing scenario logs were accepted")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--java", default=os.environ.get("JAVA", "java"))
+    parser.add_argument("--out", type=Path, help="retain raw logs in this new directory")
+    parser.add_argument("--check-only", action="store_true", help="check retained logs without generating them again")
+    args = parser.parse_args()
+    if args.out:
+        run(args.out.resolve(), args.java, generate=not args.check_only)
+        return
+    if args.check_only:
+        parser.error("--check-only requires --out")
+    with tempfile.TemporaryDirectory(prefix="pigeon-driver-traces-") as tmp:
+        run(Path(tmp), args.java)
+
+
+if __name__ == "__main__":
+    main()

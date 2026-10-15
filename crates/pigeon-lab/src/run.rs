@@ -140,16 +140,7 @@ pub fn run<I: Interpreter>(scenario: &Scenario, interp: &mut I) -> Report {
         let verdict = match interp.trace() {
             None => Verdict::Skip("no trace".into()),
             Some(trace) => {
-                let specs: Vec<&str> = trace.iter().map(|l| l.spec).collect();
-                let wanted: Vec<_> = project(&scenario.steps)
-                    .into_iter()
-                    .filter(|item| match item {
-                        crate::scenario::Item::One(l) => specs.contains(&l.spec),
-                        crate::scenario::Item::AnyOrder(ls) => {
-                            ls.iter().all(|l| specs.contains(&l.spec))
-                        }
-                    })
-                    .collect();
+                let wanted = project(&scenario.steps);
                 if embeds_per_device(&wanted, &trace) {
                     Verdict::Pass
                 } else {

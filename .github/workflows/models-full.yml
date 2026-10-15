@@ -13,6 +13,7 @@ on:
       - "models/tla/**"
       - "scripts/run-tlc"
       - "scripts/check-code-traces"
+      - "scripts/check-*-traces"
       - "scripts/check-s9-schedules"
       - "crates/pigeon-core/**"
       - "crates/pigeon-lab/**"
@@ -103,6 +104,14 @@ jobs:
         # Eighty distinct seeds, 12 or 13 cases apiece: still 1000 cases.
         # Each process has its own disks and logs.
         run: scripts/check-s9-schedules --cases 50 --jobs 4 --seed "$((SHARD * 4))"
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        if: always()
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: every emitted trace checked by TLC, including failed schedules
+        if: always()
+        run: scripts/check-lab-traces target/lab/s9
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -176,6 +185,14 @@ jobs:
       - name: summary
         if: always() && steps.blocked.outputs.run == 'true'
         run: cat target/lab/out/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        if: always() && steps.blocked.outputs.run == 'true'
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: every emitted trace checked by TLC, including blocked scenarios
+        if: always() && steps.blocked.outputs.run == 'true'
+        run: scripts/check-lab-traces target/lab/out
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always() && steps.blocked.outputs.run == 'true'
         with:

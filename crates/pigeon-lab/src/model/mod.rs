@@ -437,11 +437,11 @@ impl Model {
             }
             LaptopOp::Free { folder } => {
                 self.laptop(on).freed.insert(*folder);
-                self.log("CaptureInstall", "Start", d);
+                self.log("Evict", "Start", d);
             }
             LaptopOp::Keep { folder } => {
                 self.laptop(on).freed.remove(folder);
-                self.log("CaptureInstall", "Start", d);
+                self.log("Evict", "Start", d);
             }
             LaptopOp::Restore { file, version } => {
                 let ver = self.laptops[on.0 as usize]
@@ -469,7 +469,7 @@ impl Model {
                 let lm = self.laptop(on);
                 lm.content.insert(ver.key.clone(), ver.len);
                 lm.disk.insert(file.clone(), OnDisk::File(ver.key.clone()));
-                self.log("CaptureInstall", "Start", d);
+                self.log("Restore", "Start", d);
             }
             LaptopOp::Invite { custodian } => {
                 let c = &mut self.custodians[custodian.0 as usize];

@@ -113,6 +113,11 @@ pub async fn resolve(d: &Daemon, path: &Path, choice: &Choice) -> Vec<Response> 
     if stat_now(&wt, &rel) != div.mine_stat {
         return problem("changed-since", &shown);
     }
+    let mut observed = if matches!(choice, Choice::SuggestAgain) {
+        Some(crate::trace_state::Span::begin(&d.tracer, &g, &rel, 0, "Resolve", "resolve").await)
+    } else {
+        None
+    };
     let said = match choice {
         Choice::TakeGroup => take(d, &g, &rel, &div).await.map(|()| {
             crate::api::said("resolved-take-group", &[("path", Arg::Text(shown.clone()))])
@@ -138,15 +143,31 @@ pub async fn resolve(d: &Daemon, path: &Path, choice: &Choice) -> Vec<Response> 
     };
     let said = match said {
         Ok(s) => s,
-        Err(Some(code)) => return problem(code, &shown),
-        Err(None) => return internal("resolve failed; see the daemon's log"),
+        Err(Some(code)) => {
+            if let Some(span) = observed.take() {
+                span.interrupted("idle").await;
+            }
+            return problem(code, &shown);
+        }
+        Err(None) => {
+            if let Some(span) = observed.take() {
+                span.interrupted("idle").await;
+            }
+            return internal("resolve failed; see the daemon's log");
+        }
     };
     if !matches!(choice, Choice::SuggestAgain) {
         table.paths.remove(&rel);
     }
+    let observed = match observed {
+        Some(span) => span,
+        None => crate::trace_state::Span::begin(&d.tracer, &g, &rel, 0, "Resolve", "resolve").await,
+    };
     if let Err(e) = crate::conflicts_file::write(&g, &table) {
+        observed.interrupted("idle").await;
         return internal(e);
     }
+    observed.finish("idle").await;
     tracing::info!(group = %g.id, path = %rel, choice = ?choice, "resolved");
     drop(busy);
     crate::api::wake_soon(d);
@@ -208,7 +229,17 @@ async fn take(
             .map(|()| Put::Done),
     };
     match done {
-        Ok(Put::Done) => withdraw(g, div).await,
+        Ok(Put::Done) => {
+            let span =
+                crate::trace_state::Span::begin(&d.tracer, g, rel, 0, "Withdraw", "resolve").await;
+            let result = withdraw(g, div).await;
+            if result.is_ok() {
+                span.finish("idle").await;
+            } else {
+                span.interrupted("idle").await;
+            }
+            result
+        }
         Ok(_) => Err(Some("changed-since")),
         Err(e) => {
             tracing::warn!(group = %g.id, path = %rel, error = %e, "resolve-install-failed");

@@ -23,7 +23,7 @@ use pigeon_core::roster::Role as DeviceRole;
 use crate::git::Git;
 use crate::group::Group;
 use crate::settings::ensure_remote;
-use crate::trace::{Act, Tracer};
+use crate::trace::Tracer;
 
 /// How long one fetch may take: a P2P fetch can hang (E12, 16 §16.4), and
 /// one that does is tried once more at once.
@@ -153,7 +153,8 @@ pub async fn accept(g: &Group, me: &str, tracer: &Tracer) -> bool {
             .await
         {
             Ok(()) => {
-                tracer.event(Act::Merge, &[("commit", &target)]);
+                g.reload_roster().await;
+                crate::trace_roster::moved(tracer, g, "Merge", ours.as_deref()).await;
                 tracing::info!(group = %g.id, peer = %id, commit = %target, "accepted");
                 moved = true;
             }

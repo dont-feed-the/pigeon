@@ -12,7 +12,7 @@ use pigeon_sys::fs::{Renamed, fsync_dir, lstat, rename_noreplace};
 
 use crate::evict::{is_old, journal, record, truncate_if_done};
 use crate::group::Group;
-use crate::trace::{Act, Tracer};
+use crate::trace::Tracer;
 
 /// The minimum keep period of an install's displaced inode, in seconds.
 pub const KEEP_SECONDS: i64 = 10 * 60;
@@ -80,6 +80,18 @@ async fn one(g: &Group, t: &Tracer, now: i64, seq: u64, e: &Entry) -> Result<(),
     }
     let written = !writers_clear(&st);
     let old = long_enough && !written && is_old(&file, e.begin.old_key.as_deref());
+    if written {
+        return Ok(());
+    }
+    let span = crate::trace_state::Span::begin(
+        t,
+        g,
+        &e.begin.path,
+        seq,
+        "Release",
+        crate::trace_state::operation(e),
+    )
+    .await;
     match decision(long_enough, written, false, old) {
         Release::Wait => return Ok(()),
         Release::Unlink if e.preserved.is_none() => {
@@ -88,7 +100,13 @@ async fn one(g: &Group, t: &Tracer, now: i64, seq: u64, e: &Entry) -> Result<(),
         }
         _ => {
             let kept = preserve(g, seq, e, &file)?;
-            let (name, key, commit) = capture(g, e, &kept, at).await?;
+            let (name, key, commit) = match capture(g, e, &kept, at).await {
+                Ok(captured) => captured,
+                Err(error) => {
+                    span.interrupted("idle").await;
+                    return Err(error);
+                }
+            };
             let meta = serde_json::json!({
                 "format": 1, "path": e.begin.path, "captured_as": name,
                 "key": key, "commit": commit,
@@ -98,7 +116,7 @@ async fn one(g: &Group, t: &Tracer, now: i64, seq: u64, e: &Entry) -> Result<(),
         }
     }
     record(g, &Record::Released(seq))?;
-    t.event(Act::Release, &[("path", &e.begin.path)]);
+    span.finish("idle").await;
     Ok(())
 }
 

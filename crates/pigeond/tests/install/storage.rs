@@ -255,11 +255,14 @@ async fn placement_copies_historical_captured_versions_too() {
     std::fs::create_dir(&remote).unwrap();
     let rg = Git::new(&remote, GitEnv::default());
     rg.run(&["init", "--bare", "-q"]).await.unwrap();
+    let uuid = l.g.roster().unwrap().roster.devices[&dev(3)]
+        .annex_uuid
+        .clone()
+        .unwrap();
+    rg.run(&["config", "annex.uuid", &uuid]).await.unwrap();
     rg.run(&["annex", "init", "backup"]).await.unwrap();
-    let uuid = rg.config("annex.uuid").await.unwrap();
     let mut doc = l.g.roster().unwrap();
     doc.roster.k = 1;
-    doc.roster.devices.get_mut(&dev(3)).unwrap().annex_uuid = Some(uuid);
     pigeond::change::commit_roster(&l.g, &doc, "pigeon: configure test custodian", &l.t)
         .await
         .unwrap();

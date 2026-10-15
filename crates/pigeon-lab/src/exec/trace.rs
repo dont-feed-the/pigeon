@@ -52,12 +52,26 @@ pub fn merged(files: &[PathBuf]) -> Vec<Line> {
     let mut lines = Vec::new();
     for f in files {
         let Ok(text) = fs::read_to_string(f) else {
+            lines.push(trace_error("unreadable trace file"));
             continue;
         };
         for raw in text.lines() {
+            if raw.trim().is_empty() {
+                continue;
+            }
             let Ok(v) = serde_json::from_str::<Value>(raw) else {
+                lines.push(trace_error("malformed trace event"));
                 continue;
             };
+            if ["spec", "device", "action"]
+                .iter()
+                .any(|k| v.get(k).and_then(Value::as_str).is_none())
+                || v.get("clock").and_then(Value::as_u64).is_none()
+                || !v.get("vars").is_some_and(Value::is_object)
+            {
+                lines.push(trace_error("incomplete trace event"));
+                continue;
+            }
             let field = |k: &str| {
                 v.get(k)
                     .and_then(Value::as_str)
@@ -75,6 +89,19 @@ pub fn merged(files: &[PathBuf]) -> Vec<Line> {
     }
     lines.sort_by(|a, b| (a.clock, &a.device).cmp(&(b.clock, &b.device)));
     lines
+}
+
+fn trace_error(why: &str) -> Line {
+    let raw = serde_json::json!({"spec": "TraceError", "device": "unknown", "clock": 0,
+        "action": "Read", "vars": {"error": why}})
+    .to_string();
+    Line {
+        spec: "TraceError".into(),
+        device: "unknown".into(),
+        clock: 0,
+        action: "Read".into(),
+        raw,
+    }
 }
 
 /// Writes the merged events, one per line.

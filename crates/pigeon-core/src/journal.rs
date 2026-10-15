@@ -72,6 +72,11 @@ pub enum Record {
     Kept(u64, i64),
     /// A changed aside is preserved at this non-replacing destination.
     Preserved(u64, String),
+    /// The index entry an install must replay, or its deletion. This is
+    /// durable before proof; free/keep transitions do not have this record.
+    InstallIndex(u64, Option<crate::authority::Entry>),
+    /// Which filesystem transition recovery is replaying.
+    Operation(u64, String),
     /// An entry's aside was unlinked or captured.
     Released(u64),
 }
@@ -91,6 +96,10 @@ pub struct Entry {
     pub kept_at: Option<i64>,
     /// Where a changed aside is preserved before capturing it.
     pub preserved: Option<String>,
+    /// The install's index intent; absent for free/keep and older journals.
+    pub install_index: Option<Option<crate::authority::Entry>>,
+    /// Install, free, keep, thin, restore or resolve; absent in old journals.
+    pub operation: Option<String>,
 }
 
 /// Fold records into entries by sequence number. Records about an unknown
@@ -107,6 +116,8 @@ pub fn entries(records: &[Record]) -> BTreeMap<u64, Entry> {
                     released: false,
                     kept_at: None,
                     preserved: None,
+                    install_index: None,
+                    operation: None,
                 });
             }
             Record::Proved(seqs) => {
@@ -134,6 +145,16 @@ pub fn entries(records: &[Record]) -> BTreeMap<u64, Entry> {
             Record::Preserved(s, path) => {
                 if let Some(e) = out.get_mut(s) {
                     e.preserved = Some(path.clone());
+                }
+            }
+            Record::InstallIndex(s, entry) => {
+                if let Some(e) = out.get_mut(s) {
+                    e.install_index = Some(entry.clone());
+                }
+            }
+            Record::Operation(s, operation) => {
+                if let Some(e) = out.get_mut(s) {
+                    e.operation = Some(operation.clone());
                 }
             }
         }

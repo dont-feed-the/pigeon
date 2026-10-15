@@ -529,3 +529,7 @@ async fn a_renamed_file_is_captured_with_its_trailer() {
 
 #[path = "install/storage.rs"]
 mod storage;
+
+#[cfg(all(feature = "lab", feature = "tla-trace"))]
+#[path = "install/tracing.rs"]
+mod tracing;

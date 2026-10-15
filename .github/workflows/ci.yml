@@ -123,6 +123,8 @@ jobs:
           java-version: "21"
       - name: real storage boundaries pass TLC and every corrupted observation fails
         run: python3 scripts/check-storage-traces
+      - name: daemon filesystem and roster traces pass TLC; missing steps and corrupted observations fail
+        run: python3 scripts/check-driver-traces
       - name: the format fixtures, golden and next-format files (ADR 0048, 13 §13.6)
         run: cargo test -p pigeond --test formats --locked
       - name: the lab build's seams (13 §13.12)

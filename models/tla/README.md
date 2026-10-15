@@ -1,5 +1,10 @@
 # The TLA+ models
 
+The daemon's before/after observations are checked by
+`CaptureInstallTrace.tla`/`DaemonDriver.tla` and `RosterDaemonTrace.tla`.
+See [Checking daemon traces](../../docs/daemon-traces.md) for the required
+regressions, commands, observation contract and projection limits.
+
 What each configuration of `expected.tsv` shows, and what each model leaves
 out. This is evidence; what the models must prove is stated in spec
 [13 §13.2](../../docs/spec/13-verification.md), and the invariants it cites

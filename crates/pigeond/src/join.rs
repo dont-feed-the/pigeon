@@ -76,9 +76,8 @@ pub async fn laptop(
         .update_ref("refs/heads/main", &theirs, None)
         .await
         .map_err(|e| e.to_string())?;
-    d.tracer
-        .event(crate::trace::Act::Merge, &[("commit", &theirs)]);
     g.reload_roster().await;
+    crate::trace_roster::moved(&d.tracer, &g, "Merge", None).await;
     crate::recovery::hide_all(&g, &theirs).await?;
     drop(busy);
     tracing::info!(group = %g.id, commit = %commit, "joined-as-laptop");
