@@ -84,18 +84,33 @@ supports (ext4, xfs, btrfs, ZFS): its repository is bare.
 The supervisor restarts `pigeond` after a panic (`panic = "abort"`, ADR
 0023); on exit `pigeond` stops its git-annex children and closes its
 endpoint. `MemoryHigh` is a default for the budgets of
-[15 §15.7](15-resource-use.md) to check **[no ADR: value]**. Not yet packaged.
+[15 §15.7](15-resource-use.md) to check **[no ADR: value]**. On a person's
+computer `packaging/pigeon-install` writes the unit or the agent and
+(re)starts it (§14.5); the system unit is not yet packaged.
 
 ## 14.5 Packaging and installation
 
 | Platform | Package | Holds |
 |---|---|---|
-| Linux, people | a tarball and an install script | `pigeon`, `pigeond`, `git-annex-p2p-iroh`, the user unit, the `.desktop` launcher and icon, man pages, shell completions, pigeon's git-annex; the script fetches git-annex's standalone build (§14.3) and enables the unit |
-| Linux, backup machines | a static tarball and a system unit (ADR 0032) | the same binaries, the system unit, a `pigeon` user created by the script |
-| macOS | a Homebrew formula in pigeon's tap **[no ADR]** | the binaries, the launchd agent, the small launcher app bundle (ADR 0029), pigeon's git-annex (§14.3) |
+| Linux, people | a tarball and an install script | `pigeon`, `pigeond`, `git-annex-p2p-iroh`, the installers; the script installs pigeon's git-annex, or fetches git-annex's standalone build (§14.3), and enables the user unit; later the `.desktop` launcher and icon, man pages, shell completions |
+| Linux, backup machines | a static tarball and a system unit (ADR 0032) | the same binaries, the system unit, a `pigeon` user created by the script; until then, the people's tarball and `loginctl enable-linger` |
+| macOS | a tarball and the install script; later a Homebrew formula in pigeon's tap **[no ADR]** | the binaries, the launchd agent, pigeon's git-annex (§14.3); the formula adds the small launcher app bundle (ADR 0029) |
 
 Release archives come with SHA-256 checksums, built by CI from a tag
-**[no ADR: signing]**. Paul installs (ux.md §11). Uninstalling keeps the
+**[no ADR: signing]**: `release.yml` runs on a tag `v` + the workspace's
+version, builds the programs for Linux x86-64 (on Ubuntu 22.04, glibc 2.35
+or later) and macOS on Apple Silicon, calls `git-annex.yml` for pigeon's
+git-annex, installs the Linux archive as a person would, then publishes
+`pigeon-<tag>-<os>-<arch>.tar.gz`, `git-annex-pigeon-<os>-<arch>.tar.gz`,
+`SHA256SUMS` and `pigeon-install` as the latest release. People install
+with `curl -fsSL …/releases/latest/download/pigeon-install | sh`.
+`pigeon-install` fetches the release, checks it, and hands over to the
+release's own copy of itself, which places it: the programs in `bin/`, the
+ones they replace in `bin.previous/`, a `pigeon` link in `~/.local/bin`,
+git-annex by `install-git-annex`, and the unit or agent of §14.4.
+`pigeon update [--version TAG | --rollback]` runs the `pigeon-install`
+beside it; a release already installed is not fetched again, and
+`--rollback` swaps `bin/` and `bin.previous/`. Paul installs (ux.md §11). Uninstalling keeps the
 folder, the repository and the configuration unless the person asks.
 
 ## 14.6 The Rust workspace
@@ -110,7 +125,7 @@ folder, the repository and the configuration unless the person asks.
 | `pigeon-telemetry` | lib | the only crate depending on `opentelemetry*` (ADR 0025) | yes |
 | `pigeon-web` | lib | axum routes and maud pages (ADR 0021) | through `pigeon-proto` |
 | `pigeond` | bin | the daemon: loops, iroh endpoint, socket, web server | yes |
-| `pigeon` | bin | the CLI (ADR 0024) | socket only |
+| `pigeon` | bin | the CLI (ADR 0024) | socket only; `update` runs the installer beside it (§14.5) |
 | `git-annex-p2p-iroh` | bin | the transport helper (ADR 0006) | socket and stdio only |
 | `pigeon-lab` | lib and bin, never shipped | the slice's scenarios as typed values, their model interpreter over `pigeon-core` and their process executor ([13 §13.12](13-verification.md)) | yes: it runs `pigeond` and `pigeon` and mounts disk images |
 

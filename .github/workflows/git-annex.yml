@@ -9,11 +9,14 @@
 # job. The installer job runs packaging/check-install: install-git-annex
 # puts the build in a fresh prefix, and pigeond's children run it although
 # the stock git-annex is first in the PATH they inherit. A cold build takes
-# about an hour; it runs only when the patch set changes.
+# about an hour, only when the patch set changes. The workflow runs when its
+# inputs change, and for each release: release.yml calls it and ships its
+# archives.
 name: git-annex
 
 on:
   push:
+    branches: ["**"]
     paths:
       - third_party/git-annex/**
       - .github/workflows/git-annex.yml
@@ -22,6 +25,7 @@ on:
       - lab/git-annex/ga-e25-relay-stress.py
       - packaging/install-git-annex
       - packaging/check-install
+  workflow_call:
   workflow_dispatch:
 
 permissions:

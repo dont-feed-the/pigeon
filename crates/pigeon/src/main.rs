@@ -2,7 +2,8 @@
 //! §10.2). It sends one request, prints the responses as they come, and
 //! exits 0 when done, 1 on a problem and 2 when the arguments do not fit.
 //! Text comes from the Fluent catalogue (ADR 0028); `--json` prints each
-//! response as JSON instead.
+//! response as JSON instead. `pigeon update` hands over to the installer
+//! that put this program here (14 §14.5).
 
 mod args;
 mod render;
@@ -140,6 +141,19 @@ fn main() -> ExitCode {
             show(&out, line.json, &Response::Problem(p));
             ExitCode::from(2)
         }
+        Action::Version => {
+            emit(&[format!("pigeon {}", env!("CARGO_PKG_VERSION"))], false);
+            ExitCode::SUCCESS
+        }
+        Action::Update(args) => {
+            let code = match update(args).kind() {
+                std::io::ErrorKind::NotFound => "not-installed",
+                _ => "internal-error",
+            };
+            let p = local_problem(code, &[]);
+            show(&out, line.json, &Response::Problem(p));
+            ExitCode::from(1)
+        }
         Action::NotInThisBuild(cmd) => {
             let p = local_problem("not-in-this-build", &[("command", cmd)]);
             show(&out, line.json, &Response::Problem(p));
@@ -156,6 +170,20 @@ fn main() -> ExitCode {
             }
             exchange(&out, line.json, request)
         }
+    }
+}
+
+/// Replaces this process with `pigeon-install`, which a release puts beside
+/// `pigeon` in pigeon's `bin/`; returns only if it cannot run.
+fn update(args: &[String]) -> std::io::Error {
+    use std::os::unix::process::CommandExt;
+    let installer = std::env::current_exe()
+        .and_then(std::fs::canonicalize)
+        .map(|exe| exe.with_file_name("pigeon-install"));
+    match installer {
+        Ok(at) if at.is_file() => std::process::Command::new(at).args(args).exec(),
+        Ok(at) => std::io::Error::new(std::io::ErrorKind::NotFound, at.display().to_string()),
+        Err(e) => e,
     }
 }
 

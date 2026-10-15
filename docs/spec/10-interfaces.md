@@ -148,7 +148,8 @@ and `no-capacity` ([08 §8.9](08-custody-loops.md)), `commit-unsigned`,
 `not-in-this-build` and `file-system-not-in-this-build` (13 §13.12). The
 first build adds **[no ADR]**: `usage` (exit code 2), `unknown-computer`,
 `receiving` (`keep` while a copy arrives), `not-a-pigeon-repository`,
-`peer-unreachable` and `peer-refused` (the helper, 09 §9.3), and
+`peer-unreachable` and `peer-refused` (the helper, 09 §9.3),
+`not-installed` (`pigeon update` without the installer of 14 §14.5), and
 `internal-error` (details kept for the debug bundle).
 
 ## 10.7 Checks before acting

@@ -93,6 +93,20 @@ fn other_commands_are_not_in_this_build_and_bad_arguments_are_usage() {
     assert!(line("remove-computer nas --no-input").no_input);
     assert_eq!(line("").action, Action::Help);
     assert_eq!(line("keep --help").action, Action::Help);
+    assert_eq!(line("--version").action, Action::Version);
+    assert_eq!(line("update").action, Action::Update(vec![]));
+    assert_eq!(
+        line("update --version v2.0.0").action,
+        Action::Update(vec!["--version".into(), "v2.0.0".into()])
+    );
+    assert_eq!(
+        line("update --rollback").action,
+        Action::Update(vec!["--rollback".into()])
+    );
+    assert_eq!(
+        line("update --rollback --version v2.0.0").action,
+        Action::Usage("update".into())
+    );
 }
 
 fn version(state: State) -> VersionStatus {
@@ -170,6 +184,8 @@ fn local_problems_fit_the_catalogue() {
         ("version-mismatch", &[]),
         ("usage", &[("command", "free")]),
         ("not-in-this-build", &[("command", "pause")]),
+        ("not-installed", &[]),
+        ("internal-error", &[]),
     ] {
         let p = crate::local_problem(code, args);
         let m = pigeon_i18n::Message {

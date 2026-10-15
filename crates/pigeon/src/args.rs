@@ -1,7 +1,7 @@
 //! The command line of the safety slice (13 §13.12): which request each
 //! command sends to `pigeond`, or why it sends none. A hand parser, as the
-//! slice's commands take few options (13 §13.12); every other command
-//! answers `not-in-this-build`.
+//! slice's commands take few options (13 §13.12); `update` and `--version`
+//! need no daemon, and every other command answers `not-in-this-build`.
 
 use std::path::Path;
 
@@ -15,6 +15,10 @@ pub enum Action {
     Send(Request),
     /// Print the commands.
     Help,
+    /// Print this program's version.
+    Version,
+    /// Run the installer beside this program with these arguments (14 §14.5).
+    Update(Vec<String>),
     /// A command this build does not have yet.
     NotInThisBuild(String),
     /// The arguments do not fit this command.
@@ -62,6 +66,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("recover SHEET [FOLDER] [--from NAME]", "cmd-recover"),
     ("doctor [--details]", "cmd-doctor"),
     ("debug bundle [--from NAME…]", "cmd-debug-bundle"),
+    ("update [--version TAG | --rollback]", "cmd-update"),
 ];
 
 /// Options that take a value.
@@ -156,6 +161,14 @@ fn hostname() -> String {
 
 /// Parses the arguments after the program's name.
 pub fn parse(args: &[String]) -> Line {
+    if args == ["--version"] {
+        return Line {
+            action: Action::Version,
+            json: false,
+            yes: false,
+            no_input: false,
+        };
+    }
     let Some(mut s) = split(args) else {
         let cmd = args.first().cloned().unwrap_or_default();
         return Line {
@@ -302,9 +315,17 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
                 peers: s.all("from"),
             })
         }
+        "update" if fits(0, 0, &["version", "rollback"]) => {
+            match (s.value("version"), s.flag("rollback")) {
+                (None, false) => Some(Action::Update(Vec::new())),
+                (Some(tag), false) => Some(Action::Update(vec!["--version".into(), tag.into()])),
+                (None, true) => Some(Action::Update(vec!["--rollback".into()])),
+                (Some(_), true) => None,
+            }
+        }
         "create" | "invite" | "join" | "status" | "machines" | "history" | "restore" | "free"
         | "keep" | "remove-computer" | "recovery-sheet" | "recover" | "doctor" | "debug"
-        | "suggestions" | "accept" | "decline" | "conflicts" | "resolve" => None,
+        | "suggestions" | "accept" | "decline" | "conflicts" | "resolve" | "update" => None,
         other => Some(Action::NotInThisBuild(other.to_owned())),
     }
 }

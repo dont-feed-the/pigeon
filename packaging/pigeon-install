@@ -1,0 +1,190 @@
+#!/bin/sh
+# Installs a release of pigeon (14 §14.5) under PREFIX, pigeon's directory
+# (~/.local/share/pigeon, ~/Library/Application Support/pigeon on macOS):
+# the latest release, or --version's, fetched from GitHub with its checksum
+# from the release's SHA256SUMS. The release's own copy of this script then
+# places it: the programs in PREFIX/bin, the one they replace kept in
+# PREFIX/bin.previous, git-annex by install-git-annex (14 §14.3), a link to
+# `pigeon` in ~/.local/bin, and pigeond started as the systemd user unit or
+# the launchd agent of 14 §14.4, restarted when it ran. `pigeon update` runs
+# this script; installing the release already here changes nothing.
+#
+#   curl -fsSL https://github.com/mariogeiger/pigeon/releases/latest/download/pigeon-install | sh
+#   pigeon-install [--version vX.Y.Z] [--rollback] [--prefix DIR] [--no-service]
+#
+# --rollback puts PREFIX/bin.previous back; --no-service starts nothing.
+# PIGEON_RELEASES names where releases are, a directory laid out as GitHub's
+# (latest, a file holding the tag, and download/<tag>/<asset>) for tests.
+set -eu
+
+releases=${PIGEON_RELEASES:-https://github.com/mariogeiger/pigeon/releases}
+
+die() { echo "pigeon-install: $*" >&2; exit 1; }
+say() { echo "pigeon-install: $*"; }
+sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
+
+# fetch ASSET TAG DEST: copies or downloads the release's ASSET to DEST.
+fetch() {
+  case $releases in
+    https://*) curl -fsSL --retry 3 -o "$3" "$releases/download/$2/$1" ||
+                 die "could not download $1 of $2; check the connection and try again" ;;
+    *) cp "$releases/download/$2/$1" "$3" 2>/dev/null || die "$releases has no $1 for $2" ;;
+  esac
+}
+
+# The tag of the latest release.
+latest() {
+  case $releases in
+    https://*) curl -fsSLI -o /dev/null -w '%{url_effective}' "$releases/latest" | sed -n 's|.*/releases/tag/||p' ;;
+    *) cat "$releases/latest" ;;
+  esac
+}
+
+# The release installed in PREFIX/BIN, or nothing.
+installed() { "$prefix/$1/pigeon" --version 2>/dev/null | sed -n 's/^pigeon /v/p'; }
+
+case "$(uname -s)" in
+  Darwin) os=macos prefix="$HOME/Library/Application Support/pigeon" ;;
+  Linux) os=linux prefix="${XDG_DATA_HOME:-$HOME/.local/share}/pigeon" ;;
+  *) die "pigeon runs on Linux and macOS" ;;
+esac
+case "$(uname -m)" in
+  x86_64 | amd64) arch=x86_64 ;;
+  arm64 | aarch64) arch=arm64 ;;
+  *) arch=$(uname -m) ;;
+esac
+version= rollback= service=1 place=
+while [ $# -gt 0 ]; do
+  case $1 in
+    --version) version=${2:?--version needs a tag}; shift 2 ;;
+    --rollback) rollback=1; shift ;;
+    --prefix) prefix=${2:?--prefix needs a directory}; shift 2 ;;
+    --no-service) service=; shift ;;
+    --place) place=${2:?}; shift 2 ;;
+    -h | --help) sed -n '2,17s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    *) die "unknown argument $1" ;;
+  esac
+done
+
+# Writes pigeond's unit or agent and (re)starts it (14 §14.4).
+start_service() {
+  [ -n "$service" ] || return 0
+  pigeond="$prefix/bin/pigeond"
+  if [ "$os" = macos ]; then
+    plist="$HOME/Library/LaunchAgents/org.pigeon.pigeond.plist"
+    mkdir -p "${plist%/*}"
+    cat >"$plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>org.pigeon.pigeond</string>
+  <key>ProgramArguments</key><array><string>$pigeond</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ProcessType</key><string>Background</string>
+</dict>
+</plist>
+PLIST
+    launchctl bootout "gui/$(id -u)/org.pigeon.pigeond" 2>/dev/null || true
+    launchctl bootstrap "gui/$(id -u)" "$plist" || die "launchctl could not start $plist"
+    say "pigeond runs as the launchd agent org.pigeon.pigeond"
+  elif systemctl --user show-environment >/dev/null 2>&1; then
+    unit="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/pigeond.service"
+    mkdir -p "${unit%/*}"
+    cat >"$unit" <<UNIT
+# Written by pigeon-install (14 §14.4); the next install rewrites it.
+[Unit]
+Description=pigeon, which keeps the files of a group on its computers
+
+[Service]
+ExecStart="$pigeond"
+Restart=on-failure
+RestartSec=5
+Nice=10
+IOSchedulingClass=idle
+CPUWeight=20
+IOWeight=20
+MemoryHigh=512M
+
+[Install]
+WantedBy=default.target
+UNIT
+    systemctl --user daemon-reload
+    systemctl --user enable --quiet pigeond.service
+    systemctl --user restart pigeond.service || die "pigeond did not start: journalctl --user -u pigeond"
+    say "pigeond runs as the systemd user unit pigeond.service"
+  else
+    say "no systemd user session here: start $pigeond yourself"
+  fi
+}
+
+# Puts ~/.local/bin/pigeon on PREFIX/bin/pigeon and says whether it is the one found.
+link_pigeon() {
+  mkdir -p "$HOME/.local/bin"
+  ln -sfn "$prefix/bin/pigeon" "$HOME/.local/bin/pigeon"
+  found=$(command -v pigeon 2>/dev/null || true)
+  if [ "$found" = "$HOME/.local/bin/pigeon" ]; then
+    say "pigeon is $found"
+  elif [ -z "$found" ]; then
+    say "add ~/.local/bin to your PATH:  export PATH=\"\$HOME/.local/bin:\$PATH\""
+  else
+    say "$found comes before ~/.local/bin/pigeon in your PATH: remove it, or put ~/.local/bin first"
+  fi
+}
+
+if [ -n "$rollback" ]; then
+  [ -d "$prefix/bin.previous" ] || die "no previous release in $prefix/bin.previous"
+  was=$(installed bin)
+  mv "$prefix/bin" "$prefix/bin.rollback"
+  mv "$prefix/bin.previous" "$prefix/bin"
+  mv "$prefix/bin.rollback" "$prefix/bin.previous"
+  start_service
+  say "back to pigeon $(installed bin) (from $was)"
+  exit 0
+fi
+
+if [ -z "$place" ]; then
+  # Fetch: the release's archive, checked, then its own script places it.
+  [ -n "$version" ] || version=$(latest) || true
+  [ -n "$version" ] || die "could not find the latest release at $releases"
+  if [ "$(installed bin)" = "$version" ]; then
+    say "pigeon $version is already installed in $prefix"
+    exit 0
+  fi
+  archive="pigeon-$version-$os-$arch.tar.gz"
+  mkdir -p "$prefix"
+  tmp=$(mktemp -d "$prefix/.pigeon-install.XXXXXX")
+  trap 'rm -rf "$tmp"' EXIT
+  say "fetching pigeon $version for $os-$arch"
+  fetch SHA256SUMS "$version" "$tmp/SHA256SUMS"
+  want=$(awk -v a="$archive" '$2 == a || $2 == "*" a { print $1 }' "$tmp/SHA256SUMS")
+  [ -n "$want" ] || die "pigeon $version has no build for $os-$arch; build it from source (README.md)"
+  fetch "$archive" "$version" "$tmp/archive.tar.gz"
+  [ "$(sha256 "$tmp/archive.tar.gz")" = "$want" ] || die "$archive does not match its SHA256SUMS"
+  mkdir "$tmp/release"
+  tar -C "$tmp/release" -xzf "$tmp/archive.tar.gz"
+  [ -x "$tmp/release/bin/pigeon-install" ] || die "$archive holds no bin/pigeon-install"
+  trap - EXIT
+  if [ -n "$service" ]; then set --; else set -- --no-service; fi
+  exec "$tmp/release/bin/pigeon-install" --place "$tmp" --version "$version" --prefix "$prefix" "$@"
+fi
+
+# Place: this script is the release's, unpacked with SHA256SUMS in $place.
+trap 'rm -rf "$place"' EXIT
+got=$("$place/release/bin/pigeon" --version | sed -n 's/^pigeon /v/p')
+[ "$got" = "$version" ] || die "the archive of $version holds pigeon $got"
+annex="git-annex-pigeon-$os-$arch.tar.gz"
+annex_sha=$(awk -v a="$annex" '$2 == a || $2 == "*" a { print $1 }' "$place/SHA256SUMS")
+if [ -n "$annex_sha" ]; then
+  "$place/release/bin/install-git-annex" --prefix "$prefix" \
+    --archive "$releases/download/$version/$annex" --sha256 "$annex_sha" </dev/null
+else
+  "$place/release/bin/install-git-annex" --prefix "$prefix" --stock </dev/null
+fi
+rm -rf "$prefix/bin.previous"
+if [ -d "$prefix/bin" ]; then mv "$prefix/bin" "$prefix/bin.previous"; fi
+mv "$place/release/bin" "$prefix/bin"
+link_pigeon
+start_service
+say "pigeon $version is installed in $prefix"

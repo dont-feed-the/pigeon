@@ -1,0 +1,97 @@
+# A release (14 §14.5): pushing a tag vX.Y.Z[-pre] that is the workspace's
+# version builds pigeon, pigeond and git-annex-p2p-iroh for Linux x86-64
+# (on Ubuntu 22.04, so glibc 2.35 or later) and macOS on Apple Silicon,
+# calls git-annex.yml for pigeon's git-annex and its proofs, installs the
+# Linux archive with packaging/pigeon-install from the assets as they will
+# be published, then publishes them as the latest release with SHA256SUMS.
+# People install it with the release's pigeon-install, and `pigeon update`
+# fetches the next one the same way.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+
+jobs:
+  git-annex:
+    uses: ./.github/workflows/git-annex.yml
+
+  build:
+    name: pigeon (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, platform: linux-x86_64 }
+          - { os: macos-latest, platform: macos-arm64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: the tag is the workspace's version
+        run: |
+          v=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
+          [ "$TAG" = "v$v" ] || { echo "::error::tag $TAG, but Cargo.toml holds version $v"; exit 1; }
+      - name: the pinned toolchain (rust-toolchain.toml)
+        run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
+      - name: the three programs
+        run: cargo build --release --locked -p pigeond -p pigeon -p git-annex-p2p-iroh
+      - name: the archive
+        run: |
+          d=$RUNNER_TEMP/pigeon && mkdir -p "$d/bin"
+          cp target/release/pigeon target/release/pigeond target/release/git-annex-p2p-iroh \
+            packaging/pigeon-install packaging/install-git-annex "$d/bin/"
+          cp README.md LICENSE-MIT LICENSE-APACHE "$d/"
+          [ "$("$d/bin/pigeon" --version)" = "pigeon ${TAG#v}" ]
+          tar -C "$d" -czf "pigeon-$TAG-${{ matrix.platform }}.tar.gz" .
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pigeon-${{ matrix.platform }}
+          path: pigeon-${{ github.ref_name }}-${{ matrix.platform }}.tar.gz
+
+  publish:
+    name: install, then publish
+    needs: [git-annex, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          path: ${{ runner.temp }}/artifacts
+      - name: the assets, laid out as GitHub serves them
+        run: |
+          a=$RUNNER_TEMP/artifacts r=$RUNNER_TEMP/releases d=$RUNNER_TEMP/releases/download/$TAG
+          mkdir -p "$d" && echo "$TAG" > "$r/latest"
+          cp "$a"/pigeon-*/pigeon-*.tar.gz "$d/"
+          cp "$a/git-annex-pigeon-ubuntu-24.04/git-annex-pigeon-ubuntu-24.04.tar.gz" "$d/git-annex-pigeon-linux-x86_64.tar.gz"
+          cp "$a/git-annex-pigeon-macos-latest/git-annex-pigeon-macos-latest.tar.gz" "$d/git-annex-pigeon-macos-arm64.tar.gz"
+          (cd "$d" && sha256sum -- *.tar.gz > SHA256SUMS)
+          cp packaging/pigeon-install "$d/"
+          ls -l "$d" && cat "$d/SHA256SUMS" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: pigeon-install installs them, and installs nothing twice
+        run: |
+          export PIGEON_RELEASES=$RUNNER_TEMP/releases
+          p=$RUNNER_TEMP/prefix
+          sh "$PIGEON_RELEASES/download/$TAG/pigeon-install" --prefix "$p" --no-service
+          [ "$("$p/bin/pigeon" --version)" = "pigeon ${TAG#v}" ]
+          . third_party/git-annex/VERSION
+          [ "$("$p/git-annex/bin/git-annex" version --raw)" = "$PIGEON_VERSION" ]
+          sh "$PIGEON_RELEASES/download/$TAG/pigeon-install" --prefix "$p" --no-service | grep -q 'already installed'
+      - name: the release
+        run: |
+          d=$RUNNER_TEMP/releases/download/$TAG
+          gh release create "$TAG" --title "pigeon $TAG" --generate-notes --latest "$d"/*

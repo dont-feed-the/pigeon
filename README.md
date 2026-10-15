@@ -11,9 +11,9 @@ counts the copies and refuses unsafe deletions. pigeon adds the parts people
 see: who belongs to the group, which machines keep the safe copies, and a
 status everybody can read.
 
-> **Status: alpha (v0.3).** It runs on Linux and macOS, built from source.
-> Packages come with v0.4 ([roadmap](docs/roadmap.md)). Try it, but keep
-> another copy of anything you care about.
+> **Status: alpha (v0.3).** It runs on Linux and macOS, from release
+> binaries or built from source ([roadmap](docs/roadmap.md)). Try it, but
+> keep another copy of anything you care about.
 
 ## What "safe" means
 
@@ -30,46 +30,47 @@ guarantees (P1–P6) is in [docs/spec/02-guarantees.md](docs/spec/02-guarantees.
 
 ## Install
 
-You need:
+On Linux (x86_64) or macOS (Apple silicon), with git 2.38 or later and curl:
 
-- Linux (x86_64) or macOS (Apple silicon);
-- git 2.38 or later, and curl;
-- Rust, through [rustup](https://rustup.rs). The repository pins its
-  toolchain, and rustup fetches it on the first build.
+```sh
+curl -fsSL https://github.com/mariogeiger/pigeon/releases/latest/download/pigeon-install | sh
+```
 
-Build pigeon:
+This fetches the latest release and checks it against the release's
+`SHA256SUMS`. It puts pigeon in `~/.local/share/pigeon` (macOS:
+`~/Library/Application Support/pigeon`) with the git-annex it runs, links
+`pigeon` into `~/.local/bin`, and starts the daemon, `pigeond`, as a systemd
+user service (macOS: a launchd agent), so it runs again after a reboot.
+
+To update, or to go back to the release you had before:
+
+```sh
+pigeon update               # the latest release; or: pigeon update --version vX.Y.Z
+pigeon update --rollback    # back to the previous release
+```
+
+Both restart `pigeond`. `pigeon --version` tells which release runs.
+
+pigeon has its own build of git-annex, with fixes for two bugs in
+git-annex's P2P protocol ([ADR 0069](docs/adr/0069-pigeon-runs-a-pinned-patched-git-annex.md)),
+shipped with each release. Where it does not run (Linux before glibc 2.39),
+the installer takes the official build, and pigeon works around both bugs.
+
+### From source
+
+With [rustup](https://rustup.rs), which fetches the pinned toolchain:
 
 ```sh
 git clone https://github.com/mariogeiger/pigeon.git
 cd pigeon
 cargo build --release -p pigeond -p pigeon -p git-annex-p2p-iroh
+packaging/install-git-annex --stock    # the official git-annex, where pigeon looks for it
 ```
 
-Install git-annex where pigeon looks for it. On Linux this downloads the
-official standalone build and checks its SHA-256; on macOS it runs
-`brew install git-annex`:
-
-```sh
-packaging/install-git-annex --stock
-```
-
-Copy the three programs next to it, and put them on your `PATH`:
-
-```sh
-# Linux
-P="$HOME/.local/share/pigeon"
-# macOS
-P="$HOME/Library/Application Support/pigeon"
-
-mkdir -p "$P/bin"
-cp target/release/pigeond target/release/pigeon target/release/git-annex-p2p-iroh "$P/bin/"
-export PATH="$P/bin:$PATH"     # and add this line to your shell's profile
-```
-
-pigeon also has its own build of git-annex, with fixes for two bugs in
-git-annex's P2P protocol ([ADR 0069](docs/adr/0069-pigeon-runs-a-pinned-patched-git-annex.md)).
-It is not published yet, so `--stock` installs the official build;
-pigeon works around both bugs.
+Then copy the three programs to `bin/` of the directory above
+(`~/.local/share/pigeon/bin`), put it on your `PATH`, and run `pigeond`.
+A release is made by pushing a tag `v` + the workspace's version
+(`.github/workflows/release.yml`).
 
 ## Try it on one computer
 
@@ -91,15 +92,8 @@ above.
 
 ## Use it with other people
 
-Every computer in the group runs the daemon, `pigeond`. Start it and leave
-it running:
-
-```sh
-pigeond &
-```
-
-Packages with a systemd or launchd service come in v0.4; until then, start
-it again after a reboot.
+Every computer in the group runs the daemon, `pigeond`, which the
+installer starts. `pigeon doctor` checks that it runs.
 
 **1. Create the group** on the first computer. `--k` is how many backup
 machines must hold a copy before a version counts as protected:
@@ -109,7 +103,9 @@ pigeon create Family ~/Family --k 1 --name mario-laptop
 ```
 
 **2. Add a backup machine.** Any computer that stays on will do: an old
-laptop, a mini PC, a server. Install pigeon there, start `pigeond`, then:
+laptop, a mini PC, a server. Install pigeon there (on a Linux server,
+`loginctl enable-linger $USER` keeps `pigeond` running when nobody is logged
+in), then:
 
 ```sh
 pigeon invite --backup-machine          # on your computer: prints a line to run
@@ -153,6 +149,7 @@ pigeon accept ID            # or: pigeon decline ID --note "why"
 | `pigeon free FOLDER` / `pigeon keep FOLDER` | frees a folder's space here, or keeps it here |
 | `pigeon recovery-sheet` | prints the sheet that recovers the group on a new computer |
 | `pigeon doctor` | checks the installation and explains what is wrong |
+| `pigeon update` | installs the latest release (`--rollback`: the one before) |
 
 `pigeon --help` lists them all, and `--json` prints any answer as JSON.
 
@@ -160,8 +157,8 @@ pigeon accept ID            # or: pigeon decline ID --note "why"
 
 pigeon is built milestone by milestone ([roadmap](docs/roadmap.md)):
 
-- **v0.4:** packages for Linux and macOS, and relays checked between two
-  networks;
+- **v0.4:** a system service for backup machines, a Homebrew tap, and
+  relays checked between two networks;
 - **v0.5:** a web page with plain words instead of the command line, and a
   French translation;
 - **v0.6:** deleting for good (purge) and a monthly check of every copy

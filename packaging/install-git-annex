@@ -7,6 +7,7 @@
 # pigeond puts that directory first in its children's PATH. An archive is
 # checked against its sha256 before it is unpacked; the new directory
 # replaces the old one only once its git-annex reports the expected version.
+# A build already there that reports it is kept, and nothing is fetched.
 #
 #   install-git-annex [--prefix DIR] [--archive FILE|URL --sha256 HEX] [--stock]
 #
@@ -33,7 +34,7 @@ while [ $# -gt 0 ]; do
     --archive) archive=${2:?}; shift 2 ;;
     --sha256) want_sha=${2:?}; shift 2 ;;
     --stock) stock=1; shift ;;
-    -h|--help) sed -n '2,14s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,15s/^# \{0,1\}//p' "$0"; exit 0 ;;
     *) die "unknown argument $1" ;;
   esac
 done
@@ -71,7 +72,12 @@ mkdir -p "$prefix"
 tmp=$(mktemp -d "$prefix/.install-git-annex.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 
-if [ -z "$stock" ] && ours_runs; then
+# The version the git-annex in DIR reports, or nothing.
+version_in() { if [ -x "$1/git-annex" ]; then "$1/git-annex" version --raw 2>/dev/null || true; fi; }
+
+if [ -z "$stock" ] && ours_runs && [ "$(version_in "$prefix/git-annex/bin")" = "$PIGEON_VERSION" ]; then
+  echo "pigeon's git-annex $PIGEON_VERSION already in $prefix/git-annex/bin"
+elif [ -z "$stock" ] && ours_runs; then
   [ -n "$archive" ] || die "pigeon's build runs here: give --archive (git-annex.yml's artifact), or --stock"
   if [ -z "$want_sha" ] && [ -f "$archive.sha256" ]; then want_sha=$(cut -d' ' -f1 "$archive.sha256"); fi
   [ -n "$want_sha" ] || die "give --sha256 for $archive"
@@ -83,6 +89,10 @@ if [ -z "$stock" ] && ours_runs; then
   [ -e "$tmp/git-annex/bin/git-remote-p2p-annex" ] || die "the archive has no git-remote-p2p-annex"
   swap "$tmp/git-annex" "$prefix/git-annex"
   echo "pigeon's git-annex $got in $prefix/git-annex/bin"
+elif [ "$(uname -s)" = Linux ] && case "$(version_in "$prefix/git-annex.linux")" in
+    "$STOCK_VERSION" | "$STOCK_VERSION"-g*) true ;; *) false ;; esac; then
+  rm -rf "$prefix/git-annex"
+  echo "stock git-annex $STOCK_VERSION already in $prefix/git-annex.linux"
 elif [ "$(uname -s)" = Linux ]; then
   [ "$(uname -m)" = x86_64 ] || die "no stock standalone build is pinned for $(uname -m) yet"
   fetch "$STOCK_URL" "$tmp/s.tar.gz" "$STOCK_SHA256"
