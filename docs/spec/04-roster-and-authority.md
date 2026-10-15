@@ -187,8 +187,8 @@ accepts a new `.pigeon/decisions/<commit>.toml` from a decider of that
 proposal (`rejected`) or its author, the person of its signer under the
 roster of its base (`withdrawn`), never a changed one, and lets the commit
 wait when this device does not keep the proposal
-(`a_decision_is_accepted_iff_its_signer_may_make_it`; `commit::about`). Nothing writes a
-withdrawal yet: it comes with `pigeon resolve` (07 §7.6).
+(`a_decision_is_accepted_iff_its_signer_may_make_it`; `commit::about`).
+`pigeon resolve` writes a withdrawal (07 §7.6, `pigeond::resolve`).
 
 A rejection or withdrawal is a commit of `.pigeon/decisions/<commit>.toml`:
 

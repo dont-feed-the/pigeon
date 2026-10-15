@@ -241,9 +241,12 @@ from this specification as follows, each to close before S1–S11 run
   ([04 §4.5](04-roster-and-authority.md), [07 §7.6](07-capture-and-install.md));
   `crates/pigeond/tests/suggestions.rs` runs it, with an admin accepting
   one suggestion, which reaches every device and ends the author's, and
-  declining the next, a conflict on the author's laptop. Withdrawal and
-  `pigeon resolve` are not in it, and a refused commit on a peer's `main`
-  is not kept as a proposal ([08 §8.2](08-custody-loops.md) step 4);
+  declining the next, a conflict on the author's laptop;
+  `crates/pigeond/tests/resolve.rs` resolves divergences each way of
+  [07 §7.6](07-capture-and-install.md), the first withdrawing a waiting
+  proposal. *Keep mine*, *Keep Paul's*, *Keep both* and `pigeon view` are
+  not in it, and a refused commit on a peer's `main` is not kept as a
+  proposal ([08 §8.2](08-custody-loops.md) step 4);
 - laptops join by invitation, of a new person or of a person of the
   roster ([09 §9.6](09-network-and-joining.md)), and keep every folder:
   choosing them at the join, and the safety words, are not in it;

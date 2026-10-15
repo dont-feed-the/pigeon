@@ -187,6 +187,24 @@ impl Renderer {
                 proposals.iter().map(|p| self.suggestion(p)).collect(),
                 false,
             ),
+            Response::Conflicts { conflicts } if conflicts.is_empty() => {
+                (vec![self.id("conflicts-none")], false)
+            }
+            Response::Conflicts { conflicts } => (
+                conflicts
+                    .iter()
+                    .map(|c| {
+                        let id = if c.state == "waiting" {
+                            "conflict-waiting"
+                        } else {
+                            "conflict-choose"
+                        };
+                        self.cat
+                            .format(&pigeon_i18n::Message::new(id).arg("path", c.path.clone()))
+                    })
+                    .collect(),
+                false,
+            ),
             Response::Done
             | Response::Hello { .. }
             | Response::Address { .. }

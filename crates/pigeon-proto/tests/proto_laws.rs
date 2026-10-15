@@ -8,7 +8,9 @@ use std::collections::BTreeMap;
 
 use hegel::TestCase;
 use hegel::generators as gs;
-use pigeon_proto::api::{Level, Machine, State, StatusReport, Suggestion, VersionStatus};
+use pigeon_proto::api::{
+    Choice, Divergence, Level, Machine, State, StatusReport, Suggestion, VersionStatus,
+};
 use pigeon_proto::stream::{Refusal, StreamAnswer, StreamHeader};
 use pigeon_proto::{Arg, Envelope, LineDecoder, Message, Problem, Request, Response, encode};
 
@@ -25,7 +27,7 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(21)) {
+    match tc.draw(gs::integers::<u8>().max_value(23)) {
         0 => Request::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -91,6 +93,15 @@ fn request(tc: &TestCase) -> Request {
             proposal: text(tc),
             note: maybe_text(tc),
         },
+        21 => Request::Conflicts,
+        22 => Request::Resolve {
+            path: text(tc),
+            choice: match tc.draw(gs::integers::<u8>().max_value(2)) {
+                0 => Choice::TakeGroup,
+                1 => Choice::KeepCopy { dest: text(tc) },
+                _ => Choice::SuggestAgain,
+            },
+        },
         _ => Request::Listen {
             repository: text(tc),
             socket: text(tc),
@@ -133,7 +144,7 @@ fn version(tc: &TestCase) -> VersionStatus {
 }
 
 fn response(tc: &TestCase) -> Response {
-    match tc.draw(gs::integers::<u8>().max_value(11)) {
+    match tc.draw(gs::integers::<u8>().max_value(12)) {
         0 => Response::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -202,6 +213,16 @@ fn response(tc: &TestCase) -> Response {
                     decide: flag(tc),
                     force: flag(tc),
                     mine: flag(tc),
+                })
+                .collect(),
+        },
+        11 => Response::Conflicts {
+            conflicts: (0..tc.draw(gs::integers::<u8>().max_value(3)))
+                .map(|_| Divergence {
+                    path: text(tc),
+                    kind: text(tc),
+                    state: text(tc),
+                    since: text(tc),
                 })
                 .collect(),
         },

@@ -5,7 +5,8 @@
 //! `main` does not contain it and no other kept proposal builds on it (a
 //! later save stacked one) and `main` holds no decision on it; its deciders
 //! are recomputed on `main` each time. `pigeon decline` commits the
-//! decision `rejected` (`decision_file`), which a decider may sign.
+//! decision `rejected` (`decision_file`), which a decider may sign; its
+//! author withdraws one with `withdrawn` (`resolve`).
 
 use pigeon_core::authority::{self, Deciders};
 use pigeon_core::roster::{DeviceId, PersonId};
@@ -242,54 +243,8 @@ pub async fn decline(d: &Daemon, id: &str, note: Option<&str>) -> Vec<Response> 
         Ok(p) => p,
         Err(r) => return r,
     };
-    let doc = crate::decision_file::DecisionDoc {
-        proposal: p.id.clone(),
-        verdict: authority::Decided::Rejected,
-        note: note.map(str::to_owned),
-    };
     let _busy = g.busy.lock().await;
-    let done = async {
-        let main = g
-            .git
-            .rev("refs/heads/main")
-            .await
-            .ok_or_else(|| "no main".to_owned())?;
-        let text = crate::decision_file::render(&doc);
-        let blob = g
-            .git
-            .run_in(&["hash-object", "-w", "--stdin"], text.as_bytes())
-            .await
-            .map_err(|e| e.to_string())?;
-        let mut tree = g.git.tree(&main).await.map_err(|e| e.to_string())?;
-        tree.insert(
-            authority::decision_path(&p.id),
-            authority::Entry {
-                mode: "100644".to_owned(),
-                kind: "blob".to_owned(),
-                oid: blob.trim().to_owned(),
-            },
-        );
-        let oid = crate::merge::write_tree(&g.git, &tree)
-            .await
-            .map_err(|e| e.to_string())?;
-        let commit = g
-            .git
-            .commit_tree(&oid, &[&main], "pigeon: decline a suggestion")
-            .await
-            .map_err(|e| e.to_string())?;
-        crate::merge::judge_history(&g, std::slice::from_ref(&commit))
-            .await
-            .map_err(|e| e.to_string())?;
-        if !g.lock().engine.accepted(&commit) {
-            let v = g.lock().verdicts.get(&commit).cloned();
-            return Err(format!("not accepted: {v:?}"));
-        }
-        g.git
-            .update_ref("refs/heads/main", &commit, Some(&main))
-            .await
-            .map_err(|e| e.to_string())?;
-        Ok::<String, String>(commit)
-    };
+    let done = decision(&g, &p.id, authority::Decided::Rejected, note);
     let commit = match done.await {
         Ok(c) => c,
         Err(e) => return vec![crate::api::problem("internal-error", &[], Some(e))],
@@ -301,4 +256,63 @@ pub async fn decline(d: &Daemon, id: &str, note: Option<&str>) -> Vec<Response> 
         "declined-suggestion",
         &[("author", Arg::Text(author(&g, &p)))],
     )]
+}
+
+/// Commits on `main` the decision `verdict` on `proposal` (04 §4.5), with
+/// `note`, once the authority rule accepts it; the caller holds `busy`.
+pub(crate) async fn decision(
+    g: &Group,
+    proposal: &str,
+    verdict: authority::Decided,
+    note: Option<&str>,
+) -> Result<String, String> {
+    let message = match verdict {
+        authority::Decided::Rejected => "pigeon: decline a suggestion",
+        authority::Decided::Withdrawn => "pigeon: withdraw a suggestion",
+    };
+    let doc = crate::decision_file::DecisionDoc {
+        proposal: proposal.to_owned(),
+        verdict,
+        note: note.map(str::to_owned),
+    };
+    let main = g
+        .git
+        .rev("refs/heads/main")
+        .await
+        .ok_or_else(|| "no main".to_owned())?;
+    let text = crate::decision_file::render(&doc);
+    let blob = g
+        .git
+        .run_in(&["hash-object", "-w", "--stdin"], text.as_bytes())
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut tree = g.git.tree(&main).await.map_err(|e| e.to_string())?;
+    tree.insert(
+        authority::decision_path(proposal),
+        authority::Entry {
+            mode: "100644".to_owned(),
+            kind: "blob".to_owned(),
+            oid: blob.trim().to_owned(),
+        },
+    );
+    let oid = crate::merge::write_tree(&g.git, &tree)
+        .await
+        .map_err(|e| e.to_string())?;
+    let commit = g
+        .git
+        .commit_tree(&oid, &[&main], message)
+        .await
+        .map_err(|e| e.to_string())?;
+    crate::merge::judge_history(g, std::slice::from_ref(&commit))
+        .await
+        .map_err(|e| e.to_string())?;
+    if !g.lock().engine.accepted(&commit) {
+        let v = g.lock().verdicts.get(&commit).cloned();
+        return Err(format!("not accepted: {v:?}"));
+    }
+    g.git
+        .update_ref("refs/heads/main", &commit, Some(&main))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(commit)
 }

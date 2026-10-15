@@ -142,8 +142,11 @@ Resolutions (`pigeon resolve PATH …`, or ux.md §8.8; the model's
 | *Suggest again* (`--suggest-again`) | a new proposal from their file on the current `main`: *waiting* |
 | *Keep mine*, *Keep Paul's*, *Keep both* | the signed changes of [05 §5.3](05-catalogue-and-names.md) |
 
-A save after the choice fails the check: nothing is replaced, the save
-extends their proposal, and they are told once. *Open Paul's version* and
+A save after the choice fails the check: nothing is replaced
+(`changed-since`), the save extends their proposal, and they are told
+once. `pigeon conflicts` lists the table; `pigeond::resolve` codes the
+first three choices (`tests/resolve.rs`), the withdrawal being the decision
+`withdrawn` signed by the author's device. *Open Paul's version* and
 `pigeon view PATH --group` (`--version N`) show the group's version as
 ADR 0035 says: read-only, outside the folder, for seven days at most.
 

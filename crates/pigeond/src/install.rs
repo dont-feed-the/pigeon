@@ -157,7 +157,7 @@ fn finish(g: &Group, seq: u64, rel: &str, aside: &Path, t: &Tracer) -> Result<()
 }
 
 /// Sets the index entry of `rel` to `entry`, without stat data, or removes it.
-async fn index_entry(g: &Group, rel: &str, entry: Option<&Entry>) -> Result<(), String> {
+pub(crate) async fn index_entry(g: &Group, rel: &str, entry: Option<&Entry>) -> Result<(), String> {
     let out = match entry {
         Some(e) => {
             let info = format!("{},{},{rel}", e.mode, e.oid);

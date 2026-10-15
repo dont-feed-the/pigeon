@@ -37,6 +37,7 @@ pub mod recovery;
 pub mod repair;
 pub mod report;
 pub mod report_file;
+pub mod resolve;
 pub mod restore;
 pub mod roster_file;
 pub mod settings;

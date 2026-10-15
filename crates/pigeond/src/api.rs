@@ -166,6 +166,10 @@ async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             from,
         } => crate::recovery::recover(d, &sheet, folder, from).await,
         Request::Proposals => crate::decide::list(d).await,
+        Request::Conflicts => crate::resolve::list(d).await,
+        Request::Resolve { path, choice } => {
+            crate::resolve::resolve(d, Path::new(&path), &choice).await
+        }
         Request::Accept { proposal, reason } => {
             crate::decide::accept(d, &proposal, reason.as_deref()).await
         }

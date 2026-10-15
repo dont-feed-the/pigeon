@@ -6,6 +6,7 @@
 use std::path::Path;
 
 use pigeon_proto::Request;
+use pigeon_proto::api::Choice;
 
 /// What the command line asks for.
 #[derive(Debug, PartialEq, Eq)]
@@ -51,6 +52,11 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("suggestions", "cmd-suggestions"),
     ("accept ID [--override REASON]", "cmd-accept"),
     ("decline ID [--note TEXT]", "cmd-decline"),
+    ("conflicts", "cmd-conflicts"),
+    (
+        "resolve PATH --take-group | --keep-copy DEST | --suggest-again",
+        "cmd-resolve",
+    ),
     ("remove-computer NAME [--yes]", "cmd-remove-computer"),
     ("recovery-sheet", "cmd-recovery-sheet"),
     ("recover SHEET [FOLDER] [--from NAME]", "cmd-recover"),
@@ -60,7 +66,15 @@ pub const COMMANDS: &[(&str, &str)] = &[
 
 /// Options that take a value.
 const VALUED: &[&str] = &[
-    "k", "name", "folder", "version", "at", "from", "override", "note",
+    "k",
+    "name",
+    "folder",
+    "version",
+    "at",
+    "from",
+    "override",
+    "note",
+    "keep-copy",
 ];
 
 #[derive(Debug, Default)]
@@ -228,6 +242,25 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
             proposal: w.first()?.clone(),
             note: s.value("note").map(str::to_owned),
         }),
+        "conflicts" if fits(0, 0, &[]) => send(Request::Conflicts),
+        "resolve" if fits(1, 1, &["take-group", "keep-copy", "suggest-again"]) => {
+            let choice = match (
+                s.flag("take-group"),
+                s.value("keep-copy"),
+                s.flag("suggest-again"),
+            ) {
+                (true, None, false) => Choice::TakeGroup,
+                (false, Some(dest), false) => Choice::KeepCopy {
+                    dest: absolute(dest),
+                },
+                (false, None, true) => Choice::SuggestAgain,
+                _ => return None,
+            };
+            send(Request::Resolve {
+                path: absolute(w.first()?),
+                choice,
+            })
+        }
         "history" if fits(1, 1, &[]) => send(Request::History {
             path: absolute(w.first()?),
         }),
@@ -271,7 +304,7 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
         }
         "create" | "invite" | "join" | "status" | "machines" | "history" | "restore" | "free"
         | "keep" | "remove-computer" | "recovery-sheet" | "recover" | "doctor" | "debug"
-        | "suggestions" | "accept" | "decline" => None,
+        | "suggestions" | "accept" | "decline" | "conflicts" | "resolve" => None,
         other => Some(Action::NotInThisBuild(other.to_owned())),
     }
 }

@@ -133,6 +133,17 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         note: Option<String>,
     },
+    /// `pigeon conflicts`: the paths whose file differs from the group's
+    /// version on this computer (07 §7.6).
+    Conflicts,
+    /// `pigeon resolve PATH --take-group | --keep-copy DEST |
+    /// --suggest-again` (07 §7.6).
+    Resolve {
+        /// The diverging file.
+        path: String,
+        /// What the person chose.
+        choice: Choice,
+    },
     /// `pigeon doctor [--details]`.
     Doctor {
         /// Show every check.
@@ -211,6 +222,11 @@ pub enum Response {
     Proposals {
         /// Oldest first.
         proposals: Vec<Suggestion>,
+    },
+    /// The answer to `Conflicts`.
+    Conflicts {
+        /// By path.
+        conflicts: Vec<Divergence>,
     },
     /// The answer to `Address`.
     Address {
@@ -374,4 +390,32 @@ pub struct Suggestion {
     /// Whether it is this person's.
     #[serde(default)]
     pub mine: bool,
+}
+
+/// A resolution of a divergence (07 §7.6, ux.md §8.8).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Choice {
+    /// *Take the group's version*.
+    TakeGroup,
+    /// *Keep mine as a copy* at `dest`, then take the group's version.
+    KeepCopy {
+        /// Where the copy goes.
+        dest: String,
+    },
+    /// *Suggest again*: a new proposal on the current `main`.
+    SuggestAgain,
+}
+
+/// A path whose file on this computer differs from the group's version.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Divergence {
+    /// The path in the folder.
+    pub path: String,
+    /// `suggestion`, `concurrent` or `recovered`.
+    pub kind: String,
+    /// `waiting` (for the deciders) or `conflict` (the person chooses).
+    pub state: String,
+    /// When it started, RFC 3339.
+    pub since: String,
 }
