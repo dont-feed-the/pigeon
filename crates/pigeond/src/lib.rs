@@ -19,6 +19,7 @@ pub mod custody;
 pub mod daemon;
 pub mod decide;
 pub mod decision_file;
+pub mod drop;
 pub mod evict;
 pub mod fold;
 pub mod folders;

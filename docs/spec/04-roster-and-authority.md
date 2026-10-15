@@ -78,7 +78,7 @@ a conflict copy as its version's ([05 §5.2](05-catalogue-and-names.md);
 | `decisions/<commit>.toml`, `verdict = "rejected"` | a decider of that proposal (§4.5, ADR 0051) |
 | `decisions/<commit>.toml`, `verdict = "withdrawn"` | a device of the proposal's author |
 | `decisions/purge-<id>.toml` | an admin (ADR 0018, [08 §8.6](08-custody-loops.md)) |
-| `records/drop-<id>.toml` | any member, about their own device ([08 §8.7](08-custody-loops.md)) **[no ADR]** |
+| `records/drop-<device>-<id>.toml` | any member, about their own device (the device in the name), added only ([08 §8.7](08-custody-loops.md)) **[no ADR]** |
 | `roster.toml`, anything else | an admin |
 
 Each row is checked under the roster at the commit's parents.

@@ -134,6 +134,27 @@ pub fn decision_path(proposal: &str) -> String {
     format!(".pigeon/decisions/{proposal}.toml")
 }
 
+/// The path of a drop record of `device` (08 §8.7, 04 §4.3):
+/// `.pigeon/records/drop-<device>-<id>.toml`, `id` of lowercase letters
+/// and digits.
+pub fn drop_record_path(device: &DeviceId, id: &str) -> String {
+    format!(".pigeon/records/drop-{}-{id}.toml", device.0)
+}
+
+/// Whether `path` is a drop record that `signer` may add: one of its own
+/// device, by [`drop_record_path`].
+pub fn own_drop_record(path: &str, signer: &DeviceId) -> bool {
+    let prefix = format!(".pigeon/records/drop-{}-", signer.0);
+    path.strip_prefix(&prefix)
+        .and_then(|r| r.strip_suffix(".toml"))
+        .is_some_and(|id| {
+            !id.is_empty()
+                && id
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+        })
+}
+
 /// Why a `.pigeon/` document was not read (ADR 0048).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Unread {
@@ -445,6 +466,13 @@ pub fn judge(step: &Step<'_>) -> Verdict {
         {
             if let Err(v) = decision(step, path, u, recovery) {
                 return *v;
+            }
+        } else if path.starts_with(".pigeon/records/") && !admin {
+            // Any member adds a record of its own device's drop, never
+            // changes or removes one (04 §4.3, 08 §8.7).
+            let added = !step.before.contains_key(path) && step.after.contains_key(path);
+            if recovery || !added || !own_drop_record(path, &signer) {
+                return Verdict::Refused(Refusal::NotAllowed(path.clone()));
             }
         } else if path.starts_with(".pigeon/decisions/") || path.starts_with(".pigeon/records/") {
             if !admin {

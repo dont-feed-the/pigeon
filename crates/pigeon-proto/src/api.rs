@@ -78,6 +78,15 @@ pub enum Request {
         /// A folder or file.
         folder: String,
     },
+    /// `pigeon free --without-checking PATH` (08 §8.7): says the risk, and
+    /// drops the content even if it is the last copy once `confirmed`.
+    Drop {
+        /// A folder or file.
+        path: String,
+        /// The person saw the risk and confirmed.
+        #[serde(default)]
+        confirmed: bool,
+    },
     /// `pigeon history PATH`.
     History {
         /// A file.

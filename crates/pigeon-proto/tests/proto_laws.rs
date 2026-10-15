@@ -28,7 +28,7 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(37)) {
+    match tc.draw(gs::integers::<u8>().max_value(38)) {
         0 => Request::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -80,6 +80,10 @@ fn request(tc: &TestCase) -> Request {
         },
         35 => Request::Leave,
         36 => Request::Held,
+        38 => Request::Drop {
+            path: text(tc),
+            confirmed: flag(tc),
+        },
         37 => Request::ReleaseHeld {
             batch: text(tc),
             choice: if flag(tc) {

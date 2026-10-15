@@ -96,10 +96,17 @@ fn entry(oid: &str) -> Entry {
 }
 
 fn base() -> Tree {
-    [".gitattributes", ".pigeon/roster.toml", "F/a", "S/b", "r"]
+    let mut t: Tree = [".gitattributes", ".pigeon/roster.toml", "F/a", "S/b", "r"]
         .iter()
         .map(|p| ((*p).to_owned(), entry(&format!("old-{p}"))))
-        .collect()
+        .collect();
+    t.insert(old_record(), entry("old-record"));
+    t
+}
+
+/// A drop record of person 2's laptop, already on `main`.
+fn old_record() -> String {
+    authority::drop_record_path(&dev(2), "0")
 }
 
 fn raw(force: bool) -> Vec<u8> {
@@ -134,6 +141,10 @@ fn table(d: usize, path: &str, added: bool, force: bool, w: &Writers) -> bool {
         5 => (1, false, true),
         p => (p, false, false),
     };
+    if let Some(rest) = path.strip_prefix(".pigeon/records/") {
+        let own = rest == format!("drop-{}-1.toml", dev(d).0);
+        return admin || (!recovery && added && own);
+    }
     if path.starts_with(".pigeon/") {
         return admin;
     }
@@ -179,6 +190,14 @@ fn judge(
 fn a_change_is_accepted_iff_the_tables_allow_it(tc: TestCase) {
     let signer = int(&tc, 1, 5) as usize;
     let force = flag(&tc);
+    // Drop records: the signer's own, another device's, an old one, and a
+    // malformed name (08 §8.7).
+    let own = authority::drop_record_path(&dev(signer), "1");
+    let other = authority::drop_record_path(&dev(if signer == 2 { 3 } else { 2 }), "1");
+    let (old, odd) = (
+        old_record(),
+        format!(".pigeon/records/drop-{}-.toml", dev(signer).0),
+    );
     let paths = [
         "F/a",
         "F/new",
@@ -189,6 +208,10 @@ fn a_change_is_accepted_iff_the_tables_allow_it(tc: TestCase) {
         "deep/new",
         ".pigeon/other",
         ".gitattributes",
+        own.as_str(),
+        other.as_str(),
+        old.as_str(),
+        odd.as_str(),
     ];
     let w = drawn(&tc);
     let mut tree = base();

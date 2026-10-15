@@ -55,6 +55,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("history PATH", "cmd-history"),
     ("restore PATH [--version N | --at TIME]", "cmd-restore"),
     ("free PATH", "cmd-free"),
+    ("free --without-checking PATH", "cmd-free-without-checking"),
     ("keep PATH", "cmd-keep"),
     ("suggestions", "cmd-suggestions"),
     ("accept ID [--override REASON]", "cmd-accept"),
@@ -332,6 +333,12 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
                 path: absolute(w.first()?),
                 version,
                 at: s.value("at").map(str::to_owned),
+            })
+        }
+        "free" if fits(1, 1, &["without-checking"]) && s.flag("without-checking") => {
+            send(Request::Drop {
+                path: absolute(w.first()?),
+                confirmed: false,
             })
         }
         "free" if fits(1, 1, &[]) => send(Request::Evict {

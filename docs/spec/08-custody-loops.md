@@ -165,8 +165,16 @@ the signed history; `pigeon erase` says so before asking.
 escape: it removes this device's copy of PATH's content even if it is the
 last. It shows the known risk ("last seen on Paul's NAS, 3 days ago"; "no
 other copy is known"), asks (or needs `--yes`), drops with `--force`, and
-commits `.pigeon/records/drop-<id>.toml` (device, paths, keys, risk shown,
-time) **[no ADR: command and record]**.
+commits `.pigeon/records/drop-<device>-<id>.toml` (device, paths, keys,
+risk shown, time) **[no ADR: command and record]**. The device in the name
+lets the authority rule check that a member records only its own device's
+drops, without reading the record ([04 §4.3](04-roster-and-authority.md)).
+
+Coded so far (`pigeond/src/drop.rs`, `evict::free_with`, `tests/drop.rs`):
+`Drop {path, confirmed}` first answers with the risk as counts (files not
+on enough backup machines, files on no other computer); once confirmed it
+hides each file whose content is its version, drops with `--force` and
+commits the record. The risk does not name machines or times yet.
 
 ## 8.8 Scrubs
 

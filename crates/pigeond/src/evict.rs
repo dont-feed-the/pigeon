@@ -201,6 +201,19 @@ fn hide(g: &Group, wt: &Path, seq: u64, path: &str, key: &str, t: &Tracer) -> Re
 
 /// Frees the folder `prefix` while it is a target (`pigeon free` records it).
 pub async fn free(g: &Group, me: &str, prefix: &str, t: &Tracer) -> Result<Freed, String> {
+    free_with(g, me, prefix, t, true).await
+}
+
+/// Frees `prefix`; without `check`, every file present, protected or not,
+/// and its content dropped with `--force` (`pigeon free --without-checking`,
+/// 08 §8.7). A file changed since its version is never hidden.
+pub async fn free_with(
+    g: &Group,
+    me: &str,
+    prefix: &str,
+    t: &Tracer,
+    check: bool,
+) -> Result<Freed, String> {
     let wt = g.worktree.clone().ok_or("not-in-group")?;
     let observed = crate::status::observe(g, me, prefix).await;
     let mut hidden = hidden_paths(g).await;
@@ -211,7 +224,12 @@ pub async fn free(g: &Group, me: &str, prefix: &str, t: &Tracer) -> Result<Freed
     };
     let mut new = Vec::new();
     for o in &observed {
-        if !matches!(o.state, State::Protected(_)) {
+        let ready = match o.state {
+            State::Protected(_) => true,
+            State::Missing(_) => false,
+            _ => !check,
+        };
+        if !ready {
             done.waiting += 1;
             continue;
         }
@@ -247,7 +265,7 @@ pub async fn free(g: &Group, me: &str, prefix: &str, t: &Tracer) -> Result<Freed
     }
     done.hidden = observed.iter().filter(|o| hidden.contains(&o.path)).count();
     if targets(g).contains(prefix) {
-        done.dropped = drop_hidden(g, &hidden, prefix).await;
+        done.dropped = drop_hidden(g, &hidden, prefix, check).await;
     }
     truncate_if_done(g);
     Ok(done)
@@ -265,7 +283,7 @@ pub async fn free_targets(g: &Group, me: &str, t: &Tracer) {
 }
 
 /// Drops the keys of hidden paths under `prefix` that no visible path names.
-async fn drop_hidden(g: &Group, hidden: &BTreeSet<String>, prefix: &str) -> usize {
+async fn drop_hidden(g: &Group, hidden: &BTreeSet<String>, prefix: &str, check: bool) -> usize {
     let Some(main) = g.git.rev("refs/heads/main").await else {
         return 0;
     };
@@ -286,17 +304,12 @@ async fn drop_hidden(g: &Group, hidden: &BTreeSet<String>, prefix: &str) -> usiz
         if visible.contains(key) || crate::custody::present(g, key).await.is_none() {
             continue;
         }
-        let args = [
-            "annex",
-            "drop",
-            "--json",
-            "--key",
-            key.as_str(),
-            "--numcopies",
-            k.as_str(),
-            "--mincopies",
-            k.as_str(),
-        ];
+        let mut args = vec!["annex", "drop", "--json", "--key", key.as_str()];
+        if check {
+            args.extend(["--numcopies", k.as_str(), "--mincopies", k.as_str()]);
+        } else {
+            args.push("--force");
+        }
         match g.git.run_for(&args, Duration::from_secs(300)).await {
             Ok(_) => dropped += 1,
             Err(e) => tracing::info!(group = %g.id, key = %key, error = %e, "drop-refused"),

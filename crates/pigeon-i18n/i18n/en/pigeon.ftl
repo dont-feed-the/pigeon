@@ -351,3 +351,12 @@ web-held-bring-back = Bring them back
 web-held-share-confirm = Delete the files of { $batch } for everyone? They stay in the history.
 web-leave = Leave the group
 web-leave-confirm = Remove this computer from the group? Its files stay in the folder, but it stops sharing them.
+cmd-free-without-checking = Remove this computer's copy even if it is the last one
+drop-risk =
+    { $files ->
+        [one] 1 file
+       *[other] { $files } files
+    }: { $unsafe } not on enough backup machines, { $alone } on no other computer.
+drop-preview = The content of these { $files } files would leave this computer, even where it is the only copy.
+drop-done = { $files } files hidden, { $dropped } contents removed from this computer; a record of it is shared with the group.
+confirm-drop = Remove this computer's copy anyway? What no other machine has is lost. [y/N]

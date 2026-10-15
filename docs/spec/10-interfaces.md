@@ -19,7 +19,7 @@ result, progress events then a result, or a `Problem` (§10.6).
 | `Invite {person, admin, custodian, name?}` | `pigeon invite [--admin] PERSON`, `pigeon invite --backup-machine [NAME]` | People → Invite someone | [09 §9.6](09-network-and-joining.md) |
 | `Join {invitation, folder, keep, name?}` | `pigeon join INVITATION [FOLDER] [--name NAME]` | Welcome → Join | [09 §9.6](09-network-and-joining.md) |
 | `Keep {folder}` · `Evict {folder}` | `pigeon keep PATH` · `pigeon free PATH` | Files → *Keep on this computer* | [08 §8.5](08-custody-loops.md) |
-| `Drop {path}` | `pigeon free --without-checking PATH` | — (CLI only, ux.md §2.2) | [08 §8.7](08-custody-loops.md) |
+| `Drop {path, confirmed}` | `pigeon free --without-checking PATH` | — (CLI only, ux.md §2.2) | [08 §8.7](08-custody-loops.md) |
 | `History {path}` | `pigeon history PATH` | a file's page | [05](05-catalogue-and-names.md) |
 | `View {path, version \| group}` | `pigeon view PATH [--version N \| --group]` | *Open a copy*, *Open Paul's version* | [07 §7.6](07-capture-and-install.md) |
 | `Restore {path, version \| at}` | `pigeon restore PATH [--version N \| --at TIME]` | *Restore this version*, Deleted files | [05 §5.1](05-catalogue-and-names.md) |

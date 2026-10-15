@@ -90,7 +90,7 @@ pub fn relative(g: &Group, path: &Path) -> Option<String> {
     )
 }
 
-fn group_of(d: &Daemon, path: &Path) -> Option<Arc<Group>> {
+pub(crate) fn group_of(d: &Daemon, path: &Path) -> Option<Arc<Group>> {
     d.group_at(path).or_else(|| d.group_at(path.parent()?))
 }
 
@@ -174,6 +174,9 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             }
         }
         Request::Evict { folder } => free(d, Path::new(&folder)).await,
+        Request::Drop { path, confirmed } => {
+            crate::drop::drop(d, Path::new(&path), confirmed).await
+        }
         Request::Keep { folder } => keep(d, Path::new(&folder)).await,
         Request::Machines => machines(d),
         Request::People => people(d),

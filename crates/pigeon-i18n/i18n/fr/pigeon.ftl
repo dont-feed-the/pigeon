@@ -351,3 +351,12 @@ web-held-bring-back = Les faire revenir
 web-held-share-confirm = Supprimer les fichiers de { $batch } pour tout le monde ? Ils restent dans l'historique.
 web-leave = Quitter le groupe
 web-leave-confirm = Retirer cet ordinateur du groupe ? Ses fichiers restent dans le dossier, mais il cesse de les partager.
+cmd-free-without-checking = Retirer la copie de cet ordinateur même si c'est la dernière
+drop-risk =
+    { $files ->
+        [one] 1 fichier
+       *[other] { $files } fichiers
+    } : { $unsafe } pas sur assez de machines de sauvegarde, { $alone } sur aucun autre ordinateur.
+drop-preview = Le contenu de ces { $files } fichiers quitterait cet ordinateur, même là où c'est la seule copie.
+drop-done = { $files } fichiers masqués, { $dropped } contenus retirés de cet ordinateur ; une trace en est partagée avec le groupe.
+confirm-drop = Retirer quand même la copie de cet ordinateur ? Ce qu'aucune autre machine n'a est perdu. [o/N]

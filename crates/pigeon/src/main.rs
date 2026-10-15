@@ -197,6 +197,7 @@ fn main() -> ExitCode {
             show(&out, line.json, &Response::Problem(p));
             ExitCode::from(1)
         }
+        Action::Send(Request::Drop { path, .. }) => drop(&out, &line, path),
         Action::Send(request) => {
             if let Some(question) = question(request)
                 && !line.yes
@@ -223,6 +224,31 @@ fn update(args: &[String]) -> std::io::Error {
         Ok(at) => std::io::Error::new(std::io::ErrorKind::NotFound, at.display().to_string()),
         Err(e) => e,
     }
+}
+
+/// `pigeon free --without-checking PATH` (08 §8.7): shows the risk, asks,
+/// then drops; with `--yes`, drops at once and shows the risk with it.
+fn drop(out: &Renderer, line: &args::Line, path: &str) -> ExitCode {
+    let send = |confirmed| Request::Drop {
+        path: path.to_owned(),
+        confirmed,
+    };
+    if !line.yes {
+        let shown = exchange(out, line.json, &send(false));
+        if shown != ExitCode::SUCCESS {
+            return shown;
+        }
+        let question = Message {
+            id: "confirm-drop".to_owned(),
+            args: std::collections::BTreeMap::new(),
+        };
+        if !confirm(out, line, &question) {
+            let p = local_problem("needs-confirmation", &[]);
+            show(out, line.json, &Response::Problem(p));
+            return ExitCode::from(1);
+        }
+    }
+    exchange(out, line.json, &send(true))
 }
 
 /// What a request asks before it is sent, if anything (10 §10.2).
