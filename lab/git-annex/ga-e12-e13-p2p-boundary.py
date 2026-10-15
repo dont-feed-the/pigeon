@@ -524,7 +524,14 @@ def main():
     r = p2p(P, 'push', 'l', 'main:refs/heads/main', ok=False)
     check(r.returncode != 0 and ref(L, 'main') == before[0],
           "git refuses a push to L's checked-out main by default (receive.denyCurrentBranch)")
-    r = p2p(P, 'push', 'l', 'main:refs/pigeon/peers/X/main', ok=False)
+    # The stock relay can also end such a push with an error (E25); what is
+    # asserted is git's policy, so a failed push is tried again, and said.
+    for attempt in (1, 2, 3):
+        r = p2p(P, 'push', 'l', 'main:refs/pigeon/peers/X/main', ok=False)
+        if r.returncode == 0 and ref(L, 'refs/pigeon/peers/X/main') == pc:
+            break
+        NOTES.append(f'push to refs/pigeon/peers/X/main of L failed (attempt {attempt}, '
+                     f'exit {r.returncode}): {r.stderr.strip()[-300:]}')
     check(r.returncode == 0 and ref(L, 'refs/pigeon/peers/X/main') == pc,
           "but accepts a push to any other ref of L, such as refs/pigeon/peers/X/main")
     refuse_pushes(os.path.join(L, '.git'))
