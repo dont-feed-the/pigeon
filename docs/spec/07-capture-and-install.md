@@ -122,7 +122,10 @@ catalogue's version and from pigeon's last install. The **divergence table**
 
 *waiting* ends when the proposal is accepted (only the index changes,
 `Decide`) and becomes *conflict* when it is rejected or `current(p)` moves:
-the person is told **once**, and Home keeps a *Needs you* item. A new save
+the person is told **once**, and Home keeps a *Needs you* item. It also
+ends when the file is clean again, the person having put a version back;
+the proposal stays for its deciders **[no ADR]**. Capture leaves a
+suggested path alone while its file keeps the stat the table recorded. A new save
 of a diverging path extends the person's proposal chain, or makes a proposal
 of their own, so it is replicated without changing the catalogue
 **[no ADR]**. Install never writes a diverging path. A divergence changes no

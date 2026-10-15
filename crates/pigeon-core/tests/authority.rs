@@ -194,6 +194,102 @@ fn a_change_is_accepted_iff_the_tables_allow_it(tc: TestCase) {
     }
 }
 
+#[hegel::test(test_cases = 1000)]
+fn a_proposals_deciders_are_those_who_may_adopt_it(tc: TestCase) {
+    let paths = ["F/a", "F/new", "S/b", "S/new", "r", "new", "deep/new"];
+    let mut tree = base();
+    let mut blobs = BTreeMap::new();
+    let mut changes = Vec::new();
+    for _ in 0..int(&tc, 1, 3) {
+        let p: &str = pick(&tc, &paths);
+        if changes.iter().any(|(q, _)| *q == p) {
+            continue;
+        }
+        let added = !tree.contains_key(p);
+        if !added && flag(&tc) {
+            tree.remove(p);
+        } else {
+            let oid = format!("new-{p}");
+            tree.insert(p.to_owned(), entry(&oid));
+            blobs.insert(oid, POINTER.as_bytes().to_vec());
+        }
+        changes.push((p, added));
+    }
+    let (deciders, force) = authority::deciders(&group(), &changes);
+    let may = |i: usize| changes.iter().all(|(p, a)| table(i, p, *a, false));
+    let expect: BTreeSet<PersonId> = (1..=3).filter(|i| may(*i)).map(pid).collect();
+    if force {
+        assert!(expect.is_empty(), "{changes:?}");
+        assert_eq!(deciders, [pid(1)].into(), "the admins decide");
+    } else {
+        assert_eq!(deciders, expect, "{changes:?}");
+    }
+    // `DecidersCanAdopt`: each decider's laptop may sign the adoption, with
+    // Force when nobody may make it; nobody else may (04 §4.5).
+    for i in 1..=3 {
+        let accepted = matches!(judge(i, &tree, force, &blobs), Verdict::Accepted(..));
+        assert_eq!(
+            accepted,
+            deciders.contains(&pid(i)),
+            "person {i}: {changes:?}"
+        );
+    }
+}
+
+#[hegel::test(test_cases = 1000)]
+fn capture_splits_a_batch_into_an_accepted_commit_and_proposals(tc: TestCase) {
+    let signer = int(&tc, 1, 3) as usize;
+    let paths = ["F/a", "F/new", "S/b", "S/new", "r", "new", "deep/new"];
+    let before = base();
+    let mut changes: BTreeMap<String, Option<Entry>> = BTreeMap::new();
+    for _ in 0..int(&tc, 1, 5) {
+        let p: &str = pick(&tc, &paths);
+        let gone = before.contains_key(p) && flag(&tc);
+        changes.insert(p.to_owned(), (!gone).then(|| entry(&format!("new-{p}"))));
+    }
+    let blobs: BTreeMap<String, Vec<u8>> = changes
+        .values()
+        .flatten()
+        .map(|e| (e.oid.clone(), POINTER.as_bytes().to_vec()))
+        .collect();
+    let applied = |part: &BTreeMap<String, Option<Entry>>| {
+        let mut t = before.clone();
+        for (p, e) in part {
+            match e {
+                Some(e) => t.insert(p.clone(), e.clone()),
+                None => t.remove(p),
+            };
+        }
+        t
+    };
+    let s = authority::split(&group(), &dev(signer), &before, &changes);
+    // Nothing is lost, nothing is in two places.
+    let mut all: Vec<&String> = s.allowed.keys().collect();
+    all.extend(s.proposed.values().flat_map(BTreeMap::keys));
+    all.sort_unstable();
+    assert_eq!(all, changes.keys().collect::<Vec<_>>());
+    // The commit on `main` is accepted; each proposal is refused for folder
+    // rules alone, and its deciders are those of each of its changes.
+    let v = judge(signer, &applied(&s.allowed), false, &blobs);
+    assert!(matches!(v, Verdict::Accepted(..)), "{v:?}");
+    for (deciders, part) in &s.proposed {
+        assert!(!part.is_empty());
+        let v = judge(signer, &applied(part), false, &blobs);
+        assert!(
+            matches!(v, Verdict::Refused(Refusal::NotAllowed(_))),
+            "{v:?}"
+        );
+        let each: Vec<(&str, bool)> = part
+            .keys()
+            .map(|p| (p.as_str(), !before.contains_key(p)))
+            .collect();
+        assert_eq!(&authority::deciders(&group(), &each), deciders);
+        for one in &each {
+            assert_eq!(&authority::deciders(&group(), &[*one]), deciders);
+        }
+    }
+}
+
 #[hegel::test(test_cases = 300)]
 fn only_files_and_pointers_are_well_formed(tc: TestCase) {
     let p: &str = pick(&tc, &["r", "new", "S/new"]);

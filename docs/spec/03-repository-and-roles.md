@@ -116,7 +116,7 @@ Every other device of the roster is a remote:
     annex-uuid = <the device's git-annex UUID, from the roster>
     fetch = +refs/heads/main:refs/pigeon/peers/<device-id>/main
     fetch = +refs/heads/git-annex:refs/remotes/pigeon-3f9a0c1d2e4b/git-annex
-    fetch = refs/pigeon/proposals/*:refs/pigeon/proposals/*
+    fetch = +refs/pigeon/proposals/*:refs/pigeon/peers/<device-id>/proposals/*
     fetch = +refs/pigeon/status/*:refs/pigeon/peers/<device-id>/status/*
 ```
 
@@ -124,8 +124,11 @@ Every other device of the roster is a remote:
   refuses `CONNECT git-receive-pack`, a `pre-receive` hook every push (E12,
   [09 §9.4](09-network-and-joining.md)). Content moves both ways by
   git-annex's P2P protocol (`get`, `copy --to`).
-- `pigeond` keeps the remotes in step with the roster. Proposal refs are
-  fetched without `+`: unique names, fixed targets.
+- `pigeond` keeps the remotes in step with the roster. A peer's proposal
+  refs land in its own namespace, and accept copies each valid one into
+  `refs/pigeon/proposals/` ([04 §4.5](04-roster-and-authority.md)): two
+  peers relaying one proposal never race on a ref, and nothing unchecked is
+  relayed **[no ADR]**.
 - One `git annex remotedaemon --foreground` per repository (ADR 0011), stdin
   held open, tells peers of changes; on a notice it only fetches by these
   refspecs, never moving `main`, `HEAD`, the index or the tree (E12).

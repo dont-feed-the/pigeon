@@ -1,9 +1,10 @@
-//! Accept and place (08 §8.2, §8.3): fetch each peer's `main` and git-annex
-//! branch, fast-forward to a descendant of `main`, and move content to the
-//! custodians.
+//! Accept and place (08 §8.2, §8.3): fetch each peer's `main`, git-annex
+//! branch and proposals (`proposal`), fast-forward to a descendant of
+//! `main`, and move content to the custodians.
 //!
 //! In the slice a laptop sends every version to every custodian with
-//! `copy --to --key`, and a custodian gets each key of `main` it lacks and
+//! `copy --to --key`, and a custodian gets each key of `main` and of the
+//! kept proposals it lacks and
 //! admits (`admission`) with `get --key`, then syncs the object to disk,
 //! both in queue order; with K = 2 and two custodians that is
 //! `sizebalanced`'s choice too (13 §13.12). Every device moves `main` only
@@ -49,6 +50,7 @@ pub fn peers(g: &Group, me: &str) -> Vec<(String, String, DeviceRole)> {
 async fn fetch(g: &Group, id: &str) -> Result<(), crate::git::Error> {
     let spec = crate::settings::peer_refspec(id);
     let reports = crate::report::refspec(id);
+    let proposals = crate::proposal::refspec(id);
     let args = [
         "fetch",
         "-q",
@@ -57,6 +59,7 @@ async fn fetch(g: &Group, id: &str) -> Result<(), crate::git::Error> {
         id,
         spec.as_str(),
         reports.as_str(),
+        proposals.as_str(),
     ];
     match g.git.run_for(&args, FETCH_TIMEOUT).await {
         Err(e @ crate::git::Error::Timeout { .. }) => {
@@ -114,6 +117,7 @@ pub async fn accept(g: &Group, me: &str, tracer: &Tracer) -> bool {
     }
     let mut moved = false;
     for id in fetched {
+        crate::proposal::take(g, &id).await;
         let Some(theirs) = g.git.rev(&format!("refs/pigeon/peers/{id}/main")).await else {
             continue;
         };
@@ -253,7 +257,8 @@ pub async fn place(g: &Group, me: &str) -> usize {
     let Ok(keys) = g.git.keys(&main).await else {
         return 0;
     };
-    let keys: BTreeSet<String> = keys.into_values().collect();
+    let mut keys: BTreeSet<String> = keys.into_values().collect();
+    keys.extend(crate::proposal::keys(g).await);
     let mut made = 0;
     let mut left = 0;
     match g.role {

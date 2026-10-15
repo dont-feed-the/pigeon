@@ -165,7 +165,37 @@ async fn judge_child(
     if rosters.windows(2).any(|w| w[0] != w[1]) {
         return Ok(Verdict::Unknown("roster-fork"));
     }
-    let changed = authority::delta(&before, after);
+    let verdict = judge_step(g, raw, &before, after, &rosters).await?;
+    let refs: Vec<&Roster> = rosters.iter().collect();
+    name(meta, &verdict, &refs);
+    if let Verdict::Accepted(signer, _) = &verdict {
+        let person = rosters
+            .iter()
+            .find_map(|r| r.devices.get(signer))
+            .map(|d| d.person.clone());
+        meta.resolves = authority::resolved(raw)
+            .into_iter()
+            .filter(|p| {
+                person
+                    .as_ref()
+                    .is_some_and(|u| rosters.iter().all(|r| authority::allowed(r, u, p, false)))
+            })
+            .collect();
+    }
+    Ok(verdict)
+}
+
+/// The verdict of rules 2–6 on `raw`, whose tree is `after`, against
+/// `before` under each of `rosters`, with rule 5's portable names.
+async fn judge_step(
+    g: &Group,
+    raw: &[u8],
+    before: &Tree,
+    after: &Tree,
+    rosters: &[Roster],
+) -> Result<Verdict, Error> {
+    let git = &g.git;
+    let changed = authority::delta(before, after);
     for path in changed.iter().filter(|p| after.contains_key(*p)) {
         if let Err(why) = names::portable(path) {
             return Ok(Verdict::Refused(Refusal::Malformed(
@@ -204,31 +234,39 @@ async fn judge_child(
             authority::judge(&Step {
                 raw,
                 roster,
-                before: &before,
+                before,
                 after,
                 blobs: &blobs,
                 new_roster: new_roster.as_ref(),
             })
         })
         .collect();
-    let verdict = combine(verdicts, changed.is_empty());
-    let refs: Vec<&Roster> = rosters.iter().collect();
-    name(meta, &verdict, &refs);
-    if let Verdict::Accepted(signer, _) = &verdict {
-        let person = rosters
-            .iter()
-            .find_map(|r| r.devices.get(signer))
-            .map(|d| d.person.clone());
-        meta.resolves = authority::resolved(raw)
-            .into_iter()
-            .filter(|p| {
-                person
-                    .as_ref()
-                    .is_some_and(|u| rosters.iter().all(|r| authority::allowed(r, u, p, false)))
-            })
-            .collect();
-    }
-    Ok(verdict)
+    Ok(combine(verdicts, changed.is_empty()))
+}
+
+/// The verdict on the proposal `raw`, whose tree is `after`, against
+/// `base`, the accepted commit it builds on (04 §4.5): its change judged
+/// under R(`base`) as if it were one commit on it.
+pub async fn judge_proposal(
+    g: &Group,
+    raw: &[u8],
+    base: &str,
+    after: &Tree,
+) -> Result<Verdict, Error> {
+    let Some(before) = g
+        .lock()
+        .engine
+        .base(&[base.to_owned()])
+        .map(|v| v.tree.clone())
+    else {
+        return Ok(Verdict::Unknown("parent"));
+    };
+    let roster = match roster_at(&g.git, &g.git.tree(base).await?).await {
+        Some(Ok(r)) => r,
+        Some(Err(Unread::Unknown(_))) => return Ok(Verdict::Unknown("format")),
+        _ => return Ok(Verdict::Refused(Refusal::RosterUnreadable("parent".into()))),
+    };
+    judge_step(g, raw, &before, after, &[roster]).await
 }
 
 /// Whether `theirs` brings a contribution that `ours` lacks (05 §5.2):

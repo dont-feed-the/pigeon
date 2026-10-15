@@ -30,6 +30,8 @@ pub struct Captured {
     pub removed: usize,
     /// Paths left for the next round: a process may be writing them.
     pub busy: usize,
+    /// Paths suggested in proposals (07 §7.3 step 7).
+    pub suggested: usize,
 }
 
 fn kind(worktree: &Path, path: &str) -> Option<&'static str> {
@@ -102,16 +104,19 @@ pub async fn dirty(g: &Group) -> Result<std::collections::BTreeSet<String>, Erro
         .collect())
 }
 
-/// One round of capture on a laptop. The index may lag `main` where
+/// One round of capture on a laptop `me`. The index may lag `main` where
 /// install has not written a version yet: such a path is left out, and the
 /// commit is `main`'s tree with the person's changes. A path the person
-/// changed there diverges, unless it now holds `main`'s version.
-pub async fn capture(g: &Group, tracer: &Tracer) -> Result<Captured, Error> {
+/// changed there diverges, unless it now holds `main`'s version. Changes
+/// the person may not make become proposals (`suggest`); a suggested path
+/// saved since is left alone.
+pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, Error> {
     let mut done = Captured::default();
     let Some(worktree) = g.worktree.clone() else {
         return Ok(done);
     };
     undo_interrupted(g).await?;
+    let table = crate::conflicts_file::read(g).unwrap_or_default();
     let head = g.git.rev("refs/heads/main").await;
     let mut main: Option<Tree> = None;
     let (mut add, mut remove, mut not_shared) = (Vec::new(), Vec::new(), Vec::new());
@@ -122,6 +127,9 @@ pub async fn capture(g: &Group, tracer: &Tracer) -> Result<Captured, Error> {
         }
         if y == '.' {
             behind |= x != '.';
+            continue;
+        }
+        if crate::suggest::unchanged(&worktree, &table, &path, y == 'D') {
             continue;
         }
         let lagging = match x {
@@ -195,9 +203,10 @@ pub async fn capture(g: &Group, tracer: &Tracer) -> Result<Captured, Error> {
         source,
     })?;
     let batch = Batch {
+        me,
+        table,
         head,
         main,
-        behind,
         before,
         add,
         remove,
@@ -235,10 +244,11 @@ async fn undo_interrupted(g: &Group) -> Result<(), Error> {
 }
 
 /// What one batch stages and commits.
-struct Batch {
+struct Batch<'a> {
+    me: &'a str,
+    table: crate::conflicts_file::Table,
     head: Option<String>,
     main: Option<Tree>,
-    behind: bool,
     before: Tree,
     add: Vec<String>,
     remove: Vec<String>,
@@ -251,13 +261,14 @@ struct Batch {
 async fn commit_batch(
     g: &Group,
     tracer: &Tracer,
-    b: Batch,
+    b: Batch<'_>,
     mut done: Captured,
 ) -> Result<Captured, Error> {
     let Batch {
+        me,
+        mut table,
         head,
         mut main,
-        mut behind,
         before,
         add,
         remove,
@@ -293,7 +304,6 @@ async fn commit_batch(
     let head = match settled.moved {
         Some(m) => {
             main = Some(g.git.tree(&m).await?);
-            behind = true;
             done.commit = Some(m.clone());
             Some(m)
         }
@@ -302,23 +312,52 @@ async fn commit_batch(
     if done.added + done.removed == 0 {
         return Ok(done);
     }
-    let tree = match &main {
-        Some(main) if behind => {
-            let index = g.git.index().await?;
-            let mut tree = main.clone();
-            for p in &add {
-                match index.get(p) {
-                    Some(e) => tree.insert(p.clone(), e.clone()),
-                    None => tree.remove(p),
-                };
-            }
-            for p in &remove {
-                tree.remove(p);
-            }
-            crate::merge::write_tree(&g.git, &tree).await?
-        }
-        _ => g.git.run(&["write-tree"]).await?.trim().to_owned(),
+    let (Some(h), Some(worktree)) = (&head, &g.worktree) else {
+        let tree = g.git.run(&["write-tree"]).await?.trim().to_owned();
+        return commit_main(g, tree, head, done).await;
     };
+    let main = match main {
+        Some(t) => t,
+        None => g.git.tree(h).await?,
+    };
+    let index = g.git.index().await?;
+    let changes: crate::suggest::Changes = add
+        .iter()
+        .map(|p| (p.clone(), index.get(p).cloned()))
+        .chain(remove.iter().map(|p| (p.clone(), None)))
+        .collect();
+    let (allowed, proposals) =
+        crate::suggest::plan(g, me, h, &main, &table, changes.clone()).await?;
+    let known = table.clone();
+    for p in proposals {
+        let commit = crate::proposal::write(g, me, &p.parent, &p.tree).await?;
+        crate::suggest::record(g, worktree, &main, &mut table, &commit, &p.paths, &changes).await?;
+        done.suggested += p.paths.len();
+    }
+    table.paths.retain(|p, d| {
+        !(allowed.contains_key(p) && d.kind == crate::conflicts_file::Kind::Suggestion)
+    });
+    if table != known
+        && let Err(e) = crate::conflicts_file::write(g, &table)
+    {
+        tracing::warn!(group = %g.id, error = %e, "conflicts-write-failed");
+    }
+    done.added = allowed.values().filter(|e| e.is_some()).count();
+    done.removed = allowed.len() - done.added;
+    if allowed.is_empty() {
+        return Ok(done);
+    }
+    let tree = crate::merge::write_tree(&g.git, &crate::suggest::applied(&main, &allowed)).await?;
+    commit_main(g, tree, head, done).await
+}
+
+/// Commits `tree` on `main` at `head`, unless it is `main`'s tree.
+async fn commit_main(
+    g: &Group,
+    tree: String,
+    head: Option<String>,
+    mut done: Captured,
+) -> Result<Captured, Error> {
     let head_tree = g.git.rev("refs/heads/main^{tree}").await;
     if head_tree.as_deref() == Some(tree.as_str()) {
         return Ok(done);

@@ -42,7 +42,7 @@ pub async fn restore(d: &Daemon, path: &Path, version: Option<u64>) -> Vec<Respo
         return vec![problem("not-in-group", &[], None)];
     };
     let _busy = g.busy.lock().await;
-    if let Err(e) = crate::capture::capture(&g, &d.tracer).await {
+    if let Err(e) = crate::capture::capture(&g, &d.device, &d.tracer).await {
         tracing::warn!(group = %g.id, error = %e, "capture-failed");
     }
     let mut versions = crate::history::versions(&g, &rel).await;
@@ -79,7 +79,7 @@ pub async fn restore(d: &Daemon, path: &Path, version: Option<u64>) -> Vec<Respo
         }
         Err(e) => return vec![problem("internal-error", &[], Some(e))],
     }
-    if let Err(e) = crate::capture::capture(&g, &d.tracer).await {
+    if let Err(e) = crate::capture::capture(&g, &d.device, &d.tracer).await {
         tracing::warn!(group = %g.id, error = %e, "capture-failed");
     }
     d.wake.notify_one();

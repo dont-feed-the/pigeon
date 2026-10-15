@@ -111,7 +111,7 @@ async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             // them first, unless a round is already at work.
             if g.role == pigeon_core::filter::Role::Laptop
                 && let Ok(_busy) = g.busy.try_lock()
-                && let Err(e) = crate::capture::capture(&g, &d.tracer).await
+                && let Err(e) = crate::capture::capture(&g, &d.device, &d.tracer).await
             {
                 tracing::warn!(group = %g.id, error = %e, "capture-failed");
             }

@@ -123,8 +123,8 @@ files, which pigeon never changed; S9's random schedules found the need,
 as a crash before the ref moved left the saves staged and out of `main`.
 
 **`conflicts.json`** (`pigeond::conflicts_file`, written so far for
-`concurrent` divergences; `suggestion` and `recovered` come with proposals
-and kept asides): `format`, and per path
+`concurrent` and `suggestion` divergences; `recovered` comes with kept
+asides): `format`, and per path
 `kind` (`suggestion`), `since`, `state` (`waiting`), `mine` (key),
 `mine_stat` (the stat of the person's file when `mine` was captured, which
 *Take the group's version* checks), `proposal` (the chain's latest),

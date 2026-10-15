@@ -223,6 +223,78 @@ pub fn allowed(roster: &Roster, u: &roster::PersonId, path: &str, added: bool) -
     }
 }
 
+/// The deciders of a proposal whose adoption makes `changes`, each a path
+/// and whether it adds it (04 §4.5): the persons allowed every change
+/// under `roster`; if nobody, the admins, who adopt it with Force
+/// (04 §4.6), which the flag says.
+pub fn deciders(roster: &Roster, changes: &[(&str, bool)]) -> Deciders {
+    let all: BTreeSet<roster::PersonId> = roster
+        .persons
+        .keys()
+        .filter(|u| changes.iter().all(|(p, a)| allowed(roster, u, p, *a)))
+        .cloned()
+        .collect();
+    if !all.is_empty() {
+        return (all, false);
+    }
+    let admins = roster
+        .persons
+        .iter()
+        .filter(|(_, p)| p.admin)
+        .map(|(u, _)| u.clone())
+        .collect();
+    (admins, true)
+}
+
+/// The deciders of a proposal, and whether its adoption needs Force.
+pub type Deciders = (BTreeSet<roster::PersonId>, bool);
+
+/// A batch of changes split as capture commits them (07 §7.3 steps 5 and
+/// 7): those the signer's person may make, and the others by deciders.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Split<T> {
+    /// The changes for one commit on `main`.
+    pub allowed: BTreeMap<String, T>,
+    /// The changes for one proposal per set of deciders (04 §4.5).
+    pub proposed: BTreeMap<Deciders, BTreeMap<String, T>>,
+}
+
+/// Splits `changes` of `before` by `signer` under `roster`: a change is
+/// allowed when 04 §4.3 lets the signer's person make it, else proposed
+/// to the deciders of that one change. A device outside the roster, or a
+/// recovery device, may make none.
+pub fn split<T: Clone>(
+    roster: &Roster,
+    signer: &DeviceId,
+    before: &Tree,
+    changes: &BTreeMap<String, T>,
+) -> Split<T> {
+    let person = roster
+        .devices
+        .get(signer)
+        .filter(|d| d.role != Role::Recovery)
+        .map(|d| d.person.clone());
+    let mut out = Split {
+        allowed: BTreeMap::new(),
+        proposed: BTreeMap::new(),
+    };
+    for (path, change) in changes {
+        let added = !before.contains_key(path);
+        if person
+            .as_ref()
+            .is_some_and(|u| allowed(roster, u, path, added))
+        {
+            out.allowed.insert(path.clone(), change.clone());
+        } else {
+            out.proposed
+                .entry(deciders(roster, &[(path, added)]))
+                .or_default()
+                .insert(path.clone(), change.clone());
+        }
+    }
+    out
+}
+
 fn well_formed(path: &str, e: &Entry, blobs: &BTreeMap<String, Vec<u8>>) -> Option<&'static str> {
     if e.kind != "blob" {
         return Some("not-a-file");

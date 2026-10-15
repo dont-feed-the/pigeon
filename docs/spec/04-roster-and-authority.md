@@ -135,7 +135,8 @@ Consequences, checked by `Authority.tla` (`AuthorisedContent`,
   B = `catalogue::Engine`'s catalogue of its accepted parents, under each
   accepted parent's roster (rules 2 and 3) and with rule 5; a merge of
   parents whose rosters differ (§4.8) and a commit with a parent outside
-  A(c) (rule 7) wait as *unknown* until M2 codes them. `pigeond` signs every
+  A(c) (rule 7) wait as *unknown* until M2 codes them. Capture splits a
+  batch with `authority::split` (§4.5). `pigeond` signs every
   commit it writes with the device key, and accept takes a peer's commits
   in topological order up to the first not accepted, which `doctor` names
   with its problem code: `commit-unsigned`, `commit-forged`,
@@ -159,6 +160,19 @@ adoption and concurrent decisions are ADR 0051, checked by `Authority.tla`
 | accept | on a `main` holding all it builds on, merge (`main`, proposal) with its change; a path changed meanwhile keeps both, the proposal's under its conflict name ([05 §5.2–5.3](05-catalogue-and-names.md)) |
 | concurrency | an adoption wins over a rejection; the proposal stays the author's **submission**, the adoption the decider's **authorised change**, so rights never widen |
 | content | replicates like any version: *protected* only once K custodians hold it (ADR 0034, [06 §6.2](06-status.md)) |
+
+**In code** (M2, first step): `authority::deciders` and `authority::split`
+(`tests/authority.rs`: `a_proposals_deciders_are_those_who_may_adopt_it`,
+each decider's device may sign the adoption and nobody else's;
+`capture_splits_a_batch_into_an_accepted_commit_and_proposals`, nothing
+lost, the commit on `main` accepted, each proposal refused for folder rules
+alone). `pigeond::proposal` writes and keeps them; accept keeps a peer's
+only if its ref names its commit, the signature is the named device's, and,
+judged as one commit on the first accepted commit it builds on by first
+parents, it is refused for folder rules alone (`commit-not-allowed`). Place
+moves their content like `main`'s, and status reports list them. Deciding
+(adoption, rejection, withdrawal) comes next; until then an adoption waits
+as *unknown* (§4.4).
 
 A rejection or withdrawal is a commit of `.pigeon/decisions/<commit>.toml`:
 

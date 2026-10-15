@@ -120,7 +120,7 @@ impl Daemon {
             if let Err(e) = crate::evict::keep(g, &self.tracer).await {
                 tracing::info!(group = %g.id, error = %e, "keep-waits");
             }
-            if let Err(e) = crate::capture::capture(g, &self.tracer).await {
+            if let Err(e) = crate::capture::capture(g, &self.device, &self.tracer).await {
                 tracing::warn!(group = %g.id, error = %e, "capture-failed");
             }
         }

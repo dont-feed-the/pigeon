@@ -277,8 +277,17 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
     };
     let known = table.clone();
     let want = g.git.tree(&main).await?;
-    let have = g.git.index().await?;
-    table.paths.retain(|p, _| want.get(p) != have.get(p));
+    let mut have = g.git.index().await?;
+    table
+        .paths
+        .retain(|p, d| d.kind == Kind::Suggestion || want.get(p) != have.get(p));
+    let suggested = table.paths.values().any(|d| d.kind == Kind::Suggestion);
+    let mut dirty = None;
+    if suggested {
+        let d = crate::capture::dirty(g).await?;
+        suggestions(g, &want, &mut have, &mut table, &d).await;
+        dirty = Some(d);
+    }
     let paths: BTreeSet<&String> = want.keys().chain(have.keys()).collect();
     let changed: Vec<&String> = paths
         .into_iter()
@@ -288,7 +297,10 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
         save(g, &known, &table);
         return Ok(done);
     }
-    let dirty = crate::capture::dirty(g).await?;
+    let dirty = match dirty {
+        Some(d) => d,
+        None => crate::capture::dirty(g).await?,
+    };
     let freed = crate::evict::targets(g);
     let before = crate::evict::hidden_paths(g).await;
     let mut hidden = before.clone();
@@ -383,6 +395,51 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
             receiving = done.receiving, deferred = done.deferred, "installed");
     }
     Ok(done)
+}
+
+/// Settles the `suggestion`s of `table` against `main`'s tree `want`
+/// (07 §7.6): one whose version `main` now has ends, and only the index
+/// changes (`Decide`); one whose file is clean again ends too, the person
+/// having put a version back; one whose path `main` changed meanwhile
+/// becomes a conflict, told once.
+async fn suggestions(
+    g: &Group,
+    want: &pigeon_core::authority::Tree,
+    have: &mut pigeon_core::authority::Tree,
+    table: &mut Table,
+    dirty: &BTreeSet<String>,
+) {
+    let paths: Vec<String> = table
+        .paths
+        .iter()
+        .filter(|(_, d)| d.kind == Kind::Suggestion)
+        .map(|(p, _)| p.clone())
+        .collect();
+    for p in paths {
+        let w = want.get(&p);
+        let group = key_of(g, w).await;
+        let Some(d) = table.paths.get_mut(&p) else {
+            continue;
+        };
+        if group == d.mine {
+            if index_entry(g, &p, w).await.is_ok() {
+                match w {
+                    Some(e) => have.insert(p.clone(), e.clone()),
+                    None => have.remove(&p),
+                };
+                tracing::info!(group = %g.id, path = %p, "suggestion-adopted");
+                table.paths.remove(&p);
+            }
+        } else if !dirty.contains(&p) {
+            tracing::info!(group = %g.id, path = %p, "suggestion-dropped");
+            table.paths.remove(&p);
+        } else if group != d.group && d.state == State::Waiting {
+            tracing::warn!(group = %g.id, path = %p, "suggestion-overtaken");
+            d.group = group;
+            d.state = State::Conflict;
+            d.told = false;
+        }
+    }
 }
 
 fn save(g: &Group, known: &Table, table: &Table) {

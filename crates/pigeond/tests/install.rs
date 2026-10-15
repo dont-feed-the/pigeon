@@ -208,7 +208,11 @@ async fn install_writes_the_versions_main_gained() {
     };
     write(&l, "a.txt", b"one\n");
     write(&l, "b.txt", b"bee\n");
-    let c1 = capture::capture(&l.g, &l.t).await.unwrap().commit.unwrap();
+    let c1 = capture::capture(&l.g, &dev(1).0, &l.t)
+        .await
+        .unwrap()
+        .commit
+        .unwrap();
     let mut tree = l.git.tree(&c1).await.unwrap();
     tree.insert("a.txt".into(), version(&l, "a.txt", b"two\n", true).await);
     tree.insert(
@@ -218,7 +222,7 @@ async fn install_writes_the_versions_main_gained() {
     tree.remove("b.txt");
     let c2 = bens(&l, &tree, &c1, 60).await;
     // The index lags `main`: capture finds nothing of the person's.
-    let none = capture::capture(&l.g, &l.t).await.unwrap();
+    let none = capture::capture(&l.g, &dev(1).0, &l.t).await.unwrap();
     assert_eq!(none.commit, None, "{none:?}");
     assert_eq!(
         l.git.rev("refs/heads/main").await.as_deref(),
@@ -242,7 +246,13 @@ async fn install_writes_the_versions_main_gained() {
         .mode();
     assert_eq!(mode & 0o200, 0o200, "the person can save it: {mode:o}");
     assert_eq!(clean(&l).await, "");
-    assert_eq!(capture::capture(&l.g, &l.t).await.unwrap().commit, None);
+    assert_eq!(
+        capture::capture(&l.g, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .commit,
+        None
+    );
     assert_eq!(
         install::incoming(&l.g, &dev(1).0, &l.t).await.unwrap(),
         Installed::default()
@@ -265,7 +275,11 @@ async fn a_save_racing_an_install_is_kept_both_ways() {
         return;
     };
     write(&l, "a.txt", b"one\n");
-    let c1 = capture::capture(&l.g, &l.t).await.unwrap().commit.unwrap();
+    let c1 = capture::capture(&l.g, &dev(1).0, &l.t)
+        .await
+        .unwrap()
+        .commit
+        .unwrap();
     let mut tree = l.git.tree(&c1).await.unwrap();
     let theirs = version(&l, "a.txt", b"two\n", true).await;
     tree.insert("a.txt".into(), theirs.clone());
@@ -273,7 +287,11 @@ async fn a_save_racing_an_install_is_kept_both_ways() {
     // Ana saves before install wrote Ben's version: her save is a
     // contribution concurrent with his, merged into `main`.
     write(&l, "a.txt", b"mine\n");
-    let m = capture::capture(&l.g, &l.t).await.unwrap().commit.unwrap();
+    let m = capture::capture(&l.g, &dev(1).0, &l.t)
+        .await
+        .unwrap()
+        .commit
+        .unwrap();
     assert!(l.g.lock().diverging.is_empty());
     let parents = l
         .git
@@ -309,7 +327,11 @@ async fn a_save_racing_an_install_is_kept_both_ways() {
     );
     // Another save is committed on `main`'s tree, not the index's.
     write(&l, "c.txt", b"sea\n");
-    let c3 = capture::capture(&l.g, &l.t).await.unwrap().commit.unwrap();
+    let c3 = capture::capture(&l.g, &dev(1).0, &l.t)
+        .await
+        .unwrap()
+        .commit
+        .unwrap();
     let t3 = l.git.tree(&c3).await.unwrap();
     assert_eq!(t3.get("a.txt"), Some(&theirs), "Ben's version stays");
     assert!(t3.contains_key("c.txt") && t3.contains_key(copy.as_str()));
@@ -323,7 +345,13 @@ async fn a_save_racing_an_install_is_kept_both_ways() {
     assert_eq!(read(&l, "a.txt"), "mine\n", "never written");
     // Once the file holds Ben's version, the divergence ends.
     write(&l, "a.txt", b"two\n");
-    assert_eq!(capture::capture(&l.g, &l.t).await.unwrap().commit, None);
+    assert_eq!(
+        capture::capture(&l.g, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .commit,
+        None
+    );
     install::incoming(&l.g, &dev(1).0, &l.t).await.unwrap();
     assert!(
         pigeond::conflicts_file::read(&l.g)
@@ -340,13 +368,23 @@ async fn a_version_whose_content_is_not_here_waits() {
         return;
     };
     write(&l, "a.txt", b"one\n");
-    let c1 = capture::capture(&l.g, &l.t).await.unwrap().commit.unwrap();
+    let c1 = capture::capture(&l.g, &dev(1).0, &l.t)
+        .await
+        .unwrap()
+        .commit
+        .unwrap();
     let mut tree = l.git.tree(&c1).await.unwrap();
     tree.insert("a.txt".into(), version(&l, "a.txt", b"far\n", false).await);
     bens(&l, &tree, &c1, 60).await;
     let done = install::incoming(&l.g, &dev(1).0, &l.t).await.unwrap();
     assert_eq!((done.receiving, done.written), (1, 0), "{done:?}");
     assert_eq!(read(&l, "a.txt"), "one\n");
-    assert_eq!(capture::capture(&l.g, &l.t).await.unwrap().commit, None);
+    assert_eq!(
+        capture::capture(&l.g, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .commit,
+        None
+    );
     assert!(l.g.lock().diverging.is_empty());
 }

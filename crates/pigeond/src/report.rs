@@ -115,7 +115,11 @@ pub async fn build(g: &Group, me: &str) -> Status {
         device: me.to_owned(),
         at: report_file::datetime(now),
         main: g.git.rev("refs/heads/main").await,
-        proposals: Vec::new(),
+        proposals: crate::proposal::kept(&g.git)
+            .await
+            .into_iter()
+            .map(|(_, c)| c)
+            .collect(),
         checking: false,
         lab: pigeon_sys::lab::LAB,
         versions: versions(g).await,
