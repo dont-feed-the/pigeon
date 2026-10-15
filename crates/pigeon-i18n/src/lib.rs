@@ -20,7 +20,10 @@ pub use unic_langid::LanguageIdentifier;
 pub use lang::{AVAILABLE, Setting, choose, system_languages};
 
 /// The embedded bundles: a language tag of [`AVAILABLE`] and its source.
-pub const BUNDLES: &[(&str, &str)] = &[("en", include_str!("../i18n/en/pigeon.ftl"))];
+pub const BUNDLES: &[(&str, &str)] = &[
+    ("en", include_str!("../i18n/en/pigeon.ftl")),
+    ("fr", include_str!("../i18n/fr/pigeon.ftl")),
+];
 
 /// One argument of a message: a count or a text (a name, a path, a time
 /// already rendered).
