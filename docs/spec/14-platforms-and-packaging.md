@@ -119,8 +119,9 @@ builds the programs there with `cargo build --release --locked`, and hands
 over to that commit's `pigeon-install`, which places them as a release's;
 `pigeon --version` then says `X.Y.Z+g<commit>`, so a plain `pigeon update`
 installs the latest release again. Its `install-git-annex --build` keeps a
-git-annex that reports the commit's `PIGEON_VERSION`, else builds
-`third_party/git-annex`, else takes the stock build. Paul installs (ux.md §11). Uninstalling keeps the
+git-annex that reports the commit's `PIGEON_VERSION`, else takes the latest
+release's archive when that reports it, else builds `third_party/git-annex`,
+else takes the stock build. Paul installs (ux.md §11). Uninstalling keeps the
 folder, the repository and the configuration unless the person asks.
 
 ## 14.6 The Rust workspace
