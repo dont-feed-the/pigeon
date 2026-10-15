@@ -610,3 +610,39 @@ async fn a_version_is_opened_as_a_read_only_download() {
     let other = body(other).await;
     assert!(other.contains("vSome(2) is removed"), "{other}");
 }
+
+/// Writes every page, in English and in French, to `$PIGEON_WEB_PAGES` for
+/// `scripts/check-a11y`, which runs axe-core on them (10 §10.3); without
+/// the variable it does nothing.
+#[tokio::test]
+async fn the_pages_are_written_for_axe() {
+    let Some(dir) = std::env::var_os("PIGEON_WEB_PAGES") else {
+        return;
+    };
+    let dir = std::path::PathBuf::from(dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let pages = [
+        ("home", "/"),
+        ("machines", "/machines"),
+        ("suggestions", "/suggestions"),
+        ("files", "/files"),
+        ("folder", "/folder?path=%2Fg%2FPhotos"),
+        ("deleted", "/deleted"),
+        ("file", "/file?path=%2Fg%2Ftarte.docx"),
+        ("settings", "/settings"),
+    ];
+    for lang in ["en", "fr"] {
+        let w = Web::new(Arc::new(Fixed), lang.parse().unwrap(), 4321);
+        let app = w.router();
+        let cookie = logged_in(&app, &w).await;
+        for (name, path) in pages {
+            let r = app
+                .clone()
+                .oneshot(get(path, HOST, Some(&cookie)))
+                .await
+                .unwrap();
+            assert_eq!(r.status(), StatusCode::OK, "{path}");
+            std::fs::write(dir.join(format!("{lang}-{name}.html")), body(r).await).unwrap();
+        }
+    }
+}

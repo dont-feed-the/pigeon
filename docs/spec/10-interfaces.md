@@ -92,7 +92,9 @@ show and withdraw the invitations not yet used.
 Home lists the held deletions (`Held`) with *Delete for everyone*, asked
 again, and *Bring them back* (`ReleaseHeld`); Settings has *Leave the
 group*, asked again (`Leave`).
-Not yet: the other settings, the other actions, axe-core.
+axe-core (`scripts/check-a11y`, in CI) checks the mockups and every page of
+the test backend in English and French, without colour contrast, which
+needs a layout engine. Not yet: the other settings, the other actions.
 
 - Served by `pigeond`, rendered on the server; server-sent events refresh
   the headline and activity; pages work without JavaScript. It writes

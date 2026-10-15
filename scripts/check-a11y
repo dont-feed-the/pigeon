@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# axe-core over the mockups and the real pages (10 §10.3): writes the
+# pages of pigeon-web's test backend, in English and French, then checks
+# them with docs/design/mockups/*.html. Needs node and npm.
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+pages=${PIGEON_WEB_PAGES:-$root/target/a11y-pages}
+rm -rf "$pages"
+PIGEON_WEB_PAGES=$pages cargo test -q -p pigeon-web --lib the_pages_are_written_for_axe >/dev/null
+(cd "$root/scripts/a11y" && { [ -d node_modules ] || npm ci --silent --no-audit --no-fund; })
+node "$root/scripts/a11y/check.js" "$root/docs/design/mockups" "$pages"

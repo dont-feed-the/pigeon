@@ -1,0 +1,9 @@
+{
+  "name": "pigeon-a11y",
+  "private": true,
+  "description": "axe-core over the mockups and the real pages (10 §10.3)",
+  "dependencies": {
+    "axe-core": "4.10.3",
+    "jsdom": "24.1.3"
+  }
+}

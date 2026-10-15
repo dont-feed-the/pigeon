@@ -138,6 +138,9 @@ jobs:
           command: check
       - name: pigeon-core depends on no crate that does I/O (14 §14.6)
         run: scripts/check-core-deps
+      - name: axe-core over the mockups and the real pages (10 §10.3)
+        if: runner.os == 'Linux'
+        run: scripts/check-a11y
       - name: pigeon-core with its trace events (feature tla-trace, 12 §12.3)
         run: |
           cargo clippy -p pigeon-core --all-targets --features tla-trace --locked -- -D warnings
