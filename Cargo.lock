@@ -2371,6 +2371,7 @@ dependencies = [
  "pigeon-proto",
  "pigeon-sys",
  "serde_json",
+ "toml_edit",
 ]
 
 [[package]]
