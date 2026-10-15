@@ -434,6 +434,57 @@ fn bytes_hash(bytes: &[u8]) -> String {
 }
 
 #[tokio::test]
+async fn status_uses_one_ref_snapshot_for_current_files_and_history() {
+    let Some(mut l) = laptop().await else { return };
+    let before = l.git.rev("refs/heads/main").await.unwrap();
+    let mut tree = l.git.tree(&before).await.unwrap();
+    tree.insert(
+        "b.txt".into(),
+        version(&l, "b.txt", b"newly captured\n", true).await,
+    );
+    let tree = merge::write_tree(&l.git, &tree).await.unwrap();
+    let next =
+        l.g.git
+            .commit_tree(&tree, &[&before], "pigeon: captured meanwhile")
+            .await
+            .unwrap();
+    let bin = l.dir.path().join("advance-main");
+    std::fs::create_dir(&bin).unwrap();
+    let wrapper = bin.join("git");
+    // Advance main at the ref-listing boundary. Reading current paths
+    // before that boundary and history after it used to yield Local with
+    // an empty path list, and could omit intermediate historical versions.
+    std::fs::write(&wrapper, "#!/bin/sh\nif [ \"$1\" = for-each-ref ] && [ ! -e \"$PIGEON_REVIEW_SWITCHED\" ]; then\n  \"$PIGEON_REVIEW_REAL_GIT\" update-ref refs/heads/main \"$PIGEON_REVIEW_NEXT\" || exit\n  touch \"$PIGEON_REVIEW_SWITCHED\"\nfi\nexec \"$PIGEON_REVIEW_REAL_GIT\" \"$@\"\n").unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let real = std::env::split_paths(&std::env::var_os("PATH").unwrap())
+        .map(|p| p.join("git"))
+        .find(|p| p.is_file())
+        .unwrap();
+    let marker = l.dir.path().join("switched");
+    l.g.git.repo.env.extra.extend([
+        ("PIGEON_REVIEW_REAL_GIT".into(), real.into_os_string()),
+        ("PIGEON_REVIEW_NEXT".into(), next.into()),
+        (
+            "PIGEON_REVIEW_SWITCHED".into(),
+            marker.clone().into_os_string(),
+        ),
+    ]);
+    l.g.git.repo.env.path_first.insert(0, bin);
+    let report = pigeond::status::report(&l.g, &dev(1).0, "", false).await;
+    assert!(marker.exists());
+    assert_eq!(report.state, pigeon_proto::api::State::Local);
+    assert_eq!(
+        report
+            .versions
+            .iter()
+            .map(|v| v.path.as_str())
+            .collect::<Vec<_>>(),
+        ["b.txt"]
+    );
+}
+
+#[tokio::test]
 async fn a_failed_recovered_commit_keeps_the_file_and_retries() {
     let Some(mut l) = laptop().await else { return };
     seed_recovered(&l, b"saved while the daemon was down");

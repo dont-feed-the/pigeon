@@ -81,9 +81,13 @@ pub async fn observe(g: &Group, me: &str, prefix: &str) -> Vec<Observed> {
     let Some(main) = g.git.rev("refs/heads/main").await else {
         return Vec::new();
     };
-    let keys = g.git.keys(&main).await.unwrap_or_default();
+    observe_at(g, me, prefix, &main).await
+}
+
+async fn observe_at(g: &Group, me: &str, prefix: &str, main: &str) -> Vec<Observed> {
+    let keys = g.git.keys(main).await.unwrap_or_default();
     let doc = g.roster();
-    let saved = g.git.commit_time(&main).await.unwrap_or(0);
+    let saved = g.git.commit_time(main).await.unwrap_or(0);
     let now = crate::util::now();
     let s = settings(g);
     let (heard, mut lost, reported) = {
@@ -214,12 +218,21 @@ pub(crate) fn worst<'a>(states: impl Iterator<Item = &'a State<String>>) -> api:
 
 /// The answer to `Status` for the versions under `prefix`.
 pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> StatusReport {
-    let observed = observe(g, me, prefix).await;
-    let retained = if prefix.is_empty() {
-        let current = observed.iter().map(|o| o.key.clone()).collect();
-        crate::retention::states(g, me, &current).await
+    let (observed, retained) = if prefix.is_empty() {
+        match crate::retention::snapshot(g).await {
+            Ok(snapshot) => {
+                let observed = match &snapshot.main {
+                    Some(main) => observe_at(g, me, prefix, main).await,
+                    None => Vec::new(),
+                };
+                let current = observed.iter().map(|o| o.key.clone()).collect();
+                let retained = crate::retention::states(g, me, &current, &snapshot.tips).await;
+                (observed, retained)
+            }
+            Err(e) => (observe(g, me, prefix).await, Err(e)),
+        }
     } else {
-        Ok(Vec::new())
+        (observe(g, me, prefix).await, Ok(Vec::new()))
     };
     let history_unreadable = retained.is_err();
     let retained = retained.unwrap_or_default();

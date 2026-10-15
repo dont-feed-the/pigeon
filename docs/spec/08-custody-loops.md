@@ -50,9 +50,11 @@ accepted head and retained proposal heads (`pigeond::retention`), not just
 their current trees. The same set feeds placement and repair. Purge is not
 implemented yet, so every such historical reference remains retained.
 The whole-group status includes retained keys outside the current tree;
-they cannot be hidden behind a safe current version. Counting their
-metadata conservatively waits for every retained head on each counted
-custodian **[no ADR]**.
+they cannot be hidden behind a safe current version. Current files and
+retained history use one snapshot of the Git refs, so a capture between
+reads cannot turn a new current file into an unlisted historical version.
+Counting their metadata conservatively waits for every retained head on
+each counted custodian **[no ADR]**.
 
 - A **laptop** uploads each key of `keys()`
   ([05 §5.1](05-catalogue-and-names.md)) that a custodian wants (its

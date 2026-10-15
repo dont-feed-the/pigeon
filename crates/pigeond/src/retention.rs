@@ -7,8 +7,16 @@ use std::collections::BTreeSet;
 use crate::git::Error;
 use crate::group::Group;
 
-/// Retention heads, read without silently ignoring a failed ref listing.
-pub async fn tips(g: &Group) -> Result<Vec<String>, Error> {
+/// One reading of accepted and proposal refs, shared by both status views.
+pub(crate) struct Snapshot {
+    /// The accepted head in this reading.
+    pub main: Option<String>,
+    /// Every head retaining content in this reading.
+    pub tips: Vec<String>,
+}
+
+/// Read refs once, without silently ignoring a failed listing.
+pub(crate) async fn snapshot(g: &Group) -> Result<Snapshot, Error> {
     let refs = g
         .git
         .run(&[
@@ -19,6 +27,7 @@ pub async fn tips(g: &Group) -> Result<Vec<String>, Error> {
         ])
         .await?;
     let mut tips = Vec::new();
+    let mut main = None;
     for line in refs.lines() {
         let Some((name, commit)) = line.split_once(' ') else {
             return Err(Error::Parse {
@@ -26,6 +35,9 @@ pub async fn tips(g: &Group) -> Result<Vec<String>, Error> {
                 detail: "unreadable retained reference".to_owned(),
             });
         };
+        if name == "refs/heads/main" {
+            main = Some(commit.to_owned());
+        }
         if name == "refs/heads/main"
             || name
                 .strip_prefix(crate::proposal::PREFIX)
@@ -35,7 +47,12 @@ pub async fn tips(g: &Group) -> Result<Vec<String>, Error> {
             tips.push(commit.to_owned());
         }
     }
-    Ok(tips)
+    Ok(Snapshot { main, tips })
+}
+
+/// Retention heads, read without silently ignoring a failed ref listing.
+pub async fn tips(g: &Group) -> Result<Vec<String>, Error> {
+    Ok(snapshot(g).await?.tips)
 }
 
 /// Every key this repository must retain, including historical references.
@@ -50,12 +67,12 @@ pub async fn states(
     g: &Group,
     me: &str,
     current: &BTreeSet<String>,
+    tips: &[String],
 ) -> Result<Vec<pigeon_core::state::State<String>>, Error> {
     use pigeon_core::roster::Role;
     use pigeon_core::state::{Custodian, Version, state};
     use pigeon_core::time::Time;
-    let tips = tips(g).await?;
-    let mut keys = g.git.retained_keys(&tips).await?;
+    let mut keys = g.git.retained_keys(tips).await?;
     keys.retain(|k| !current.contains(k));
     if keys.is_empty() {
         return Ok(Vec::new());
@@ -76,7 +93,7 @@ pub async fn states(
             .run(&["for-each-ref", "--format=%(objectname)", &prefix])
             .await?;
         let mut named = true;
-        for tip in &tips {
+        for tip in tips {
             let mut found = false;
             for root in refs.lines() {
                 if g.git.contains(root, tip).await {
