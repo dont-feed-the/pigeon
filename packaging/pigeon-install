@@ -258,7 +258,18 @@ got=$("$place/release/bin/pigeon" --version | sed -n 's/^pigeon /v/p')
 annex="git-annex-pigeon-$os-$arch.tar.gz"
 annex_sha=$(awk -v a="$annex" '$2 == a || $2 == "*" a { print $1 }' "$place/SHA256SUMS" 2>/dev/null || true)
 if [ -n "$main" ]; then
-  "$place/release/bin/install-git-annex" --prefix "$prefix" --build "$prefix/src/third_party/git-annex" </dev/null
+  # The latest release's git-annex when main pins the same one; else built.
+  tag=$(latest 2>/dev/null) || tag=
+  sha=
+  if [ -n "$tag" ] && (fetch SHA256SUMS "$tag" "$place/latest-SHA256SUMS") 2>/dev/null; then
+    sha=$(awk -v a="$annex" '$2 == a || $2 == "*" a { print $1 }' "$place/latest-SHA256SUMS")
+  fi
+  if [ -n "$sha" ]; then
+    "$place/release/bin/install-git-annex" --prefix "$prefix" --build "$prefix/src/third_party/git-annex" \
+      --archive "$releases/download/$tag/$annex" --sha256 "$sha" </dev/null
+  else
+    "$place/release/bin/install-git-annex" --prefix "$prefix" --build "$prefix/src/third_party/git-annex" </dev/null
+  fi
 elif [ -n "$annex_sha" ]; then
   "$place/release/bin/install-git-annex" --prefix "$prefix" \
     --archive "$releases/download/$version/$annex" --sha256 "$annex_sha" </dev/null

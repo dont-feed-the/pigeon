@@ -4,6 +4,14 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.3.4 — 2026-10-16
+
+### Changed
+
+- `pigeon update --main` takes pigeon's git-annex from the latest release
+  when main pins the same one, instead of building it for an hour on a
+  computer that has none yet.
+
 ## 0.3.3 — 2026-10-16
 
 ### Added
