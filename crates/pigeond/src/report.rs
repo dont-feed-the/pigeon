@@ -97,8 +97,10 @@ pub async fn build(g: &Group, me: &str) -> Status {
     let custody = match g.role {
         Role::Laptop => None,
         Role::Custodian => {
-            let uuid = g.git.config("annex.uuid").await;
-            let ok = uuid.is_some() && uuid == mine.as_ref().and_then(|d| d.annex_uuid.clone());
+            // Lost: not the UUID the roster names for this device. One that
+            // is joining is not in its roster copy yet: that is no loss.
+            let named = mine.as_ref().and_then(|d| d.annex_uuid.clone());
+            let ok = named.is_none() || g.git.config("annex.uuid").await == named;
             Some(Custody {
                 repository: if ok { "ok" } else { "lost" }.to_owned(),
             })
