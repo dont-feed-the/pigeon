@@ -226,8 +226,12 @@ from this specification as follows, each to close before S1–S11 run
   only as far as the authority rule accepts each commit against the
   catalogue of its accepted parents ([04 §4.4](04-roster-and-authority.md)),
   merging two accepted heads ([05 §5.2](05-catalogue-and-names.md)); a
-  merge of roster forks and an adoption wait, and a laptop installs no
-  incoming version, so the group has one laptop;
+  merge of roster forks and an adoption wait; a laptop moves `main` the
+  same way, then installs each clean path's new version through the journal
+  ([07 §7.5](07-capture-and-install.md)), and a path its person changed
+  meanwhile diverges: capture keeps it out of `main` until it holds `main`'s
+  version, without `conflicts.json` yet ([07 §7.6](07-capture-and-install.md));
+  no laptop joins yet, so the group has one laptop;
 - place follows the queue order with admission
   ([08 §8.9](08-custody-loops.md)) but reads no introduction time; repair
   marks a removed device's UUID `dead`, after which place copies again;
@@ -247,7 +251,8 @@ from this specification as follows, each to close before S1–S11 run
 - the CLI parses its arguments by hand, without completions or colour
   ([10 §10.2](10-interfaces.md));
 - one round runs, per group, the settings check, free and keep toward each
-  folder's target, capture, accept, place, re-thinning and repair, every
+  folder's target, capture, accept, install (laptops), place, re-thinning
+  and repair, every
   `[loops] interval_seconds` and at once after a request or a peer's
   notice (remotedaemon's `CONNECTED` and `DONESYNCING`); `free` and `keep`
   only record the target; `status` on a laptop captures first;

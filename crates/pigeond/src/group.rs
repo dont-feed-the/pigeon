@@ -52,6 +52,9 @@ pub struct Known {
     /// The first commit of each peer's `main` that accept refused, and its
     /// problem code (04 §4.4).
     pub refused: BTreeMap<String, (String, &'static str)>,
+    /// The paths this laptop's person changed while `main` gave them
+    /// another version that install has not written (07 §7.6).
+    pub diverging: BTreeSet<String>,
     /// The latest status report of each other device that counted (06 §6.3).
     pub reports: pigeon_core::report::Latest,
     /// What those reports say, by device ID.

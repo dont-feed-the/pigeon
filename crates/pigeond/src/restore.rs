@@ -9,20 +9,16 @@
 //! `annex.diskreserve` is refused with `disk-full` before anything starts,
 //! held here or not (08 §8.9, S8).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
-use pigeon_core::journal::{Begin, End, Record};
 use pigeon_proto::Response;
 use pigeon_proto::api::Arg;
-use pigeon_sys::fs::{Renamed, lstat, rename_noreplace};
 
 use crate::api::{problem, relative};
 use crate::daemon::Daemon;
-use crate::evict::{is_old, journal, next_seq, record, stat_of, truncate_if_done};
 use crate::group::Group;
-use crate::journal_file::read;
-use crate::trace::{Act, Tracer};
+use crate::install::Put;
 
 fn text(s: &str) -> Arg {
     Arg::Text(s.to_owned())
@@ -75,8 +71,12 @@ pub async fn restore(d: &Daemon, path: &Path, version: Option<u64>) -> Vec<Respo
         Err(code) => return vec![problem(code, &[], None)],
     }
     let current = versions.last().map(|(_, k)| k.clone());
-    match install(&g, &rel, &key, current.as_deref(), &d.tracer).await {
-        Ok(()) => {}
+    match crate::install::put(&g, &rel, &key, current.as_deref(), None, &d.tracer).await {
+        Ok(Put::Done | Put::Raced) => {}
+        Ok(Put::InUse) => {
+            let e = "the file is being written; try again".to_owned();
+            return vec![problem("internal-error", &[], Some(e))];
+        }
         Err(e) => return vec![problem("internal-error", &[], Some(e))],
     }
     if let Err(e) = crate::capture::capture(&g, &d.tracer).await {
@@ -101,7 +101,7 @@ fn fits(g: &Group, key: &str) -> bool {
 
 /// Makes `key`'s content present here: answers a problem code if it does
 /// not fit above the reserve, or cannot be received.
-async fn bring(g: &Group, key: &str) -> Result<(), &'static str> {
+pub(crate) async fn bring(g: &Group, key: &str) -> Result<(), &'static str> {
     if crate::custody::present(g, key).await.is_some() {
         return Ok(());
     }
@@ -117,80 +117,6 @@ async fn bring(g: &Group, key: &str) -> Result<(), &'static str> {
         .await
         .map(drop)
         .ok_or("receiving")
-}
-
-/// Installs `key`'s content at `rel`, moving the current file aside first
-/// if there is one; a file saved meanwhile wins (07 §7.5).
-async fn install(
-    g: &Group,
-    rel: &str,
-    key: &str,
-    current: Option<&str>,
-    t: &Tracer,
-) -> Result<(), String> {
-    let wt = g.worktree.clone().ok_or("not-in-group")?;
-    let object = crate::custody::present(g, key).await.ok_or("receiving")?;
-    let file = wt.join(rel);
-    let seq = next_seq(&read(&journal(g)));
-    let stage = g.files.stage(seq);
-    let aside: PathBuf = g.files.aside(seq);
-    std::fs::copy(&object, &stage).map_err(|e| e.to_string())?;
-    if let Ok(f) = std::fs::File::open(&stage) {
-        let _ = f.sync_all();
-    }
-    let st = stat_of(&file);
-    record(
-        g,
-        &Record::Begin(Begin {
-            seq,
-            path: rel.to_owned(),
-            old_key: st.and(current.map(str::to_owned)),
-            new_key: Some(key.to_owned()),
-            stat: st,
-            stage: Some(stage.to_string_lossy().into_owned()),
-            aside: aside.to_string_lossy().into_owned(),
-        }),
-    )?;
-    t.event(Act::Start, &[("path", rel)]);
-    if st.is_some() {
-        if rename_noreplace(&file, &aside).map_err(|e| e.to_string())? != Renamed::Done {
-            record(g, &Record::End(seq, End::Raced))?;
-            let _ = std::fs::remove_file(&stage);
-            return Ok(());
-        }
-        t.event(Act::MoveAside, &[("path", rel)]);
-        let clear = lstat(&aside)
-            .ok()
-            .flatten()
-            .is_some_and(|a| pigeon_sys::writers::scan(a.id).is_clear());
-        t.event(Act::Scan, &[("path", rel)]);
-        if !clear || stat_of(&aside) != st || !is_old(&aside, current) {
-            let end = match rename_noreplace(&aside, &file).map_err(|e| e.to_string())? {
-                Renamed::Done | Renamed::SourceMissing => End::Skip,
-                Renamed::TargetExists => End::Recovered,
-            };
-            record(g, &Record::End(seq, end))?;
-            let _ = std::fs::remove_file(&stage);
-            return Err("the file is being written; try again".to_owned());
-        }
-    } else if let Some(dir) = file.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    record(g, &Record::Proved(vec![seq]))?;
-    t.event(Act::Check, &[("path", rel)]);
-    if rename_noreplace(&stage, &file).map_err(|e| e.to_string())? != Renamed::Done {
-        record(g, &Record::End(seq, End::Raced))?;
-        let _ = std::fs::remove_file(&stage);
-        return Ok(());
-    }
-    t.event(Act::RenameIn, &[("path", rel)]);
-    record(g, &Record::End(seq, End::Done))?;
-    t.event(Act::Done, &[("path", rel)]);
-    let _ = std::fs::remove_file(&aside);
-    record(g, &Record::Released(seq))?;
-    t.event(Act::Release, &[("path", rel)]);
-    truncate_if_done(g);
-    Ok(())
 }
 
 #[cfg(test)]

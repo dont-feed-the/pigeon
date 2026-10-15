@@ -6,10 +6,11 @@
 //! `copy --to --key`, and a custodian gets each key of `main` it lacks and
 //! admits (`admission`) with `get --key`, then syncs the object to disk,
 //! both in queue order; with K = 2 and two custodians that is
-//! `sizebalanced`'s choice too (13 §13.12). Accept only
-//! fast-forwards: with one laptop, nothing else commits, and a divergence
-//! is logged and left (slice only). A custodian fast-forwards only as far
-//! as the authority rule accepts (`verify`, 04 §4.4).
+//! `sizebalanced`'s choice too (13 §13.12). Every device moves `main` only
+//! as far as the authority rule accepts (`verify`, 04 §4.4), and merges a
+//! peer's accepted `main` that diverged from its own (05 §5.2); on a
+//! laptop, install then writes the new versions into the folder
+//! (`install`, 07 §7.5).
 
 use std::collections::BTreeSet;
 use std::time::Duration;
@@ -116,17 +117,6 @@ pub async fn accept(g: &Group, me: &str, tracer: &Tracer) -> bool {
             continue;
         }
         let ours = g.git.rev("refs/heads/main").await;
-        let forward = match &ours {
-            None => true,
-            Some(o) if *o == theirs => false,
-            Some(o) => g.git.contains(&theirs, o).await,
-        };
-        if g.role == Role::Laptop {
-            if forward {
-                tracing::info!(group = %g.id, peer = %id, "accept-install-not-in-this-build");
-            }
-            continue;
-        }
         if let Some(o) = &ours
             && g.git.contains(o, &theirs).await
         {

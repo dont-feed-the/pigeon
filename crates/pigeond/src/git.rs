@@ -216,6 +216,32 @@ impl Git {
         Ok(tree)
     }
 
+    /// Every entry of the index at stage 0, by path, as [`Git::tree`]
+    /// gives a commit's.
+    pub async fn index(&self) -> Result<Tree, Error> {
+        let out = self
+            .repo
+            .run(&["ls-files", "-s", "-z"], None, pigeon_git::DEFAULT_TIMEOUT)
+            .await?;
+        let mut tree = Tree::new();
+        for rec in out.stdout.split(|b| *b == 0) {
+            let rec = String::from_utf8_lossy(rec);
+            let Some((meta, path)) = rec.split_once('\t') else {
+                continue;
+            };
+            if let [mode, oid, "0"] = meta.split(' ').collect::<Vec<_>>().as_slice() {
+                let kind = if *mode == "160000" { "commit" } else { "blob" };
+                let entry = Entry {
+                    mode: (*mode).to_owned(),
+                    kind: kind.to_owned(),
+                    oid: (*oid).to_owned(),
+                };
+                tree.insert(path.to_owned(), entry);
+            }
+        }
+        Ok(tree)
+    }
+
     /// Objects by name, through one `cat-file --batch`: `(kind, data)`, or
     /// `None` for a missing one.
     pub async fn objects(&self, names: &[String]) -> Result<Vec<Option<(String, Vec<u8>)>>, Error> {

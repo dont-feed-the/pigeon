@@ -68,7 +68,7 @@ pub(crate) fn next_seq(records: &[Record]) -> u64 {
         .map_or(1, |s| s + 1)
 }
 
-fn under(path: &str, prefix: &str) -> bool {
+pub(crate) fn under(path: &str, prefix: &str) -> bool {
     prefix.is_empty() || path == prefix || path.starts_with(&format!("{prefix}/"))
 }
 
@@ -112,7 +112,7 @@ pub(crate) fn write_sparse(g: &Group, hidden: &BTreeSet<String>) {
     let _ = pigeon_sys::fs::write_atomic(&file, text.as_bytes());
 }
 
-fn targets(g: &Group) -> BTreeSet<String> {
+pub(crate) fn targets(g: &Group) -> BTreeSet<String> {
     std::fs::read_to_string(g.root().join("freed.json"))
         .ok()
         .and_then(|t| serde_json::from_str(&t).ok())

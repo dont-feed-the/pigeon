@@ -19,6 +19,7 @@ pub mod evict;
 pub mod git;
 pub mod group;
 pub mod history;
+pub mod install;
 pub mod invite;
 pub mod journal_file;
 pub mod locks;
