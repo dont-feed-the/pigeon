@@ -25,7 +25,8 @@ pass the same experiments before release ([16](16-open-questions.md)).
 | `refs/pigeon/peers/<device-id>/main` | each peer's last fetched `main`, before validation **[no ADR]** | `git fetch` |
 | `refs/remotes/<remote>/git-annex` | the peer's git-annex branch, for `git annex merge` | `git fetch` |
 | `refs/pigeon/archive/<group-id>/main` | the history of the group this one was refounded from, read-only (ADR 0047) | the refounding device; fetched |
-| `refs/pigeon/status/<device-id>` | each device's latest signed status report ([06 §6.3](06-status.md)) **[no ADR]** | its device; fetched |
+| `refs/pigeon/status/<device-id>` | each device's latest signed status report ([06 §6.3](06-status.md)) **[no ADR]** | its device; relayed by every peer that counted it |
+| `refs/pigeon/reports/<peer-id>/<device-id>` | the reports last fetched from a peer, before they count **[no ADR]** | `git fetch` |
 
 `main` only moves forward: `update-ref` with the expected old value, to a
 descendant of it.

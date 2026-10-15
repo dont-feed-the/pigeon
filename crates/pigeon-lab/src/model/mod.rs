@@ -61,6 +61,9 @@ pub struct View {
     pub known: BTreeMap<File, usize>,
     /// Its repository was lost.
     pub lost: bool,
+    /// What its status report says needs a person (06 §6.3): `disk-full`
+    /// or `no-capacity`.
+    pub says: BTreeSet<String>,
 }
 
 /// A daemon's life.
@@ -270,7 +273,7 @@ impl Model {
                 .views
                 .iter()
                 .zip(&self.custodians)
-                .any(|(v, c)| c.present && v.lost)
+                .any(|(v, c)| c.present && (v.lost || !v.says.is_empty()))
         {
             level = Level::NeedsYou;
         }
@@ -325,8 +328,12 @@ impl Model {
             }
             Condition::Says { on, code } => {
                 let says = match on {
-                    Device::Laptop(l) => &self.laptops[l.0 as usize].says,
-                    Device::Custodian(c) => &self.custodians[c.0 as usize].says,
+                    Device::Laptop(l) => {
+                        let lm = &self.laptops[l.0 as usize];
+                        let reported = lm.views.iter().flat_map(|v| v.says.iter());
+                        lm.says.iter().chain(reported).cloned().collect()
+                    }
+                    Device::Custodian(c) => self.custodians[c.0 as usize].says.clone(),
                 };
                 yes(says.contains(code), &format!("the model says {says:?}"))
             }

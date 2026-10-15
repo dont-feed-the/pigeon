@@ -77,6 +77,12 @@ pub const MESSAGES: &[Entry] = &[
     e("headline-disk-full", &[]),
     e("headline-no-capacity", &["files", "missing_mb"]),
     e("headline-machine-missing", &["machine", "days"]),
+    e("headline-machine-full", &["machine"]),
+    e(
+        "headline-machine-no-capacity",
+        &["machine", "files", "missing_mb"],
+    ),
+    e("headline-machine-lost", &["machine"]),
     e("why-machine-offline", &["machine", "since"]),
     e("why-safe-copies", &["have", "need"]),
     e("next-when-back", &["machine"]),

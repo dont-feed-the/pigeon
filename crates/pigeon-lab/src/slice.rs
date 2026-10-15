@@ -487,8 +487,9 @@ pub fn s11() -> Scenario {
 pub const CUSTODIAN_RESERVE_MIB: u32 = 4769;
 
 /// S12: a nearly full custodian takes what fits in its room above the
-/// reserve, says what it misses (`no-capacity`, 08 §8.9), is not full, and
-/// takes the rest once room returns, without action.
+/// reserve, says what it misses (`no-capacity`, 08 §8.9), and so does the
+/// laptop from its status report (06 §6.3); it is not full, and takes the
+/// rest once room returns, without action.
 pub fn s12() -> Scenario {
     let mut world = World::new("slice", 2);
     let l = world.laptop("laptop");
@@ -506,6 +507,7 @@ pub fn s12() -> Scenario {
                 l.sees(&small, Kind::Protected),
                 l.sees(&big, Kind::Published),
                 c1.says("no-capacity"),
+                l.says("no-capacity"),
             ]),
             180,
         ),
@@ -582,10 +584,11 @@ pub fn s13() -> Scenario {
 /// random schedules of tests/s9_exec.rs.
 pub const BLOCKED: &[(&str, &str)] = &[(
     "S9-random",
-    "flaky on macOS: in slice.yml run 38648627496 (13188f8) 75 of 76 passed, \
-     the 50 on Linux included; one macOS case failed once and passed in \
-     hegel's 10 replays, which overwrote its logs. Cases now keep their logs \
-     and print why they fail",
+    "flaky on macOS: in slice.yml runs 38648627496 (13188f8) and \
+     38654035048 (9b69c2f) one macOS case of 50 failed once, then passed in \
+     hegel's 10 replays; the second kept its logs: a stale .git/index.lock \
+     refused every capture for three minutes. pigeond now removes stale \
+     locks (11 §11.4); blocked until both runners pass every shard",
 )];
 
 /// Why the scenario `id` is blocked, if it is.

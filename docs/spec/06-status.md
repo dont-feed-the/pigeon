@@ -54,6 +54,7 @@ at = 2026-10-13T12:02:00Z          # RFC 3339, UTC
 main = "<commit id of its main>"
 proposals = ["<commit id>"]         # tips of the proposal chains it keeps outside main (ADR 0046)
 checking = false                    # custodians: true while a restored repository is re-checked (ADR 0046)
+lab = false                         # true from a lab build (13 §13.12); a release build never counts it
 versions = { pigeon = "1.0.0", git_annex = "10.20261006-pigeon1", git = "2.55.0" }
 
 [disk]                              # bytes
@@ -80,14 +81,34 @@ bytes_to_send = 0
 bytes_to_receive = 0
 paused = ""                         # "", "person", "battery", "metered", "disk-busy" (ADR 0037)
 admits = "all"                      # custodians: "endangered" while they keep room for repair (08 §8.9)
+deferred = 0                        # custodians: keys admission deferred
+missing = 0                         # custodians: the free space they miss for them, bytes
 ```
 
-Not yet coded. A custodian refuses a repository on `tmpfs` or `ramfs`, and
-before each report and served session checks its repository and UUID; if
-lost, it reports `repository = "lost"` and stops serving. A device publishes
-on each change and at least every 10 minutes. A report counts only if signed
-by the roster device it names, with a known `format` and fields (else
-ignored, ADR 0048), and an `at` later than the last; every peer relays it.
+A custodian refuses a repository on `tmpfs` or `ramfs`, and before each
+report and served session checks its repository and UUID; if lost, it
+reports `repository = "lost"` and stops serving. A device publishes when a
+field other than `at`, `used`, `free` and the queue's byte counts changes,
+and at least every 10 minutes. Accept fetches each peer's
+`refs/pigeon/status/*` to `refs/pigeon/reports/<peer>/*` beside its
+branches ([03 §3.2](03-repository-and-roles.md)). A report counts only if
+signed by the roster device it names, with a known `format` and fields
+(else ignored, ADR 0048), at most 10 minutes ahead of this device's clock,
+and later than the last by `at`, then commit ID; every peer relays it at
+`refs/pigeon/status/<device>`. What counts is, by device, the latest
+report: a join, so reports met in any order, directly or relayed, give the
+same knowledge (`pigeon-core::report`; laws in `tests/report.rs`:
+`latest_is_a_semilattice`, `the_order_of_arrival_does_not_matter`,
+`an_older_report_never_replaces_a_newer`,
+`only_a_report_signed_by_its_roster_device_counts`,
+`relaying_what_counted_changes_nothing`). A counted report raises its
+device's `heard` to its `at`, gives `has_commit` for its `main`, and puts in
+`status` and `doctor` a device that is full (`disk-full`), short of room
+(`no-capacity`) or lost (`repository-lost`), at *Needs you*.
+
+In code (`pigeond::report`, `report_file`) all of this but the `tmpfs`
+refusal and serving nothing once lost; `proposals`, `[scrub]` and
+`[[purge]]` stay empty until their loops exist, and `checking` false.
 
 ## 6.4 Reasons and next steps
 

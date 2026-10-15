@@ -283,7 +283,10 @@ pub async fn recover(
         Ok(name) => vec![Response::Said {
             message: msg("recovered", &[("group", text(&name))]),
         }],
-        Err(code) if code.contains(' ') => vec![problem("internal-error", &[], Some(code))],
+        Err(code) if code.contains(' ') => {
+            tracing::warn!(error = %code, "recover-failed");
+            vec![problem("internal-error", &[], Some(code))]
+        }
         Err(code) => vec![problem(&code, &[], None)],
     }
 }

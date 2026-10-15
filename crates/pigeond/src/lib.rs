@@ -26,6 +26,8 @@ pub mod logs;
 pub mod net;
 pub mod recovery;
 pub mod repair;
+pub mod report;
+pub mod report_file;
 pub mod restore;
 pub mod roster_file;
 pub mod settings;

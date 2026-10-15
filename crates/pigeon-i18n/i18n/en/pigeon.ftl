@@ -40,6 +40,9 @@ headline-machine-missing =
         [one] { $machine } has been missing for 1 day.
        *[other] { $machine } has been missing for { $days } days.
     } Replace it or add another backup machine.
+headline-machine-full = { $machine } is full; it waits until space is freed on it.
+headline-machine-no-capacity = { $machine } has no room for { $files } files: it needs { $missing_mb } MB more free space. Free up space on it, or add another backup machine.
+headline-machine-lost = { $machine } no longer finds its backup folder; it counts for nothing until it is set up again.
 why-machine-offline = { $machine } has been offline since { $since }.
 why-safe-copies = { $have } of { $need } safe copies
 next-when-back = Nothing to do: they will be safe when { $machine } is back.

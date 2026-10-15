@@ -125,12 +125,14 @@ impl Daemon {
             }
         }
         crate::custody::accept(g, &self.device, &self.tracer).await;
+        crate::report::receive(g, &self.device).await;
         self.note_lost(g);
         crate::custody::place(g, &self.device).await;
         if g.role == Role::Laptop {
             crate::thin::rethin(g, &self.device, &self.tracer).await;
         }
         crate::repair::repair(g, &self.device).await;
+        crate::report::publish(g, &self.device).await;
         crate::clock_file::save(g, self.tracer.clock());
     }
 }

@@ -189,6 +189,23 @@ pub async fn doctor(d: &Daemon, _details: bool) -> Vec<Response> {
         }
     }
     for g in d.groups() {
+        let names = g.roster().map(|doc| doc.roster.devices).unwrap_or_default();
+        let name = |peer: &str| {
+            names
+                .get(&DeviceId(peer.to_owned()))
+                .map_or(peer.to_owned(), |x| x.name.clone())
+        };
+        for (code, peer, files, missing) in crate::report::problems(&g) {
+            let n = |x: u64| Arg::Number(i64::try_from(x).unwrap_or(i64::MAX));
+            let mut args = vec![("machine", text(&name(&peer)))];
+            if code == "no-capacity" {
+                args.push(("files", n(files)));
+                args.push(("missing_mb", n(missing.div_ceil(1_000_000))));
+            }
+            out.push(problem(code, &args, Some(format!("reported by {peer}"))));
+        }
+    }
+    for g in d.groups() {
         let refused = g.lock().refused.clone();
         let names = g.roster().map(|doc| doc.roster.devices).unwrap_or_default();
         for (peer, (commit, code)) in refused {

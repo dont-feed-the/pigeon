@@ -43,10 +43,11 @@ pub fn peers(g: &Group, me: &str) -> Vec<(String, String, DeviceRole)> {
         .collect()
 }
 
-/// Fetches `id`'s branches; a fetch that hangs is killed and tried once
-/// more.
+/// Fetches `id`'s branches and the status reports it has (06 §6.3); a
+/// fetch that hangs is killed and tried once more.
 async fn fetch(g: &Group, id: &str) -> Result<(), crate::git::Error> {
     let spec = crate::settings::peer_refspec(id);
+    let reports = crate::report::refspec(id);
     let args = [
         "fetch",
         "-q",
@@ -54,6 +55,7 @@ async fn fetch(g: &Group, id: &str) -> Result<(), crate::git::Error> {
         "--no-write-fetch-head",
         id,
         spec.as_str(),
+        reports.as_str(),
     ];
     match g.git.run_for(&args, FETCH_TIMEOUT).await {
         Err(e @ crate::git::Error::Timeout { .. }) => {
@@ -222,15 +224,17 @@ pub async fn place(g: &Group, me: &str) -> usize {
     };
     let keys: BTreeSet<String> = keys.into_values().collect();
     let mut made = 0;
+    let mut left = 0;
     match g.role {
         Role::Laptop => {
             let mut failed = g.lock().unreachable.clone();
             for (work, lacking) in crate::admission::items(g, me, &keys).await {
-                let Work::Protect { key, .. } = work else {
+                let Work::Protect { key, size, .. } = work else {
                     continue;
                 };
                 for id in lacking {
                     if failed.contains(&id) {
+                        left += size;
                         continue;
                     }
                     let args = [
@@ -247,6 +251,7 @@ pub async fn place(g: &Group, me: &str) -> usize {
                         Err(e) => {
                             tracing::debug!(group = %g.id, peer = %id, error = %e, "copy-failed");
                             failed.insert(id);
+                            left += size;
                         }
                     }
                 }
@@ -254,8 +259,16 @@ pub async fn place(g: &Group, me: &str) -> usize {
         }
         Role::Custodian => {
             let plan = crate::admission::plan(g, me, &keys).await;
+            left = plan
+                .deferred
+                .iter()
+                .map(|d| match &d.work {
+                    Work::Protect { size, .. } => *size,
+                    _ => 0,
+                })
+                .sum();
             for work in plan.admitted {
-                let Work::Protect { key, .. } = work else {
+                let Work::Protect { key, size, .. } = work else {
                     continue;
                 };
                 let args = ["annex", "get", "--json", "--key", key.as_str()];
@@ -266,11 +279,15 @@ pub async fn place(g: &Group, me: &str) -> usize {
                         }
                         made += 1;
                     }
-                    Err(e) => tracing::debug!(group = %g.id, key = %key, error = %e, "get-failed"),
+                    Err(e) => {
+                        tracing::debug!(group = %g.id, key = %key, error = %e, "get-failed");
+                        left += size;
+                    }
                 }
             }
         }
     }
+    g.lock().queue_bytes = left;
     if made > 0 {
         tracing::info!(group = %g.id, copies = made, "placed");
     }

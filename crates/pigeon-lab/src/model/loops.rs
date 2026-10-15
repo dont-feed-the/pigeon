@@ -240,7 +240,8 @@ impl Model {
         }
     }
 
-    /// Status reports: a running laptop hears every running custodian.
+    /// Status reports (06 §6.3): a running laptop hears every running
+    /// custodian, and says what its report says needs a person.
     fn observe(&mut self) {
         for i in 0..self.laptops.len() {
             if !self.up(Laptop(i as u8)) {
@@ -253,6 +254,12 @@ impl Model {
                         holds: c.holds.keys().cloned().collect(),
                         known: c.known.clone(),
                         lost: c.lost,
+                        says: c
+                            .says
+                            .iter()
+                            .filter(|s| ["disk-full", "no-capacity"].contains(&s.as_str()))
+                            .cloned()
+                            .collect(),
                     };
                 }
             }

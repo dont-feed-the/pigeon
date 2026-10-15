@@ -5,7 +5,9 @@
 //! *has the commit* if its fetched `main` names the same key at the same
 //! path. It is heard of when a fetch from it last succeeded (13 §13.12),
 //! and its repository is lost while it answers but serves the group no
-//! more: it then counts for nothing, and the headline says *Needs you*.
+//! more, or its report says so: it then counts for nothing, and the
+//! headline says *Needs you*. A custodian's report (06 §6.3) tells the
+//! `main` it has, and whether it is full or short of room.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -84,19 +86,30 @@ pub async fn observe(g: &Group, me: &str, prefix: &str) -> Vec<Observed> {
     let saved = g.git.commit_time(&main).await.unwrap_or(0);
     let now = crate::util::now();
     let s = settings(g);
-    let (heard, lost) = {
+    let (heard, mut lost, reported) = {
         let k = g.lock();
-        (k.heard.clone(), k.lost.clone())
+        let mains: BTreeMap<String, String> = k
+            .report_files
+            .iter()
+            .filter_map(|(d, r)| Some((d.clone(), r.main.clone()?)))
+            .collect();
+        (k.heard.clone(), k.lost.clone(), mains)
     };
+    lost.extend(crate::report::lost(g));
     let mut peer_keys: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+    let mut report_keys: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
     let mut custodians: Vec<(String, String)> = Vec::new();
     if let Some(doc) = &doc {
         for (id, d) in &doc.roster.devices {
             if id.0 == me || d.role == DeviceRole::Recovery {
                 continue;
             }
-            if let Some(theirs) = g.git.rev(&format!("refs/pigeon/peers/{}/main", id.0)).await {
-                peer_keys.insert(id.0.clone(), g.git.keys(&theirs).await.unwrap_or_default());
+            let fetched = g.git.rev(&format!("refs/pigeon/peers/{}/main", id.0)).await;
+            if let Some(theirs) = &fetched {
+                peer_keys.insert(id.0.clone(), g.git.keys(theirs).await.unwrap_or_default());
+            }
+            if let Some(main) = reported.get(&id.0).filter(|m| fetched.as_ref() != Some(*m)) {
+                report_keys.insert(id.0.clone(), g.git.keys(main).await.unwrap_or_default());
             }
             if d.role == DeviceRole::Custodian
                 && let Some(uuid) = &d.annex_uuid
@@ -111,7 +124,11 @@ pub async fn observe(g: &Group, me: &str, prefix: &str) -> Vec<Observed> {
             continue;
         }
         let have: BTreeSet<String> = holders(&g.git, &key).await;
-        let named = |id: &str| peer_keys.get(id).and_then(|k| k.get(&path)) == Some(&key);
+        let named = |id: &str| {
+            [&peer_keys, &report_keys]
+                .iter()
+                .any(|m| m.get(id).and_then(|k| k.get(&path)) == Some(&key))
+        };
         let version = Version {
             custodians: custodians
                 .iter()
@@ -124,7 +141,10 @@ pub async fn observe(g: &Group, me: &str, prefix: &str) -> Vec<Observed> {
                     repository_lost: lost.contains(id),
                 })
                 .collect(),
-            other_device_has_commit: peer_keys.keys().any(|id| named(id)),
+            other_device_has_commit: peer_keys
+                .keys()
+                .chain(report_keys.keys())
+                .any(|id| named(id)),
             this_device_holds: present(g, &key).await.is_some(),
             erased: false,
         };
@@ -212,21 +232,39 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
     let files = Arg::Number(i64::try_from(unsafe_files).unwrap_or(i64::MAX));
     let last = g.lock().heard.values().max().copied().unwrap_or(now);
     let full = disk_full(g);
-    let (lost, shortfall) = {
+    let (mut lost, shortfall) = {
         let k = g.lock();
-        (!k.lost.is_empty(), k.shortfall.clone())
+        (k.lost.clone(), k.shortfall.clone())
     };
-    let level = if full || lost || shortfall.is_some() {
+    lost.extend(crate::report::lost(g));
+    let peers = crate::report::problems(g);
+    let level = if full || !lost.is_empty() || shortfall.is_some() || !peers.is_empty() {
         Level::NeedsYou
     } else {
         level
     };
+    let name = |d: &str| Arg::Text(names.get(d).cloned().unwrap_or_else(|| d.to_owned()));
     let headline = match (level, &shortfall) {
         _ if full => msg("headline-disk-full", &[]),
         (_, Some(s)) => msg(
             "headline-no-capacity",
             &crate::admission::no_capacity_args(s),
         ),
+        _ if let Some(d) = lost.first() => msg("headline-machine-lost", &[("machine", name(d))]),
+        _ if let Some((code, d, files, missing)) = peers.first() => match *code {
+            "disk-full" => msg("headline-machine-full", &[("machine", name(d))]),
+            _ => {
+                let n = |x: u64| Arg::Number(i64::try_from(x).unwrap_or(i64::MAX));
+                msg(
+                    "headline-machine-no-capacity",
+                    &[
+                        ("machine", name(d)),
+                        ("files", n(*files)),
+                        ("missing_mb", n(missing.div_ceil(1_000_000))),
+                    ],
+                )
+            }
+        },
         (level, None) => match level {
             Level::Safe => msg("headline-safe", &[("ago", Arg::Text(rfc3339(last)))]),
             Level::Working => msg("headline-working", &[("files", files)]),

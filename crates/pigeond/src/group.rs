@@ -52,6 +52,15 @@ pub struct Known {
     /// The first commit of each peer's `main` that accept refused, and its
     /// problem code (04 §4.4).
     pub refused: BTreeMap<String, (String, &'static str)>,
+    /// The latest status report of each other device that counted (06 §6.3).
+    pub reports: pigeon_core::report::Latest,
+    /// What those reports say, by device ID.
+    pub report_files: BTreeMap<String, crate::report_file::Status>,
+    /// This device's last publication: its gist, and when.
+    pub published: Option<(String, i64)>,
+    /// The bytes place left to send (a laptop) or to receive (a custodian)
+    /// in its last round.
+    pub queue_bytes: u64,
 }
 
 /// How long remotedaemon's fetch of a notice may last before it is

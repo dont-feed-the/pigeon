@@ -226,7 +226,10 @@ from this specification as follows, each to close before S1–S11 run
 - the device key is hex, not OpenSSH ([11 §11.2](11-local-state.md)); an
   invitation is base32 of JSON, and also carries the group's name, K and the
   inviter's name;
-- there are no status reports yet ([06 §6.3](06-status.md));
+- status reports are published, fetched, counted and relayed
+  ([06 §6.3](06-status.md)), but a custodian neither refuses `tmpfs` nor
+  stops serving once its repository is lost, and reports no proposals,
+  scrub or purge;
 - the person's ID is `$USER`, and a custodian is named `<host
   name>-<6 hex digits of its device ID>`;
 - the CLI parses its arguments by hand, without completions or colour
@@ -297,7 +300,7 @@ in 10 replays.
 | S9 | `pigeond` crashed at each named point of capture, install, place and free: nothing lost or duplicated; 50 random schedules per push, 1000 in `models-full` |
 | S10 | a fresh laptop recovers from the custodians with the recovery sheet (ADR 0047); the keys, metadata and authority it needed are listed |
 | S11 | steady and peak disk use per device: folders, `.git`, annex objects, `.git/annex/tmp`, pending history ([07 §7.8](07-capture-and-install.md)), pigeon's state, temporary files |
-| S12 | a nearly full custodian takes what fits in its room above the reserve, says `no-capacity` without being full, and takes the rest once room returns ([08 §8.9](08-custody-loops.md), issue #13) |
+| S12 | a nearly full custodian takes what fits in its room above the reserve, says `no-capacity` without being full, and so does the laptop from its status report ([06 §6.3](06-status.md)); it takes the rest once room returns ([08 §8.9](08-custody-loops.md), issue #13) |
 | S13 | a commit signed outside the group, put on the laptop's `main` beside pigeond, is refused by both custodians with `commit-unknown-signer`, with every commit after it; what came before stays protected ([04 §4.4](04-roster-and-authority.md), ADR 0007) |
 
 S7's repair order and S10's list of what recovery needed are read from the
@@ -333,6 +336,7 @@ the same way: `pigeond/tests/codecs.rs` and `net_laws.rs`,
 | the join is a semilattice with *Safe* as identity and *Needs you* absorbing; the headline of a union is the join; adding an item never lowers it; a version only this computer holds is *Not safe yet* after the grace period, even unreachable | `headline` | `tests/headline.rs` | — |
 | a signed commit verifies to its signer; changing any byte of it never does; signing then cutting the signature off gives the commit back | `sig` | `tests/sig.rs` | — |
 | a commit signed by a device of R(p) that changes only what its person may is accepted; one unsigned, forged or signed outside R(p) is refused; a path's change is allowed exactly as §4.3's tables say; a roster change is accepted iff `may_sign` allows it and it applies whole; `diff` is a right inverse of `apply` and says every change of one edit | `authority` | `tests/authority.rs` | `Authority` (`AuthorisedContent`, `DecisionsByDeciders`) for one parent |
+| the latest report of each device is a semilattice; the order of arrival does not matter; an older report never replaces a newer; only a report signed by the roster device it names, known and not from the future, counts; relaying what counted changes nothing | `report` | `tests/report.rs` | — |
 | the queue order is total; a higher class goes first; arrival order is irrelevant; a key on fewer custodians never waits behind one on more | `queue` | `tests/queue.rs` | — |
 | admitted bytes never exceed the room; an endangered key is never deferred for one that is not; the plan does not depend on arrival and keeps queue order, each item once; a deferred item says the bytes it misses, and that much more room admits everything; the reserve is a floor or a share; the parts of the need sum to K times each distinct key; capacity counts at most one copy per custodian | `capacity` | `tests/capacity.rs`, `tests/admit_trace.rs` | `Admission` (`ReserveKept`, `EndangeredFirst`) |
 | recovery ends every entry and a second does nothing; a crash during recovery ends as one recovery; a person's save is never lost; a deletion after install stays; without a person, the path ends old or new and the index agrees (INV-Journal); pigeon never renames over a name | `journal` | `tests/journal.rs` | `CaptureInstall` (`NoLoss`, `Journal`, `NoOverwrite`, `DeletionKept`) |
