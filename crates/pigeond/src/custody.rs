@@ -80,8 +80,13 @@ pub async fn accept(g: &Group, me: &str, tracer: &Tracer) -> bool {
     }
     g.reload_remotedaemon(peers.iter().map(|(id, _, _)| id.clone()).collect())
         .await;
-    for (id, _, _) in peers {
-        match fetch(g, &id).await {
+    // Every peer at once: one whose fetch hangs until its timeout must not
+    // hold back what the others bring (16 §16.4).
+    let fetches = peers
+        .iter()
+        .map(|(id, _, _)| async move { (id.clone(), fetch(g, id).await) });
+    for (id, result) in crate::util::join_all(fetches.collect()).await {
+        match result {
             Ok(()) => {
                 g.lock().heard.insert(id.clone(), crate::util::now());
                 if let Some(ga) = g

@@ -1,17 +1,22 @@
-//! Invitations and joining (09 §9.6), for backup machines in the slice.
+//! Invitations and joining (09 §9.6).
 //!
-//! `invite --backup-machine` writes a one-time invitation; `join
-//! --backup-machine` makes the custodian's bare repository, sends `Join`
-//! on `pigeon/join/1`, and once welcomed fetches `main` from the inviter
-//! and checks its genesis. The inviter keeps each invitation's secret in
-//! `invitations.json`, mode 0600, since it checks the HMAC keyed by it
-//! (13 §13.12 corrects 09 §9.6, which kept only its hash).
+//! `invite PERSON` writes a one-time invitation for a new person's laptop,
+//! or for a new laptop of a person of the roster; `invite --backup-machine`
+//! one for a backup machine of the inviter's person. The joining device
+//! sends `Join` on `pigeon/join/1`; the inviter checks the proof and signs
+//! the roster commit that adds it, and the new device fetches `main` from
+//! the inviter and checks its genesis ([`crate::join`] for a laptop). The
+//! inviter keeps each invitation's secret in `invitations.json`, mode
+//! 0600, since it checks the HMAC keyed by it (13 §13.12 corrects 09 §9.6,
+//! which kept only its hash).
 
 use std::path::PathBuf;
 use std::time::Duration;
 
 use data_encoding::BASE32_NOPAD;
-use pigeon_core::roster::{Device, DeviceId, Edit, PersonId, Role as DeviceRole, apply, may_sign};
+use pigeon_core::roster::{
+    Device, DeviceId, Edit, Person, PersonId, Role as DeviceRole, Roster, apply, may_sign,
+};
 use pigeon_proto::join::{JOIN_VERSION, Join, JoinAnswer};
 use serde::{Deserialize, Serialize};
 
@@ -43,8 +48,15 @@ pub struct Invitation {
     pub addresses: Vec<String>,
     /// 256 random bits, hex.
     pub secret: String,
-    /// The person the new device belongs to.
+    /// The person the new device belongs to: their ID.
     pub person: String,
+    /// A new person's name, when the invitation adds them; empty for a
+    /// person of the roster.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub new_person: String,
+    /// Whether the new person is an admin.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub admin: bool,
     /// `custodian` or `laptop`.
     pub role: String,
     /// The new device's name in the roster, if the inviter chose one.
@@ -106,35 +118,101 @@ fn save(g: &Group, r: &Records) -> std::io::Result<()> {
     crate::util::write_private(&g.files.invitations(), &text)
 }
 
-/// Makes an invitation for a backup machine of `person` (the inviter's
-/// own person if empty) in `g`, named `name` in the roster if not empty.
-pub fn invite(d: &Daemon, g: &Group, person: &str, name: &str) -> Result<String, &'static str> {
+/// What `pigeon invite` asks for (10 §10.1).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Ask<'a> {
+    /// The person, by ID or name; empty for the inviter's own person.
+    pub person: &'a str,
+    /// A new person as an admin.
+    pub admin: bool,
+    /// A backup machine rather than a laptop.
+    pub custodian: bool,
+    /// The new device's name in the roster, if the inviter chose one.
+    pub name: &'a str,
+}
+
+/// The person of `roster` that `who` names, by ID or by name, ignoring case.
+pub fn find_person(roster: &Roster, who: &str) -> Option<PersonId> {
+    let id = PersonId(who.to_ascii_lowercase());
+    if roster.persons.contains_key(&id) {
+        return Some(id);
+    }
+    roster
+        .persons
+        .iter()
+        .find(|(_, p)| p.name.to_lowercase() == who.to_lowercase())
+        .map(|(id, _)| id.clone())
+}
+
+/// A person ID for a new person named `name`: its ASCII letters and
+/// digits, lowercase, with a number if another person has it (04 §4.2).
+pub fn new_person_id(roster: &Roster, name: &str) -> PersonId {
+    let mut base: String = name
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
+    if base.is_empty() {
+        base = "person".to_owned();
+    }
+    let mut id = base.clone();
+    let mut n = 2;
+    while roster.persons.contains_key(&PersonId(id.clone())) {
+        id = format!("{base}{n}");
+        n += 1;
+    }
+    PersonId(id)
+}
+
+/// Makes an invitation in `g` (09 §9.6): for a new laptop of a person of
+/// the roster, from an admin or one of their devices; for a new person,
+/// from an admin; for a backup machine of the inviter's person (or the
+/// person named), named `ask.name` in the roster if not empty.
+pub fn invite(d: &Daemon, g: &Group, ask: Ask<'_>) -> Result<String, &'static str> {
     let doc = g.roster().ok_or("not-in-group")?;
     let me = doc
         .roster
         .devices
         .get(&DeviceId(d.device.clone()))
         .ok_or("not-in-group")?;
-    let person = if person.is_empty() {
-        me.person.0.clone()
+    let admin = me.role != DeviceRole::Recovery
+        && doc.roster.persons.get(&me.person).is_some_and(|p| p.admin);
+    let who = ask.person.trim();
+    let found = if who.is_empty() {
+        Some(me.person.clone())
     } else {
-        person.to_ascii_lowercase()
+        find_person(&doc.roster, who)
     };
-    if !doc.roster.persons.contains_key(&PersonId(person.clone())) {
-        return Err("invite-not-allowed");
-    }
-    let name = name.trim();
+    let (person, new_person) = match found {
+        Some(p) if !ask.admin && (admin || p == me.person) => (p, None),
+        None if !ask.custodian && admin => (
+            new_person_id(&doc.roster, who),
+            Some(Person {
+                name: who.to_owned(),
+                admin: ask.admin,
+            }),
+        ),
+        _ => return Err("invite-not-allowed"),
+    };
+    let name = ask.name.trim();
     if !name.is_empty() && doc.roster.devices.values().any(|x| x.name == name) {
         return Err("invite-not-allowed");
     }
+    let role = if ask.custodian { "custodian" } else { "laptop" };
     let secret = random::<32>().map_err(|_| "not-allowed")?;
     let expires = now() + LIFETIME;
+    let purpose = match &new_person {
+        Some(p) => serde_json::json!({"new-person": {
+            "id": person.0, "name": p.name, "admin": p.admin}}),
+        None => serde_json::json!({"new-device": {
+            "person": person.0, "role": role, "name": name}}),
+    };
     let mut records = load(g);
     records.invitations.push(Record {
         id: format!("inv-{}", hex(secret.get(..2).unwrap_or_default())),
         secret: hex(&secret),
         secret_sha256: sha256_hex(&secret),
-        purpose: serde_json::json!({"new-device": {"person": person, "role": "custodian", "name": name}}),
+        purpose,
         expires: crate::util::rfc3339(expires),
         used_by: None,
     });
@@ -148,11 +226,69 @@ pub fn invite(d: &Daemon, g: &Group, person: &str, name: &str) -> Result<String,
         from: me.name.clone(),
         addresses: d.addresses().iter().map(ToString::to_string).collect(),
         secret: hex(&secret),
-        person,
-        role: "custodian".to_owned(),
+        person: person.0,
+        new_person: new_person
+            .as_ref()
+            .map(|p| p.name.clone())
+            .unwrap_or_default(),
+        admin: new_person.as_ref().is_some_and(|p| p.admin),
+        role: role.to_owned(),
         device: name.to_owned(),
         expires,
     }))
+}
+
+/// The roster edits a used invitation's `purpose` makes for the device
+/// `id` that sent `join`: `None` if the join asks for another role.
+fn edits(
+    purpose: &serde_json::Value,
+    id: &DeviceId,
+    join: &Join,
+    roster: &Roster,
+) -> Option<Vec<Edit>> {
+    let text = |v: &serde_json::Value| v.as_str().map(str::to_owned);
+    let mut name = join.device_name.clone();
+    if roster.devices.values().any(|x| x.name == name) {
+        name = format!("{name}-{}", id.0.get(..6).unwrap_or_default());
+    }
+    let device = |person: String, role: DeviceRole| Device {
+        person: PersonId(person),
+        name: name.clone(),
+        role,
+        annex_uuid: Some(join.annex_uuid.clone()),
+        maxsize: if role == DeviceRole::Custodian {
+            join.capacity
+        } else {
+            None
+        },
+    };
+    if let Some(p) = purpose.get("new-person") {
+        if join.role != "laptop" {
+            return None;
+        }
+        let person = text(&p["id"])?;
+        let added = Person {
+            name: text(&p["name"])?,
+            admin: p["admin"].as_bool().unwrap_or(false),
+        };
+        return Some(vec![
+            Edit::AddPerson(PersonId(person.clone()), added),
+            Edit::AddDevice(id.clone(), device(person, DeviceRole::Laptop)),
+        ]);
+    }
+    let p = purpose.get("new-device")?;
+    let role = match p["role"].as_str()? {
+        "custodian" => DeviceRole::Custodian,
+        "laptop" => DeviceRole::Laptop,
+        _ => return None,
+    };
+    if join.role != p["role"].as_str()? {
+        return None;
+    }
+    Some(vec![Edit::AddDevice(
+        id.clone(),
+        device(text(&p["person"])?, role),
+    )])
 }
 
 fn equal(a: &str, b: &str) -> bool {
@@ -191,10 +327,7 @@ pub async fn welcome(d: &Daemon, device: &str, join: Join) -> JoinAnswer {
         if crate::util::parse_rfc3339(&rec.expires).is_none_or(|t| t < now()) {
             return refused("invite-expired");
         }
-        let person = rec.purpose["new-device"]["person"]
-            .as_str()
-            .unwrap_or_default()
-            .to_owned();
+        let purpose = rec.purpose.clone();
         rec.used_by = Some(device.to_owned());
         if save(&g, &records).is_err() {
             return refused("not-allowed");
@@ -203,14 +336,9 @@ pub async fn welcome(d: &Daemon, device: &str, join: Join) -> JoinAnswer {
             return refused("not-in-group");
         };
         let id = DeviceId(device.to_owned());
-        let added = Device {
-            person: PersonId(person),
-            name: join.device_name.clone(),
-            role: DeviceRole::Custodian,
-            annex_uuid: Some(join.annex_uuid.clone()),
-            maxsize: join.capacity,
+        let Some(change) = edits(&purpose, &id, &join, &doc.roster) else {
+            return refused("invite-not-allowed");
         };
-        let change = [Edit::AddDevice(id.clone(), added)];
         if !may_sign(&doc.roster, &DeviceId(d.device.clone()), &change) {
             return refused("invite-not-allowed");
         }
@@ -219,7 +347,13 @@ pub async fn welcome(d: &Daemon, device: &str, join: Join) -> JoinAnswer {
             return refused("invite-not-allowed");
         }
         doc.roster = applied.roster;
-        let message = format!("pigeon: add {}", join.device_name);
+        let added = doc
+            .roster
+            .devices
+            .get(&id)
+            .map(|x| x.name.clone())
+            .unwrap_or_default();
+        let message = format!("pigeon: add {added}");
         let commit = match crate::change::commit_roster(&g, &doc, &message, &d.tracer).await {
             Ok(c) => c,
             Err(e) => {
@@ -256,18 +390,96 @@ fn hostname() -> String {
         .unwrap_or_else(|| "backup".to_owned())
 }
 
-/// The new custodian's side: answers a problem code, or the group's name.
+/// The new device's side: answers a problem code, or the group's name.
 pub async fn join(d: &Daemon, code: &str, folder: Option<String>) -> Result<String, String> {
     let inv = decode(code).ok_or("invite-unknown")?;
     if inv.expires < now() {
         return Err("invite-expired".into());
     }
-    if inv.role != "custodian" {
-        return Err("not-in-this-build".into());
-    }
     if d.group(&inv.group).is_some() {
         return Err("invite-used".into());
     }
+    match inv.role.as_str() {
+        "custodian" => join_backup(d, &inv, folder).await,
+        "laptop" => crate::join::laptop(d, &inv, folder).await,
+        _ => Err("invite-unknown".into()),
+    }
+}
+
+/// The name a joining device gives itself: the inviter's choice, else
+/// `<host name>-<6 hex digits of its device ID>` (13 §13.12).
+pub fn device_name(d: &Daemon, inv: &Invitation) -> String {
+    let short = d.device.get(..6).unwrap_or_default();
+    if inv.device.is_empty() {
+        format!("{}-{short}", hostname())
+    } else {
+        inv.device.clone()
+    }
+}
+
+/// The `Join` a new device sends, for `role`, with its annex UUID.
+pub fn request(d: &Daemon, inv: &Invitation, name: &str, uuid: &str) -> Result<Join, String> {
+    let secret = unhex(&inv.secret).ok_or("invite-unknown")?;
+    Ok(Join {
+        v: JOIN_VERSION,
+        invitation_hash: sha256_hex(&secret),
+        proof: proof(&secret, &d.device, &inv.inviter),
+        device_name: name.to_owned(),
+        role: inv.role.clone(),
+        annex_uuid: uuid.to_owned(),
+        capacity: None,
+        addresses: d.addresses().iter().map(ToString::to_string).collect(),
+        new_device: None,
+    })
+}
+
+/// What a welcome gives: the commit adding the device, the inviter's annex
+/// UUID, and the direct addresses of the peers it knows.
+pub type Welcomed = (
+    String,
+    String,
+    std::collections::BTreeMap<String, Vec<String>>,
+);
+
+/// Sends `request` to the inviter, retrying for a minute while it is
+/// offline; a refusal answers its code.
+pub async fn dial(d: &Daemon, inv: &Invitation, request: &Join) -> Result<Welcomed, String> {
+    let addresses = inviter_addresses(inv);
+    let mut answer = None;
+    for _ in 0..30 {
+        match d.node.join(&inv.inviter, addresses.clone(), request).await {
+            Ok(a) => {
+                answer = Some(a);
+                break;
+            }
+            Err(e) => tracing::info!(error = %e, "inviter-offline"),
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
+    match answer.ok_or("inviter-offline")? {
+        JoinAnswer::Welcome {
+            commit,
+            annex_uuid,
+            peers,
+        } => Ok((commit, annex_uuid, peers)),
+        JoinAnswer::Refused { code } => Err(code),
+    }
+}
+
+/// The inviter's direct addresses, as the invitation gives them.
+pub fn inviter_addresses(inv: &Invitation) -> Vec<std::net::SocketAddr> {
+    inv.addresses
+        .iter()
+        .filter_map(|a| a.parse().ok())
+        .collect()
+}
+
+/// A backup machine's join: its bare repository, then the welcome.
+async fn join_backup(
+    d: &Daemon,
+    inv: &Invitation,
+    folder: Option<String>,
+) -> Result<String, String> {
     let path = folder.map_or_else(
         || d.dirs.config.join(format!("{}.git", inv.group)),
         PathBuf::from,
@@ -279,12 +491,7 @@ pub async fn join(d: &Daemon, code: &str, folder: Option<String>) -> Result<Stri
     git.run(&["init", "-q", "--bare", "-b", "main"])
         .await
         .map_err(fail)?;
-    let short = d.device.get(..6).unwrap_or_default();
-    let name = if inv.device.is_empty() {
-        format!("{}-{short}", hostname())
-    } else {
-        inv.device.clone()
-    };
+    let name = device_name(d, inv);
     git.run(&["config", "user.name", &name])
         .await
         .map_err(fail)?;
@@ -299,42 +506,8 @@ pub async fn join(d: &Daemon, code: &str, folder: Option<String>) -> Result<Stri
     let (uuid, token) = init_annex(&git, pigeon_core::filter::Role::Custodian, &name, inv.k)
         .await
         .map_err(fail)?;
-    let secret = unhex(&inv.secret).ok_or("invite-unknown")?;
-    let request = Join {
-        v: JOIN_VERSION,
-        invitation_hash: sha256_hex(&secret),
-        proof: proof(&secret, &d.device, &inv.inviter),
-        device_name: name,
-        role: "custodian".to_owned(),
-        annex_uuid: uuid,
-        capacity: None,
-        addresses: d.addresses().iter().map(ToString::to_string).collect(),
-        new_device: None,
-    };
-    let addresses: Vec<std::net::SocketAddr> = inv
-        .addresses
-        .iter()
-        .filter_map(|a| a.parse().ok())
-        .collect();
-    let mut answer = None;
-    for _ in 0..30 {
-        match d.node.join(&inv.inviter, addresses.clone(), &request).await {
-            Ok(a) => {
-                answer = Some(a);
-                break;
-            }
-            Err(e) => tracing::info!(error = %e, "inviter-offline"),
-        }
-        tokio::time::sleep(Duration::from_secs(2)).await;
-    }
-    let (commit, inviter_uuid, peers) = match answer.ok_or("inviter-offline")? {
-        JoinAnswer::Welcome {
-            commit,
-            annex_uuid,
-            peers,
-        } => (commit, annex_uuid, peers),
-        JoinAnswer::Refused { code } => return Err(code),
-    };
+    let request = request(d, inv, &name, &uuid)?;
+    let (commit, inviter_uuid, peers) = dial(d, inv, &request).await?;
     ensure_remote(&git, &inv.inviter, &inviter_uuid)
         .await
         .map_err(fail)?;
@@ -342,13 +515,13 @@ pub async fn join(d: &Daemon, code: &str, folder: Option<String>) -> Result<Stri
         .await
         .ok_or("not-a-repository")?;
     g.set_token(&token);
-    g.set_addresses(&inv.inviter, addresses);
+    g.set_addresses(&inv.inviter, inviter_addresses(inv));
     g.learn_peers(&peers);
     let g = d.add_group(g, &path).await;
-    first_fetch(&g, &inv, &commit, &d.device).await?;
+    first_fetch(&g, inv, &commit, &d.device).await?;
     g.reload_roster().await;
     d.wake.notify_one();
-    Ok(inv.name)
+    Ok(inv.name.clone())
 }
 
 /// Fetches `main` from the inviter, checks that its root is the group's

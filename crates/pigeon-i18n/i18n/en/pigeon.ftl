@@ -71,6 +71,7 @@ time-never = never
 ## Commands of the safety slice (13 §13.12)
 
 cmd-create = Create a group with this computer as its first member
+cmd-invite-person = Print a one-time invitation for a person's computer, valid 24 hours
 cmd-invite = Print a one-time invitation, valid 24 hours
 cmd-join = Join a group with an invitation
 cmd-status = Say whether your files are safe, and why not

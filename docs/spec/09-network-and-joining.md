@@ -128,6 +128,12 @@ person (ux.md §8) **[no ADR: reading]**, creates a one-time invitation:
 
 - It is written `pgn1-` plus the lowercase unpadded base32 of its binary
   encoding, shown as text and QR code **[no ADR: encoding]**.
+- `PERSON` names a person of the roster by ID or name, ignoring case: the
+  invitation is then for a new laptop of theirs (`--admin` is refused);
+  any other name is a new person, whose ID is the name's ASCII letters and
+  digits in lowercase (`person` if none), with a number if a person has it
+  (`a_new_persons_id_is_fresh`) **[no ADR]**. A device name already in the
+  roster gets `-` and 6 hex digits of the device ID at step 3.
 - **Who may invite:** for a new person, an admin's device; for a new device
   of person P, an admin's device or one of P's (ADR 0017).
 - The inviter keeps the secret, its SHA-256, purpose and expiry in

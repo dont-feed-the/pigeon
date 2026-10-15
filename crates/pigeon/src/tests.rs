@@ -40,6 +40,16 @@ fn commands_map_to_requests() {
             name: Some("nas".into()),
         })
     );
+    assert_eq!(
+        line("invite --admin Paul").action,
+        Action::Send(Request::Invite {
+            person: "Paul".into(),
+            admin: true,
+            custodian: false,
+            name: None,
+        })
+    );
+    assert_eq!(line("invite").action, Action::Usage("invite".into()));
     assert!(matches!(
         line("create F --folder /tmp/f").action,
         Action::Send(Request::Create { ref name, ref folder, k: 2, .. })
@@ -63,10 +73,6 @@ fn commands_map_to_requests() {
 #[test]
 fn other_commands_are_not_in_this_build_and_bad_arguments_are_usage() {
     assert_eq!(line("pause").action, Action::NotInThisBuild("pause".into()));
-    assert_eq!(
-        line("invite paul").action,
-        Action::NotInThisBuild("invite".into())
-    );
     assert_eq!(line("free").action, Action::Usage("free".into()));
     assert_eq!(line("free a b").action, Action::Usage("free".into()));
     assert_eq!(

@@ -47,7 +47,11 @@ repository, in this order:
 | 7 | commit | allowed paths: one signed commit, `main` moved from its expected old value; the others: one proposal per set of deciders ([04 §4.5](04-roster-and-authority.md)), the index keeps `main`'s version, the path becomes a *suggestion* (§7.6) |
 | 8 | trace | each commit and proposal (ADR 0008, [12](12-observability.md)) |
 
-A crash anywhere loses nothing: the next scan redoes the batch.
+A crash anywhere loses nothing: the next scan redoes the batch. Before it
+stages a path, capture records each path's index entry in `capture.json`
+([11 §11.3](11-local-state.md)), and a capture that finds the file puts
+them back first **[no ADR]**: the index alone cannot tell a save staged
+before a crash from a version install has not written yet.
 `CaptureFirst`: what install moves away for good is already in a commit.
 
 ## 7.4 Held changes

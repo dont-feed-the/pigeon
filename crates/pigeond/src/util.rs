@@ -1,5 +1,5 @@
 //! Small helpers of `pigeond`: hex, random bytes, SHA-256 and HMAC, times
-//! in RFC 3339 (UTC), and the device key (09 §9.1).
+//! in RFC 3339 (UTC), the device key (09 §9.1), and a `join_all`.
 //!
 //! The device key is kept as the hex of its 32-byte ed25519 secret, mode
 //! 0600, rather than in OpenSSH format (13 §13.12, first build).
@@ -113,4 +113,29 @@ pub fn device_key(path: &Path) -> io::Result<[u8; 32]> {
         }
         Err(e) => Err(e),
     }
+}
+
+/// Runs `futures` concurrently on this task and answers their outputs in
+/// order, as `futures::future::join_all` does.
+pub async fn join_all<F: std::future::Future>(futures: Vec<F>) -> Vec<F::Output> {
+    let mut futures: Vec<std::pin::Pin<Box<F>>> = futures.into_iter().map(Box::pin).collect();
+    let mut out: Vec<Option<F::Output>> = futures.iter().map(|_| None).collect();
+    std::future::poll_fn(|cx| {
+        let mut pending = false;
+        for (f, slot) in futures.iter_mut().zip(out.iter_mut()) {
+            if slot.is_none() {
+                match f.as_mut().poll(cx) {
+                    std::task::Poll::Ready(v) => *slot = Some(v),
+                    std::task::Poll::Pending => pending = true,
+                }
+            }
+        }
+        if pending {
+            std::task::Poll::Pending
+        } else {
+            std::task::Poll::Ready(())
+        }
+    })
+    .await;
+    out.into_iter().flatten().collect()
 }

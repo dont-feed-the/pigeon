@@ -121,17 +121,20 @@ async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         }
         Request::Invite {
             person,
+            admin,
             custodian,
             name,
-            ..
         } => {
-            if !custodian {
-                return not_in_this_build("invite");
-            }
             let Some(g) = d.default_group() else {
                 return vec![problem("not-in-group", &[], None)];
             };
-            match crate::invite::invite(d, &g, &person, name.as_deref().unwrap_or_default()) {
+            let ask = crate::invite::Ask {
+                person: &person,
+                admin,
+                custodian,
+                name: name.as_deref().unwrap_or_default(),
+            };
+            match crate::invite::invite(d, &g, ask) {
                 Ok(code) => vec![said("invitation", &[("code", text(&code))])],
                 Err(code) => vec![problem(code, &[], None)],
             }

@@ -93,6 +93,7 @@ pub const MESSAGES: &[Entry] = &[
     e("time-days-ago", &["days"]),
     e("time-never", &[]),
     e("cmd-create", &[]),
+    e("cmd-invite-person", &[]),
     e("cmd-invite", &[]),
     e("cmd-join", &[]),
     e("cmd-status", &[]),

@@ -441,7 +441,7 @@ async fn dial(
 /// Takes `main`'s tree into the index with every annexed file hidden and
 /// writes pigeon's own files, so that nothing reads as deleted and keep
 /// brings the files back (08 §8.5).
-async fn hide_all(g: &Group, main: &str) -> Result<(), String> {
+pub(crate) async fn hide_all(g: &Group, main: &str) -> Result<(), String> {
     let wt = g.worktree.clone().ok_or("not-in-group")?;
     g.git
         .run(&["read-tree", main])

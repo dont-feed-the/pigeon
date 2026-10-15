@@ -89,6 +89,7 @@ repository, and git never shares it (ADR 0036).
 | File | Written when | Content | Rebuildable? |
 |---|---|---|---|
 | `install.ndjson` | each install step ([07 §7.5](07-capture-and-install.md)) | the install journal | no: it is the crash record |
+| `capture.json` | before a capture batch stages a path, removed once the batch is in `main` ([07 §7.3](07-capture-and-install.md)) | each path's index entry before the batch | no: it is the crash record |
 | `conflicts.json` | a divergence starts, changes or ends ([07 §7.6](07-capture-and-install.md)) | the divergence table | no: "what pigeon last installed" is known only here |
 | `purges.toml` | a custodian first merges a purge decision, or seals it ([08 §8.6](08-custody-loops.md)) | when it received each active decision, and its seals | yes, conservatively: a lost file restarts each waiting period ([08 §8.6](08-custody-loops.md)) |
 | `clock.json` | after a round that changed it, at most every second | `format`, when each peer was last heard of, and the Lamport clock of trace events (ADR 0008); a newer format is neither read nor overwritten (ADR 0048) | no, but losing it only forgets when peers were heard of and weakens trace ordering |
@@ -114,6 +115,13 @@ checks), `new_key`, `tmp`, `tmp_ino`, `aside`. Recovery replays every
 and its aside is released (`journal` laws). A torn last line is ignored;
 any other malformed line stops install with a Problem.
 
+**`capture.json`** (`pigeond::capture_file`, `capture_intents_round_trip`)
+**[no ADR]**: `format`, `head` (`main` when the batch began) and `before`,
+each path's index entry (`mode`, `oid`) or `null`. A capture that finds it
+puts those entries back before its scan, so the batch is redone from the
+files, which pigeon never changed; S9's random schedules found the need,
+as a crash before the ref moved left the saves staged and out of `main`.
+
 **`conflicts.json`** (`pigeond::conflicts_file`, written so far for
 `concurrent` divergences; `suggestion` and `recovered` come with proposals
 and kept asides): `format`, and per path
@@ -125,8 +133,8 @@ ADR 0034). Rewritten whole.
 
 **`invitations.json`** (`invitations_round_trip`): `format`, and per
 invitation `id` (`inv-7Q2M`), `secret`, `secret_sha256`, `purpose`
-(`{"new-person": {"name", "admin"}}` or `{"new-device": {"person", "role",
-"name"}}`), `expires` (RFC 3339), `used_by`.
+(`{"new-person": {"id", "name", "admin"}}` or `{"new-device": {"person",
+"role", "name"}}`), `expires` (RFC 3339), `used_by`.
 Expired entries are kept 30 days for the "already used / expired" messages
 **[no ADR: retention]**.
 
@@ -162,7 +170,8 @@ stale `index.lock` kept capture failing on macOS until the check timed out.
   roster files and invitations (`pigeond/tests/codecs.rs`:
   `journal_records_round_trip`, `roster_files_round_trip`,
   `invitations_round_trip`), the divergence table (`conflict_tables_round_trip`,
-  which also reads a newer format as nothing) and the socket protocol
+  which also reads a newer format as nothing), capture intents
+  (`capture_intents_round_trip`, likewise) and the socket protocol
   (`pigeon-proto/tests/proto_laws.rs`).
 - Not yet coded as laws: **atomicity** (a crash during a write leaves the
   old value or the new one); **refusal** (a file of a newer format is never

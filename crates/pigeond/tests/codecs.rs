@@ -193,7 +193,7 @@ fn a_roster_a_newer_release_could_write_is_unknown(tc: TestCase) {
 
 /// Law *invitation*: an invitation decodes from its `pgn1-` code, which is
 /// lower-case base32, and a damaged code decodes to nothing else.
-#[hegel::test]
+#[hegel::test(test_cases = 1000)]
 fn invitations_round_trip(tc: TestCase) {
     let n = tc.draw(gs::integers::<u8>().max_value(3));
     let inv = Invitation {
@@ -208,7 +208,18 @@ fn invitations_round_trip(tc: TestCase) {
             .collect(),
         secret: hex(&tc.draw(gs::binary().min_size(32).max_size(32))),
         person: word(&tc),
-        role: "custodian".to_owned(),
+        new_person: if tc.draw(gs::booleans()) {
+            word(&tc)
+        } else {
+            String::new()
+        },
+        admin: tc.draw(gs::booleans()),
+        role: if tc.draw(gs::booleans()) {
+            "custodian"
+        } else {
+            "laptop"
+        }
+        .to_owned(),
         device: word(&tc),
         expires: tc.draw(gs::integers::<i64>().min_value(0).max_value(1 << 40)),
     };
@@ -224,6 +235,80 @@ fn invitations_round_trip(tc: TestCase) {
         Some(inv)
     );
     assert_eq!(decode(body), None);
+}
+
+/// Law *round trip* (11 §11.3): a capture batch's intent (`capture.json`,
+/// 07 §7.3) parses back to the intent it renders, and one of a newer
+/// format reads as nothing.
+#[hegel::test(test_cases = 1000)]
+fn capture_intents_round_trip(tc: TestCase) {
+    use pigeond::capture_file::{FORMAT, Intent, Staged, parse, render};
+    let n = tc.draw(gs::integers::<u8>().max_value(4));
+    let before = (0..n)
+        .map(|_| {
+            let e = tc.draw(gs::booleans()).then(|| Staged {
+                mode: if tc.draw(gs::booleans()) {
+                    "100644"
+                } else {
+                    "100755"
+                }
+                .to_owned(),
+                oid: hex(&tc.draw(gs::binary().min_size(20).max_size(20))),
+            });
+            (word(&tc), e)
+        })
+        .collect();
+    let i = Intent {
+        format: FORMAT,
+        head: maybe(&tc),
+        before,
+    };
+    assert_eq!(parse(&render(&i)), Some(i.clone()));
+    let newer = Intent {
+        format: FORMAT + 1,
+        ..i
+    };
+    assert_eq!(parse(&render(&newer)), None);
+}
+
+/// Law *new person* (09 §9.6): the ID an invitation gives a new person is
+/// lowercase ASCII letters and digits, no person of the roster has it, and
+/// the person is found by it once added.
+#[hegel::test(test_cases = 1000)]
+fn a_new_persons_id_is_fresh(tc: TestCase) {
+    use pigeon_core::roster::{Person, PersonId, Roster};
+    use pigeond::invite::{find_person, new_person_id};
+    let mut roster = Roster {
+        rules: 1,
+        group: "g".into(),
+        k: 1,
+        retention_days: 30,
+        persons: BTreeMap::new(),
+        devices: BTreeMap::new(),
+        removed: BTreeMap::new(),
+        folders: Vec::new(),
+    };
+    let names = ["Ana", "ana", "Ana2", "Zoé", "", "Ünal", "person", "ana3"];
+    let n = tc.draw(gs::integers::<usize>().max_value(6));
+    for _ in 0..n {
+        let name = names[tc.draw(gs::integers::<usize>().max_value(names.len() - 1))];
+        let id = new_person_id(&roster, name);
+        assert!(
+            !id.0.is_empty()
+                && id
+                    .0
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()),
+            "{id:?}"
+        );
+        assert!(!roster.persons.contains_key(&id), "{id:?}");
+        let person = Person {
+            name: name.to_owned(),
+            admin: false,
+        };
+        roster.persons.insert(id.clone(), person);
+        assert_eq!(find_person(&roster, &id.0), Some(PersonId(id.0.clone())));
+    }
 }
 
 /// Law *round trip* (11 §11.5): a divergence table (`conflicts.json`, 07

@@ -21,7 +21,6 @@ use pigeon_core::catalogue::Content;
 use pigeon_core::journal::{Begin, End, Record};
 use pigeon_core::names;
 use pigeon_sys::fs::{Renamed, lstat, rename_noreplace};
-use pigeon_sys::lab::crash_point;
 
 use crate::conflicts_file::{Divergence, Kind, State, Table};
 use crate::evict::{is_old, journal, next_seq, record, stat_of, truncate_if_done};
@@ -107,7 +106,6 @@ pub(crate) async fn put(
         }),
     )?;
     t.event(Act::Start, &[("path", rel)]);
-    crash_point("install-after-begin");
     if st.is_some() {
         if rename_noreplace(&file, &aside).map_err(|e| e.to_string())? != Renamed::Done {
             record(g, &Record::End(seq, End::Raced))?;
@@ -140,7 +138,6 @@ pub(crate) async fn put(
         return Ok(Put::Raced);
     }
     t.event(Act::RenameIn, &[("path", rel)]);
-    crash_point("install-after-rename-in");
     if let Some(e) = entry {
         index_entry(g, rel, Some(e)).await?;
         t.event(Act::Index, &[("path", rel)]);

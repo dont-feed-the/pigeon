@@ -14,6 +14,7 @@ use pigeon_core::authority::Tree;
 use pigeon_git::status::Entry;
 use pigeon_sys::fs::lstat;
 
+use crate::capture_file::{Intent, Staged};
 use crate::git::{Error, is_pigeon_path};
 use crate::group::Group;
 use crate::trace::{Act, Tracer};
@@ -110,6 +111,7 @@ pub async fn capture(g: &Group, tracer: &Tracer) -> Result<Captured, Error> {
     let Some(worktree) = g.worktree.clone() else {
         return Ok(done);
     };
+    undo_interrupted(g).await?;
     let head = g.git.rev("refs/heads/main").await;
     let mut main: Option<Tree> = None;
     let (mut add, mut remove, mut not_shared) = (Vec::new(), Vec::new(), Vec::new());
@@ -167,12 +169,102 @@ pub async fn capture(g: &Group, tracer: &Tracer) -> Result<Captured, Error> {
     {
         main = Some(g.git.tree(h).await?);
     }
-    let before = if pending.is_empty() && gone.is_empty() {
-        Tree::new()
-    } else {
-        g.git.index().await?
-    };
     let all: Vec<String> = add.iter().chain(&pending).cloned().collect();
+    if all.is_empty() && remove.is_empty() && gone.is_empty() {
+        return Ok(done);
+    }
+    let before = g.git.index().await?;
+    let intent = Intent {
+        format: crate::capture_file::FORMAT,
+        head: head.clone(),
+        before: all
+            .iter()
+            .chain(&remove)
+            .chain(&gone)
+            .map(|p| {
+                let e = before.get(p).map(|e| Staged {
+                    mode: e.mode.clone(),
+                    oid: e.oid.clone(),
+                });
+                (p.clone(), e)
+            })
+            .collect(),
+    };
+    crate::capture_file::write(g, &intent).map_err(|source| Error::Pipe {
+        argv: vec!["capture.json".to_owned()],
+        source,
+    })?;
+    let batch = Batch {
+        head,
+        main,
+        behind,
+        before,
+        add,
+        remove,
+        pending,
+        gone,
+        all,
+    };
+    let done = commit_batch(g, tracer, batch, done).await?;
+    crate::capture_file::clear(g);
+    Ok(done)
+}
+
+/// Puts back the index entries of a batch that a crash interrupted
+/// (`capture.json`), so that this scan redoes it from the files.
+async fn undo_interrupted(g: &Group) -> Result<(), Error> {
+    let Some(intent) = crate::capture_file::read(g) else {
+        return Ok(());
+    };
+    for (p, e) in &intent.before {
+        match e {
+            Some(e) => {
+                let info = format!("{},{},{p}", e.mode, e.oid);
+                g.git.run(&["update-index", "--cacheinfo", &info]).await?;
+            }
+            None => {
+                g.git
+                    .run(&["update-index", "--force-remove", "--", p])
+                    .await?;
+            }
+        }
+    }
+    tracing::info!(group = %g.id, paths = intent.before.len(), "capture-redone");
+    crate::capture_file::clear(g);
+    Ok(())
+}
+
+/// What one batch stages and commits.
+struct Batch {
+    head: Option<String>,
+    main: Option<Tree>,
+    behind: bool,
+    before: Tree,
+    add: Vec<String>,
+    remove: Vec<String>,
+    pending: Vec<String>,
+    gone: Vec<String>,
+    all: Vec<String>,
+}
+
+/// Stages a batch and commits it on `main` (07 §7.3 steps 3–7).
+async fn commit_batch(
+    g: &Group,
+    tracer: &Tracer,
+    b: Batch,
+    mut done: Captured,
+) -> Result<Captured, Error> {
+    let Batch {
+        head,
+        mut main,
+        mut behind,
+        before,
+        add,
+        remove,
+        pending,
+        gone,
+        all,
+    } = b;
     for chunk in all.chunks(64) {
         let mut args = vec![
             "-c",

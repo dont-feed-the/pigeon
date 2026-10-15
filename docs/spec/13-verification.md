@@ -197,7 +197,7 @@ two folders.
 |---|---|---|
 | crates ([14 §14.6](14-platforms-and-packaging.md)) | `pigeon-core`, `pigeon-proto`, `pigeon-i18n` (the English bundle), `pigeon-git`, `pigeon-sys`, `pigeond`, `pigeon`, `git-annex-p2p-iroh` | `pigeon-web`, `pigeon-telemetry`, the French bundle (ADR 0028) |
 | loops ([08 §8.1](08-custody-loops.md)) | capture, accept, install with its journal ([07 §7.5](07-capture-and-install.md)), place, repair (started by a removed custodian), free and keep, settings check; the filter with its `CHECKPRESENT` probe ([09 §9.4](09-network-and-joining.md)) | scrub, purge |
-| commands ([10](10-interfaces.md)) | `create`, `invite --backup-machine`, `join --backup-machine`, `status`, `machines`, `history`, `restore`, `free`, `keep`, `remove-computer`, `recovery-sheet`, `recover`, `doctor`, `debug bundle` | the rest answer `not-in-this-build` |
+| commands ([10](10-interfaces.md)) | `create`, `invite` (a person's laptop, or `--backup-machine`), `join`, `status`, `machines`, `history`, `restore`, `free`, `keep`, `remove-computer`, `recovery-sheet`, `recover`, `doctor`, `debug bundle` | the rest answer `not-in-this-build` |
 | content | regular files and folders, the executable bit, portable names ([07 §7.9](07-capture-and-install.md)) | other file systems: `create` and `join` name the one they refuse (`file-system-not-in-this-build`, 10 §10.5) |
 | network | iroh with direct addresses and mDNS | relays and discovery (ADR 0016) |
 | diagnostics | JSON logs (ADR 0022), trace logs (ADR 0008) | telemetry transport and dashboards (ADR 0025) |
@@ -233,8 +233,12 @@ from this specification as follows, each to close before S1–S11 run
   the laptop whose version lost the name keeps its file, a `concurrent`
   divergence in `conflicts.json` that install leaves alone
   ([07 §7.6](07-capture-and-install.md)); a save that does not merge clean
-  stays out of `main`, its content in the annex; no laptop joins yet, so
-  the group has one laptop;
+  stays out of `main`, its content in the annex;
+- laptops join by invitation, of a new person or of a person of the
+  roster ([09 §9.6](09-network-and-joining.md)), and keep every folder:
+  choosing them at the join, and the safety words, are not in it;
+  `crates/pigeond/tests/people.rs` runs two people, three laptops and two
+  backup machines on one host, through a concurrent edit;
 - place follows the queue order with admission
   ([08 §8.9](08-custody-loops.md)) but reads no introduction time; repair
   marks a removed device's UUID `dead`, after which place copies again;
@@ -249,7 +253,7 @@ from this specification as follows, each to close before S1–S11 run
   ([06 §6.3](06-status.md)), but a custodian neither refuses `tmpfs` nor
   stops serving once its repository is lost, and reports no proposals,
   scrub or purge;
-- the person's ID is `$USER`, and a custodian is named `<host
+- the creator's person ID is `$USER`, and a joining device is named `<host
   name>-<6 hex digits of its device ID>`;
 - the CLI parses its arguments by hand, without completions or colour
   ([10 §10.2](10-interfaces.md));

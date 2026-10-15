@@ -10,6 +10,7 @@
 pub mod admission;
 pub mod api;
 pub mod capture;
+pub mod capture_file;
 pub mod change;
 pub mod clock_file;
 pub mod config;
@@ -22,6 +23,7 @@ pub mod group;
 pub mod history;
 pub mod install;
 pub mod invite;
+pub mod join;
 pub mod journal_file;
 pub mod locks;
 pub mod logs;

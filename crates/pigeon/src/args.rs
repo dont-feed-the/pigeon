@@ -39,8 +39,9 @@ pub const COMMANDS: &[(&str, &str)] = &[
         "create NAME [FOLDER | --folder FOLDER] [--k N] [--name NAME]",
         "cmd-create",
     ),
+    ("invite [--admin] PERSON", "cmd-invite-person"),
     ("invite --backup-machine [NAME]", "cmd-invite"),
-    ("join --backup-machine INVITATION [FOLDER]", "cmd-join"),
+    ("join INVITATION [FOLDER]", "cmd-join"),
     ("status [PATH] [--not-shared]", "cmd-status"),
     ("machines", "cmd-machines"),
     ("history PATH", "cmd-history"),
@@ -187,26 +188,26 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
             })
         }
         "invite" if fits(0, 1, &["backup-machine", "admin"]) => {
-            if !s.flag("backup-machine") {
-                return Some(Action::NotInThisBuild("invite".to_owned()));
+            if s.flag("backup-machine") {
+                return send(Request::Invite {
+                    person: String::new(),
+                    admin: false,
+                    custodian: true,
+                    name: w.first().cloned(),
+                });
             }
             send(Request::Invite {
-                person: String::new(),
+                person: w.first()?.clone(),
                 admin: s.flag("admin"),
-                custodian: true,
-                name: w.first().cloned(),
+                custodian: false,
+                name: None,
             })
         }
-        "join" if fits(1, 2, &["backup-machine", "keep"]) => {
-            if !s.flag("backup-machine") {
-                return Some(Action::NotInThisBuild("join".to_owned()));
-            }
-            send(Request::Join {
-                invitation: w.first()?.clone(),
-                folder: w.get(1).map(|f| absolute(f)),
-                keep: s.flag("keep"),
-            })
-        }
+        "join" if fits(1, 2, &["backup-machine", "keep"]) => send(Request::Join {
+            invitation: w.first()?.clone(),
+            folder: w.get(1).map(|f| absolute(f)),
+            keep: s.flag("keep"),
+        }),
         "status" if fits(0, 1, &["not-shared"]) => send(Request::Status {
             path: w.first().map(|p| absolute(p)),
             not_shared: s.flag("not-shared"),
