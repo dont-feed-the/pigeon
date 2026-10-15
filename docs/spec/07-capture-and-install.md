@@ -135,7 +135,9 @@ are removed. It satisfies `Journal` and the `journal` laws
 
 `NoOverwrite` (ADR 0034): pigeon never renames over a name. A write through
 a handle opened before step 4 that escapes the scan lands in the kept aside
-and is captured at step 9; after the keep period it is lost. The name is
+and is captured at step 9; after the keep period it is lost. An aside that
+no process writes and that still holds the old key is unlinked at once, so
+re-thinning leaves no second copy on the disk (S11). The name is
 absent for milliseconds (E19).
 
 **Saves soon after an install** (ADR 0071): an application that kept a

@@ -14,7 +14,7 @@ use crate::evict::{is_old, journal, record, truncate_if_done};
 use crate::group::Group;
 use crate::trace::Tracer;
 
-/// The minimum keep period of an install's displaced inode, in seconds.
+/// The keep period of a changed displaced inode, in seconds.
 pub const KEEP_SECONDS: i64 = 10 * 60;
 
 /// A complete-enough writer scan: unreadable processes are unsafe when
@@ -41,7 +41,7 @@ fn source(e: &Entry) -> Result<PathBuf, String> {
     Ok(aside)
 }
 
-/// Release eligible ended entries, after the keep period. This also runs
+/// Release eligible ended entries, retaining changed ones for the keep period. This also runs
 /// in ordinary rounds, so a retained entry need not wait for a restart.
 pub async fn release(g: &Group, t: &Tracer) {
     release_at(g, t, crate::util::now()).await;
@@ -75,12 +75,18 @@ async fn one(g: &Group, t: &Tracer, now: i64, seq: u64, e: &Entry) -> Result<(),
         return record(g, &Record::Kept(seq, now));
     };
     let long_enough = now.saturating_sub(at) >= KEEP_SECONDS;
-    if !long_enough {
-        return Ok(());
-    }
     let written = !writers_clear(&st);
-    let old = long_enough && !written && is_old(&file, e.begin.old_key.as_deref());
-    if written {
+    // An aside of the old size is hashed; one of another size changed, and
+    // waits for the keep period without being read each round.
+    let same_size = e
+        .begin
+        .old_key
+        .as_deref()
+        .and_then(pigeon_core::capacity::key_size)
+        == Some(st.size);
+    let old = !written && same_size && is_old(&file, e.begin.old_key.as_deref());
+    let action = decision(long_enough, written, false, old);
+    if action == Release::Wait {
         return Ok(());
     }
     let span = crate::trace_state::Span::begin(
@@ -92,7 +98,7 @@ async fn one(g: &Group, t: &Tracer, now: i64, seq: u64, e: &Entry) -> Result<(),
         crate::trace_state::operation(e),
     )
     .await;
-    match decision(long_enough, written, false, old) {
+    match action {
         Release::Wait => return Ok(()),
         Release::Unlink if e.preserved.is_none() => {
             std::fs::remove_file(&file).map_err(|e| e.to_string())?;

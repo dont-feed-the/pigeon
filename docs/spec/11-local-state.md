@@ -125,8 +125,9 @@ any other malformed line stops install with a Problem.
 or `null` for deletion before proof. Forward recovery replays this pointer,
 not just the skip-worktree bit. Older journals retain their legacy replay.
 
-`kept` records the start of the ten-minute keep period as `at` (Unix
-seconds); older ended entries without it start a full period at recovery.
+`kept` records the start of a changed aside's ten-minute keep period as
+`at` (Unix seconds); older ended entries without it start a full period at
+recovery. An unchanged aside with no writer can be released at the next scan.
 `preserved` journals a changed aside's destination `path` before moving it
 without replacement. Its recovered file and a same-stem `.json` manifest
 (original path, captured name, key and signed commit) remain available for
