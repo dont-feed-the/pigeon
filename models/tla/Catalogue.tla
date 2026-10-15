@@ -45,14 +45,19 @@ Best(C, W) == CHOOSE w \in W : \A u \in W : ~Less(Rank(C, u.o), Rank(C, w.o))
 (* Step 4: each distinct content, with its earliest head. *)
 Reps(X, C, S, x) == LET W == Cands(X, S, x) IN {Best(C, {w \in W : w.c = v}) : v \in {u.c : u \in W}}
 Live(X, S) == {x \in Slots(X, S) : Cands(X, S, x) # {}}
-(* Step 5: the first version keeps the slot, every other one its copy. *)
+(* Whether a conflict event of S froze x with o's version at its copy. *)
+Copied(X, S, x, o) == \E k \in S : Ev(X, k).fx = x /\ \E u \in Ev(X, k).w : u.s = Append(x, o) /\ u.o = o
+(* Step 5: the first version keeps the slot, every other one its copy,
+   unless a conflict event put it there: the copy shows it already, or what
+   a person who saw it saved there. *)
 Shown(X, C, S, x) ==
   LET R == Reps(X, C, S, x)
       f == Best(C, R)
-  IN {[s |-> x, c |-> f.c, o |-> f.o]} \cup {[s |-> Append(x, w.o), c |-> w.c, o |-> w.o] : w \in R \ {f}}
+  IN {[s |-> x, c |-> f.c, o |-> f.o]} \cup
+     {[s |-> Append(x, w.o), c |-> w.c, o |-> w.o] : w \in {u \in R \ {f} : ~Copied(X, S, x, u.o)}}
 View(X, C, S) == UNION {Shown(X, C, S, x) : x \in Live(X, S)}
 Tree(X, C, S) == {[s |-> v.s, c |-> v.c] : v \in View(X, C, S)}
-Unsettled(X, C, S) == {x \in Live(X, S) : Cardinality(Reps(X, C, S, x)) > 1}
+Unsettled(X, C, S) == {x \in Live(X, S) : Cardinality(Shown(X, C, S, x)) > 1}
 (* 05 §5.3: a conflict is open while unsettled, or frozen and neither
    written nor resolved by a contribution that saw it. *)
 Closed(X, S, f) == \E k \in S : k.k = "c" /\ f \in Ev(X, k).past

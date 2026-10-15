@@ -256,4 +256,8 @@ that one freeze reached twice is one event; `Heads`, `Reps`, `Shown` and
 commits through `Record`, which judges each against the catalogue of its
 accepted parents (clean, a proposal when its person may not change a slot,
 or a contribution). Run against a build of `catalogue::Engine` that never
-freezes, it rejects the logs (line 9 to 15 of seeds 2, 6 and 7).
+freezes, it rejects the logs (line 9 to 15 of seeds 2, 6 and 7). A version
+that a conflict event already put at one of its slot's copies is not shown
+again as that slot's copy (`Copied`): seeds 24 and 197 of models-full's 200
+found the code showing it twice, under a second name ` 2`, once a copy was
+edited or a re-frozen side met the other.

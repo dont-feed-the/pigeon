@@ -583,6 +583,21 @@ impl<K: Clone + Ord> Engine<K> {
             out.push(parts[parts.len() - 1].to_owned());
             out.join("/")
         };
+        // The versions a conflict event placed at one of their slot's copies:
+        // that copy holds them, or what a person who saw them saved there.
+        let copied: BTreeSet<(&str, &str)> = state
+            .iter()
+            .filter_map(|&e| {
+                let ev = &self.events[e];
+                Some((ev, ev.frozen.as_ref()?.0.as_str()))
+            })
+            .flat_map(|(ev, x)| {
+                ev.writes
+                    .iter()
+                    .filter(move |(y, _)| y.as_str() != x)
+                    .filter_map(move |(_, w)| Some((x, w.as_ref()?.1.as_str())))
+            })
+            .collect();
         let mut placed: BTreeSet<String> = BTreeSet::new();
         let mut shown: BTreeMap<String, Vec<Shown<K>>> = BTreeMap::new();
         let mut later = Vec::new();
@@ -604,6 +619,9 @@ impl<K: Clone + Ord> Engine<K> {
         for (x, v, o, path) in later {
             if crate::authority::is_pigeon_path(&x) {
                 continue; // pigeon's own files keep their first version (05 §5.2)
+            }
+            if copied.contains(&(x.as_str(), o.as_str())) {
+                continue; // shown at the copy a conflict event gave it (05 §5.2)
             }
             let (who, when) = self
                 .origins

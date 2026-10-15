@@ -234,6 +234,9 @@ class New:
             folders_ = [spell[fold("/".join(parts[: i + 1]))] for i in range(len(parts) - 1)]
             return "/".join(folders_ + parts[-1:])
 
+        # The versions a conflict event placed at one of their slot's copies (step 5).
+        copied = {(eid[1], o) for eid in state if isinstance(eid, tuple)
+                  for y, (v, o) in self.events[eid].writes.items() if y != eid[1] and v}
         placed, shown, later = set(), defaultdict(list), []
         for _, x, _, v, o in versions:
             path = respell(v[0])
@@ -243,6 +246,8 @@ class New:
                 placed.add(x)
                 shown[x].append((v, path, o))
         for x, v, o, path in later:
+            if (x, o) in copied:
+                continue  # shown at the copy a conflict event gave it
             c, n = self.run.commits[o], 1
             while fold(conflict_name(path, c.who, c.when, n)) in placed | folders:
                 n += 1

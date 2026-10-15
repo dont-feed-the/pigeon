@@ -43,7 +43,7 @@ and the conflict events they froze.
 | 2 | **Heads** of a slot: the events that wrote it with no later writer of it |
 | 3 | **Versions:** each distinct content among the heads' values; a deletion is none, so a modification survives a concurrent deletion (P3) |
 | 4 | **Representative** of a version: its earliest head by (author time, device ID, that device's earlier contributions, commit ID); an adoption counts with its proposal's author and time |
-| 5 | **Placement**, in representative order: a folder takes its first version's spelling; each slot's first version its own name, unless a folder of that folded name is there; every other version its first free conflict name (§5.3) |
+| 5 | **Placement**, in representative order: a folder takes its first version's spelling; each slot's first version its own name, unless a folder of that folded name is there; every other version its first free conflict name (§5.3), unless a conflict event put it at one: that copy shows it, or what a person who saw it saved there **[no ADR: correction]** |
 | 6 | **Freezing:** a slot with several versions, or a version under another name, is unsettled; every contribution freezes each unsettled slot of its base into a **conflict event** writing each version where B(c) showed it, so a later save keeps the copies its person saw |
 
 | Case (`catalogue.py`) | Result |
