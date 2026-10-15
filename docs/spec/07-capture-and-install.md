@@ -94,7 +94,11 @@ retried at every scan. A batch shares its fsyncs and one writer scan.
 A deletion skips steps 1, 2 and 7. The journal is truncated once every
 entry has ended and its aside is released.
 
-**Recovery** (`Recover`, `RecoverEnd`) runs at start, before capture: an
+**Recovery** (`Recover`, `RecoverEnd`) runs at start, before capture, and
+again at the start of a round after a step failed (a git call that found
+`index.lock`, say), which leaves its entry as a crash would: capture,
+install, free, keep and re-thinning wait while an entry has no end, so a
+file moved aside never reads as the person's deletion. An
 entry with `proved` rolls forward (step 7, `raced` if *p* exists, then step
 8); any other rolls back (the aside goes back if *p* is absent, or is kept
 and hashed at release if *p* is another file). Staged files no entry names

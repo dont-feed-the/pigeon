@@ -193,6 +193,11 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
     let Some(worktree) = g.worktree.clone() else {
         return Ok(done);
     };
+    if crate::evict::unsettled(g) {
+        // A half-done install, free or keep is no change of the person's;
+        // the next round settles it first (07 §7.5).
+        return Ok(done);
+    }
     undo_interrupted(g).await?;
     let now = crate::util::now_ns();
     g.lock()

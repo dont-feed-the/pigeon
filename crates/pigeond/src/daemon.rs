@@ -115,7 +115,14 @@ impl Daemon {
         crate::settings::check(g).await;
         g.ensure_remotedaemon(&self.wake).await;
         g.reload_roster().await;
-        if g.role == Role::Laptop {
+        if g.role == Role::Laptop && crate::evict::unsettled(g) {
+            // A step that failed, such as a git call that found a lock,
+            // left its transition half done: it ends as after a crash,
+            // before anything reads or writes the folder (07 §7.5).
+            crate::evict::recover(g, &self.tracer).await;
+        }
+        let settled = g.role == Role::Laptop && !crate::evict::unsettled(g);
+        if settled {
             crate::evict::free_targets(g, &self.device, &self.tracer).await;
             if let Err(e) = crate::evict::keep(g, &self.tracer).await {
                 tracing::info!(group = %g.id, error = %e, "keep-waits");
@@ -125,15 +132,13 @@ impl Daemon {
             }
         }
         crate::custody::accept(g, &self.device, &self.tracer).await;
-        if g.role == Role::Laptop
-            && let Err(e) = crate::install::incoming(g, &self.device, &self.tracer).await
-        {
+        if settled && let Err(e) = crate::install::incoming(g, &self.device, &self.tracer).await {
             tracing::warn!(group = %g.id, error = %e, "install-failed");
         }
         crate::report::receive(g, &self.device).await;
         self.note_lost(g);
         crate::custody::place(g, &self.device).await;
-        if g.role == Role::Laptop {
+        if settled && !crate::evict::unsettled(g) {
             crate::thin::rethin(g, &self.device, &self.tracer).await;
         }
         crate::repair::repair(g, &self.device).await;

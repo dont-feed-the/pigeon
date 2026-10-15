@@ -1,5 +1,5 @@
 //! Freeing and keeping (08 §8.5 and 07 §7.5), and the recovery of the
-//! install journal at start (07 §7.5).
+//! install journal at start and after a failed step (07 §7.5).
 //!
 //! A request only records the folder's target and wakes the loops; each
 //! round moves every folder toward its target, so a crash at any point
@@ -427,6 +427,16 @@ pub async fn keep(g: &Group, t: &Tracer) -> Result<usize, String> {
     }
     truncate_if_done(g);
     Ok(moved.len())
+}
+
+/// Whether an entry of the journal has no end: a transition that a crash
+/// or a failed step left half done, which [`recover`] settles (07 §7.5).
+/// Capture takes nothing while one has none: a file moved aside is no
+/// deletion of the person's.
+pub fn unsettled(g: &Group) -> bool {
+    entries(&read(&journal(g)))
+        .values()
+        .any(|e| e.end.is_none())
 }
 
 /// Replays every entry of the journal without an end (07 §7.5), then
