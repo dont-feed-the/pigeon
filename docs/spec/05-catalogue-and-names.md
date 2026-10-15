@@ -40,17 +40,34 @@ and the conflict events they froze.
 | # | Step |
 |---|---|
 | 1 | **Order:** an event comes after its ancestors and the events it froze |
-| 2 | **Heads** of a slot: the events that wrote it with no later writer of it |
+| 2 | **Heads** of a slot: the events that wrote it with no later writer of it, renames followed (below) |
 | 3 | **Versions:** each distinct content among the heads' values; a deletion is none, so a modification survives a concurrent deletion (P3) |
 | 4 | **Representative** of a version: its earliest head by (author time, device ID, that device's earlier contributions, commit ID); an adoption counts with its proposal's author and time |
 | 5 | **Placement**, in representative order: a folder takes its first version's spelling; each slot's first version its own name, unless a folder of that folded name is there; every other version its first free conflict name (§5.3), unless a conflict event put it at one: that copy shows it, or what a person who saw it saved there **[no ADR: correction]** |
 | 6 | **Freezing:** a slot with several versions, or a version under another name, is unsettled; every contribution freezes each unsettled slot of its base into a **conflict event** writing each version where B(c) showed it, so a later save keeps the copies its person saw |
 
+**Renames** (ADR 0072). A contribution's `Pigeon-Renamed: "x" "y"`
+trailers count when the base has *x* and not *y*, and the commit has *y*
+and not *x*, both plain files; a rename is *pure* when the content is the
+same. A write at *x* that did not see a rename *x* → *y* follows the
+earliest one that builds on its version (an event it saw, or a rename it
+followed, wrote *x* before the rename), unless it saw a rename of *x*, or
+writes or saw a write of *y*; it goes on from *y*. An event replaces a
+write it saw where its own view put that write; a pure rename's write of
+*y* yields to a version that came through it and saw every version it
+moved; a conflict event sees the renames that moved its heads. Without a
+trailer, a rename is a deletion and an add.
+
 | Case (`catalogue.py`) | Result |
 |---|---|
 | `edit-edit`, `add-add` | the first representative keeps *p*; the others go to conflict names |
 | `edit-delete` | the edit stays; the deletion is in `versions(p)` |
-| `rename-edit` | a rename is a deletion and an add: *p* holds the edit, *q* the renamed file |
+| `rename-edit`, `rename-chain`, `rename-twice` | an edit follows the renames it did not see to the new name; an add of the new name meets it there |
+| `rename-rename` | two concurrent renames keep both names; an edit follows the earlier |
+| `rename-delete` | a rename survives a concurrent deletion, as an edit does |
+| `rename-edited`, `rename-conflict` | a rename that changed the file, or moved a version the edit did not see, keeps both at the new name |
+| `rename-add`, `rename-seen` | an add of a name stays when another file is renamed to it; a deletion people saw holds wherever renames take it |
+| `rename-keep`, `rename-folder`, `rename-spell` | *Keep mine* moves with a rename; an edit moved into a folder its author may not write stays there as a copy; the spelling shown stays |
 | `case`, `unicode` | one slot: the later goes to `photo (Bob, 2026-10-13 14h02).jpg`; one content under both names is one version |
 | `package` | two edits keep two whole packages, never a mix |
 | `keep-mine` racing an edit | a new conflict, both kept |

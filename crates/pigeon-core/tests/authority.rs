@@ -6,7 +6,8 @@
 //! of `S`; devices 1-3 are theirs, device 4 is outside the roster, device 5
 //! is p1's recovery key. Other paths are add-only with the admins as
 //! stewards. The base's files were written by persons drawn at random: one
-//! who alone wrote an add-only file may change it (ADR 0070).
+//! who alone wrote an add-only file may change it (ADR 0070). A rename's
+//! trailer gives back its two paths (ADR 0072).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod common;
 
@@ -676,4 +677,28 @@ fn trailers_and_author_times_are_read_from_the_commit() {
         authority::author_time(b"tree x\nauthor A <a@x> 12 +2\n\n"),
         None
     );
+}
+
+/// A path of letters, spaces, quotes, backslashes and slashes.
+fn odd_path(tc: &TestCase) -> String {
+    let chars = ['a', 'é', ' ', '"', '\\', '/', '.', '(', '\''];
+    let n = usize::try_from(int(tc, 1, 12)).unwrap();
+    (0..n).map(|_| pick(tc, &chars)).collect()
+}
+
+#[hegel::test(test_cases = 1000)]
+fn a_rename_trailer_names_its_paths(tc: TestCase) {
+    let (old, new) = (odd_path(&tc), odd_path(&tc));
+    let raw = format!(
+        "tree x\nauthor A <a@x> 12 +0000\n\npigeon: capture\n\n{}\n{}\n",
+        authority::renamed_trailer(&old, &new),
+        authority::renamed_trailer(&new, "b.txt"),
+    );
+    let got = authority::renamed(raw.as_bytes());
+    assert_eq!(
+        got,
+        vec![(old.clone(), new.clone()), (new, "b.txt".to_owned())]
+    );
+    let bad = format!("tree x\n\nPigeon-Renamed: \"{old}\n");
+    assert!(authority::renamed(bad.as_bytes()).is_empty() || old.contains('"'));
 }

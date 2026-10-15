@@ -155,7 +155,5 @@ These come in v1.1:
 
 These questions of [16 §16.4](spec/16-open-questions.md) block a milestone:
 
-- rename tracking blocks M2 (own files in add-only folders: ADR 0070;
-  saves from stale memory: ADR 0071);
 - the status thresholds block M4;
 - expiring declined suggestions blocks M5.

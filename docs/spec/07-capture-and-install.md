@@ -44,7 +44,7 @@ repository, in this order:
 | 4 | names | a non-portable name is held ([05 §5.4](05-catalogue-and-names.md)) |
 | 5 | classify | under `main`'s roster ([04 §4.3](04-roster-and-authority.md)): *allowed*, *not allowed* (per set of deciders) or *diverging* (§7.6) |
 | 6 | ingest | a copy (reflink where possible) into the annex, with the execute bit from `lstat` (E20); a file changing meanwhile waits for its next quiet period; content beyond the pending budget waits (§7.8) |
-| 7 | commit | allowed paths: one signed commit, `main` moved from its expected old value; the others: one proposal per set of deciders ([04 §4.5](04-roster-and-authority.md)), the index keeps `main`'s version, the path becomes a *suggestion* (§7.6) |
+| 7 | commit | allowed paths: one signed commit, `main` moved from its expected old value, with a `Pigeon-Renamed: "old" "new"` trailer for each deleted file paired with a new one by content, else, up to 1 MiB, by git's similarity estimate (ADR 0072, [05 §5.2](05-catalogue-and-names.md)); the others: one proposal per set of deciders ([04 §4.5](04-roster-and-authority.md)), the index keeps `main`'s version, the path becomes a *suggestion* (§7.6) |
 | 8 | trace | each commit and proposal (ADR 0008, [12](12-observability.md)) |
 
 A crash anywhere loses nothing: the next scan redoes the batch. Before it

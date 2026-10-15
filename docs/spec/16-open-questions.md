@@ -97,10 +97,6 @@ into 0054; 0065 into 0053.
 
 ## 16.4 Design questions left open
 
-- **Rename tracking.** Should capture record renames? A rename is a
-  deletion and an add ([05 §5.2](05-catalogue-and-names.md)), so an edit
-  concurrent with it stays at the old name; git's similarity detection
-  guesses, and fails on small files.
 - **Scope:** a per-group `.pigeon/ignore` ([07 §7.2](07-capture-and-install.md));
   links, empty folders, extended attributes, live libraries, and packages
   from macOS's type declarations (§7.9); mapping non-portable names on

@@ -34,6 +34,7 @@ pub mod merge;
 pub mod net;
 pub mod proposal;
 pub mod recovery;
+pub mod renames;
 pub mod repair;
 pub mod report;
 pub mod report_file;

@@ -26,6 +26,8 @@ pub const ROSTER: &str = ".pigeon/roster.toml";
 pub const FORCE: &str = "Pigeon-Force:";
 /// The trailer of *Keep both* (05 §5.3).
 pub const RESOLVED: &str = "Pigeon-Resolved:";
+/// The trailer of a rename, old path and new (ADR 0072, 05 §5.2).
+pub const RENAMED: &str = "Pigeon-Renamed:";
 
 /// One entry of a tree, as `ls-tree -r` lists it.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -219,6 +221,41 @@ pub fn resolved(raw: &[u8]) -> Vec<String> {
         .map(|p| p.trim().to_owned())
         .filter(|p| !p.is_empty())
         .collect()
+}
+
+/// The trailer line of a rename from `old` to `new`: each path in double
+/// quotes, a quote or backslash in it escaped by a backslash.
+pub fn renamed_trailer(old: &str, new: &str) -> String {
+    let quote = |p: &str| format!("\"{}\"", p.replace('\\', "\\\\").replace('"', "\\\""));
+    format!("{RENAMED} {} {}", quote(old), quote(new))
+}
+
+/// The renames, old path and new, that a commit object's
+/// `Pigeon-Renamed:` trailers name; a malformed one is skipped.
+pub fn renamed(raw: &[u8]) -> Vec<(String, String)> {
+    trailers(raw)
+        .iter()
+        .filter_map(|l| l.strip_prefix(RENAMED))
+        .filter_map(|l| {
+            let (old, rest) = quoted(l.trim_start())?;
+            let (new, rest) = quoted(rest.strip_prefix(' ')?)?;
+            (rest.trim().is_empty() && !old.is_empty() && !new.is_empty()).then_some((old, new))
+        })
+        .collect()
+}
+
+/// A double-quoted path at the start of `s`, unescaped, and what follows.
+fn quoted(s: &str) -> Option<(String, &str)> {
+    let mut out = String::new();
+    let mut chars = s.strip_prefix('"')?.char_indices();
+    while let Some((i, c)) = chars.next() {
+        match c {
+            '"' => return Some((out, s.get(i + 2..)?)),
+            '\\' => out.push(chars.next()?.1),
+            c => out.push(c),
+        }
+    }
+    None
 }
 
 /// The author time of a commit object, and its recorded offset in minutes

@@ -9,7 +9,8 @@
 //! lagging index's. A save within ten seconds of an install, as an
 //! application holding the old content makes, is concurrent with the
 //! installed version too (ADR 0071); a later one replaces it. A version
-//! whose content is not here waits.
+//! whose content is not here waits. A file renamed, alone or with a small
+//! edit, is captured with its `Pigeon-Renamed:` trailer (ADR 0072).
 //!
 //! Needs git-annex on PATH; skipped without, unless
 //! `PIGEON_REQUIRE_GIT_ANNEX` is set, as in CI.
@@ -474,4 +475,29 @@ async fn a_version_whose_content_is_not_here_waits() {
         None
     );
     assert!(l.g.lock().diverging.is_empty());
+}
+
+#[tokio::test]
+async fn a_renamed_file_is_captured_with_its_trailer() {
+    let Some(l) = laptop().await else {
+        return;
+    };
+    let text = b"one\ntwo\nthree\nfour\nfive\nsix\n";
+    write(&l, "a.txt", b"apple\n");
+    write(&l, "c.txt", text);
+    write(&l, "e.txt", b"eel\n");
+    capture::capture(&l.g, &dev(1).0, &l.t).await.unwrap();
+    // a.txt moves, c.txt moves with an edit, e.txt is replaced by another.
+    std::fs::create_dir_all(l.wt.join("sub")).unwrap();
+    std::fs::rename(l.wt.join("a.txt"), l.wt.join("sub/b.md")).unwrap();
+    std::fs::remove_file(l.wt.join("c.txt")).unwrap();
+    write(&l, "d.txt", b"one\ntwo\nthree\nfour\nfive\nseven\n");
+    std::fs::remove_file(l.wt.join("e.txt")).unwrap();
+    write(&l, "f.txt", b"fig\n");
+    let c = capture::capture(&l.g, &dev(1).0, &l.t).await.unwrap();
+    let raw = l.git.object(&c.commit.unwrap()).await.unwrap();
+    let got = pigeon_core::authority::renamed(&raw);
+    let pair = |a: &str, b: &str| (a.to_owned(), b.to_owned());
+    // Same contents pair first, whatever the extension, then similar ones.
+    assert_eq!(got, [pair("a.txt", "sub/b.md"), pair("c.txt", "d.txt")]);
 }

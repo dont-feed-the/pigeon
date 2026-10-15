@@ -9,7 +9,9 @@
 //! captured: the roster changes only through `pigeond`. A save within ten
 //! seconds of an install of its path, as an application holding the old
 //! content makes, goes beside the installed version, under its conflict
-//! name, as if the two were concurrent (ADR 0071).
+//! name, as if the two were concurrent (ADR 0071). A file deleted and one
+//! added in one round are a rename when their contents match (`renames`,
+//! ADR 0072).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -402,7 +404,7 @@ async fn commit_batch(
     }
     let (Some(h), Some(worktree)) = (&head, &g.worktree) else {
         let tree = g.git.run(&["write-tree"]).await?.trim().to_owned();
-        return commit_main(g, tree, head, done).await;
+        return commit_main(g, tree, head, done, &[]).await;
     };
     let main = match main {
         Some(t) => t,
@@ -439,16 +441,19 @@ async fn commit_batch(
     if allowed.is_empty() {
         return Ok(done);
     }
+    let renames = crate::renames::detect(g, &main, &allowed).await;
     let tree = crate::merge::write_tree(&g.git, &crate::suggest::applied(&main, &allowed)).await?;
-    commit_main(g, tree, head, done).await
+    commit_main(g, tree, head, done, &renames).await
 }
 
-/// Commits `tree` on `main` at `head`, unless it is `main`'s tree.
+/// Commits `tree` on `main` at `head`, unless it is `main`'s tree, with a
+/// trailer for each of `renames` (ADR 0072).
 async fn commit_main(
     g: &Group,
     tree: String,
     head: Option<String>,
     mut done: Captured,
+    renames: &[(String, String)],
 ) -> Result<Captured, Error> {
     let head_tree = g.git.rev("refs/heads/main^{tree}").await;
     if head_tree.as_deref() == Some(tree.as_str()) {
@@ -457,13 +462,13 @@ async fn commit_main(
     let parents: Vec<&str> = head.iter().map(String::as_str).collect();
     let commit = g
         .git
-        .commit_tree(&tree, &parents, "pigeon: capture")
+        .commit_tree(&tree, &parents, &crate::renames::message(renames))
         .await?;
     pigeon_sys::lab::crash_point("capture-before-ref");
     g.git
         .update_ref("refs/heads/main", &commit, head.as_deref())
         .await?;
-    tracing::info!(group = %g.id, commit = %commit, added = done.added, removed = done.removed, "captured");
+    tracing::info!(group = %g.id, commit = %commit, added = done.added, removed = done.removed, renamed = renames.len(), "captured");
     done.commit = Some(commit);
     Ok(done)
 }

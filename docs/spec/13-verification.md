@@ -170,7 +170,7 @@ What carries each guarantee today; gaps are GitHub issues
 | P2 Capture, no overwrite | E15b, E18, E19, E20, E24 (asserting); `CaptureInstall`, `Evict` | journal laws against the model (§13.13) | copy-on-write cost on APFS and btrfs; saves from stale memory or a macOS shared mapping (16 §16.4) |
 | P3 Reversible deletion | E14 (asserting); E2, E4 (printing); `Purge` | purge laws; `Purge` trace validation | a custodian clock jumping beyond the waiting period; erased names stay in history (16 §16.4) |
 | P4 Authority | E12 (asserting); E7 (printing); `Roster`, `Authority` | acceptance and revocation laws; `Authority` trace validation | format compatibility (#15) |
-| P5 Convergence | E3 (printing); `models/catalogue`, `Catalogue` | merges by `pigeond`; the scenarios of two people and three laptops (M2) | rename tracking (16 §16.4) |
+| P5 Convergence | E3 (printing); `models/catalogue`, `Catalogue` | merges by `pigeond`; the scenarios of two people and three laptops (M2); renames in `Catalogue` traces (ADR 0072) | renames with a large edit, or of files beyond 1 MiB, are a deletion and an add (ADR 0072) |
 | P6 Honest status | E20, E21 (asserting) | observation laws; usability test | — |
 
 ## 13.11 Going on: technical and human criteria

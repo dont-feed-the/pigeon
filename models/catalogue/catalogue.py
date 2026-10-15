@@ -2,22 +2,20 @@
 """Reference model of the logical catalogue and its merge (spec 05 §5.2).
 
 catalogue(S) is a pure function of a set S of accepted commits, in three modes:
-new is spec 05 §5.2 (contributions, conflict events, folded slots); old is spec 05
-§5.2 before it (heads over every change, merge commits included); naive is the
-obvious repair of old (heads over contributions only, copies derived).
-For each case the checker runs every schedule of the contributions and of
-pulls between three devices: orders, pairings, fast-forwards, duplicate merges
-and deliveries, split and rejoin. new reaches every state (there are finitely
-many); old and naive stop at OLD_PULLS pulls, enough to show how they fail.
-Laws: order (the final catalogue depends only on which contribution saw which,
-never on contact order or merge identities), tree (tree(c) = catalogue(anc*(c))
-for every commit; a device shows the tree of its main), kept (a key leaves the
-catalogue only through a contribution that had it), seen (no version that no
-contribution saw comes back), names (portable, injective after folding),
-algebra (merge idempotent, commutative, associative), authority (clean merges
-change nothing; each copy is allowed to its author). new must pass them all,
-and EXAMPLES; old and naive must fail exactly as EXPECTED says. --dump DIR
-writes each case's commits (mode new) for pigeon-core's catalogue_oracle.rs.
+new is spec 05 §5.2 (contributions, conflict events, folded slots, renames);
+old is §5.2 before it (heads over every change, merge commits included); naive
+is the obvious repair of old (heads over contributions only, copies derived).
+Each case of catalogue_cases.py runs every schedule of its contributions and of
+pulls between three devices (orders, pairings, fast-forwards, duplicate merges
+and deliveries, split and rejoin): new reaches every state; old and naive stop
+at OLD_PULLS pulls. Laws: order (the catalogue depends only on which
+contribution saw which), tree (tree(c) = catalogue(anc*(c)); a device shows
+the tree of its main), kept (a key leaves only through a contribution that had
+it), seen (no version no contribution saw comes back), names (portable,
+injective after folding), algebra (merge idempotent, commutative,
+associative), authority (clean merges change nothing; a copy is allowed to its
+author where it is or was written). new passes them all and EXAMPLES; old and
+naive fail as EXPECTED says. --dump DIR writes the commits for catalogue_oracle.rs.
 Usage: catalogue.py [--mode M] [--case C] [--pulls N] [--dump DIR] [-v]
 """
 

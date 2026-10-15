@@ -142,3 +142,4 @@ passes; 16 §16.3 lists where each rule now lives.
 | [0069](0069-pigeon-runs-a-pinned-patched-git-annex.md) | pigeon runs a pinned, patched git-annex, built by its own CI | Accepted |
 | [0070](0070-a-member-may-change-an-add-only-file-only-they-wrote.md) | A member may change an add-only file that only they wrote | Accepted |
 | [0071](0071-a-save-soon-after-an-install-goes-beside-it.md) | A save within ten seconds of an install goes beside it | Accepted |
+| [0072](0072-capture-records-renames-and-the-merge-follows-them.md) | Capture records renames, and the merge follows them | Accepted |

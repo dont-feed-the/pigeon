@@ -4,6 +4,8 @@
 //! by the custodian, and judges it clean; a commit signed outside the
 //! roster is refused, and so are a non-portable name and a merge of roster
 //! forks that does not hold their fold; forks merge by the fold (04 §4.8).
+//! A rename merged with a concurrent edit gives the edit the new name (ADR
+//! 0072).
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,
@@ -91,6 +93,17 @@ async fn pointer(git: &Git, n: u8) -> Entry {
 
 /// A commit of `tree` on `parents`, at `T0 + at` seconds, signed by `signer`.
 async fn commit(git: &Git, tree: &Tree, parents: &[&str], at: i64, signer: u8) -> String {
+    commit_with(git, tree, parents, (at, signer), "pigeon: capture").await
+}
+
+/// The same, with `message`.
+async fn commit_with(
+    git: &Git,
+    tree: &Tree,
+    parents: &[&str],
+    (at, signer): (i64, u8),
+    message: &str,
+) -> String {
     let root = merge::write_tree(git, tree).await.unwrap();
     let mut body = format!("tree {root}\n");
     for p in parents {
@@ -98,7 +111,7 @@ async fn commit(git: &Git, tree: &Tree, parents: &[&str], at: i64, signer: u8) -
     }
     let t = T0 + at;
     body.push_str(&format!(
-        "author pigeon <pigeon@localhost> {t} +0200\ncommitter pigeon <pigeon@localhost> {t} +0200\n\npigeon: capture\n"
+        "author pigeon <pigeon@localhost> {t} +0200\ncommitter pigeon <pigeon@localhost> {t} +0200\n\n{message}\n"
     ));
     let raw = sig::sign(body.as_bytes(), &key(signer)).unwrap();
     let args = ["hash-object", "-t", "commit", "-w", "--stdin"];
@@ -300,4 +313,45 @@ async fn roster_forks_merge_by_the_fold() {
     let c1 = commit(&w.git, &c, &[&m], 180, 4).await;
     let judged = verify::judge(&w.g, Some(&m), &c1).await.unwrap();
     assert_eq!(judged.accepted.as_deref(), Some(c1.as_str()), "{judged:?}");
+}
+
+#[tokio::test]
+async fn a_rename_and_a_concurrent_edit_merge_into_the_renamed_file() {
+    let w = world().await;
+    pigeond::git::set_signer(key(3));
+    let mut a = w.base.clone();
+    a.insert("Shared/a.txt".into(), pointer(&w.git, 1).await);
+    let a1 = commit(&w.git, &a, &[&w.genesis], 60, 1).await;
+    // Ana renames a.txt to b.txt; Ben, who saw a.txt, edits it.
+    let mut r = a.clone();
+    let v = r.remove("Shared/a.txt").unwrap();
+    r.insert("Shared/b.txt".into(), v);
+    let renamed = [("Shared/a.txt".to_owned(), "Shared/b.txt".to_owned())];
+    let message = pigeond::renames::message(&renamed);
+    let a2 = commit_with(&w.git, &r, &[&a1], (120, 1), &message).await;
+    let mut e = a.clone();
+    let edit = pointer(&w.git, 2).await;
+    e.insert("Shared/a.txt".into(), edit.clone());
+    let b2 = commit(&w.git, &e, &[&a1], 180, 2).await;
+    let judged = verify::judge(&w.g, Some(&a2), &b2).await.unwrap();
+    assert_eq!(judged.accepted.as_deref(), Some(b2.as_str()), "{judged:?}");
+    let m = merge::merge(&w.g, &a2, &b2)
+        .await
+        .unwrap()
+        .expect("a clean merge");
+    let tree = w.git.tree(&m).await.unwrap();
+    let paths: Vec<&str> = tree.keys().map(String::as_str).collect();
+    assert_eq!(paths, [".pigeon/roster.toml", "Shared/b.txt"]);
+    assert_eq!(tree["Shared/b.txt"], edit, "the edit follows the rename");
+    assert!(w.g.lock().engine.open(std::slice::from_ref(&m)).is_empty());
+    // Without the trailer, the rename is a deletion and an add: both stay.
+    let a3 = commit(&w.git, &r, &[&a1], 240, 1).await;
+    let judged = verify::judge(&w.g, Some(&a3), &b2).await.unwrap();
+    assert_eq!(judged.accepted.as_deref(), Some(b2.as_str()), "{judged:?}");
+    let m = merge::merge(&w.g, &a3, &b2).await.unwrap().unwrap();
+    let tree = w.git.tree(&m).await.unwrap();
+    assert_eq!(
+        (&tree["Shared/a.txt"], &tree["Shared/b.txt"]),
+        (&edit, &a["Shared/a.txt"])
+    );
 }
