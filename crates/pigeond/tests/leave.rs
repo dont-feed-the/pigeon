@@ -106,10 +106,14 @@ fn a_laptop_leaves_once_a_peer_has_its_removal() {
     let config = a2.home.join("config/config.toml");
     eventually_within(
         180,
+        // The config forgets the group first; the repository moves and
+        // the key goes after it.
         || {
             !std::fs::read_to_string(&config)
                 .unwrap_or_default()
                 .contains("[[groups]]")
+                && !fa2.join(".git").exists()
+                && !a2.home.join("config/device-key").exists()
         },
         "the leaver never forgot the group",
         &all,
