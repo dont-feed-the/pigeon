@@ -5,10 +5,13 @@
 # address lookup (scripts/reach-pair). The two jobs meet through this run's
 # artifacts: the inviter uploads the invitation, which the joiner polls
 # for, and says when Mac's file has arrived. Both also run tests/relay.rs.
+# It runs on tags only, as macOS runners are for releases.
 name: reach
 
 on:
+  # The macOS runner is for releases only: tags and by hand.
   push:
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:

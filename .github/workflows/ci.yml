@@ -1,7 +1,7 @@
 # Checks of every push and pull request: repository rules, the fast set of
 # TLA+ models with their expected verdicts (ADR 0026), the catalogue model on
-# every schedule of its cases (spec 05 §5.2), the Rust workspace on Linux and
-# macOS (spec 14 §14.6), and runs of pigeon-core checked by TLC (ADR 0008, 13 §13.13).
+# every schedule of its cases (spec 05 §5.2), the Rust workspace on Linux (and
+# macOS on tags, 14 §14.6), and runs of pigeon-core checked by TLC (ADR 0008, 13 §13.13).
 name: ci
 
 on:
@@ -62,7 +62,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-latest]
+        os: ${{ fromJSON(startsWith(github.ref, 'refs/tags/v') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     env:
