@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 use hegel::TestCase;
 use hegel::generators as gs;
 use pigeon_proto::api::{
-    Choice, DeletedFile, Divergence, FileEntry, Folder, Level, Machine, PersonEntry, Setting,
-    State, StatusReport, Suggestion, VersionStatus,
+    Choice, DeletedFile, Divergence, FileEntry, Folder, InvitationEntry, Level, Machine,
+    PersonEntry, Setting, State, StatusReport, Suggestion, VersionStatus,
 };
 use pigeon_proto::stream::{Refusal, StreamAnswer, StreamHeader};
 use pigeon_proto::{Arg, Envelope, LineDecoder, Message, Problem, Request, Response, encode};
@@ -28,7 +28,7 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(32)) {
+    match tc.draw(gs::integers::<u8>().max_value(34)) {
         0 => Request::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -74,6 +74,10 @@ fn request(tc: &TestCase) -> Request {
         },
         31 => Request::Resume,
         32 => Request::People,
+        33 => Request::Invitations,
+        34 => Request::CancelInvitation {
+            invitation: text(tc),
+        },
         28 => Request::Files { folder: text(tc) },
         27 => Request::SetSettings {
             key: text(tc),
@@ -159,7 +163,7 @@ fn version(tc: &TestCase) -> VersionStatus {
 }
 
 fn response(tc: &TestCase) -> Response {
-    match tc.draw(gs::integers::<u8>().max_value(17)) {
+    match tc.draw(gs::integers::<u8>().max_value(18)) {
         0 => Response::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -205,6 +209,16 @@ fn response(tc: &TestCase) -> Response {
                     custodian: flag(tc),
                     heard_at: maybe_text(tc),
                     this_device: flag(tc),
+                })
+                .collect(),
+        },
+        18 => Response::Invitations {
+            invitations: (0..tc.draw(gs::integers::<u8>().max_value(3)))
+                .map(|_| InvitationEntry {
+                    id: text(tc),
+                    who: text(tc),
+                    custodian: flag(tc),
+                    expires: text(tc),
                 })
                 .collect(),
         },

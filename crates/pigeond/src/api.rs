@@ -177,6 +177,19 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         Request::Keep { folder } => keep(d, Path::new(&folder)).await,
         Request::Machines => machines(d),
         Request::People => people(d),
+        Request::Invitations => match d.default_group() {
+            Some(g) => vec![Response::Invitations {
+                invitations: crate::invite::pending(&g),
+            }],
+            None => vec![problem("not-in-group", &[], None)],
+        },
+        Request::CancelInvitation { invitation: id } => match d.default_group() {
+            Some(g) if crate::invite::cancel(&g, &id) => {
+                vec![said("invitation-cancelled", &[("id", text(&id))])]
+            }
+            Some(_) => vec![problem("invite-unknown", &[], None)],
+            None => vec![problem("not-in-group", &[], None)],
+        },
         Request::OpenWeb => match d.web.get() {
             Some(web) => vec![said("web-login", &[("url", text(&web.login_url()))])],
             None => not_in_this_build("open"),

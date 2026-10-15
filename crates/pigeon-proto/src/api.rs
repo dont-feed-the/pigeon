@@ -98,6 +98,13 @@ pub enum Request {
     Machines,
     /// `pigeon people`: the group's members, with their computers (04 §4.2).
     People,
+    /// `pigeon invite --list`: this computer's invitations not yet used.
+    Invitations,
+    /// `pigeon invite --cancel ID`: an invitation no one can use any more.
+    CancelInvitation {
+        /// Its ID, from `Invitations`.
+        invitation: String,
+    },
     /// `pigeon open`: a link to the web interface holding a single-use
     /// token (10 §10.3).
     OpenWeb,
@@ -245,6 +252,11 @@ pub enum Response {
     Machines {
         /// The roster's devices.
         machines: Vec<Machine>,
+    },
+    /// The answer to `Invitations`.
+    Invitations {
+        /// Oldest first.
+        invitations: Vec<InvitationEntry>,
     },
     /// The answer to `People`.
     People {
@@ -413,6 +425,20 @@ pub struct NotShared {
     pub path: String,
     /// Why, such as a symbolic link.
     pub reason: Message,
+}
+
+/// An invitation not yet used.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InvitationEntry {
+    /// Its ID, for `CancelInvitation`.
+    pub id: String,
+    /// Whom it is for: a new person's name, or the person of a new
+    /// computer or backup machine.
+    pub who: String,
+    /// Whether it is for a backup machine.
+    pub custodian: bool,
+    /// When it expires, RFC 3339.
+    pub expires: String,
 }
 
 /// A person of the roster.

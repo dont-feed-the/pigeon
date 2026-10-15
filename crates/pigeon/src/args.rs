@@ -86,6 +86,7 @@ const VALUED: &[&str] = &[
     "override",
     "note",
     "keep-copy",
+    "cancel",
 ];
 
 #[derive(Debug, Default)]
@@ -223,6 +224,12 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
                 ),
                 k,
                 device_name: s.value("name").map_or_else(hostname, str::to_owned),
+            })
+        }
+        "invite" if n == 0 && s.flag("list") && s.only(&["list"]) => send(Request::Invitations),
+        "invite" if n == 0 && s.only(&["cancel"]) && s.value("cancel").is_some() => {
+            send(Request::CancelInvitation {
+                invitation: s.value("cancel")?.to_owned(),
             })
         }
         "invite" if fits(0, 1, &["backup-machine", "admin"]) => {

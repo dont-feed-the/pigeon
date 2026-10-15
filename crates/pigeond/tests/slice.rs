@@ -161,6 +161,27 @@ fn local_published_protected_then_free_and_keep() {
         [Response::Deleted { .. }] => {}
         other => panic!("deleted: {other:?}"),
     }
+    let code = pigeon(&lap, &["invite", "Zoe"]);
+    assert!(said(&code, "invitation", "code").is_some(), "{code:?}");
+    let zoe = match pigeon(&lap, &["invite", "--list"]).as_slice() {
+        [Response::Invitations { invitations }] => invitations
+            .iter()
+            .find(|i| i.who == "Zoe")
+            .map(|i| i.id.clone())
+            .unwrap_or_else(|| panic!("no invitation for Zoe: {invitations:?}")),
+        other => panic!("invite --list: {other:?}"),
+    };
+    let cancelled = pigeon(&lap, &["invite", "--cancel", &zoe]);
+    assert!(
+        said(&cancelled, "invitation-cancelled", "id").is_some(),
+        "{cancelled:?}"
+    );
+    match pigeon(&lap, &["invite", "--list"]).as_slice() {
+        [Response::Invitations { invitations }] => {
+            assert!(invitations.iter().all(|i| i.id != zoe), "{invitations:?}");
+        }
+        other => panic!("invite --list: {other:?}"),
+    }
     let paused = pigeon(&lap, &["pause", "2h"]);
     assert!(
         said(&paused, "paused-until", "until").is_some(),

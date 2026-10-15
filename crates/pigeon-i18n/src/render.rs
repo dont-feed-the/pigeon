@@ -118,6 +118,20 @@ impl Renderer {
     }
 
     /// A computer or backup machine, and when it was last heard.
+    pub fn invitation(&self, i: &pigeon_proto::api::InvitationEntry) -> String {
+        let id = if i.custodian {
+            "invitation-row-backup"
+        } else {
+            "invitation-row"
+        };
+        let msg = crate::Message::new(id)
+            .arg("id", i.id.as_str())
+            .arg("who", i.who.as_str())
+            .arg("expires", i.expires.as_str());
+        self.cat.format(&msg)
+    }
+
+    /// A person of the roster, with their machines.
     pub fn person(&self, p: &pigeon_proto::api::PersonEntry) -> String {
         let role = if p.admin {
             "person-admin"
@@ -220,6 +234,13 @@ impl Renderer {
             Response::Machines { machines } => {
                 (machines.iter().map(|m| self.machine(m)).collect(), false)
             }
+            Response::Invitations { invitations } if invitations.is_empty() => {
+                (vec![self.id("invitations-none")], false)
+            }
+            Response::Invitations { invitations } => (
+                invitations.iter().map(|i| self.invitation(i)).collect(),
+                false,
+            ),
             Response::People { people } => (people.iter().map(|p| self.person(p)).collect(), false),
             Response::History { versions } => {
                 (versions.iter().map(|v| self.version(v)).collect(), false)

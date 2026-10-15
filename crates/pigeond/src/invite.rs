@@ -122,6 +122,48 @@ fn save(g: &Group, r: &Records) -> std::io::Result<()> {
     crate::util::write_private(&g.files.invitations(), &text)
 }
 
+/// `pigeon invite --list`: the invitations neither used nor expired.
+pub fn pending(g: &Group) -> Vec<pigeon_proto::api::InvitationEntry> {
+    let t = now();
+    load(g)
+        .invitations
+        .into_iter()
+        .filter(|r| r.used_by.is_none())
+        .filter(|r| pigeon_proto::time::parse_rfc3339(&r.expires).is_some_and(|e| e > t))
+        .map(|r| {
+            let field = |kind: &str, key: &str| {
+                r.purpose
+                    .get(kind)
+                    .and_then(|p| p.get(key))
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned)
+            };
+            let person = field("new-device", "person").and_then(|p| {
+                g.roster()
+                    .and_then(|d| d.roster.persons.get(&PersonId(p.clone())).cloned())
+                    .map_or(Some(p), |x| Some(x.name))
+            });
+            pigeon_proto::api::InvitationEntry {
+                id: r.id.clone(),
+                who: field("new-person", "name").or(person).unwrap_or_default(),
+                custodian: field("new-device", "role").as_deref() == Some("custodian"),
+                expires: r.expires.clone(),
+            }
+        })
+        .collect()
+}
+
+/// `pigeon invite --cancel ID`: forgets an invitation not yet used, so that
+/// joining with it fails with `invite-unknown`. False if there is none.
+pub fn cancel(g: &Group, id: &str) -> bool {
+    let mut records = load(g);
+    let before = records.invitations.len();
+    records
+        .invitations
+        .retain(|r| r.id != id || r.used_by.is_some());
+    records.invitations.len() < before && save(g, &records).is_ok()
+}
+
 /// What `pigeon invite` asks for (10 §10.1).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Ask<'a> {
