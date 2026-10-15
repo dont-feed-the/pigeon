@@ -199,7 +199,9 @@ that escapes the scan.
 **`Authority`** ([04 §4.3–4.5](../../docs/spec/04-roster-and-authority.md),
 [09 §9.7](../../docs/spec/09-network-and-joining.md)) models acceptance with three persons:
 the admin a, b who owns a folder F, and the member c. There are two paths: a
-file in F, and a file at the root (add-only, the admins are its stewards).
+file in F, and a file at the root (add-only, the admins are its stewards;
+a person who alone wrote it changes it too, ADR 0070: each commit records
+the person it writes as, its proposal's author for an adoption).
 The devices of a and b are honest `pigeond`s: they capture, revise, adopt,
 reject and withdraw suggestions, give F to someone else, remove c's devices,
 fetch and merge. c's devices belong to an attacker who signs any change,

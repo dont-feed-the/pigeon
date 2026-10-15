@@ -9,6 +9,7 @@
    Paths: "f" in F (owned by b), "r" at the root (add-only, the admins are its
    stewards). A path's value is the set of versions the catalogue keeps there
    (a conflict keeps several); version n is the content commit n wrote.
+   A member may change a root path that only they wrote (ADR 0070).
    The catalogue is the abstraction of models/catalogue: the values of the
    newest changes of each path (spec 05 §5.2).
    Modes (the design first; each other value removes a safeguard):
@@ -68,8 +69,10 @@ Change(Ro, E) ==
 (* Commits: cm[i] = [parents, signer, kind, tree, dec, redits, force, and, set
    when it is written and never changed: acc (the verdict of 04 §4.4), delta
    (the paths it changes against its base), cbase (a proposal's nearest
-   accepted ancestor), anc]. Parents have smaller ids, so increasing id is a
-   canonical topological order (the fold's order is checked by Roster.tla). *)
+   accepted ancestor), anc, who (the person it writes as: its signer's, or
+   for an adoption its proposal's author, as the catalogue represents it)].
+   Parents have smaller ids, so increasing id is a canonical topological
+   order (the fold's order is checked by Roster.tla). *)
 Ids == 1..Len(cm)
 IsProposal(x) == x # 1 /\ ~cm[x].acc
 (* The fold of the commits S, of which those in C count: a counting change
@@ -105,16 +108,21 @@ RosterOf(S) == Fold(S, IF Revocation = "contentonly" THEN S ELSE Counting(S))
 Hist(X) == UNION {cm[x].anc : x \in X}
 HistSet(X) == IF BaseOf = "accepted" THEN {y \in Hist(X) : cm[y].acc} ELSE Hist(X)
 Contrib(S, q) == {x \in S : q \in cm[x].delta}
+(* The persons who wrote q in S, and whether u is the only one (ADR 0070). *)
+Writers(S, q) == {cm[x].who : x \in Contrib(S, q)}
+Mine(u, q, S) == Writers(S, q) \subseteq {u}
 Newest(S, q) == {x \in Contrib(S, q) : \A y \in Contrib(S, q) : y = x \/ x \notin cm[y].anc}
 Cat(S) == [q \in CPaths |-> UNION {cm[x].tree[q] : x \in Newest(S, q)}]
 TreeOf(X) == Cat(Counting(HistSet(X)))
 R(x) == RosterOf(HistSet({x}))           \* the roster in force for x's children
 
-(* Folder rules (04 §4.3) for person u changing q from old to new: F is
-   b's; at the root anyone adds, and only the admins, its stewards, change
-   or delete. A value that keeps every version of old only adds: a version
-   beside them is a conflict copy, a new file (05 §5.3). *)
-AllowedC(u, q, old, new, Ro) == IF q = "f" THEN u = Ro.own ELSE old \subseteq new \/ u \in Ro.adm
+(* Folder rules (04 §4.3) for person u changing q from old to new, on a
+   base whose counting commits are S: F is b's; at the root anyone adds, and
+   only the admins, its stewards, or the person who alone wrote it (ADR
+   0070), change or delete. A value that keeps every version of old only
+   adds: a version beside them is a conflict copy, a new file (05 §5.3). *)
+AllowedC(u, q, old, new, Ro, S) ==
+  IF q = "f" THEN u = Ro.own ELSE old \subseteq new \/ u \in Ro.adm \/ Mine(u, q, S)
 
 (* Proposals (04 §4.5). The adoption on main x: a path the proposal changed
    gets its value, or both values if x changed it meanwhile. *)
@@ -131,7 +139,8 @@ Deciders(p, x) ==
       diff == IF DecidersAt = "decision" THEN ADiff(x, p) ELSE PDiff(p)
       old(q) == IF DecidersAt = "decision" THEN cm[x].tree[q] ELSE cm[cm[p].cbase].tree[q]
       new(q) == IF DecidersAt = "decision" THEN AdoptTree(x, p)[q] ELSE cm[p].tree[q]
-      D == {u \in Persons : \A q \in diff : AllowedC(u, q, old(q), new(q), Ro)}
+      S == Counting(HistSet({IF DecidersAt = "proposal" THEN cm[p].cbase ELSE x}))
+      D == {u \in Persons : \A q \in diff : AllowedC(u, q, old(q), new(q), Ro, S)}
   IN IF D = {} THEN Ro.adm ELSE D
 Author(p) == R(cm[p].cbase).dev[cm[p].signer]
 (* tree holds the change of p on a base BT (rule 7): each version it wrote,
@@ -157,7 +166,8 @@ Judge(P, s, tree, D, RE, F) ==
                ELSE \A p \in A : s \in Present(R(p))
       rule3 == \A p \in AR :
                  LET Ro == R(p)  u == Ro.dev[s] IN
-                 /\ (\A q \in delta : AllowedC(u, q, BT[q], tree[q], Ro)) \/ (F /\ u \in Ro.adm)
+                 /\ (\A q \in delta : AllowedC(u, q, BT[q], tree[q], Ro, Counting(BS)))
+                    \/ (F /\ u \in Ro.adm)
                  /\ \A e \in D : /\ IsProposal(e.p)
                                  /\ ~\E y \in Counting(BS) : \E o \in cm[y].dec : o.p = e.p
                                  /\ \/ DecisionRule = "members"
@@ -175,14 +185,17 @@ Judge(P, s, tree, D, RE, F) ==
   IN [acc |-> A # {} /\ rule2 /\ rule3 /\ rule4 /\ ruleX, delta |-> delta]
 
 New(P, s, kind, tree, D, RE, F, cb) ==
-  LET j == Judge(P, s, tree, D, RE, F) IN
+  LET j == Judge(P, s, tree, D, RE, F)
+      who == IF \E p \in P : IsProposal(p) THEN Author(CHOOSE p \in P : IsProposal(p))
+             ELSE R(cb).dev[s] IN
   [parents |-> P, signer |-> s, kind |-> kind, tree |-> tree, dec |-> D, redits |-> RE,
-   force |-> F, acc |-> j.acc, delta |-> j.delta, cbase |-> cb, anc |-> Hist(P) \cup {Len(cm) + 1}]
+   force |-> F, acc |-> j.acc, delta |-> j.delta, cbase |-> cb, anc |-> Hist(P) \cup {Len(cm) + 1},
+   who |-> who]
 CBase(p) == IF cm[p].acc THEN p ELSE cm[p].cbase
 
 Init == /\ cm = << [parents |-> {}, signer |-> 0, kind |-> "genesis",
                     tree |-> [q \in CPaths |-> {}], dec |-> {}, redits |-> {}, force |-> FALSE,
-                    acc |-> TRUE, delta |-> {}, cbase |-> 1, anc |-> {1}] >>
+                    acc |-> TRUE, delta |-> {}, cbase |-> 1, anc |-> {1}, who |-> 0] >>
         /\ head = [d \in Honest |-> 1]
         /\ has = [d \in Honest |-> {1}]
 
@@ -218,7 +231,8 @@ Revise(d, p, q) ==
                   cm[p].cbase))
 Pending(d, p) == /\ p \in has[d] /\ IsProposal(p) /\ State(p, d) = "pending"
                  /\ HistSet({p}) \subseteq cm[head[d]].anc   \* pigeond merges its base first
-NeedsForce(u, x, p) == ~\A q \in ADiff(x, p) : AllowedC(u, q, cm[x].tree[q], AdoptTree(x, p)[q], R(x))
+NeedsForce(u, x, p) ==
+  ~\A q \in ADiff(x, p) : AllowedC(u, q, cm[x].tree[q], AdoptTree(x, p)[q], R(x), Counting(HistSet({x})))
 Adopt(d, p) ==
   LET x == head[d]
       c == New({x, p}, d, "adopt", AdoptTree(x, p), {}, {},
@@ -315,7 +329,8 @@ AuthorisedAt(y, q) ==
   /\ A # {}
   /\ \A p \in A : LET Ro == R(p)  u == Ro.dev[cm[y].signer] IN
                   /\ cm[y].signer \in Present(Ro)
-                  /\ AllowedC(u, q, old, cm[y].tree[q], Ro) \/ (cm[y].force /\ u \in Ro.adm)
+                  /\ AllowedC(u, q, old, cm[y].tree[q], Ro, Counting(HistSet(A)))
+                     \/ (cm[y].force /\ u \in Ro.adm)
 AuthorisedContent ==
   \A d \in Honest : LET S == Main(d)  T == Cat(S) IN
     \A q \in CPaths : \A v \in T[q] :
@@ -328,8 +343,9 @@ DecisionsByDeciders ==
       LET u == R(p).dev[cm[x].signer] IN
       IF e.v = "rejected" THEN u \in Deciders(e.p, p) ELSE u = Author(e.p)
 (* Each decider of a pending proposal can make a valid adoption of it. *)
-MayAdopt(u, x, p) == \A q \in ADiff(x, p) : AllowedC(u, q, cm[x].tree[q], AdoptTree(x, p)[q], R(x))
-                                           \/ (ForceAdopt /\ u \in R(x).adm)
+MayAdopt(u, x, p) ==
+  \A q \in ADiff(x, p) : AllowedC(u, q, cm[x].tree[q], AdoptTree(x, p)[q], R(x), Counting(HistSet({x})))
+                        \/ (ForceAdopt /\ u \in R(x).adm)
 DecidersCanAdopt ==
   \A d \in Honest : \A p \in Ids : Pending(d, p) =>
     \A u \in Deciders(p, head[d]) : MayAdopt(u, head[d], p)

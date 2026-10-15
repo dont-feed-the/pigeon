@@ -1,6 +1,7 @@
 //! A suggestion (04 §4.5, 07 §7.3 step 7, 07 §7.6): Ana, an admin, creates
 //! the group with a backup machine and invites Cid, who is not one. Cid
-//! adds a file, which reaches Ana; Cid then edits Ana's file in a folder
+//! adds a file, which reaches Ana, and edits it, which he may since he alone
+//! wrote it (ADR 0070); Cid then edits Ana's file in a folder
 //! with the default rule (add-only, the admins as stewards), which he may
 //! not change. His edit becomes a proposal, kept as
 //! `refs/pigeon/proposals/<device>/<commit>` and relayed to every device;
@@ -122,6 +123,18 @@ fn a_change_its_person_may_not_make_becomes_a_relayed_suggestion() {
         || text(&fa, "c.txt") == "from cid\n",
         "Cid's new file never reached Ana",
         &all,
+    );
+    // So is a change of a file nobody else wrote (ADR 0070).
+    std::fs::write(fc.join("c.txt"), "cid's own edit\n").unwrap();
+    eventually_within(
+        WAIT,
+        || text(&fa, "c.txt") == "cid's own edit\n",
+        "Cid's edit of his own file never reached Ana",
+        &all,
+    );
+    assert!(
+        proposals(&b1).is_empty(),
+        "his own file became a suggestion"
     );
 
     // A change of Ana's file is a suggestion to the admins.

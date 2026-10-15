@@ -149,8 +149,9 @@ fn gather(f: &Family, files: &[(&File, &str)]) -> Vec<Step> {
     steps
 }
 
-/// S14: two people, three laptops: files flow everywhere; Bob's change of
-/// Ana's file is a suggestion, which he may not accept and she does.
+/// S14: two people, three laptops: files flow everywhere; Bob changes his
+/// own file at once (ADR 0070), while his change of Ana's file is a
+/// suggestion, which he may not accept and she does.
 pub fn s14() -> Scenario {
     let f = family();
     let (a1, a2, b1) = (f.a1, f.a2, f.b1);
@@ -166,6 +167,15 @@ pub fn s14() -> Scenario {
             ]),
             FLOW,
         ),
+        b1.write_text(&note, "bob's second note"),
+        wait(
+            every(vec![
+                a1.has_text(&note, "bob's second note"),
+                a2.has_text(&note, "bob's second note"),
+            ]),
+            FLOW,
+        ),
+        expect(not(a1.lists_suggestion(&note))),
         a2.write_text(&plan, "second plan"),
         wait(
             every(vec![

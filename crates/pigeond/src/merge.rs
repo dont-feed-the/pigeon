@@ -14,7 +14,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use pigeon_core::authority::{self, Entry, ROSTER, Refusal, Tree, Unread, Verdict};
+use pigeon_core::authority::{self, Entry, ROSTER, Refusal, Tree, Unread, Verdict, Writers};
 use pigeon_core::catalogue::{Judgement, Meta, Outcome};
 use pigeon_core::commit;
 use pigeon_core::names::Stamp;
@@ -62,6 +62,7 @@ async fn judge_commit(g: &Group, c: &str, parents: Vec<String>) -> Result<(), Er
         parents: parents.clone(),
         device: String::new(),
         who: String::new(),
+        person: pigeon_core::roster::PersonId(String::new()),
         when: Stamp { utc: secs, offset },
         resolves: Vec::new(),
     };
@@ -107,8 +108,8 @@ async fn judge_commit(g: &Group, c: &str, parents: Vec<String>) -> Result<(), Er
 /// change δ of 04 §4.8 the commit makes.
 type Judged = (Verdict, Vec<String>, Vec<pigeon_core::roster::Edit>);
 
-/// Sets the signer's device and display name in `meta` from the first
-/// roster that knows it.
+/// Sets the signer's device, display name and person in `meta` from the
+/// first roster that knows it.
 fn name(meta: &mut Meta, v: &Verdict, rosters: &[&Roster]) {
     let Verdict::Accepted(signer, _) = v else {
         return;
@@ -116,6 +117,7 @@ fn name(meta: &mut Meta, v: &Verdict, rosters: &[&Roster]) {
     meta.device = signer.0.clone();
     for r in rosters {
         if let Some(d) = r.devices.get(signer) {
+            meta.person = d.person.clone();
             meta.who = r
                 .persons
                 .get(&d.person)
@@ -155,7 +157,12 @@ async fn judge_parents(
     if accepted.is_empty() {
         return none(Verdict::Unknown("parent"));
     }
-    let Some(mut before) = g.lock().engine.base(accepted).map(|v| v.tree.clone()) else {
+    let base = g
+        .lock()
+        .engine
+        .base(accepted)
+        .map(|v| (v.tree.clone(), v.writers.clone()));
+    let Some((mut before, writers)) = base else {
         return none(Verdict::Unknown("parent"));
     };
     let mut views = Vec::new();
@@ -200,7 +207,7 @@ async fn judge_parents(
             tree: &v.tree,
         })
         .collect();
-    let verdict = judge_step(g, raw, &before, after, &rosters, &adopted).await?;
+    let verdict = judge_step(g, raw, (&before, &writers), after, &rosters, &adopted).await?;
     let refs: Vec<&Roster> = rosters.iter().collect();
     name(meta, &verdict, &refs);
     if let (Verdict::Accepted(..), Some((device, when))) = (&verdict, author) {
@@ -221,9 +228,11 @@ async fn judge_parents(
         meta.resolves = authority::resolved(raw)
             .into_iter()
             .filter(|p| {
-                person
-                    .as_ref()
-                    .is_some_and(|u| rosters.iter().all(|r| authority::allowed(r, u, p, false)))
+                person.as_ref().is_some_and(|u| {
+                    rosters
+                        .iter()
+                        .all(|r| authority::allowed(r, &writers, u, p, false))
+                })
             })
             .collect();
     }
@@ -276,11 +285,12 @@ async fn adopted(g: &Group, x: &str) -> Result<Result<View, Verdict>, Error> {
 }
 
 /// The verdict of 04 §4.4 on `raw`, whose tree is `after`, against
-/// `before` under each of `rosters`, adopting `adopted` (`commit::judge`).
+/// `before` and who wrote its slots under each of `rosters`, adopting
+/// `adopted` (`commit::judge`).
 async fn judge_step(
     g: &Group,
     raw: &[u8],
-    before: &Tree,
+    (before, writers): (&Tree, &Writers),
     after: &Tree,
     rosters: &[Roster],
     adopted: &[commit::Adopted<'_>],
@@ -305,12 +315,13 @@ async fn judge_step(
     } else {
         None
     };
-    let decisions = decisions(g, before, after, &changed, rosters).await?;
+    let decisions = decisions(g, (before, writers), after, &changed, rosters).await?;
     Ok(commit::judge(&commit::Commit {
         raw,
         rosters,
         before,
         after,
+        writers,
         blobs: &blobs,
         new_roster: new_roster.as_ref(),
         decisions: &decisions,
@@ -323,7 +334,7 @@ async fn judge_step(
 /// first of `rosters`; deciders are reckoned on `before`, B(c).
 async fn decisions(
     g: &Group,
-    before: &Tree,
+    (before, writers): (&Tree, &Writers),
     after: &Tree,
     changed: &BTreeSet<String>,
     rosters: &[Roster],
@@ -347,7 +358,7 @@ async fn decisions(
                 continue;
             }
         };
-        let about = about(g, &doc.proposal, before, roster).await?;
+        let about = about(g, &doc.proposal, (before, writers), roster).await?;
         let d = authority::Decision {
             proposal: doc.proposal,
             verdict: doc.verdict,
@@ -363,7 +374,7 @@ async fn decisions(
 async fn about(
     g: &Group,
     x: &str,
-    before: &Tree,
+    (before, writers): (&Tree, &Writers),
     roster: &Roster,
 ) -> Result<Option<(authority::Deciders, pigeon_core::roster::PersonId)>, Error> {
     let kept = crate::proposal::kept(&g.git).await;
@@ -387,7 +398,7 @@ async fn about(
     let signer = pigeon_core::roster::DeviceId(device);
     let tree = g.git.tree(x).await?;
     Ok(commit::about(
-        roster, &at_roster, &signer, &at, &tree, before,
+        roster, &at_roster, &signer, &at, &tree, before, writers,
     ))
 }
 
@@ -400,11 +411,11 @@ pub async fn judge_proposal(
     base: &str,
     after: &Tree,
 ) -> Result<Verdict, Error> {
-    let Some(before) = g
+    let Some((before, writers)) = g
         .lock()
         .engine
         .base(&[base.to_owned()])
-        .map(|v| v.tree.clone())
+        .map(|v| (v.tree.clone(), v.writers.clone()))
     else {
         return Ok(Verdict::Unknown("parent"));
     };
@@ -413,7 +424,18 @@ pub async fn judge_proposal(
         Some(Err(Unread::Unknown(_))) => return Ok(Verdict::Unknown("format")),
         _ => return Ok(Verdict::Refused(Refusal::RosterUnreadable("parent".into()))),
     };
-    judge_step(g, raw, &before, after, &[roster], &[]).await
+    judge_step(g, raw, (&before, &writers), after, &[roster], &[]).await
+}
+
+/// Who wrote each slot of `main`'s catalogue (ADR 0070), its history
+/// judged first.
+pub async fn writers(g: &Group, main: &str) -> Result<Writers, Error> {
+    judge_history(g, &[main.to_owned()]).await?;
+    Ok(g.lock()
+        .engine
+        .catalogue(&[main.to_owned()])
+        .writers
+        .clone())
 }
 
 /// Whether `theirs` brings a contribution that `ours` lacks (05 §5.2):

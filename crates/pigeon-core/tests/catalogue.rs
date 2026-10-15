@@ -247,6 +247,7 @@ fn meta(
         parents,
         device: device.to_owned(),
         who: who.to_owned(),
+        person: pigeon_core::roster::PersonId(who.to_owned()),
         when: Stamp {
             utc: when,
             offset: 0,

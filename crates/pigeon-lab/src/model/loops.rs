@@ -112,7 +112,8 @@ impl Model {
 
     /// Capture: each regular file whose bytes are not what the laptop last
     /// captured or installed there. A change of a file that exists, which
-    /// the person may not make, is a suggestion instead (04 §4.5).
+    /// the person may not make, is a suggestion instead (04 §4.5): one
+    /// that only they wrote is theirs to change (ADR 0070).
     fn capture(&mut self, l: Laptop) {
         if !self.up(l) {
             return;
@@ -126,8 +127,9 @@ impl Model {
                 OnDisk::Link => None,
             })
             .collect();
-        let may_change = self.may_change(l);
+        let person = self.laptops[i].person;
         for (f, k) in files {
+            let may_change = self.may_change(l, &f);
             let lm = &mut self.laptops[i];
             let current = lm.history.get(&f).and_then(|v| v.last()).map(|v| &v.key);
             if lm.synced.get(&f) == Some(&k) || current == Some(&k) {
@@ -143,6 +145,7 @@ impl Model {
                 key: k,
                 len,
                 saved: self.now,
+                by: person,
             };
             if !may_change && lm.history.get(&f).is_some_and(|v| !v.is_empty()) {
                 self.suggest(l, f, ver);

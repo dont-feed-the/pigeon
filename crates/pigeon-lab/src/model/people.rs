@@ -2,9 +2,9 @@
 //! makes where the authority rule lets them only suggest (04 §4.5).
 //!
 //! The model follows the default root rule, add-only with the admins as
-//! stewards: anyone adds a file, an admin changes one, and another
-//! person's change of a file is a suggestion, which an admin accepts into
-//! the history or declines. The proposer's file is then theirs alone and
+//! stewards: anyone adds a file, an admin or the person who alone wrote
+//! it (ADR 0070) changes one, and another person's change of a file is a
+//! suggestion, which one of them accepts into the history or declines. The proposer's file is then theirs alone and
 //! is never installed over. Concurrent changes, and the conflict copies
 //! they make, are Authority.tla's and the catalogue's (models/catalogue),
 //! not this model's: their conditions are observed by the process executor
@@ -26,9 +26,15 @@ pub struct Suggestion {
 }
 
 impl Model {
-    /// Whether laptop `l`'s person may change a file that exists.
-    pub(crate) fn may_change(&self, l: Laptop) -> bool {
-        self.laptops[l.0 as usize].admin
+    /// Whether laptop `l`'s person may change `file`, which exists: an
+    /// admin, or the person who wrote every version of it that `l` knows.
+    pub(crate) fn may_change(&self, l: Laptop, file: &File) -> bool {
+        let lm = &self.laptops[l.0 as usize];
+        lm.admin
+            || lm
+                .history
+                .get(file)
+                .is_some_and(|v| !v.is_empty() && v.iter().all(|x| x.by == lm.person))
     }
 
     /// `by` invites the spare laptop `l`, which joins: the inviter commits
@@ -53,11 +59,12 @@ impl Model {
         self.suggestions.push(Suggestion { file, ver, by: l });
     }
 
-    /// An admin's decision on the newest suggestion for `file`: an adopted
-    /// one becomes the file's next version in the history the decider
-    /// knows, which every laptop then learns.
+    /// A decider's decision on the newest suggestion for `file`: an
+    /// adopted one becomes the file's next version, written by its
+    /// proposer, in the history the decider knows, which every laptop then
+    /// learns.
     pub(crate) fn decide(&mut self, on: Laptop, file: &File, adopt: bool) -> Outcome {
-        if !self.may_change(on) {
+        if !self.may_change(on, file) {
             return Outcome::Refused("not-allowed".into());
         }
         let Some(i) = self.suggestions.iter().rposition(|s| s.file == *file) else {

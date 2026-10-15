@@ -82,6 +82,7 @@ fn replay(name: &str, text: &str) -> usize {
             parents: strings(&rec["parents"]),
             device: rec["device"].as_str().unwrap().to_owned(),
             who: rec["who"].as_str().unwrap().to_owned(),
+            person: pigeon_core::roster::PersonId(rec["who"].as_str().unwrap().to_owned()),
             when: Stamp {
                 utc: DAY + rec["when"].as_i64().unwrap() * 60,
                 offset: 0,

@@ -9,6 +9,8 @@
 //! or rejects or withdraws a proposal the code keeps (a commit refused for
 //! folder rules alone); or adopts one whose base it holds, as
 //! `proposal::adoption` writes it or with a change dropped or one more.
+//! Who wrote each path is kept as the catalogue keeps it (ADR 0070): an
+//! adoption writes as its proposal's author.
 //! Each line logs the commit as the model's `New` takes it and the code's
 //! verdict; `AuthorityTrace.tla` checks that the verdict is `Judge`'s. With `PIGEON_TRACE_DIR` set, one
 //! NDJSON file per seed is written there for `scripts/check-code-traces`.
@@ -19,7 +21,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::PathBuf;
 
-use pigeon_core::authority::{self, Decided, Decision, Entry, ROSTER, Refusal, Tree, Verdict};
+use pigeon_core::authority::{
+    self, Decided, Decision, Entry, ROSTER, Refusal, Tree, Verdict, Writers,
+};
 use pigeon_core::commit::{self, Commit};
 use pigeon_core::names::{self, Stamp};
 use pigeon_core::proposal;
@@ -120,13 +124,14 @@ fn edit(k: &str, d: u64, p: u64, old: u64, new: u64) -> Value {
     ])
 }
 
-/// An accepted commit: its tree as the code sees it, its roster, and its
-/// accepted history, itself included.
+/// An accepted commit: its tree as the code sees it, its roster, its
+/// accepted history, itself included, and who wrote each slot.
 #[derive(Clone)]
 struct Kept {
     code: Tree,
     roster: Roster,
     anc: BTreeSet<u64>,
+    writers: Writers,
 }
 
 /// A proposal the code keeps (04 §4.5): a commit on an accepted parent,
@@ -199,7 +204,8 @@ fn pick<T: Copy>(rng: &mut Rng, xs: &[T]) -> T {
 }
 
 /// A commit of the history: its parents (the accepted one first), tree,
-/// roster edits, decisions, the code's verdict, and the proposal it is.
+/// roster edits, decisions, the code's verdict, the proposal it is, and
+/// the proposal it adopts.
 struct Made {
     parents: Vec<u64>,
     after: Tree,
@@ -208,6 +214,7 @@ struct Made {
     dec: Vec<Value>,
     verdict: Verdict,
     proposal: bool,
+    adopts: Option<u64>,
 }
 
 /// One commit on the accepted `parent` that writes or deletes versions and
@@ -265,6 +272,7 @@ fn ordinary(rng: &mut Rng, n: u64, parent: u64, p: &Kept, raw: &[u8]) -> Made {
         rosters: std::slice::from_ref(&p.roster),
         before: &p.code,
         after: &after,
+        writers: &p.writers,
         blobs: &blobs_of(&after),
         new_roster: changed.then_some(&parsed),
         decisions: &BTreeMap::new(),
@@ -282,6 +290,7 @@ fn ordinary(rng: &mut Rng, n: u64, parent: u64, p: &Kept, raw: &[u8]) -> Made {
         dec: Vec::new(),
         verdict,
         proposal,
+        adopts: None,
     }
 }
 
@@ -313,6 +322,7 @@ fn decide(
         &at.code,
         &prop.code,
         &p.code,
+        &p.writers,
     );
     let decisions = BTreeMap::from([(
         path,
@@ -327,6 +337,7 @@ fn decide(
         rosters: std::slice::from_ref(&p.roster),
         before: &p.code,
         after: &after,
+        writers: &p.writers,
         blobs: &blobs_of(&after),
         new_roster: None,
         decisions: &decisions,
@@ -344,6 +355,7 @@ fn decide(
         dec: vec![rec(vec![("p", int(x)), ("v", Value::Str(word.into()))])],
         verdict: v,
         proposal: false,
+        adopts: None,
     }
 }
 
@@ -395,6 +407,7 @@ fn adopt(
         rosters: std::slice::from_ref(&p.roster),
         before: &p.code,
         after: &after,
+        writers: &p.writers,
         blobs: &blobs_of(&after),
         new_roster: None,
         decisions: &BTreeMap::new(),
@@ -408,6 +421,7 @@ fn adopt(
         dec: Vec::new(),
         verdict,
         proposal: false,
+        adopts: Some(x),
     }
 }
 
@@ -424,6 +438,7 @@ fn run(seed: u64) -> Vec<Event> {
             code,
             roster: genesis(),
             anc: BTreeSet::from([1]),
+            writers: Writers::new(),
         },
     );
     let mut proposals: BTreeMap<u64, Proposal> = BTreeMap::new();
@@ -490,12 +505,30 @@ fn run(seed: u64) -> Vec<Event> {
         if acc {
             let mut anc = p.anc.clone();
             anc.insert(n);
+            // The person it writes as: an adoption's proposal's author.
+            let who = match made.adopts {
+                Some(x) => {
+                    let prop = &proposals[&x];
+                    accepted[&prop.base].roster.devices[&dev(prop.signer)]
+                        .person
+                        .clone()
+                }
+                None => p.roster.devices[&dev(signer)].person.clone(),
+            };
+            let mut writers = p.writers.clone();
+            for path in authority::delta(&p.code, &made.after) {
+                writers
+                    .entry(names::fold(names::unit(&path)))
+                    .or_default()
+                    .insert(who.clone());
+            }
             accepted.insert(
                 n,
                 Kept {
                     code: made.after.clone(),
                     roster: made.roster.clone(),
                     anc,
+                    writers,
                 },
             );
         } else if made.proposal {

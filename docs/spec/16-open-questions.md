@@ -101,9 +101,6 @@ into 0054; 0065 into 0053.
   deletion and an add ([05 §5.2](05-catalogue-and-names.md)), so an edit
   concurrent with it stays at the old name; git's similarity detection
   guesses, and fails on small files.
-- **Own files in an add-only folder** become suggestions
-  ([04 §4.3](04-roster-and-authority.md)). May the author of a path's only
-  version modify it until someone else changes it?
 - **Scope:** a per-group `.pigeon/ignore` ([07 §7.2](07-capture-and-install.md));
   links, empty folders, extended attributes, live libraries, and packages
   from macOS's type declarations (§7.9); mapping non-portable names on

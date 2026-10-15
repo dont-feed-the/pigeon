@@ -17,6 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use crate::names::{self, Stamp};
+use crate::roster::PersonId;
 
 /// The most catalogues an engine keeps computed.
 const MEMO: usize = 256;
@@ -102,6 +103,8 @@ pub struct Meta {
     pub device: String,
     /// The display name of its author: the proposal's for an adoption.
     pub who: String,
+    /// Its author's person: the proposal's for an adoption.
+    pub person: PersonId,
     /// Its author time: the proposal's for an adoption.
     pub when: Stamp,
     /// The paths of its `Pigeon-Resolved:` trailers (*Keep both*).
@@ -142,6 +145,9 @@ pub struct View<K> {
     pub shown: BTreeMap<String, Vec<Shown<K>>>,
     /// The slots with several versions, or one away from its own path.
     pub unsettled: Vec<String>,
+    /// The persons who wrote each slot (ADR 0070): the authors of the
+    /// events that wrote or deleted it, a copy's being its version's.
+    pub writers: BTreeMap<String, BTreeSet<PersonId>>,
     heads: BTreeMap<String, Vec<usize>>,
 }
 
@@ -212,13 +218,17 @@ struct Info {
     state: Arc<BTreeSet<usize>>,
 }
 
+/// A contribution as its versions show it: rank, author's name, time and
+/// person.
+type Origin = (Rank, String, Stamp, PersonId);
+
 /// The catalogue of every commit judged so far.
 #[derive(Clone, Debug)]
 pub struct Engine<K> {
     events: Vec<Event<K>>,
     keys: BTreeMap<Key<K>, usize>,
     info: BTreeMap<String, Info>,
-    origins: BTreeMap<String, (Rank, String, Stamp)>,
+    origins: BTreeMap<String, Origin>,
     memo: BTreeMap<Arc<BTreeSet<usize>>, Arc<View<K>>>,
 }
 
@@ -283,8 +293,8 @@ impl<K: Clone + Ord> Engine<K> {
             seq: u32::try_from(seq + 1).unwrap_or(u32::MAX),
             id: meta.id.clone(),
         };
-        self.origins
-            .insert(meta.id.clone(), (rank, meta.who.clone(), meta.when));
+        let origin = (rank, meta.who.clone(), meta.when, meta.person.clone());
+        self.origins.insert(meta.id.clone(), origin);
     }
 
     /// Judges the genesis commit (04 §4.1): every unit of its tree is a
@@ -656,8 +666,28 @@ impl<K: Clone + Ord> Engine<K> {
             tree,
             shown,
             unsettled,
+            writers: self.writers(state),
             heads,
         }
+    }
+
+    /// The persons who wrote each slot in `state`: a write's version's
+    /// author, a deletion's contribution's.
+    fn writers(&self, state: &BTreeSet<usize>) -> BTreeMap<String, BTreeSet<PersonId>> {
+        let mut out: BTreeMap<String, BTreeSet<PersonId>> = BTreeMap::new();
+        for &e in state {
+            let ev = &self.events[e];
+            for (x, w) in &ev.writes {
+                let origin = match w {
+                    Some((_, o)) => Some(o),
+                    None => ev.commit.as_ref(),
+                };
+                if let Some(o) = origin.and_then(|o| self.origins.get(o)) {
+                    out.entry(x.clone()).or_default().insert(o.3.clone());
+                }
+            }
+        }
+        out
     }
 
     /// The open conflicts of the accepted commits among `ids` (05 §5.3): a

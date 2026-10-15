@@ -60,7 +60,8 @@ pub async fn plan(
     if !doc.roster.devices.contains_key(&me_id) {
         return Ok((changes, Vec::new()));
     }
-    let split = authority::split(&doc.roster, &me_id, main, &changes);
+    let writers = crate::merge::writers(g, head).await?;
+    let split = authority::split(&doc.roster, &me_id, main, &writers, &changes);
     let mut out = Vec::new();
     for part in split.proposed.into_values() {
         let mut chains: BTreeMap<Option<String>, Changes> = BTreeMap::new();

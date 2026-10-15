@@ -60,8 +60,13 @@ no entry, root files included, is *add-only* with the admins as stewards
 | Change by person *u* | owned by P | add-only, stewards S |
 |---|---|---|
 | add (path absent before) | *u* = P | any member |
-| modify, delete | *u* = P | *u* ∈ S (the admins if S is empty) |
+| modify, delete | *u* = P | *u* ∈ S (the admins if S is empty), or *u* alone wrote it (ADR 0070) |
 | rename | a delete and an add, both allowed | same |
+
+*u* **alone wrote** *p* when every contribution that wrote or deleted *p*'s
+slot in the base is *u*'s: an adoption counts as its proposal's author's,
+a conflict copy as its version's ([05 §5.2](05-catalogue-and-names.md);
+`catalogue::View::writers`, `Authority.tla` `Writers`).
 
 `.pigeon/` has its own table (ADRs 0009, 0017, 0018, 0047, 0051):
 

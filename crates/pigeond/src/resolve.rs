@@ -249,7 +249,9 @@ async fn copy(
     let entry = pointer(g, mine, &wt.join(rel)).await.map_err(internal)?;
     let doc = g.roster().ok_or_else(|| internal("no roster"))?;
     let changes = std::collections::BTreeMap::from([(to.clone(), Some(entry))]);
-    let split = authority::split(&doc.roster, &DeviceId(d.device.clone()), &tree, &changes);
+    let writers = crate::merge::writers(g, &main).await.map_err(internal)?;
+    let me = DeviceId(d.device.clone());
+    let split = authority::split(&doc.roster, &me, &tree, &writers, &changes);
     if tree.contains_key(&to) || !split.proposed.is_empty() {
         return Err(vec![crate::api::problem("not-allowed", &[], None)]);
     }

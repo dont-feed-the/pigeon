@@ -46,6 +46,12 @@ pub async fn pending(g: &Group) -> Result<Vec<Pending>, Error> {
         return Ok(Vec::new());
     };
     let main_tree = g.git.tree(&main).await?;
+    let writers = g
+        .lock()
+        .engine
+        .catalogue(std::slice::from_ref(&main))
+        .writers
+        .clone();
     let mut out = Vec::new();
     for (device, c) in &kept {
         if main_tree.contains_key(&authority::decision_path(c)) || g.git.contains(&main, c).await {
@@ -86,7 +92,7 @@ pub async fn pending(g: &Group) -> Result<Vec<Pending>, Error> {
                 .get(&DeviceId(device.clone()))
                 .map(|d| d.person.clone()),
             saved: authority::author_time(&raw).map_or(0, |t| t.0),
-            deciders: authority::deciders(&doc.roster, &changes),
+            deciders: authority::deciders(&doc.roster, &writers, &changes),
             paths,
         });
     }

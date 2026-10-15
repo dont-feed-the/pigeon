@@ -414,6 +414,7 @@ fn commit_cases_get_their_verdicts() {
             roster: &roster,
             before: &before,
             after: &after,
+            writers: &BTreeMap::new(),
             blobs: &blobs,
             new_roster: new_roster.as_ref(),
             decisions: &BTreeMap::new(),

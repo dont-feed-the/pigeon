@@ -52,6 +52,8 @@ pub struct Ver {
     pub len: u64,
     /// When it was captured.
     pub saved: Time,
+    /// The person who wrote it (ADR 0070).
+    pub by: u8,
 }
 
 /// What a laptop last heard from one custodian.
@@ -117,6 +119,8 @@ pub struct LaptopM {
     pub says: BTreeSet<String>,
     /// Its person is an admin.
     pub admin: bool,
+    /// Its person.
+    pub person: u8,
     /// Per file, the content it last captured or installed there: a file
     /// on disk that holds it is unchanged.
     pub synced: BTreeMap<File, Key>,
@@ -186,6 +190,7 @@ impl Model {
             .enumerate()
             .map(|(i, l)| LaptopM {
                 admin: world.is_admin(Laptop(i as u8)),
+                person: l.person,
                 present: l.present,
                 daemon: Daemon {
                     running: l.present,

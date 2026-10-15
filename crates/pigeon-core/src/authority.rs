@@ -5,7 +5,7 @@
 //! `commit`'s, on `proposal`; rule 5 is 05 §5.4's `names`.
 //!
 //! [`judge`] is a pure function of the commit object, the parent's roster
-//! R(p) and both trees. Laws (`tests/authority.rs`): a commit signed by a
+//! R(p), both trees and who wrote each path of the base. Laws (`tests/authority.rs`): a commit signed by a
 //! device of R(p) that changes only what its person may is accepted; one
 //! that is unsigned, forged, or signed by a device outside R(p) is refused;
 //! a change of a path is allowed exactly as 04 §4.3's table says; a roster
@@ -14,7 +14,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::roster::{self, DeviceId, Invalid, Role, Roster, Rule};
+use crate::names;
+use crate::roster::{self, DeviceId, Invalid, PersonId, Role, Roster, Rule};
 use crate::sig::{self, SigError};
 
 /// The rule sets this release judges (ADR 0048).
@@ -39,6 +40,18 @@ pub struct Entry {
 
 /// A tree: path → entry.
 pub type Tree = BTreeMap<String, Entry>;
+
+/// The persons who wrote each slot of a base (05 §5.1), as the catalogue's
+/// `View::writers` gives them: a member may change an add-only path that
+/// only they wrote (ADR 0070).
+pub type Writers = BTreeMap<String, BTreeSet<PersonId>>;
+
+/// Whether `u` alone wrote the slot of `path`, by `writers`.
+pub fn sole_writer(writers: &Writers, u: &PersonId, path: &str) -> bool {
+    writers
+        .get(&names::fold(names::unit(path)))
+        .is_some_and(|w| !w.is_empty() && w.iter().all(|p| p == u))
+}
 
 /// Why a commit is refused.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -82,6 +95,8 @@ pub struct Step<'a> {
     pub before: &'a Tree,
     /// tree(c).
     pub after: &'a Tree,
+    /// Who wrote each slot of `before`.
+    pub writers: &'a Writers,
     /// The bytes of the blobs of `after` that [`delta`] names, by object
     /// ID; a missing one is too large to be a pointer.
     pub blobs: &'a BTreeMap<String, Vec<u8>>,
@@ -241,26 +256,41 @@ pub fn rule_of<'a>(roster: &'a Roster, path: &str) -> Option<&'a Rule> {
         .map(|f| &f.rule)
 }
 
-/// Whether person `u` of `roster` may add (`added`) or change `path`
-/// under the folder rules (04 §4.3).
-pub fn allowed(roster: &Roster, u: &roster::PersonId, path: &str, added: bool) -> bool {
+/// Whether person `u` of `roster` may add (`added`) or change `path`, on
+/// a base whose slots `writers` wrote, under the folder rules (04 §4.3):
+/// in an add-only folder, a steward, or the person who alone wrote it
+/// (ADR 0070), changes it.
+pub fn allowed(
+    roster: &Roster,
+    writers: &Writers,
+    u: &roster::PersonId,
+    path: &str,
+    added: bool,
+) -> bool {
     let admin = roster.persons.get(u).is_some_and(|p| p.admin);
+    let mine = || sole_writer(writers, u, path);
     match rule_of(roster, path) {
         Some(Rule::Owned(owner)) => owner == u,
-        Some(Rule::AddOnly(stewards)) if !stewards.is_empty() => added || stewards.contains(u),
-        _ => added || admin,
+        Some(Rule::AddOnly(stewards)) if !stewards.is_empty() => {
+            added || stewards.contains(u) || mine()
+        }
+        _ => added || admin || mine(),
     }
 }
 
 /// The deciders of a proposal whose adoption makes `changes`, each a path
-/// and whether it adds it (04 §4.5): the persons allowed every change
-/// under `roster`; if nobody, the admins, who adopt it with Force
-/// (04 §4.6), which the flag says.
-pub fn deciders(roster: &Roster, changes: &[(&str, bool)]) -> Deciders {
+/// and whether it adds it, on a `main` whose slots `writers` wrote
+/// (04 §4.5): the persons allowed every change under `roster`; if nobody,
+/// the admins, who adopt it with Force (04 §4.6), which the flag says.
+pub fn deciders(roster: &Roster, writers: &Writers, changes: &[(&str, bool)]) -> Deciders {
     let all: BTreeSet<roster::PersonId> = roster
         .persons
         .keys()
-        .filter(|u| changes.iter().all(|(p, a)| allowed(roster, u, p, *a)))
+        .filter(|u| {
+            changes
+                .iter()
+                .all(|(p, a)| allowed(roster, writers, u, p, *a))
+        })
         .cloned()
         .collect();
     if !all.is_empty() {
@@ -288,14 +318,15 @@ pub struct Split<T> {
     pub proposed: BTreeMap<Deciders, BTreeMap<String, T>>,
 }
 
-/// Splits `changes` of `before` by `signer` under `roster`: a change is
-/// allowed when 04 §4.3 lets the signer's person make it, else proposed
-/// to the deciders of that one change. A device outside the roster, or a
-/// recovery device, may make none.
+/// Splits `changes` of `before`, whose slots `writers` wrote, by `signer`
+/// under `roster`: a change is allowed when 04 §4.3 lets the signer's
+/// person make it, else proposed to the deciders of that one change. A
+/// device outside the roster, or a recovery device, may make none.
 pub fn split<T: Clone>(
     roster: &Roster,
     signer: &DeviceId,
     before: &Tree,
+    writers: &Writers,
     changes: &BTreeMap<String, T>,
 ) -> Split<T> {
     let person = roster
@@ -311,12 +342,12 @@ pub fn split<T: Clone>(
         let added = !before.contains_key(path);
         if person
             .as_ref()
-            .is_some_and(|u| allowed(roster, u, path, added))
+            .is_some_and(|u| allowed(roster, writers, u, path, added))
         {
             out.allowed.insert(path.clone(), change.clone());
         } else {
             out.proposed
-                .entry(deciders(roster, &[(path, added)]))
+                .entry(deciders(roster, writers, &[(path, added)]))
                 .or_default()
                 .insert(path.clone(), change.clone());
         }
@@ -386,7 +417,9 @@ pub fn judge(step: &Step<'_>) -> Verdict {
             if !admin {
                 return Verdict::Refused(Refusal::NotAllowed(path.clone()));
             }
-        } else if recovery || !(allowed(r, u, path, !step.before.contains_key(path)) || force) {
+        } else if recovery
+            || !(allowed(r, step.writers, u, path, !step.before.contains_key(path)) || force)
+        {
             return Verdict::Refused(Refusal::NotAllowed(path.clone()));
         }
     }

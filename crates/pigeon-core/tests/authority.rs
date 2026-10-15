@@ -5,7 +5,8 @@
 //! The group: p1 an admin, p2 the owner of `F`, p3 a member and the steward
 //! of `S`; devices 1-3 are theirs, device 4 is outside the roster, device 5
 //! is p1's recovery key. Other paths are add-only with the admins as
-//! stewards.
+//! stewards. The base's files were written by persons drawn at random: one
+//! who alone wrote an add-only file may change it (ADR 0070).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod common;
 
@@ -13,7 +14,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use common::{flag, index, int, pick};
 use hegel::TestCase;
-use pigeon_core::authority::{self, Entry, Refusal, Step, Tree, Unread, Verdict};
+use pigeon_core::authority::{self, Entry, Refusal, Step, Tree, Unread, Verdict, Writers};
+use pigeon_core::names;
 use pigeon_core::roster::{
     self, Device, DeviceId, Edit, Field, Folder, Person, PersonId, Role, Roster, Rule, Value,
 };
@@ -111,8 +113,20 @@ fn raw(force: bool) -> Vec<u8> {
     s.into_bytes()
 }
 
-/// The oracle: 04 §4.3's tables for one change by device `d`.
-fn table(d: usize, path: &str, added: bool, force: bool) -> bool {
+/// Who wrote each file of the base: persons drawn at random.
+fn drawn(tc: &TestCase) -> Writers {
+    ["F/a", "S/b", "r"]
+        .iter()
+        .map(|p| {
+            let who = (1..=3).filter(|_| flag(tc)).map(pid).collect();
+            (names::fold(names::unit(p)), who)
+        })
+        .collect()
+}
+
+/// The oracle: 04 §4.3's tables for one change by device `d`, the base's
+/// files written by `w`.
+fn table(d: usize, path: &str, added: bool, force: bool, w: &Writers) -> bool {
     let (person, admin, recovery) = match d {
         1 => (1, true, false),
         5 => (1, false, true),
@@ -124,17 +138,26 @@ fn table(d: usize, path: &str, added: bool, force: bool) -> bool {
     if recovery {
         return false;
     }
+    let sole = w
+        .get(&names::fold(path))
+        .is_some_and(|s| !s.is_empty() && s.iter().all(|p| *p == pid(person)));
     let folders = if path.starts_with("F/") {
         person == 2
     } else if path.starts_with("S/") {
-        added || person == 3
+        added || person == 3 || sole
     } else {
-        added || admin
+        added || admin || sole
     };
     folders || (force && admin)
 }
 
-fn judge(signer: usize, tree: &Tree, force: bool, blobs: &BTreeMap<String, Vec<u8>>) -> Verdict {
+fn judge(
+    signer: usize,
+    tree: &Tree,
+    force: bool,
+    blobs: &BTreeMap<String, Vec<u8>>,
+    writers: &Writers,
+) -> Verdict {
     let r = group();
     let before = base();
     let signed = sig::sign(&raw(force), &key(signer)).unwrap();
@@ -143,6 +166,7 @@ fn judge(signer: usize, tree: &Tree, force: bool, blobs: &BTreeMap<String, Vec<u
         roster: &r,
         before: &before,
         after: tree,
+        writers,
         blobs,
         new_roster: None,
         decisions: &BTreeMap::new(),
@@ -164,6 +188,7 @@ fn a_change_is_accepted_iff_the_tables_allow_it(tc: TestCase) {
         ".pigeon/other",
         ".gitattributes",
     ];
+    let w = drawn(&tc);
     let mut tree = base();
     let mut blobs = BTreeMap::new();
     let mut expect = true;
@@ -181,9 +206,9 @@ fn a_change_is_accepted_iff_the_tables_allow_it(tc: TestCase) {
             tree.insert(p.to_owned(), entry(&oid));
             blobs.insert(oid, POINTER.as_bytes().to_vec());
         }
-        expect &= table(signer, p, added, force);
+        expect &= table(signer, p, added, force, &w);
     }
-    let verdict = judge(signer, &tree, force, &blobs);
+    let verdict = judge(signer, &tree, force, &blobs, &w);
     match verdict {
         Verdict::Accepted(s, None) => {
             assert!(expect, "accepted against the tables");
@@ -198,6 +223,7 @@ fn a_change_is_accepted_iff_the_tables_allow_it(tc: TestCase) {
 #[hegel::test(test_cases = 1000)]
 fn a_proposals_deciders_are_those_who_may_adopt_it(tc: TestCase) {
     let paths = ["F/a", "F/new", "S/b", "S/new", "r", "new", "deep/new"];
+    let w = drawn(&tc);
     let mut tree = base();
     let mut blobs = BTreeMap::new();
     let mut changes = Vec::new();
@@ -216,8 +242,8 @@ fn a_proposals_deciders_are_those_who_may_adopt_it(tc: TestCase) {
         }
         changes.push((p, added));
     }
-    let (deciders, force) = authority::deciders(&group(), &changes);
-    let may = |i: usize| changes.iter().all(|(p, a)| table(i, p, *a, false));
+    let (deciders, force) = authority::deciders(&group(), &w, &changes);
+    let may = |i: usize| changes.iter().all(|(p, a)| table(i, p, *a, false, &w));
     let expect: BTreeSet<PersonId> = (1..=3).filter(|i| may(*i)).map(pid).collect();
     if force {
         assert!(expect.is_empty(), "{changes:?}");
@@ -228,7 +254,7 @@ fn a_proposals_deciders_are_those_who_may_adopt_it(tc: TestCase) {
     // `DecidersCanAdopt`: each decider's laptop may sign the adoption, with
     // Force when nobody may make it; nobody else may (04 §4.5).
     for i in 1..=3 {
-        let accepted = matches!(judge(i, &tree, force, &blobs), Verdict::Accepted(..));
+        let accepted = matches!(judge(i, &tree, force, &blobs, &w), Verdict::Accepted(..));
         assert_eq!(
             accepted,
             deciders.contains(&pid(i)),
@@ -241,6 +267,7 @@ fn a_proposals_deciders_are_those_who_may_adopt_it(tc: TestCase) {
 fn capture_splits_a_batch_into_an_accepted_commit_and_proposals(tc: TestCase) {
     let signer = int(&tc, 1, 3) as usize;
     let paths = ["F/a", "F/new", "S/b", "S/new", "r", "new", "deep/new"];
+    let w = drawn(&tc);
     let before = base();
     let mut changes: BTreeMap<String, Option<Entry>> = BTreeMap::new();
     for _ in 0..int(&tc, 1, 5) {
@@ -263,7 +290,7 @@ fn capture_splits_a_batch_into_an_accepted_commit_and_proposals(tc: TestCase) {
         }
         t
     };
-    let s = authority::split(&group(), &dev(signer), &before, &changes);
+    let s = authority::split(&group(), &dev(signer), &before, &w, &changes);
     // Nothing is lost, nothing is in two places.
     let mut all: Vec<&String> = s.allowed.keys().collect();
     all.extend(s.proposed.values().flat_map(BTreeMap::keys));
@@ -271,11 +298,11 @@ fn capture_splits_a_batch_into_an_accepted_commit_and_proposals(tc: TestCase) {
     assert_eq!(all, changes.keys().collect::<Vec<_>>());
     // The commit on `main` is accepted; each proposal is refused for folder
     // rules alone, and its deciders are those of each of its changes.
-    let v = judge(signer, &applied(&s.allowed), false, &blobs);
+    let v = judge(signer, &applied(&s.allowed), false, &blobs, &w);
     assert!(matches!(v, Verdict::Accepted(..)), "{v:?}");
     for (deciders, part) in &s.proposed {
         assert!(!part.is_empty());
-        let v = judge(signer, &applied(part), false, &blobs);
+        let v = judge(signer, &applied(part), false, &blobs, &w);
         assert!(
             matches!(v, Verdict::Refused(Refusal::NotAllowed(_))),
             "{v:?}"
@@ -284,9 +311,9 @@ fn capture_splits_a_batch_into_an_accepted_commit_and_proposals(tc: TestCase) {
             .keys()
             .map(|p| (p.as_str(), !before.contains_key(p)))
             .collect();
-        assert_eq!(&authority::deciders(&group(), &each), deciders);
+        assert_eq!(&authority::deciders(&group(), &w, &each), deciders);
         for one in &each {
-            assert_eq!(&authority::deciders(&group(), &[*one]), deciders);
+            assert_eq!(&authority::deciders(&group(), &w, &[*one]), deciders);
         }
     }
 }
@@ -329,6 +356,7 @@ fn a_decision_is_accepted_iff_its_signer_may_make_it(tc: TestCase) {
         roster: &r,
         before: &before,
         after: &after,
+        writers: &Writers::new(),
         blobs: &BTreeMap::new(),
         new_roster: None,
         decisions: &decisions,
@@ -387,11 +415,40 @@ fn only_files_and_pointers_are_well_formed(tc: TestCase) {
         [("x".to_owned(), content.as_bytes().to_vec())].into()
     };
     let good = kind == "blob" && mode != "120000" && !big && content == POINTER;
-    match judge(1, &tree, false, &blobs) {
+    match judge(1, &tree, false, &blobs, &Writers::new()) {
         Verdict::Accepted(..) => assert!(good),
         Verdict::Refused(Refusal::Malformed(q, _)) => assert!(!good && q == p),
         other => panic!("{other:?}"),
     }
+}
+
+#[test]
+fn the_only_author_of_an_add_only_file_may_change_it() {
+    let blobs = [("n".to_owned(), POINTER.as_bytes().to_vec())].into();
+    let mut tree = base();
+    tree.insert("r".into(), entry("n"));
+    tree.remove("S/b");
+    let ok = |signer, who: &[usize]| {
+        let set: BTreeSet<PersonId> = who.iter().map(|i| pid(*i)).collect();
+        let w: Writers = [("r".to_owned(), set.clone()), ("s/b".to_owned(), set)].into();
+        matches!(
+            judge(signer, &tree, false, &blobs, &w),
+            Verdict::Accepted(..)
+        )
+    };
+    assert!(ok(2, &[2]), "p2 alone wrote both");
+    assert!(!ok(2, &[2, 1]), "someone else changed them since");
+    assert!(!ok(2, &[3]), "p3's files");
+    assert!(!ok(2, &[]), "nobody known");
+    assert!(!ok(3, &[1]), "p3 stewards S, not the root");
+    let mut owned = base();
+    owned.insert("F/a".into(), entry("n"));
+    let w: Writers = [("f/a".to_owned(), [pid(3)].into())].into();
+    let v = judge(3, &owned, false, &blobs, &w);
+    assert!(
+        matches!(v, Verdict::Refused(Refusal::NotAllowed(_))),
+        "an owned folder stays its owner's: {v:?}"
+    );
 }
 
 #[test]
@@ -407,6 +464,7 @@ fn unsigned_and_forged_commits_are_refused() {
             roster: &r,
             before: &before,
             after: &after,
+            writers: &Writers::new(),
             blobs: &blobs,
             new_roster: None,
             decisions: &BTreeMap::new(),
@@ -535,6 +593,7 @@ fn a_roster_change_is_accepted_iff_its_signer_may_make_it(tc: TestCase) {
         roster: &r,
         before: &before,
         after: &after,
+        writers: &Writers::new(),
         blobs: &BTreeMap::new(),
         new_roster: Some(&parsed),
         decisions: &BTreeMap::new(),
@@ -584,6 +643,7 @@ fn an_invalid_or_unreadable_roster_is_refused_and_an_unknown_one_waits() {
             roster: &r,
             before: &before,
             after: &after,
+            writers: &Writers::new(),
             blobs: &BTreeMap::new(),
             new_roster: Some(&parsed),
             decisions: &BTreeMap::new(),

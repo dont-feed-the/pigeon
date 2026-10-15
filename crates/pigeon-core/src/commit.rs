@@ -12,7 +12,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::authority::{self, Deciders, Decision, Refusal, Step, Tree, Unread, Verdict};
+use crate::authority::{self, Deciders, Decision, Refusal, Step, Tree, Unread, Verdict, Writers};
 use crate::names;
 use crate::proposal;
 use crate::roster::{DeviceId, PersonId, Roster};
@@ -40,6 +40,8 @@ pub struct Commit<'a> {
     pub before: &'a Tree,
     /// tree(c).
     pub after: &'a Tree,
+    /// Who wrote each slot of B(c) (ADR 0070).
+    pub writers: &'a Writers,
     /// As [`Step::blobs`].
     pub blobs: &'a BTreeMap<String, Vec<u8>>,
     /// As [`Step::new_roster`].
@@ -84,6 +86,7 @@ pub fn judge(c: &Commit<'_>) -> Verdict {
                 roster,
                 before: c.before,
                 after: c.after,
+                writers: c.writers,
                 blobs: c.blobs,
                 new_roster: c.new_roster,
                 decisions: c.decisions,
@@ -113,11 +116,11 @@ fn combine(verdicts: Vec<Verdict>, clean: bool) -> Verdict {
         .unwrap_or(Verdict::Unknown("no-parent"))
 }
 
-/// What the judge of a decision on `main`, B(c), needs of the proposal it
-/// names (04 §4.5): its deciders under `roster`, R(p) of the decision's
-/// parent, on the changes its adoption on `main` makes; and its author,
-/// the person of its `signer` under `at`, the roster of its base. `None`
-/// when `at` does not know the signer.
+/// What the judge of a decision on `main`, B(c), whose slots `writers`
+/// wrote, needs of the proposal it names (04 §4.5): its deciders under
+/// `roster`, R(p) of the decision's parent, on the changes its adoption on
+/// `main` makes; and its author, the person of its `signer` under `at`, the
+/// roster of its base. `None` when `at` does not know the signer.
 pub fn about(
     roster: &Roster,
     at: &Roster,
@@ -125,9 +128,10 @@ pub fn about(
     base: &Tree,
     tree: &Tree,
     main: &Tree,
+    writers: &Writers,
 ) -> Option<(Deciders, PersonId)> {
     let author = at.devices.get(signer)?.person.clone();
     let adoption = proposal::adoption_changes(base, tree, main);
     let changes: Vec<(&str, bool)> = adoption.iter().map(|(p, a)| (p.as_str(), *a)).collect();
-    Some((authority::deciders(roster, &changes), author))
+    Some((authority::deciders(roster, writers, &changes), author))
 }
