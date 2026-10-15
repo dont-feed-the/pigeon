@@ -83,8 +83,9 @@ backup machine and removes a machine, asking again first; *Accept*,
 a per-session form token. A folder's page lists its files (`Files`), a file's page
 its versions (`History`) with *Restore this version* (`Restore`);
 Deleted files lists what `main` deleted (`Deleted`), each with *Restore*.
-Not yet: pause and the other settings, the other actions,
-axe-core.
+Settings also pauses for an hour, a day or until *Share again* (`Pause`,
+`Resume`, also `pigeon pause` and `pigeon resume`, 15 §15.6).
+Not yet: the other settings, the other actions, axe-core.
 
 - Served by `pigeond`, rendered on the server; server-sent events refresh
   the headline and activity; pages work without JavaScript. It writes

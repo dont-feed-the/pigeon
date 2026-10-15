@@ -34,6 +34,7 @@ pub mod logs;
 pub mod merge;
 pub mod net;
 pub mod notices;
+pub mod pause;
 pub mod prefs;
 pub mod proposal;
 pub mod recovery;

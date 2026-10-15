@@ -124,9 +124,15 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             {
                 tracing::warn!(group = %g.id, error = %e, "capture-failed");
             }
-            vec![Response::Status(
-                crate::status::report(&g, &d.device, &prefix, not_shared).await,
-            )]
+            let mut report = crate::status::report(&g, &d.device, &prefix, not_shared).await;
+            // A pause the person chose says so, unless something needs them
+            // (15 §15.6, ADR 0027).
+            if let Some(p) = crate::pause::now(d)
+                && report.level != pigeon_proto::api::Level::NeedsYou
+            {
+                report.headline = crate::pause::headline(p);
+            }
+            vec![Response::Status(report)]
         }
         Request::Invite {
             person,
@@ -194,6 +200,8 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         },
         Request::GetSettings => crate::prefs::get(d),
         Request::SetSettings { key, value } => crate::prefs::set(d, &key, &value),
+        Request::Pause { duration } => crate::pause::pause(d, duration.as_deref()),
+        Request::Resume => crate::pause::resume(d),
         Request::History { path } => crate::history::history(d, Path::new(&path)).await,
         Request::RemoveDevice { name } => crate::history::remove_device(d, &name).await,
         Request::Doctor { details } => crate::history::doctor(d, details).await,

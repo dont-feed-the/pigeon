@@ -118,6 +118,15 @@ pub enum Request {
         /// Its new value, as written after `=` without quotes.
         value: String,
     },
+    /// `pigeon pause [DURATION]`: all but capture waits until the time
+    /// ends, or until `Resume` without one (15 §15.6).
+    Pause {
+        /// Such as `45m`, `2h` or `3d`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        duration: Option<String>,
+    },
+    /// `pigeon resume`.
+    Resume,
     /// `pigeon remove-computer NAME`.
     RemoveDevice {
         /// The computer's name in the roster.

@@ -134,6 +134,11 @@ impl Daemon {
                 tracing::warn!(group = %g.id, error = %e, "capture-failed");
             }
         }
+        if crate::pause::now(self).is_some() {
+            // Paused by the person: all but capture waits (15 §15.6).
+            crate::clock_file::save(g, self.tracer.clock());
+            return;
+        }
         crate::custody::accept(g, &self.device, &self.tracer).await;
         if settled && let Err(e) = crate::install::incoming(g, &self.device, &self.tracer).await {
             tracing::warn!(group = %g.id, error = %e, "install-failed");

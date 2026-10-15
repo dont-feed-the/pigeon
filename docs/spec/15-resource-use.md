@@ -117,6 +117,11 @@ passes with the default (§15.8).
 preset; `scrub_window` defaults to 01:00–06:00. `pigeon pause [DURATION]`
 stops all but capture until it ends or `pigeon resume`; `paused_until`
 survives a restart; the status says `paused(person)` (ADR 0027).
+*Coded so far:* `pause` and `resume` write `paused_until` (`"resume"` for
+a pause without end, DURATION as `45m`, `2h` or `3d`); a paused round only
+captures and the headline says until when, unless something needs the
+person. Peers may still fetch from this computer **[no ADR: serve while
+paused]**.
 
 ## 15.7 Budgets
 

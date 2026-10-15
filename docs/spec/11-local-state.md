@@ -53,7 +53,7 @@ battery_percent = 20
 on_metered = "pause"              # pause | continue
 full_speed = []                   # local time windows, e.g. ["12:00-13:00"]
 scrub_window = "01:00-06:00"      # backup machines only
-paused_until = 2026-10-13T18:00:00+02:00   # written by pigeon pause; absent if not paused
+paused_until = 2026-10-13T18:00:00+02:00   # written by pigeon pause, "resume" without DURATION; absent if not paused
 
 [network]                         # 09 §9.5
 bind = "0.0.0.0:0"                # the endpoint's address; the lab binds 127.0.0.1:0

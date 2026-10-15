@@ -71,7 +71,7 @@ fn commands_map_to_requests() {
 
 #[test]
 fn other_commands_are_not_in_this_build_and_bad_arguments_are_usage() {
-    assert_eq!(line("pause").action, Action::NotInThisBuild("pause".into()));
+    assert_eq!(line("erase").action, Action::NotInThisBuild("erase".into()));
     assert_eq!(line("free").action, Action::Usage("free".into()));
     assert_eq!(line("free a b").action, Action::Usage("free".into()));
     assert_eq!(
@@ -182,7 +182,7 @@ fn local_problems_fit_the_catalogue() {
         ("daemon-not-running", &[][..]),
         ("version-mismatch", &[]),
         ("usage", &[("command", "free")]),
-        ("not-in-this-build", &[("command", "pause")]),
+        ("not-in-this-build", &[("command", "erase")]),
         ("not-installed", &[]),
         ("internal-error", &[]),
     ] {

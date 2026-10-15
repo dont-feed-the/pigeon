@@ -148,6 +148,8 @@ impl Web {
             .route("/files/keep", post(actions::keep))
             .route("/files/free", post(actions::free))
             .route("/settings", get(settings::settings).post(settings::save))
+            .route("/pause", post(settings::pause))
+            .route("/resume", post(settings::resume))
             .route("/suggestions/accept", post(actions::accept))
             .route("/suggestions/decline", post(actions::decline))
             .route_layer(middleware::from_fn_with_state(self.clone(), session))

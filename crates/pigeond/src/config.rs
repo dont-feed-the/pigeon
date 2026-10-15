@@ -151,7 +151,7 @@ pub fn load(path: &Path) -> Result<Config, ConfigError> {
 }
 
 /// The document at `path`; a missing file is `format = 1`.
-fn read_doc(path: &Path) -> Result<toml_edit::DocumentMut, ConfigError> {
+pub(crate) fn read_doc(path: &Path) -> Result<toml_edit::DocumentMut, ConfigError> {
     let text = match std::fs::read_to_string(path) {
         Ok(t) => t,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => "format = 1\n".to_owned(),
@@ -168,6 +168,30 @@ fn write_doc(path: &Path, doc: &toml_edit::DocumentMut) -> Result<(), ConfigErro
     }
     pigeon_sys::fs::write_atomic(path, doc.to_string().as_bytes())
         .map_err(|e| ConfigError::Io(std::io::Error::other(e.to_string())))
+}
+
+/// Sets `key` of `[resources]` in the file at `path` to `value`, or removes
+/// it for `None`, keeping the rest (15 §15.6).
+pub fn set_resource(
+    path: &Path,
+    key: &str,
+    value: Option<toml_edit::Value>,
+) -> Result<(), ConfigError> {
+    let mut doc = read_doc(path)?;
+    let table = doc
+        .entry("resources")
+        .or_insert_with(toml_edit::table)
+        .as_table_like_mut()
+        .ok_or_else(|| ConfigError::Invalid("[resources] is not a table".to_owned()))?;
+    match value {
+        Some(v) => {
+            table.insert(key, toml_edit::Item::Value(v));
+        }
+        None => {
+            table.remove(key);
+        }
+    }
+    write_doc(path, &doc)
 }
 
 /// Sets the top-level `key` of the file at `path` to `value`, keeping the

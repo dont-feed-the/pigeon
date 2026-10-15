@@ -28,7 +28,7 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(29)) {
+    match tc.draw(gs::integers::<u8>().max_value(31)) {
         0 => Request::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -69,6 +69,10 @@ fn request(tc: &TestCase) -> Request {
         25 => Request::Folders,
         26 => Request::GetSettings,
         29 => Request::Deleted,
+        30 => Request::Pause {
+            duration: maybe_text(tc),
+        },
+        31 => Request::Resume,
         28 => Request::Files { folder: text(tc) },
         27 => Request::SetSettings {
             key: text(tc),

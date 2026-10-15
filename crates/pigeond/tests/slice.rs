@@ -148,9 +148,20 @@ fn local_published_protected_then_free_and_keep() {
         std::fs::read(folder.join("a.txt")).is_ok_and(|b| b == b"hello\n"),
         "{back:?}"
     );
-    match pigeon(&lap, &["pause"]).as_slice() {
+    let paused = pigeon(&lap, &["pause", "2h"]);
+    assert!(
+        said(&paused, "paused-until", "until").is_some(),
+        "{paused:?}"
+    );
+    match pigeon(&lap, &["status"]).as_slice() {
+        [Response::Status(r)] => assert_eq!(r.headline.id, "headline-paused", "{r:?}"),
+        other => panic!("status while paused: {other:?}"),
+    }
+    let resumed = pigeon(&lap, &["resume"]);
+    assert!(said(&resumed, "resumed", "-").is_some(), "{resumed:?}");
+    match pigeon(&lap, &["erase", "a.txt"]).as_slice() {
         [Response::Problem(p)] => assert_eq!(p.code, "not-in-this-build"),
-        other => panic!("pause: {other:?}"),
+        other => panic!("erase: {other:?}"),
     }
 }
 

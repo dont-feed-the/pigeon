@@ -1,6 +1,7 @@
 //! Settings (ux.md §6.5): this computer's settings of `config.toml` (11
 //! §11.2), each a choice and a *Save* button that becomes `SetSettings`.
-//! A new language shows from the answer on.
+//! A new language shows from the answer on. *Pause* and *Share again* are
+//! `pigeon pause` and `pigeon resume` (15 §15.6).
 
 use std::sync::Arc;
 
@@ -34,6 +35,7 @@ pub async fn settings(
     let body = html! {
         (list(&other))
         @for s in &rows { (setting(&r, s, &form.0)) }
+        (pausing(&r, &form.0))
     };
     page(&r, "/settings", &r.id("web-nav-settings"), &body)
 }
@@ -67,6 +69,80 @@ fn setting(r: &Renderer, s: &Setting, form: &str) -> Markup {
             }
         }
     }
+}
+
+/// The pause: a duration and *Pause*, and *Share again*.
+fn pausing(r: &Renderer, form: &str) -> Markup {
+    html! {
+        article {
+            form method="post" action="/pause" {
+                input type="hidden" name="form" value=(form);
+                label for="pause-for" { (r.id("web-pause")) " " }
+                select id="pause-for" name="duration" {
+                    option value="1h" { (r.id("pause-hour")) }
+                    option value="1d" { (r.id("pause-day")) }
+                    option value="" { (r.id("pause-forever")) }
+                }
+                " "
+                button type="submit" { (r.id("web-pause")) }
+            }
+            form method="post" action="/resume" {
+                input type="hidden" name="form" value=(form);
+                button type="submit" { (r.id("web-resume")) }
+            }
+        }
+    }
+}
+
+/// The form of *Pause*.
+#[derive(serde::Deserialize)]
+pub struct PauseForm {
+    /// The session's form token.
+    form: String,
+    /// A duration, or empty until *Share again*.
+    #[serde(default)]
+    duration: String,
+}
+
+/// The form of *Share again*.
+#[derive(serde::Deserialize)]
+pub struct ResumeForm {
+    /// The session's form token.
+    form: String,
+}
+
+/// *Pause*: `pigeon pause [DURATION]`.
+pub async fn pause(
+    State(web): State<Arc<Web>>,
+    Extension(token): Extension<FormToken>,
+    Form(f): Form<PauseForm>,
+) -> Response {
+    let duration = (!f.duration.is_empty()).then_some(f.duration);
+    answer(&web, &token, &f.form, Request::Pause { duration }).await
+}
+
+/// *Share again*: `pigeon resume`.
+pub async fn resume(
+    State(web): State<Arc<Web>>,
+    Extension(token): Extension<FormToken>,
+    Form(f): Form<ResumeForm>,
+) -> Response {
+    answer(&web, &token, &f.form, Request::Resume).await
+}
+
+/// Sends `request` if the form token holds, and shows the answer.
+async fn answer(web: &Arc<Web>, token: &FormToken, form: &str, request: Request) -> Response {
+    if token.0.is_empty() || form != token.0 {
+        return (
+            StatusCode::FORBIDDEN,
+            pages::refused(web, "web-form-expired"),
+        )
+            .into_response();
+    }
+    let answers = web.ask(request).await;
+    let r = web.renderer();
+    let lines = answers.iter().flat_map(|a| r.response(a).0).collect();
+    pages::result(&r, "/settings", lines).into_response()
 }
 
 /// The form of one setting.

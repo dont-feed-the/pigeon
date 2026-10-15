@@ -66,6 +66,8 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("recovery-sheet", "cmd-recovery-sheet"),
     ("recover SHEET [FOLDER] [--from NAME]", "cmd-recover"),
     ("settings [KEY VALUE]", "cmd-settings"),
+    ("pause [DURATION]", "cmd-pause"),
+    ("resume", "cmd-resume"),
     ("doctor [--details]", "cmd-doctor"),
     ("debug bundle [--from NAME…]", "cmd-debug-bundle"),
     ("update [--version TAG | --rollback]", "cmd-update"),
@@ -254,6 +256,10 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
             key: w.first()?.clone(),
             value: w.get(1)?.clone(),
         }),
+        "pause" if fits(0, 1, &[]) => send(Request::Pause {
+            duration: w.first().cloned(),
+        }),
+        "resume" if fits(0, 0, &[]) => send(Request::Resume),
         "suggestions" if fits(0, 0, &[]) => send(Request::Proposals),
         "accept" if fits(1, 1, &["override"]) => send(Request::Accept {
             proposal: w.first()?.clone(),
@@ -332,10 +338,9 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
             }
         }
         "create" | "invite" | "join" | "status" | "machines" | "open" | "history" | "restore"
-        | "free" | "keep" | "remove-computer" | "recovery-sheet" | "recover" | "doctor"
-        | "debug" | "suggestions" | "accept" | "decline" | "conflicts" | "resolve" | "update" => {
-            None
-        }
+        | "pause" | "resume" | "free" | "keep" | "remove-computer" | "recovery-sheet"
+        | "recover" | "doctor" | "debug" | "suggestions" | "accept" | "decline" | "conflicts"
+        | "resolve" | "update" => None,
         other => Some(Action::NotInThisBuild(other.to_owned())),
     }
 }
