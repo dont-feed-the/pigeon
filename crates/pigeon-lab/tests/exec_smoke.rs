@@ -19,8 +19,8 @@ const PIGEOND: &str = r#"#!/bin/sh
 dir="$XDG_STATE_HOME/pigeon/traces"
 mkdir -p "$dir"
 printf '{"spec":"CaptureInstall","device":"id-%s","clock":1,"action":"Capture","vars":{}}\n' "$PIGEON_NAME" > "$dir/a.ndjson"
-printf '{"spec":"CaptureInstall","device":"id-%s","clock":2,"action":"Start","vars":{}}\n' "$PIGEON_NAME" >> "$dir/a.ndjson"
-printf '{"spec":"CaptureInstall","device":"id-%s","clock":3,"action":"Start","vars":{}}\n' "$PIGEON_NAME" >> "$dir/a.ndjson"
+printf '{"spec":"Evict","device":"id-%s","clock":2,"action":"Start","vars":{}}\n' "$PIGEON_NAME" >> "$dir/a.ndjson"
+printf '{"spec":"Evict","device":"id-%s","clock":3,"action":"Start","vars":{}}\n' "$PIGEON_NAME" >> "$dir/a.ndjson"
 printf '{"spec":"CaptureInstall","device":"id-%s","clock":4,"action":"Capture","vars":{}}\n' "$PIGEON_NAME" >> "$dir/a.ndjson"
 exec sleep 600
 "#;
