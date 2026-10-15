@@ -79,6 +79,11 @@ and the ADRs say what pigeon does.
 - S11 once found the laptop silent for two minutes on macOS, with nothing
   logged; a git call still running after 20 seconds is now named in the
   log (`git-slow`, 727d259).
+- Trying pigeon outside the lab found that `pigeon` looked for the
+  daemon's socket under `$TMPDIR` on macOS, while `pigeond` puts it in
+  `~/Library/Caches/pigeon/run` (11 §11.2): the lab and the tests give
+  both `PIGEON_SOCKET`. The CLI and the helper now take the path from
+  `pigeon-sys`, as the daemon does (ab596eb, 09 §9.3).
 - Following renames needed four rules found by the oracle's schedules:
   a write follows a rename only when both build on one version; an event
   replaces what it saw where its own view put it; a pure rename yields to
@@ -110,7 +115,7 @@ models-full pass on it; v0.2.0 is d6c02d9. It also carries M3's first
 steps: n0's relays and address lookup are on by default (ADR 0016,
 c2944b6), while the lab and the tests stay on their own network, and
 `reach.yml` runs a group between the Linux and the macOS runner over them
-(f815360).
+(f815360), which passed at its first run (38750098867).
 
 ## Next
 
