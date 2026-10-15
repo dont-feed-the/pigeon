@@ -79,6 +79,17 @@ impl Backend for Fixed {
             pigeon_proto::Request::RemoveDevice { name } => {
                 vec![said("removed-computer", "name", name)]
             }
+            pigeon_proto::Request::Invitations => vec![Response::Invitations {
+                invitations: vec![pigeon_proto::api::InvitationEntry {
+                    id: "ab12".into(),
+                    who: "Ana".into(),
+                    custodian: false,
+                    expires: "2026-10-22T10:00:00Z".into(),
+                }],
+            }],
+            pigeon_proto::Request::CancelInvitation { invitation } => {
+                vec![said("invitation-cancelled", "id", invitation)]
+            }
             pigeon_proto::Request::Invite { person, .. } => {
                 vec![said("invitation", "code", format!("pgn1-{person}"))]
             }
@@ -365,4 +376,43 @@ async fn a_machine_is_removed_once_confirmed_and_a_person_invited() {
         .unwrap();
     let invited = body(invited).await;
     assert!(invited.contains("pgn1-Ana"), "{invited}");
+}
+
+#[tokio::test]
+async fn a_pending_invitation_is_listed_and_cancelled() {
+    let w = web();
+    let app = w.router();
+    let cookie = logged_in(&app, &w).await;
+    let page = app
+        .clone()
+        .oneshot(get("/machines", HOST, Some(&cookie)))
+        .await
+        .unwrap();
+    let page = body(page).await;
+    assert!(page.contains("Pending invitations"), "{page}");
+    assert!(page.contains("ab12: for Ana, until"), "{page}");
+    let form = form_of(&page);
+    let forged = app
+        .clone()
+        .oneshot(post(
+            "/machines/cancel-invitation",
+            &cookie,
+            "form=00&invitation=ab12",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(forged.status(), StatusCode::FORBIDDEN);
+    let done = app
+        .oneshot(post(
+            "/machines/cancel-invitation",
+            &cookie,
+            &format!("form={form}&invitation=ab12"),
+        ))
+        .await
+        .unwrap();
+    let done = body(done).await;
+    assert!(
+        done.contains("Invitation ab12 can no longer be used."),
+        "{done}"
+    );
 }

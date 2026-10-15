@@ -1,7 +1,9 @@
 //! People & machines (ux.md §6.4): the group's computers and backup
 //! machines, each but this one with *Remove* (`pigeon remove-computer`,
 //! asked again before it is done), and the forms that invite a person or
-//! a backup machine (`pigeon invite`), whose answer is the invitation.
+//! a backup machine (`pigeon invite`), whose answer is the invitation,
+//! and the pending invitations, each with *Cancel* (`pigeon invite
+//! --cancel ID`).
 
 use std::sync::Arc;
 
@@ -13,7 +15,7 @@ use maud::{Markup, html};
 use pigeon_i18n::Message;
 use pigeon_i18n::render::Renderer;
 use pigeon_proto::Request;
-use pigeon_proto::api::Machine;
+use pigeon_proto::api::{InvitationEntry, Machine};
 
 use crate::pages::{list, page};
 use crate::{FormToken, Web, pages};
@@ -45,6 +47,12 @@ pub async fn machines(
             _ => Vec::new(),
         })
         .collect();
+    let mut invitations = Vec::new();
+    for answer in web.ask(Request::Invitations).await {
+        if let pigeon_proto::Response::Invitations { invitations: i } = answer {
+            invitations = i;
+        }
+    }
     let f = &form.0;
     let body = html! {
         (list(&other))
@@ -65,6 +73,10 @@ pub async fn machines(
             input type="hidden" name="backup" value="true";
             button type="submit" { (r.id("web-invite-backup")) }
         }
+        @if !invitations.is_empty() {
+            h2 { (r.id("web-invitations")) }
+            @for i in &invitations { (invitation(&r, i, f)) }
+        }
     };
     page(&r, "/machines", &r.id("web-nav-machines"), &body)
 }
@@ -83,6 +95,46 @@ fn machine(r: &Renderer, m: &Machine, form: &str) -> Markup {
             }
         }
     }
+}
+
+/// One pending invitation, and the form that cancels it.
+fn invitation(r: &Renderer, i: &InvitationEntry, form: &str) -> Markup {
+    html! {
+        article {
+            p { (r.invitation(i)) }
+            form method="post" action="/machines/cancel-invitation" {
+                input type="hidden" name="form" value=(form);
+                input type="hidden" name="invitation" value=(i.id);
+                button type="submit" { (r.id("web-cancel-invitation")) }
+            }
+        }
+    }
+}
+
+/// The form that cancels a pending invitation.
+#[derive(serde::Deserialize)]
+pub struct CancelForm {
+    /// The session's form token.
+    form: String,
+    /// The invitation's ID.
+    invitation: String,
+}
+
+/// *Cancel*: `pigeon invite --cancel ID`.
+pub async fn cancel(
+    State(web): State<Arc<Web>>,
+    Extension(token): Extension<FormToken>,
+    Form(f): Form<CancelForm>,
+) -> Response {
+    if let Some(refused) = expired(&web, &token, &f.form) {
+        return refused;
+    }
+    let r = web.renderer();
+    let request = Request::CancelInvitation {
+        invitation: f.invitation,
+    };
+    let lines = pages::lines(&web, &r, request).await;
+    pages::result(&r, "/machines", lines).into_response()
 }
 
 /// The form that removes a machine; `yes` once the person confirmed.

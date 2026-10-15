@@ -138,6 +138,7 @@ impl Web {
             .route("/machines", get(machines::machines))
             .route("/machines/remove", post(machines::remove))
             .route("/machines/invite", post(machines::invite))
+            .route("/machines/cancel-invitation", post(machines::cancel))
             .route("/suggestions", get(pages::suggestions))
             .route("/events", get(pages::events))
             .route("/files", get(files::files))

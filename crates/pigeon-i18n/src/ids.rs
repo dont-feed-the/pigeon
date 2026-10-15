@@ -197,6 +197,8 @@ pub const MESSAGES: &[Entry] = &[
     e("web-invite-person", &[]),
     e("web-invite-admin", &[]),
     e("web-invite-backup", &[]),
+    e("web-invitations", &[]),
+    e("web-cancel-invitation", &[]),
     e("web-save", &[]),
     e("setting-row", &["key", "value"]),
     e("setting-changed", &["key", "value"]),

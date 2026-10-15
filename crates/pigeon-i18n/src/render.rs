@@ -117,7 +117,7 @@ impl Renderer {
         self.cat.format(&m)
     }
 
-    /// A computer or backup machine, and when it was last heard.
+    /// A pending invitation: its ID, who it is for, and when it expires.
     pub fn invitation(&self, i: &pigeon_proto::api::InvitationEntry) -> String {
         let id = if i.custodian {
             "invitation-row-backup"
