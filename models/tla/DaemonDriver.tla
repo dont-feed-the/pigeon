@@ -34,7 +34,9 @@ StartRestore(new, old) ==
   /\ Begin("restore", new, old, Stat(at.p), FALSE)
 HideIndex ==
   /\ pc = "checked" /\ operation = "free" /\ jr.new = Absent
-  /\ hidden' = (at.p = 0) /\ pc' = "indexed"
+  (* update-index sets the raw bit even if a person recreated p. A later
+     Git refresh/capture clears it; the recreated inode must survive. *)
+  /\ hidden' = TRUE /\ pc' = "indexed"
   /\ UNCHANGED <<fc, fm, fresh, at, kept, orph, hnd, hid, punl, idx, cur,
        store, saved, dropped, div, jr, deferred, who, pdel, gap, disp, n, operation>>
 KeepIndex ==
@@ -93,7 +95,7 @@ DriverRecoverEnd ==
      ELSE IF Forward /\ (StepSeven \/ jr.new = Absent)
           THEN idx' = Record(jr.new) /\ UNCHANGED div
           ELSE UNCHANGED <<idx, div>>
-  /\ hidden' = IF Forward /\ operation = "free" THEN (at.p = 0)
+  /\ hidden' = IF Forward /\ operation = "free" THEN TRUE
                 ELSE IF operation = "restore" THEN hidden
                 ELSE IF Forward THEN FALSE ELSE hidden
   /\ kept' = Keep(at.aside, jr.exp) /\ at' = [at EXCEPT !.aside = 0, !.stage = 0]

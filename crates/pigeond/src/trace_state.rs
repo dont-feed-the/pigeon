@@ -81,9 +81,14 @@ fn journal(path: &Path) -> Result<Vec<pigeon_core::journal::Record>, String> {
     bytes
         .split_inclusive(|b| *b == b'\n')
         .filter(|line| line.ends_with(b"\n")) // a torn last record is not durable
+        .filter(|line| !line.iter().all(u8::is_ascii_whitespace)) // legacy append framing
         .map(|line| {
             std::str::from_utf8(line)
                 .ok()
+                .filter(|line| {
+                    serde_json::from_str::<Value>(line)
+                        .is_ok_and(|v| v["format"].as_u64() == Some(1))
+                })
                 .and_then(crate::journal_file::parse)
                 .ok_or_else(|| "invalid complete journal record in trace observation".to_owned())
         })

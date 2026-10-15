@@ -126,6 +126,9 @@ def mutations(streams, java):
     events, j = choose("Check")
     events[j]["vars"]["state"]["expected_stat"] += "1"
     reject(events, java, "journal stat does not justify proof", model=True)
+    events, j = choose("Index", lambda b, a: not b["hidden"] and a["hidden"])
+    events[j]["vars"]["state"]["hidden"] = False
+    reject(events, java, "free did not set the raw skip-worktree bit", model=True)
     events, j = choose("Scan")
     events[j - 1]["vars"]["state"]["aside"]["writers"] = True
     reject(events, java, "writer-scan input contradicts successful scan", model=True)
