@@ -121,6 +121,32 @@ class Installation(unittest.TestCase):
         self.run_installer("--uninstall", ok=False)
         self.assertEqual(sentinel.read_text(), "still here")
 
+    def test_main_build_carries_the_service_helper_into_the_installation(self):
+        source = self.prefix / "src"
+        (source / ".git").mkdir(parents=True)
+        (source / "packaging").mkdir()
+        (source / "Cargo.toml").write_text('[workspace.package]\nversion = "0.3.4"\n')
+        for name in ("pigeon-install", "pigeon-service"):
+            shutil.copy2(PACKAGING / name, source / "packaging" / name)
+        self.executable(source / "packaging/install-git-annex", "exit 0")
+        target = source / "target/release"
+        target.mkdir(parents=True)
+        self.executable(target / "pigeon", "echo pigeon 0.3.4+gabcdef123456")
+        for name in ("pigeond", "git-annex-p2p-iroh"):
+            self.executable(target / name, "exit 0")
+        self.executable(self.commands / "git", 'case "$*" in *rev-parse*) echo abcdef123456 ;; esac')
+        self.executable(self.commands / "cargo", "exit 0")
+        self.env.pop("CARGO_TARGET_DIR", None)
+        self.run_installer("--main")
+        self.assertEqual(self.version(), "pigeon 0.3.4+gabcdef123456")
+        self.assertTrue((self.prefix / "bin/pigeon-service").is_file())
+
+    def test_conflicting_modes_leave_the_installation_untouched(self):
+        self.run_installer("--version", "v0.3.2", "--no-service")
+        self.run_installer("--main", "--uninstall", ok=False)
+        self.run_installer("--rollback", "--version", "v0.3.3", ok=False)
+        self.assertEqual(self.version(), "pigeon 0.3.2")
+
     def test_supervisor_configuration_escapes_paths(self):
         for os_name in ("Linux", "Darwin"):
             with self.subTest(os=os_name):
