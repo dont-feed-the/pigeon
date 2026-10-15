@@ -1,6 +1,6 @@
 # The full set of TLA+ models, slow rows included (ADR 0026), 200 runs of
 # pigeon-core checked by TLC (spec 13 §13.3), and 1000 random S9 crash schedules
-# of the slice against the lab build, in ten shards, and every slice scenario,
+# of the slice against the lab build, in twenty shards, and every slice scenario,
 # blocked ones included (13 §13.12). Runs when a
 # model or the runner changes, weekly, and by hand. GitHub runs `schedule`
 # and `workflow_dispatch` only from the default branch, so until v2 is the
@@ -65,13 +65,13 @@ jobs:
         run: scripts/check-code-traces --seeds 200
 
   s9-schedules:
-    name: S9, 100 crash schedules (shard ${{ matrix.shard }})
+    name: S9, 50 crash schedules (shard ${{ matrix.shard }})
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
     env:
       GIT_ANNEX_SHA256: 88ea73c9bb8fb751916e0e4a0a8f489a7476f9b9e861fd2cce2601a77f4f409d
     steps:
@@ -90,12 +90,20 @@ jobs:
             --features pigeond/lab,pigeond/tla-trace
           mkdir -p target/lab/bin
           cp target/release/pigeond target/release/pigeon target/release/git-annex-p2p-iroh target/lab/bin/
-      - name: 100 random S9 crash schedules
+      - name: 50 random S9 crash schedules
         env:
           PIGEON_LAB_BIN: ${{ github.workspace }}/target/lab/bin
-          HEGEL_TEST_CASES: "100"
+          PIGEON_LAB_OUT: ${{ github.workspace }}/target/lab/out
+          HEGEL_TEST_CASES: "50"
           HEGEL_SEED: ${{ matrix.shard }}
         run: cargo test --locked --release -p pigeon-lab --test s9_exec
+      # The daemons' logs of each case, kept only when a shard fails.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: s9-schedules-${{ matrix.shard }}
+          path: target/lab/out
+          if-no-files-found: ignore
 
   slice-with-blocked:
     name: S1-S12 with the blocked ones, against the lab build (${{ matrix.os }})

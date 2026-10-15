@@ -503,12 +503,18 @@ pub type Welcomed = (
     std::collections::BTreeMap<String, Vec<String>>,
 );
 
-/// Sends `request` to the inviter, retrying for a minute while it is
-/// offline; a refusal answers its code.
+/// How long a join waits for the inviter at most, unless the invitation
+/// expires first (09 §9.6 step 1): the inviter may be offline, or busy
+/// with a long round, as its welcome waits for the group.
+pub const DIAL_FOR: Duration = Duration::from_secs(600);
+
+/// Sends `request` to the inviter, retrying while it is offline until the
+/// invitation expires or [`DIAL_FOR`] passed; a refusal answers its code.
 pub async fn dial(d: &Daemon, inv: &Invitation, request: &Join) -> Result<Welcomed, String> {
     let addresses = inviter_addresses(inv);
     let mut answer = None;
-    for _ in 0..30 {
+    let until = tokio::time::Instant::now() + DIAL_FOR;
+    while tokio::time::Instant::now() < until && crate::util::now() < inv.expires {
         match d.node.join(&inv.inviter, addresses.clone(), request).await {
             Ok(a) => {
                 answer = Some(a);
@@ -616,10 +622,11 @@ pub async fn fetch_welcome(
         inviter,
         spec.as_str(),
     ];
-    // The inviter may still be busy with the welcome's round: retry for a
-    // minute, as a P2P fetch can also hang (16 §16.4).
+    // The inviter may still be busy with the welcome's round: retry for
+    // five minutes, as a P2P fetch can also hang (16 §16.4) and a loaded
+    // machine is slow.
     let mut fetched = false;
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(300);
     while tokio::time::Instant::now() < deadline {
         match g.git.run_for(&args, Duration::from_secs(30)).await {
             Ok(_) => {

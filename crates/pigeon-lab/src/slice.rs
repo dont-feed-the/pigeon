@@ -339,14 +339,14 @@ pub fn s9_workload(s: &Slice) -> (Vec<Step>, Vec<(File, Content)>) {
                 l.sees(&a, Kind::Protected),
                 l.sees(&b, Kind::Protected),
             ]),
-            180,
+            300,
         ),
         l.free(docs),
         wait(every(vec![l.lacks(&a), l.lacks(&b)]), 120),
         l.keep(docs),
-        wait(every(vec![l.has(&a, &va), l.has(&b, &vb)]), 180),
+        wait(every(vec![l.has(&a, &va), l.has(&b, &vb)]), 300),
         l.write(&a, va2.clone()),
-        wait(l.sees(&a, Kind::Protected), 180),
+        wait(l.sees(&a, Kind::Protected), 300),
     ];
     (steps, vec![(a, va2), (b, vb)])
 }
