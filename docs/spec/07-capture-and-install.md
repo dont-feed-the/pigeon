@@ -177,6 +177,11 @@ first three choices (`tests/resolve.rs`), the withdrawal being the decision
 `withdrawn` signed by the author's device. *Open Paul's version* and
 `pigeon view PATH --group` (`--version N`) show the group's version as
 ADR 0035 says: read-only, outside the folder, for seven days at most.
+Coded so far (`pigeond/src/view.rs`, `tests/view.rs`): `View {path,
+version, group}` copies the version to `<cache>/view/<id>/` as
+`tarte (version 3).docx` or `tarte (group's version).docx`, read-only, and
+the CLI opens it; each view removes the copies older than seven days. The
+name's label is English yet, and the web has no button for it.
 
 ## 7.7 What the models must show
 

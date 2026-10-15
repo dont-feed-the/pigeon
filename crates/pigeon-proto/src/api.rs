@@ -87,6 +87,19 @@ pub enum Request {
         #[serde(default)]
         confirmed: bool,
     },
+    /// `pigeon view PATH [--version N | --group]` (07 §7.6): a read-only
+    /// copy of a version, outside the folder.
+    View {
+        /// A file.
+        path: String,
+        /// Version N of the history, from 1, the oldest; the current one
+        /// when absent.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        version: Option<u64>,
+        /// The group's version rather than the person's.
+        #[serde(default)]
+        group: bool,
+    },
     /// `pigeon history PATH`.
     History {
         /// A file.

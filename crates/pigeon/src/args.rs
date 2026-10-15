@@ -53,6 +53,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("machines", "cmd-machines"),
     ("open", "cmd-open"),
     ("history PATH", "cmd-history"),
+    ("view PATH [--version N | --group]", "cmd-view"),
     ("restore PATH [--version N | --at TIME]", "cmd-restore"),
     ("free PATH", "cmd-free"),
     ("free --without-checking PATH", "cmd-free-without-checking"),
@@ -321,6 +322,20 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
                 choice,
             })
         }
+        "view" if fits(1, 1, &["version", "group"]) => {
+            let version = match s.value("version") {
+                Some(v) => Some(v.parse().ok()?),
+                None => None,
+            };
+            if version.is_some() && s.flag("group") {
+                return None;
+            }
+            send(Request::View {
+                path: absolute(w.first()?),
+                version,
+                group: s.flag("group"),
+            })
+        }
         "history" if fits(1, 1, &[]) => send(Request::History {
             path: absolute(w.first()?),
         }),
@@ -387,7 +402,7 @@ fn command(cmd: &str, s: &Split) -> Option<Action> {
         "create" | "invite" | "join" | "status" | "machines" | "open" | "history" | "restore"
         | "pause" | "resume" | "people" | "deleted" | "leave" | "held" | "free" | "keep"
         | "remove-computer" | "recovery-sheet" | "recover" | "doctor" | "debug" | "suggestions"
-        | "accept" | "decline" | "conflicts" | "resolve" | "update" | "export" => None,
+        | "accept" | "decline" | "conflicts" | "resolve" | "update" | "export" | "view" => None,
         other => Some(Action::NotInThisBuild(other.to_owned())),
     }
 }

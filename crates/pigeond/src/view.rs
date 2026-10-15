@@ -1,0 +1,143 @@
+//! `pigeon view PATH [--version N | --group]` (07 §7.6, ADR 0035): a
+//! read-only copy of a version of a file, outside the shared folder, in
+//! `<cache>/view/` (11 §11.3), which the CLI opens with the default
+//! application. `--group` is the group's version, the one `main` holds
+//! while the folder keeps the person's own; `--version N` any version of
+//! the history, numbered from 1, the oldest, as `history` numbers them;
+//! neither, the current one. Copies older than seven days are removed at
+//! each view.
+
+use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime};
+
+use pigeon_proto::Response;
+use pigeon_proto::api::Arg;
+
+use crate::api::{problem, relative};
+use crate::daemon::Daemon;
+
+/// How long a copy stays.
+pub const KEPT: Duration = Duration::from_secs(7 * 24 * 3600);
+
+/// The name of the copy: `tarte (version 3).docx`, `tarte (group's
+/// version).docx`.
+pub fn copy_name(rel: &str, label: &str) -> String {
+    let name = rel.rsplit('/').next().unwrap_or(rel);
+    match name.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() => format!("{stem} ({label}).{ext}"),
+        _ => format!("{name} ({label})"),
+    }
+}
+
+/// Removes the copies in `dir` older than [`KEPT`].
+pub fn sweep(dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let old = e
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| SystemTime::now().duration_since(t).ok())
+            .is_some_and(|age| age > KEPT);
+        if old {
+            let p = e.path();
+            make_writable(&p);
+            let _ = std::fs::remove_dir_all(&p);
+        }
+    }
+}
+
+fn make_writable(dir: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o755));
+    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let _ = std::fs::set_permissions(e.path(), std::fs::Permissions::from_mode(0o644));
+    }
+}
+
+/// `pigeon view`.
+pub async fn view(d: &Daemon, path: &Path, version: Option<u64>, group: bool) -> Vec<Response> {
+    let Some(g) = d.group_at(path).or_else(|| d.group_at(path.parent()?)) else {
+        return vec![problem("not-in-group", &[], None)];
+    };
+    let Some(rel) = relative(&g, path) else {
+        return vec![problem("not-in-group", &[], None)];
+    };
+    let text = |s: &str| Arg::Text(s.to_owned());
+    let (key, label) = if group {
+        let main = g.git.rev("refs/heads/main").await;
+        let keys = match main {
+            Some(m) => g.git.keys(&m).await.unwrap_or_default(),
+            None => Default::default(),
+        };
+        match keys.get(&rel) {
+            Some(k) => (k.clone(), "group's version".to_owned()),
+            None => {
+                let args = [("path", text(&rel)), ("version", text("main"))];
+                return vec![problem("no-such-version", &args, None)];
+            }
+        }
+    } else {
+        let mut versions = crate::history::versions(&g, &rel).await;
+        versions.reverse();
+        let n = version.unwrap_or(versions.len() as u64);
+        let wanted = usize::try_from(n)
+            .ok()
+            .and_then(|i| i.checked_sub(1))
+            .and_then(|i| versions.get(i));
+        match wanted {
+            Some((_, k)) => (k.clone(), format!("version {n}")),
+            None => {
+                let args = [("path", text(&rel)), ("version", Arg::Number(n as i64))];
+                return vec![problem("no-such-version", &args, None)];
+            }
+        }
+    };
+    if let Err(code) = crate::restore::bring(&g, &key).await {
+        return vec![problem(code, &[], None)];
+    }
+    let Some(object) = crate::custody::present(&g, &key).await else {
+        return vec![problem("receiving", &[], None)];
+    };
+    let views = d.dirs.cache.join("view");
+    sweep(&views);
+    match write_copy(&views, &object, &copy_name(&rel, &label)) {
+        Ok(at) => vec![Response::Said {
+            message: crate::status::msg("view-ready", &[("path", text(&at.to_string_lossy()))]),
+        }],
+        Err(e) => vec![problem("internal-error", &[], Some(e.to_string()))],
+    }
+}
+
+/// Copies `object` to a new directory of `views` as `name`, read-only.
+fn write_copy(views: &Path, object: &Path, name: &str) -> std::io::Result<PathBuf> {
+    use std::os::unix::fs::PermissionsExt;
+    let id = crate::util::hex(&crate::util::random::<8>()?);
+    let dir = views.join(id);
+    std::fs::create_dir_all(&dir)?;
+    let at = dir.join(name);
+    std::fs::copy(object, &at)?;
+    std::fs::set_permissions(&at, std::fs::Permissions::from_mode(0o444))?;
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555))?;
+    Ok(at)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_copy_is_named_after_the_file_and_its_version() {
+        assert_eq!(
+            copy_name("a/tarte.docx", "version 2"),
+            "tarte (version 2).docx"
+        );
+        assert_eq!(
+            copy_name("Makefile", "group's version"),
+            "Makefile (group's version)"
+        );
+        assert_eq!(copy_name(".bashrc", "version 1"), ".bashrc (version 1)");
+    }
+}

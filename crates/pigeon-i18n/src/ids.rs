@@ -279,6 +279,8 @@ pub const MESSAGES: &[Entry] = &[
     e("problem-held-unknown", &["id"]),
     e("hint-held-unknown", &[]),
     e("cmd-export", &[]),
+    e("cmd-view", &[]),
+    e("view-ready", &["path"]),
     e("cmd-free-without-checking", &[]),
     e("drop-risk", &["files", "unsafe", "alone"]),
     e("drop-preview", &["files"]),

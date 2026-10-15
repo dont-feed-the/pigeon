@@ -57,4 +57,5 @@ pub mod thin;
 pub mod trace;
 pub mod util;
 pub mod verify;
+pub mod view;
 pub mod web;

@@ -81,8 +81,9 @@ impl Client {
     }
 }
 
-/// Opens `url` in the person's browser, for `pigeon open` (10 §10.3); the
-/// link is printed anyway, for a computer without one.
+/// Opens `url` in the person's browser, for `pigeon open` (10 §10.3), or a
+/// file with its default application, for `pigeon view`; the link or path
+/// is printed anyway, for a computer without one.
 fn open_browser(url: &str) {
     let opener = if cfg!(target_vendor = "apple") {
         "open"
@@ -101,8 +102,11 @@ fn open_browser(url: &str) {
 fn show(out: &Renderer, json: bool, r: &Response) -> (bool, bool) {
     if !json
         && let Response::Said { message } = r
-        && message.id == "web-login"
-        && let Some(pigeon_proto::Arg::Text(url)) = message.args.get("url")
+        && let Some(pigeon_proto::Arg::Text(url)) = match message.id.as_str() {
+            "web-login" => message.args.get("url"),
+            "view-ready" => message.args.get("path"),
+            _ => None,
+        }
     {
         open_browser(url);
     }

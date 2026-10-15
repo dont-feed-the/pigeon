@@ -360,3 +360,5 @@ drop-risk =
 drop-preview = The content of these { $files } files would leave this computer, even where it is the only copy.
 drop-done = { $files } files hidden, { $dropped } contents removed from this computer; a record of it is shared with the group.
 confirm-drop = Remove this computer's copy anyway? What no other machine has is lost. [y/N]
+cmd-view = Open a read-only copy of a version of a file, outside the folder
+view-ready = A read-only copy is at { $path }; it is removed after seven days.
