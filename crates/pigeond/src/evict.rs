@@ -113,10 +113,14 @@ pub(crate) fn write_sparse(g: &Group, hidden: &BTreeSet<String>) {
     let _ = pigeon_sys::fs::write_atomic(&file, text.as_bytes());
 }
 
-/// This computer's folder choices as the loops apply them: its own, and
-/// other people's folders of a per-person folder freed by default (08 §8.5).
+/// This computer's folder choices as the loops apply them: its own, and,
+/// on a laptop, other people's folders of a per-person folder freed by
+/// default (08 §8.5). A backup machine keeps everything.
 pub(crate) fn targets(g: &Group) -> pigeon_core::keep_targets::Targets {
     let chosen = crate::keep_targets::read(g);
+    if g.role != pigeon_core::filter::Role::Laptop {
+        return chosen;
+    }
     let Some(doc) = g.roster() else {
         return chosen;
     };

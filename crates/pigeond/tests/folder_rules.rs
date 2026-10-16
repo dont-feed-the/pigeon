@@ -411,4 +411,19 @@ fn a_per_person_folder_gives_each_person_theirs() {
         !src.join("ana/bob.txt").exists(),
         "Bob changed Ana's folder"
     );
+
+    // A backup machine keeps everyone's folder; none is someone else's.
+    let vault = start(&root, sockets.path(), "vault");
+    join(&lap, &vault, &[&lap, &bob, &vault]);
+    eventually_within(
+        90,
+        || {
+            synced(&vault)
+                .iter()
+                .any(|f| f.path == "src/bob" && f.kept && f.others.is_none())
+        },
+        "the backup machine lists Bob's folder as not kept",
+        &[&lap, &bob, &vault],
+    );
+    assert!(synced(&vault).iter().all(|f| f.kept && f.others.is_none()));
 }
