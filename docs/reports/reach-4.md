@@ -81,3 +81,15 @@ on macOS 15 while keeping the existing artifact/cache names for newer
 macOS runners. The old candidate's Linux Rust job and real macOS Homebrew
 installation passed in run 38830164002. The combined candidate is checked
 again after integrating upstream; publication still waits for its tag.
+
+The combined run 38834010811 passed packaging and model checks but its
+Rust job stopped before tests because GitHub had evicted the required
+dependency cache. The successful main-branch producer's artifact remained
+available. A cache miss now checks successful producers from this
+repository whose commits are ancestors of the candidate, compares all
+build inputs, verifies GitHub's archive digest and validates the native
+architecture and exact patched version before installing it. Twelve
+regressions cover source drift, provenance, failed builds, archive escapes
+and credential stripping on download redirects. This avoids treating an
+evicted cache as a reason to use stock git-annex. The repaired workflow
+still needs its own green run.
