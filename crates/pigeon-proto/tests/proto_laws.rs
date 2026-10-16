@@ -28,7 +28,8 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(46)) {
+    match tc.draw(gs::integers::<u8>().max_value(47)) {
+        47 => Request::RemoveDeviceId { device: text(tc) },
         46 => Request::Capacity,
         45 => Request::ViewSuggestion {
             proposal: text(tc),
@@ -39,9 +40,11 @@ fn request(tc: &TestCase) -> Request {
         },
         44 => Request::SetFolderRule {
             folder: text(tc),
-            rule: match tc.draw(gs::integers::<u8>().max_value(2)) {
+            confirmed: tc.draw(gs::booleans()),
+            rule: match tc.draw(gs::integers::<u8>().max_value(3)) {
                 0 => pigeon_proto::policy::Change::Inherit,
                 1 => pigeon_proto::policy::Change::Owned { person: text(tc) },
+                2 => pigeon_proto::policy::Change::PerPerson,
                 _ => pigeon_proto::policy::Change::AddOnly {
                     stewards: (0..tc.draw(gs::integers::<u8>().max_value(3)))
                         .map(|_| text(tc))

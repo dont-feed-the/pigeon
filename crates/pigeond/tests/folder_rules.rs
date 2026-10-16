@@ -139,6 +139,36 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
         "steward rule not shared",
         &[&lap, &bob],
     );
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .unwrap();
+    let git = pigeond::git::Git::new(&folder, pigeon_git::GitEnv::default());
+    let bob_device = match pigeon(&lap, &["machines"]).as_slice() {
+        [Response::Machines { machines }] => machines
+            .iter()
+            .find(|m| m.name == "bob-laptop")
+            .unwrap()
+            .device
+            .clone(),
+        answer => panic!("machines: {answer:?}"),
+    };
+    // The real CI failure retained this flag after a failed initial probe.
+    // Metadata still arrived, but annex refused to fetch the steward's bytes.
+    for option in ["annex-ignore", "annex-ignore-auto"] {
+        let key = format!("remote.{bob_device}.{option}");
+        eventually_within(
+            15,
+            || match runtime.block_on(git.run(&["config", &key, "true"])) {
+                Ok(_) => true,
+                Err(error) if error.to_string().contains("config.lock") => false,
+                Err(error) => panic!("fixture remote configuration: {error}"),
+            },
+            "fixture could not mark the peer ignored",
+            &[&lap, &bob],
+        );
+    }
     std::fs::write(other.join("Photos/second.txt"), b"Bob steward edit\n").unwrap();
     eventually_within(
         90,
@@ -146,6 +176,14 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
         "steward edit not accepted",
         &[&lap, &bob],
     );
+    for option in ["annex-ignore", "annex-ignore-auto"] {
+        assert_eq!(
+            runtime
+                .block_on(git.config(&format!("remote.{bob_device}.{option}")))
+                .as_deref(),
+            Some("false")
+        );
+    }
 
     // Put real unpublished working bytes and an unrelated raw entry in
     // the personal index. A rule update must commit only roster metadata.
@@ -155,12 +193,6 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
         .write(true)
         .open(&draft)
         .unwrap();
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(2)
-        .enable_all()
-        .build()
-        .unwrap();
-    let git = pigeond::git::Git::new(&folder, pigeon_git::GitEnv::default());
     let blob = runtime
         .block_on(git.run_in(&["hash-object", "-w", "--stdin"], b"private index entry"))
         .unwrap();
@@ -234,4 +266,109 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
     assert!(!peer_main.contains_key("private-draft.txt"));
     assert!(!root.join("cara-files/private-draft.txt").exists());
     drop(writer);
+}
+
+/// A per-person folder (04 §4.3, rules 2): setting it raises the group's
+/// rules once the admin confirms; then each person's folder in it is
+/// theirs, so Bob's files in `src/bob` are shared and his file in Ana's
+/// `src/ana` waits as a suggestion.
+#[test]
+fn a_per_person_folder_gives_each_person_theirs() {
+    let _one = SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some((_tmp, root, sockets)) = dirs() else {
+        return;
+    };
+    let lap = start(&root, sockets.path(), "lap");
+    let bob = start(&root, sockets.path(), "bob");
+    let folder = root.join("Film");
+    let src = folder.join("src");
+    std::fs::create_dir_all(src.join("ana")).unwrap();
+    std::fs::write(src.join("ana/plan.txt"), b"Ana's plan\n").unwrap();
+    let created = pigeon(
+        &lap,
+        &[
+            "create",
+            "Film",
+            folder.to_str().unwrap(),
+            "--k",
+            "1",
+            "--name",
+            "ana-laptop",
+        ],
+    );
+    assert!(said(&created, "created", "group").is_some(), "{created:?}");
+    let code = invitation(&lap);
+    let other = root.join("bob-film");
+    let joined = pigeon(
+        &bob,
+        &[
+            "join",
+            &code,
+            "--person",
+            "Bob",
+            other.to_str().unwrap(),
+            "--name",
+            "bob-laptop",
+        ],
+    );
+    assert!(said(&joined, "joined", "group").is_some(), "{joined:?}");
+    eventually_within(
+        90,
+        || std::fs::read(other.join("src/ana/plan.txt")).is_ok_and(|b| b == b"Ana's plan\n"),
+        "initial data not installed",
+        &[&lap, &bob],
+    );
+
+    let src_path = src.to_str().unwrap();
+    let asked = pigeon(&lap, &["folder-rule", src_path, "--per-person"]);
+    assert!(
+        asked
+            .iter()
+            .any(|r| matches!(r, Response::Problem(p) if p.code == "needs-confirmation")),
+        "{asked:?}"
+    );
+    assert!(
+        !report(&lap, &src).rules[0].per_person,
+        "saved without confirmation"
+    );
+    let saved = pigeon(&lap, &["folder-rule", src_path, "--per-person", "--yes"]);
+    assert!(
+        said(&saved, "folder-rule-result", "folder").is_some(),
+        "{saved:?}"
+    );
+    let mine = report(&lap, &src.join("bob"));
+    assert_eq!(mine.rules[0].owner.as_deref(), Some("bob"), "{mine:?}");
+    assert!(!mine.rules[0].direct);
+    eventually_within(
+        90,
+        || report(&bob, &other.join("src")).rules[0].per_person,
+        "per-person rule not shared",
+        &[&lap, &bob],
+    );
+
+    std::fs::create_dir_all(other.join("src/bob")).unwrap();
+    std::fs::write(other.join("src/bob/shot.txt"), b"Bob's shot\n").unwrap();
+    std::fs::write(other.join("src/ana/bob.txt"), b"Bob in Ana's folder\n").unwrap();
+    eventually_within(
+        120,
+        || std::fs::read(src.join("bob/shot.txt")).is_ok_and(|b| b == b"Bob's shot\n"),
+        "Bob's own file not shared",
+        &[&lap, &bob],
+    );
+    eventually_within(
+        120,
+        || {
+            pigeon(&lap, &["suggestions"])
+                .iter()
+                .any(|r| matches!(r, Response::Proposals { proposals } if !proposals.is_empty()))
+        },
+        "Bob's file in Ana's folder not suggested",
+        &[&lap, &bob],
+    );
+    assert!(
+        !src.join("ana/bob.txt").exists(),
+        "Bob changed Ana's folder"
+    );
 }

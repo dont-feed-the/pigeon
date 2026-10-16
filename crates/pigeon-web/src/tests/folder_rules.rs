@@ -64,6 +64,7 @@ impl Backend for Rules {
                         owner: None,
                         stewards: Vec::new(),
                         direct: true,
+                        per_person: false,
                     }],
                     people: vec![policy::Person {
                         id: "alice".into(),
@@ -151,20 +152,43 @@ async fn folder_rules_escape_names_and_need_a_single_checked_form() {
     let submitted =
         format!("form={token}&path=%2FFamily%2FPhotos&kind=add-only&steward=alice&steward=bob");
     assert_eq!(
-        app.oneshot(post("/folder-rule", &cookie, &submitted))
+        app.clone()
+            .oneshot(post("/folder-rule", &cookie, &submitted))
             .await
             .unwrap()
             .status(),
         StatusCode::OK
     );
+    // A per-person rule says it may raise the group's rules only with the box.
+    assert!(page.contains("value=\"per-person\"") && page.contains("name=\"confirm\""));
+    for (extra, confirmed) in [("", false), ("&confirm=rules", true)] {
+        let submitted = format!("form={token}&path=%2FFamily%2FPhotos&kind=per-person{extra}");
+        assert_eq!(
+            app.clone()
+                .oneshot(post("/folder-rule", &cookie, &submitted))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            backend.calls.lock().unwrap().last(),
+            Some(&pigeon_proto::Request::SetFolderRule {
+                folder: "/Family/Photos".into(),
+                rule: policy::Change::PerPerson,
+                confirmed,
+            })
+        );
+    }
     assert_eq!(
-        backend.calls.lock().unwrap().as_slice(),
-        &[pigeon_proto::Request::SetFolderRule {
+        backend.calls.lock().unwrap().first(),
+        Some(&pigeon_proto::Request::SetFolderRule {
             folder: "/Family/Photos".into(),
             rule: policy::Change::AddOnly {
                 stewards: vec!["alice".into(), "bob".into()]
             },
-        }]
+            confirmed: false,
+        })
     );
 }
 

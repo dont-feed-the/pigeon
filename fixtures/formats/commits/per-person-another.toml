@@ -1,0 +1,12 @@
+about = "Ben's laptop adds a file to Work/ana, the folder per-person Work gives Ana."
+verdict = "refused:commit-not-allowed"
+roster = "known/group-per-person.toml"
+signer = 2
+message = "pigeon: capture"
+
+[before]
+"Shared/a.jpg" = "/annex/objects/SHA256E-s7--b236e74d49a5152abeec27d7e176a2e7976aec064f3389ef0b4a69ed1cfc5378.jpg\n"
+"Ana/notes.txt" = "/annex/objects/SHA256E-s5--ab5aa97074c454a0632057e704220d9a6678fbf773a0a5806fc09b8173b07309.txt\n"
+
+[after]
+"Work/ana/shot-001.blend" = "/annex/objects/SHA256E-s10--4d091a83db4b4bb699dd32ed3d5f9b7c8242ebd74c398e7fb4d12fbbe22c1047.blend\n"

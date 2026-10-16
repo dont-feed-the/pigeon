@@ -30,6 +30,7 @@ fn folder_policy_preserves_names_selections_and_authority(tc: TestCase) {
                 .map(|p| p.id.clone())
                 .collect(),
             direct: flag(&tc),
+            per_person: flag(&tc),
         })
         .collect();
     let response = Response::FolderRules(Box::new(policy::Report {
@@ -50,6 +51,8 @@ fn folder_policy_preserves_names_selections_and_authority(tc: TestCase) {
     assert!(decoder.into_rest().is_empty());
     let rule = if flag(&tc) {
         policy::Change::Owned { person: text(&tc) }
+    } else if flag(&tc) {
+        policy::Change::PerPerson
     } else {
         policy::Change::AddOnly {
             stewards: (0..tc.draw(gs::integers::<u8>().max_value(4)))
@@ -60,6 +63,7 @@ fn folder_policy_preserves_names_selections_and_authority(tc: TestCase) {
     let request = Request::SetFolderRule {
         folder: text(&tc),
         rule,
+        confirmed: flag(&tc),
     };
     decoder = LineDecoder::new();
     decoder.push(&encode(10, &request).unwrap());

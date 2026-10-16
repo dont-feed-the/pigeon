@@ -151,7 +151,9 @@ pub async fn init_annex(
 /// Adds or updates the git remote of a peer: its URL through the helper,
 /// its annex UUID, and a refspec that fetches its branches where accept
 /// reads them, so remotedaemon's fetches of a notice serve too (09 §9.3,
-/// 03 §3.6). The remote is named by the device ID.
+/// 03 §3.6). Roster peers stay enabled: Remote/Git.hs of git-annex
+/// 10.20261006 can persist ignore flags after an unsuccessful first probe.
+/// The remote is named by the device ID.
 pub async fn ensure_remote(git: &Git, device: &str, uuid: &str) -> Result<(), Error> {
     let url = format!("p2p-annex::iroh:{device}");
     let key = format!("remote.{device}.url");
@@ -166,6 +168,12 @@ pub async fn ensure_remote(git: &Git, device: &str, uuid: &str) -> Result<(), Er
     let spec = peer_refspec(device);
     if git.config(&key).await.as_deref() != Some(spec.as_str()) {
         git.run(&["config", &key, &spec]).await?;
+    }
+    for option in ["annex-ignore", "annex-ignore-auto"] {
+        let key = format!("remote.{device}.{option}");
+        if git.config(&key).await.as_deref() != Some("false") {
+            git.run(&["config", &key, "false"]).await?;
+        }
     }
     Ok(())
 }

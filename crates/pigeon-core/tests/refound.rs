@@ -93,6 +93,7 @@ fn folder_boundaries_and_group_settings_survive(tc: TestCase) {
             Rule::AddOnly(stewards) => {
                 assert!(stewards.iter().all(|p| p == &old.devices[&me].person))
             }
+            Rule::PerPerson => {}
         }
     }
 }
