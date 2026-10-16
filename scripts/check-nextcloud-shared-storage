@@ -59,7 +59,7 @@ def run(provider="custodian"):
         def objects(repo, body, bare=False):
             digest = hashlib.sha256(body).hexdigest()
             folder = repo / ("annex/objects" if bare else ".git/annex/objects")
-            return [p for p in folder.rglob("*") if p.is_file() and f"--{digest}" in p.name]
+            return [p for p in folder.rglob("*") if p.is_file() and p.name == p.parent.name and f"--{digest}" in p.name]
 
         try:
             control, control_process = daemon("control")

@@ -176,7 +176,7 @@ def run():
 
             def annex_objects(folder, body):
                 digest = hashlib.sha256(body).hexdigest()
-                return [p for p in (folder / ".git/annex/objects").rglob("*") if p.is_file() and f"--{digest}" in p.name]
+                return [p for p in (folder / ".git/annex/objects").rglob("*") if p.is_file() and p.name == p.parent.name and f"--{digest}" in p.name]
 
             assert len({c["device"] for c in clients.values()}) == 3
             assert len({c["annex_uuid"] for c in clients.values()}) == 3

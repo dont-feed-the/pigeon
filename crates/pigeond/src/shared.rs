@@ -254,7 +254,9 @@ fn local_objects(
         let kind = entry.file_type()?;
         if kind.is_dir() {
             local_objects(&entry.path(), out, depth + 1)?;
-        } else if kind.is_file() {
+        } else if kind.is_file() && directory.file_name() == Some(entry.file_name().as_os_str()) {
+            // Annex/Locations.hs also puts .lck/.rtm siblings here. Only
+            // key/key is content; relinking a lock breaks its inode identity.
             let key = entry.file_name().to_string_lossy().into_owned();
             if crate::net::sync::plausible_key(&key) && crate::net::sync::key_sha256(&key).is_some()
             {
@@ -328,3 +330,7 @@ pub(crate) fn unchanged(
         None => !wt.join(rel).exists(),
     }
 }
+
+#[cfg(test)]
+#[path = "shared_objects_tests.rs"]
+mod tests;
