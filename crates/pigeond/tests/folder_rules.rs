@@ -48,7 +48,7 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
     let invitation = pigeon(&lap, &["invite", "Bob"]);
     let code = said(&invitation, "invitation", "code").unwrap();
-    let other = root.join("Bob");
+    let other = root.join("bob-files");
     let joined = pigeon(
         &bob,
         &[
@@ -213,7 +213,7 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
         &[
             "join",
             &code,
-            root.join("Cara").to_str().unwrap(),
+            root.join("cara-files").to_str().unwrap(),
             "--name",
             "cara-laptop",
         ],
@@ -227,9 +227,9 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
         std::fs::read(&draft).unwrap(),
         b"editor bytes not accepted\0"
     );
-    let peer_git = pigeond::git::Git::new(root.join("Cara"), pigeon_git::GitEnv::default());
+    let peer_git = pigeond::git::Git::new(root.join("cara-files"), pigeon_git::GitEnv::default());
     let peer_main = runtime.block_on(peer_git.tree("refs/heads/main")).unwrap();
     assert!(!peer_main.contains_key("private-draft.txt"));
-    assert!(!root.join("Cara/private-draft.txt").exists());
+    assert!(!root.join("cara-files/private-draft.txt").exists());
     drop(writer);
 }

@@ -60,7 +60,7 @@ fn shared_keys_and_declined_suggestions_remain_visible_and_count_once() {
     assert!(said(&rule, "folder-rule-result", "folder").is_some());
     let invite = pigeon(&alice, &["invite", "Bob"]);
     let code = said(&invite, "invitation", "code").unwrap();
-    let other = root.join("Bob");
+    let other = root.join("bob-files");
     let result = pigeon(&bob, &["join", &code, other.to_str().unwrap()]);
     assert!(said(&result, "joined", "group").is_some());
     eventually(
