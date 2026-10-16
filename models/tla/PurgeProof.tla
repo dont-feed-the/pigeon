@@ -56,7 +56,7 @@ THEOREM InitialCopy == Init => \E d \in Devices : copy[d]
 <1>1. PICK d \in Share \cup LaptopCopies : TRUE
   BY Parameters
 <1>2. d \in Devices BY <1>1, Parameters, SMT DEF Devices
-<1>3. Init => copy[d] BY <1>1, <1>2, SMT DEF Init, Devices
+<1>3. Init => copy[d] BY <1>1, <1>2 DEF Init, Devices
 <1> QED BY <1>2, <1>3, SMT
 
 THEOREM Initial == Init => Inductive
@@ -73,14 +73,18 @@ THEOREM Initial == Init => Inductive
   <2>5. Init => knownSeals \in [Devices -> SUBSET Custodians]
     BY SMT, Parameters DEF Init, Devices
   <2>6. Init => timely \in BOOLEAN /\ dropped \subseteq Devices /\ refetched \subseteq Devices
-    BY SMT DEF Init, Devices
+    BY DEF Init, Devices
   <2> QED BY <2>1, <2>2, <2>3, <2>4, <2>5, <2>6 DEF StateType
 <1>2. Init => Knowledge
   BY SMT, Parameters DEF Init, Knowledge, Keeps, Devices, NoTime
 <1>3. Init => Seals
   BY SMT, Parameters DEF Init, Seals, Devices, NoTime, NoSeal
 <1>4. Init => DropHistory
-  BY SMT, Parameters, InitialCopy DEF Init, DropHistory, Devices, NoTime, NoSeal
+  <2>1. Init => firstDrop = NoTime /\ dropped = {}
+    BY DEF Init
+  <2>2. Init => \E d \in Devices : copy[d]
+    BY InitialCopy
+  <2> QED BY <2>1, <2>2 DEF DropHistory
 <1>5. Init => Witness /\ NoResurrection
   BY SMT DEF Init, Witness, NoResurrection
 <1> QED BY <1>1, <1>2, <1>3, <1>4, <1>5 DEF Inductive
