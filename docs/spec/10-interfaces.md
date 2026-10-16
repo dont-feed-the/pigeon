@@ -130,6 +130,13 @@ show and withdraw the invitations not yet used.
 Home lists the held deletions (`Held`) with *Delete for everyone*, asked
 again, and *Bring them back* (`ReleaseHeld`); Settings has *Leave the
 group*, asked again (`Leave`).
+Home also lists the files whose copy here differs from the group's
+(`Conflicts`, 07 §7.6), each a link to its page; there *Take the group's
+version*, *Keep mine as a copy* (named next to the file) and, unless the
+suggestion still waits, *Suggest again* are `Resolve`, each saying where
+both versions go. A file's page marks its current version. Every page opens
+with a skip link to `main`, and a repeated button names its row (version,
+computer, suggestion or folder) in visually hidden text.
 axe-core (`scripts/check-a11y`, in CI) checks the mockups and every page of
 the test backend in English and French, without colour contrast, which
 needs a layout engine. Not yet: the other settings, the other actions.

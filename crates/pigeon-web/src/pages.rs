@@ -35,7 +35,13 @@ const STYLE: &str = "body{font-family:system-ui,sans-serif;max-width:46rem;margi
 padding:0 1rem;line-height:1.5;color:#1b1b1b;background:#fff}main{overflow-wrap:anywhere}\
 nav a{margin-right:1.2rem;display:inline-block}\
 nav a[aria-current]{font-weight:bold}h1{font-size:1.5rem}li{margin:.3rem 0}\
-article{border-top:1px solid #ccc;padding:.5rem 0}form{display:inline-block;margin-right:1rem}\
+article{border-top:1px solid #ccc;padding:.5rem 0}form{display:inline-block;margin:0 1rem .75rem 0}\
+.visually-hidden,.skip:not(:focus){position:absolute;width:1px;height:1px;margin:-1px;padding:0;\
+overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}\
+.skip:focus{display:inline-block;padding:.5rem 0}\
+@media (max-width:40rem){button,select,input:not([type=checkbox]):not([type=radio]),nav a{min-height:44px;\
+box-sizing:border-box}nav a{display:inline-flex;align-items:center;margin-right:1rem}\
+input[type=checkbox],input[type=radio]{width:1.5rem;height:1.5rem;vertical-align:middle}}\
 .capacity-details{overflow-wrap:anywhere}\
 textarea{max-width:100%;box-sizing:border-box}\
 .recovery-instructions{overflow-wrap:anywhere}.recovery-instructions p{margin:.25rem 0}\
@@ -88,6 +94,7 @@ fn document(r: &Renderer, here: &str, headline: &str, body: &Markup, live: bool)
                     style { (STYLE) }
                 }
                 body {
+                    a class="skip" href="#main" { (r.id("web-skip")) }
                     @if let Some(mount) = &r.mount {
                         p class="no-print" { a href=(&mount.back) { (&mount.label) } }
                         @if !mount.storage_controls { p { (r.id("web-managed-client")) } }
@@ -103,7 +110,7 @@ fn document(r: &Renderer, here: &str, headline: &str, body: &Markup, live: bool)
                             }
                         }
                     }
-                    main {
+                    main id="main" tabindex="-1" {
                         @if live {
                             h1 id="headline" aria-live="polite" { (headline) }
                             noscript { p { (r.id("web-noscript")) } }
@@ -187,6 +194,12 @@ async fn status(
     )
 }
 
+/// Text for screen readers only, after a button's short visible label:
+/// which row the button acts on (ux.md §6).
+pub(crate) fn hidden(context: &str) -> Markup {
+    html! { span class="visually-hidden" { " — " (context) } }
+}
+
 pub(crate) fn list(items: &[String]) -> Markup {
     html! { ul { @for i in items { li { (i.trim()) } } } }
 }
@@ -199,13 +212,17 @@ pub async fn home(
 ) -> Html<String> {
     let r = web.renderer();
     let (headline, rest, no_group, health, _) = status(&web, &r).await;
-    let held = if no_group {
-        html! {}
+    let (conflicts, held) = if no_group {
+        (html! {}, html! {})
     } else {
-        crate::held::section(&web, &r, &form.0).await
+        (
+            crate::conflicts::section(&web, &r).await,
+            crate::held::section(&web, &r, &form.0).await,
+        )
     };
     let body = html! {
         ul id="health-explanations" { @for line in &rest { li { (line.trim()) } } }
+        (conflicts)
         (held)
         @if let Some(health) = &health { (crate::health::section(&r, health)) }
         @if no_group && r.mount.is_none() {
@@ -256,6 +273,12 @@ fn suggestion(r: &Renderer, s: &Suggestion, form: &str) -> Markup {
         .arg("paths", s.paths.join(", "))
         .arg("saved", saved);
     let decides = s.decide && (!s.mine || s.force);
+    // Which suggestion an *Accept* or *Decline* is for, for screen readers.
+    let which = r.catalogue().format(
+        &Message::new("web-suggestion-label")
+            .arg("author", s.author.clone())
+            .arg("paths", s.paths.join(", ")),
+    );
     html! {
         article {
             p { (r.catalogue().format(&msg)) }
@@ -274,7 +297,7 @@ fn suggestion(r: &Renderer, s: &Suggestion, form: &str) -> Markup {
                     @if s.force {
                         label { (r.id("web-override-reason")) " " input name="reason" required; }
                     }
-                    button type="submit" { (r.id("web-accept")) }
+                    button type="submit" { (r.id("web-accept")) (hidden(&which)) }
                 }
             }
             @if decides {
@@ -283,7 +306,7 @@ fn suggestion(r: &Renderer, s: &Suggestion, form: &str) -> Markup {
                     input type="hidden" name="id" value=(s.id);
                     label { (r.id("web-decline-note")) " " input type="text" name="note"; }
                     " "
-                    button type="submit" { (r.id("web-decline")) }
+                    button type="submit" { (r.id("web-decline")) (hidden(&which)) }
                 }
             }
         }

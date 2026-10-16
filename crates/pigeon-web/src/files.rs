@@ -15,7 +15,7 @@ use maud::{Markup, html};
 use pigeon_proto::api::{Folder, VersionStatus};
 use pigeon_proto::{Request, Response};
 
-use crate::pages::{list, page};
+use crate::pages::{hidden, list, page};
 use crate::{FormToken, Web};
 
 /// The Files page.
@@ -94,14 +94,14 @@ fn folder(r: &Renderer, root: &str, f: &Folder, form: &str) -> Markup {
             @if r.storage_controls() { form method="post" action=(r.url(action)) {
                 input type="hidden" name="form" value=(form);
                 input type="hidden" name="folder" value=(path.to_string_lossy());
-                button type="submit" { (r.id(label)) }
+                button type="submit" { (r.id(label)) (hidden(&f.path)) }
             } }
         }
     }
 }
 
 /// A path in a query.
-fn enc(path: &str) -> String {
+pub(crate) fn enc(path: &str) -> String {
     form_urlencoded::byte_serialize(path.as_bytes()).collect()
 }
 
@@ -149,6 +149,21 @@ pub async fn folder_page(
         .and_then(|p| p.to_str())
         .unwrap_or_default()
         .trim_end_matches('/');
+    // A file's name from this folder down; *Back* goes up one folder.
+    let shown = |path: &str| -> String {
+        match path.strip_prefix(prefix).and_then(|p| p.strip_prefix('/')) {
+            Some(rest) if !prefix.is_empty() => rest.to_owned(),
+            _ => path.to_owned(),
+        }
+    };
+    let here = std::path::Path::new(&at.path);
+    let back = match (prefix.contains('/'), here.parent()) {
+        (true, Some(parent)) => format!("/folder?path={}", enc(&parent.to_string_lossy())),
+        _ => "/files".to_owned(),
+    };
+    let name = here
+        .file_name()
+        .map_or_else(|| at.path.clone(), |n| n.to_string_lossy().into_owned());
     let children: std::collections::BTreeSet<_> = rows
         .iter()
         .filter_map(|file| {
@@ -176,29 +191,32 @@ pub async fn folder_page(
         ul {
             @for f in &rows {
                 @let full = std::path::Path::new(&root).join(&f.path);
-                li { a href=(r.url(&format!("/file?path={}", enc(&full.to_string_lossy())))) { (line(&f.path, f.state)) } }
+                li { a href=(r.url(&format!("/file?path={}", enc(&full.to_string_lossy())))) { (line(&shown(&f.path), f.state)) } }
             }
         }
-        p { a href=(r.url("/files")) { (r.id("web-back")) } }
+        p { a href=(r.url(&back)) { (r.id("web-back")) } }
     };
     let body = html! {
+        p { (at.path) }
         @if r.storage_controls() && !root.is_empty() && !rows.is_empty() {
             @for (action, label) in [("/files/free", "web-free"), ("/files/keep", "web-keep")] {
                 form method="post" action=(r.url(action)) {
                     input type="hidden" name="form" value=(form.0);
                     input type="hidden" name="folder" value=(at.path);
-                    button type="submit" { (r.id(label)) }
+                    button type="submit" { (r.id(label)) (hidden(&name)) }
                 }
             }
         }
         p { a href=(r.url(&format!("/folder-rule?path={}", enc(&at.path)))) { (r.id("web-folder-rule")) } }
         (body)
     };
-    page(&r, "/files", &at.path, &body)
+    page(&r, "/files", &name, &body)
 }
 
-/// A file's page: its versions, newest first, each with *Open a
-/// copy*, and *Restore this version* but the current one.
+/// A file's page: what to do when this computer's copy differs from the
+/// group's (`conflicts.rs`), then its versions, newest first and the
+/// current one marked, each with *Open a copy*, and *Restore this
+/// version* but the current one.
 pub async fn file_page(
     State(web): State<Arc<Web>>,
     Extension(form): Extension<FormToken>,
@@ -220,34 +238,61 @@ pub async fn file_page(
         }
     }
     let newest = rows.iter().map(|v| v.number).max();
+    let differs = crate::conflicts::on_file(&web, &r, &at.path, &form.0).await;
+    // While this copy differs, the newest version is the group's, not this file.
+    let current = r.id(if differs.is_some() {
+        "web-version-group-current"
+    } else {
+        "web-version-current"
+    });
     let body = html! {
         (list(&other))
+        @if let Some(differs) = differs { (differs) }
         h2 { (r.id("web-versions")) }
-        @for v in &rows { (version(&r, &at.path, v, Some(v.number) != newest, &form.0)) }
+        @for v in &rows {
+            (version(&r, &at.path, v, (Some(v.number) == newest).then_some(current.as_str()), &form.0))
+        }
         p { a href=(r.url("/files")) { (r.id("web-back")) } }
     };
     page(&r, "/files", &at.path, &body)
 }
 
-/// One version, the form that opens a copy of it, and the one that
-/// restores it.
-fn version(r: &Renderer, path: &str, v: &VersionStatus, restore: bool, form: &str) -> Markup {
+/// One version, marked `current` if it is the one in use, the form that
+/// opens a copy of it, and the one that restores it but the current one.
+/// The buttons name the version for screen readers.
+fn version(
+    r: &Renderer,
+    path: &str,
+    v: &VersionStatus,
+    current: Option<&str>,
+    form: &str,
+) -> Markup {
+    let saved = pigeon_proto::time::parse_rfc3339(&v.saved_at)
+        .map_or_else(|| v.saved_at.clone(), |t| r.ago(crate::now() - t));
+    let which = r.catalogue().format(
+        &pigeon_i18n::Message::new("web-version-label")
+            .arg("number", v.number.to_string())
+            .arg("saved", saved),
+    );
     html! {
         article {
-            p { (r.version(v)) }
-            @if restore {
+            p {
+                (r.version(v))
+                @if let Some(current) = current { " — " strong { (current) } }
+            }
+            @if current.is_none() {
                 form method="post" action=(r.url("/files/restore")) {
                     input type="hidden" name="form" value=(form);
                     input type="hidden" name="path" value=(path);
                     input type="hidden" name="version" value=(v.number);
-                    button type="submit" { (r.id("web-restore")) }
+                    button type="submit" { (r.id("web-restore")) (hidden(&which)) }
                 }
             }
             form method="post" action=(r.url("/files/view")) {
                 input type="hidden" name="form" value=(form);
                 input type="hidden" name="path" value=(path);
                 input type="hidden" name="version" value=(v.number);
-                button type="submit" { (r.id("web-view")) }
+                button type="submit" { (r.id("web-view")) (hidden(&which)) }
             }
         }
     }

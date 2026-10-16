@@ -27,6 +27,7 @@ use axum::routing::{get, post};
 use pigeon_i18n::Catalogue;
 
 mod actions;
+mod conflicts;
 mod files;
 mod folder_rules;
 mod health;
@@ -235,6 +236,8 @@ impl Web {
             routes
                 .route("/files/keep", post(actions::keep))
                 .route("/files/free", post(actions::free))
+                // A bridge's managed clients resolve on its own page (10 §10.3).
+                .route("/files/resolve", post(conflicts::resolve))
         } else {
             routes
         };
