@@ -159,7 +159,12 @@ TraceNext == l <= Len(TraceLog) /\
      Exactly one driver action still lies between the two observations;
      only person/time steps can interleave within that interval. *)
   \/ /\ segment \in {"before", "after"} /\ budget < EnvBudget
-     /\ PersonStep(Ev.vars.after) /\ SameControl /\ Safety'
+     (* A crash pair ends at the next process's first checkpoint. Git's
+        index read during that restart can clear skip-worktree for a
+        visible path. This only clears the bit; it cannot set free's bit,
+        refresh the key, or replace a missing journal/driver action. *)
+     /\ ((PersonStep(Ev.vars.after) /\ SameControl)
+          \/ (Ev.vars.crashed /\ VisibleBit)) /\ Safety'
      /\ budget' = budget + 1 /\ UNCHANGED <<l, segment>>
   \/ /\ segment = "before" /\ DriverStep /\ Safety'
      /\ (Ev.vars.ok /\ ~Ev.vars.crashed /\ Ev.action # "Cleanup" => pc' = Ev.vars.phase)
