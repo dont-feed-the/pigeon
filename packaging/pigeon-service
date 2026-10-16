@@ -93,7 +93,16 @@ UNIT
 if [ -n "$print" ]; then render; exit 0; fi
 if [ "$os" = Darwin ]; then
   plist="$HOME/Library/LaunchAgents/org.pigeon.pigeond.plist"
-  launchctl bootout "gui/$(id -u)/org.pigeon.pigeond" 2>/dev/null || true
+  job="gui/$(id -u)/org.pigeon.pigeond"
+  launchctl bootout "$job" 2>/dev/null || true
+  # bootout returns before launchd has torn the job down, and bootstrapping
+  # before then fails with "Input/output error"; wait up to ten seconds.
+  tries=100
+  while launchctl print "$job" >/dev/null 2>&1; do
+    tries=$((tries - 1))
+    [ "$tries" -gt 0 ] || die "launchd still runs pigeond ten seconds after stopping it"
+    sleep 0.1
+  done
   if [ -n "$stop" ]; then rm -f "$plist"; exit 0; fi
   mkdir -p "${plist%/*}"
   render > "$plist"
