@@ -317,8 +317,8 @@ fn line(program: &str, found: &str, minimum: &str) -> Response {
     ))
 }
 
-/// `pigeon debug bundle`: this device's part, as one JSON file (12).
-pub async fn debug_bundle(d: &Daemon) -> Vec<Response> {
+/// This computer’s local diagnostic snapshot (12).
+pub async fn snapshot(d: &Daemon) -> serde_json::Value {
     pigeon_telemetry::flush();
     let now = crate::util::now();
     let log = d
@@ -345,7 +345,7 @@ pub async fn debug_bundle(d: &Daemon) -> Vec<Response> {
             "main": g.git.rev("refs/heads/main").await,
         }));
     }
-    let bundle = serde_json::json!({
+    serde_json::json!({
         "format": 1,
         "device": d.device,
         "time": rfc3339(now),
@@ -353,11 +353,22 @@ pub async fn debug_bundle(d: &Daemon) -> Vec<Response> {
         "groups": groups,
         "log_tail": tail,
         "telemetry_tail": pigeon_telemetry::tail(&d.dirs.state.join("telemetry"), 500),
-    });
+    })
+}
+
+/// `pigeon debug bundle`: this computer's local part, saved privately.
+pub async fn debug_bundle(d: &Daemon) -> Vec<Response> {
+    let bundle = snapshot(d).await;
+    write_bundle(d, &bundle)
+}
+
+/// Saves a diagnostic bundle locally; no network exporter reads it.
+pub fn write_bundle(d: &Daemon, bundle: &serde_json::Value) -> Vec<Response> {
+    let now = crate::util::now();
     let dir = crate::api::bundle_dir(d);
     let path = dir.join(format!("bundle-{now}.json"));
     let _ = std::fs::create_dir_all(&dir);
-    match serde_json::to_vec_pretty(&bundle)
+    match serde_json::to_vec_pretty(bundle)
         .map_err(std::io::Error::other)
         .and_then(|b| crate::util::write_private(&path, &b))
     {

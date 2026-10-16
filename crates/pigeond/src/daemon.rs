@@ -48,6 +48,8 @@ pub struct Daemon {
     pub web: OnceLock<Arc<pigeon_web::Web>>,
     /// Starts a round at once: a request, or a peer's change notice.
     pub wake: Arc<tokio::sync::Notify>,
+    /// One-use diagnostic permissions granted by this computer’s user.
+    pub debug: crate::debug::Permissions,
     /// Trace events.
     pub tracer: Tracer,
 }
@@ -453,6 +455,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
         web: OnceLock::new(),
         wake: Arc::new(tokio::sync::Notify::new()),
         tracer,
+        debug: crate::debug::Permissions::default(),
     });
     // Each group's install journal is replayed while the socket already
     // answers: whatever needs the worktree waits on `busy`, held from here.

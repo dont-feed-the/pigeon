@@ -414,3 +414,16 @@ the same way: `pigeond/tests/codecs.rs` and `net_laws.rs`,
 | what goes and what is held split a round's deletions; nothing held goes unless released; what goes unasked stays within the limit and touches no removed top folder; a larger round is held whenever a smaller one is (07 §7.4) | `held` | `tests/held.rs` | — |
 | a manifest reads back as written; content matches a key exactly when its size and SHA-256 are the key's; a safe path stays below the export directory; a pointer gives back its key; a free name is never a tree path nor its folder (09 §9.9) | `export` | `tests/export.rs` | — |
 | a trace line parses back to its event; the Lamport clock orders a receive after its send; every action name is an operator of its `.tla` | `trace` | `tests/trace.rs`, `tests/roster_trace.rs` | every `*Trace.tla` |
+
+
+## 13.14 Local diagnostic consent
+
+The pure `consent::Grant` algebra is independent of replicated authority.
+Its four laws (`tests/consent.rs`, 1000 cases each) cover expiry, complete
+recipient/group matching, one use, and refusals that leave consent unspent.
+The adapter uses a monotonic clock, checks current roster membership before
+and after preparing a part, and exposes no remote grant operation. Real
+peer tests cover default refusal, local confirmation, one-use disclosure,
+private output and other-group canaries; web tests reject missing consent
+and forged forms. Diagnostic collection is never evidence that a file is
+protected.

@@ -176,3 +176,61 @@ async fn joining_a_refounded_group_waits_for_the_second_confirmation() {
         1
     );
 }
+
+#[tokio::test]
+async fn diagnostic_disclosure_requires_a_checked_local_consent_and_valid_form() {
+    let (web, backend) = recording();
+    let app = web.router();
+    let cookie = logged_in(&app, &web).await;
+    let page = body(
+        app.clone()
+            .oneshot(get("/settings", HOST, Some(&cookie)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    let form = form_token(&page);
+    for (fields, status) in [
+        (format!("form={form}&peer=peer"), StatusCode::BAD_REQUEST),
+        (
+            format!("form={form}&peer=peer&consent=false"),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "form=forged&peer=peer&consent=true".to_owned(),
+            StatusCode::FORBIDDEN,
+        ),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(post("/settings/diagnostics", &cookie, &fields))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), status);
+    }
+    assert!(
+        !backend
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|r| matches!(r, pigeon_proto::Request::AllowDebug { .. }))
+    );
+    app.oneshot(post(
+        "/settings/diagnostics",
+        &cookie,
+        &format!("form={form}&peer=peer&consent=true"),
+    ))
+    .await
+    .unwrap();
+    assert_eq!(
+        backend
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|r| matches!(r, pigeon_proto::Request::AllowDebug { .. }))
+            .count(),
+        1
+    );
+}

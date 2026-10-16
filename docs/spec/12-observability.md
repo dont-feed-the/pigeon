@@ -50,6 +50,11 @@ ready-queue depths. The transfer path remains `unknown` until measured.
   oldest dropped first **[no ADR: bound]**. `pigeon debug bundle [--from NAME…]` collects logs, telemetry
   and trace events from this device and chosen peers (`pigeon/debug/1`),
   after asking each peer's person **[no ADR: consent on the peer]**.
+  `pigeon debug allow NAME`, or the explicit consent form in Settings,
+  grants one part for that group and authenticated peer for ten monotonic
+  minutes. Restart cancels it. Recovery keys cannot request parts. Peers
+  receive only that group's records; ungrouped records stay local. Requests
+  have a 45-second deadline and at most 2 MiB of JSON per peer.
 - If the roster names a `telemetry_device` ([04 §4.2](04-roster-and-authority.md)),
   the others ship OTLP to it over `pigeon/telemetry/1`. Nothing leaves the
   group unless a member sets `[telemetry] endpoint` on their own device.

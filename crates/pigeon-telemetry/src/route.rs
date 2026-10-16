@@ -60,6 +60,48 @@ fn items(line: &mut Value, mut visit: impl FnMut(&mut Vec<Value>)) {
     }
 }
 
+fn prune(line: &mut Value) {
+    for (resources, scopes, records) in [
+        ("resourceSpans", "scopeSpans", "spans"),
+        ("resourceMetrics", "scopeMetrics", "metrics"),
+    ] {
+        let Some(resources) = line.get_mut(resources).and_then(Value::as_array_mut) else {
+            continue;
+        };
+        resources.retain_mut(|resource| {
+            let Some(scopes) = resource.get_mut(scopes).and_then(Value::as_array_mut) else {
+                return false;
+            };
+            scopes.retain_mut(|scope| {
+                let Some(values) = scope.get_mut(records).and_then(Value::as_array_mut) else {
+                    return false;
+                };
+                if records == "metrics" {
+                    values.retain(|metric| {
+                        [
+                            "gauge",
+                            "sum",
+                            "histogram",
+                            "exponentialHistogram",
+                            "summary",
+                        ]
+                        .iter()
+                        .any(|kind| {
+                            metric
+                                .get(kind)
+                                .and_then(|k| k.get("dataPoints"))
+                                .and_then(Value::as_array)
+                                .is_some_and(|p| !p.is_empty())
+                        })
+                    });
+                }
+                !values.is_empty()
+            });
+            !scopes.is_empty()
+        });
+    }
+}
+
 pub(crate) fn split(line: &Value) -> BTreeMap<String, Value> {
     let mut groups = BTreeSet::new();
     items(&mut line.clone(), |records| {
@@ -72,6 +114,7 @@ pub(crate) fn split(line: &Value) -> BTreeMap<String, Value> {
             items(&mut part, |records| {
                 records.retain(|r| group(r) == Some(g.as_str()))
             });
+            prune(&mut part);
             (g, part)
         })
         .collect()

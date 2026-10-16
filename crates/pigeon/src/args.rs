@@ -86,6 +86,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ),
     ("doctor [--details]", "cmd-doctor"),
     ("debug bundle [--from NAME…]", "cmd-debug-bundle"),
+    ("debug allow NAME", "cmd-debug-allow"),
     ("update [--version TAG | --main | --rollback]", "cmd-update"),
 ];
 
@@ -293,6 +294,10 @@ enum Command {
 
 #[derive(Subcommand, Debug)]
 enum DebugCommand {
+    Allow {
+        #[arg(value_name = "NAME", add = complete::machines())]
+        peer: String,
+    },
     Bundle {
         #[arg(long = "from", value_name = "NAME", add = complete::machines())]
         peers: Vec<String>,
@@ -522,6 +527,9 @@ fn action(c: Command) -> Action {
         Command::Debug {
             what: DebugCommand::Bundle { peers },
         } => send(Request::DebugBundle { peers }),
+        Command::Debug {
+            what: DebugCommand::Allow { peer },
+        } => send(Request::AllowDebug { peer }),
         Command::Export {
             to,
             at,

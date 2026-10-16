@@ -211,3 +211,17 @@ fn real_files_stay_within_the_advertised_byte_bound() {
             <= super::LIMIT_BYTES
     );
 }
+
+#[test]
+fn a_group_snapshot_drops_other_resources_even_when_their_records_are_empty() {
+    let line = serde_json::json!({"resourceSpans": [
+        {"resource":{"attributes":[{"key":"private","value":{"stringValue":"g1-secret"}}]},
+         "scopeSpans":[{"spans":[{"name":"a","attributes":[{"key":"group","value":{"stringValue":"g1"}}]}]}]},
+        {"resource":{"attributes":[{"key":"private","value":{"stringValue":"g2-secret"}}]},
+         "scopeSpans":[{"spans":[{"name":"b","attributes":[{"key":"group","value":{"stringValue":"g2"}}]}]}]}
+    ]});
+    let selected = super::only_group(&[line], "g1");
+    let json = serde_json::to_string(&selected).unwrap();
+    assert!(json.contains("g1-secret"));
+    assert!(!json.contains("g2-secret"));
+}

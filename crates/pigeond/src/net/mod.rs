@@ -9,6 +9,7 @@
 //! ([`serve`]). What the roster says comes from a [`Directory`]; the loops
 //! of `pigeond` provide it, and tests use [`StaticDirectory`].
 
+mod debug;
 pub mod recovery;
 mod relays;
 pub mod serve;
@@ -26,8 +27,8 @@ use iroh::{Endpoint, EndpointAddr, PublicKey, SecretKey};
 use pigeon_core::filter::Role;
 use pigeon_proto::join::{Join, JoinAnswer};
 use pigeon_proto::stream::{
-    ALPN_ANNEX, ALPN_JOIN, ALPN_RECOVERY, ALPN_TELEMETRY, MAX_HEADER, Refusal, StreamAnswer,
-    StreamHeader,
+    ALPN_ANNEX, ALPN_DEBUG, ALPN_JOIN, ALPN_RECOVERY, ALPN_TELEMETRY, MAX_HEADER, Refusal,
+    StreamAnswer, StreamHeader,
 };
 use pigeon_proto::{Request, Response};
 use tokio::io::{AsyncRead, AsyncReadExt};
@@ -91,6 +92,10 @@ pub trait Loops: Send + Sync + 'static {
     fn join(&self, device: String, join: Join) -> Answer<JoinAnswer>;
     /// Read-only metadata for a recovery device authenticated by QUIC.
     fn recovery_bundle(&self, _group: String, _device: String) -> Answer<Option<recovery::Bundle>> {
+        Box::pin(async { None })
+    }
+    /// A diagnostic snapshot, after explicit local consent for this peer.
+    fn diagnostics(&self, _group: String, _device: String) -> Answer<Option<serde_json::Value>> {
         Box::pin(async { None })
     }
     /// Stores authenticated telemetry on the group's selected collector.
@@ -294,6 +299,7 @@ impl Node {
                 ALPN_ANNEX.to_vec(),
                 ALPN_JOIN.to_vec(),
                 ALPN_RECOVERY.to_vec(),
+                ALPN_DEBUG.to_vec(),
                 ALPN_TELEMETRY.to_vec(),
             ])
             .clear_ip_transports()

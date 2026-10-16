@@ -15,7 +15,8 @@ use iroh::endpoint::{RecvStream, SendStream};
 use pigeon_core::filter::{Action, Config, Filter};
 use pigeon_proto::join::{Join, JoinAnswer};
 use pigeon_proto::stream::{
-    ALPN_JOIN, ALPN_RECOVERY, ALPN_TELEMETRY, HEADER_VERSION, Refusal, StreamAnswer, StreamHeader,
+    ALPN_DEBUG, ALPN_JOIN, ALPN_RECOVERY, ALPN_TELEMETRY, HEADER_VERSION, Refusal, StreamAnswer,
+    StreamHeader,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
@@ -40,6 +41,10 @@ pub async fn accept_loop(net: Arc<Net>) {
                 }
             };
             let device = device_id(&connection.remote_id());
+            if connection.alpn() == ALPN_DEBUG {
+                super::debug::serve(&net, &device, &connection).await;
+                return;
+            }
             if connection.alpn() == ALPN_RECOVERY {
                 super::recovery::serve(&net, &device, &connection).await;
                 return;

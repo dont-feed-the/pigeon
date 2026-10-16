@@ -245,3 +245,22 @@ Both computers need a version supporting the sheet-signed recovery exchange.
 An older recovery exchange is refused. Recovery metadata transfers have a
 120-second deadline and a 64 MiB limit; file content arrives separately
 through the normal, checked annex transport.
+
+## Gather diagnostics with another member
+
+Diagnostics can contain file names and member activity. `pigeon debug bundle`
+asks before saving them in a private local file; it sends no diagnostic
+file to an external service.
+
+To include another computer, ask its person to run
+`pigeon debug allow YOUR-COMPUTER-NAME` on that computer. They confirm that
+its file names may be included. They can instead open Settings, choose your
+computer under Share diagnostics once, check the consent box and press
+Allow one diagnostic part. Then run `pigeon debug bundle --from THEIR-NAME`
+on your own computer and confirm the local collection.
+
+Permission covers only the shared group, works once during the next ten
+minutes and disappears when pigeon restarts. If collection fails after the
+permission is consumed, ask for a new permission. A refusal exports nothing.
+The local file includes the chosen parts; review it before sharing it with
+someone else. `--yes` supplies explicit confirmation for scripted commands.

@@ -245,6 +245,11 @@ pub enum Request {
         #[serde(default)]
         peers: Vec<String>,
     },
+    /// Allow one diagnostic bundle to this peer during the next ten minutes.
+    AllowDebug {
+        /// The peer's device ID or current name.
+        peer: String,
+    },
     /// The helper's `address` mode: this device's address for git-annex.
     Address {
         /// The repository the helper runs for (09 §9.2).

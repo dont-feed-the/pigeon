@@ -28,7 +28,7 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(40)) {
+    match tc.draw(gs::integers::<u8>().max_value(41)) {
         0 => Request::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -84,6 +84,7 @@ fn request(tc: &TestCase) -> Request {
         },
         35 => Request::Leave,
         36 => Request::Held,
+        41 => Request::AllowDebug { peer: text(tc) },
         40 => Request::Refound {
             repository: flag(tc).then(|| text(tc)),
         },

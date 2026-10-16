@@ -232,11 +232,8 @@ fn commands_and_options_complete_with_their_help() {
     assert_eq!(shared.len(), 1, "{shared:?}");
     assert!(!shared[0].1.is_empty(), "{shared:?}");
     let debug: Vec<String> = completed("debug ").into_iter().map(|c| c.0).collect();
-    assert_eq!(
-        debug.first().map(String::as_str),
-        Some("bundle"),
-        "{debug:?}"
-    );
+    assert!(debug.iter().any(|c| c == "bundle"), "{debug:?}");
+    assert!(debug.iter().any(|c| c == "allow"), "{debug:?}");
 }
 
 fn version(state: State) -> VersionStatus {

@@ -11,6 +11,7 @@ pub mod authority;
 pub mod capacity;
 pub mod catalogue;
 pub mod commit;
+pub mod consent;
 pub mod export;
 pub mod filter;
 pub mod headline;

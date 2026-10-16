@@ -310,3 +310,12 @@ pub async fn forward(endpoint: &str, records: &[Value]) -> bool {
     }
     true
 }
+
+/// A diagnostic snapshot restricted to one group, preserving SDK batches.
+/// Ungrouped records and records from other groups stay on this computer.
+pub fn only_group(records: &[Value], group: &str) -> Vec<Value> {
+    records
+        .iter()
+        .filter_map(|record| route::split(record).remove(group))
+        .collect()
+}

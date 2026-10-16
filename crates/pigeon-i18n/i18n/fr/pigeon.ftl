@@ -422,3 +422,16 @@ progress-recovery-sheet = Préparation d’une fiche de récupération et attent
 progress-recover = Récupération de cet ordinateur ; vérification de l’historique de la sauvegarde et de l’autorisation du nouvel ordinateur.
 
 confirm-revoke-sheet = Révoquer { $name } ? Cette clé sur papier ne pourra plus ajouter d’ordinateurs. [o/N]
+
+cmd-debug-allow = Autoriser un diagnostic pour un ordinateur choisi pendant dix minutes
+debug-allowed = { $name } peut recueillir une partie des diagnostics de ce groupe pendant les dix prochaines minutes, noms de fichiers inclus. Redémarrer pigeon annule cette autorisation.
+problem-debug-not-allowed = { $name } n’a pas autorisé de diagnostic. Demandez à sa personne d’ouvrir les réglages et d’autoriser un diagnostic pour cet ordinateur, puis réessayez.
+confirm-debug-bundle = Enregistrer les diagnostics, noms de fichiers inclus, dans un fichier local privé ? Les autres ordinateurs ne partagent qu’avec leur propre autorisation. [o/N]
+confirm-debug-allow = Autoriser { $name } à recueillir une partie des diagnostics de ce groupe, noms de fichiers inclus, pendant les dix prochaines minutes ? [o/N]
+progress-debug-bundle = Collecte des diagnostics ; les ordinateurs choisis ne partagent qu’avec l’autorisation de leur personne.
+web-diagnostics = Partager un diagnostic une fois
+web-diagnostics-consent = J’accepte de partager une fois les diagnostics de ce groupe, noms de fichiers inclus, pendant les dix prochaines minutes avec l’ordinateur choisi.
+web-diagnostic-peer = Ordinateur recevant le diagnostic
+web-allow-diagnostics = Autoriser un diagnostic
+
+action-cancelled = Annulé.

@@ -4,6 +4,17 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.4 — 2026-10-16
+
+### Added
+
+- `pigeon debug bundle --from NAME` collects a chosen computer's diagnostics
+  after its user allows one bundle with `pigeon debug allow NAME` or in
+  Settings. Permission expires after ten minutes, works once, and covers
+  only the shared group. Nothing is exported by default.
+- Diagnostic collection asks before including file names and keeps the
+  resulting bundle in a private local file.
+
 ## 0.4.3 — 2026-10-16
 
 ### Fixed

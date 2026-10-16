@@ -43,6 +43,11 @@ impl Loops for Api {
         Box::pin(async move { crate::recovery::bundle(&d, &group, &device).await })
     }
 
+    fn diagnostics(&self, group: String, device: String) -> Answer<Option<serde_json::Value>> {
+        let d = self.0.clone();
+        Box::pin(async move { crate::debug::share(&d, &group, &device).await })
+    }
+
     fn telemetry(
         &self,
         group: String,
@@ -269,7 +274,8 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         Request::Held => crate::held::list(d),
         Request::ReleaseHeld { batch, choice } => crate::held::release(d, &batch, choice).await,
         Request::Doctor { details } => crate::history::doctor(d, details).await,
-        Request::DebugBundle { .. } => crate::history::debug_bundle(d).await,
+        Request::DebugBundle { peers } => crate::debug::collect(d, &peers).await,
+        Request::AllowDebug { peer } => crate::debug::allow(d, &peer),
         Request::Restore { path, version, at } => {
             crate::restore::restore(d, Path::new(&path), version, at.as_deref()).await
         }

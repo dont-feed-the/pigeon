@@ -18,6 +18,7 @@ pub mod config;
 pub mod conflicts_file;
 pub mod custody;
 pub mod daemon;
+pub mod debug;
 pub mod decide;
 pub mod decision_file;
 pub mod drop;
