@@ -261,6 +261,20 @@ impl Daemon {
                 if moved {
                     made_progress.store(true, std::sync::atomic::Ordering::Relaxed);
                 }
+                if moved && settled && !crate::evict::unsettled(g) {
+                    // Install ready contents before releasing busy to bridge
+                    // writes. One pending peer must not delay files whose
+                    // contents are already here.
+                    let mut install = accept_round.child("install");
+                    if let Err(e) = crate::install::incoming(g, &self.device, &self.tracer).await {
+                        tracing::warn!(group = %g.id, error = %e, "install-failed");
+                        install.fail(&e.to_string());
+                        return;
+                    }
+                    if let Err(e) = crate::shared::compact(g).await {
+                        tracing::warn!(group = %g.id, error = %e, "shared-storage-waits");
+                    }
+                }
             })
             .await
         };

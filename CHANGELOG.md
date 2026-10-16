@@ -121,7 +121,8 @@ increments the second number, and every other release the third.
 - The file manager's script, stylesheet and icon load when it is opened
   through a bridge client's own pages.
 - A slow or unavailable computer no longer delays accepting new versions
-  from the group’s reachable computers.
+  from the group’s reachable computers, or installing their contents when
+  those are already on this computer.
 
 ## 0.5.14 — 2026-10-16
 
