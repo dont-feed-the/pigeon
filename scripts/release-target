@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+"""Resolve an existing version tag, preserving its immutable source on retries.
+
+Only a tag whose Cargo workspace declares that exact version is releasable.
+The release workflow checks CI against this commit and tag, not its retry branch.
+"""
+import re
+import subprocess
+import sys
+import tomllib
+
+
+def resolve(tag):
+    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.]+)?", tag):
+        raise ValueError("expected an existing version tag vX.Y.Z[-pre]")
+    sha = subprocess.check_output(
+        ["git", "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}"], text=True
+    ).strip()
+    manifest = subprocess.check_output(["git", "show", f"{sha}:Cargo.toml"], text=True)
+    version = tomllib.loads(manifest)["workspace"]["package"]["version"]
+    if tag != f"v{version}":
+        raise ValueError("the tag differs from its source workspace version")
+    return sha
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        raise SystemExit("usage: release-target vX.Y.Z[-pre]")
+    try:
+        print(resolve(sys.argv[1]))
+    except (ValueError, KeyError, subprocess.CalledProcessError) as error:
+        raise SystemExit(f"release-target: {error}") from error
