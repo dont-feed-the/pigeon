@@ -15,6 +15,9 @@ packaging/install-git-annex --stock    # the official git-annex, where pigeon lo
 
 Then copy the three programs to `bin/` of the directory above
 (`~/.local/share/pigeon/bin`), put it on your `PATH`, and run `pigeond`.
+Or let `scripts/install-local` do it all: it builds the checkout as it is,
+uncommitted changes included, and installs it as `pigeon update --main`
+does, the previous programs kept for `pigeon update --rollback`.
 A release is made by pushing a tag `v` + the workspace's version
 (`.github/workflows/release.yml`). Pull requests leave the version alone
 and add their entries under `## Unreleased` in

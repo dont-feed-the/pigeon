@@ -154,6 +154,36 @@ class Installation(unittest.TestCase):
         self.assertEqual(self.version(), "pigeon 0.3.4+gabcdef123456")
         self.assertTrue((self.prefix / "bin/pigeon-service").is_file())
 
+    def test_a_checkout_is_built_where_it_is_and_a_dirty_one_placed_again(self):
+        source = self.root / "checkout"
+        (source / "packaging").mkdir(parents=True)
+        (source / "Cargo.toml").write_text('[workspace.package]\nversion = "0.3.4"\n')
+        for name in ("pigeon-install", "pigeon-service"):
+            shutil.copy2(PACKAGING / name, source / "packaging" / name)
+        built = self.root / "git-annex-built-from"
+        self.executable(
+            source / "packaging/install-git-annex",
+            f'while [ $# -gt 0 ]; do [ "$1" != --build ] || echo "$2" >> "{built}"; shift; done',
+        )
+        target = source / "target/release"
+        target.mkdir(parents=True)
+        self.executable(target / "pigeon", "echo pigeon 0.3.4+gabcdef123456.dirty")
+        for name in ("pigeond", "git-annex-p2p-iroh"):
+            self.executable(target / name, "exit 0")
+        self.executable(
+            self.commands / "git",
+            'case "$*" in *rev-parse*) echo abcdef123456 ;; *status*) echo " M src/lib.rs" ;; esac',
+        )
+        self.executable(self.commands / "cargo", "exit 0")
+        self.env.pop("CARGO_TARGET_DIR", None)
+        self.run_installer("--source", str(source))
+        self.assertEqual(self.version(), "pigeon 0.3.4+gabcdef123456.dirty")
+        self.assertEqual(built.read_text().split(), [f"{source.resolve()}/third_party/git-annex"])
+        self.assertFalse((self.prefix / "src").exists())
+        again = self.run_installer("--source", str(source))
+        self.assertNotIn("already installed", again.stdout)
+        self.assertTrue((self.prefix / "bin.previous/pigeon").is_file())
+
     def test_conflicting_modes_leave_the_installation_untouched(self):
         self.run_installer("--version", "v0.3.2", "--no-service")
         self.run_installer("--main", "--uninstall", ok=False)
