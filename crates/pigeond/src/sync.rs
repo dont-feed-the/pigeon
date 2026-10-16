@@ -60,8 +60,12 @@ pub async fn list(d: &Daemon, folder: Option<&Path>) -> Vec<Response> {
     vec![Response::Sync { root, folders }]
 }
 
-/// Other people's folders of a per-person folder, with their owner's name.
+/// Other people's folders of a per-person folder, with their owner's name;
+/// none on a backup machine, which keeps everything.
 fn others(g: &crate::group::Group) -> BTreeMap<String, String> {
+    if g.role != pigeon_core::filter::Role::Laptop {
+        return BTreeMap::new();
+    }
     let Some(doc) = g.roster() else {
         return BTreeMap::new();
     };
