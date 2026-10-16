@@ -53,8 +53,9 @@ Already authorized clients use their own daemons and peer UI independently.
 By default that control peer is also the content provider. To reuse an existing
 custodian, set `storage_socket` in the user's table to its private local socket.
 It must serve the same group, run the matching Pigeon version, and be accessible
-to the same operating-system user. Invitation and review still use the personal
-control peer. The source may have other groups: requests name the exact group.
+to the same operating-system user. Invitation and account-level review still
+use the personal control peer. The source may have other groups: requests name
+the exact group.
 
 Copy [bridge.example.toml](../packaging/bridge.example.toml) into a private
 configuration directory. Generate a portal password hash by piping a password
