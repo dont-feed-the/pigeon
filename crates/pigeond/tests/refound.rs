@@ -221,7 +221,12 @@ fn a_member_refounds_the_group_in_place() {
         Some("needs-confirmation"),
         "{unasked:?}"
     );
-    let joined = pigeon(&a1, &["join", &code, f, "--name", "ana-1", "--yes"]);
+    let joined = pigeon(
+        &a1,
+        &[
+            "join", &code, "--person", "Ana", f, "--name", "ana-1", "--yes",
+        ],
+    );
     assert!(
         said(&joined, "joined", "group").is_some(),
         "{joined:?}\n{}",

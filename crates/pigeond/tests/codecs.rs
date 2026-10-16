@@ -182,7 +182,7 @@ fn roster_files_round_trip(tc: TestCase) {
 }
 
 /// Law *closed roster* (ADR 0048): a rendered roster with a newer `format`,
-/// or with one key format 1 does not define, at the top or in a person, a
+/// or with one key format 2 does not define, at the top or in a person, a
 /// device or a folder, is unknown: never read, and never refused.
 #[hegel::test(test_cases = 1000)]
 fn a_roster_a_newer_release_could_write_is_unknown(tc: TestCase) {
@@ -191,7 +191,10 @@ fn a_roster_a_newer_release_could_write_is_unknown(tc: TestCase) {
     let key = format!("x{}", tc.draw(gs::integers::<u16>()));
     let value = toml_edit::value(tc.draw(gs::integers::<i64>()));
     match tc.draw(gs::integers::<u8>().max_value(4)) {
-        0 => newer["format"] = toml_edit::value(tc.draw(gs::integers::<i64>().min_value(2))),
+        0 => {
+            let next = i64::from(pigeond::roster_file::FORMAT) + 1;
+            newer["format"] = toml_edit::value(tc.draw(gs::integers::<i64>().min_value(next)));
+        }
         1 => newer["persons"]["ada"][&key] = value,
         2 => {
             let devices = newer["devices"].as_table_mut().unwrap();

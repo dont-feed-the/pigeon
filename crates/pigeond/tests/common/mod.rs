@@ -242,9 +242,23 @@ pub fn invitation(d: &Daemon) -> String {
     pigeon_proto::join::invitation(&line)
 }
 
-/// Joins `c` to `lap`'s group as a backup machine of `ana`, named `c.name`.
+/// The name of `d`'s person, as `pigeon people` lists it.
+pub fn person(d: &Daemon) -> String {
+    match pigeon(d, &["people"]).as_slice() {
+        [Response::People { people }] => people
+            .iter()
+            .find(|p| p.this_person)
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| panic!("no person of this computer: {people:?}")),
+        other => panic!("people: {other:?}"),
+    }
+}
+
+/// Joins `c` to `lap`'s group as a backup machine of `lap`'s person, named
+/// `c.name`.
 pub fn join(lap: &Daemon, c: &Daemon, all: &[&Daemon]) {
     let code = invitation(lap);
+    let owner = person(lap);
     let joined = pigeon(
         c,
         &[
@@ -254,7 +268,7 @@ pub fn join(lap: &Daemon, c: &Daemon, all: &[&Daemon]) {
             "--name",
             c.name,
             "--person",
-            "ana",
+            &owner,
             "--yes",
         ],
     );
