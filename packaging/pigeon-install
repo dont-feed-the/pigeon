@@ -1,20 +1,23 @@
 #!/bin/sh
-# Installs pigeon under PREFIX (~/.local/share/pigeon, or on a Mac
-# ~/Library/Application Support/pigeon), keeping the previous programs.
-# Releases are checked against SHA256SUMS. --main builds main in PREFIX/src;
-# --source builds a checkout's working tree (scripts/install-local).
-# Installs git-annex, the launcher and supervisor with its automatic update.
-# --join passes the remaining arguments to pigeon join on the terminal.
+# Installs a release of pigeon (14 §14.5) under PREFIX (~/.local/share/pigeon,
+# ~/Library/Application Support/pigeon on macOS): the latest release, or
+# --version's, checked against its SHA256SUMS; with --main, main's latest
+# commit, built in PREFIX/src; with --source, a checkout, built where it is.
+# The new copy of this script places it: the programs in PREFIX/bin (the old
+# ones in bin.previous), git-annex (14 §14.3), a link in ~/.local/bin,
+# pigeond's unit or agent (14 §14.4) with the automatic update (ADR 0076), and
+# the launcher (ADR 0029). With --join, which takes the rest of the arguments,
+# it then runs `pigeon join` on the terminal.
 #
 #   curl -fsSL https://github.com/dont-feed-the/pigeon/releases/latest/download/pigeon-install | sh
-#   pigeon-install [--version TAG | --main | --source DIR | --rollback | --uninstall | --auto on|off] [--system]
+#   pigeon-install [--version vX.Y.Z | --main | --source DIR | --rollback | --uninstall | --auto on|off] [--system]
 #   pigeon-install --join INVITATION [FOLDER] [--person NAME] [--backup-machine]
 #
-# --auto keeps the update choice; --unattended leaves it off and leaves main.
-# --rollback restores bin.previous; --no-service starts nothing.
-# PIGEON_RELEASES names test releases, PIGEON_REPOSITORY main's repository.
-# PIGEON_COMMIT names --source's commit when the copy has no Git history
-# (scripts/install-remote --build-there).
+# --auto turns the automatic update on or off, installing only where nothing
+# is; --unattended, its own run, leaves an update turned off and a build of
+# main alone. --rollback puts bin.previous back; --no-service starts nothing.
+# PIGEON_RELEASES and PIGEON_REPOSITORY stand in for GitHub in tests;
+# PIGEON_COMMIT names --source's commit when it has no history.
 set -eu
 
 releases=${PIGEON_RELEASES:-https://github.com/dont-feed-the/pigeon/releases}
@@ -102,7 +105,7 @@ if [ -n "$source" ]; then
 fi
 if [ -z "$place" ]; then
   case "${version:+v}${main:+m}${rollback:+r}${uninstall:+u}${auto:+a}${unattended:+n}" in
-    ??*) die "choose one of --version, --main, --rollback, --uninstall and --auto" ;;
+    ??*) die "choose one of --version, --main, --source, --rollback, --uninstall and --auto" ;;
   esac
 fi
 
