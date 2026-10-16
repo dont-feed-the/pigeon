@@ -160,3 +160,54 @@ fn a_remote_context_is_validated_and_not_shared_with_other_tasks() {
         remote.inner.span_context().trace_id()
     );
 }
+
+#[tokio::test]
+async fn interleaved_futures_keep_their_own_trace_context() {
+    let a = super::remote_span(
+        "a",
+        Some("00-11111111111111111111111111111111-1111111111111111-01"),
+    );
+    let b = super::remote_span(
+        "b",
+        Some("00-22222222222222222222222222222222-2222222222222222-01"),
+    );
+    let work = || async {
+        tokio::task::yield_now().await;
+        super::traceparent()
+    };
+    let (got_a, got_b) = tokio::join!(a.in_scope(work()), b.in_scope(work()));
+    assert_eq!(got_a, a.traceparent());
+    assert_eq!(got_b, b.traceparent());
+    assert_ne!(got_a, got_b);
+    assert!(super::traceparent().is_none());
+}
+
+#[test]
+fn real_files_stay_within_the_advertised_byte_bound() {
+    use std::sync::Mutex;
+    let dir = tempfile::tempdir().unwrap();
+    let sink = super::file::FileSink {
+        dir: dir.path().to_path_buf(),
+        file: Mutex::new(None),
+    };
+    // Each pair would just exceed one file: rotate before it does.
+    let record = serde_json::json!({"sample":"x".repeat(super::FILE_BYTES as usize / 2)});
+    for _ in 0..24 {
+        sink.write(&record);
+    }
+    let sizes: Vec<_> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .map(|e| e.unwrap().metadata().unwrap().len())
+        .collect();
+    assert!(sizes.iter().all(|n| *n <= super::FILE_BYTES));
+    assert!(sizes.iter().sum::<u64>() <= super::LIMIT_BYTES);
+    assert!(!sizes.is_empty());
+    sink.write(&serde_json::json!({"too_big":"x".repeat(super::FILE_BYTES as usize)}));
+    assert!(
+        std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().metadata().unwrap().len())
+            .sum::<u64>()
+            <= super::LIMIT_BYTES
+    );
+}

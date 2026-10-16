@@ -55,8 +55,14 @@ impl FileSink {
     pub(crate) fn write(&self, line: &Value) {
         let mut bytes = serde_json::to_vec(line).unwrap_or_default();
         bytes.push(b'\n');
+        if bytes.len() as u64 > FILE_BYTES {
+            return;
+        }
         let mut file = self.file.lock().unwrap_or_else(|p| p.into_inner());
-        if file.as_ref().is_none_or(|(_, _, n)| *n >= FILE_BYTES) {
+        if file
+            .as_ref()
+            .is_none_or(|(_, _, n)| *n + bytes.len() as u64 > FILE_BYTES)
+        {
             let _ = std::fs::create_dir_all(&self.dir);
             let name = format!("pigeond-{:020}.jsonl", now_ns() / 1_000);
             let path = self.dir.join(name);

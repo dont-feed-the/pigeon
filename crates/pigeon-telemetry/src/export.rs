@@ -38,9 +38,9 @@ impl Local {
         self.store(line);
         let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
         for (group, part) in super::route::split(line) {
-            let n = serde_json::to_vec(&part).map_or(usize::MAX, |b| b.len());
+            let n = serde_json::to_vec(&part).map_or(256 * 1024, |b| b.len());
             // At most 256 KiB per request; 1 MiB queued for the device.
-            if n <= 256 * 1024 {
+            if n + 2 <= 256 * 1024 {
                 pending.push_back((group, part, n));
             }
         }
@@ -59,11 +59,11 @@ impl Local {
     pub(crate) fn take(&self, group: &str) -> Vec<Value> {
         let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
         let mut out = Vec::new();
-        let mut size = 0;
+        let mut size = 2;
         pending.retain(|(g, line, n)| {
             if g == group && size + n < 256 * 1024 {
                 out.push(line.clone());
-                size += n;
+                size += n + 1;
                 false
             } else {
                 true

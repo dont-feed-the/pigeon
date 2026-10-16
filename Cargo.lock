@@ -2812,6 +2812,7 @@ dependencies = [
  "reqwest",
  "serde_json",
  "tempfile",
+ "tokio",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
