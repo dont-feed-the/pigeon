@@ -4,6 +4,26 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.2 — 2026-10-16
+
+### Added
+
+- Parameterized proofs check that capture preserves committed changes and
+  safe drops keep the required copies, beyond the finite model sizes.
+  Proof-covered drop checks still run independently each week and on releases.
+
+### Fixed
+
+- After a crash during an incoming install, recovery finishes the intended
+  file index update, including deletions, instead of leaving the old version.
+- Creating or deleting a file while an incoming version is being prepared
+  keeps the person's change for capture instead of replacing it.
+- Restoring a deleted file can finish recovery after a crash without getting
+  stuck on its missing index entry.
+
+- Leaving a group waits briefly for temporary Git index contention instead
+  of failing before it can commit the computer's removal.
+
 ## 0.4.1 — 2026-10-16
 
 ### Changed

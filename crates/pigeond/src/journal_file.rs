@@ -39,6 +39,13 @@ pub fn line(r: &Record) -> String {
         Record::Preserved(seq, path) => {
             json!({"format": 1, "seq": seq, "op": "preserved", "path": path})
         }
+        Record::InstallIndex(seq, entry) => json!({
+            "format": 1, "seq": seq, "op": "index-intent",
+            "entry": entry.as_ref().map(|e| json!({"mode": e.mode, "kind": e.kind, "oid": e.oid})),
+        }),
+        Record::Operation(seq, kind) => {
+            json!({"format": 1, "seq": seq, "op": "operation", "kind": kind})
+        }
     };
     format!("{v}\n")
 }
@@ -91,6 +98,18 @@ pub fn parse(line: &str) -> Option<Record> {
         "released" => Record::Released(seq?),
         "kept" => Record::Kept(seq?, v.get("at")?.as_i64()?),
         "preserved" => Record::Preserved(seq?, text(&v, "path")?),
+        "operation" => Record::Operation(seq?, text(&v, "kind")?),
+        "index-intent" => Record::InstallIndex(
+            seq?,
+            match v.get("entry")? {
+                Value::Null => None,
+                e => Some(pigeon_core::authority::Entry {
+                    mode: text(e, "mode")?,
+                    kind: text(e, "kind")?,
+                    oid: text(e, "oid")?,
+                }),
+            },
+        ),
         _ => return None,
     })
 }

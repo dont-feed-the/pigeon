@@ -6,7 +6,7 @@ Lamport-clock order. For each specification of a trace that has a trace
 specification (SPECS), its events become a TLA+ module through
 scripts/trace-to-tla and TLC must accept them. A specification without one,
 or whose events lack the variables its trace specification reads (FIELDS),
-is listed as not checked yet with what is missing, never silently passed.
+fails with what is missing. Unknown or incomplete trace families never pass.
 Usage: scripts/check-lab-traces [--java JAVA] OUT
 """
 
@@ -25,17 +25,11 @@ ROOT = Path(__file__).resolve().parent.parent
 MODELS = ROOT / "models" / "tla"
 # spec of the events: trace specification, its log module and name, config.
 SPECS = {
-    "Roster": ("RosterTrace", ("RosterCodeLog", "CodeLog"), "RosterTrace_good"),
     "StorageBoundary": ("StorageTrace", ("StorageCodeLog", "CodeLog"), "StorageTrace_good"),
 }
-# The variables each action of a trace specification reads. RosterTrace was
-# written for pigeon-core's simulated group, which logs the replica, the
-# operation and the roster; pigeond logs a commit ID only.
+# Variables read by the generic trace specifications. Filesystem and
+# roster observations use their dedicated adapters below.
 FIELDS = {
-    "Roster": {
-        "Commit": {"r", "t", "op", "edits", "ros"},
-        "Merge": {"r", "y", "ff", "ros"},
-    },
     "StorageBoundary": {
         "Capture": {"pending", "live", "saved", "captured"},
         "Archive": {"saved", "present"},
@@ -72,23 +66,86 @@ def main():
     parser.add_argument("--require", action="append", default=[], help="fail unless this specification was checked")
     args = parser.parse_args()
     tla, tlc = load("trace-to-tla"), load("run-tlc")
+    install, roster = load("check-install-traces"), load("check-roster-traces")
     jar = tlc.tlc_jar()
     failures, unchecked, partial, checked = 0, set(), {}, set()
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp) / "models"
         shutil.copytree(MODELS, work)
         tlc.MODELS = work
-        for log in sorted(Path(args.out).glob("*/trace.ndjson")):
+        logs = sorted(Path(args.out).rglob("trace.ndjson"))
+        if not logs:
+            logs = sorted(Path(args.out).rglob("*.ndjson"))
+        if not logs:
+            print("FAIL no trace logs", flush=True)
+            failures += 1
+        for log in logs:
             by_spec = {}
-            for line in log.read_text().splitlines():
-                by_spec.setdefault(json.loads(line)["spec"], []).append(line)
+            clocks = {}
+            try:
+                for line in log.read_text().splitlines():
+                    if not line.strip():
+                        continue
+                    event = json.loads(line, object_pairs_hook=tla.pairs)
+                    for field in ("spec", "device", "clock", "action", "vars"):
+                        if field not in event:
+                            raise ValueError(f"missing {field}")
+                    device, clock = event["device"], event["clock"]
+                    if type(clock) is not int or clock != clocks.get(device, 0) + 1:
+                        raise ValueError("missing, repeated or out-of-order trace clock")
+                    clocks[device] = clock
+                    by_spec.setdefault(event["spec"], []).append(line)
+                if not by_spec:
+                    raise ValueError("empty trace log")
+            except (ValueError, KeyError, TypeError, tla.Refused) as error:
+                print(f"FAIL {log}: {error}", flush=True)
+                failures += 1
+                continue
+            filesystem = set(by_spec) & install.FILESYSTEM_SPECS
+            if filesystem:
+                groups = {}
+                for spec in filesystem:
+                    for line in by_spec.pop(spec):
+                        e = json.loads(line)
+                        try:
+                            v = e["vars"]
+                            groups.setdefault((e["device"], v["group"], v["path"]), []).append(e)
+                        except KeyError as error:
+                            print(f"FAIL {log}: missing filesystem identity {error}", flush=True)
+                            failures += 1
+                complete = bool(groups)
+                for identity, events in sorted(groups.items()):
+                    try:
+                        verdict = install.check(sorted(events, key=lambda e: e["clock"]), args.java, 4)
+                        ok = verdict == "trace:accepted"
+                        print(f"{'ok' if ok else 'FAIL'} {log.parent.name} filesystem {identity[-1]}: {verdict}", flush=True)
+                    except (install.Refused, KeyError, ValueError, TypeError) as error:
+                        ok = False
+                        print(f"FAIL {log}: filesystem: {error}", flush=True)
+                    failures += not ok
+                    complete &= ok
+                if complete:
+                    checked.update(filesystem)
+            if "Roster" in by_spec:
+                try:
+                    verdict = roster.check([json.loads(line) for line in by_spec.pop("Roster")], args.java)
+                    ok = verdict == "trace:accepted"
+                    print(f"{'ok' if ok else 'FAIL'} {log.parent.name} Roster: {verdict}", flush=True)
+                except (roster.Refused, KeyError, ValueError, TypeError) as error:
+                    ok = False
+                    print(f"FAIL {log}: Roster: {error}", flush=True)
+                failures += not ok
+                if ok:
+                    checked.add("Roster")
             for spec, lines in sorted(by_spec.items()):
                 if spec not in SPECS:
                     unchecked.add(spec)
+                    failures += 1
                     continue
                 missing = lacking(spec, lines)
                 if missing:
                     partial.setdefault(spec, set()).update(missing)
+                    failures += 1
                     continue
                 trace_spec, (module, name), cfg = SPECS[spec]
                 try:
@@ -106,9 +163,9 @@ def main():
                 else:
                     checked.add(spec)
     for spec in sorted(unchecked):
-        print(f"not checked yet: {spec} has no trace specification in models/tla", flush=True)
+        print(f"FAIL unsupported trace specification: {spec}", flush=True)
     for spec, missing in sorted(partial.items()):
-        print(f"not checked yet: {spec}: {'; '.join(sorted(missing))}", flush=True)
+        print(f"FAIL incomplete trace specification {spec}: {'; '.join(sorted(missing))}", flush=True)
     for spec in sorted(set(args.require)):
         if spec not in checked or spec in partial or spec in unchecked:
             print(f"FAIL required trace specification was not checked: {spec}", flush=True)

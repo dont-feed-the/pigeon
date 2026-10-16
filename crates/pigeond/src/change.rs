@@ -8,7 +8,7 @@ use std::path::Path;
 use crate::git::{Error, Git};
 use crate::group::Group;
 use crate::roster_file::{self, RosterDoc};
-use crate::trace::{Act, Tracer};
+use crate::trace::Tracer;
 
 /// Writes `bytes` at `path` in the index, and in `worktree` if there is one.
 pub async fn stage_file(
@@ -37,7 +37,28 @@ pub async fn stage_file(
 
 /// Commits the index on `main`, whose head is `parent`.
 pub async fn commit_index(git: &Git, parent: Option<&str>, message: &str) -> Result<String, Error> {
-    let tree = git.run(&["write-tree"]).await?.trim().to_owned();
+    // Git's background housekeeping may briefly own the index even while
+    // the group's busy lock serializes pigeon's writers. write-tree fails
+    // before producing a tree when it cannot acquire that lock; retry only
+    // that failure, without removing a lock or repeating a ref update.
+    let mut waits = 0;
+    let tree = loop {
+        match git.run(&["write-tree"]).await {
+            Ok(tree) => break tree.trim().to_owned(),
+            Err(Error::Failed {
+                status: Some(128),
+                stderr_tail,
+                ..
+            }) if waits < 20
+                && stderr_tail.contains("Unable to create '")
+                && stderr_tail.contains("index.lock': File exists.") =>
+            {
+                waits += 1;
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+            Err(error) => return Err(error),
+        }
+    };
     let parents: Vec<&str> = parent.into_iter().collect();
     let commit = git.commit_tree(&tree, &parents, message).await?;
     git.update_ref("refs/heads/main", &commit, parent).await?;
@@ -76,7 +97,7 @@ pub async fn commit_roster(
     let commit = commit_index(&g.git, parent.as_deref(), message)
         .await
         .map_err(|e| e.to_string())?;
-    tracer.event(Act::Commit, &[("commit", &commit)]);
     g.reload_roster().await;
+    crate::trace_roster::moved(tracer, g, "Commit", parent.as_deref()).await;
     Ok(commit)
 }

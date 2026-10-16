@@ -3,8 +3,18 @@
    A failed commit leaves a durable intent; install must wait for rollback
    or commit. Three values suffice for old, saved and incoming versions. *)
 EXTENDS Naturals, FiniteSets
-CONSTANTS Values, Off
-VARIABLES live, idx, head, commits, phase, pending, prior, displaced
+CONSTANTS
+  (* @type: Set(Int); *) Values,
+  (* @type: Set(Str); *) Off
+VARIABLES
+  (* @type: Int; *) live,
+  (* @type: Int; *) idx,
+  (* @type: Int; *) head,
+  (* @type: Set(Int); *) commits,
+  (* @type: Str; *) phase,
+  (* @type: Int; *) pending,
+  (* @type: Int; *) prior,
+  (* @type: Set(Int); *) displaced
 vars == <<live, idx, head, commits, phase, pending, prior, displaced>>
 Init == /\ live = 1 /\ idx = 1 /\ head = 1 /\ commits = {1}
         /\ phase = "idle" /\ pending = 1 /\ prior = 1 /\ displaced = {}

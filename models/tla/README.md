@@ -1,14 +1,27 @@
 # The TLA+ models
 
+The daemon's before/after observations are checked by
+`CaptureInstallTrace.tla`/`DaemonDriver.tla` and `RosterDaemonTrace.tla`.
+See [Checking daemon traces](../../docs/daemon-traces.md) for the required
+regressions, commands, observation contract and projection limits.
+
 What each configuration of `expected.tsv` shows, and what each model leaves
 out. This is evidence; what the models must prove is stated in spec
 [13 §13.2](../../docs/spec/13-verification.md), and the invariants it cites
 are normative. `scripts/run-tlc` runs the configurations: the fast set in
-`ci`, the full set in `models-full` (ADR 0026). State counts are those of
+`ci`, the fast/full sets nightly and on release tags in `models-full` (ADR 0026). Both workflows first
+run `scripts/check-proofs`: parameterized TLAPS safety proofs, checks that
+their assumptions cover the actual configurations, and mutations that must
+fail. The proof-covered `AnnexDrop_design4` row is an `audit`: TLC still
+runs it on Monday's nightly run, release tags and by hand (`scripts/run-tlc --audit`), or when explicitly
+named, but no longer on every nightly run. See
+[the proof scope and tool measurements](../../docs/model-proofs.md).
+State counts are those of
 the run that last changed a model.
 
 The full workflow partitions `expected.tsv` over four runners using
-`scripts/run-tlc --full --shard INDEX 4` (indices 0–3). Every row runs once;
+`scripts/run-tlc --full --shard INDEX 4` (indices 0–3), adding `--audit`
+on Monday's nightly run, release tags and by hand. Every selected row runs once;
 each model keeps TLC's automatic worker count. Trace validation uses
 `scripts/check-code-traces --seeds 200 --jobs 4 --heap 2g`: four independent
 JVMs on one runner, each with at most a 2 GiB heap. Trace workers keep separate
@@ -37,7 +50,7 @@ scenario deadlines stay the same.
 | `T_n42o4` | `CustodyTokens` | `pass` (full set) | N = 4, K = 2, 4 offers |
 | `AnnexDrop_design` | `AnnexDrop` | `pass` (fast set) | git-annex's verified drop as pigeon uses it (ADR 0046, [09 §9.4](../../docs/spec/09-network-and-joining.md)): each custodian drops only its own copy, under its removal lock, once it has locked, or seen present by a check that honours removal locks, K copies among those its location log lists; location logs go stale, partitions cut a drop off, a lock expires under a stalled drop, a custodian is marked `dead`, a new copy is made. The key stays on K custodians (INV_K) and a locked copy stays (LockedStays); 3 custodians, K = 2: 406 880 distinct states, 11 s on 1 worker |
 | `AnnexDrop_ranked` | `AnnexDrop` | `pass` (fast set) | with git-annex's P2P check, which ignores removal locks, a drop that counts only custodians ranked above its own is safe: the alternative [09 §9.4](../../docs/spec/09-network-and-joining.md) rejects, for liveness |
-| `AnnexDrop_design4`, `AnnexDrop_gets2`, `AnnexDrop_ranked4` | `AnnexDrop` | `pass` (full set) | the design with 4 custodians, without expiry or new copies (4 518 880 distinct states, 4.5 minutes on 1 worker); with two new copies (1 259 520, 35 s); the ranked drop with 4 custodians (970 240, 44 s) |
+| `AnnexDrop_design4`, `AnnexDrop_gets2`, `AnnexDrop_ranked4` | `AnnexDrop` | `pass` (`design4`: audit; others: full set) | the design with 4 custodians, without expiry or new copies (4 518 880 distinct states, 4.5 minutes on 1 worker); with two new copies (1 259 520, 35 s); the ranked drop with 4 custodians (970 240, 44 s). `AnnexDropProof` proves the first configuration's safety for every finite custodian set, feasible K and MaxGets; the expiry-enabled and ranked checks remain separate. |
 | `AnnexDrop_p2p` | `AnnexDrop` | `violation:INV_K` | git-annex over its P2P protocol: `CHECKPRESENT` ignores the removal lock, so two custodians that drop at once each count the other's copy (E23) |
 | `AnnexDrop_log` | `AnnexDrop` | `violation:INV_K` | counting the location log without checking: a stale log drops the last copies (E5) |
 | `AnnexDrop_trusted` | `AnnexDrop` | `violation:INV_K` | one custodian marked `trust`: the others count it unasked from a stale log (E23) |

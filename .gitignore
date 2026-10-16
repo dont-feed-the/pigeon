@@ -3,3 +3,5 @@ states/
 *.out
 .hegel/
 __pycache__/
+.tlacache/
+_apalache-out/

@@ -12,9 +12,9 @@ use pigeon_sys::fs::{Renamed, fsync_dir, lstat, rename_noreplace};
 
 use crate::evict::{is_old, journal, record, truncate_if_done};
 use crate::group::Group;
-use crate::trace::{Act, Tracer};
+use crate::trace::Tracer;
 
-/// The minimum keep period of an install's displaced inode, in seconds.
+/// The keep period of a changed displaced inode, in seconds.
 pub const KEEP_SECONDS: i64 = 10 * 60;
 
 /// A complete-enough writer scan: unreadable processes are unsafe when
@@ -41,7 +41,7 @@ fn source(e: &Entry) -> Result<PathBuf, String> {
     Ok(aside)
 }
 
-/// Release eligible ended entries, after the keep period. This also runs
+/// Release eligible ended entries, retaining changed ones for the keep period. This also runs
 /// in ordinary rounds, so a retained entry need not wait for a restart.
 pub async fn release(g: &Group, t: &Tracer) {
     release_at(g, t, crate::util::now()).await;
@@ -85,7 +85,20 @@ async fn one(g: &Group, t: &Tracer, now: i64, seq: u64, e: &Entry) -> Result<(),
         .and_then(pigeon_core::capacity::key_size)
         == Some(st.size);
     let old = !written && same_size && is_old(&file, e.begin.old_key.as_deref());
-    match decision(long_enough, written, false, old) {
+    let action = decision(long_enough, written, false, old);
+    if action == Release::Wait {
+        return Ok(());
+    }
+    let span = crate::trace_state::Span::begin(
+        t,
+        g,
+        &e.begin.path,
+        seq,
+        "Release",
+        crate::trace_state::operation(e),
+    )
+    .await;
+    match action {
         Release::Wait => return Ok(()),
         Release::Unlink if e.preserved.is_none() => {
             std::fs::remove_file(&file).map_err(|e| e.to_string())?;
@@ -93,7 +106,13 @@ async fn one(g: &Group, t: &Tracer, now: i64, seq: u64, e: &Entry) -> Result<(),
         }
         _ => {
             let kept = preserve(g, seq, e, &file)?;
-            let (name, key, commit) = capture(g, e, &kept, at).await?;
+            let (name, key, commit) = match capture(g, e, &kept, at).await {
+                Ok(captured) => captured,
+                Err(error) => {
+                    span.interrupted("idle").await;
+                    return Err(error);
+                }
+            };
             let meta = serde_json::json!({
                 "format": 1, "path": e.begin.path, "captured_as": name,
                 "key": key, "commit": commit,
@@ -103,7 +122,7 @@ async fn one(g: &Group, t: &Tracer, now: i64, seq: u64, e: &Entry) -> Result<(),
         }
     }
     record(g, &Record::Released(seq))?;
-    t.event(Act::Release, &[("path", &e.begin.path)]);
+    span.finish("idle").await;
     Ok(())
 }
 

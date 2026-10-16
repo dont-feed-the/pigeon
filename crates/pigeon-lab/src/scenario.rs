@@ -564,7 +564,9 @@ fn labels_of(s: &Step) -> Vec<Label> {
             }
             match op {
                 // Free journals `begin` before anything can crash.
-                LaptopOp::Free { .. } => vec![l("CaptureInstall", "Start", d)],
+                LaptopOp::Free { .. } => vec![l("Evict", "Start", d)],
+                LaptopOp::Restore { .. } => vec![l("Restore", "Start", d)],
+                LaptopOp::TakeGroup { .. } => vec![l("Resolve", "Resolve", d)],
                 // The inviter commits the roster that adds the custodian;
                 // a removal is a roster commit too.
                 LaptopOp::Invite { .. }
@@ -578,14 +580,12 @@ fn labels_of(s: &Step) -> Vec<Label> {
                 // pigeond logs no event of its own for the others yet.
                 LaptopOp::Write { .. }
                 | LaptopOp::Keep { .. }
-                | LaptopOp::Restore { .. }
                 | LaptopOp::Recover { .. }
                 | LaptopOp::Symlink { .. }
                 | LaptopOp::Forge { .. }
                 | LaptopOp::RecoverySheet
                 | LaptopOp::Accept { .. }
-                | LaptopOp::Decline { .. }
-                | LaptopOp::TakeGroup { .. } => Vec::new(),
+                | LaptopOp::Decline { .. } => Vec::new(),
             }
         }
         _ => Vec::new(),

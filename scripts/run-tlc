@@ -4,7 +4,8 @@
 The expectations live in models/tla/expected.tsv. The TLC jar is pinned by
 version and SHA-256, downloaded once into a cache directory, and refused when
 its hash differs. Usage: scripts/run-tlc [--full] [config ...]; with no
-configuration named, the fast set runs, or every row with --full. --shard I N
+configuration named, the fast set runs, or the fast/full rows with --full.
+--audit includes the proof-covered finite cross-checks as well. --shard I N
 runs the zero-based shard I of N, partitioning the selected rows in order.
 """
 
@@ -108,6 +109,7 @@ def run(jar, config, module, java, workers, heap, models=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--full", action="store_true", help="include the slow rows")
+    parser.add_argument("--audit", action="store_true", help="include all rows, including proof-covered audits")
     parser.add_argument("configs", nargs="*", help="only these configurations")
     parser.add_argument("--java", default=os.environ.get("JAVA", "java"))
     parser.add_argument("--workers", default="auto")
@@ -121,7 +123,10 @@ def main():
     failures = 0
     rows = [row for row in expectations()
             if (row[0] in arguments.configs if arguments.configs
-                else arguments.full or row[2] == "fast")]
+                else arguments.audit or row[2] == "fast" or arguments.full and row[2] == "full")]
+    unknown = set(arguments.configs) - {row[0] for row in rows}
+    if unknown:
+        parser.error("unknown configurations: " + ", ".join(sorted(unknown)))
     if arguments.shard:
         index, count = arguments.shard
         rows = rows[index::count]

@@ -21,9 +21,20 @@
 
 Each protocol has a model in `models/tla/` (ADR 0008).
 `models/tla/expected.tsv` lists every configuration with its set (fast in
-`ci`, full in `models-full`) and its expected verdict; `scripts/run-tlc`
+`ci`, full in `models-full`, audit on Mondays, release tags and by hand)
+and its expected verdict; `scripts/run-tlc`
 runs them; `models/tla/README.md` says what each shows and leaves out. The
 invariants this specification cites are normative.
+
+`scripts/check-proofs` also checks parameterized TLAPS proofs over the
+actual `CaptureTransaction` and `AnnexDrop` actions (ADR 0073). They remove
+execution-length and small-domain bounds under their stated assumptions;
+TLC evaluates those assumptions against each covered configuration. The
+drop proof requires no lock expiry, safe checks, and no trusted or log-only
+copies. Only its covered `AnnexDrop_design4` finite check moves to the
+audit set. Expiry-enabled, ranked, negative, liveness and implementation
+trace checks retain their existing frequency. See
+[model-proofs.md](../model-proofs.md) for exact claims and measurements.
 
 | Model | Invariants; liveness | Specified in |
 |---|---|---|

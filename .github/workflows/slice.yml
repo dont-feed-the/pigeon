@@ -122,6 +122,7 @@ jobs:
           cargo run --locked --release -q -p pigeon-lab -- run --bin target/lab/bin \
             --work /tmp/lab --out target/lab/out "${args[@]}"
       - name: the merged trace logs, checked by TLC
+        if: always()
         run: scripts/check-lab-traces target/lab/out
       - name: summary
         if: always()
@@ -212,6 +213,7 @@ jobs:
           HEGEL_TEST_CASES: "25"
         run: cargo test --locked --release -p pigeon-lab --test s9_exec
       - name: their trace logs, checked by TLC
+        if: always()
         run: scripts/check-lab-traces target/lab/out
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()

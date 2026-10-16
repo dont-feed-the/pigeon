@@ -24,7 +24,7 @@ use pigeon_sys::fs::lstat;
 use crate::capture_file::{Intent, Staged};
 use crate::git::{Error, is_pigeon_path};
 use crate::group::Group;
-use crate::trace::{Act, Tracer};
+use crate::trace::Tracer;
 
 /// How soon after an install a save of its path counts as concurrent with
 /// the installed version (ADR 0071): ten seconds.
@@ -36,7 +36,7 @@ const STALE_SLACK_NS: i64 = 2_000_000_000;
 
 /// Whether `path`, modified at `mtime_ns`, was saved within
 /// [`STALE_SAVE_NS`] of an install of it.
-fn soon_after_install(g: &Group, path: &str, mtime_ns: i64) -> bool {
+pub(crate) fn soon_after_install(g: &Group, path: &str, mtime_ns: i64) -> bool {
     g.lock()
         .installed
         .get(path)
@@ -341,6 +341,14 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
             })
             .collect(),
     };
+    let mut observed = Vec::new();
+    if tracer.enabled() {
+        for path in intent.before.keys() {
+            observed.push(
+                crate::trace_state::Span::begin(tracer, g, path, 0, "Capture", "capture").await,
+            );
+        }
+    }
     crate::capture_file::write(g, &intent).map_err(|source| Error::Pipe {
         argv: vec!["capture.json".to_owned()],
         source,
@@ -359,8 +367,19 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
         gone,
         all,
     };
-    let done = commit_batch(g, tracer, batch, done).await?;
+    let done = match commit_batch(g, batch, done).await {
+        Ok(done) => done,
+        Err(error) => {
+            for span in observed {
+                span.interrupted("idle").await;
+            }
+            return Err(error);
+        }
+    };
     crate::capture_file::clear(g);
+    for span in observed {
+        span.finish("idle").await;
+    }
     Ok(done)
 }
 
@@ -413,12 +432,7 @@ struct Batch<'a> {
 }
 
 /// Stages a batch and commits it on `main` (07 §7.3 steps 3–7).
-async fn commit_batch(
-    g: &Group,
-    tracer: &Tracer,
-    b: Batch<'_>,
-    mut done: Captured,
-) -> Result<Captured, Error> {
+async fn commit_batch(g: &Group, b: Batch<'_>, mut done: Captured) -> Result<Captured, Error> {
     let Batch {
         mut held,
         me,
@@ -446,9 +460,6 @@ async fn commit_batch(
         ];
         args.extend(chunk.iter().map(String::as_str));
         g.git.run(&args).await?;
-        for p in chunk {
-            tracer.event(Act::Capture, &[("path", p)]);
-        }
     }
     for chunk in remove.chunks(64) {
         let mut args = vec!["update-index", "--remove", "--"];

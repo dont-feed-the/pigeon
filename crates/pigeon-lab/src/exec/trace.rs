@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use serde_json::Value;
 
 use super::observe::walk;
-use crate::scenario::Label;
+use crate::scenario::{Item, Label, embeds_per_device};
 use crate::world::Device;
 
 /// One trace event.
@@ -52,12 +52,26 @@ pub fn merged(files: &[PathBuf]) -> Vec<Line> {
     let mut lines = Vec::new();
     for f in files {
         let Ok(text) = fs::read_to_string(f) else {
+            lines.push(trace_error("unreadable trace file"));
             continue;
         };
         for raw in text.lines() {
+            if raw.trim().is_empty() {
+                continue;
+            }
             let Ok(v) = serde_json::from_str::<Value>(raw) else {
+                lines.push(trace_error("malformed trace event"));
                 continue;
             };
+            if ["spec", "device", "action"]
+                .iter()
+                .any(|k| v.get(k).and_then(Value::as_str).is_none())
+                || v.get("clock").and_then(Value::as_u64).is_none()
+                || !v.get("vars").is_some_and(Value::is_object)
+            {
+                lines.push(trace_error("incomplete trace event"));
+                continue;
+            }
             let field = |k: &str| {
                 v.get(k)
                     .and_then(Value::as_str)
@@ -75,6 +89,50 @@ pub fn merged(files: &[PathBuf]) -> Vec<Line> {
     }
     lines.sort_by(|a, b| (a.clock, &a.device).cmp(&(b.clock, &b.device)));
     lines
+}
+
+fn trace_error(why: &str) -> Line {
+    let raw = serde_json::json!({"spec": "TraceError", "device": "unknown", "clock": 0,
+        "action": "Read", "vars": {"error": why}})
+    .to_string();
+    Line {
+        spec: "TraceError".into(),
+        device: "unknown".into(),
+        clock: 0,
+        action: "Read".into(),
+        raw,
+    }
+}
+
+/// Whether a live read ends between filesystem operations. This does not
+/// validate the log: errors and malformed pairs remain for the checker.
+pub fn settled(lines: &[Line]) -> bool {
+    let mut pending = BTreeSet::new();
+    for line in lines {
+        let Ok(v) = serde_json::from_str::<Value>(&line.raw) else {
+            continue;
+        };
+        let vars = &v["vars"];
+        let (Some(group), Some(path)) = (vars["group"].as_str(), vars["path"].as_str()) else {
+            continue;
+        };
+        let key = (line.device.clone(), group.to_owned(), path.to_owned());
+        match vars["edge"].as_str() {
+            Some("before") => {
+                pending.insert(key);
+            }
+            Some("after") => {
+                pending.remove(&key);
+            }
+            _ => {}
+        }
+    }
+    pending.is_empty()
+}
+
+/// A complete prefix includes the requested actions as well as their ends.
+pub fn complete(lines: &[Line], ids: &BTreeMap<String, Device>, wanted: &[Item]) -> bool {
+    settled(lines) && embeds_per_device(wanted, &labels(lines, ids))
 }
 
 /// Writes the merged events, one per line.
@@ -114,4 +172,49 @@ pub fn labels(lines: &[Line], ids: &BTreeMap<String, Device>) -> Vec<Label> {
             })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Item, Label, Line, complete, settled};
+
+    fn edge(edge: &str, clock: u64) -> Line {
+        Line {
+            spec: "CaptureInstall".into(),
+            device: "device".into(),
+            clock,
+            action: "Capture".into(),
+            raw: serde_json::json!({"vars": {"group": "g", "path": "p", "edge": edge}}).to_string(),
+        }
+    }
+
+    #[test]
+    fn collection_waits_for_a_complete_boundary() {
+        assert!(!settled(&[edge("before", 1)]));
+        assert!(!settled(&[edge("before", 1), edge("cancelled", 2)]));
+        assert!(settled(&[edge("before", 1), edge("after", 2)]));
+        assert!(!settled(&[
+            edge("before", 1),
+            edge("after", 2),
+            edge("before", 3)
+        ]));
+    }
+
+    #[test]
+    fn an_idle_prefix_cannot_hide_a_requested_action_that_has_not_started() {
+        let device = crate::world::Device::Laptop(crate::world::Laptop(0));
+        let ids = std::collections::BTreeMap::from([("device".to_owned(), device)]);
+        let wanted = [Item::One(Label {
+            spec: "CaptureInstall",
+            action: "Capture",
+            device,
+        })];
+        assert!(!complete(&[], &ids, &wanted));
+        assert!(!complete(&[edge("before", 1)], &ids, &wanted));
+        assert!(complete(
+            &[edge("before", 1), edge("after", 2)],
+            &ids,
+            &wanted
+        ));
+    }
 }

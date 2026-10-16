@@ -32,6 +32,9 @@ env:
   CARGO_PROFILE_TEST_DEBUG: line-tables-only
 
 jobs:
+  proofs:
+    uses: ./.github/workflows/proofs.yml
+
   repository:
     name: repository rules
     runs-on: ubuntu-24.04
@@ -86,6 +89,7 @@ jobs:
           brew untap dont-feed-the/pigeon
 
   models:
+    needs: proofs
     name: TLA+ models (fast set, shard ${{ matrix.shard }})
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -345,3 +349,46 @@ jobs:
             ~/.cargo/git/db
             target
           key: ${{ steps.cache.outputs.cache-primary-key }}
+
+  driver-traces:
+    name: daemon observations checked by TLC
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: pigeon's patched git-annex and the system git (ADR 0069)
+        uses: ./.github/actions/git-annex-pigeon
+        with:
+          required: "true"
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: cache
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: rust-driver-traces-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: rust-driver-traces-
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pigeon
+          key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
+      - name: the pinned toolchain (rust-toolchain.toml)
+        run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
+      - name: observations and every semantic, schema and pipeline mutant
+        run: python3 scripts/check-driver-traces
+      - name: save the Rust cache (main only)
+        if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: rust-driver-traces-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}

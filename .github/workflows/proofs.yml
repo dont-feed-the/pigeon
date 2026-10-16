@@ -1,0 +1,34 @@
+# Parameterized safety proofs of the actual TLA+ actions, plus mutation and
+# configuration-coverage checks. Called before the routine model checks.
+name: TLA+ proofs
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  safety:
+    name: TLAPS safety and proof mutations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pigeon
+          key: formal-tools-linux-x64-${{ hashFiles('scripts/check-proofs', 'scripts/run-tlc') }}
+          restore-keys: formal-tools-linux-x64-
+      - name: fresh proofs, actual cfg assumptions, and rejected mutations
+        run: scripts/check-proofs
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: tlaps-proofs-${{ github.workflow }}
+          path: target/formal-proofs
+          if-no-files-found: error

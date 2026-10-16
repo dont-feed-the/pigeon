@@ -49,6 +49,45 @@ fn a_wrong_expectation_fails_in_the_model() {
 }
 
 #[test]
+fn a_failed_scenario_still_collects_its_trace() {
+    use pigeon_lab::run::{Interpreter, Measure};
+    use pigeon_lab::scenario::{Item, Label};
+    use pigeon_lab::step::Step;
+    use pigeon_lab::world::World;
+
+    #[derive(Default)]
+    struct Failed {
+        traced: bool,
+        ended: bool,
+    }
+    impl Interpreter for Failed {
+        fn name(&self) -> String {
+            "failed".into()
+        }
+        fn begin(&mut self, _: &World) -> Result<(), String> {
+            Ok(())
+        }
+        fn step(&mut self, _: &World, _: &Step) -> Verdict {
+            Verdict::Fail("injected".into())
+        }
+        fn measures(&mut self) -> Vec<Measure> {
+            Vec::new()
+        }
+        fn trace(&mut self, _wanted: &[Item]) -> Option<Vec<Label>> {
+            assert!(!self.ended, "collect before teardown");
+            self.traced = true;
+            Some(Vec::new())
+        }
+        fn end(&mut self) {
+            self.ended = true;
+        }
+    }
+    let mut interp = Failed::default();
+    assert!(!run(&slice::s1(), &mut interp).passed());
+    assert!(interp.traced && interp.ended);
+}
+
+#[test]
 fn each_s9_crashes_where_it_says_and_recovers() {
     for p in CrashPoint::ALL {
         let s = slice::s9_point(p);

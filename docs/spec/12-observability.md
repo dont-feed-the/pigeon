@@ -76,12 +76,15 @@ A run of the real system is checked against the TLA+ specifications
   in memory and sends it to no peer yet.
 - git-annex is not instrumented: pigeon logs an event per git-annex command
   with its JSON result; the harness snapshots `whereis --json` between steps.
-- Traced: every action of `Roster` and `CaptureInstall`, the coded enums.
-  Not yet coded: `Authority`, `Evict`, `Purge`, `Repair` and `CustodyTokens`,
-  every action likewise, except that the attacker's actions (`HCommit`,
-  `HMerge`, `HAdd`, `HDecide`) and the faults (`LoseDisk`, `Rot`,
-  `Partition`, `Heal`) log nothing and stay free in the check; `Crash` is logged at restart, and
-  `Tick`, `Replace` and `WriteHandle` are inferred from the scan,
-  `GroupChange` from accept and `Observe` from status reports.
+- The current daemon emits observed `Roster`, `CaptureInstall`, `Evict`,
+  `Thin`, `Restore` and `Resolve` operations. Filesystem operations have
+  before/after states; roster moves include accepted signed history and the
+  daemon-loaded roster. The adapters check actual values against the model
+  actions. They do not claim coverage of every action in the design models.
+  `Authority`, `Purge`, `Repair` and `CustodyTokens` have no daemon adapter.
+  Environment changes, including crashes, are constrained by observations.
 - In production the feature is off; `PIGEON_TRACE=1`, with a build that has
   it, attaches a trace to a bug report **[no ADR: switch name]**.
+
+See [Checking daemon traces](../daemon-traces.md) for commands, required CI
+coverage, the observation contract and the limits of these projections.

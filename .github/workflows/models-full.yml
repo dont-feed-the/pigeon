@@ -42,9 +42,14 @@ jobs:
             echo "main has not moved since the last nightly run." >> "$GITHUB_STEP_SUMMARY"
           fi
 
+  proofs:
+    needs: fresh
+    if: needs.fresh.outputs.run == 'true'
+    uses: ./.github/workflows/proofs.yml
+
   models:
     name: TLA+ models (full set, shard ${{ matrix.shard }})
-    needs: fresh
+    needs: [fresh, proofs]
     if: needs.fresh.outputs.run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
@@ -64,7 +69,16 @@ jobs:
           key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
       - name: every configuration gives its expected verdict
         # Partition expected.tsv without reducing TLC's workers per model.
-        run: scripts/run-tlc --full --shard ${{ matrix.shard }} 4
+        env:
+          EVENT: ${{ github.event_name }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          args=()
+          # Independent proof-covered audits: Monday, every release, or by hand.
+          if [ "$EVENT" != schedule ] || [ "$(date -u +%u)" = 1 ]; then
+            args+=(--audit)
+          fi
+          scripts/run-tlc --full "${args[@]}" --shard "$SHARD" 4
 
   code-traces:
     name: ${{ github.event_name == 'push' && 50 || 200 }} runs of pigeon-core checked by TLC

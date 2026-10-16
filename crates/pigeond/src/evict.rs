@@ -28,7 +28,8 @@ use pigeon_sys::lab::crash_point;
 use crate::group::Group;
 use crate::journal_file::{append, read};
 use crate::net::sync::{key_sha256, sha256_file};
-use crate::trace::{Act, Tracer};
+use crate::trace::Tracer;
+use crate::trace_state::{Checkpoint, Span};
 
 /// What `free` did.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -158,12 +159,20 @@ pub(crate) fn is_old(aside: &Path, key: Option<&str>) -> bool {
 }
 
 /// Hides one protected file; answers whether it is hidden.
-fn hide(g: &Group, wt: &Path, seq: u64, path: &str, key: &str, t: &Tracer) -> Result<bool, String> {
+fn hide(
+    g: &Group,
+    wt: &Path,
+    seq: u64,
+    path: &str,
+    key: &str,
+    trace: &Checkpoint<'_>,
+) -> Result<bool, String> {
     let file = wt.join(path);
     let Some(st) = stat_of(&file) else {
         return Ok(false);
     };
     let aside = g.files.aside(seq);
+    let start = trace.begin("Start");
     record(
         g,
         &Record::Begin(Begin {
@@ -176,29 +185,36 @@ fn hide(g: &Group, wt: &Path, seq: u64, path: &str, key: &str, t: &Tracer) -> Re
             aside: aside.to_string_lossy().into_owned(),
         }),
     )?;
-    t.event(Act::Start, &[("path", path)]);
+    record(g, &Record::Operation(seq, "free".into()))?;
+    start.finish("begun");
     crash_point("free-after-begin");
+    let moved = trace.begin("MoveAside");
     if rename_noreplace(&file, &aside).map_err(|e| e.to_string())? != Renamed::Done {
         record(g, &Record::End(seq, End::Skip))?;
+        moved.finish("idle");
         return Ok(false);
     }
-    t.event(Act::MoveAside, &[("path", path)]);
+    moved.finish("aside");
     crash_point("free-after-move-aside");
     let clear = lstat(&aside)
         .ok()
         .flatten()
         .is_some_and(|a| crate::asides::writers_clear(&a));
-    t.event(Act::Scan, &[("path", path)]);
-    if !clear || stat_of(&aside) != Some(st) || !is_old(&aside, Some(key)) {
-        let end = match rename_noreplace(&aside, &file).map_err(|e| e.to_string())? {
-            Renamed::Done | Renamed::SourceMissing => End::Skip,
-            Renamed::TargetExists => End::Recovered,
-        };
-        record(g, &Record::End(seq, end))?;
+    let scan = trace.scan(clear);
+    if !clear {
+        crate::install::rollback(g, seq, &aside, &file, None)?;
+        scan.finish("idle");
+        return Ok(false);
+    }
+    scan.finish("scanned");
+    let check = trace.begin("Check");
+    if stat_of(&aside) != Some(st) || !is_old(&aside, Some(key)) {
+        crate::install::rollback(g, seq, &aside, &file, None)?;
+        check.finish("idle");
         return Ok(false);
     }
     record(g, &Record::Proved(vec![seq]))?;
-    t.event(Act::Check, &[("path", path)]);
+    check.finish("checked");
     crash_point("free-after-proved");
     Ok(true)
 }
@@ -243,11 +259,12 @@ pub async fn free_with(
         if hidden.contains(&o.path) {
             continue;
         }
+        let trace = Checkpoint::new(t, g, &o.path, seq, "free").await;
         let order = targets_lock();
         if !targets(g).contains(prefix) {
             break;
         }
-        let hidden_now = hide(g, &wt, seq, &o.path, &o.key, t);
+        let hidden_now = hide(g, &wt, seq, &o.path, &o.key, &trace);
         drop(order);
         if hidden_now? {
             new.push((seq, o.path.clone()));
@@ -255,16 +272,28 @@ pub async fn free_with(
         seq += 1;
     }
     if !new.is_empty() {
+        let mut indexing = Vec::new();
+        for (seq, path) in &new {
+            indexing.push(Span::begin(t, g, path, *seq, "Index", "free").await);
+        }
         hidden.extend(new.iter().map(|(_, p)| p.clone()));
         write_sparse(g, &hidden);
         let mut args = vec!["update-index", "--skip-worktree", "--"];
         args.extend(new.iter().map(|(_, p)| p.as_str()));
-        g.git.run(&args).await.map_err(|e| e.to_string())?;
+        if let Err(error) = g.git.run(&args).await {
+            for span in indexing {
+                span.interrupted("checked").await;
+            }
+            return Err(error.to_string());
+        }
+        for span in indexing {
+            span.finish("indexed").await;
+        }
         crash_point("free-after-index");
-        for (s, p) in &new {
-            t.event(Act::Index, &[("path", p)]);
-            record(g, &Record::End(*s, End::Done))?;
-            t.event(Act::Done, &[("path", p)]);
+        for (seq, path) in &new {
+            let done = Span::begin(t, g, path, *seq, "Done", "free").await;
+            record(g, &Record::End(*seq, End::Done))?;
+            done.finish("idle").await;
         }
     }
     done.hidden = observed.iter().filter(|o| hidden.contains(&o.path)).count();
@@ -378,6 +407,7 @@ pub async fn keep(g: &Group, t: &Tracer) -> Result<usize, String> {
     for (path, key) in &wanted {
         let stage = g.files.stage(seq);
         let object = objects.get(key).ok_or("receiving")?;
+        let start = Span::begin(t, g, path, seq, "Start", "keep").await;
         std::fs::copy(object, &stage).map_err(|e| e.to_string())?;
         let mode = if modes.get(path).map(String::as_str) == Some("100755") {
             0o755
@@ -385,7 +415,8 @@ pub async fn keep(g: &Group, t: &Tracer) -> Result<usize, String> {
             0o644
         };
         use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&stage, std::fs::Permissions::from_mode(mode));
+        std::fs::set_permissions(&stage, std::fs::Permissions::from_mode(mode))
+            .map_err(|e| e.to_string())?;
         std::fs::File::open(&stage)
             .and_then(|f| f.sync_all())
             .map_err(|e| e.to_string())?;
@@ -403,8 +434,10 @@ pub async fn keep(g: &Group, t: &Tracer) -> Result<usize, String> {
                 aside: g.files.aside(seq).to_string_lossy().into_owned(),
             }),
         )?;
-        t.event(Act::Start, &[("path", path)]);
+        record(g, &Record::Operation(seq, "keep".into()))?;
+        start.finish("begun").await;
         crash_point("keep-after-begin");
+        let check = Span::begin(t, g, path, seq, "MoveAside", "keep").await;
         let file = wt.join(path);
         if let Some(dir) = file.parent() {
             let _ = std::fs::create_dir_all(dir);
@@ -412,39 +445,51 @@ pub async fn keep(g: &Group, t: &Tracer) -> Result<usize, String> {
         if lstat(&file).ok().flatten().is_some() {
             record(g, &Record::End(seq, End::Raced))?;
             let _ = std::fs::remove_file(&stage);
-            raced.push(path.clone());
+            check.finish("idle").await;
+            raced.push((seq, path.clone()));
             seq += 1;
             continue;
         }
         record(g, &Record::Proved(vec![seq]))?;
-        t.event(Act::Check, &[("path", path)]);
+        check.finish("checked").await;
+        let renamed = Span::begin(t, g, path, seq, "RenameIn", "keep").await;
         if rename_noreplace(&stage, &file).map_err(|e| e.to_string())? != Renamed::Done {
             record(g, &Record::End(seq, End::Raced))?;
             let _ = std::fs::remove_file(&stage);
-            raced.push(path.clone());
+            renamed.finish("idle").await;
+            raced.push((seq, path.clone()));
             seq += 1;
             continue;
         }
-        t.event(Act::RenameIn, &[("path", path)]);
+        renamed.finish("renamed").await;
         crash_point("keep-after-rename-in");
         moved.push((seq, path.clone()));
         seq += 1;
     }
     if !moved.is_empty() || !raced.is_empty() {
-        for p in moved.iter().map(|(_, p)| p).chain(&raced) {
-            hidden.remove(p);
+        let mut indexing = Vec::new();
+        for (seq, path) in moved.iter().chain(&raced) {
+            indexing.push(Span::begin(t, g, path, *seq, "Index", "keep").await);
+            hidden.remove(path);
         }
         write_sparse(g, &hidden);
         let mut args = vec!["update-index", "--no-skip-worktree", "--"];
-        args.extend(moved.iter().map(|(_, p)| p.as_str()));
-        args.extend(raced.iter().map(String::as_str));
-        g.git.run(&args).await.map_err(|e| e.to_string())?;
+        args.extend(moved.iter().chain(&raced).map(|(_, p)| p.as_str()));
+        if let Err(error) = g.git.run(&args).await {
+            for span in indexing {
+                span.interrupted("renamed").await;
+            }
+            return Err(error.to_string());
+        }
         let _ = g.git.run(&["update-index", "-q", "--refresh"]).await;
-        for (s, p) in &moved {
-            t.event(Act::Index, &[("path", p)]);
-            record(g, &Record::End(*s, End::Done))?;
-            t.event(Act::Done, &[("path", p)]);
-            record(g, &Record::Released(*s))?;
+        for span in indexing {
+            span.finish("indexed").await;
+        }
+        for (seq, path) in &moved {
+            let done = Span::begin(t, g, path, *seq, "Done", "keep").await;
+            record(g, &Record::End(*seq, End::Done))?;
+            record(g, &Record::Released(*seq))?;
+            done.finish("idle").await;
         }
     }
     truncate_if_done(g);
@@ -479,43 +524,103 @@ pub async fn recover(g: &Group, t: &Tracer) {
             stage: stage.as_ref().is_some_and(|s| s.exists()),
             aside_is_old: aside.exists() && is_old(&aside, b.old_key.as_deref()),
         };
-        if e.end.is_none() {
-            t.event(Act::Recover, &[("path", &b.path)]);
+        let kind = crate::trace_state::operation(&e);
+        let replay = steps(&e, found);
+        if e.end.is_some() && replay.is_empty() && !t.unfinished(&g.id, &b.path) {
+            continue;
         }
-        for step in steps(&e, found) {
+        let action = if e.end.is_none() {
+            "Recover"
+        } else {
+            "Cleanup"
+        };
+        let mut recovering = Some(Span::begin(t, g, &b.path, seq, action, kind).await);
+        let mut ending = None;
+        let mut failed = false;
+        for step in replay {
+            if matches!(step, Step::Restage | Step::Append(_))
+                && let Some(span) = recovering.take()
+            {
+                span.finish("rec").await;
+                ending = Some(
+                    crate::trace_state::Span::begin(t, g, &b.path, seq, "RecoverEnd", kind).await,
+                );
+            }
             let ok = match step {
                 Step::RenameIn => stage
                     .as_ref()
                     .is_some_and(|s| matches!(rename_noreplace(s, &file), Ok(Renamed::Done))),
                 Step::Restage => {
-                    let bit = if b.new_key.is_none() {
-                        "--skip-worktree"
+                    if e.operation.as_deref() == Some("restore") {
+                        // Restore leaves the pointer for the next capture,
+                        // including when the path was deleted from the index.
+                        true
+                    } else if let Some(entry) = &e.install_index {
+                        if crate::install::index_entry(g, &b.path, entry.as_ref())
+                            .await
+                            .is_err()
+                        {
+                            false
+                        } else if entry.is_some() {
+                            g.git
+                                .run(&["update-index", "--no-skip-worktree", "--", &b.path])
+                                .await
+                                .is_ok()
+                        } else {
+                            true
+                        }
                     } else {
-                        "--no-skip-worktree"
-                    };
-                    if b.new_key.is_none() {
-                        let mut h = hidden_paths(g).await;
-                        h.insert(b.path.clone());
-                        write_sparse(g, &h);
+                        let bit = if b.new_key.is_none() {
+                            "--skip-worktree"
+                        } else {
+                            "--no-skip-worktree"
+                        };
+                        if b.new_key.is_none() {
+                            let mut h = hidden_paths(g).await;
+                            h.insert(b.path.clone());
+                            write_sparse(g, &h);
+                        }
+                        g.git
+                            .run(&["update-index", bit, "--", &b.path])
+                            .await
+                            .is_ok()
                     }
-                    g.git
-                        .run(&["update-index", bit, "--", &b.path])
-                        .await
-                        .is_ok()
                 }
                 Step::PutAsideBack => matches!(rename_noreplace(&aside, &file), Ok(Renamed::Done)),
                 Step::Append(end) => record(g, &Record::End(seq, end)).is_ok(),
-                Step::RemoveStage => stage
-                    .as_ref()
-                    .is_none_or(|s| std::fs::remove_file(s).is_ok()),
+                Step::RemoveStage => stage.as_ref().is_none_or(|s| {
+                    std::fs::remove_file(s)
+                        .map_or_else(|e| e.kind() == std::io::ErrorKind::NotFound, |()| true)
+                }),
             };
             if !ok {
+                if let Some(span) = recovering.take() {
+                    span.interrupted("down").await;
+                }
+                if let Some(span) = ending.take() {
+                    span.interrupted("rec").await;
+                }
                 tracing::warn!(group = %g.id, seq, step = ?step, "recover-step-failed");
+                failed = true;
                 break;
+            }
+        }
+        if !failed {
+            if let Some(span) = ending {
+                span.finish("idle").await;
+            }
+            if let Some(span) = recovering {
+                span.finish("idle").await;
             }
         }
     }
     crate::asides::release(g, t).await;
+    for (path, seq, kind) in t.unfinished_paths(&g.id) {
+        Span::begin(t, g, &path, seq, "Cleanup", kind)
+            .await
+            .finish("idle")
+            .await;
+    }
     let _ = g.git.run(&["update-index", "-q", "--refresh"]).await;
     truncate_if_done(g);
 }
