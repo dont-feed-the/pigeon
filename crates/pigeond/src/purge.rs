@@ -16,6 +16,7 @@ use crate::purge_receipts::Ledger;
 #[derive(Debug, Default)]
 pub struct State {
     index: Index,
+    archives: Option<crate::purge_archive::Archives>,
     ledger: Option<Ledger>,
     observed: BTreeSet<String>,
 }
@@ -46,12 +47,11 @@ pub async fn prepare(g: &Group) {
     }
     let result = async {
         let reading = crate::retention::snapshot(g).await?;
-        g.purge
-            .lock()
-            .await
-            .index
-            .extend(&g.git, &reading.tips)
-            .await
+        let mut state = g.purge.lock().await;
+        if state.archives.is_none() {
+            state.archives = Some(crate::purge_archive::load(g).await?);
+        }
+        state.index.extend(&g.git, &reading.tips).await
     }
     .await;
     if let Err(e) = result {
@@ -107,14 +107,10 @@ async fn evaluate(g: &Group, me: &str, allow_drop: bool) -> Result<(), crate::gi
     if crate::membership::pending(g, me) {
         return Err(invalid("this backup has not completed custody admission"));
     }
-    let certificates = crate::purge_epoch::collect(g, main).await?;
-    let epochs: BTreeMap<_, _> = certificates
-        .iter()
-        .map(|(id, verified)| (id.clone(), verified.epoch.clone()))
-        .collect();
+    let mut certificates = crate::purge_epoch::collect(g, main).await?;
     let custodians = membership.eligible;
     for (id, decision) in &active {
-        if epochs.contains_key(id) {
+        if certificates.contains_key(id) {
             continue;
         }
         if !membership.pending.is_empty() {
@@ -142,6 +138,22 @@ async fn evaluate(g: &Group, me: &str, allow_drop: bool) -> Result<(), crate::gi
             return Err(invalid("purge membership epoch needs a completion proof"));
         }
     }
+    let archives = state
+        .archives
+        .as_ref()
+        .ok_or_else(|| invalid("archive verification is pending"))?;
+    if !archives.anchored(&reading.named) {
+        return Err(invalid(
+            "a signed erasure archive was removed or substituted",
+        ));
+    }
+    certificates.extend(archives.epochs.clone());
+    let epochs: BTreeMap<_, _> = certificates
+        .iter()
+        .map(|(id, verified)| (id.clone(), verified.epoch.clone()))
+        .collect();
+    let mut all_active = active.clone();
+    all_active.extend(archives.active.clone());
     let mut proofs = crate::purge_proofs::collect(g, &active).await?;
     for certificate in certificates.values() {
         for (key, seal) in &certificate.seals {
@@ -157,8 +169,8 @@ async fn evaluate(g: &Group, me: &str, allow_drop: bool) -> Result<(), crate::gi
     let mut ancestry = BTreeMap::new();
     for tip in tips
         .iter()
-        .chain(active.values().map(|a| &a.doc.base))
-        .chain(active.values().flat_map(|a| a.doc.proposals.iter()))
+        .chain(all_active.values().map(|a| &a.doc.base))
+        .chain(all_active.values().flat_map(|a| a.doc.proposals.iter()))
         .chain(proofs.values().map(|seal| &seal.main))
         .chain(epochs.values().map(|epoch| &epoch.main))
     {
@@ -169,6 +181,22 @@ async fn evaluate(g: &Group, me: &str, allow_drop: bool) -> Result<(), crate::gi
             ancestry.insert(tip.clone(), ancestors);
         }
     }
+    // Signed archive links establish observation across authority domains,
+    // without pretending that a new genesis has Git parents. Its current
+    // files therefore keep their genuine fresh births in the index.
+    let mut observed = ancestry
+        .get(main)
+        .cloned()
+        .ok_or_else(|| invalid("missing current ancestry"))?;
+    for tip in archives.anchors.values() {
+        observed.extend(
+            state
+                .index
+                .ancestors(tip)
+                .ok_or_else(|| invalid("incomplete signed archive"))?,
+        );
+    }
+    ancestry.insert(main.clone(), observed);
     let references: BTreeSet<Reference<String, String>> = state
         .index
         .references
@@ -177,7 +205,7 @@ async fn evaluate(g: &Group, me: &str, allow_drop: bool) -> Result<(), crate::gi
         .cloned()
         .collect();
     let current: BTreeSet<String> = g.git.keys(main).await?.into_values().collect();
-    let decisions: BTreeMap<_, _> = active
+    let decisions: BTreeMap<_, _> = all_active
         .iter()
         .map(|(id, a)| (id.clone(), a.doc.decision()))
         .collect();

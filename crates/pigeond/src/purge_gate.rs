@@ -114,9 +114,9 @@ impl Gate {
         }
     }
 
-    /// Cover every fetch (including archive refs) and direct retained-ref
-    /// mutation. Immutable objects and replaceable status refs do not dirty
-    /// a completed reference scan.
+    /// Cover direct retained-ref mutation and unconstrained fetches.
+    /// Quarantined peer/incoming refs are not retained until separately
+    /// validated and adopted through a guarded update-ref.
     pub fn mutation(self: &Arc<Self>, args: &[&str]) -> Option<Mutation> {
         if !dirty(args) {
             return None;
@@ -129,7 +129,7 @@ impl Gate {
 
 fn dirty(args: &[&str]) -> bool {
     match args.first().copied() {
-        Some("fetch") => true,
+        Some("fetch") => !quarantined_fetch(args),
         Some("update-ref") => args.iter().any(|arg| {
             *arg == "--stdin"
                 || *arg == "refs/heads/main"
@@ -138,6 +138,34 @@ fn dirty(args: &[&str]) -> bool {
         }),
         _ => false,
     }
+}
+
+fn quarantined_fetch(args: &[&str]) -> bool {
+    let [
+        "fetch",
+        "-q",
+        "--no-tags",
+        "--no-write-fetch-head",
+        "--refmap=",
+        remote,
+        specs @ ..,
+    ] = args
+    else {
+        return false;
+    };
+    !remote.is_empty()
+        && !remote.starts_with('-')
+        && !specs.is_empty()
+        && specs.iter().all(|spec| {
+            spec.strip_prefix('+')
+                .and_then(|spec| spec.split_once(':'))
+                .is_some_and(|(source, destination)| {
+                    source.starts_with("refs/")
+                        && (destination.starts_with("refs/pigeon/peers/")
+                            || destination.starts_with("refs/pigeon/incoming/")
+                            || destination.starts_with("refs/pigeon/reports/"))
+                })
+        })
 }
 
 /// Cancellation is also a mutation boundary: a killed Git command may
@@ -180,6 +208,46 @@ mod tests {
         );
         drop(erase);
         assert!(writer.await.is_some());
+    }
+
+    #[tokio::test]
+    async fn quarantined_fetches_keep_content_usable_until_validated_history_is_adopted() {
+        let gate = Arc::new(Gate::default());
+        gate.arm();
+        assert!(gate.publish(gate.revision().unwrap(), ContentPolicy::default()));
+        let args = [
+            "fetch",
+            "-q",
+            "--no-tags",
+            "--no-write-fetch-head",
+            "--refmap=",
+            "peer",
+            "+refs/heads/*:refs/pigeon/peers/peer/*",
+            "+refs/pigeon/archive/*:refs/pigeon/peers/peer/archive/*",
+            "+refs/pigeon/status/*:refs/pigeon/reports/peer/*",
+        ];
+        // A physical erasure need not block a quarantined metadata fetch;
+        // neither the retained reading nor the content policy can change.
+        let erase = gate.erasure().await;
+        assert!(gate.before_mutation(&args).await.is_none());
+        assert!(gate.mutation(&args).is_none());
+        assert!(!gate.policy().waiting);
+        drop(erase);
+        let adopted = gate.mutation(&["update-ref", "refs/heads/main", "new", "old"]);
+        assert!(gate.policy().waiting);
+        drop(adopted);
+        assert!(gate.policy().waiting);
+        // Extra or unbounded refspecs must still take the conservative path.
+        for spec in [
+            "+refs/heads/*:refs/heads/*",
+            "+refs/*:refs/pigeon/archive/*",
+            "refs/heads/main",
+        ] {
+            let mut unsafe_args = args.to_vec();
+            unsafe_args.push(spec);
+            assert!(gate.mutation(&unsafe_args).is_some());
+        }
+        assert!(gate.mutation(&["fetch", "peer"]).is_some());
     }
 
     #[test]

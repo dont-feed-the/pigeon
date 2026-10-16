@@ -683,6 +683,7 @@ pub async fn fetch_welcome(
         "-q",
         "--no-tags",
         "--no-write-fetch-head",
+        "--refmap=",
         inviter,
         spec.as_str(),
         archive.as_str(),

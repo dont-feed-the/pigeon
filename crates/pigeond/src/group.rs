@@ -227,6 +227,13 @@ impl Group {
                 _ => g.git.purge_gate.arm(),
             }
         }
+        if g.git
+            .object(&g.id)
+            .await
+            .is_ok_and(|raw| crate::refound::refounded(&raw).is_some())
+        {
+            g.git.purge_gate.arm();
+        }
         Some(g)
     }
 

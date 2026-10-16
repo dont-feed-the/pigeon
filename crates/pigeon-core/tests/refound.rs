@@ -12,6 +12,7 @@ use pigeon_core::{
 
 fn input(tc: &TestCase) -> (Roster, DeviceId) {
     let mut old = genesis();
+    old.rules = tc.draw(gs::integers::<u32>().min_value(1).max_value(2));
     old.k = tc.draw(gs::integers::<u32>().min_value(1).max_value(9));
     old.retention_days = tc.draw(gs::integers::<u32>().min_value(1).max_value(365));
     old.relay = tc
@@ -66,18 +67,17 @@ fn folder_boundaries_and_group_settings_survive(tc: TestCase) {
             new.k,
             new.retention_days,
             &new.relay,
-            &new.telemetry_device,
-            new.rules
+            &new.telemetry_device
         ),
         (
             &old.group,
             old.k,
             old.retention_days,
             &old.relay,
-            &old.telemetry_device,
-            old.rules
+            &old.telemetry_device
         )
     );
+    assert_eq!(new.rules, 1, "new custody requires its own preparation");
     assert_eq!(new.folders.len(), old.folders.len());
     for (a, b) in old.folders.iter().zip(&new.folders) {
         assert_eq!(a.path, b.path);

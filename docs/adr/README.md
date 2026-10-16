@@ -147,3 +147,4 @@ passes; 16 §16.3 lists where each rule now lives.
 | [0074](0074-mount-the-peer-ui-behind-bridge-authorization.md) | Mount the peer UI behind bridge authorization | Proposed |
 | [0075](0075-purge-waits-survive-restarts-and-delayed-approval.md) | Purge waits survive restarts and delayed approval | Proposed |
 | [0076](0076-completed-purge-epochs-fence-custodian-membership.md) | Completed purge epochs fence custodian membership | Proposed |
+| [0077](0077-refounding-keeps-completed-erasure-in-its-signed-archive.md) | Refounding keeps completed erasure in its signed archive | Proposed |

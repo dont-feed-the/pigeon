@@ -75,7 +75,14 @@ async fn import(g: &Group, peer: &str, bundle: &Bundle) -> Result<String, String
     if !specs.iter().any(|s| s.ends_with(&format!("/{peer}/main"))) {
         return Err("join-history-unverified".into());
     }
-    let mut args = vec!["fetch", "-q", "--no-tags", "--no-write-fetch-head", path];
+    let mut args = vec![
+        "fetch",
+        "-q",
+        "--no-tags",
+        "--no-write-fetch-head",
+        "--refmap=",
+        path,
+    ];
     args.extend(specs.iter().map(String::as_str));
     g.git.run(&args).await.map_err(|e| e.to_string())?;
     while crate::proposal::take(g, peer).await > 0 {}

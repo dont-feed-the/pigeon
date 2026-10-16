@@ -21,6 +21,11 @@ the second number, and every other pull request the third.
 - Restoring an already retained version continues while erasure metadata is
   being checked. Browser erasure receipts link directly to waiting requests,
   and restoration explains how older contents become a new current version.
+- Refounding keeps verified completed erasure in the signed archive. Pending
+  requests stay with the old group; the new group asks for fresh preparation
+  after its backup machines rejoin.
+- New versions keep arriving while erasure is prepared or old groups are
+  checked. Routine peer metadata fetches no longer interrupt those transfers.
 
 ## 0.5.5 — 2026-10-16
 

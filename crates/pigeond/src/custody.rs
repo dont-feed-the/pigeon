@@ -58,6 +58,7 @@ async fn fetch(g: &Group, id: &str) -> Result<(), crate::git::Error> {
         "-q",
         "--no-tags",
         "--no-write-fetch-head",
+        "--refmap=",
         id,
         spec.as_str(),
         reports.as_str(),

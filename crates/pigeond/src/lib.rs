@@ -66,6 +66,7 @@ pub mod prefs;
 pub mod proposal;
 pub mod purge;
 mod purge_admission;
+mod purge_archive;
 pub mod purge_epoch;
 pub mod purge_file;
 pub mod purge_gate;

@@ -202,6 +202,75 @@ async fn only_fully_released_historical_objects_drop_and_private_bytes_stay() {
     assert!(!l.g.git.purge_gate.policy().released.contains(&alias_key));
     assert_eq!(std::fs::read(&old_pool).unwrap(), old_bytes);
     assert!(pigeond::custody::present(&l.g, &alias_key).await.is_some());
+
+    // A real new signed authority domain retains completed erasure in
+    // its old archive, without copying old votes into its new genesis.
+    assert!(pigeond::purge_epoch::close(&l.g).await.unwrap());
+    let old_main = l.g.git.rev("refs/heads/main").await.unwrap();
+    let tree = pigeond::refound::new_tree(&l.g, &old_main, &dev(1))
+        .await
+        .unwrap();
+    assert!(
+        tree.keys()
+            .all(|p| !p.starts_with(pigeond::purge_file::PREFIX)
+                && !p.starts_with(pigeond::purge_epoch::PREFIX)
+                && !p.starts_with(pigeond::admission_file::PREFIX))
+    );
+    let tree = merge::write_tree(&l.git, &tree).await.unwrap();
+    let message = format!(
+        "pigeon: refound install\n\nPigeon-Refound: {} {old_main}",
+        l.g.id
+    );
+    let new = l.git.commit_tree(&tree, &[], &message).await.unwrap();
+    let archive = pigeond::refound::archive_ref(&l.g.id);
+    l.git.update_ref(&archive, &old_main, None).await.unwrap();
+    l.git
+        .update_ref("refs/heads/main", &new, Some(&old_main))
+        .await
+        .unwrap();
+    for restart in [false, true] {
+        let group = Group::open(&new, &l.wt, &GitEnv::default()).await.unwrap();
+        merge::judge_history(&group, std::slice::from_ref(&new))
+            .await
+            .unwrap();
+        assert!(group.lock().engine.accepted(&new));
+        assert_eq!(group.roster().unwrap().roster.rules, 1);
+        assert!(
+            pigeond::purge_state::active(&group, &new)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        pigeond::purge::prepare(&group).await;
+        pigeond::purge::round(&group, &dev(1).0, true).await;
+        let policy = group.git.purge_gate.policy();
+        assert!(
+            !policy.waiting,
+            "refounded archive stayed unverified, restart={restart}"
+        );
+        assert!(policy.released.contains(&old_key));
+        assert!(!policy.released.contains(&alias_key));
+        assert!(
+            !pigeond::retention::keys(&group)
+                .await
+                .unwrap()
+                .contains(&old_key)
+        );
+        let alias_object = pigeond::custody::present(&group, &alias_key).await.unwrap();
+        assert_eq!(std::fs::read(alias_object).unwrap(), old_bytes);
+        assert_eq!(std::fs::read(&kept_object).unwrap(), kept_bytes);
+        assert_eq!(std::fs::read(l.wt.join("private.txt")).unwrap(), private);
+        assert_eq!(l.git.index().await.unwrap()["private.txt"], private_entry);
+        if restart {
+            l.git.run(&["update-ref", "-d", &archive]).await.unwrap();
+            pigeond::purge::round(&group, &dev(1).0, true).await;
+            assert!(
+                group.git.purge_gate.policy().waiting,
+                "a cached proof ignored its removed archive anchor"
+            );
+            assert_eq!(std::fs::read(&kept_object).unwrap(), kept_bytes);
+        }
+    }
 }
 
 #[tokio::test]

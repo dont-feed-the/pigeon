@@ -76,6 +76,9 @@ pub fn roster(old: &Roster, me: &DeviceId) -> Option<Roster> {
         })
         .collect();
     let new = Roster {
+        // A new authority domain must prepare its own erasure quorum;
+        // old capability votes are bound to the archived genesis.
+        rules: 1,
         persons: BTreeMap::from([(owner, person)]),
         devices: BTreeMap::from([(me.clone(), device)]),
         removed: BTreeMap::new(),

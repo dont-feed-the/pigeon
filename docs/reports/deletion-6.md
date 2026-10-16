@@ -88,7 +88,7 @@ skip the configured month or claim physical purge completion.
 - Erased history/restore states, complete cancellation and readiness recovery
   scenarios, and broader interface usability tests.
 - Real partition/restore/offline-return races and implementation traces.
-- Refounded archive and pending-erasure recovery semantics.
+- Wider refounded archive and initial-preparation recovery conformance.
 - Initial upgrade contention: different concurrent requests may split
   immutable choices and remain blocked. No retry may silently change a
   vote; a safe recovery protocol needs separate modelling and evidence.
@@ -126,4 +126,56 @@ while content is fenced, without refusing an already local restore. Network
 hydration and export still obey the fence. The real three-peer lifecycle
 now requires the first restore attempt after cancellation to succeed;
 deduplication tests require that no fenced pool name is published. These
-corrections still need a focused browser retake.
+corrections were evaluated in the focused browser retakes below.
+
+The [English retake](m5-usability-english-retake.md) and
+[French retake](m5-usability-french-retake.md), using a fresh normal build
+of `242146a`, both completed every step on the first attempt without help.
+Both rated the workflow 6/7. They found the direct receipt link and the
+restoration explanation clear. Browser downloads completed; the French
+participant compared versions 3 and 1 byte for byte. Independent checking
+confirmed both restored files and all three downloaded copies matched the
+exact original binary bytes. Each session retained three history entries
+and no accepted erasure request. All browsers and fixture peers were then
+stopped and reaped. Headless transport limitations are recorded separately.
+
+## Refounding checkpoint
+
+Refounding now starts a new rules-1 authority domain, preserving old votes
+and decisions in its signed archive. It carries completed erasure forward
+only after verifying the original full signed epoch proofs with the old
+group's judge. Missing or substituted archive anchors pause content, even
+after a successful cached check. Current files have new reference births.
+This design is recorded in proposed [ADR 0077](../adr/0077-refounding-keeps-completed-erasure-in-its-signed-archive.md).
+
+The physical-purge fixture closes a real signed epoch, refounds, restarts
+and verifies that the old key stays released while a current alias, another
+group's pool link, private bytes and staged entries survive. Removing its
+verified canonical archive then stops content. This uses historical signed
+fixtures; it does not claim a month of observation.
+
+A real two-peer CLI scenario prepares erasure, submits a pending request,
+refounds and checks that the request remains archived rather than being
+reissued or cancelled in the new group. The first explicit restore recovers
+the exact binary bytes. The original backup rejoins in place, safe copies
+return, and a fresh preparation completes without importing old votes or
+submitting any erasure. Broader partition and initial-upgrade contention
+evidence remains required before release.
+
+The wider refound scenario initially failed twice before refounding: Bob
+accepted the second main but could not receive its bytes. Routine fetches
+were invalidating the content reading despite writing only quarantined
+peer/report refs. The first correction still missed the report namespace;
+the same failure exposed it. Explicit empty Git refmaps now prevent any
+configured opportunistic branch updates, and only complete, constrained
+quarantine fetches avoid invalidation. Validated adoption still takes the
+retained-ref mutation lease and invalidates the reading before changing it.
+A real Git regression verifies this even with a remote configured to map
+incoming heads onto local heads, including during the erasure lease.
+
+With that correction, the original full refound scenario passed in 47.45
+seconds, including a participant's declined suggestion and fresh peers
+reading old bytes across two signed refoundings. The backup-history test,
+all three public erasure lifecycle tests and all three mutation-gate tests
+also passed. This supplies recovery evidence, not arbitrary membership
+churn or a completed longitudinal release gate.
