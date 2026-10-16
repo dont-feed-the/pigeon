@@ -283,11 +283,11 @@ jobs:
           case "$SHARD" in
             0) tests="held" ;;
             1) tests="suggestions unsettled restore view drop status_pending" ;;
-            2) tests="people resolve" ;;
-            3) tests="slice leave refound" ;;
+            2) tests="people resolve bridge" ;;
+            3) tests="slice leave refound shared" ;;
           esac
           all=$(grep -l '^#!\[cfg(feature = "lab")\]' crates/pigeond/tests/*.rs | xargs -n1 basename | sed 's/\.rs$//' | sort)
-          listed=$(echo held suggestions unsettled restore view drop status_pending people resolve slice leave refound | tr ' ' '\n' | sort)
+          listed=$(echo held suggestions unsettled restore view drop status_pending people resolve bridge slice leave refound shared | tr ' ' '\n' | sort)
           [ "$all" = "$listed" ] || { echo "::error::a lab test of pigeond is in no shard of ci.yml"; diff <(echo "$all") <(echo "$listed"); exit 1; }
           args=(); for t in $tests; do args+=(--test "$t"); done
           cargo test -p pigeond --features lab --locked --no-fail-fast "${args[@]}"
