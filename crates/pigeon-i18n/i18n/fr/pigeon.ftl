@@ -456,7 +456,6 @@ web-invitation-code = La ligne à partager
 web-command-line = Instructions en ligne de commande
 web-local-folder = Dossier sur cet ordinateur
 web-computer-name = Nom de cet ordinateur
-web-your-name = Votre nom, tel que les autres membres du groupe le verront
 web-group-name = Nom du groupe
 web-backup-copies = Nombre d'ordinateurs de sauvegarde nécessaires à la sécurité
 status-freshness = Une vérification de sécurité est récente pendant une heure. Si aucun ordinateur de sauvegarde n'a donné de nouvelles depuis une heure, pigeon indique que la vérification n'est plus récente. Cela ne signifie pas que les fichiers sont perdus. Un ordinateur silencieux pendant 24 heures ne compte plus parmi les copies de sauvegarde. Une nouvelle modification peut afficher Envoi pendant dix minutes ; elle n'est en sécurité que lorsque suffisamment d'ordinateurs de sauvegarde la conservent.

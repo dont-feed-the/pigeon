@@ -448,7 +448,6 @@ web-invitation-code = The line to share
 web-command-line = Command-line instructions
 web-local-folder = Folder on this computer
 web-computer-name = This computer's name
-web-your-name = Your name, as the others in the group see it
 web-group-name = Group name
 web-backup-copies = Number of backup machines needed for safety
 status-freshness = A safety check is recent for one hour. If no backup machine has been heard from for an hour, pigeon says it has not checked recently; that does not mean files have been lost. A machine silent for 24 hours stops counting toward safe copies. A new change may show Sending for up to ten minutes; it is safe only once enough backup machines hold it.

@@ -123,10 +123,7 @@ async fn the_creator_names_themselves_and_a_refusal_keeps_the_name() {
         .unwrap(),
     )
     .await;
-    assert!(
-        page.contains("Your name, as the others in the group see it"),
-        "{page}"
-    );
+    assert!(page.contains("Your name in the group"), "{page}");
     assert!(page.contains("value=\"Inès\""), "{page}");
     let sent = backend.0.lock().unwrap();
     assert!(

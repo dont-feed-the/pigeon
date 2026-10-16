@@ -438,7 +438,6 @@ pub const MESSAGES: &[Entry] = &[
     e("web-command-line", &[]),
     e("web-local-folder", &[]),
     e("web-computer-name", &[]),
-    e("web-your-name", &[]),
     e("web-group-name", &[]),
     e("web-backup-copies", &[]),
     e("status-freshness", &[]),
