@@ -61,6 +61,14 @@ An independent zxing-cpp decoder recovered the exact respective
 rasters. Normal sheets were one page with complete text and no clipping.
 A deliberately oversized valid group label produced a 6,949-character code
 with the explicit QR fallback and its complete text over three A4 pages.
+The revised layout then passed 44 focused checks: English and French A4
+and Letter prints remain one page, decode to the exact code and have no
+clipping. Instructions measure 12 points, with the code at 8.4 points and
+the QR at 12 cm. The fallback now says “on this sheet” and still preserves
+the complete 6,949-character text. Two initial browser selectors in this
+focused harness were corrected to match the actual Settings controls;
+these were harness mistakes, not product failures.
+
 Private QR, key and PDF evidence stays outside the repository. All owned
 processes were stopped.
 
