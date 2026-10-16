@@ -170,7 +170,10 @@ pub(crate) async fn panel(
                 @if let Some(m) = &row.modified { dt { (r.id("web-col-modified")) } dd { (when(r, m)) } }
                 @if row.folder && r.storage_controls() {
                     dt { (r.id("web-detail-here")) }
-                    dd { (r.id(if row.freed { "web-not-here" } else { "web-kept-here" })) }
+                    dd {
+                        @if let Some(f) = &row.sync { (crate::sync::here(r, f)) }
+                        @else { (r.id(if row.freed { "web-not-here" } else { "web-kept-here" })) }
+                    }
                 }
                 @if let Some(rule) = &rule { dt { (r.id("web-detail-rule")) } dd { (rule) } }
             }
@@ -182,8 +185,9 @@ pub(crate) async fn panel(
                 a class="btn small" href=(r.url(&format!("/folder-rule?path={}", enc(&folder)))) {
                     (icon("rule", "")) (r.id("web-folder-rule"))
                 }
-                @if row.folder && r.storage_controls() && std::path::Path::new(&row.abs).parent() == Some(std::path::Path::new(root)) {
+                @if row.folder && r.storage_controls() && (row.sync.is_some() || std::path::Path::new(&row.abs).parent() == Some(std::path::Path::new(root))) {
                     (keep_or_free(r, form, &row.abs, Some(row.freed), "small"))
+                    @if row.sync.as_ref().is_some_and(|f| f.chosen) { (crate::sync::forget(r, form, &row.abs, "small")) }
                 }
             }
             @if !row.folder {

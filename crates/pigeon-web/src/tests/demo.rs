@@ -77,7 +77,31 @@ const FILES: &[(&str, State, u64, i64)] = &[
         940_000_000,
         12_000,
     ),
+    ("Projets/martine/plan.txt", State::Protected, 3_000, 50),
+    ("Projets/robin/notes.md", State::Protected, 9_000, 70),
 ];
+
+/// The folders of `FILES`, parents first, as `Sync` answers: Photos 2019
+/// freed by this computer's choice, and Robin's folder of the per-person
+/// folder Projets not here by default.
+pub(super) fn sync_folders() -> Vec<pigeon_proto::api::SyncFolder> {
+    let mut paths = std::collections::BTreeSet::new();
+    for (path, ..) in FILES {
+        let parts: Vec<&str> = path.split('/').collect();
+        for n in 1..parts.len() {
+            paths.insert(parts[..n].join("/"));
+        }
+    }
+    paths
+        .into_iter()
+        .map(|path| pigeon_proto::api::SyncFolder {
+            kept: !(path.starts_with("Photos 2019") || path == "Projets/robin"),
+            chosen: path == "Photos 2019",
+            others: (path == "Projets/robin").then(|| "Robin".to_owned()),
+            path,
+        })
+        .collect()
+}
 
 pub(super) struct Demo;
 
@@ -276,6 +300,17 @@ impl Backend for Demo {
                 .into(),
             }],
             pigeon_proto::Request::Held => vec![Response::Held { held: Vec::new() }],
+            pigeon_proto::Request::Sync { .. } => vec![Response::Sync {
+                root: ROOT.into(),
+                folders: sync_folders(),
+            }],
+            pigeon_proto::Request::Keep { folder } => vec![said("keep-result", "folder", folder)],
+            pigeon_proto::Request::Evict { folder } => {
+                vec![said("removed-computer", "name", format!("free {folder}"))]
+            }
+            pigeon_proto::Request::ForgetChoice { folder } => {
+                vec![said("sync-default-result", "folder", folder)]
+            }
             other => return Fixed.request(other),
         };
         Box::pin(async move { answer })

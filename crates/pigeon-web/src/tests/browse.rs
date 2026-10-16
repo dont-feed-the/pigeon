@@ -100,6 +100,7 @@ async fn a_readme_that_is_not_here_is_said_so() {
         modified: None,
         freed: true,
         arriving: 0,
+        sync: None,
     }];
     let section = crate::readme::section(&w, &r, ROOT, &rows)
         .await

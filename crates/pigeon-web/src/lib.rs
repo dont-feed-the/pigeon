@@ -47,6 +47,7 @@ mod render;
 mod settings;
 mod shell;
 mod space;
+mod sync;
 mod view;
 
 use render::Renderer;
@@ -248,6 +249,8 @@ impl Web {
             routes
                 .route("/files/keep", post(actions::keep))
                 .route("/files/free", post(actions::free))
+                .route("/files/forget", post(sync::forget_choice))
+                .route("/folders", get(sync::view).post(sync::apply))
         } else {
             routes
         };

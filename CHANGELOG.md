@@ -28,6 +28,15 @@ increments the second number, and every other release the third.
   *Free up space*. Actions now run without leaving the page and say their
   result in a message at the bottom. Dates show in your own time zone, and
   the interface follows your system's light or dark mode.
+- Choose which folders are on this computer in `pigeon open`: every folder
+  in **Files** says whether it is on this computer, and whose it is when it
+  is someone else's folder ("Robin’s folder, not on this computer"), with
+  *Keep on this computer* or *Free up space*; a folder you chose says
+  "Your choice", with *Use the default*. **Folders on this computer**, under
+  Files, shows all the group's folders as a tree with a box each: tick or
+  untick them, folders inside following, and *Apply*. Folders not on this
+  computer stay safe on the backup machines, and freeing one waits until
+  its files are safe there.
 - A folder's README shows under its files, as on code-hosting sites:
   `README.md` (or `README.markdown`) as formatted text, else `README` or
   `README.txt` as plain text. Its links to files and folders of the group

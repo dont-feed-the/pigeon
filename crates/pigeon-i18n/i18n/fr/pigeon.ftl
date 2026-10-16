@@ -627,3 +627,18 @@ web-rule-owned = Seulement { $owner } ; les modifications des autres deviennent 
 web-rule-add-only = Tout le monde peut ajouter ; les autres modifications sont décidées par { $stewards }
 web-rule-per-person = Chaque dossier qu'il contient appartient à la personne dont il porte le nom
 web-shortcuts = Aller à
+web-here-others = Dossier de { $owner }, pas sur cet ordinateur
+web-here-chosen = Votre choix
+web-forget = Revenir au choix par défaut
+web-folder-others-note = C'est le dossier de { $owner } : il n'est pas sur cet ordinateur, sauf si vous le gardez. Ses fichiers restent en sécurité sur les machines de sauvegarde.
+web-sync-title = Dossiers sur cet ordinateur
+web-sync-lead = Cochez les dossiers à garder sur cet ordinateur. Un dossier coché ou décoché entraîne les dossiers qu'il contient ; vous pouvez encore choisir pour chacun d'eux.
+web-sync-help = Les fichiers d'un dossier qui n'est pas sur cet ordinateur restent en sécurité sur les machines de sauvegarde, et pigeon les montre toujours. Libérer un dossier attend que chacun de ses fichiers y soit en sécurité ; le garder à nouveau le télécharge, complet.
+web-sync-partly = certains de ses dossiers ne sont pas sur cet ordinateur
+web-sync-inside =
+    { $count ->
+        [one] 1 dossier dans { $name }
+       *[other] { $count } dossiers dans { $name }
+    }
+web-sync-apply = Appliquer
+web-sync-unchanged = Rien à changer : chaque dossier est déjà comme coché.

@@ -56,6 +56,8 @@ pub(crate) struct Row {
     pub modified: Option<String>,
     pub freed: bool,
     pub arriving: u64,
+    /// For a folder, whether it is on this computer and who chose so.
+    pub sync: Option<pigeon_proto::api::SyncFolder>,
 }
 
 /// The columns a table sorts by.
@@ -149,6 +151,7 @@ pub(crate) fn rows_of(root: &str, prefix: &str, listed: &[FileEntry]) -> Vec<Row
                     modified: None,
                     freed: false,
                     arriving: 0,
+                    sync: None,
                 });
                 row.files += 1;
                 if f.state != State::Protected {
@@ -173,6 +176,7 @@ pub(crate) fn rows_of(root: &str, prefix: &str, listed: &[FileEntry]) -> Vec<Row
                 modified: f.modified.clone(),
                 freed: false,
                 arriving: 0,
+                sync: None,
             }),
         }
     }
@@ -303,7 +307,27 @@ async fn browse(web: &Web, r: &Renderer, form: &str, q: Browse) -> Html<String> 
                     modified: None,
                     freed: t.freed,
                     arriving: t.arriving,
+                    sync: None,
                 });
+            }
+        }
+    }
+    // Which folders are here, by the daemon's choices and defaults (08 §8.5).
+    let sync = if r.storage_controls() {
+        crate::sync::read(web).await
+    } else {
+        None
+    };
+    if let Some(sync) = &sync {
+        for row in rows.iter_mut().filter(|row| row.folder) {
+            let rel = if prefix.is_empty() {
+                row.name.clone()
+            } else {
+                format!("{prefix}/{}", row.name)
+            };
+            if let Some(f) = sync.get(&rel) {
+                row.freed = !f.kept;
+                row.sync = Some(f.clone());
             }
         }
     }
@@ -336,11 +360,22 @@ async fn browse(web: &Web, r: &Renderer, form: &str, q: Browse) -> Html<String> 
             r.url(&format!("/folder?path={}", enc(&at.to_string_lossy()))),
         ));
     }
-    // Only a top folder's state is known; a nested one offers both actions.
-    let top_freed = top_folder
-        .filter(|_| !prefix.contains('/'))
-        .map(|t| t.freed);
+    // Without the daemon's list, only a top folder's state is known, and a
+    // nested one offers both actions.
+    let here_sync = sync.as_ref().and_then(|s| s.get(&prefix));
+    let top_freed = match here_sync {
+        Some(f) => Some(!f.kept),
+        None => top_folder
+            .filter(|_| !prefix.contains('/'))
+            .map(|t| t.freed),
+    };
     let freed_here = !prefix.is_empty() && top_freed == Some(true);
+    let freed_note = match here_sync.and_then(|f| f.others.as_deref()) {
+        Some(owner) => r
+            .catalogue()
+            .format(&Message::new("web-folder-others-note").arg("owner", owner)),
+        None => r.id("web-folder-freed-note"),
+    };
     let body = html! {
         header class="page-head" {
             @if trail.len() > 1 { (crate::shell::crumbs(r, &trail)) }
@@ -348,7 +383,7 @@ async fn browse(web: &Web, r: &Renderer, form: &str, q: Browse) -> Html<String> 
             @if prefix.is_empty() && !root.is_empty() {
                 p class="lead" { (r.catalogue().format(&Message::new("web-files-lead").arg("folder", root.as_str()))) }
             }
-            @if freed_here { p class="note warn" { (r.id("web-folder-freed-note")) } }
+            @if freed_here { p class="note warn" { (freed_note) } }
         }
         (list(&other))
         div class="toolbar" {
@@ -361,8 +396,11 @@ async fn browse(web: &Web, r: &Renderer, form: &str, q: Browse) -> Html<String> 
             @if !prefix.is_empty() {
                 a class="btn" href=(r.url(&format!("/folder-rule?path={}", enc(&folder)))) { (icon("rule", "")) (r.id("web-folder-rule")) }
                 @if r.storage_controls() && !listed.is_empty() {
+                    @if here_sync.is_some_and(|f| f.chosen) { (crate::sync::forget(r, form, &folder, "")) }
                     (keep_or_free(r, form, &folder, top_freed, ""))
                 }
+            } @else if r.storage_controls() && sync.is_some() {
+                a class="btn" href=(r.url("/folders")) { (icon("laptop", "")) (r.id("web-sync-title")) }
             }
         }
         div class={ "browser" @if details.is_some() { " has-details" } } {
@@ -487,7 +525,8 @@ fn table_row(
                 @if row.folder {
                     span class="sub" {
                         (r.catalogue().format(&Message::new("web-folder-files").arg("files", count(row.files))))
-                        @if row.freed { " · " (r.id("web-not-here")) }
+                        @if let Some(f) = &row.sync { " · " (crate::sync::here(r, f)) }
+                        @else if row.freed { " · " (r.id("web-not-here")) }
                     }
                     @if r.storage_controls() && row.arriving > 0 {
                         span class="sub" { (r.catalogue().format(&Message::new("web-files-arriving").arg("files", count(row.arriving)))) }
@@ -511,7 +550,7 @@ fn table_row(
                         (icon("info", ""))
                         span class="visually-hidden" { (r.catalogue().format(&Message::new("web-details-of").arg("name", row.name.as_str()))) }
                     }
-                    @if row.folder && top && r.storage_controls() {
+                    @if row.folder && (top || row.sync.is_some()) && r.storage_controls() {
                         (keep_or_free(r, form, &row.abs, Some(row.freed), "small"))
                     }
                 }

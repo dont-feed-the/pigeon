@@ -27,6 +27,8 @@ mod mounted;
 mod recovery;
 #[path = "tests/setup.rs"]
 mod setup;
+#[path = "tests/sync.rs"]
+mod sync;
 #[path = "tests/usability.rs"]
 mod usability;
 
@@ -728,6 +730,7 @@ async fn the_pages_are_written_for_axe() {
             ("demo-file", format!("/file?path={budget}")),
             ("demo-deleted", "/deleted".to_owned()),
             ("demo-machines", "/machines".to_owned()),
+            ("demo-folders", "/folders".to_owned()),
         ] {
             let r = demo_app
                 .clone()

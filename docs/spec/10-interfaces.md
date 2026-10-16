@@ -154,6 +154,14 @@ lists, strikethrough) keeps no raw HTML and shows no image (an image is a
 link to it); a link outside the group is followed only for `http`,
 `https` and `mailto`, and a relative link only if it stays in the group's
 folder, to that file's or folder's page; headings start at level 3.
+Each folder says from `Sync` whether it is on this computer, whose it is
+(another person's folder of a per-person folder) and whether this computer
+chose so, with *Keep on this computer* or *Free up space* and, for a
+choice, *Use the default* (`ForgetChoice`). *Folders on this computer*
+shows the group's folders as a tree with a box each, partly kept folders
+marked; *Apply* sends, parents first, a `Keep` or `Evict` only for a folder
+whose box differs from what covers it so far, as a choice covers the
+folders in it (08 §8.5).
 
 - Served by `pigeond`, rendered on the server; pages work without
   JavaScript. The client (ADR 0076), TypeScript built by `build.rs` with

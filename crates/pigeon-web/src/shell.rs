@@ -95,6 +95,9 @@ fn sidebar(r: &Renderer, here: &str) -> Markup {
                 ul class="nav" {
                     @for (path, id, symbol, sub) in SECTIONS {
                         li class=[sub.then_some("sub")] { (link(r, here, path, id, symbol)) }
+                        @if *path == "/files" && r.storage_controls() {
+                            li class="sub" { (link(r, here, "/folders", "web-sync-title", "laptop")) }
+                        }
                     }
                 }
             }

@@ -380,6 +380,7 @@ mod tests {
             modified: None,
             freed: false,
             arriving: 0,
+            sync: None,
         }
     }
 

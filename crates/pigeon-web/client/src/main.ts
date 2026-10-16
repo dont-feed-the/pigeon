@@ -7,10 +7,12 @@ import { setUpCopy } from "./copy";
 import { setUpFilter } from "./filter";
 import { setUpLive } from "./live";
 import { localizeTimes } from "./times";
+import { setUpTree } from "./tree";
 
 function enhance(root: ParentNode): void {
   setUpFilter(root);
   setUpCopy(root);
+  setUpTree(root);
   localizeTimes(root, document.documentElement.lang || "en");
   setUpBrowse(root, enhance);
 }

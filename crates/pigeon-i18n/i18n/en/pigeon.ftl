@@ -627,3 +627,18 @@ web-rule-owned = Only { $owner }; others' changes become suggestions
 web-rule-add-only = Everyone can add; other changes are decided by { $stewards }
 web-rule-per-person = Each folder in it belongs to the person it is named after
 web-shortcuts = Go to
+web-here-others = { $owner }’s folder, not on this computer
+web-here-chosen = Your choice
+web-forget = Use the default
+web-folder-others-note = This is { $owner }’s folder: it is not on this computer unless you keep it. Its files stay safe on the backup machines.
+web-sync-title = Folders on this computer
+web-sync-lead = Tick the folders to keep on this computer. A folder you tick or untick takes the folders in it along; you can still choose for each of them.
+web-sync-help = The files of a folder that is not on this computer stay safe on the backup machines, and pigeon still shows them. Freeing a folder waits until each of its files is safe there; keeping it again downloads it, complete.
+web-sync-partly = some folders in it are not on this computer
+web-sync-inside =
+    { $count ->
+        [one] 1 folder in { $name }
+       *[other] { $count } folders in { $name }
+    }
+web-sync-apply = Apply
+web-sync-unchanged = Nothing to change: every folder already is as ticked.

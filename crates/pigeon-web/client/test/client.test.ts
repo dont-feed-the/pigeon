@@ -8,6 +8,7 @@ import { leaveToBrowser } from "../src/browse";
 import { fold, matches } from "../src/filter";
 import { level, parseHealth } from "../src/live";
 import { exactTime, localDate } from "../src/times";
+import { type Folder, mixed, setAll } from "../src/tree";
 
 test("the filter ignores case, accents and the order of words", () => {
   assert.equal(fold("Été À Noël"), "ete a noel");
@@ -48,4 +49,17 @@ test("clicks with a modifier, or not with the main button, stay the browser's", 
   assert.equal(leaveToBrowser(click({ metaKey: true })), true);
   assert.equal(leaveToBrowser(click({ button: 1 })), true);
   assert.equal(leaveToBrowser(click({ defaultPrevented: true })), true);
+});
+
+test("a folder ticks its folders, and is partly kept when they differ", () => {
+  const leaf = (checked: boolean): Folder => ({ checked, children: [] });
+  const photos: Folder = { checked: true, children: [leaf(true), { checked: true, children: [leaf(false)] }] };
+  assert.equal(mixed(photos), true, "a folder two levels down is not kept");
+  assert.equal(mixed(photos.children[1]!), true);
+  assert.equal(mixed(photos.children[0]!), false, "no folder in it");
+  setAll(photos, false);
+  assert.equal(mixed(photos), false);
+  assert.deepEqual(photos.children.map((c) => c.checked), [false, false]);
+  setAll(photos.children[1]!, true);
+  assert.equal(mixed(photos), true, "unticked, with a ticked folder in it");
 });
