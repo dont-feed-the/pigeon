@@ -4,6 +4,15 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.11 — 2026-10-16
+
+### Fixed
+
+- `pigeon doctor` detects a missing, unusable or mismatched transport
+  helper and explains how to repair the installation.
+- Doctor no longer says everything is in place after reporting a problem.
+- Settings offers the same installation check in the browser.
+
 ## 0.4.10 — 2026-10-16
 
 ### Added

@@ -240,3 +240,9 @@ first build adds **[no ADR]**: `usage` (exit code 2), `unknown-computer`,
 - A request that changes the catalogue checks the roster first and fails
   with `not-allowed` rather than make a surprise proposal; capture, which
   cannot ask, makes proposals ([07 §7.3](07-capture-and-install.md)).
+
+Doctor also checks that `git-annex-p2p-iroh --version` runs in the same
+child environment used by git-annex and matches the daemon release. A
+missing, failed, stale or timed-out helper gives
+`transport-helper-unavailable`, with a reinstall remedy. An installation
+or group problem suppresses the final everything-in-place reassurance.

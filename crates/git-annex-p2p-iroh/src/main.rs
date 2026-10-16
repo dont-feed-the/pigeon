@@ -17,6 +17,16 @@ use pigeon_proto::{LineDecoder, PROTOCOL_VERSION, Request, Response};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.as_slice() == ["--version"] {
+        return match writeln!(
+            std::io::stdout(),
+            "git-annex-p2p-iroh {}",
+            env!("CARGO_PKG_VERSION")
+        ) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(_) => ExitCode::FAILURE,
+        };
+    }
     match run(&args) {
         Ok(()) => ExitCode::SUCCESS,
         Err(code) => {

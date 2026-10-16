@@ -145,6 +145,9 @@ not-shared-kind = { $path } : non partagé ({ $kind })
 doctor-lab-build = Ceci est une version de laboratoire : ses rapports d'état sont marqués, et aucune version publiée ne les compte.
 doctor-version = { $program } { $found } (il faut au moins { $minimum })
 doctor-ok = Tout ce dont pigeon a besoin est en place.
+web-doctor = Vérifier l’installation
+problem-transport-helper-unavailable = Le programme de transport de pigeon manque, ne fonctionne pas ou appartient à une autre version.
+hint-transport-helper-unavailable = Réinstallez cette version de pigeon avec tous ses programmes, puis redémarrez pigeon et relancez pigeon doctor.
 created = Le groupe « { $group } » est créé. Ajoutez une machine de sauvegarde avec : pigeon invite --backup-machine
 invitation =
     { $who ->

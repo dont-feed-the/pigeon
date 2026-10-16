@@ -21,6 +21,7 @@ pub mod daemon;
 pub mod debug;
 pub mod decide;
 pub mod decision_file;
+mod doctor;
 pub mod drop;
 pub mod evict;
 pub mod fold;

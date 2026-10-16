@@ -145,6 +145,9 @@ not-shared-kind = { $path }: not shared ({ $kind })
 doctor-lab-build = This is a lab build: its status reports are marked, and no release counts them.
 doctor-version = { $program } { $found } (at least { $minimum } is needed)
 doctor-ok = Everything pigeon needs is in place.
+web-doctor = Check installation
+problem-transport-helper-unavailable = Pigeon's transport helper is missing, cannot run, or belongs to a different release.
+hint-transport-helper-unavailable = Reinstall this pigeon release with all its binaries, then restart pigeon and run pigeon doctor again.
 created = The group “{ $group }” is created. Add a backup machine with: pigeon invite --backup-machine
 invitation =
     { $who ->

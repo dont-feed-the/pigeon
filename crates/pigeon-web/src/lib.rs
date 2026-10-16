@@ -163,6 +163,7 @@ impl Web {
             .route("/files/keep", post(actions::keep))
             .route("/files/free", post(actions::free))
             .route("/settings", get(settings::settings).post(settings::save))
+            .route("/doctor", get(settings::doctor))
             .route("/settings/diagnostics", post(settings::diagnostics))
             .route("/pause", post(settings::pause))
             .route("/resume", post(settings::resume))

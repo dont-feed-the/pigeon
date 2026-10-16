@@ -278,6 +278,9 @@ pub async fn doctor(d: &Daemon, _details: bool) -> Vec<Response> {
     if pigeon_sys::lab::LAB {
         out.push(progress(msg("doctor-lab-build", &[])));
     }
+    if let Err(detail) = crate::doctor::helper(&d.env).await {
+        out.push(problem("transport-helper-unavailable", &[], Some(detail)));
+    }
     for g in d.groups() {
         if crate::status::disk_full(&g) {
             let name = crate::status::this_name(&g, &d.device);
@@ -325,9 +328,12 @@ pub async fn doctor(d: &Daemon, _details: bool) -> Vec<Response> {
     }
     match bad {
         Some(p) => out.push(p),
-        None => out.push(Response::Said {
-            message: msg("doctor-ok", &[]),
-        }),
+        None if !out.iter().any(|r| matches!(r, Response::Problem(_))) => {
+            out.push(Response::Said {
+                message: msg("doctor-ok", &[]),
+            });
+        }
+        None => {}
     }
     out
 }

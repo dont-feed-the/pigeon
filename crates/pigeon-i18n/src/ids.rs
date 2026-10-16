@@ -19,6 +19,7 @@ const fn e(id: &'static str, vars: &'static [&'static str]) -> Entry {
 /// The problem codes of the slice: stable, kebab-case, public (ADR 0023).
 /// Each has a message `problem-<code>`, and may have a hint `hint-<code>`.
 pub const PROBLEMS: &[&str] = &[
+    "transport-helper-unavailable",
     "not-in-this-build",
     "folder-rule-path",
     "folder-rule-person",
@@ -143,6 +144,9 @@ pub const MESSAGES: &[Entry] = &[
     e("folder-rule-result", &["folder"]),
     e("problem-folder-rule-path", &[]),
     e("problem-folder-rule-person", &["name"]),
+    e("problem-transport-helper-unavailable", &[]),
+    e("web-doctor", &[]),
+    e("hint-transport-helper-unavailable", &[]),
     e("web-folder-rule", &[]),
     e("web-folder-rule-help", &[]),
     e("web-folder-rule-admin", &[]),

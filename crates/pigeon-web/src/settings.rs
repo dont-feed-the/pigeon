@@ -49,6 +49,7 @@ pub async fn settings(
         (pausing(&r, &form.0))
         (crate::leave::form(&r, &form.0))
         h2 { (r.id("web-diagnostics")) }
+        p { a href="/doctor" { (r.id("web-doctor")) } }
         p { (r.id("web-diagnostics-consent")) }
         form method="post" action="/settings/diagnostics" {
             input type="hidden" name="form" value=(&form.0);
@@ -64,6 +65,20 @@ pub async fn settings(
         }
     };
     page(&r, "/settings", &r.id("web-nav-settings"), &body)
+}
+
+/// Installation and group diagnostics use the same read-only request as CLI.
+pub async fn doctor(State(web): State<Arc<Web>>) -> Html<String> {
+    let r = web.renderer();
+    let answers = web.ask(Request::Doctor { details: false }).await;
+    pages::result(
+        &r,
+        "/settings",
+        answers
+            .iter()
+            .flat_map(|answer| r.response(answer).0)
+            .collect(),
+    )
 }
 
 /// What a value is called: a language by its own name, the others from

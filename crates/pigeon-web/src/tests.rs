@@ -11,6 +11,8 @@ use tower::ServiceExt;
 
 use crate::{Answer, Backend, Web};
 
+#[path = "tests/doctor.rs"]
+mod doctor;
 #[path = "tests/folder_rules.rs"]
 mod folder_rules;
 #[path = "tests/health.rs"]
@@ -689,6 +691,7 @@ async fn the_pages_are_written_for_axe() {
         ("deleted", "/deleted"),
         ("file", "/file?path=%2Fg%2Ftarte.docx"),
         ("settings", "/settings"),
+        ("doctor", "/doctor"),
     ];
     for lang in ["en", "fr"] {
         let w = Web::new(Arc::new(Fixed), lang.parse().unwrap(), 4321);
