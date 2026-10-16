@@ -39,6 +39,26 @@ impl Backend for Fixed {
                     not_shared: Vec::new(),
                 })]
             }
+            pigeon_proto::Request::Capacity => vec![Response::Capacity(Box::new(
+                pigeon_proto::capacity::Report {
+                    group: "Family <space>".into(),
+                    at: "2026-10-16T06:00:00Z".into(),
+                    k: 1,
+                    current: 40,
+                    history: 0,
+                    suggestions: 18,
+                    overflow: None,
+                    configured: 58,
+                    short: true,
+                    machines: Vec::new(),
+                    proposals: vec![pigeon_proto::capacity::Proposal {
+                        id: "a".repeat(40),
+                        saved_at: "2026-10-16T05:00:00Z".into(),
+                        state: "rejected".into(),
+                        additional_bytes: 18,
+                    }],
+                },
+            ))],
             pigeon_proto::Request::Proposals => vec![Response::Proposals {
                 proposals: vec![Suggestion {
                     id: "c0ffee".into(),
@@ -691,6 +711,7 @@ async fn the_pages_are_written_for_axe() {
         ("deleted", "/deleted"),
         ("file", "/file?path=%2Fg%2Ftarte.docx"),
         ("settings", "/settings"),
+        ("space", "/space"),
         ("doctor", "/doctor"),
     ];
     for lang in ["en", "fr"] {

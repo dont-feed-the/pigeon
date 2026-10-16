@@ -245,6 +245,12 @@ report ([06 §6.3](06-status.md)).
   and free space, and declined suggestions by size and age, which `pigeon
   erase --suggestion ID` (§8.6) erases. Nothing expires by itself.
 
+The capacity view is implemented by `capacity_view` using the core capacity
+algebra: `status --capacity` and `/space` share distinct-key totals and signed
+disk report times. Extra-copy location observations have a five-second bound
+and remain unknown on incomplete evidence. Suggestions retain their size and
+age after a decline. Erase and purge remain the next implementation step.
+
 ## 8.10 Rebalancing
 
 At the lowest priority, a custodian drops, verified (§8.3), each key it

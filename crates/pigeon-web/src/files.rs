@@ -71,6 +71,7 @@ pub async fn files(
             }
         }
         @for f in &rows { (folder(&r, &root, f, &form.0)) }
+        p { a href="/space" { (r.id("space-title")) } }
         p { a href="/deleted" { (r.id("web-deleted")) } }
     };
     page(&r, "/files", &r.id("web-nav-files"), &body)

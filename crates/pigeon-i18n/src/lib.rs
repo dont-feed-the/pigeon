@@ -6,6 +6,7 @@
 //! 10 §10.6), and renders it at the edge with a [`Catalogue`]. [`ids`] lists
 //! every id; the completeness test checks it against every bundle.
 
+mod capacity;
 pub mod ids;
 pub mod lang;
 pub mod recovery;

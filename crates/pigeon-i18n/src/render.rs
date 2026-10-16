@@ -22,6 +22,11 @@ impl Renderer {
         Renderer { cat, now }
     }
 
+    /// This renderer's fixed observation time.
+    pub(crate) fn now(&self) -> i64 {
+        self.now
+    }
+
     /// Its catalogue.
     pub fn catalogue(&self) -> &Catalogue {
         &self.cat
@@ -319,6 +324,7 @@ impl Renderer {
             Response::Progress { message, .. } => (vec![self.text(message)], true),
             Response::Problem(p) => (self.problem(p), true),
             Response::Status(s) => (self.status(s), false),
+            Response::Capacity(report) => (crate::capacity::lines(self, report), false),
             Response::Health(h) => (self.status(&h.status), false),
             Response::Machines { machines } => {
                 (machines.iter().map(|m| self.machine(m)).collect(), false)

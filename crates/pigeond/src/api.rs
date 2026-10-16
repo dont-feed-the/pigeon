@@ -129,6 +129,7 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
     match request {
         Request::FolderRules { folder } => crate::folder_rules::list(d, folder.as_deref()),
         Request::SetFolderRule { folder, rule } => crate::folder_rules::set(d, &folder, rule).await,
+        Request::Capacity => crate::capacity_view::report(d).await,
         Request::Health => crate::health::report(d).await,
         Request::Create {
             name,

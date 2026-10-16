@@ -14,6 +14,8 @@ pub(crate) struct Snapshot {
     pub main: Option<String>,
     /// Every head retaining content in this reading.
     pub tips: Vec<String>,
+    /// The same admitted ref reading, preserving each retention namespace.
+    pub named: std::collections::BTreeMap<String, String>,
 }
 
 /// Read refs once, without silently ignoring a failed listing.
@@ -30,6 +32,7 @@ pub(crate) async fn snapshot(g: &Group) -> Result<Snapshot, Error> {
         .await?;
     let mut tips = Vec::new();
     let mut main = None;
+    let mut named = std::collections::BTreeMap::new();
     for line in refs.lines() {
         let Some((name, commit)) = line.split_once(' ') else {
             return Err(Error::Parse {
@@ -48,9 +51,10 @@ pub(crate) async fn snapshot(g: &Group) -> Result<Snapshot, Error> {
             || name.starts_with(crate::refound::ARCHIVE)
         {
             tips.push(commit.to_owned());
+            named.insert(name.to_owned(), commit.to_owned());
         }
     }
-    Ok(Snapshot { main, tips })
+    Ok(Snapshot { main, tips, named })
 }
 
 /// Retention heads, read without silently ignoring a failed ref listing.

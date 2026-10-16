@@ -90,6 +90,23 @@ pub const PROBLEMS: &[&str] = &[
 
 /// Every message of the catalogue.
 pub const MESSAGES: &[Entry] = &[
+    e("space-title", &[]),
+    e("space-snapshot", &["group", "when"]),
+    e(
+        "space-need",
+        &["copies", "current", "history", "suggestions"],
+    ),
+    e("space-offered", &["bytes"]),
+    e("space-overflow", &["bytes"]),
+    e("space-overflow-unknown", &[]),
+    e("space-short", &[]),
+    e("space-disk", &["used", "free", "limit", "reserve"]),
+    e("space-proposal", &["id", "state", "when", "bytes"]),
+    e("space-shared", &[]),
+    e("space-open", &[]),
+    e("space-adopted", &[]),
+    e("space-rejected", &[]),
+    e("space-withdrawn", &[]),
     e("state-local", &[]),
     e("state-published", &[]),
     e("state-protected", &[]),

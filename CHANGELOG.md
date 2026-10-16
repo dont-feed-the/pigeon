@@ -4,6 +4,12 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.17 — 2026-10-16
+
+### Added
+
+- `pigeon status --capacity` and the Space page show storage for current files, history and suggestions, each backup machine's latest report, and retained suggestions by age and additional size.
+
 ## 0.4.16 — 2026-10-16
 
 ### Fixed

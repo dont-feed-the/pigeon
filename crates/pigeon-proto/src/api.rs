@@ -27,6 +27,8 @@ pub enum Request {
     },
     /// Group health from accepted state and signed reports (ADR 0025).
     Health,
+    /// Read-only distinct-key storage need and signed disk observations.
+    Capacity,
     /// The first request of a connection: the client's protocol version.
     Hello {
         /// The client's [`crate::PROTOCOL_VERSION`].
@@ -300,6 +302,8 @@ pub enum Response {
     FolderRules(Box<crate::policy::Report>),
     /// Local group health, without an optional telemetry collector.
     Health(Box<crate::health::HealthReport>),
+    /// Required storage and each backup machine's reported capacity.
+    Capacity(Box<crate::capacity::Report>),
     /// The answer to `Hello`.
     Hello {
         /// `pigeond`'s [`crate::PROTOCOL_VERSION`].

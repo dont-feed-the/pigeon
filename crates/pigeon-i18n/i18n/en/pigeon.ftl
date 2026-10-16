@@ -515,3 +515,18 @@ web-folder-rule-default-admins = Leave all unchecked to let the admins decide.
 
 web-view-suggestion = Review suggested file
 suggestion-deletes-file = This suggestion deletes { $path }. The shared file stays unchanged until the suggestion is accepted.
+
+space-title = Backup storage
+space-need = Required storage for { $copies } backup copies: current files { $current } bytes; history { $history } bytes; suggestions { $suggestions } bytes.
+space-offered = Configured capacity for this content: { $bytes } bytes. Each backup computer counts for at most one copy, including computers with no recent storage report.
+space-overflow = Extra copies: { $bytes } bytes, from reported locations.
+space-overflow-unknown = Extra copies have not been checked.
+space-short = There is less than 25% spare configured backup capacity. Add another backup computer, or raise a storage limit that is below one copy. Each computer’s reported free disk space is shown below.
+space-disk = Stored { $used } bytes; free { $free } bytes; storage limit { $limit }; reserve { $reserve } bytes.
+space-proposal = Suggestion { $id }, { $state }, saved { $when }: { $bytes } additional bytes before backup copies.
+space-shared = Shared content counts once in the totals and can appear in several suggestion rows. Declined suggestions stay until you erase them.
+space-open = awaiting a decision
+space-adopted = accepted
+space-rejected = declined
+space-withdrawn = withdrawn
+space-snapshot = { $group }, checked at { $when }.

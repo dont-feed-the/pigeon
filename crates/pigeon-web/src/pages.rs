@@ -35,6 +35,7 @@ const STYLE: &str = "body{font-family:system-ui,sans-serif;max-width:46rem;margi
 padding:0 1rem;line-height:1.5;color:#1b1b1b}nav a{margin-right:1.2rem}\
 nav a[aria-current]{font-weight:bold}h1{font-size:1.5rem}li{margin:.3rem 0}\
 article{border-top:1px solid #ccc;padding:.5rem 0}form{display:inline-block;margin-right:1rem}\
+.capacity-details{overflow-wrap:anywhere}\
 textarea{max-width:100%;box-sizing:border-box}\
 .recovery-instructions{overflow-wrap:anywhere}.recovery-instructions p{margin:.25rem 0}\
 .recovery-code{overflow-wrap:anywhere;white-space:pre-wrap;font-size:.7rem}\

@@ -45,6 +45,7 @@ pub async fn settings(
     let body = html! {
         (list(&other))
         @for s in &rows { (setting(&r, s, &form.0)) }
+        p { a href="/space" { (r.id("space-title")) } }
         p { (r.id("status-freshness")) }
         (pausing(&r, &form.0))
         (crate::leave::form(&r, &form.0))

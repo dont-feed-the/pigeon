@@ -515,3 +515,18 @@ web-folder-rule-default-admins = Ne cochez personne pour laisser les administrat
 
 web-view-suggestion = Examiner le fichier suggéré
 suggestion-deletes-file = Cette suggestion supprime { $path }. Le fichier partagé reste inchangé tant que la suggestion n’est pas acceptée.
+
+space-title = Espace de sauvegarde
+space-need = Stockage nécessaire pour { $copies } copies de sauvegarde : fichiers actuels { $current } octets ; historique { $history } octets ; suggestions { $suggestions } octets.
+space-offered = Capacité configurée pour ce contenu : { $bytes } octets. Chaque ordinateur de sauvegarde compte pour une copie au maximum, même sans état de stockage récent.
+space-overflow = Copies supplémentaires : { $bytes } octets, selon les emplacements signalés.
+space-overflow-unknown = Les copies supplémentaires n’ont pas été vérifiées.
+space-short = La capacité de sauvegarde configurée a moins de 25 % de marge. Ajoutez un autre ordinateur de sauvegarde, ou augmentez une limite inférieure à une copie. L’espace disque libre signalé par chaque ordinateur est affiché ci-dessous.
+space-disk = Stockage utilisé { $used } octets ; libre { $free } octets ; limite { $limit } ; réserve { $reserve } octets.
+space-proposal = Suggestion { $id }, { $state }, enregistrée { $when } : { $bytes } octets supplémentaires avant les copies de sauvegarde.
+space-shared = Un contenu commun est compté une seule fois dans les totaux et peut apparaître dans plusieurs suggestions. Les suggestions refusées restent jusqu’à leur effacement.
+space-open = en attente d’une décision
+space-adopted = acceptée
+space-rejected = refusée
+space-withdrawn = retirée
+space-snapshot = { $group }, vérifié le { $when }.

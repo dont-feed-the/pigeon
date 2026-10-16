@@ -11,6 +11,7 @@ pub mod admission;
 pub mod api;
 mod archive_chain;
 pub mod asides;
+mod capacity_view;
 pub mod capture;
 pub mod capture_file;
 pub mod change;

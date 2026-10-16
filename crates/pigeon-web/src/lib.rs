@@ -35,6 +35,7 @@ mod machines;
 mod pages;
 mod recovery;
 mod settings;
+mod space;
 mod view;
 
 /// What a backend answers a request with: progress, then one result.
@@ -152,6 +153,7 @@ impl Web {
             .route("/suggestions", get(pages::suggestions))
             .route("/events", get(pages::events))
             .route("/files", get(files::files))
+            .route("/space", get(space::page))
             .route("/folder", get(files::folder_page))
             .route(
                 "/folder-rule",

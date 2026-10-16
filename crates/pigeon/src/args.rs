@@ -52,7 +52,10 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("invite [--admin] PERSON", "cmd-invite-person"),
     ("invite --backup-machine [NAME]", "cmd-invite"),
     ("join INVITATION [FOLDER] [--name NAME]", "cmd-join"),
-    ("status [PATH] [--not-shared]", "cmd-status"),
+    (
+        "status [PATH] [--not-shared] | status --capacity",
+        "cmd-status",
+    ),
     ("machines", "cmd-machines"),
     (
         "folder-rule [PATH [--owner PERSON | --add-only [--steward PERSON…] | --default]]",
@@ -167,6 +170,8 @@ enum Command {
         path: Option<String>,
         #[arg(long)]
         not_shared: bool,
+        #[arg(long, conflicts_with_all = ["path", "not_shared"])]
+        capacity: bool,
     },
     Machines,
     #[command(group(ArgGroup::new("rule").args(["owner", "add_only", "inherit"]).requires("path")))]
@@ -442,7 +447,10 @@ fn action(c: Command) -> Action {
             keep,
             name,
         }),
-        Command::Status { path, not_shared } => send(Request::Status {
+        Command::Status { capacity: true, .. } => send(Request::Capacity),
+        Command::Status {
+            path, not_shared, ..
+        } => send(Request::Status {
             path: path.map(|p| absolute(&p)),
             not_shared,
         }),

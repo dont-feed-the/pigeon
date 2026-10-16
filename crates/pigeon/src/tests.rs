@@ -13,6 +13,18 @@ fn line(args: &str) -> crate::args::Line {
 
 #[test]
 fn commands_map_to_requests() {
+    assert_eq!(
+        line("status --capacity").action,
+        Action::Send(Request::Capacity)
+    );
+    assert_eq!(
+        line("status some/path --capacity").action,
+        Action::Usage("status".into())
+    );
+    assert_eq!(
+        line("status --not-shared --capacity").action,
+        Action::Usage("status".into())
+    );
     let l = line("free docs --json");
     assert!(l.json);
     assert_eq!(
