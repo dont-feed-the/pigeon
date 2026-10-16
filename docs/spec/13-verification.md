@@ -42,6 +42,14 @@ trace checks retain their existing frequency. See
 checks the planned protocol; purge is not yet coded. Its smaller positive
 case stays in the fast set, alongside its negative protocol cases.
 
+`T_n31o5` and `T_n32o5` share the token proof but have separate checks of
+their constants and all four configured invariants. `AuthorityDecidersProof`
+establishes `DecidersCanAdopt` for decision/mixed policy and enabled Force,
+which covers the entire `Authority_mixed` contract. Those three graphs
+are audits. The other Authority contracts still run with TLC; the policy
+theorem does not establish their additional invariants. See
+[authority-proof.md](../authority-proof.md).
+
 | Model | Invariants; liveness | Specified in |
 |---|---|---|
 | `CaptureInstall` | `NoLoss`, `Journal`, `IndexHonest`, `CaptureFirst`, `NoOverwrite`, `DeletionKept`; `SavesCaptured`, `Converges` | [07 §7.5](07-capture-and-install.md), [07 §7.7](07-capture-and-install.md) |

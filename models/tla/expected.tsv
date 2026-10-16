@@ -12,8 +12,8 @@ T_idem	CustodyTokens	fast	violation:TokensNeverLost
 T_nononce	CustodyTokens	fast	violation:TokensNeverLost
 T_nonce	CustodyTokens	fast	pass
 T_n42o3	CustodyTokens	fast	pass
-T_n31o5	CustodyTokens	fast	pass
-T_n32o5	CustodyTokens	fast	pass
+T_n31o5	CustodyTokens	audit	pass
+T_n32o5	CustodyTokens	audit	pass
 T_n42o4	CustodyTokens	audit	pass
 Purge_full	Purge	fast	pass
 Purge_seals	Purge	fast	violation:KeepWins
@@ -105,7 +105,7 @@ Authority_decide4	Authority	full	pass
 Authority_faulty2	Authority	full	pass
 Authority_revoke2	Authority	full	pass
 Authority_proposal	Authority	fast	violation:DecidersCanAdopt
-Authority_mixed	Authority	fast	pass
+Authority_mixed	Authority	audit	pass
 Authority_noforce	Authority	fast	violation:DecidersCanAdopt
 Authority_fakeadopt	Authority	fast	violation:AdoptionHoldsContent
 Authority_base	Authority	fast	violation:AuthorisedContent

@@ -16,6 +16,7 @@ FIXED = (
     "models/tla/expected.tsv",
     "models/tla/costs.tsv",
     "scripts/check-proofs",
+    "scripts/check-authority-folds",
     "scripts/proof-inputs",
     "scripts/run-tlc",
     "scripts/tests/test_proof_inputs.py",

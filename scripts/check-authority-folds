@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+"""Compare Authority's function folds with the original recursive equations.
+
+Both models share every other definition. TLC explores either transition
+relation, checking that each transition and every stored history view agree.
+This is finite migration evidence, not an unbounded equivalence theorem.
+"""
+
+import argparse
+import importlib.machinery
+import importlib.util
+import re
+import shutil
+import sys
+import tempfile
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+ROOT = Path(__file__).resolve().parent.parent
+MODELS = ROOT / "models/tla"
+
+
+def reference(source):
+    fixture = (MODELS / "reference/AuthorityRecursiveFolds.tla").read_text()
+    for name, following in (("ApplyAll", "Change"), ("FoldUpTo", "Fold"), ("CountUpTo", "Counting")):
+        old = fixture.split(f"(* BEGIN {name} *)\n", 1)[1].split(f"\n(* END {name} *)", 1)[0]
+        source, count = re.subn(rf"^{name}\(.*?(?=^{following}\()", lambda _: old + "\n",
+                                source, flags=re.M | re.S)
+        if count != 1:
+            raise RuntimeError(f"{name}: fold boundary changed")
+    return source.replace("MODULE Authority ", "MODULE AuthorityRecursive ", 1)
+
+
+def check(out, mutant=False):
+    loader = importlib.machinery.SourceFileLoader("authority_tlc", str(ROOT / "scripts/run-tlc"))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    tlc = importlib.util.module_from_spec(spec)
+    loader.exec_module(tlc)
+    out.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as temp:
+        work = Path(temp)
+        for path in MODELS.glob("*.tla"):
+            shutil.copy2(path, work / path.name)
+        original = (MODELS / "Authority.tla").read_text()
+        (work / "AuthorityRecursive.tla").write_text(reference(original))
+        if mutant:
+            # Omitting the newest commit changes the interpreted roster.
+            start, end = original.index("FoldUpTo("), original.index("\nFold(")
+            part = original[start:end]
+            if part.count("i + n - 1") != 1:
+                raise RuntimeError("fold mutation site changed")
+            original = original[:start] + part.replace("i + n - 1", "i + n - 2") + original[end:]
+            (work / "Authority.tla").write_text(original)
+        (work / "AuthorityEquivalent.tla").write_text('''---- MODULE AuthorityEquivalent ----
+EXTENDS Authority
+Old == INSTANCE AuthorityRecursive
+BothNext == Next \\/ Old!Next
+BothSpec == Init /\\ [][BothNext]_vars
+HistoryViewsAgree == \\A x \\in Ids : R(x) = Old!R(x) /\\ TreeOf({x}) = Old!TreeOf({x})
+SameTransitions == [][Next <=> Old!Next]_vars
+====
+''')
+        (work / "AuthorityEquivalent.cfg").write_text('''CONSTANTS MaxCommits = 2
+          MaxHostile = 1
+          Hostile = TRUE
+          Ops = {"capture", "revise", "adopt", "rejected", "withdrawn", "merge", "fetch", "transfer", "remove", "hcommit", "hmerge", "hadd", "hdecide"}
+          Revocation = "revoke"
+          DecidersAt = "decision"
+          ForceAdopt = TRUE
+          DecisionMerge = TRUE
+          Rule3 = "every"
+          BaseOf = "accepted"
+          DecisionRule = "deciders"
+SPECIFICATION BothSpec
+INVARIANT HistoryViewsAgree
+PROPERTY SameTransitions
+CHECK_DEADLOCK FALSE
+''')
+        got, output = tlc.run(tlc.tlc_jar(), "AuthorityEquivalent", "AuthorityEquivalent",
+                              "java", "1", "1g", work)
+        name = "mutant" if mutant else "equivalence"
+        (out / f"{name}.log").write_text(output)
+        expected = "violation:HistoryViewsAgree" if mutant else "pass"
+        if got != expected:
+            raise RuntimeError(f"{name}: expected {expected}, got {got}; see {out}")
+        print(f"{name}: {got}", flush=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--out", type=Path, default=ROOT / "target/formal-proofs/authority-folds")
+    args = parser.parse_args()
+    check(args.out.resolve())
+    check(args.out.resolve(), mutant=True)
+
+
+if __name__ == "__main__":
+    main()

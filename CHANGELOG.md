@@ -4,6 +4,14 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## Unreleased
+
+### Changed
+
+- Routine verification uses checked proofs for two more token hand-off
+  cases and for suggestion adoption permissions. Their large finite checks
+  remain available in the weekly audit and on request.
+
 ## 0.5.8 — 2026-10-16
 
 ### Changed

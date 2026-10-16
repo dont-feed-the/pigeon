@@ -63,6 +63,13 @@ detected mutations. Smaller positive and negative token cases still run
 with TLC on every PR/main push. The large unmodified case remains a weekly
 and manual independent audit.
 
+The same theorem now covers the actual `T_n31o5` and `T_n32o5`
+configurations too. Each gets its own configured-property theorem and
+assumption check, while the root proof runs once. The smaller `T_nonce`
+and `T_n42o3` cases, plus both negative designs, stay in routine TLC.
+The two additional audits remove 95.0 + 116.7 seconds of traversal from
+the completed CI baseline; they add only two property/assumption checks.
+
 Fresh local checks on 16 October 2026 used TLAPS 1.5.0, TLC 1.7.4, Java 21,
 Linux x86_64 and four available CPUs. TLAPS used two threads; another large
 TLC exploration was running concurrently. These are single samples with

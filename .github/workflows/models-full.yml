@@ -79,11 +79,15 @@ jobs:
         run: scripts/run-tlc --full --balanced --shard "$SHARD" 4
 
   audits:
-    name: independent TLC audits of proved configurations
+    name: independent TLC audits of proved configurations (shard ${{ matrix.shard }})
     needs: [fresh, proofs]
     if: needs.fresh.outputs.audit == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -95,7 +99,9 @@ jobs:
           path: ~/.cache/pigeon
           key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
       - name: exhaustive cross-checks using a separate model checker
-        run: scripts/run-tlc --audit-only
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: scripts/run-tlc --audit-only --balanced --shard "$SHARD" 2
 
   code-traces:
     name: ${{ github.event_name == 'push' && 50 || 200 }} runs of pigeon-core checked by TLC
