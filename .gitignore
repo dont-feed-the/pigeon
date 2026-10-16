@@ -1,6 +1,7 @@
 /target
 states/
-.tlacache/
-_apalache-out/
 *.out
 .hegel/
+__pycache__/
+.tlacache/
+_apalache-out/

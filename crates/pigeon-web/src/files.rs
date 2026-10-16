@@ -37,9 +37,39 @@ pub async fn files(
             a => other.extend(r.response(&a).0),
         }
     }
+    let mut root_files = Vec::new();
+    if !root.is_empty() {
+        for answer in web
+            .ask(Request::Files {
+                folder: root.clone(),
+            })
+            .await
+        {
+            match answer {
+                Response::Files { files, .. } => {
+                    root_files.extend(files.into_iter().filter(|f| !f.path.contains('/')))
+                }
+                Response::Progress { .. } => {}
+                a => other.extend(r.response(&a).0),
+            }
+        }
+    }
     let body = html! {
-        @if rows.is_empty() && other.is_empty() { p { (r.id("folders-none")) } }
+        @if rows.is_empty() && root_files.is_empty() && other.is_empty() { p { (r.id("files-none")) } }
         (list(&other))
+        @if !root_files.is_empty() {
+            h2 { (r.id("web-root-files")) }
+            ul {
+                @for f in &root_files {
+                    @let full = std::path::Path::new(&root).join(&f.path);
+                    li {
+                        a href=(format!("/file?path={}", enc(&full.to_string_lossy()))) {
+                            (r.catalogue().format(&pigeon_i18n::Message::new("file-row").arg("path", f.path.clone()).arg("state", r.state(f.state))))
+                        }
+                    }
+                }
+            }
+        }
         @for f in &rows { (folder(&r, &root, f, &form.0)) }
         p { a href="/deleted" { (r.id("web-deleted")) } }
     };

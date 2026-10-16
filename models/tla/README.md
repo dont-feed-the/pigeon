@@ -9,19 +9,19 @@ What each configuration of `expected.tsv` shows, and what each model leaves
 out. This is evidence; what the models must prove is stated in spec
 [13 §13.2](../../docs/spec/13-verification.md), and the invariants it cites
 are normative. `scripts/run-tlc` runs the configurations: the fast set in
-`ci`, the fast/full sets in `models-full` (ADR 0026). Both workflows first
+`ci`, the fast/full sets nightly and on release tags in `models-full` (ADR 0026). Both workflows first
 run `scripts/check-proofs`: parameterized TLAPS safety proofs, checks that
 their assumptions cover the actual configurations, and mutations that must
 fail. The proof-covered `AnnexDrop_design4` row is an `audit`: TLC still
-runs it weekly and by hand (`scripts/run-tlc --audit`), or when explicitly
-named, but no longer on every model push. See
+runs it on Monday's nightly run, release tags and by hand (`scripts/run-tlc --audit`), or when explicitly
+named, but no longer on every nightly run. See
 [the proof scope and tool measurements](../../docs/model-proofs.md).
 State counts are those of
 the run that last changed a model.
 
 The full workflow partitions `expected.tsv` over four runners using
 `scripts/run-tlc --full --shard INDEX 4` (indices 0–3), adding `--audit`
-weekly and by hand. Every selected row runs once;
+on Monday's nightly run, release tags and by hand. Every selected row runs once;
 each model keeps TLC's automatic worker count. Trace validation uses
 `scripts/check-code-traces --seeds 200 --jobs 4 --heap 2g`: four independent
 JVMs on one runner, each with at most a 2 GiB heap. Trace workers keep separate

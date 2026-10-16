@@ -1,21 +1,25 @@
 # The safety slice's scenarios S1-S12 (13 §13.12), written in pigeon-lab's
 # EDSL, on GitHub's Linux and macOS runners, which replace a run on real
-# hardware. Every push runs the scenario laws and the model on both, checks
+# hardware. Every push to main or a release tag runs the scenario laws and the model on both, checks
 # each runner's isolation (loop-mounted ext4 and mount namespaces with sudo
 # on Linux, APFS disk images on macOS), then runs every scenario against
 # the lab build of pigeond and pigeon and hands the merged trace logs to
 # TLC. S5 runs separately from the remaining scenarios. The s9-random job
-# runs 50 random S9 crash schedules per runner, and models-full.yml runs 1000.
+# runs 50 random S9 crash schedules per runner on release tags and by hand,
+# and models-full.yml runs 200 on tags and 1000 nightly.
 # A scenario marked blocked in pigeon-lab's slice.rs reports
 # its reason and does not fail the job, until it passes.
 name: slice
 
 on:
   push:
+    branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: slice-${{ github.ref }}
@@ -70,7 +74,9 @@ jobs:
         with:
           path: ~/.cache/pigeon
           key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: restore main's Rust cache
+        id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry/index
@@ -95,6 +101,16 @@ jobs:
             --features pigeond/lab,pigeond/tla-trace
           mkdir -p target/lab/bin
           cp target/release/pigeond target/release/pigeon target/release/git-annex-p2p-iroh target/lab/bin/
+      - name: save the Rust cache (main only)
+        if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true' && matrix.scenarios == 'rest'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ steps.cache.outputs.cache-primary-key }}
       - name: selected scenarios against the real binaries
         env:
           SCENARIOS: ${{ matrix.scenarios }}
@@ -118,13 +134,15 @@ jobs:
           path: target/lab/out
           if-no-files-found: ignore
 
-  # 13 §13.12's 50 random S9 crash schedules per push, in two shards of 25
+  # 13 §13.12's 50 random S9 crash schedules per release, in two shards of 25
   # beside the slice job: one schedule takes 50-90 s, which does not fit
   # the slice job's 90 minutes. S9-random left slice::BLOCKED once both
   # runners passed every shard (run 38660637841, f5dddd6): a failure fails
   # the push.
   s9-random:
     name: S9, 25 random crash schedules (${{ matrix.os }}, shard ${{ matrix.shard }})
+    # Release tags and by hand; nightly, models-full.yml runs 1000 schedules.
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
@@ -165,7 +183,9 @@ jobs:
         with:
           path: ~/.cache/pigeon
           key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: restore main's Rust cache
+        id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry/index

@@ -21,7 +21,8 @@
 
 Each protocol has a model in `models/tla/` (ADR 0008).
 `models/tla/expected.tsv` lists every configuration with its set (fast in
-`ci`, full in `models-full`, audit weekly and by hand) and its expected verdict; `scripts/run-tlc`
+`ci`, full in `models-full`, audit on Mondays, release tags and by hand)
+and its expected verdict; `scripts/run-tlc`
 runs them; `models/tla/README.md` says what each shows and leaves out. The
 invariants this specification cites are normative.
 
@@ -168,8 +169,8 @@ rerun with bare custodian repositories.
 Each workflow of `.github/workflows/` says in its header what it runs:
 `ci.yml` (the `scripts/check-*` rules, clippy, the Fluent check, `cargo
 deny`) on pull requests, main pushes and release tags; `lab.yml` and
-`slice.yml` (§13.12) on every push; `models-full.yml`
-when a model changes, weekly and by hand, with E17 on a self-hosted HDD
+`slice.yml` (§13.12) on main and release tags; `models-full.yml`
+on release tags, nightly and by hand, with E17 on a self-hosted HDD
 runner **[no ADR: runner]**. A lab
 platform difference prints `SKIP (platform)` with its reason, never a
 dropped check. TLC is pinned by SHA-256, actions by commit; permissions are
@@ -362,7 +363,7 @@ locks (11 §11.4).
 | S6 | a save racing `keep`'s install wins ([07 §7.5](07-capture-and-install.md)) |
 | S7 | a custodian's image destroyed: not safe; `remove-computer`, a new custodian, repair in [08 §8.9](08-custody-loops.md)'s order |
 | S8 | a full custodian refuses admission and says why; a full laptop refuses a restore before it starts |
-| S9 | `pigeond` crashed at each named point of capture, install, place and free: nothing lost or duplicated; 50 random schedules per push; `models-full` runs 200 when a model or the runner changes, 1000 weekly and by hand |
+| S9 | `pigeond` crashed at each named point of capture, install, place and free: nothing lost or duplicated; 50 random schedules per release tag; `models-full` runs 200 per release tag, 1000 nightly and by hand |
 | S10 | a fresh laptop recovers from the custodians with the recovery sheet (ADR 0047); the keys, metadata and authority it needed are listed |
 | S11 | steady and peak disk use per device: folders, `.git`, annex objects, `.git/annex/tmp`, pending history ([07 §7.8](07-capture-and-install.md)), pigeon's state, temporary files |
 | S12 | a nearly full custodian takes what fits in its room above the reserve, says `no-capacity` without being full, and so does the laptop from its status report ([06 §6.3](06-status.md)); it takes the rest once room returns ([08 §8.9](08-custody-loops.md), issue #13) |

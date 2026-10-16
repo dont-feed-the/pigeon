@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -48,7 +49,7 @@ jobs:
         run: |
           d=$RUNNER_TEMP/pigeon && mkdir -p "$d/bin"
           cp target/release/pigeon target/release/pigeond target/release/git-annex-p2p-iroh \
-            packaging/pigeon-install packaging/install-git-annex "$d/bin/"
+            packaging/pigeon-install packaging/install-git-annex packaging/pigeon-service "$d/bin/"
           cp README.md LICENSE-MIT LICENSE-APACHE "$d/"
           [ "$("$d/bin/pigeon" --version)" = "pigeon ${TAG#v}" ]
           tar -C "$d" -czf "pigeon-$TAG-${{ matrix.platform }}.tar.gz" .
@@ -61,9 +62,10 @@ jobs:
     name: install, then publish
     needs: [git-annex, build]
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 150
     permissions:
       contents: write
+      actions: read
     env:
       TAG: ${{ github.ref_name }}
       GH_TOKEN: ${{ github.token }}
@@ -81,6 +83,8 @@ jobs:
           cp "$a/git-annex-pigeon-macos-latest/git-annex-pigeon-macos-latest.tar.gz" "$d/git-annex-pigeon-macos-arm64.tar.gz"
           (cd "$d" && sha256sum -- *.tar.gz > SHA256SUMS)
           cp packaging/pigeon-install "$d/"
+          packaging/homebrew-formula --tag "$TAG" --checksums "$d/SHA256SUMS" \
+            --repository "$GITHUB_REPOSITORY" > "$d/pigeon.rb"
           ls -l "$d" && cat "$d/SHA256SUMS" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: pigeon-install installs them, and installs nothing twice
         run: |
@@ -92,7 +96,48 @@ jobs:
           [ "$("$p/git-annex/bin/git-annex" version --raw)" = "$PIGEON_VERSION" ]
           grep -qx "Exec=\"$p/bin/pigeon\" open" ~/.local/share/applications/pigeon.desktop
           sh "$PIGEON_RELEASES/download/$TAG/pigeon-install" --prefix "$p" --no-service | grep -q 'already installed'
+          mkdir -p "$p/data"
+          echo keep > "$p/data/uninstall-proof"
+          sh "$p/bin/pigeon-install" --prefix "$p" --no-service --uninstall
+          test ! -d "$p/bin"
+          grep -qx keep "$p/data/uninstall-proof"
+      - name: the real backup service starts as pigeon and uninstall keeps its key
+        run: |
+          p=/opt/pigeon-release-test
+          sudo env PIGEON_RELEASES="$RUNNER_TEMP/releases" \
+            sh packaging/pigeon-install --system --prefix "$p" --version "$TAG"
+          for i in $(seq 60); do
+            if sudo test -S /run/pigeon/pigeond.sock; then break; fi
+            sleep 1
+          done
+          sudo env PIGEON_SOCKET=/run/pigeon/pigeond.sock "$p/bin/pigeon" --json doctor
+          test "$(stat -c %U /var/lib/pigeon/device-key)" = pigeon
+          sudo sh "$p/bin/pigeon-install" --system --prefix "$p" --uninstall
+          test ! -d "$p/bin"
+          sudo test -s /var/lib/pigeon/device-key
+      - name: the tag's CI, lab, slice and reach must pass before publication
+        run: scripts/wait-release-checks --repository "$GITHUB_REPOSITORY" --sha "$GITHUB_SHA" --tag "$TAG"
       - name: the release
         run: |
           d=$RUNNER_TEMP/releases/download/$TAG
-          gh release create "$TAG" --title "pigeon $TAG" --generate-notes --latest "$d"/*
+          case "${TAG#v}" in
+            *-*) set -- --prerelease --latest=false ;;
+            *) set -- --latest ;;
+          esac
+          gh release create "$TAG" --title "pigeon $TAG" --generate-notes "$@" "$d"/*
+      - name: update the Homebrew tap after publication
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: |
+          # Only the formula changes. Preserve concurrent changes on main.
+          cp "$RUNNER_TEMP/releases/download/$TAG/pigeon.rb" "$RUNNER_TEMP/pigeon.rb"
+          git fetch origin main
+          git checkout -B homebrew-release origin/main
+          mkdir -p Formula
+          cp "$RUNNER_TEMP/pigeon.rb" Formula/pigeon.rb
+          if ! git diff --quiet -- Formula/pigeon.rb; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add Formula/pigeon.rb
+            git commit -m "Homebrew: publish $TAG"
+            git push origin HEAD:main
+          fi

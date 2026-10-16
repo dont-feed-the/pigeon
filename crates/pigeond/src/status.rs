@@ -11,7 +11,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use pigeon_core::headline::{Level, headline, version_level};
+use pigeon_core::headline::{Level, checked_at, headline, version_level};
 use pigeon_core::roster::Role as DeviceRole;
 use pigeon_core::state::{Custodian, Reason, Settings, State, Version, rank, state};
 use pigeon_core::time::{Span, Time};
@@ -198,6 +198,16 @@ fn reason(s: &State<String>, k: usize, names: &BTreeMap<String, String>) -> Opti
                 ),
             ],
         ),
+        Reason::TooFewCustodians { have, k } => msg(
+            "why-too-few-backups",
+            &[
+                (
+                    "have",
+                    Arg::Number(i64::try_from(*have).unwrap_or(i64::MAX)),
+                ),
+                ("need", Arg::Number(i64::try_from(*k).unwrap_or(i64::MAX))),
+            ],
+        ),
         _ => msg(
             "why-safe-copies",
             &[
@@ -218,6 +228,9 @@ pub(crate) fn worst<'a>(states: impl Iterator<Item = &'a State<String>>) -> api:
 
 /// The answer to `Status` for the versions under `prefix`.
 pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> StatusReport {
+    let pending = crate::capture::pending(g, prefix).await;
+    let pending_unreadable = pending.is_err();
+    let pending = pending.unwrap_or_default();
     let (observed, retained) = if prefix.is_empty() {
         match crate::retention::snapshot(g).await {
             Ok(snapshot) => {
@@ -253,19 +266,40 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
         .iter()
         .map(|s| version_level(s, Span::hours(1), GRACE, &settings, Time(now)))
         .collect();
-    let level = headline(
+    let mut level = headline(
         observed
             .iter()
             .map(|o| o.level)
             .chain(historical_levels.iter().copied()),
     );
-    let unsafe_files = observed.iter().filter(|o| o.level != Level::Safe).count()
+    let unsafe_files = observed
+        .iter()
+        .filter(|o| o.level != Level::Safe && !pending.contains(&o.path))
+        .count()
+        + pending.len()
         + historical_levels
             .iter()
             .filter(|l| **l != Level::Safe)
             .count();
     let files = Arg::Number(i64::try_from(unsafe_files).unwrap_or(i64::MAX));
-    let last = g.lock().heard.values().max().copied().unwrap_or(now);
+    let backups = g
+        .roster()
+        .map(|doc| {
+            doc.roster
+                .devices
+                .values()
+                .filter(|d| d.role == DeviceRole::Custodian)
+                .count()
+        })
+        .unwrap_or(0);
+    let too_few_backups = unsafe_files > 0 && backups < k;
+    if too_few_backups && level < Level::NotSafeYet {
+        level = Level::NotSafeYet;
+    } else if !pending.is_empty() && level < Level::Working {
+        level = Level::Working;
+    }
+    let last =
+        checked_at(observed.iter().map(|o| &o.state).chain(retained.iter())).map_or(now, |at| at.0);
     let full = disk_full(g);
     let (mut lost, shortfall) = {
         let k = g.lock();
@@ -276,6 +310,7 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
     let held_table = crate::held_file::read(g);
     let (held, held_names) = (held_table.held().len(), held_table.names().len());
     let level = if history_unreadable
+        || pending_unreadable
         || full
         || held > 0
         || held_names > 0
@@ -289,6 +324,7 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
     };
     let name = |d: &str| Arg::Text(names.get(d).cloned().unwrap_or_else(|| d.to_owned()));
     let headline = match (level, &shortfall) {
+        _ if pending_unreadable => msg("headline-checking", &[]),
         _ if full => msg("headline-disk-full", &[]),
         _ if held > 0 => msg(
             "headline-held",
@@ -323,6 +359,14 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
                 )
             }
         },
+        _ if !pending.is_empty() && level != Level::NeedsYou => msg(
+            "headline-capturing",
+            &[(
+                "files",
+                Arg::Number(i64::try_from(pending.len()).unwrap_or(i64::MAX)),
+            )],
+        ),
+        _ if too_few_backups && level != Level::NeedsYou => msg("headline-too-few-backups", &[]),
         (level, None) => match level {
             Level::Safe => msg("headline-safe", &[("ago", Arg::Text(rfc3339(last)))]),
             Level::Working => msg("headline-working", &[("files", files)]),
@@ -333,10 +377,15 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
             Level::NotSafeYet | Level::NeedsYou => msg("headline-not-safe", &[("files", files)]),
         },
     };
-    let worst = worst(observed.iter().map(|o| &o.state).chain(retained.iter()));
+    let worst = if pending.is_empty() {
+        worst(observed.iter().map(|o| &o.state).chain(retained.iter()))
+    } else {
+        api::State::Local
+    };
     let asked = !prefix.is_empty();
-    let versions = observed
+    let mut versions: Vec<VersionStatus> = observed
         .iter()
+        .filter(|o| !pending.contains(&o.path))
         .filter(|o| asked || !matches!(o.state, State::Protected(_)))
         .map(|o| VersionStatus {
             path: o.path.clone(),
@@ -351,6 +400,14 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
             reason: reason(&o.state, k, &names),
         })
         .collect();
+    versions.extend(pending.into_iter().map(|path| VersionStatus {
+        path,
+        number: 1,
+        saved_at: rfc3339(now),
+        state: api::State::Local,
+        observed_at: None,
+        reason: Some(msg("why-capturing", &[])),
+    }));
     let not_shared = if not_shared {
         g.lock()
             .not_shared

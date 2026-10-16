@@ -11,6 +11,9 @@ use tower::ServiceExt;
 
 use crate::{Answer, Backend, Web};
 
+#[path = "tests/usability.rs"]
+mod usability;
+
 struct Fixed;
 
 impl Backend for Fixed {
@@ -379,7 +382,7 @@ async fn a_setting_is_shown_and_saved_with_the_sessions_form_token() {
         .unwrap();
     assert_eq!(ok.status(), StatusCode::OK);
     let text = body(ok).await;
-    assert!(text.contains("language is now fr."), "{text}");
+    assert!(text.contains("Language: Français."), "{text}");
 }
 
 /// The form token of a page.

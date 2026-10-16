@@ -27,6 +27,7 @@ use pigeon_i18n::Catalogue;
 mod actions;
 mod files;
 mod held;
+mod join;
 mod leave;
 mod machines;
 mod pages;
@@ -138,6 +139,8 @@ impl Web {
     pub fn router(self: &Arc<Web>) -> Router {
         Router::new()
             .route("/", get(pages::home))
+            .route("/join", get(join::setup).post(join::join))
+            .route("/create", post(join::create))
             .route("/machines", get(machines::machines))
             .route("/machines/remove", post(machines::remove))
             .route("/machines/invite", post(machines::invite))

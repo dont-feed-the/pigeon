@@ -15,7 +15,7 @@ and the real storage boundaries is still necessary.
 ## Decision
 
 - Check `CaptureTransactionProof` and `AnnexDropProof` with pinned TLAPS
-  1.5.0 on each pull request and model push. Import the existing model
+  1.5.0 on each pull request and main push. Import the existing model
   actions; do not maintain a separate proof implementation of the protocol.
 - Check all proof obligations from scratch, reject omitted proofs, and
   require the `Safety` theorem. Check mutations that remove safety guards.
@@ -25,7 +25,8 @@ and the real storage boundaries is still necessary.
   TLAPS trusts imported theorems. Unsupported assumptions or claims fail
   before a finite check can be moved out of routine CI.
 - Move only `AnnexDrop_design4`, covered by the parameterized no-expiry
-  proof, to an audit set: scheduled/manual TLC and explicit local runs.
+  proof, to an audit set: Monday's nightly run, release tags, manual TLC and
+  explicit local runs.
   Other safety, negative, liveness, trace, law, contract and fault-injection
   checks keep their frequency. Proofs are prerequisites of the model jobs.
 - Keep Apalache 0.62.4 as an opt-in, reproducible benchmark and induction

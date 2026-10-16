@@ -22,6 +22,15 @@ level-not-checked = Pas vérifié récemment
 ## Titres : quoi, puis pourquoi et la suite (ux.md §4)
 
 headline-safe = Tout est en sécurité. Vérifié { $ago }.
+headline-capturing =
+    { $files ->
+        [one] Vérification d'un fichier modifié ; il n'est pas encore en sécurité.
+       *[other] Vérification de { $files } fichiers modifiés ; ils ne sont pas encore en sécurité.
+    }
+headline-checking = Le dossier local n'a pas pu être vérifié. Lancez : pigeon doctor
+headline-too-few-backups = Pas encore en sécurité : ajoutez un ordinateur de sauvegarde.
+why-capturing = Cette modification attend d'être enregistrée et copiée sur les ordinateurs de sauvegarde.
+why-too-few-backups = { $have } ordinateurs de sauvegarde sur { $need } sont configurés. Pour en ajouter un : pigeon invite --backup-machine
 headline-not-safe =
     { $files ->
         [one] { $files } fichier n'est pas encore en sécurité.
@@ -204,7 +213,7 @@ problem-commit-malformed = Une modification venant de { $machine } est mal form�
 problem-commit-waits = Une modification venant de { $machine } attend une version plus récente de pigeon ({ $commit }).
 problem-repository-lost = Les fichiers de { $machine } ont été perdus ou remplacés.
 problem-daemon-not-running = pigeon ne tourne pas sur cet ordinateur.
-hint-daemon-not-running = Démarrez-le, puis vérifiez avec : pigeon doctor
+hint-daemon-not-running = Lancez pigeon open pour le démarrer, puis vérifiez avec : pigeon doctor
 problem-version-mismatch = Cette commande pigeon et le pigeon qui tourne ne sont pas de la même version.
 hint-version-mismatch = Redémarrez pigeon.
 problem-not-installed = Ce pigeon n'a pas été installé depuis une version publiée ; il ne peut pas se mettre à jour lui-même.
@@ -247,6 +256,21 @@ web-decline-note = Pourquoi (facultatif)
 web-back = Retour
 web-form-expired = Cette page n'est plus à jour. Rechargez-la et réessayez.
 web-nav-files = Fichiers
+web-root-files = Fichiers dans le dossier partagé
+web-setup = Rejoindre ou créer un groupe
+web-setup-help = Demandez une invitation à un membre du groupe, ou créez un groupe pour votre famille ou votre équipe. Choisissez un chemin de dossier absolu sur cet ordinateur. Un ordinateur de sauvegarde n'a pas besoin de dossier partagé.
+web-join = Rejoindre le groupe
+web-create = Créer un groupe
+web-invitation = Invitation
+web-invitation-ready = Invitation prête
+web-invite-handoff = Envoyez cette invitation à la personne qui rejoint le groupe. Sur l'autre ordinateur, installez et ouvrez pigeon, choisissez Rejoindre ou créer un groupe, puis collez le code dans les 24 heures. Gardez cet ordinateur connecté jusqu'à la fin de l'adhésion.
+web-invitation-code = Code d'invitation
+web-command-line = Instructions en ligne de commande
+web-local-folder = Dossier sur cet ordinateur
+web-computer-name = Nom de cet ordinateur
+web-group-name = Nom du groupe
+web-backup-copies = Nombre d'ordinateurs de sauvegarde nécessaires à la sécurité
+status-freshness = Une vérification de sécurité est récente pendant une heure. Si aucun ordinateur de sauvegarde n'a donné de nouvelles depuis une heure, pigeon indique que la vérification n'est plus récente. Cela ne signifie pas que les fichiers sont perdus. Un ordinateur silencieux pendant 24 heures ne compte plus parmi les copies de sauvegarde. Une nouvelle modification peut afficher Envoi pendant dix minutes ; elle n'est en sécurité que lorsque suffisamment d'ordinateurs de sauvegarde la conservent.
 web-keep = Garder sur cet ordinateur
 web-free = Libérer l'espace
 folders-none = Le groupe n'a encore aucun dossier.
@@ -262,6 +286,7 @@ folder-row-freed =
     }
 web-nav-settings = Réglages
 web-save = Enregistrer
+web-setting-saved = { $key } : { $value }.
 setting-row = { $key } = { $value }
 setting-changed = { $key } vaut maintenant { $value }.
 setting-language = Langue
@@ -378,3 +403,5 @@ drop-done = { $files } fichiers masqués, { $dropped } contenus retirés de cet 
 confirm-drop = Retirer quand même la copie de cet ordinateur ? Ce qu'aucune autre machine n'a est perdu. [o/N]
 cmd-view = Ouvrir une copie en lecture seule d'une version d'un fichier, hors du dossier
 view-ready = Une copie en lecture seule est dans { $path } ; elle est supprimée après sept jours.
+
+problem-join-history-unverified = Pigeon n’a pas pu vérifier l’historique de ce groupe. Demandez à la personne qui vous a invité de mettre pigeon à jour et de vous envoyer une nouvelle invitation.

@@ -53,9 +53,9 @@ The proof job runs before the fast and full model jobs. Only
 `AnnexDrop_design4` moves from the routine full set to `audit`: the proof
 covers that instance and all larger finite custodian sets, every feasible K
 and every natural get bound. The same finite instance still runs with TLC
-weekly, by hand, and when explicitly named. This retains an independent
+on Monday's nightly run, release tags, by hand, and when explicitly named. This retains an independent
 finite cross-check while removing a redundant graph traversal from each
-model push.
+routine nightly run.
 
 All other model frequencies remain. In particular, `AnnexDrop_design` and
 `AnnexDrop_gets2` have expiry enabled; the ranked and deliberately unsafe
