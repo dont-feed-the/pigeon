@@ -235,24 +235,23 @@ fn reason(s: &State<String>, k: usize, names: &BTreeMap<String, String>) -> Opti
         _ => return None,
     };
     Some(match r {
-        Reason::CustodianOffline(who, since) => msg(
-            "why-machine-offline",
-            &[
-                (
-                    "machine",
-                    Arg::Text(
-                        who.iter()
-                            .map(|d| names.get(d).cloned().unwrap_or_else(|| d.clone()))
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                    ),
+        Reason::CustodianOffline(who, since) => {
+            let machine = Arg::Text(
+                who.iter()
+                    .map(|d| names.get(d).cloned().unwrap_or_else(|| d.clone()))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            );
+            // Never heard from, as on a computer that has just joined: no
+            // time to say it went offline at.
+            match since {
+                Some(t) => msg(
+                    "why-machine-offline",
+                    &[("machine", machine), ("since", Arg::Text(rfc3339(t.0)))],
                 ),
-                (
-                    "since",
-                    Arg::Text(since.map_or_else(String::new, |t| rfc3339(t.0))),
-                ),
-            ],
-        ),
+                None => msg("why-machine-not-heard", &[("machine", machine)]),
+            }
+        }
         Reason::TooFewCustodians { have, k } => msg(
             "why-too-few-backups",
             &[

@@ -181,6 +181,7 @@ impl Web {
     /// The routes, behind the checks of the module's header.
     pub fn router(self: &Arc<Web>) -> Router {
         self.pages()
+            .fallback(pages::not_found)
             .route_layer(middleware::from_fn_with_state(self.clone(), session))
             .route("/login", get(login))
             .layer(middleware::from_fn_with_state(self.clone(), same_origin))

@@ -200,6 +200,11 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
                     "invitation",
                     &[("code", text(&code)), ("who", text(who(custodian)))],
                 )],
+                Err("device-name-taken") => vec![problem(
+                    "device-name-taken",
+                    &[("name", text(name.as_deref().unwrap_or_default().trim()))],
+                    None,
+                )],
                 Err(code) => vec![problem(code, &[], None)],
             }
         }
@@ -209,6 +214,10 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             name,
             ..
         } => {
+            if let Some(f) = folder.as_deref().filter(|f| !Path::new(f).is_absolute()) {
+                return vec![problem("folder-not-absolute", &[("folder", text(f))], None)];
+            }
+            let invitation = pigeon_proto::join::invitation(&invitation);
             let custodian =
                 crate::invite::decode(&invitation).is_some_and(|i| i.role == "custodian");
             match crate::invite::join(d, &invitation, folder, name).await {
@@ -378,6 +387,17 @@ fn person_id() -> (String, String) {
 }
 
 async fn create(d: &Daemon, name: &str, folder: &Path, k: u32, device_name: &str) -> Response {
+    // Refused before anything is written, so a corrected try starts clean.
+    if name.trim().is_empty() || device_name.trim().is_empty() {
+        return problem("name-empty", &[], None);
+    }
+    if k == 0 {
+        return problem("copies-zero", &[], None);
+    }
+    if !folder.is_absolute() {
+        let folder = folder.to_string_lossy();
+        return problem("folder-not-absolute", &[("folder", text(&folder))], None);
+    }
     match create_inner(d, name, folder, k, device_name).await {
         Ok(()) => said("created", &[("group", text(name))]),
         Err(e) => problem("internal-error", &[], Some(e)),

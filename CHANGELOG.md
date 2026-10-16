@@ -6,6 +6,20 @@ the second number, and every other pull request the third.
 
 ## Unreleased
 
+### Changed
+
+- The web interface's Join and Create forms explain what is wrong in words
+  and show the form again with what you typed. A folder must be a full
+  path; `~` means your home folder. An invitation pasted wrapped over
+  several lines, or as the whole `pigeon join …` line, is understood.
+- A member who tries to invite a new person is told that only an admin
+  can, instead of seeing "{ $inviter } may no longer invite".
+- Each page of the web interface has its own browser tab title; unknown
+  addresses show a page that says so; long file names wrap instead of
+  widening the page; Home announces its headline to screen readers, says
+  to reload when JavaScript is off, and lists what is not safe yet right
+  under its headline. Pages follow the system's dark mode.
+
 ### Fixed
 
 - Files whose names have accents or other non-ASCII letters, such as
@@ -13,6 +27,19 @@ the second number, and every other pull request the third.
   UTF-8 locale, as under launchd or `brew services`. Before, one such
   file kept every new change on Home at "Checking N changed files"
   indefinitely, with no error shown.
+- Home shows the number of suggestions awaiting a decision steadily,
+  instead of "Not checked yet; pigeon may be busy" most of the time.
+- Creating a group with an empty name, zero backup copies or a relative
+  folder is refused before anything is written; before, it could leave
+  a half-made repository behind, outside the folder you meant.
+- A computer that has just joined says a backup machine "has not been
+  heard from yet" instead of "has been offline since ." with no date.
+- Leaving a group removes only placeholders of files whose content is
+  elsewhere; a file you changed keeps your bytes, as the confirmation
+  promises.
+- The *Check installation* page has its own title, the diagnostics
+  consent is no longer printed twice, and French plurals and wording are
+  corrected on the Space page, Home's machine details and *Free up space*.
 
 ## 0.5.6 — 2026-10-16
 

@@ -54,6 +54,7 @@ headline-machine-full = { $machine } est pleine ; elle attend qu'on y libère de
 headline-machine-no-capacity = { $machine } n'a pas la place pour { $files } fichiers : il lui faut { $missing_mb } Mo d'espace libre en plus. Libérez-y de l'espace, ou ajoutez une autre machine de sauvegarde.
 headline-machine-lost = { $machine } ne trouve plus son dossier de sauvegarde ; elle ne compte plus jusqu'à ce qu'elle soit réinstallée.
 why-machine-offline = { $machine } est hors ligne depuis { $since }.
+why-machine-not-heard = Cet ordinateur n’a pas encore eu de nouvelles de { $machine }.
 why-safe-copies = { $have } sur { $need } copies de sauvegarde
 next-when-back = Rien à faire : ils seront en sécurité quand { $machine } sera de retour.
 next-repairing = Réparation en cours : { $files } fichiers sont copiés sur une autre machine de sauvegarde.
@@ -110,7 +111,7 @@ help-commands = Commandes :
 
 ## Résultats
 
-free-result = { $safe } fichiers sur { $total } sont en sécurité et peuvent être libérés. Pigeon libérera leur espace en arrière-plan ; les autres fichiers attendent des copies sûres.
+free-result = Fichiers en sécurité qui peuvent être libérés : { $safe } sur { $total }. pigeon libérera leur espace en arrière-plan ; les autres fichiers attendent des copies sûres.
 free-waiting =
     { $files ->
         [one] { $files } fichier n'est pas encore en sécurité ; pigeon le libérera dès qu'il le sera.
@@ -134,7 +135,7 @@ undo-keep = Annuler : pigeon free { $folder }
 restore-result = { $path } est restauré sur cet ordinateur ; la version plus récente reste dans son historique. Consultez Accueil pour le partage et la protection, et Suggestions si une approbation est nécessaire.
 restore-folder-result = { $path } : { $files } fichiers restaurés sur cet ordinateur. Les fichiers plus récents et l’historique sont conservés. Consultez Accueil et Suggestions pour le partage et l’approbation.
 problem-restore-folder-incomplete = { $path } : { $files } fichiers restaurés ; { $skipped } n’ont pas pu être restaurés et sont restés inchangés. L’opération nécessite votre attention. Fichiers à vérifier : { $paths }. Fermez les fichiers utilisés et réessayez ; lancez pigeon doctor pour les autres problèmes. Consultez Accueil et Suggestions pour le partage et l’approbation.
-problem-restore-in-use = { $path } a changé ou est en cours d’utilisation. Pigeon l’a laissé inchangé. Ouvrez une ancienne copie avec Voir, ou fermez le fichier et réessayez.
+problem-restore-in-use = { $path } a changé ou est en cours d’utilisation. Pigeon l’a laissé inchangé. Ouvrez une ancienne version avec « Ouvrir une copie », ou fermez le fichier et réessayez.
 problem-restore-folder-version = Pour restaurer un dossier, choisissez une date avec --at ou omettez l’option de version pour restaurer son dernier état enregistré.
 web-restore-folder = Restaurer ce dossier
 web-files-arriving = En attente de { $files } fichiers pour qu’ils soient disponibles sur cet ordinateur. Laissez pigeon fonctionner ; il les recevra dès qu’une copie sera joignable.
@@ -369,7 +370,7 @@ file-row = { $path } : { $state }
 web-restore = Restaurer cette version
 web-view = Ouvrir une copie
 web-versions = Versions
-deleted-none = Aucun fichier n'a été supprimé.
+deleted-none = Aucun fichier supprimé à récupérer.
 deleted-row = { $path }, supprimé { $deleted }
 web-deleted = Fichiers supprimés
 web-restore-deleted = Restaurer
@@ -468,8 +469,7 @@ problem-recovery-needs-backup = Ajoutez une machine de sauvegarde avant de prép
 
 problem-join-incomplete = Le nouveau groupe a été vérifié, mais la récupération n’a pas pu se terminer. Redémarrez pigeon pour terminer l’opération enregistrée. Votre ancien historique est conservé.
 problem-repository-busy = Ce dépôt contient une mise à jour de fichier inachevée. Laissez pigeon la terminer, ou redémarrez pigeon avant de réessayer la récupération.
-problem-folder-not-empty = Ce dossier n’est pas vide et n’appartient pas au groupe à récupérer. Choisissez un dossier vide ou le dépôt existant du groupe refondé.
-
+problem-folder-not-empty = Ce dossier contient déjà des fichiers. Choisissez un dossier vide ou nouveau ; pour rejoindre un groupe refondé, choisissez le dossier de son dépôt existant.
 # Group health from replicated state (ADR 0025).
 web-health = État du groupe
 web-health-current = Fichiers actuels
@@ -487,7 +487,11 @@ web-health-disk = Conservés : { $used } · Libres : { $free } · Limite : { $li
 web-health-full = Ce disque a besoin de plus d’espace libre.
 web-health-lost = Cette machine de secours signale la perte de son dépôt.
 web-health-checking = Vérification des fichiers conservés ; ces copies ne comptent pas encore pour la protection.
-web-health-queue = À envoyer : { $send } · À recevoir : { $receive } · En attente d’espace : { $deferred } éléments, { $missing } nécessaires
+web-health-queue =
+    { $deferred ->
+        [one] À envoyer : { $send } · À recevoir : { $receive } · En attente d’espace : { $deferred } élément, { $missing } nécessaires
+       *[other] À envoyer : { $send } · À recevoir : { $receive } · En attente d’espace : { $deferred } éléments, { $missing } nécessaires
+    }
 web-health-report = État du stockage et des tâches : { $when }.
 web-health-report-old = État du stockage et des tâches ancien : { $when }. Un nouveau contact ne met pas ces chiffres à jour.
 web-health-suggestions = Suggestions en attente d’une décision : { $count }
@@ -519,7 +523,11 @@ web-view-suggestion = Examiner le fichier suggéré
 suggestion-deletes-file = Cette suggestion supprime { $path }. Le fichier partagé reste inchangé tant que la suggestion n’est pas acceptée.
 
 space-title = Espace de sauvegarde
-space-need = Stockage nécessaire pour { $copies } copies de sauvegarde : fichiers actuels { $current } octets ; historique { $history } octets ; suggestions { $suggestions } octets.
+space-need =
+    { $copies ->
+        [one] Stockage nécessaire pour { $copies } copie de sauvegarde : fichiers actuels { $current } octets ; historique { $history } octets ; suggestions { $suggestions } octets.
+       *[other] Stockage nécessaire pour { $copies } copies de sauvegarde : fichiers actuels { $current } octets ; historique { $history } octets ; suggestions { $suggestions } octets.
+    }
 space-offered = Capacité configurée pour ce contenu : { $bytes } octets. Chaque ordinateur de sauvegarde compte pour une copie au maximum, même sans état de stockage récent.
 space-overflow = Copies supplémentaires : { $bytes } octets, selon les emplacements signalés.
 space-overflow-unknown = Les copies supplémentaires n’ont pas été vérifiées.
@@ -532,3 +540,13 @@ space-adopted = acceptée
 space-rejected = refusée
 space-withdrawn = retirée
 space-snapshot = { $group }, vérifié le { $when }.
+
+web-health-suggestions-unavailable = Suggestions en attente d’une décision : pas encore vérifiées.
+web-health-separator = {" : "}
+web-not-found = Il n’y a pas de page ici.
+web-noscript = Cette page ne se met à jour d’elle-même qu’avec JavaScript. Rechargez-la pour voir l’état le plus récent.
+problem-invite-admin-only = Seul un administrateur du groupe peut inviter une nouvelle personne ou un autre administrateur. Vous pouvez inviter un autre de vos ordinateurs, ou une machine de sauvegarde.
+problem-device-name-taken = Un ordinateur du groupe s’appelle déjà { $name }. Choisissez un autre nom.
+problem-folder-not-absolute = « { $folder } » n’est pas un chemin de dossier complet. Indiquez-en un qui commence par /, par exemple /home/vous/Famille.
+problem-name-empty = Donnez un nom au groupe et à cet ordinateur.
+problem-copies-zero = Un groupe a besoin d’au moins une copie de sauvegarde.

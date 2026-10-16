@@ -1,18 +1,19 @@
 //! First use on a new computer (spec 09 §9.6, 10 §10.3): join by invitation
 //! or create a group. Refounded groups require a second explicit confirmation.
 //! Every action uses the same session and form checks as the other pages.
+//! A refusal shows the forms again, under it, with what was typed.
 
 use std::sync::Arc;
 
 use axum::extract::State;
 use axum::response::{Html, IntoResponse, Response};
 use axum::{Extension, Form};
-use maud::html;
-use pigeon_proto::Request;
+use maud::{Markup, html};
+use pigeon_proto::{Request, Response as Answer};
 
 use crate::machines::expired;
 use crate::pages::{self, page};
-use crate::{FormToken, Web};
+use crate::{FormToken, Renderer, Web};
 
 /// The join and create forms on a new computer.
 pub async fn setup(
@@ -20,31 +21,79 @@ pub async fn setup(
     Extension(token): Extension<FormToken>,
 ) -> Html<String> {
     let r = web.renderer();
-    let body = html! {
+    let body = forms(&r, &token.0, &JoinForm::default(), &CreateForm::default());
+    page(&r, "/join", &r.id("web-setup"), &body)
+}
+
+/// Both forms, holding `join`'s and `create`'s values.
+fn forms(r: &Renderer, token: &str, join: &JoinForm, create: &CreateForm) -> Markup {
+    let k = if create.k.is_empty() { "2" } else { &create.k };
+    html! {
         p { (r.id("web-setup-help")) }
         h2 { (r.id("web-join")) }
         form method="post" action=(r.url("/join")) {
-            input type="hidden" name="form" value=(&token.0);
-            p { label for="invitation" { (r.id("web-invitation")) } " " input id="invitation" name="invitation" required autocomplete="off"; }
-            p { label for="join-folder" { (r.id("web-local-folder")) } " " input id="join-folder" name="folder"; }
-            p { label for="join-name" { (r.id("web-computer-name")) } " " input id="join-name" name="name"; }
+            input type="hidden" name="form" value=(token);
+            p { label for="invitation" { (r.id("web-invitation")) } " " input id="invitation" name="invitation" required autocomplete="off" value=(&join.invitation); }
+            p { label for="join-folder" { (r.id("web-local-folder")) } " " input id="join-folder" name="folder" value=(&join.folder); }
+            p { label for="join-name" { (r.id("web-computer-name")) } " " input id="join-name" name="name" value=(&join.name); }
             button type="submit" { (r.id("web-join")) }
         }
         h2 { (r.id("web-create")) }
         form method="post" action=(r.url("/create")) {
-            input type="hidden" name="form" value=(&token.0);
-            p { label for="group-name" { (r.id("web-group-name")) } " " input id="group-name" name="group" required; }
-            p { label for="create-folder" { (r.id("web-local-folder")) } " " input id="create-folder" name="folder" required; }
-            p { label for="create-name" { (r.id("web-computer-name")) } " " input id="create-name" name="name" required; }
-            p { label for="copies" { (r.id("web-backup-copies")) } " " input id="copies" type="number" name="k" value="2" min="1" required; }
+            input type="hidden" name="form" value=(token);
+            p { label for="group-name" { (r.id("web-group-name")) } " " input id="group-name" name="group" required value=(&create.group); }
+            p { label for="create-folder" { (r.id("web-local-folder")) } " " input id="create-folder" name="folder" required value=(&create.folder); }
+            p { label for="create-name" { (r.id("web-computer-name")) } " " input id="create-name" name="name" required value=(&create.name); }
+            p { label for="copies" { (r.id("web-backup-copies")) } " " input id="copies" type="number" name="k" value=(k) min="1" required; }
             button type="submit" { (r.id("web-create")) }
         }
+    }
+}
+
+/// The answer to a join or create: its result, or, for a problem, the
+/// problem over the forms again with what was typed, so nothing is lost.
+async fn outcome(
+    web: &Web,
+    token: &str,
+    request: Request,
+    join: &JoinForm,
+    create: &CreateForm,
+) -> Response {
+    let r = web.renderer();
+    let answers = web.ask(request).await;
+    let lines: Vec<String> = answers
+        .iter()
+        .filter(|a| !matches!(a, Answer::Progress { .. }))
+        .flat_map(|a| r.response(a).0)
+        .collect();
+    if !answers.iter().any(|a| matches!(a, Answer::Problem(_))) {
+        return pages::result(&r, "/", lines).into_response();
+    }
+    let (title, rest) = lines
+        .split_first()
+        .map_or((String::new(), &[][..]), |(t, rest)| (t.clone(), rest));
+    let body = html! {
+        (pages::list(rest))
+        (forms(&r, token, join, create))
     };
-    page(&r, "/join", &r.id("web-setup"), &body)
+    page(&r, "/join", &title, &body).into_response()
+}
+
+/// `~` or `~/…` as the person's home folder, which the CLI's shell would
+/// have expanded; anything else as typed, trimmed.
+fn folder(typed: &str) -> String {
+    let typed = typed.trim();
+    let home = std::env::var("HOME").unwrap_or_default();
+    match typed.strip_prefix('~') {
+        Some(rest) if !home.is_empty() && (rest.is_empty() || rest.starts_with('/')) => {
+            format!("{}{rest}", home.trim_end_matches('/'))
+        }
+        _ => typed.to_owned(),
+    }
 }
 
 /// A join request; the folder is absent on a backup machine.
-#[derive(serde::Deserialize)]
+#[derive(Default, serde::Deserialize)]
 pub struct JoinForm {
     form: String,
     invitation: String,
@@ -66,7 +115,8 @@ pub async fn join(
         return refused;
     }
     let r = web.renderer();
-    let invitation = f.invitation.trim();
+    let invitation = pigeon_proto::join::invitation(&f.invitation);
+    let invitation = invitation.as_str();
     if !f.yes
         && let Some((group, refounded)) = pigeon_proto::join::refounded(invitation)
     {
@@ -90,25 +140,30 @@ pub async fn join(
     }
     let request = Request::Join {
         invitation: invitation.to_owned(),
-        folder: nonempty(&f.folder),
+        folder: nonempty(&folder(&f.folder)),
         name: nonempty(&f.name),
         keep: true,
     };
-    pages::result(&r, "/", pages::lines(&web, &r, request).await).into_response()
+    outcome(&web, &token.0, request, &f, &CreateForm::default()).await
 }
 
 fn nonempty(s: &str) -> Option<String> {
     (!s.trim().is_empty()).then(|| s.trim().to_owned())
 }
 
-/// A new group's name, folder and requested safe copies.
-#[derive(serde::Deserialize)]
+/// A new group's name, folder and requested safe copies, as typed: the
+/// daemon refuses what is wrong in words, not the form's parser.
+#[derive(Default, serde::Deserialize)]
 pub struct CreateForm {
     form: String,
+    #[serde(default)]
     group: String,
+    #[serde(default)]
     folder: String,
+    #[serde(default)]
     name: String,
-    k: u32,
+    #[serde(default)]
+    k: String,
 }
 
 /// Create a group through the daemon's usual validation.
@@ -120,12 +175,11 @@ pub async fn create(
     if let Some(refused) = expired(&web, &token, &f.form) {
         return refused;
     }
-    let r = web.renderer();
     let request = Request::Create {
-        name: f.group,
-        folder: f.folder,
-        k: f.k,
-        device_name: f.name,
+        name: f.group.trim().to_owned(),
+        folder: folder(&f.folder),
+        k: f.k.trim().parse().unwrap_or(0),
+        device_name: f.name.trim().to_owned(),
     };
-    pages::result(&r, "/", pages::lines(&web, &r, request).await).into_response()
+    outcome(&web, &token.0, request, &JoinForm::default(), &f).await
 }
