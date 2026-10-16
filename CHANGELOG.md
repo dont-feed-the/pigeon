@@ -66,6 +66,8 @@ increments the second number, and every other release the third.
 - A save, deletion or executable-bit change made while restore checks history
   stays in place, even if pigeon has already saved that change. Members can
   retry a waiting restore without losing their intervening saved suggestions.
+- A slow or unavailable computer no longer delays accepting new versions
+  from the group’s reachable computers.
 
 ### Removed
 
