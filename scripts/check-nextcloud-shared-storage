@@ -9,7 +9,8 @@ All repositories and processes are temporary.
 
 import argparse
 import base64
-from contextlib import closing
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing, nullcontext
 import hashlib
 import http.client as http_client
 import json
@@ -30,9 +31,13 @@ helpers = runpy.run_path(str(ROOT / "scripts/check-nextcloud-bridge"))
 rpc, until, Inputs, BIN = (helpers[name] for name in ["rpc", "until", "Inputs", "BIN"])
 
 
-def run(provider="custodian"):
+def run(provider="custodian", out=None):
     processes = []
-    with tempfile.TemporaryDirectory(prefix="pgnshared-", dir="/tmp") as directory:
+    if out is not None:
+        out = out.resolve()
+        out.mkdir(parents=True, mode=0o700)
+    fixture = nullcontext(out) if out is not None else tempfile.TemporaryDirectory(prefix="pgnshared-", dir="/tmp")
+    with fixture as directory:
         root = Path(directory)
 
         def start(name, args, env=None):
@@ -49,8 +54,10 @@ def run(provider="custodian"):
 
         def daemon(name):
             home = root / name
-            (home / "config").mkdir(parents=True)
-            (home / "config/config.toml").write_text('notifications=false\n[network]\nbind="127.0.0.1:0"\nmdns=false\nrelays="off"\n[loops]\ninterval_seconds=1\n')
+            (home / "config").mkdir(parents=True, exist_ok=True)
+            config_file = home / "config/config.toml"
+            if not config_file.exists():
+                config_file.write_text('notifications=false\n[network]\nbind="127.0.0.1:0"\nmdns=false\nrelays="off"\n[loops]\ninterval_seconds=1\n')
             sock = root / f"{name}.sock"
             process = start(name, [str(BIN / "pigeond"), "--home", str(home)], dict(os.environ, PIGEON_SOCKET=str(sock)))
             until(lambda: sock.exists(), "Daemon did not start")
@@ -172,6 +179,100 @@ def run(provider="custodian"):
             print("PASS: hidden-file overwrites retain old bytes and new provider/client versions share storage", flush=True)
 
             current = changed
+            if bare:
+                # Two installations of one person race on the same known ETag.
+                # They use different native daemons, so both saves may commit
+                # before gossip. Check retention rather than invent a winner.
+                baseline = b"the common version before concurrent edits\n"
+                def create(client, path, wanted):
+                    # A 412 may follow a committed save when native gossip
+                    # races its pinned refresh. Read back before retrying;
+                    # only an absent path permits a conditional create.
+                    def observed():
+                        status, _, body = dav(client, "GET", path)
+                        if status == 200:
+                            assert body == wanted, (path, body)
+                            return True
+                        assert status == 404, (path, status, body)
+                        status, _, body = dav(client, "PUT", path, wanted,
+                                              {"If-None-Match": "*"})
+                        assert status in {201, 412}, (path, status, body)
+                        return False
+                    until(observed, f"Setup save did not become visible: {path}")
+                create(clients[0], "concurrent.txt", baseline)
+                for client in clients:
+                    until(lambda c=client: dav(c, "GET", "concurrent.txt")[2] == baseline,
+                          "Clients did not observe the common version")
+                validators = [dav(c, "HEAD", "concurrent.txt")[1]["etag"] for c in clients]
+                assert validators[0] == validators[1], "Clients did not share the starting validator"
+                bodies = [b"desktop concurrent save\n", b"phone concurrent save\n"]
+                def save(i):
+                    return dav(clients[i], "PUT", "concurrent.txt", bodies[i],
+                               {"If-Match": validators[i]})[0]
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    outcomes = list(executor.map(save, range(2)))
+                assert all(s in {204, 412, 503} for s in outcomes), outcomes
+                def pooled(body):
+                    digest = hashlib.sha256(body).hexdigest()
+                    return root / "bridge/content" / group / digest[:2] / digest
+                assert any(pooled(body).exists() for body in bodies), "Neither concurrent save was retained"
+                for i, status in enumerate(outcomes):
+                    if status == 204:
+                        assert pooled(bodies[i]).read_bytes() == bodies[i], "Acknowledged concurrent save lost"
+                    def updated(c=clients[i]):
+                        status, _, body = dav(c, "GET", "concurrent.txt")
+                        return status == 200 and body in bodies
+                    until(updated,
+                          "A client stayed on the version before the concurrent saves")
+                    assert dav(clients[i], "PUT", "concurrent.txt", b"stale retry\n",
+                               {"If-Match": validators[i]})[0] == 412
+
+                # A second regular peer edits while offline, while a client
+                # makes another save. Rejoining must deliver both histories.
+                other, other_process = daemon("other")
+                info = rpc(control, dict(type="Bridge", operation={"kind": "info"}))["result"]
+                invitation = rpc(control, dict(type="Invite"))
+                other_files = root / "other-files"
+                rpc(other, dict(type="Join", invitation=invitation["message"]["args"]["command"],
+                                folder=str(other_files), keep=True, name="Other regular peer",
+                                person=info["person"], existing=True))
+                until(lambda: any(f["path"] == "same-bytes.bin" for f in rpc(other, dict(
+                    type="Bridge", operation={"kind": "snapshot", "cursor": None, "limit": 1000}
+                ))["result"].get("files", [])), "The second regular peer did not finish joining")
+                stop(other_process)
+                native_body = b"saved on a regular peer while offline\n"
+                (other_files / "native-offline.txt").write_bytes(native_body)
+                client_body = b"saved through the bridge while the regular peer was offline\n"
+                create(clients[1], "client-online.txt", client_body)
+                other, other_process = daemon("other")
+                # With discovery/relays disabled, a restarted peer's ephemeral
+                # loopback port needs an explicit fresh address hint. Restoring
+                # connectivity is part of this fixture, not a convergence claim.
+                sockets = [control, source, other] + [root / "bridge/run" / f'{cid}.sock' for cid in records]
+                def peer_info(peer_socket):
+                    result = rpc(peer_socket, dict(type="Bridge", operation={"kind": "info"}))["result"]
+                    return result if result.get("kind") == "info" else None
+                infos = [until(lambda s=s: peer_info(s), "A peer did not finish restarting") for s in sockets]
+                hints = {info["device"]: info["addresses"] for info in infos}
+                for peer_socket in sockets:
+                    rpc(peer_socket, dict(type="Bridge", operation={"kind": "learn-peers", "peers": hints}))
+                for client in clients:
+                    until(lambda c=client: dav(c, "GET", "native-offline.txt")[2] == native_body,
+                          "The regular peer's offline save did not reach a client")
+                    until(lambda c=client: dav(c, "GET", "client-online.txt")[2] == client_body,
+                          "The client's online save did not reach its sibling")
+                def other_caught_up():
+                    snapshot = rpc(other, dict(type="Bridge", operation={
+                        "kind": "snapshot", "cursor": None, "limit": 1000}))["result"]
+                    return any(f["path"] == "client-online.txt" and
+                               f["etag"].startswith(hashlib.sha256(client_body).hexdigest())
+                               for f in snapshot.get("files", []))
+                until(other_caught_up, "The regular peer did not receive the client's online save")
+                until(lambda: pooled(native_body).exists(), "The native save did not reach the shared pool")
+                assert pooled(native_body).read_bytes() == native_body
+                assert pooled(client_body).read_bytes() == client_body
+                print("PASS: independent client races retain acknowledged saves; offline regular-peer and online client edits converge", flush=True)
+
             if not bare:
                 live = files / "original.txt"
                 until(lambda: live.read_bytes() == changed, "Provider did not install the client save")
@@ -230,4 +331,6 @@ def run(provider="custodian"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--provider", choices=["custodian", "laptop"], default="custodian")
-    run(parser.parse_args().provider)
+    parser.add_argument("--out", type=Path, help="Keep private fixture repositories in a new directory")
+    args = parser.parse_args()
+    run(args.provider, args.out)

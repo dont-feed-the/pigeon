@@ -300,6 +300,9 @@ fn run() -> ExitCode {
         }
         Action::Send(Request::Drop { path, .. }) => drop(&out, &line, path),
         Action::Send(Request::Evict { folder, .. }) => free(&out, &line, folder),
+        Action::Send(Request::SetFolderRule { folder, rule, .. }) => {
+            folder_rule(&out, &line, folder, rule)
+        }
         Action::Send(request) => {
             if !line.yes
                 && let Some(question) = question(request)
@@ -366,6 +369,44 @@ fn free(out: &Renderer, line: &args::Line, folder: &str) -> ExitCode {
     }
     let question = Message {
         id: "confirm-free-quiet".to_owned(),
+        args: std::collections::BTreeMap::new(),
+    };
+    if let Err(code) = confirmed(out, line, &question) {
+        return code;
+    }
+    exchange(out, line.json, &send(true))
+}
+
+/// `pigeon folder-rule PATH …` (04 §4.3): a rule that raises the group's
+/// rules (ADR 0048) first says which computers may wait for changes, then
+/// asks; `--yes` confirms at once.
+fn folder_rule(
+    out: &Renderer,
+    line: &args::Line,
+    folder: &str,
+    rule: &pigeon_proto::policy::Change,
+) -> ExitCode {
+    let send = |confirmed| Request::SetFolderRule {
+        folder: folder.to_owned(),
+        rule: rule.clone(),
+        confirmed,
+    };
+    let first = answer(out, line.json, &send(line.yes));
+    let Response::Problem(raise) = &first else {
+        return ExitCode::from(u8::from(show(out, line.json, &first).1));
+    };
+    if raise.code != "rules-raise" || line.yes {
+        return ExitCode::from(u8::from(show(out, line.json, &first).1));
+    }
+    show(
+        out,
+        line.json,
+        &Response::Said {
+            message: raise.message.clone(),
+        },
+    );
+    let question = Message {
+        id: "confirm-rules-raise".to_owned(),
         args: std::collections::BTreeMap::new(),
     };
     if let Err(code) = confirmed(out, line, &question) {

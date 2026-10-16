@@ -24,6 +24,9 @@ pub enum Request {
         folder: String,
         /// New rule or inheritance.
         rule: crate::policy::Change,
+        /// The person confirmed raising the group's `rules` (ADR 0048).
+        #[serde(default)]
+        confirmed: bool,
     },
     /// Group health from accepted state and signed reports (ADR 0025).
     Health,
@@ -208,6 +211,12 @@ pub enum Request {
     RemoveDevice {
         /// The computer's name in the roster.
         name: String,
+    },
+    /// Removes exactly this signing key without resolving a computer label.
+    /// Already absent keys succeed, so bridge revocation can safely retry.
+    RemoveDeviceId {
+        /// The computer's device ID in the roster.
+        device: String,
     },
     /// `pigeon held`: the held mass deletions and names (07 §7.4).
     Held,

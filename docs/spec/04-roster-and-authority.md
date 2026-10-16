@@ -24,7 +24,7 @@ normative **[no ADR: field names]**:
 
 ```toml
 format = 2                           # 2 adds `invitation` (ADR 0075); format 1 is no longer read
-rules = 1                           # the rule set the group runs; never decreases (ADR 0048)
+rules = 1                           # the rule set the group runs; never decreases (ADR 0048); 2 adds per-person folders
 group = "Famille Geiger"            # display name
 invitation = "…64 hex"              # the group's invitation, never changed (ADR 0075)
 k = 2                               # custody copies, on distinct custodians (ADRs 0002 and 0046)
@@ -45,7 +45,7 @@ annex_uuid = "…"                    # its git-annex repository UUID (03 §3.5)
 
 [[folders]]
 path = "Lab data"                   # a top-level folder, or a deeper one
-rule = "add-only"                   # or rule = "owned", owner = "paul"
+rule = "add-only"                   # or rule = "owned", owner = "paul"; or rule = "per-person" (rules 2)
 stewards = ["roy"]
 ```
 
@@ -54,8 +54,9 @@ parents, and `pigeon-core::roster::Roster::validate` passes: an admin, known
 persons, unique names, `k ≥ 1`, an `invitation` of 64 lowercase hex
 digits, an `annex_uuid` never reused (ADR 0046) on
 each laptop and custodian and none on a recovery device, no removed device
-back (ADR 0051), and a `relay`, if any, an `https://` URL (`http://` for
-one on the local network). A commit that leaves an invalid roster is invalid.
+back (ADR 0051), a `relay`, if any, an `https://` URL (`http://` for
+one on the local network), and a per-person folder only with `rules` ≥ 2.
+A commit that leaves an invalid roster is invalid.
 
 ## 4.3 Folder rules
 
@@ -69,6 +70,20 @@ no entry, root files included, is *add-only* with the admins as stewards
 | add (path absent before) | *u* = P | any member |
 | modify, delete | *u* = P | *u* ∈ S (the admins if S is empty), or *u* alone wrote it (ADR 0070) |
 | rename | a delete and an add, both allowed | same |
+
+A **per-person** entry *F* (rules 2) **[no ADR]** gives each path
+`F/<id>/…`, where `<id>` is the ID of a person of the roster, spelled
+exactly as path rules are matched, the rule *owned by* that person. Any
+other path in *F*, a file directly in it or a folder named after no
+current person, is judged by the next longest entry, or the default. A
+longer entry, such as one for `F/<id>/shared`, still wins. A person who
+joins later owns their folder from then on, and one removed owns it no
+more. Configuring the first one raises the roster's `rules` to 2 in the
+same signed change, once the admin confirmed it after seeing the pigeon
+each other computer last reported (ADR 0048). `Authority.tla` abstracts
+folder rules to one owned folder and the root; a per-person entry resolves,
+path by path, to an owned folder or to another entry, as
+`pigeon-core/tests/per_person.rs` checks.
 
 *u* **alone wrote** *p* when every contribution that wrote or deleted *p*'s
 slot in the base is *u*'s: an adoption counts as its proposal's author's,

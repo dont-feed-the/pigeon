@@ -63,6 +63,9 @@ pub enum Rule {
     Owned(PersonId),
     /// Anyone adds; the stewards (the admins if none) modify and delete.
     AddOnly(BTreeSet<PersonId>),
+    /// Each folder directly in it whose name is a person's ID is owned by
+    /// that person; the rest follows the rule above it (rules 2).
+    PerPerson,
 }
 
 /// An entry of `[[folders]]`.
@@ -189,6 +192,8 @@ pub enum Invalid {
     BadRelay(String),
     /// The invitation is not 64 lowercase hex digits.
     BadInvitation,
+    /// A folder rule needs a newer `rules` than the roster's.
+    RuleNeedsRules(String),
 }
 
 impl Roster {
@@ -239,9 +244,13 @@ impl Roster {
             }
         }
         for f in &self.folders {
+            if f.rule == Rule::PerPerson && self.rules < 2 {
+                return Err(Invalid::RuleNeedsRules(f.path.clone()));
+            }
             let people: Vec<&PersonId> = match &f.rule {
                 Rule::Owned(p) => vec![p],
                 Rule::AddOnly(s) => s.iter().collect(),
+                Rule::PerPerson => Vec::new(),
             };
             if let Some(p) = people.into_iter().find(|p| !self.persons.contains_key(*p)) {
                 return Err(Invalid::UnknownSteward(p.0.clone()));

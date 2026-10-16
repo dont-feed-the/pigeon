@@ -65,16 +65,6 @@ increments the second number, and every other release the third.
   repeated button acts on. On phones, buttons, fields and menu links are
   easier to tap. A folder's page is titled with its name, shows names from
   that folder, and *Back* goes to the parent folder.
-- A computer is now in one group only. `pigeon create`, `pigeon join` and
-  `pigeon recover` (and joining or creating in the web interface) refuse a
-  second group, before writing anything, and say how to leave the first:
-  `pigeon leave`, or *Leave the group* in Settings in `pigeon open`. Before,
-  a second group was created, but `pigeon open` and the commands that take
-  no folder only ever showed the first one.
-- `pigeon leave` on a computer that is the only machine of its group leaves
-  it at once, even as the group's last admin computer; its files stay in
-  the folder. It used to refuse, so a group created by mistake could not be
-  left.
 
 ### Fixed
 
@@ -92,6 +82,46 @@ increments the second number, and every other release the third.
 - A recovery sheet whose page was closed while waiting no longer stays in
   the group unprinted: pages finish their work, or undo it, even when the
   browser leaves.
+
+## 0.5.13 — 2026-10-16
+
+### Added
+
+- Per-person folders: `pigeon folder-rule ~/Group/src --per-person` (or
+  *Each folder in it belongs to the person it is named after* in a folder's
+  sharing rule in `pigeon open`) makes every `src/<name>` belong to the
+  person of that name, including people who join later; others' changes
+  there become suggestions. A folder's name is the person's name in
+  lowercase letters and digits (Laurent's is `src/laurent`), and
+  `pigeon folder-rule ~/Group/src` lists them. The first such rule moves the
+  group to newer rules: pigeon lists the other computers with the pigeon
+  they last reported and asks first, as a computer running an older pigeon
+  waits for the group's changes until it is updated.
+
+### Changed
+
+- A computer is now in one group only. `pigeon create`, `pigeon join` and
+  `pigeon recover` (and joining or creating in the web interface) refuse a
+  second group, before writing anything, and say how to leave the first:
+  `pigeon leave`, or *Leave the group* in Settings in `pigeon open`. Before,
+  a second group was created, but `pigeon open` and the commands that take
+  no folder only ever showed the first one.
+- `pigeon leave` on a computer that is the only machine of its group leaves
+  it at once, even as the group's last admin computer; its files stay in
+  the folder. It used to refuse, so a group created by mistake could not be
+  left.
+- Pull requests run the checks relevant to their changed files. Documentation,
+  installer and formal-model changes avoid unrelated expensive jobs, while
+  shared dependencies, unknown paths and CI changes retain broader checks.
+  Releases and periodic validation still run the full set.
+- Client revocation addresses the saved signing key directly, so a change to
+  a computer's name cannot redirect its roster removal.
+
+### Fixed
+
+- Files no longer stay "receiving" when a peer was initially unavailable
+  and git-annex disabled its remote. Pigeon re-enables peers still in the
+  group when checking their settings, so transfers can resume.
 - On Linux with a umask of 002, the default on Ubuntu and Fedora desktops,
   pigeon thought every file might be in use: it delayed writing the group's
   versions into your folder, `pigeon free` and *Free up space* deleted
@@ -100,6 +130,15 @@ increments the second number, and every other release the third.
 - A computer that left its last group and then created or joined another
   one, without restarting pigeon, no longer changes identity at the next
   restart, which made the new group no longer recognise it.
+- A client-management page, download or conflict action queued behind client
+  revocation now checks the updated access state before contacting that peer.
+- Reusing a shared content object after an interrupted publication completes
+  its directory sync before reporting success.
+- Pending suggestions keep their author's identity after the signing client
+  is revoked, so the person's remaining devices can still manage them.
+- Concurrent saves from separate clients no longer leave a hidden conflict
+  that stops later synchronization. Existing affected peers recover when the
+  saved version is safely retained under its conflict filename.
 
 ## 0.5.12 — 2026-10-16
 

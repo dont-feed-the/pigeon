@@ -133,7 +133,11 @@ pub(crate) fn group_of(d: &Daemon, path: &Path) -> Option<Arc<Group>> {
 pub(crate) async fn handle(d: &Arc<Daemon>, request: Request) -> Vec<Response> {
     match request {
         Request::FolderRules { folder } => crate::folder_rules::list(d, folder.as_deref()),
-        Request::SetFolderRule { folder, rule } => crate::folder_rules::set(d, &folder, rule).await,
+        Request::SetFolderRule {
+            folder,
+            rule,
+            confirmed,
+        } => crate::folder_rules::set(d, &folder, rule, confirmed).await,
         Request::Capacity => crate::capacity_view::report(d).await,
         Request::Health => crate::health::report(d).await,
         Request::Bridge { operation } => crate::bridge::handle(d, operation).await,
@@ -295,6 +299,7 @@ pub(crate) async fn handle(d: &Arc<Daemon>, request: Request) -> Vec<Response> {
             group,
         } => crate::view::view(d, Path::new(&path), version, group).await,
         Request::RemoveDevice { name } => crate::history::remove_device(d, &name).await,
+        Request::RemoveDeviceId { device } => crate::history::remove_device_id(d, &device).await,
         Request::Leave => crate::leave::leave(d).await,
         Request::Refound { repository } => {
             crate::refound::refound(d, repository.as_deref().map(Path::new)).await

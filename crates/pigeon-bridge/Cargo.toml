@@ -9,7 +9,7 @@ repository.workspace = true
 publish.workspace = true
 
 [features]
-# Emit real catalogue observations for the offline TLC checker.
+# Emit catalogue, DAV transaction and client identity observations for TLC.
 tla-trace = []
 
 [dependencies]

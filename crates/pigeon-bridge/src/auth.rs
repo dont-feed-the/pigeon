@@ -330,6 +330,7 @@ pub async fn grant(
             app.peers.stop(&client.id).await;
             return Err(unavailable(e));
         }
+        app.lifecycle_trace.register(&app.config, &client);
     }
     app.resume_peers().await;
     // Provisioning may take time: never issue credentials to an expired poll.
@@ -383,13 +384,7 @@ pub async fn existing_password(
 pub async fn revoke(app: &App, client: &Client) -> Result<()> {
     let lock = app.client_lock(&client.id).await;
     let guard = lock.lock().await;
-    {
-        let mut store = app.store.lock().await;
-        let c = store.clients.get_mut(&client.id).ok_or_else(forbidden)?;
-        c.revoked = true;
-        store.save(&app.config.state_dir).map_err(unavailable)?;
-    }
-    app.peers.stop(&client.id).await;
+    revoke_local(app, &client.id).await?;
     drop(guard);
     // Access is already revoked even if the control peer is temporarily offline.
     let socket = &app
@@ -398,32 +393,30 @@ pub async fn revoke(app: &App, client: &Client) -> Result<()> {
         .get(&client.user)
         .ok_or_else(forbidden)?
         .control_socket;
-    let name = match rpc::call(socket, pigeon_proto::Request::Machines)
-        .await
-        .map_err(unavailable)?
-    {
-        pigeon_proto::Response::Machines { machines, .. } => machines
-            .into_iter()
-            .find(|m| m.device == client.device)
-            .map(|m| m.name),
-        _ => {
-            return Err(unavailable(
-                "Client access revoked; cannot read the control peer's roster",
-            ));
-        }
+    let request = pigeon_proto::Request::RemoveDeviceId {
+        device: client.device.clone(),
     };
-    let Some(name) = name else {
-        return Ok(());
-    };
-    let response = rpc::call(socket, pigeon_proto::Request::RemoveDevice { name })
-        .await
-        .map_err(unavailable)?;
+    app.lifecycle_trace.removal(client, &request);
+    let response = rpc::call(socket, request).await.map_err(unavailable)?;
     if let pigeon_proto::Response::Problem(p) = response {
         return Err(unavailable(format!(
             "Client access revoked; Pigeon device removal needs attention: {}",
             p.code
         )));
     }
+    Ok(())
+}
+
+/// Caller holds this client's operation lock until persistence and stop finish.
+pub(crate) async fn revoke_local(app: &App, id: &str) -> Result<()> {
+    {
+        let mut store = app.store.lock().await;
+        let c = store.clients.get_mut(id).ok_or_else(forbidden)?;
+        c.revoked = true;
+        store.save(&app.config.state_dir).map_err(unavailable)?;
+        app.lifecycle_trace.revoke(id);
+    }
+    app.peers.stop(id).await;
     Ok(())
 }
 

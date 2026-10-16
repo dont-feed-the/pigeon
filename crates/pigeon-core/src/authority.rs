@@ -18,8 +18,8 @@ use crate::names;
 use crate::roster::{self, DeviceId, Invalid, PersonId, Role, Roster, Rule};
 use crate::sig::{self, SigError};
 
-/// The rule sets this release judges (ADR 0048).
-pub const RULES: u32 = 1;
+/// The rule sets this release judges (ADR 0048): 2 adds per-person folders.
+pub const RULES: u32 = 2;
 /// The roster's path.
 pub const ROSTER: &str = ".pigeon/roster.toml";
 /// The trailer of a Force (04 §4.6).
@@ -331,14 +331,24 @@ pub fn author_time(raw: &[u8]) -> Option<(i64, i32)> {
 }
 
 /// The rule of `path` under `roster`: the folder entry with the longest
-/// path prefix of it; with none, add-only with the admins as stewards.
-pub fn rule_of<'a>(roster: &'a Roster, path: &str) -> Option<&'a Rule> {
-    roster
+/// path prefix of it; with none, add-only with the admins as stewards. A
+/// per-person entry gives `<entry>/<id>/…` to the person `<id>`, and passes
+/// any other path in it to the next longest entry.
+pub fn rule_of(roster: &Roster, path: &str) -> Option<Rule> {
+    let mut entries: Vec<&roster::Folder> = roster
         .folders
         .iter()
         .filter(|f| path == f.path || path.starts_with(&format!("{}/", f.path)))
-        .max_by_key(|f| f.path.len())
-        .map(|f| &f.rule)
+        .collect();
+    entries.sort_by_key(|f| std::cmp::Reverse(f.path.len()));
+    entries.into_iter().find_map(|f| match &f.rule {
+        Rule::PerPerson => {
+            let rest = path.strip_prefix(f.path.as_str())?.strip_prefix('/')?;
+            let id = PersonId(rest.split('/').next()?.to_owned());
+            roster.persons.contains_key(&id).then_some(Rule::Owned(id))
+        }
+        rule => Some(rule.clone()),
+    })
 }
 
 /// Whether person `u` of `roster` may add (`added`) or change `path`, on
@@ -355,7 +365,7 @@ pub fn allowed(
     let admin = roster.persons.get(u).is_some_and(|p| p.admin);
     let mine = || sole_writer(writers, u, path);
     match rule_of(roster, path) {
-        Some(Rule::Owned(owner)) => owner == u,
+        Some(Rule::Owned(owner)) => owner == *u,
         Some(Rule::AddOnly(stewards)) if !stewards.is_empty() => {
             added || stewards.contains(u) || mine()
         }

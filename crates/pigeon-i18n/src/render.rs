@@ -350,6 +350,16 @@ impl Renderer {
             &rule.path
         };
         let message = match &rule.owner {
+            None if rule.per_person => crate::Message::new("folder-rule-per-person")
+                .arg("folder", path)
+                .arg(
+                    "folders",
+                    people
+                        .iter()
+                        .map(|p| format!("{path}/{}", p.id))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                ),
             Some(owner) => crate::Message::new("folder-rule-owned")
                 .arg("folder", path)
                 .arg("owner", name(owner)),

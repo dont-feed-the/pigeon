@@ -7,10 +7,13 @@ specification (SPECS), its events become a TLA+ module through
 scripts/trace-to-tla and TLC must accept them. A specification without one,
 or whose events lack the variables its trace specification reads (FIELDS),
 fails with what is missing. Unknown or incomplete trace families never pass.
-Usage: scripts/check-lab-traces [--java JAVA] OUT
+Usage: scripts/check-lab-traces [--java JAVA] [--jobs 1|2] OUT
 """
 
 import argparse
+from concurrent.futures import ProcessPoolExecutor
+from itertools import repeat
+from multiprocessing import get_context
 import importlib.machinery
 import importlib.util
 import json
@@ -59,109 +62,131 @@ def load(name):
     return module
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("out")
-    parser.add_argument("--java", default=os.environ.get("JAVA", "java"))
-    parser.add_argument("--require", action="append", default=[], help="fail unless this specification was checked")
-    args = parser.parse_args()
+def check_log(log, java, jar):
+    """Check one complete stream with private generated models and TLC state."""
     tla, tlc = load("trace-to-tla"), load("run-tlc")
     install, roster = load("check-install-traces"), load("check-roster-traces")
-    jar = tlc.tlc_jar()
     failures, unchecked, partial, checked = 0, set(), {}, set()
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp) / "models"
         shutil.copytree(MODELS, work)
         tlc.MODELS = work
-        logs = sorted(Path(args.out).rglob("trace.ndjson"))
-        if not logs:
-            logs = sorted(Path(args.out).rglob("*.ndjson"))
-        if not logs:
-            print("FAIL no trace logs", flush=True)
+        by_spec = {}
+        clocks = {}
+        try:
+            for line in log.read_text().splitlines():
+                if not line.strip():
+                    continue
+                event = json.loads(line, object_pairs_hook=tla.pairs)
+                for field in ("spec", "device", "clock", "action", "vars"):
+                    if field not in event:
+                        raise ValueError(f"missing {field}")
+                device, clock = event["device"], event["clock"]
+                if type(clock) is not int or clock != clocks.get(device, 0) + 1:
+                    raise ValueError("missing, repeated or out-of-order trace clock")
+                clocks[device] = clock
+                by_spec.setdefault(event["spec"], []).append(line)
+            if not by_spec:
+                raise ValueError("empty trace log")
+        except (ValueError, KeyError, TypeError, tla.Refused) as error:
+            print(f"FAIL {log}: {error}", flush=True)
             failures += 1
-        for log in logs:
-            by_spec = {}
-            clocks = {}
+            return failures, unchecked, partial, checked
+        filesystem = set(by_spec) & install.FILESYSTEM_SPECS
+        if filesystem:
+            groups = {}
+            for spec in filesystem:
+                for line in by_spec.pop(spec):
+                    e = json.loads(line)
+                    try:
+                        v = e["vars"]
+                        groups.setdefault((e["device"], v["group"], v["path"]), []).append(e)
+                    except KeyError as error:
+                        print(f"FAIL {log}: missing filesystem identity {error}", flush=True)
+                        failures += 1
+            complete = bool(groups)
+            for identity, events in sorted(groups.items()):
+                try:
+                    verdict = install.check(sorted(events, key=lambda e: e["clock"]), java, 4)
+                    ok = verdict == "trace:accepted"
+                    print(f"{'ok' if ok else 'FAIL'} {log.parent.name} filesystem {identity[-1]}: {verdict}", flush=True)
+                except (install.Refused, KeyError, ValueError, TypeError) as error:
+                    ok = False
+                    print(f"FAIL {log}: filesystem: {error}", flush=True)
+                failures += not ok
+                complete &= ok
+            if complete:
+                checked.update(filesystem)
+        if "Roster" in by_spec:
             try:
-                for line in log.read_text().splitlines():
-                    if not line.strip():
-                        continue
-                    event = json.loads(line, object_pairs_hook=tla.pairs)
-                    for field in ("spec", "device", "clock", "action", "vars"):
-                        if field not in event:
-                            raise ValueError(f"missing {field}")
-                    device, clock = event["device"], event["clock"]
-                    if type(clock) is not int or clock != clocks.get(device, 0) + 1:
-                        raise ValueError("missing, repeated or out-of-order trace clock")
-                    clocks[device] = clock
-                    by_spec.setdefault(event["spec"], []).append(line)
-                if not by_spec:
-                    raise ValueError("empty trace log")
-            except (ValueError, KeyError, TypeError, tla.Refused) as error:
-                print(f"FAIL {log}: {error}", flush=True)
+                verdict = roster.check([json.loads(line) for line in by_spec.pop("Roster")], java)
+                ok = verdict == "trace:accepted"
+                print(f"{'ok' if ok else 'FAIL'} {log.parent.name} Roster: {verdict}", flush=True)
+            except (roster.Refused, KeyError, ValueError, TypeError) as error:
+                ok = False
+                print(f"FAIL {log}: Roster: {error}", flush=True)
+            failures += not ok
+            if ok:
+                checked.add("Roster")
+        for spec, lines in sorted(by_spec.items()):
+            if spec not in SPECS:
+                unchecked.add(spec)
                 failures += 1
                 continue
-            filesystem = set(by_spec) & install.FILESYSTEM_SPECS
-            if filesystem:
-                groups = {}
-                for spec in filesystem:
-                    for line in by_spec.pop(spec):
-                        e = json.loads(line)
-                        try:
-                            v = e["vars"]
-                            groups.setdefault((e["device"], v["group"], v["path"]), []).append(e)
-                        except KeyError as error:
-                            print(f"FAIL {log}: missing filesystem identity {error}", flush=True)
-                            failures += 1
-                complete = bool(groups)
-                for identity, events in sorted(groups.items()):
-                    try:
-                        verdict = install.check(sorted(events, key=lambda e: e["clock"]), args.java, 4)
-                        ok = verdict == "trace:accepted"
-                        print(f"{'ok' if ok else 'FAIL'} {log.parent.name} filesystem {identity[-1]}: {verdict}", flush=True)
-                    except (install.Refused, KeyError, ValueError, TypeError) as error:
-                        ok = False
-                        print(f"FAIL {log}: filesystem: {error}", flush=True)
-                    failures += not ok
-                    complete &= ok
-                if complete:
-                    checked.update(filesystem)
-            if "Roster" in by_spec:
-                try:
-                    verdict = roster.check([json.loads(line) for line in by_spec.pop("Roster")], args.java)
-                    ok = verdict == "trace:accepted"
-                    print(f"{'ok' if ok else 'FAIL'} {log.parent.name} Roster: {verdict}", flush=True)
-                except (roster.Refused, KeyError, ValueError, TypeError) as error:
-                    ok = False
-                    print(f"FAIL {log}: Roster: {error}", flush=True)
-                failures += not ok
-                if ok:
-                    checked.add("Roster")
-            for spec, lines in sorted(by_spec.items()):
-                if spec not in SPECS:
-                    unchecked.add(spec)
-                    failures += 1
-                    continue
-                missing = lacking(spec, lines)
-                if missing:
-                    partial.setdefault(spec, set()).update(missing)
-                    failures += 1
-                    continue
-                trace_spec, (module, name), cfg = SPECS[spec]
-                try:
-                    (work / f"{module}.tla").write_text(tla.convert(lines, module, name))
-                except tla.Refused as error:
-                    print(f"FAIL {log}: {spec}: {error}", flush=True)
-                    failures += 1
-                    continue
-                got, output = tlc.run(jar, cfg, trace_spec, args.java, "1", None)
-                ok = got.startswith("trace:accepted")
-                print(f"{'ok' if ok else 'FAIL':4} {log.parent.name} {spec}: {len(lines)} events: {got}", flush=True)
-                if not ok:
-                    failures += 1
-                    print(tlc.excerpt(output), file=sys.stderr)
-                else:
-                    checked.add(spec)
+            missing = lacking(spec, lines)
+            if missing:
+                partial.setdefault(spec, set()).update(missing)
+                failures += 1
+                continue
+            trace_spec, (module, name), cfg = SPECS[spec]
+            try:
+                (work / f"{module}.tla").write_text(tla.convert(lines, module, name))
+            except tla.Refused as error:
+                print(f"FAIL {log}: {spec}: {error}", flush=True)
+                failures += 1
+                continue
+            got, output = tlc.run(jar, cfg, trace_spec, java, "1", None)
+            ok = got.startswith("trace:accepted")
+            print(f"{'ok' if ok else 'FAIL':4} {log.parent.name} {spec}: {len(lines)} events: {got}", flush=True)
+            if not ok:
+                failures += 1
+                print(tlc.excerpt(output), file=sys.stderr)
+            else:
+                checked.add(spec)
+    return failures, unchecked, partial, checked
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("out")
+    parser.add_argument("--java", default=os.environ.get("JAVA", "java"))
+    parser.add_argument("--jobs", type=int, choices=(1, 2), default=1,
+                        help="check independent logs with one or two isolated workers")
+    parser.add_argument("--require", action="append", default=[], help="fail unless this specification was checked")
+    args = parser.parse_args()
+    jar = load("run-tlc").tlc_jar()
+    failures, unchecked, partial, checked = 0, set(), {}, set()
+    logs = sorted(Path(args.out).rglob("trace.ndjson"))
+    if not logs:
+        logs = sorted(Path(args.out).rglob("*.ndjson"))
+    if not logs:
+        print("FAIL no trace logs", flush=True)
+        failures += 1
+
+    def collect(results):
+        nonlocal failures
+        for count, unknown, incomplete, accepted in results:
+            failures += count
+            unchecked.update(unknown)
+            checked.update(accepted)
+            for spec, missing in incomplete.items():
+                partial.setdefault(spec, set()).update(missing)
+
+    if args.jobs == 1:
+        collect(map(check_log, logs, repeat(args.java), repeat(jar)))
+    else:
+        with ProcessPoolExecutor(max_workers=args.jobs, mp_context=get_context("spawn")) as executor:
+            collect(executor.map(check_log, logs, repeat(args.java), repeat(jar)))
     for spec in sorted(unchecked):
         print(f"FAIL unsupported trace specification: {spec}", flush=True)
     for spec, missing in sorted(partial.items()):

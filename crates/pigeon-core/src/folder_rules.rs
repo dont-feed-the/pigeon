@@ -45,7 +45,7 @@ pub fn configure(
         return Err(Refusal::Path);
     }
     let people: Vec<_> = match &rule {
-        None => Vec::new(),
+        None | Some(Rule::PerPerson) => Vec::new(),
         Some(Rule::Owned(person)) => vec![person],
         Some(Rule::AddOnly(stewards)) => stewards.iter().collect(),
     };
@@ -60,6 +60,11 @@ pub fn configure(
         return Err(Refusal::Authority);
     }
     let mut new = old.clone();
+    // Per-person folders need rules 2 (ADR 0048): the same signed change
+    // raises them, which the caller has the person confirm.
+    if rule == Some(Rule::PerPerson) {
+        new.rules = new.rules.max(2);
+    }
     let position = new
         .folders
         .iter()

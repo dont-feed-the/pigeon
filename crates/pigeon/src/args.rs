@@ -62,7 +62,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ),
     ("machines", "cmd-machines"),
     (
-        "folder-rule [PATH [--owner PERSON | --add-only [--steward PERSON…] | --default]]",
+        "folder-rule [PATH [--owner PERSON | --add-only [--steward PERSON…] | --per-person | --default]]",
         "cmd-folder-rule",
     ),
     ("open", "cmd-open"),
@@ -186,6 +186,8 @@ enum Command {
         add_only: bool,
         #[arg(long = "steward", requires = "add_only")]
         stewards: Vec<String>,
+        #[arg(long = "per-person", conflicts_with_all = ["owner", "add_only", "inherit"])]
+        per_person: bool,
         #[arg(long = "default")]
         inherit: bool,
     },
@@ -474,6 +476,7 @@ fn action(c: Command) -> Action {
             owner,
             add_only,
             stewards,
+            per_person,
             inherit,
         } => {
             let folder = path.map(|p| absolute(&p));
@@ -481,13 +484,19 @@ fn action(c: Command) -> Action {
                 Some(pigeon_proto::policy::Change::Owned { person })
             } else if add_only {
                 Some(pigeon_proto::policy::Change::AddOnly { stewards })
+            } else if per_person {
+                Some(pigeon_proto::policy::Change::PerPerson)
             } else if inherit {
                 Some(pigeon_proto::policy::Change::Inherit)
             } else {
                 None
             };
             match (folder, rule) {
-                (Some(folder), Some(rule)) => send(Request::SetFolderRule { folder, rule }),
+                (Some(folder), Some(rule)) => send(Request::SetFolderRule {
+                    folder,
+                    rule,
+                    confirmed: false,
+                }),
                 (folder, None) => send(Request::FolderRules { folder }),
                 _ => Action::Usage("folder-rule".into()),
             }
