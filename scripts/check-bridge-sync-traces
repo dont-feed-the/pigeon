@@ -1,0 +1,296 @@
+#!/usr/bin/env python3
+"""Replay complete real DAV transactions against the BridgeSync TLA contract.
+
+Without a directory, run deterministic DAV/socket regression tests and corrupt
+their real observations. A directory replays sync-*.ndjson recursively. Missing,
+truncated, unknown and reordered observations fail closed. Responses here are
+constructed responses; neither delivery nor an unknown commit is inferred.
+"""
+import argparse
+import copy
+import importlib.machinery
+import importlib.util
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+
+sys.dont_write_bytecode = True
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def load(name):
+    loader = importlib.machinery.SourceFileLoader(name, str(ROOT / 'scripts' / name))
+    spec = importlib.util.spec_from_loader(name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+tlc, encoder = load('run-tlc'), load('trace-to-tla')
+
+
+class Refused(Exception):
+    pass
+
+
+def fields(value, names):
+    if not isinstance(value, dict) or set(value) != set(names.split()):
+        raise Refused(f'fields differ from {names}')
+
+
+def text(value):
+    if not isinstance(value, str) or not value:
+        raise Refused('expected nonempty text identity')
+    return value
+
+
+def status(value):
+    if type(value) is not int or not 400 <= value <= 599:
+        raise Refused('invalid failure status')
+    return value
+
+
+def normalize(events):
+    if not events or not isinstance(events[0], dict) or events[0].get('action') != 'Begin':
+        raise Refused('missing Begin')
+    paths, tokens = {}, {}
+
+    def path(value):
+        if not isinstance(value, str):
+            raise Refused('path is not text')
+        return paths.setdefault(value, len(paths) + 1)
+
+    def token(value):
+        if value is None:
+            return 0
+        text(value)
+        return tokens.setdefault(value, len(tokens) + 1)
+
+    def files(values):
+        if not isinstance(values, list):
+            raise Refused('files is not a sequence')
+        result, seen = [], set()
+        for f in values:
+            fields(f, 'path etag diverging directory')
+            if f['path'] in seen or type(f['diverging']) is not bool or type(f['directory']) is not bool:
+                raise Refused('duplicate path or invalid divergence')
+            seen.add(f['path'])
+            result.append(dict(path=path(f['path']), etag=token(text(f['etag'])),
+                               diverging=f['diverging'], directory=f['directory']))
+        return result
+
+    out, method = [], None
+    for clock, event in enumerate(events, 1):
+        fields(event, 'spec clock action vars')
+        if event['spec'] != 'BridgeSync' or type(event['clock']) is not int or event['clock'] != clock:
+            raise Refused('unknown family or missing/reordered event')
+        a, v = event['action'], event['vars']
+        if not isinstance(v, dict):
+            raise Refused('vars is not a record')
+        e = dict(action=a)
+        if a == 'Begin' and clock == 1:
+            fields(v, 'client device method kind path')
+            for key in ('client', 'device', 'method'):
+                text(v[key])
+            if v['kind'] not in {'files', 'upload', 'final'}:
+                raise Refused('unknown DAV resource class')
+            method = v['method']
+            resource, target = v['kind'], path(v['path'])
+            continue
+        if a == 'View':
+            required = token(v.get('required'))
+            if type(v.get('status')) is not int:
+                raise Refused('invalid view status')
+            if v['status'] == 0:
+                fields(v, 'required status revision files')
+                e.update(required=required, status=0, revision=token(text(v['revision'])), files=files(v['files']))
+            else:
+                fields(v, 'required status')
+                e.update(required=required, status=status(v['status']))
+        elif a == 'Submit':
+            fields(v, 'revision expected changes')
+            expected = v['expected']
+            if expected is not None and not isinstance(expected, dict):
+                raise Refused('invalid expected map')
+            changes = v['changes']
+            if not isinstance(changes, list) or not changes:
+                raise Refused('empty or invalid changes')
+            result, changed_paths = [], set()
+            for change in changes:
+                fields(change, 'path kind')
+                if change['kind'] not in {'put', 'remove'}:
+                    raise Refused('unsupported change kind')
+                if change['path'] in changed_paths:
+                    raise Refused('duplicate changed path')
+                changed_paths.add(change['path'])
+                result.append(dict(path=path(change['path']), kind=change['kind']))
+            e.update(revision=token(text(v['revision'])), changes=result,
+                     conditioned=expected is not None,
+                     expected=[dict(path=path(p), etag=token(etag)) for p, etag in (expected or {}).items()])
+        elif a == 'ApplyReply':
+            if v.get('kind') == 'applied':
+                fields(v, 'kind revision suggested')
+                if type(v['suggested']) is not int or v['suggested'] < 0:
+                    raise Refused('invalid suggestion count')
+                e.update(kind='applied', revision=token(text(v['revision'])), suggested=v['suggested'])
+            elif v.get('kind') == 'failure':
+                fields(v, 'kind status'); e.update(kind='failure', status=status(v['status']))
+            elif v.get('kind') == 'unknown':
+                fields(v, 'kind'); e['kind'] = 'unknown'
+            else:
+                raise Refused('unsupported Apply reply')
+        elif a == 'Written':
+            fields(v, 'path etag suggested')
+            if type(v['suggested']) is not int or v['suggested'] < 0:
+                raise Refused('invalid suggestion count')
+            e.update(path=path(v['path']), etag=token(text(v['etag'])), suggested=v['suggested'])
+        elif a == 'Response':
+            fields(v, 'status etag')
+            if type(v['status']) is not int or not 200 <= v['status'] <= 599:
+                raise Refused('invalid response status')
+            tag = v['etag']
+            if tag is not None:
+                if not isinstance(tag, str) or len(tag) < 3 or tag[0] != '"' or tag[-1] != '"':
+                    raise Refused('response ETag is not a strong quoted validator')
+                tag = tag[1:-1]
+            e.update(status=v['status'], etag=token(tag))
+        else:
+            raise Refused('unknown action')
+        out.append(e)
+    if not out or out[-1]['action'] != 'Response':
+        raise Refused('truncated transaction')
+    return out, method, resource, target
+
+
+def check(events, java='java', diagnostics=True):
+    events, method, resource, target = normalize(events)
+    with tempfile.TemporaryDirectory(prefix='bridge-sync-tlc-') as tmp:
+        work = Path(tmp)
+        for name in ('BridgeSync', 'BridgeSyncTrace'):
+            shutil.copy(ROOT / 'models/tla' / (name + '.tla'), work)
+        (work / 'BridgeSyncCodeLog.tla').write_text(
+            '---- MODULE BridgeSyncCodeLog ----\nEXTENDS Naturals\nCodeLog == '
+            + encoder.encode(events) + '\n====\n')
+        (work / 'Observed.cfg').write_text(f'''CONSTANTS Method = {encoder.encode(method)} Resource = {encoder.encode(resource)} Target = {target}
+TraceLog <- CodeLog
+SPECIFICATION TraceSpec
+INVARIANT TraceNotConsumed
+CHECK_DEADLOCK FALSE
+''')
+        verdict, output = tlc.run(tlc.tlc_jar(), 'Observed', 'BridgeSyncTrace', java, '1', '1g', models=work)
+        if verdict != 'trace:accepted' and diagnostics:
+            print(tlc.excerpt(output), file=sys.stderr)
+        return verdict
+
+
+def mutations(streams, java):
+    def has(stream, action, predicate=lambda _: True):
+        return any(e['action'] == action and predicate(e['vars']) for e in stream)
+
+    success = next(s for s in streams
+                   if s[0]['vars']['method'] == 'PUT' and s[0]['vars']['kind'] == 'files'
+                   and s[0]['vars']['path'] == 'a.txt'
+                   and has(s, 'Written') and s[-1]['vars']['status'] < 300
+                   and has(s, 'ApplyReply', lambda v: v['kind'] == 'applied' and v['suggested'] > 0))
+    failed = next(s for s in streams if has(s, 'ApplyReply', lambda v: v['kind'] == 'applied')
+                  and has(s, 'View', lambda v: v['status'] == 412))
+    unknown = next(s for s in streams if has(s, 'ApplyReply', lambda v: v['kind'] == 'unknown'))
+    download = next(s for s in streams if s[0]['vars']['method'] in {'GET', 'HEAD'}
+                    and s[-1]['vars']['status'] == 200)
+    cached = next(s for s in streams if s[-1]['vars']['status'] == 304)
+    mutants = {}
+    def mutate(name, stream, action, update):
+        m = copy.deepcopy(stream)
+        update(next(e['vars'] for e in m if e['action'] == action))
+        mutants[name] = m
+    mutate('stale submitted path condition', success, 'Submit', lambda v: v['expected'].update({'a.txt': 'wrong-etag'}))
+    mutate('wrong submitted catalogue', success, 'Submit', lambda v: v.update(revision='wrong-revision'))
+    mutate('missing single-path condition', success, 'Submit', lambda v: v.update(expected=None))
+    mutate('wrong returned ETag', success, 'Response', lambda v: v.update(etag='"wrong-etag"'))
+    mutate('missing returned ETag', success, 'Response', lambda v: v.update(etag=None))
+    mutate('wrong saved revision', success, 'ApplyReply', lambda v: v.update(revision='wrong-revision'))
+    mutate('wrong suggestion count', success, 'Written', lambda v: v.update(suggested=v['suggested'] + 1))
+    mutate('success after failed pinned refresh', failed, 'Response', lambda v: v.update(status=201))
+    mutate('success after unknown save', unknown, 'Response', lambda v: v.update(status=201))
+    mutate('wrong download validator', download, 'Response', lambda v: v.update(etag='"wrong-etag"'))
+    mutate('wrong cache-hit validator', cached, 'Response', lambda v: v.update(etag='"wrong-etag"'))
+    def rename(value):
+        if isinstance(value, dict):
+            return {('other.txt' if k == 'a.txt' else k): rename(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [rename(v) for v in value]
+        return 'other.txt' if value == 'a.txt' else value
+    m = copy.deepcopy(success)
+    for e in m[1:]:
+        e['vars'] = rename(e['vars'])
+    mutants['internally consistent save to wrong PUT path'] = m
+    for name, stream, keep in [
+        ('missing entire native save', success, {'Begin', 'View', 'Response'}),
+        ('missing native download view', download, {'Begin', 'Response'}),
+        ('missing Written observation', success, {'Begin', 'View', 'Submit', 'ApplyReply', 'Response'}),
+    ]:
+        m = [copy.deepcopy(e) for e in stream if e['action'] in keep]
+        if name == 'missing entire native save':
+            m = [e for e in m if e['action'] != 'View' or e['vars']['required'] is None]
+        for clock, e in enumerate(m, 1):
+            e['clock'] = clock
+        mutants[name] = m
+    m = copy.deepcopy(success)
+    next(e['vars'] for e in m if e['action'] == 'View' and e['vars']['required'] is not None)['required'] = None
+    mutants['unpinned post-save view'] = m
+    for name, events in mutants.items():
+        verdict = check(events, java, False)
+        if not verdict.startswith('trace:rejected:'):
+            raise Refused(f'{name}: expected rejection, got {verdict}')
+        print(f'ok   rejects {name}', flush=True)
+    for name, events in [('truncated transaction', success[:-1]), ('empty stream', [])]:
+        try:
+            normalize(events)
+        except Refused:
+            print(f'ok   refuses {name}', flush=True)
+        else:
+            raise Refused(f'accepted {name}')
+
+
+def replay(root, java, regression=False):
+    streams = []
+    for path in sorted(root.rglob('sync-*.ndjson')):
+        events = [json.loads(line, object_pairs_hook=encoder.pairs) for line in path.read_text().splitlines()]
+        verdict = check(events, java)
+        if verdict != 'trace:accepted':
+            raise Refused(f'{path.name}: {verdict}')
+        streams.append(events)
+    if not streams:
+        raise Refused('no DAV transaction traces')
+    print(f'ok   TLC accepts {len(streams)} real DAV transactions', flush=True)
+    if regression:
+        if len(streams) != 13:
+            raise Refused(f'expected all 13 regression transactions, found {len(streams)}')
+        mutations(streams, java)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('path', nargs='?', type=Path)
+    parser.add_argument('--java', default=os.environ.get('JAVA', 'java'))
+    args = parser.parse_args()
+    if args.path:
+        replay(args.path, args.java)
+    else:
+        with tempfile.TemporaryDirectory(prefix='bridge-sync-regression-') as tmp:
+            env = dict(os.environ, PIGEON_TRACE='1', PIGEON_TRACE_DIR=tmp)
+            subprocess.run(['cargo', 'test', '--locked', '-p', 'pigeon-bridge', '--features', 'tla-trace',
+                            'sync_tests::'], cwd=ROOT, env=env, check=True)
+            replay(Path(tmp), args.java, True)
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except (Refused, encoder.Refused, KeyError, TypeError, ValueError, OSError, StopIteration) as error:
+        sys.exit(f'FAIL {error}')

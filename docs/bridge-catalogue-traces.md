@@ -2,6 +2,9 @@
 
 > Scope: one bounded part of the Nextcloud protocol, observed in the bridge.
 
+For client identity, write/response and shared-storage contracts, see
+[checking a bridge alongside native peers](bridge-system-verification.md).
+
 A Nextcloud client discovers native edits through a DAV listing and directory
 ETags. Those listings depend on the bridge reading a complete native catalogue.
 A catalogue can exceed an RPC response, and another peer may save between pages.
