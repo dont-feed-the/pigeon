@@ -112,6 +112,7 @@ mod tests {
         let roster = Roster {
             rules: 1,
             group: "Family".into(),
+            invitation: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".into(),
             k: 2,
             retention_days: 30,
             telemetry_device: None,

@@ -301,10 +301,10 @@ jobs:
             0) tests="held recovery_print" ;;
             1) tests="suggestions unsettled restore view drop status_pending capacity folder_rules restore_folder" ;;
             2) tests="people resolve health debug_consent bridge" ;;
-            3) tests="slice leave refound backup_history refound_restart recovery_sheet invitation_resume shared" ;;
+            3) tests="slice leave refound backup_history refound_restart recovery_sheet invitation shared" ;;
           esac
           all=$(grep -l '^#!\[cfg(feature = "lab")\]' crates/pigeond/tests/*.rs | xargs -n1 basename | sed 's/\.rs$//' | sort)
-          listed=$(echo held recovery_print suggestions unsettled restore view drop status_pending capacity folder_rules restore_folder people resolve health debug_consent bridge slice leave refound backup_history refound_restart recovery_sheet invitation_resume shared | tr ' ' '\n' | sort)
+          listed=$(echo held recovery_print suggestions unsettled restore view drop status_pending capacity folder_rules restore_folder people resolve health debug_consent bridge slice leave refound backup_history refound_restart recovery_sheet invitation shared | tr ' ' '\n' | sort)
           [ "$all" = "$listed" ] || { echo "::error::a lab test of pigeond is in no shard of ci.yml"; diff <(echo "$all") <(echo "$listed"); exit 1; }
           args=(); for t in $tests; do args+=(--test "$t"); done
           cargo test -p pigeond --features lab --locked --no-fail-fast "${args[@]}"

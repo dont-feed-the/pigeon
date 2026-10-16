@@ -33,6 +33,19 @@ impl Backend for Recording {
                     state: State::Published,
                 }],
             }],
+            pigeon_proto::Request::Join {
+                person: Some(person),
+                existing: false,
+                ..
+            } if person == "Ana" => vec![Response::Problem(pigeon_proto::Problem {
+                code: "person-exists".into(),
+                message: Message {
+                    id: "problem-person-exists".into(),
+                    args: [("person".to_owned(), pigeon_proto::Arg::Text(person))].into(),
+                },
+                hint: None,
+                details: None,
+            })],
             _ => vec![Response::Done],
         };
         Box::pin(async move { answer })
@@ -114,7 +127,7 @@ async fn a_new_computer_can_discover_setup_and_forged_forms_do_not_join() {
         .oneshot(post(
             "/join",
             &cookie,
-            "form=bad&invitation=pgn1-any&folder=%2FFamily",
+            "form=bad&invitation=pgn2-any&folder=%2FFamily",
         ))
         .await
         .unwrap();
@@ -128,7 +141,7 @@ async fn a_new_computer_can_discover_setup_and_forged_forms_do_not_join() {
             .any(|r| matches!(r, pigeon_proto::Request::Join { .. }))
     );
     let good = format!(
-        "form={}&invitation=pgn1-any&folder=%2FFamily&name=laptop",
+        "form={}&invitation=pgn2-any&folder=%2FFamily&name=laptop",
         form_token(&page)
     );
     let result = app.oneshot(post("/join", &cookie, &good)).await.unwrap();
@@ -148,9 +161,13 @@ async fn joining_a_refounded_group_waits_for_the_second_confirmation() {
             .unwrap(),
     )
     .await;
-    let ticket = data_encoding::BASE32_NOPAD.encode(br#"{"name":"Family","refounded":{"from":"old","by":"Ana","at":"2026-10-15T12:00:00Z"}}"#).to_lowercase();
+    let code = invitation(Some(pigeon_proto::join::Refounded {
+        from: "old".into(),
+        by: "Ana".into(),
+        at: "2026-10-15T12:00:00Z".into(),
+    }));
     let fields = format!(
-        "form={}&invitation=pgn1-{ticket}&folder=%2FFamily",
+        "form={}&invitation={code}&folder=%2FFamily",
         form_token(&page)
     );
     let answer = body(
@@ -186,6 +203,51 @@ async fn joining_a_refounded_group_waits_for_the_second_confirmation() {
             .count(),
         1
     );
+}
+
+#[tokio::test]
+async fn joining_as_a_person_of_the_group_waits_for_the_second_confirmation() {
+    let (w, backend) = recording();
+    let app = w.router();
+    let cookie = logged_in(&app, &w).await;
+    let page = body(
+        app.clone()
+            .oneshot(get("/join", HOST, Some(&cookie)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert!(page.contains("Your name in the group"), "{page}");
+    let fields = format!(
+        "form={}&invitation={}&folder=%2FFamily&person=Ana",
+        form_token(&page),
+        invitation(None)
+    );
+    let answer = body(
+        app.clone()
+            .oneshot(post("/join", &cookie, &fields))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert!(
+        answer.contains("Ana is already in") && answer.contains("name=\"existing\" value=\"true\""),
+        "{answer}"
+    );
+    app.oneshot(post("/join", &cookie, &format!("{fields}&existing=true")))
+        .await
+        .unwrap();
+    let joins: Vec<bool> = backend
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|r| match r {
+            pigeon_proto::Request::Join { existing, .. } => Some(*existing),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(joins, [false, true]);
 }
 
 #[tokio::test]

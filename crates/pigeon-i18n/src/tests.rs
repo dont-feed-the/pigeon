@@ -174,8 +174,11 @@ fn every_problem_has_a_message_and_ids_are_kebab_case() {
             );
         }
     }
-    assert_eq!(ids::display_code("invite-expired"), "P-INVITE-EXPIRED");
-    assert_eq!(ids::hint_id("invite-expired"), Some("hint-invite-expired"));
+    assert_eq!(ids::display_code("inviter-offline"), "P-INVITER-OFFLINE");
+    assert_eq!(
+        ids::hint_id("inviter-offline"),
+        Some("hint-inviter-offline")
+    );
     assert_eq!(ids::hint_id("not-allowed"), None);
 }
 
@@ -202,7 +205,7 @@ fn plurals_and_isolation() {
 
 #[test]
 fn a_problem_message_round_trips_as_json() {
-    let json = r#"{"id":"problem-invite-expired","args":{"until":"2026-10-12T14:10:00+02:00"}}"#;
+    let json = r#"{"id":"problem-person-exists","args":{"person":"Laurent"}}"#;
     let msg: Message = serde_json::from_str(json).unwrap();
     assert_eq!(check(&msg), Ok(()));
     assert_eq!(serde_json::to_string(&msg).unwrap(), json);

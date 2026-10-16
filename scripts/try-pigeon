@@ -69,17 +69,16 @@ start() {
   tail -n 20 "$d/pigeond.log" >&2
   die "$1's pigeond did not start"
 }
-invitation() { grep -o 'pgn1-[a-z2-7]*' | head -1; }
+invitation() { grep -o 'pgn2-[a-z2-7]*' | head -1; }
 
 echo "starting three pigeond in $dir/run"
 start alice
 start backup
 start bob
 "$dir/bin/alice" create Family "$dir/Alice" --k 1 --name alice-laptop
-code=$("$dir/bin/alice" invite --backup-machine backup | invitation)
-"$dir/bin/backup" join --backup-machine "$code"
-code=$("$dir/bin/alice" invite Bob | invitation)
-"$dir/bin/bob" join "$code" "$dir/Bob" --name bob-laptop
+code=$("$dir/bin/alice" invite | invitation)
+"$dir/bin/backup" join --backup-machine "$code" --name backup --yes
+"$dir/bin/bob" join "$code" "$dir/Bob" --name bob-laptop --person Bob
 cat <<MSG
 
 Alice's laptop, Bob's laptop and a backup machine now share the group Family.

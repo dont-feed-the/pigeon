@@ -1,23 +1,20 @@
 #!/bin/sh
-# Installs a release of pigeon (14 §14.5) under PREFIX, pigeon's directory
-# (~/.local/share/pigeon, ~/Library/Application Support/pigeon on macOS):
-# the latest release, or --version's, fetched from GitHub with its checksum
-# from the release's SHA256SUMS; with --main, main's latest commit, fetched
-# into PREFIX/src and built there. The new copy of this script then places
-# it: the programs in PREFIX/bin, the one they replace kept in
-# PREFIX/bin.previous, git-annex by install-git-annex (14 §14.3), a link to
-# `pigeon` in ~/.local/bin, pigeond (re)started as the systemd user unit or
-# the launchd agent of 14 §14.4, and the launcher that runs `pigeon open`
-# (10 §10.4, ADR 0029). `pigeon update` runs this script; installing the
-# release already here changes nothing.
+# Installs a release of pigeon (14 §14.5) under PREFIX (~/.local/share/pigeon,
+# ~/Library/Application Support/pigeon on macOS): the latest release, or
+# --version's, checked against its SHA256SUMS; with --main, main's latest
+# commit, built in PREFIX/src. The new copy of this script places it: the
+# programs in PREFIX/bin (the old ones in bin.previous), git-annex (14 §14.3),
+# a link in ~/.local/bin, pigeond's unit or agent (14 §14.4) and the launcher
+# (ADR 0029). A release already here is not fetched again. With --join, which
+# takes the rest of the arguments, it then runs `pigeon join` on the terminal.
 #
 #   curl -fsSL https://github.com/dont-feed-the/pigeon/releases/latest/download/pigeon-install | sh
 #   pigeon-install [--version vX.Y.Z | --main | --rollback | --uninstall] [--system]
+#   pigeon-install --join INVITATION [FOLDER] [--person NAME] [--backup-machine]
 #
 # --rollback puts PREFIX/bin.previous back; --no-service starts nothing.
-# PIGEON_RELEASES names where releases are, a directory laid out as GitHub's
-# (latest, a file holding the tag, and download/<tag>/<asset>), and
-# PIGEON_REPOSITORY the git repository --main fetches, for tests.
+# PIGEON_RELEASES names a directory laid out as GitHub's releases, and
+# PIGEON_REPOSITORY the repository --main fetches, for tests.
 set -eu
 
 releases=${PIGEON_RELEASES:-https://github.com/dont-feed-the/pigeon/releases}
@@ -57,9 +54,18 @@ case "$(uname -m)" in
   arm64 | aarch64) arch=arm64 ;;
   *) arch=$(uname -m) ;;
 esac
-version= rollback= main= uninstall= system= service=1 place= custom_prefix=
+# quote ARG: ARG as one word of sh, for eval.
+quote() { printf "'%s' " "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+
+version= rollback= main= uninstall= system= service=1 place= custom_prefix= joining= join_args=
 while [ $# -gt 0 ]; do
   case $1 in
+    --join)
+      shift
+      [ $# -gt 0 ] || die "--join needs an invitation"
+      joining=1
+      for a in "$@"; do join_args="$join_args$(quote "$a")"; done
+      break ;;
     --version) version=${2:?--version needs a tag}; shift 2 ;;
     --rollback) rollback=1; shift ;;
     --main) main=1; shift ;;
@@ -68,7 +74,7 @@ while [ $# -gt 0 ]; do
     --prefix) prefix=${2:?--prefix needs a directory}; custom_prefix=1; shift 2 ;;
     --no-service) service=; shift ;;
     --place) place=${2:?}; shift 2 ;;
-    -h | --help) sed -n '2,15s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,14s/^# \{0,1\}//p' "$0"; exit 0 ;;
     *) die "unknown argument $1" ;;
   esac
 done
@@ -85,6 +91,18 @@ if [ -z "$place" ]; then
     ??*) die "choose one of --version, --main, --rollback and --uninstall" ;;
   esac
 fi
+
+# Ends the script: with --join, runs `pigeon join` with its arguments,
+# reading the terminal even when this script came through a pipe.
+finish() {
+  [ -n "$joining" ] || exit 0
+  eval "set -- $join_args"
+  if (: </dev/tty) 2>/dev/null; then exec "$prefix/bin/pigeon" join "$@" </dev/tty; fi
+  exec "$prefix/bin/pigeon" join "$@"
+}
+
+# Passes --join and its arguments on to the next stage of this script.
+pass_join() { [ -z "$joining" ] || printf -- '--join %s' "$join_args"; }
 
 # Writes pigeond's unit or agent and (re)starts it (14 §14.4).
 start_service() {
@@ -197,7 +215,7 @@ if [ -z "$place" ] && [ -n "$main" ]; then
   version="v$v+g$commit"
   if [ "$(installed bin)" = "$version" ]; then
     say "pigeon $version is already installed in $prefix"
-    exit 0
+    finish
   fi
   say "building pigeon $version in $src"
   (cd "$src" && PIGEON_COMMIT=$commit cargo build --release --locked -p pigeond -p pigeon -p git-annex-p2p-iroh) ||
@@ -212,6 +230,7 @@ if [ -z "$place" ] && [ -n "$main" ]; then
   trap - EXIT
   if [ -n "$service" ]; then set --; else set -- --no-service; fi
   if [ -n "$system" ]; then set -- "$@" --system; fi
+  eval "set -- \"\$@\" $(pass_join)"
   exec "$tmp/release/bin/pigeon-install" --place "$tmp" --version "$version" --main --prefix "$prefix" "$@"
 fi
 
@@ -221,7 +240,7 @@ if [ -z "$place" ]; then
   [ -n "$version" ] || die "could not find the latest release at $releases"
   if [ "$(installed bin)" = "$version" ]; then
     say "pigeon $version is already installed in $prefix"
-    exit 0
+    finish
   fi
   archive="pigeon-$version-$os-$arch.tar.gz"
   mkdir -p "$prefix"
@@ -239,6 +258,7 @@ if [ -z "$place" ]; then
   trap - EXIT
   if [ -n "$service" ]; then set --; else set -- --no-service; fi
   if [ -n "$system" ]; then set -- "$@" --system; fi
+  eval "set -- \"\$@\" $(pass_join)"
   exec "$tmp/release/bin/pigeon-install" --place "$tmp" --version "$version" --prefix "$prefix" "$@"
 fi
 
@@ -274,3 +294,4 @@ mv "$place/release/bin" "$prefix/bin"
 if [ -z "$system" ]; then link_pigeon; add_launcher; fi
 start_service
 say "pigeon $version is installed in $prefix"
+finish

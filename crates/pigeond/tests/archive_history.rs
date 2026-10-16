@@ -47,6 +47,7 @@ async fn setup() -> (tempfile::TempDir, Git, Tree) {
     let roster = Roster {
         rules: 1,
         group: "Family".into(),
+        invitation: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".into(),
         k: 1,
         retention_days: 30,
         relay: None,

@@ -18,12 +18,13 @@ use serde::{Deserialize, Serialize};
 use toml_edit::{Item, TableLike};
 
 /// The format this release reads and writes.
-pub const FORMAT: u32 = 1;
+pub const FORMAT: u32 = 2;
 
 const TOP: &[&str] = &[
     "format",
     "rules",
     "group",
+    "invitation",
     "k",
     "retention_days",
     "relay",
@@ -50,6 +51,7 @@ struct FileT {
     format: u32,
     rules: u32,
     group: String,
+    invitation: String,
     k: u32,
     #[serde(default = "thirty")]
     retention_days: u32,
@@ -205,6 +207,7 @@ pub fn parse(text: &str) -> Result<RosterDoc, Unread> {
     let roster = Roster {
         rules: f.rules,
         group: f.group,
+        invitation: f.invitation,
         k: f.k,
         retention_days: f.retention_days,
         relay: f.relay,
@@ -240,6 +243,7 @@ pub fn render(doc: &RosterDoc) -> Result<String, String> {
         format: FORMAT,
         rules: r.rules,
         group: r.group.clone(),
+        invitation: r.invitation.clone(),
         k: r.k,
         retention_days: r.retention_days,
         relay: r.relay.clone(),

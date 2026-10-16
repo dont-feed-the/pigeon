@@ -134,20 +134,6 @@ impl Renderer {
         self.cat.format(&msg)
     }
 
-    /// A pending invitation: its ID, who it is for, and when it expires.
-    pub fn invitation(&self, i: &pigeon_proto::api::InvitationEntry) -> String {
-        let id = if i.custodian {
-            "invitation-row-backup"
-        } else {
-            "invitation-row"
-        };
-        let msg = crate::Message::new(id)
-            .arg("id", i.id.as_str())
-            .arg("who", i.who.as_str())
-            .arg("expires", i.expires.as_str());
-        self.cat.format(&msg)
-    }
-
     /// A person of the roster, with their machines.
     pub fn person(&self, p: &pigeon_proto::api::PersonEntry) -> String {
         let role = if p.admin {
@@ -329,13 +315,6 @@ impl Renderer {
             Response::Machines { machines } => {
                 (machines.iter().map(|m| self.machine(m)).collect(), false)
             }
-            Response::Invitations { invitations } if invitations.is_empty() => {
-                (vec![self.id("invitations-none")], false)
-            }
-            Response::Invitations { invitations } => (
-                invitations.iter().map(|i| self.invitation(i)).collect(),
-                false,
-            ),
             Response::Held { held } if held.is_empty() => (vec![self.id("held-none")], false),
             Response::Held { held } => (held.iter().map(|h| self.held(h)).collect(), false),
             Response::People { people } => (people.iter().map(|p| self.person(p)).collect(), false),

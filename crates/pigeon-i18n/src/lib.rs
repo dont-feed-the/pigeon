@@ -63,7 +63,7 @@ impl From<String> for Arg {
 }
 
 /// A message id with its arguments, as a Problem carries it and `--json`
-/// shows it: `{"id": "problem-invite-expired", "args": {"until": "…"}}`.
+/// shows it: `{"id": "problem-person-exists", "args": {"person": "…"}}`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Message {
     /// The Fluent id, one of [`ids::MESSAGES`].

@@ -81,6 +81,9 @@ pub struct Roster {
     pub rules: u32,
     /// Display name of the group.
     pub group: String,
+    /// The group's invitation: 256 random bits in lowercase hex, set at the
+    /// genesis and never changed; whoever proves it joins (ADR 0075).
+    pub invitation: String,
     /// K: custody copies, on distinct custodians (ADR 0046).
     pub k: u32,
     /// Waiting period before a purge, in days.
@@ -184,6 +187,8 @@ pub enum Invalid {
     RemovedDeviceBack(DeviceId),
     /// The group relay is not an `https://` or `http://` URL.
     BadRelay(String),
+    /// The invitation is not 64 lowercase hex digits.
+    BadInvitation,
 }
 
 impl Roster {
@@ -194,6 +199,14 @@ impl Roster {
         }
         if self.k == 0 {
             return Err(Invalid::ZeroSetting);
+        }
+        if self.invitation.len() != 64
+            || !self
+                .invitation
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        {
+            return Err(Invalid::BadInvitation);
         }
         if let Some(url) = &self.relay
             && !is_relay_url(url)
@@ -235,6 +248,34 @@ impl Roster {
             }
         }
         Ok(())
+    }
+
+    /// The person `who` names, by ID or by name, ignoring case.
+    pub fn person_named(&self, who: &str) -> Option<PersonId> {
+        let id = PersonId(who.to_ascii_lowercase());
+        if self.persons.contains_key(&id) {
+            return Some(id);
+        }
+        self.persons
+            .iter()
+            .find(|(_, p)| p.name.to_lowercase() == who.to_lowercase())
+            .map(|(id, _)| id.clone())
+    }
+
+    /// A person ID for a new person named `name`: its ASCII letters and
+    /// digits, lowercase (`person` if none), with a number if a person has
+    /// it (04 §4.2).
+    pub fn fresh_person_id(&self, name: &str) -> PersonId {
+        PersonId(fresh(name, "person", "", |id| {
+            self.persons.contains_key(&PersonId(id.to_owned()))
+        }))
+    }
+
+    /// `name`, or else `name-2`, `name-3`…: the first no device has.
+    pub fn fresh_device_name(&self, name: &str) -> String {
+        fresh(name, name, "-", |n| {
+            self.devices.values().any(|d| d.name == n)
+        })
     }
 
     /// The current value of a field, `None` if its person or device is absent.
@@ -374,6 +415,30 @@ impl Roster {
             }
         }
     }
+}
+
+/// The first of `base`, `base{sep}2`, `base{sep}3`… that is not `taken`,
+/// where `base` is `name`'s ASCII letters and digits in lowercase for a
+/// person ID (`sep` empty), `name` itself for a device name; `empty`
+/// stands for a base with no character.
+fn fresh(name: &str, empty: &str, sep: &str, taken: impl Fn(&str) -> bool) -> String {
+    let base: String = if sep.is_empty() {
+        name.chars()
+            .filter(char::is_ascii_alphanumeric)
+            .map(|c| c.to_ascii_lowercase())
+            .collect()
+    } else {
+        name.to_owned()
+    };
+    let base = if base.is_empty() {
+        empty.to_owned()
+    } else {
+        base
+    };
+    std::iter::once(base.clone())
+        .chain((2u64..).map(|n| format!("{base}{sep}{n}")))
+        .find(|c| !taken(c))
+        .unwrap_or_default()
 }
 
 /// Whether `url` may be a group relay: an `https://` URL, or `http://` for
@@ -572,11 +637,15 @@ pub fn may_sign_merge(parents: &[&Roster], signer: &DeviceId) -> bool {
 }
 
 /// The change δ that turns `old` into `new` (04 §4.8), when edits can say
-/// it: `None` if a device changes person, role or annex UUID, a removal is
-/// undone, or a device with an annex UUID is both added and removed. Laws
+/// it: `None` if the invitation changes, a device changes person, role or
+/// annex UUID, a removal is undone, or a device with an annex UUID is both
+/// added and removed. Laws
 /// (`tests/authority.rs`): when it answers, `apply(old, diff(old, new))`
 /// gives `new` without a skip; it answers for every change of one edit.
 pub fn diff(old: &Roster, new: &Roster) -> Option<Vec<Edit>> {
+    if old.invitation != new.invitation {
+        return None;
+    }
     let mut out = Vec::new();
     let set = |field: Field, out: &mut Vec<Edit>| {
         let (from, to) = (old.get(&field)?, new.get(&field)?);

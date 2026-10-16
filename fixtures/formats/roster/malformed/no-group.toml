@@ -1,5 +1,6 @@
-format = 1
+format = 2
 rules = 1
+invitation = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 k = 2
 retention_days = 30
 

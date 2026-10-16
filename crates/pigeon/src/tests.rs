@@ -42,25 +42,8 @@ fn commands_map_to_requests() {
             device_name: "lap".into(),
         })
     );
-    assert_eq!(
-        line("invite --backup-machine nas").action,
-        Action::Send(Request::Invite {
-            person: String::new(),
-            admin: false,
-            custodian: true,
-            name: Some("nas".into()),
-        })
-    );
-    assert_eq!(
-        line("invite --admin Paul").action,
-        Action::Send(Request::Invite {
-            person: "Paul".into(),
-            admin: true,
-            custodian: false,
-            name: None,
-        })
-    );
-    assert_eq!(line("invite").action, Action::Usage("invite".into()));
+    assert_eq!(line("invite").action, Action::Send(Request::Invite));
+    assert_eq!(line("invite Paul").action, Action::Usage("invite".into()));
     assert!(matches!(
         line("create F --folder /tmp/f").action,
         Action::Send(Request::Create { ref name, ref folder, k: 2, .. })
@@ -152,21 +135,7 @@ fn the_definition_is_sound_and_has_the_help_s_commands() {
 fn each_form_is_checked() {
     use pigeon_proto::api::HeldChoice;
     assert_eq!(
-        line("invite --list").action,
-        Action::Send(Request::Invitations)
-    );
-    assert_eq!(
-        line("invite --cancel i1").action,
-        Action::Send(Request::CancelInvitation {
-            invitation: "i1".into()
-        })
-    );
-    assert_eq!(
-        line("invite --list Paul").action,
-        Action::Usage("invite".into())
-    );
-    assert_eq!(
-        line("invite --admin --backup-machine").action,
+        line("invite --backup-machine").action,
         Action::Usage("invite".into())
     );
     assert_eq!(line("held").action, Action::Send(Request::Held));
@@ -201,12 +170,15 @@ fn each_form_is_checked() {
     );
     assert_eq!(line("debug").action, Action::Usage("debug".into()));
     assert_eq!(
-        line("join pgn1-x --backup-machine").action,
+        line("join pgn2-x --backup-machine --person Ana").action,
         Action::Send(Request::Join {
-            invitation: "pgn1-x".into(),
+            invitation: "pgn2-x".into(),
             folder: None,
             keep: false,
             name: None,
+            person: Some("Ana".into()),
+            existing: false,
+            custodian: true,
         })
     );
     let l = line("erase --json");

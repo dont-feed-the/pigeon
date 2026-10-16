@@ -92,17 +92,6 @@ pub fn held() -> ArgValueCandidates {
     })
 }
 
-/// The invitations not yet used, for `invite --cancel`.
-pub fn invitations() -> ArgValueCandidates {
-    listed(Request::Invitations, |r, answer| match answer {
-        Response::Invitations { invitations } => invitations
-            .iter()
-            .map(|i| candidate(&i.id, r.invitation(i)))
-            .collect(),
-        _ => Vec::new(),
-    })
-}
-
 /// The group's machines other than this one, for `remove-computer` and
 /// `debug bundle --from`.
 pub fn machines() -> ArgValueCandidates {
