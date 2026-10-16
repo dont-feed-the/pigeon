@@ -23,6 +23,9 @@ Milestone M3, reach and installation, with early M4 usability fixes
 
 ### Fixed
 
+- Joining checks every commit’s signature and permissions before adopting
+  the invited history, including recovery and refounded joins.
+
 - Service configurations handle installation paths containing spaces and
   special characters.
 - Status sees newly saved changes before capture finishes and does not

@@ -4,6 +4,7 @@ class Pigeon < Formula
   homepage "https://github.com/dont-feed-the/pigeon"
   url "https://github.com/dont-feed-the/pigeon/releases/download/v2.0.0-alpha.0/pigeon-v2.0.0-alpha.0-macos-arm64.tar.gz"
   version "2.0.0-alpha.0"
+  version_scheme 0
   sha256 "5a4b451d14ce8f8d4dadad05db1be5555cf572060bbca93f929cc7529f03b8df"
   license any_of: ["MIT", "Apache-2.0"]
 

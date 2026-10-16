@@ -403,3 +403,5 @@ drop-done = { $files } files hidden, { $dropped } contents removed from this com
 confirm-drop = Remove this computer's copy anyway? What no other machine has is lost. [y/N]
 cmd-view = Open a read-only copy of a version of a file, outside the folder
 view-ready = A read-only copy is at { $path }; it is removed after seven days.
+
+problem-join-history-unverified = Pigeon could not verify this group's history. Ask the person who invited you to update pigeon and send a new invitation.
