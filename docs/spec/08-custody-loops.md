@@ -218,6 +218,10 @@ report ([06 §6.3](06-status.md)).
 
 ## 8.9 Capacity (ADR 0003)
 
+Declining a suggestion does not schedule erasure. Its contents remain retained
+until someone explicitly erases them; there is no automatic expiry (user
+decision, 16 October 2026) **[no ADR]**.
+
 - **Need**, in parts, each K × the size of its distinct keys: *current*,
   *history* not purged, *suggestions* (open, declined or withdrawn) until
   erased, overflow copies (§8.3). A custodian also needs its git repository,

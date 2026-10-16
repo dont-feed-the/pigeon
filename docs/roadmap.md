@@ -169,9 +169,9 @@ These come in v1.1:
 - a placement planner (ADR 0003);
 - per-file freeing (ADR 0031).
 
-## Decisions people owe
+## Product decisions
 
-These questions of [16 §16.4](spec/16-open-questions.md) block a milestone:
-
-- the status thresholds block M4;
-- expiring declined suggestions blocks M5.
+The M4 usability report records the status thresholds. On 16 October 2026,
+the user resolved the M5 retention question: declined suggestions stay until
+someone explicitly erases them; groups do not expire them automatically.
+The remaining design questions are in [16 §16.4](spec/16-open-questions.md).
