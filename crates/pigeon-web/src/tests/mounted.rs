@@ -49,7 +49,9 @@ async fn mounted_pages_keep_all_urls_scoped_and_escape_peer_names() {
                     .map(|rest| rest.split('"').next().unwrap())
                 {
                     assert!(
-                        value.starts_with(PREFIX) || value == "/clients/selected",
+                        value.starts_with(PREFIX)
+                            || value.starts_with('#')
+                            || value == "/clients/selected",
                         "{path}: {attribute}{value}"
                     );
                 }

@@ -244,7 +244,6 @@ async fn shared_pages_and_actions_select_the_client_or_personal_control_peer() {
         "/machines",
         "/settings",
         "/doctor",
-        "/live.js",
     ] {
         let response = request(app.clone(), "GET", &format!("{prefix}{suffix}"), COOKIE, "").await;
         assert_eq!(response.status(), StatusCode::OK, "{suffix}");
@@ -259,7 +258,7 @@ async fn shared_pages_and_actions_select_the_client_or_personal_control_peer() {
     }));
     let home = text(request(app.clone(), "GET", &format!("{prefix}/"), COOKIE, "").await).await;
     assert!(
-        home.contains(&format!("src=\"{prefix}/live.js\""))
+        home.contains(&format!("src=\"{prefix}{}\"", pigeon_web::script_path()))
             && home.contains(&format!("data-events=\"{prefix}/events\""))
     );
     let canonical = request(app, "GET", &prefix, COOKIE, "").await;
@@ -303,13 +302,7 @@ async fn authentication_ownership_origin_csrf_and_revocation_guard_all_peer_rout
         .unwrap();
     assert_eq!(rebound.status(), StatusCode::FORBIDDEN);
     assert!(calls.lock().await.is_empty());
-    for suffix in [
-        "/files",
-        "/events",
-        "/live.js",
-        "/settings",
-        "/suggestions/view",
-    ] {
+    for suffix in ["/files", "/events", "/settings", "/suggestions/view"] {
         assert_eq!(
             request(
                 app.clone(),
@@ -376,7 +369,7 @@ async fn authentication_ownership_origin_csrf_and_revocation_guard_all_peer_rout
     for (method, suffix) in [
         ("GET", "/files"),
         ("GET", "/events"),
-        ("GET", "/live.js"),
+        ("GET", "/files?sort=size"),
         ("POST", "/files/view"),
         ("POST", "/settings"),
     ] {

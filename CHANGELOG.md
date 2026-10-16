@@ -9,6 +9,18 @@ increments the second number, and every other release the third.
 
 ### Added
 
+- `pigeon open` looks and works like a file manager. A sidebar holds the
+  sections and, on every page, whether your files are safe. **Files** shows
+  the folder you are in as a table, folders first, each with an icon by
+  kind, its state ("All safe", "2 not safe yet", "Only on this computer"),
+  its size and when it last changed; click a column to sort, type in the
+  box to filter by name, and follow the trail at the top to go back up.
+  Select a row (or its ⓘ) to see its details beside the table: its state,
+  who can change it, and a file's latest versions, each with *Open a copy*
+  and *Restore this version*, or a folder's *Keep on this computer* and
+  *Free up space*. Actions now run without leaving the page and say their
+  result in a message at the bottom. Dates show in your own time zone, and
+  the interface follows your system's light or dark mode.
 - Per-person folders: `pigeon folder-rule ~/Group/src --per-person` (or
   *Each folder in it belongs to the person it is named after* in a folder's
   sharing rule in `pigeon open`) makes every `src/<name>` belong to the
@@ -22,6 +34,10 @@ increments the second number, and every other release the third.
 
 ### Changed
 
+- Building pigeon from source now also needs Node.js 22.12 or later with
+  npm, which build the web interface's script; `pigeon update --main` and
+  `scripts/install-local` say so before building if it is missing. The
+  released programs need nothing new.
 - A computer is now in one group only. `pigeon create`, `pigeon join` and
   `pigeon recover` (and joining or creating in the web interface) refuse a
   second group, before writing anything, and say how to leave the first:

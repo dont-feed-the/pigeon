@@ -44,9 +44,11 @@ pub async fn view(
         );
     };
     let body = html! {
+        p class="lead" { (at.path) }
         p { (r.id("web-folder-rule-help")) }
         @for rule in &report.rules {
-            p { (r.folder_rule(rule, &report.people)) }
+            div class="card stack" {
+            p class="note" { (r.folder_rule(rule, &report.people)) }
             @if report.can_edit && !rule.path.is_empty() {
                 form method="post" action=(r.url("/folder-rule")) {
                     input type="hidden" name="form" value=(&token.0);
@@ -70,11 +72,12 @@ pub async fn view(
                     p { label { input type="radio" name="kind" value="per-person" checked[rule.direct && rule.per_person]; (r.id("web-folder-rule-per-person")) } }
                     p { label { input type="checkbox" name="confirm" value="rules"; (r.id("web-folder-rule-confirm-rules")) } }
                     p { label { input type="radio" name="kind" value="inherit" checked[!rule.direct]; (r.id("web-folder-rule-inherit")) } }
-                    button type="submit" { (r.id("web-save")) }
+                    button type="submit" class="primary" { (r.id("web-save")) }
                 }
             } @else { p { (r.id("web-folder-rule-admin")) } }
+            }
         }
-        p { a href=(r.url("/files")) { (r.id("web-back")) } }
+        p { a class="btn" href=(r.url(&format!("/folder?path={}", crate::browse::enc(&at.path)))) { (r.id("web-back")) } }
     };
     page(&r, "/files", &r.id("web-folder-rule"), &body)
 }

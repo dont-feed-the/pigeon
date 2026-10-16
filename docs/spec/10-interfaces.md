@@ -4,7 +4,7 @@
 > the local web interface, notifications, messages and problems. Words are
 > ux.md's; operations are the other files'.
 
-## 10.1 One request API (ADR 0021)
+## 10.1 One request API (ADRs 0021, 0076)
 
 Every operation is one **request type**, defined once in `pigeon-proto` and
 carried over the local socket ([09 §9.3](09-network-and-joining.md);
@@ -112,7 +112,7 @@ signed history. Evidence: [folder-rules-5](../reports/folder-rules-5.md).
   Only `pigeon export` reads repositories itself, read-only, with the same
   core code (ADR 0047).
 
-## 10.3 The web interface (ADR 0021, ux.md §6)
+## 10.3 The web interface (ADR 0076, ux.md §6)
 
 Coded so far (`crates/pigeon-web`, `pigeond/src/web.rs`): the binding, the
 login token and cookie, the `Host`/`Origin` check, Home, Suggestions and
@@ -137,9 +137,29 @@ axe-core (`scripts/check-a11y`, in CI) checks the mockups and every page of
 the test backend in English and French, without colour contrast, which
 needs a layout engine. Not yet: the other settings, the other actions.
 
-- Served by `pigeond`, rendered on the server; server-sent events refresh
-  the headline and activity; pages work without JavaScript. It writes
-  nothing itself: every action is a request of §10.1.
+Every page has a sidebar of the sections, with the live headline, and
+Files is a file browser **[no ADR: layout]**: a breadcrumb trail; a table
+of the folder's folders then files, each with an icon by kind, its state
+(a folder's "All safe" or "3 not safe yet"), size and last change from
+`Files`, sorted by a column's link and filtered by name; *Details* of a
+row beside it, its URL's `selected`, with the state, the sharing rule,
+the latest versions with *Open a copy* and *Restore this version*, and a
+folder's *Keep on this computer* or *Free up space*.
+
+- Served by `pigeond`, rendered on the server; pages work without
+  JavaScript. The client (ADR 0076), TypeScript built by `build.rs` with
+  the pinned esbuild and embedded, enhances them: server-sent events
+  refresh the headline while the page is shown, details open and actions
+  marked inline post without a page load and say their result, names
+  filter, and dates show in local time. It holds no message: every word
+  is the server's. It writes nothing itself: every action is a request
+  of §10.1.
+- **Assets and policy:** the script, stylesheet and icon are served at
+  `/assets/NAME-HASH.EXT`, immutable for a year, and fetched from nowhere
+  else. Every page has `Content-Security-Policy: default-src 'none';
+  script-src 'self'; style-src 'self'; img-src 'self'; connect-src
+  'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`,
+  with no inline script or style.
 - **Binding:** 127.0.0.1 only, on a port written to the runtime directory.
   `pigeon open` opens `http://127.0.0.1:<port>/login?token=<random 256
   bits>`; the single-use token becomes an `HttpOnly`, `SameSite=Strict`

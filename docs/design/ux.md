@@ -152,8 +152,8 @@ Rules:
 
 ## 6. The web interface
 
-Server-rendered pages (axum + maud, ADR 0021), five sections in a fixed navigation bar. Each
-page starts with its own one-line answer.
+Server-rendered pages (axum + maud, ADRs 0021 and 0076), five sections in a sidebar, a bar at
+the top on narrow screens. Each page starts with its own one-line answer.
 
 1. **Home.** The headline card; "Needs you" (actions, if any); "Recent activity" in sentences
    ("Paul added 12 photos to *Photos/Vacances*", "You restored *budget.xlsx*"); the space used

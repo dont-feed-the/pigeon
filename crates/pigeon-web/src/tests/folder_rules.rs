@@ -100,7 +100,7 @@ async fn nested_folders_have_discoverable_links_to_their_own_controls() {
             .unwrap(),
     )
     .await;
-    assert!(page.contains("Sous-dossiers"));
+    assert!(page.contains("data-name=\"Enfant\""), "{page}");
     assert_eq!(
         page.matches("href=\"/folder?path=%2FFamily%2FPhotos%2FEnfant\"")
             .count(),

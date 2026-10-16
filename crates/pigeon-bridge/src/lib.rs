@@ -224,11 +224,16 @@ async fn origin(State(app): State<Arc<App>>, request: Request, next: Next) -> Re
         // which would fail our origin guard even for our own forms.
         axum::http::HeaderValue::from_static("same-origin"),
     );
-    headers.insert(
-        header::CACHE_CONTROL,
-        axum::http::HeaderValue::from_static("no-store"),
-    );
-    headers.insert(header::CONTENT_SECURITY_POLICY, axum::http::HeaderValue::from_static("default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"));
+    // The peer pages' content-hashed assets say they may be cached.
+    if !headers.contains_key(header::CACHE_CONTROL) {
+        headers.insert(
+            header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static("no-store"),
+        );
+    }
+    // The bridge's own pages keep an inline stylesheet; the peer pages use
+    // their embedded one and icon (ADR 0076).
+    headers.insert(header::CONTENT_SECURITY_POLICY, axum::http::HeaderValue::from_static("default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"));
     response
 }
 

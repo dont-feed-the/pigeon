@@ -265,7 +265,6 @@ web-decline-note = Why (optional)
 web-back = Back
 web-form-expired = This page is out of date. Reload it and try again.
 web-nav-files = Files
-web-root-files = Files in the shared folder
 web-setup = Join or create a group
 web-setup-help = Ask someone in the group for an invitation, or create a group for your family or team. Choose an absolute folder path on this computer. A backup machine needs no shared folder.
 web-join = Join the group
@@ -502,7 +501,6 @@ problem-rules-raise = This sharing rule needs the group’s rules { $rules }. A 
 hint-rules-raise = Update those computers first if you can, then confirm, or run it again with --yes.
 confirm-rules-raise = Raise the group’s rules and save this sharing rule? [y/N]
 web-folder-rule = Folder sharing rule
-web-subfolders = Subfolders
 web-folder-rule-help = Choose who can change this folder. Everyone else can suggest changes. Subfolders inherit this rule unless they have their own.
 web-folder-rule-admin = An admin can change this sharing rule.
 web-folder-rule-owner = Only one person can change it
@@ -556,3 +554,64 @@ web-join-existing = { $person } is already in “{ $group }”. Choose Join to a
 web-copy = Copy
 web-invite-help = To add someone to “{ $group }”, another computer or a backup machine, share this line; it installs pigeon and joins the group. On a backup machine, add --backup-machine at its end. Whoever has it can join, with the rights of the person they say they are.
 progress-join = Joining: waiting for the computer of an admin of the group to answer…
+web-skip = Skip to the content
+web-sections = Sections
+web-status = Status:
+web-breadcrumb = Location
+web-size-b = { $size } B
+web-size-kb = { $size } kB
+web-size-mb = { $size } MB
+web-size-gb = { $size } GB
+web-size-tb = { $size } TB
+web-decimal-separator = {"."}
+web-folder-all-safe = All safe
+web-folder-not-safe =
+    { $count ->
+        [one] 1 not safe yet
+       *[other] { $count } not safe yet
+    }
+web-folder-files =
+    { $files ->
+        [one] 1 file
+       *[other] { $files } files
+    }
+web-files-lead = Your shared folder on this computer: { $folder }
+web-files-empty-help = Files you put in { $folder } appear here once pigeon has seen them.
+web-folder-freed-note = This folder is not on this computer: its files are kept safe on the backup machines. Keep it on this computer to get it back, complete.
+web-filter = Filter by name
+web-filter-placeholder = Filter by name…
+web-filter-none = No name here contains what you typed.
+web-files-caption = Folders and files, with their state, size and last change
+web-col-kind = Kind
+web-col-name = Name
+web-col-state = State
+web-col-size = Size
+web-col-modified = Changed
+web-col-deleted = Deleted
+web-col-actions = Actions
+web-not-here = Not on this computer
+web-kept-here = Kept on this computer
+web-details = Details
+web-details-of = Details of { $name }
+web-details-close = Close the details of { $name }
+web-versions-of = Versions of { $name }
+web-version-number = Version { $number }
+web-saved = Saved
+web-current-version = current version
+web-detail-files = Contains
+web-detail-here = On this computer
+web-detail-rule = Who can change it
+web-open-folder = Open
+web-all-versions = All versions
+web-deleted-lead = Deleted files stay safe: restore one to bring back its last version, with its history.
+web-suggestions-empty-help = When someone changes a file that you decide, their change waits here for you.
+web-people = People
+web-machines = Computers and backup machines
+web-copied = Copied
+web-settings-computer = This computer
+web-settings-sharing = Sharing
+web-leave-help = This computer stops sharing; its files stay in the folder.
+web-rule-owned = Only { $owner }; others' changes become suggestions
+web-rule-add-only = Everyone can add; other changes are decided by { $stewards }
+web-rule-per-person = Each folder in it belongs to the person it is named after
+web-shortcuts = Go to

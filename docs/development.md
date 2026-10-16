@@ -4,7 +4,10 @@
 
 ## Build from source
 
-With [rustup](https://rustup.rs), which fetches the pinned toolchain:
+With [rustup](https://rustup.rs), which fetches the pinned toolchain, and
+[Node.js](https://nodejs.org) 22.12 or later with npm, which build the web
+interface's script (ADR 0076; `crates/pigeon-web/client/.nvmrc` names the
+version CI uses):
 
 ```sh
 git clone https://github.com/mariogeiger/pigeon.git
@@ -80,6 +83,19 @@ scripts/check-file-length-and-header   # no file reaches 1000 lines; every file 
 scripts/check-adr-index                # docs/adr/README.md lists every ADR
 scripts/run-tlc                        # the fast set of TLA+ models (Java 11 or later)
 ```
+
+`crates/pigeon-web/build.rs` builds the web client: it copies
+`crates/pigeon-web/client/` to its `OUT_DIR`, installs the pinned esbuild
+and TypeScript there with `npm ci` (again only when `package-lock.json`
+changes; the first time needs the npm registry or npm's cache), then runs
+`client/build.mjs`, which type-checks the TypeScript and bundles it. Cargo
+reruns it only when the client's sources change; a missing or old `node`
+stops the build with what to install (`PIGEON_NODE` and `PIGEON_NPM` name
+other programs). `cargo nextest` runs the client's tests (`client/test/`)
+with that Node; in `client/`, `npm ci && npm test` runs them alone. To
+look at the pages with sample data, `PIGEON_WEB_DEMO=8123 cargo test -p
+pigeon-web --lib serve_the_demo -- --ignored --nocapture` serves them on
+127.0.0.1:8123 and prints login links.
 
 The integration tests of `pigeond` need git-annex on the `PATH`. Under
 cargo, git ignores your global and system configuration and ignore files
