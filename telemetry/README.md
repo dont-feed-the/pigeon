@@ -51,12 +51,29 @@ capture and custody; an unavailable collector or dashboard does not change
 file protection. `pigeon debug bundle` flushes and includes recent local
 OTLP records.
 
-The operator dashboard currently graphs protection counts, pending bytes,
-deferred keys, annex call durations and failures, and transported bytes.
-Transport bytes include protocol traffic. The path label is `unknown`
-until connection-path instrumentation is added; it never claims direct or
-relay evidence that was not measured. Sync/protection lag, process resource
-metrics and per-class ready queue depths remain to be instrumented for M6.
+The operator dashboard graphs current protection counts, pending bytes,
+deferred capacity, annex call durations/failures, transported bytes, capture
+acceptance lag, observed protection lag and actual work batches. Batch
+depths cover capture, history, protection and downloads; they clear on
+success or error. Short batches can fall between the SDK's samples. Scrub
+and rebalance classes appear when those queues are implemented; absence of
+a measurement is not a proven zero. Process resource budgets remain M6.
+
+Acceptance lag uses the signed capture commit's wall-clock time and records
+its arrival on each peer. Protection lag records a current path/key only
+after this process has observed it unprotected, then protected. Sampling
+is every 30 seconds and may be delayed by a busy round. Already-safe
+startup inventory is excluded; clock skew is counted separately, never
+converted to zero-second success. Duplicate suppression is bounded to
+4096 identities per group/process; excess timings are expendable. A
+restart begins a new diagnostic series. At most 256 new metadata records
+are inspected per acceptance, with truncation counted explicitly.
+
+Connection observations sample the selected iroh path when an annex stream
+is admitted, on incoming and outgoing sides. Reused connections count
+again. They do not attribute later migration or bytes: throughput includes
+protocol traffic and retains its `unknown` path label. None of these
+operator measurements replaces Home's signed-state safety judgement.
 
 ## Optional Tokio task console
 

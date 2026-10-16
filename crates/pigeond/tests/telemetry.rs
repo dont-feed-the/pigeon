@@ -87,6 +87,171 @@ impl Drop for Backend {
     }
 }
 
+fn metric<'a>(records: &'a [serde_json::Value], name: &str) -> Vec<&'a serde_json::Value> {
+    records
+        .iter()
+        .flat_map(|r| r["resourceMetrics"].as_array().into_iter().flatten())
+        .flat_map(|r| r["scopeMetrics"].as_array().into_iter().flatten())
+        .flat_map(|r| r["metrics"].as_array().into_iter().flatten())
+        .filter(|m| m["name"] == name)
+        .collect()
+}
+
+fn attribute(point: &serde_json::Value, key: &str, value: &str) -> bool {
+    point["attributes"].as_array().is_some_and(|attrs| {
+        attrs
+            .iter()
+            .any(|a| a["key"] == key && a["value"]["stringValue"] == value)
+    })
+}
+
+#[test]
+fn real_acceptance_protection_paths_and_work_batches_reach_the_backend() {
+    let Some((_tmp, root, sockets)) = dirs() else {
+        return;
+    };
+    let backend = Backend::start();
+    let alice = start(&root, sockets.path(), "alice");
+    let backup = start(&root, sockets.path(), "backup");
+    let folder = root.join("shared");
+    assert!(
+        said(
+            &pigeon(
+                &alice,
+                &[
+                    "create",
+                    "operator-metrics",
+                    folder.to_str().unwrap(),
+                    "--k",
+                    "1"
+                ]
+            ),
+            "created",
+            "group"
+        )
+        .is_some()
+    );
+    join(&alice, &backup, &[&alice, &backup]);
+    let config = alice.home.join("config/config.toml");
+    let mut doc = std::fs::read_to_string(&config)
+        .unwrap()
+        .parse::<toml_edit::DocumentMut>()
+        .unwrap();
+    doc["telemetry"]["endpoint"] = toml_edit::value(&backend.address);
+    std::fs::write(&config, doc.to_string()).unwrap();
+    let own_id = pigeon(&alice, &["machines"])
+        .into_iter()
+        .find_map(|r| match r {
+            pigeon_proto::Response::Machines { machines } => machines
+                .into_iter()
+                .find(|m| m.this_device)
+                .map(|m| m.device),
+            _ => None,
+        })
+        .unwrap();
+    let chosen = pigeon(&alice, &["settings", "telemetry-device", &own_id]);
+    assert!(
+        said(&chosen, "setting-changed", "value").is_some(),
+        "{chosen:?}"
+    );
+    drop(backup);
+    std::fs::create_dir_all(folder.join("Media")).unwrap();
+    let file = folder.join("Media/exact.bin");
+    let bytes = b"operator proof\0with exact bytes\r\n";
+    std::fs::write(&file, bytes).unwrap();
+    until(&alice, pigeon_proto::api::State::Local, &[&alice]);
+    // This proves the real sampler observed an unprotected state before
+    // reconnect, rather than manufacturing a protection measurement at boot.
+    eventually_within(
+        100,
+        || {
+            metric(&backend.records.lock().unwrap(), "pigeon.versions")
+                .iter()
+                .any(|m| {
+                    m["gauge"]["dataPoints"].as_array().is_some_and(|points| {
+                        points.iter().any(|p| {
+                            (attribute(p, "state", "local") || attribute(p, "state", "published"))
+                                && p["asDouble"].as_f64().is_some_and(|n| n > 0.0)
+                        })
+                    })
+                })
+        },
+        "a real unprotected inventory measurement",
+        &[&alice],
+    );
+    let backup = start(&root, sockets.path(), "backup");
+    eventually_within(
+        100,
+        || status(&alice).state == pigeon_proto::api::State::Protected,
+        "the exact saved version protected after reconnect",
+        &[&alice, &backup],
+    );
+    let _ = pigeon(&alice, &["free", folder.join("Media").to_str().unwrap()]);
+    eventually(
+        || !file.exists(),
+        "actual free before requested keep",
+        &[&alice, &backup],
+    );
+    let _ = pigeon(&alice, &["keep", folder.join("Media").to_str().unwrap()]);
+    eventually(
+        || std::fs::read(&file).ok().as_deref() == Some(bytes.as_slice()),
+        "exact kept bytes",
+        &[&alice, &backup],
+    );
+    let last_flags = Mutex::new([false; 4]);
+    eventually_within(
+        120,
+        || {
+            let records = backend.records.lock().unwrap();
+            let protected = !metric(&records, "pigeon.protect.lag").is_empty();
+            let peer_acceptance = metric(&records, "pigeon.sync.lag").iter().any(|m| {
+                m["histogram"]["dataPoints"]
+                    .as_array()
+                    .is_some_and(|p| p.iter().any(|p| attribute(p, "observation", "peer")))
+            });
+            let direct = metric(&records, "pigeon.connection.observations")
+                .iter()
+                .any(|m| {
+                    m["sum"]["dataPoints"]
+                        .as_array()
+                        .is_some_and(|p| p.iter().any(|p| attribute(p, "path", "direct")))
+                });
+            let queues = ["capture", "history", "protect", "download"]
+                .iter()
+                .all(|class| {
+                    metric(&records, "pigeon.queue.depth").iter().any(|m| {
+                        m["gauge"]["dataPoints"]
+                            .as_array()
+                            .is_some_and(|p| p.iter().any(|p| attribute(p, "class", class)))
+                    })
+                });
+            let flags = [protected, peer_acceptance, direct, queues];
+            let mut previous = last_flags.lock().unwrap();
+            if *previous != flags {
+                let _ = writeln!(
+                    std::io::stderr(),
+                    "operator metric conditions [protection, acceptance, direct, queues]: {flags:?}"
+                );
+                *previous = flags;
+            }
+            flags.into_iter().all(|ready| ready)
+        },
+        "lag, selected direct paths and all implemented work classes",
+        &[&alice, &backup],
+    );
+    assert_eq!(std::fs::read(file).unwrap(), bytes);
+    if let Some(path) = std::env::var_os("PIGEON_METRICS_EVIDENCE") {
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(path)
+            .unwrap();
+        serde_json::to_writer(&mut file, &*backend.records.lock().unwrap()).unwrap();
+    }
+}
+
 #[test]
 fn peer_diagnostics_require_the_signed_collector_choice() {
     let Some((_tmp, root, sockets)) = dirs() else {

@@ -48,11 +48,29 @@ refresh old capacity figures. Five-second events replace text values;
 membership or repair-history changes reload the view. This uses no OTLP
 backend. Its evidence is in [health-5](../reports/health-5.md).
 
-The optional operator dashboard
-and setup instructions live in `telemetry/`. Instrumented: version-state
-counts, pending bytes, deferred keys, annex call latency/outcome and
-transport bytes. Not yet: sync/protection lag, CPU/memory budgets and all
-ready-queue depths. The transfer path remains `unknown` until measured.
+The optional operator dashboard and setup instructions live in
+`telemetry/`. It includes version-state counts, pending bytes, deferred
+keys, annex call latency/outcome, transport bytes, acceptance/protection
+lag and constructed work batches for capture, history, protection and
+downloads. Scrub/rebalance measurements follow those implementations;
+CPU/memory budgets remain M6. Batches clear on every exit and include the
+current work until its stage advances; short batches may fall between SDK
+samples. A missing inventory produces no count sample.
+
+Acceptance records at most 256 new accepted capture commits per update,
+with a truncation counter. Protection records a sampled
+unprotected→protected transition for a current path/key; already-safe
+startup inventory is excluded. A bounded immutable snapshot preserves its
+observation time while a busy round finishes the protected history lookup.
+Read-only counts continue during long offline-peer retries. Each group
+has at most 4096 timing identities and 4096 unprotected identities per
+process; excess diagnostics can be omitted. Wall-clock skew is explicit,
+never a zero lag. These diagnostic clocks never decide safety or retention.
+
+Admitted annex streams sample the selected iroh direct/relay/unknown path
+in both directions. A reused connection counts again; later migrations
+are not attributed. Transport bytes retain `unknown` path and include
+protocol bytes. See [operator evidence](../reports/operations-5.md).
 
 - Spans, events and metrics are exported as OTLP by `pigeon-telemetry`, the
   only crate depending on `opentelemetry*`, pinned to one minor version.

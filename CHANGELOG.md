@@ -4,6 +4,14 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.13 — 2026-10-16
+
+### Added
+
+- The optional operator dashboard measures peer acceptance and observed
+  protection delays, actual work batches and direct/relay connection
+  observations. Clock skew is shown separately from successful timings.
+
 ## 0.4.12 — 2026-10-16
 
 ### Added

@@ -68,6 +68,12 @@ pub struct Known {
     /// The bytes place left to send (a laptop) or to receive (a custodian)
     /// in its last round.
     pub queue_bytes: u64,
+    /// Bounded, per-process diagnostic observations; never safety state.
+    pub telemetry_latency: pigeon_core::latency::Ledger<String>,
+    /// Current versions observed before protection, at most 4096 identities.
+    pub telemetry_unprotected: BTreeSet<String>,
+    /// One bounded immutable protection snapshot awaiting the group lock.
+    pub(crate) telemetry_protection: Option<crate::telemetry::ProtectionSample>,
     /// Every commit judged so far and the catalogue of each (05 §5.2):
     /// accept's memory, rebuilt from the genesis after a restart.
     pub engine: pigeon_core::catalogue::Engine<pigeon_core::authority::Entry>,

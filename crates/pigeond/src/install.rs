@@ -347,7 +347,9 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
     let freed = crate::evict::targets(g);
     let before = crate::evict::hidden_paths(g).await;
     let mut hidden = before.clone();
+    let mut queue = crate::telemetry::Queue::start(&g.id, "download", "install", changed.len());
     for path in changed {
+        queue.complete(1);
         let (w, h) = (want.get(path), have.get(path));
         if is_pigeon_path(path) || path == ".gitattributes" {
             own(g, path, w).await;

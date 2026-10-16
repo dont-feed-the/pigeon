@@ -180,6 +180,7 @@ impl Daemon {
         }
         if crate::pause::now(self).is_some() {
             // Paused by the person: all but capture waits (15 §15.6).
+            crate::telemetry::flush_protection(g).await;
             crate::clock_file::save(g, self.tracer.clock());
             return;
         }
@@ -213,6 +214,7 @@ impl Daemon {
             let _step = round.child("publish");
             crate::report::publish(g, &self.device).await;
         }
+        crate::telemetry::flush_protection(g).await;
         crate::clock_file::save(g, self.tracer.clock());
     }
 }

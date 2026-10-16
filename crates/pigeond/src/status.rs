@@ -83,18 +83,28 @@ pub async fn observe(g: &Group, me: &str, prefix: &str) -> Vec<Observed> {
     observe_checked(g, me, prefix).await.unwrap_or_default()
 }
 
-async fn observe_checked(
+pub(crate) async fn observe_checked(
     g: &Group,
     me: &str,
     prefix: &str,
 ) -> Result<Vec<Observed>, crate::git::Error> {
+    inventory(g, me, prefix).await.map(|(_, versions)| versions)
+}
+
+/// A consistent immutable accepted ref and the observations read from it.
+pub(crate) async fn inventory(
+    g: &Group,
+    me: &str,
+    prefix: &str,
+) -> Result<(String, Vec<Observed>), crate::git::Error> {
     let Some(main) = g.git.rev("refs/heads/main").await else {
         return Err(crate::git::Error::Parse {
             argv: vec!["main".into()],
             detail: "accepted main unavailable".into(),
         });
     };
-    observe_at(g, me, prefix, &main).await
+    let versions = observe_at(g, me, prefix, &main).await?;
+    Ok((main, versions))
 }
 
 async fn observe_at(

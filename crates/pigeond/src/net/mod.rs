@@ -382,6 +382,7 @@ impl Node {
             let admitted = Self::admit(&connection, group, &own);
             match tokio::time::timeout(CONNECT_TIMEOUT, admitted).await {
                 Ok(Ok(pair)) => {
+                    observe_path(&connection, group, device, "outgoing");
                     self.note(key, group, None);
                     return Ok(pair);
                 }
@@ -579,6 +580,26 @@ impl Node {
 
 /// One peer's connection, dialled at most once at a time.
 type Slot = Arc<tokio::sync::Mutex<Option<Connection>>>;
+
+fn observe_path(connection: &Connection, group: &str, peer: &str, direction: &str) {
+    let paths = connection.paths();
+    let selected = paths.iter().find(|p| p.is_selected());
+    let path = match selected {
+        Some(p) if p.is_ip() => "direct",
+        Some(p) if p.is_relay() => "relay",
+        _ => "unknown",
+    };
+    pigeon_telemetry::counter(
+        "pigeon.connection.observations",
+        1,
+        &[
+            ("group", group),
+            ("peer", peer),
+            ("direction", direction),
+            ("path", path),
+        ],
+    );
+}
 
 /// How long dialling a peer may take before it counts as unreachable.
 pub const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);

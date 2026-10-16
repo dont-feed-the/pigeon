@@ -434,6 +434,8 @@ async fn commit_batch(
         all,
     } = b;
     let remove = hold_mass_deletions(g, &mut held, &before, &add, remove).await?;
+    let mut queue =
+        crate::telemetry::Queue::start(&g.id, "capture", "batch", all.len() + remove.len());
     for chunk in all.chunks(64) {
         let mut args = vec![
             "-c",
@@ -477,11 +479,13 @@ async fn commit_batch(
         for p in chunk {
             tracer.event(Act::Capture, &[("path", p)]);
         }
+        queue.complete(chunk.len());
     }
     for chunk in remove.chunks(64) {
         let mut args = vec!["update-index", "--remove", "--"];
         args.extend(chunk.iter().map(String::as_str));
         g.git.run(&args).await?;
+        queue.complete(chunk.len());
     }
     let settled = settle(g, head.as_deref(), main.as_ref(), &before, &pending, &gone).await?;
     note_diverging(g, settled.diverging);
@@ -565,6 +569,7 @@ async fn commit_main(
         .update_ref("refs/heads/main", &commit, head.as_deref())
         .await?;
     tracing::info!(group = %g.id, commit = %commit, added = done.added, removed = done.removed, renamed = renames.len(), "captured");
+    crate::telemetry::captured(g, &commit);
     done.commit = Some(commit);
     Ok(done)
 }

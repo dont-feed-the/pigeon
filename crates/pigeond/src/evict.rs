@@ -358,6 +358,7 @@ pub async fn keep(g: &Group, t: &Tracer) -> Result<usize, String> {
         .filter_map(|p| Some((p.clone(), keys.get(p)?.clone())))
         .collect();
     let mut objects = BTreeMap::new();
+    let mut queue = crate::telemetry::Queue::start(&g.id, "download", "keep", wanted.len());
     for (_, key) in &wanted {
         if objects.contains_key(key) {
             continue;
@@ -376,6 +377,7 @@ pub async fn keep(g: &Group, t: &Tracer) -> Result<usize, String> {
     let mut moved = Vec::new();
     let mut raced = Vec::new();
     for (path, key) in &wanted {
+        queue.complete(1);
         let stage = g.files.stage(seq);
         let object = objects.get(key).ok_or("receiving")?;
         std::fs::copy(object, &stage).map_err(|e| e.to_string())?;

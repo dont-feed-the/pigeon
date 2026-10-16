@@ -66,7 +66,8 @@ pub async fn accept_loop(net: Arc<Net>) {
             while let Ok((send, recv)) = connection.accept_bi().await {
                 let net = net.clone();
                 let device = device.clone();
-                tokio::spawn(async move { stream(net, device, send, recv).await });
+                let connection = connection.clone();
+                tokio::spawn(async move { stream(net, device, connection, send, recv).await });
             }
         });
     }
@@ -106,7 +107,13 @@ async fn refuse(mut send: SendStream, device: &str, refusal: Refusal) {
     let _ = tokio::time::timeout(Duration::from_secs(5), send.stopped()).await;
 }
 
-async fn stream(net: Arc<Net>, device: String, send: SendStream, mut recv: RecvStream) {
+async fn stream(
+    net: Arc<Net>,
+    device: String,
+    connection: iroh::endpoint::Connection,
+    send: SendStream,
+    mut recv: RecvStream,
+) {
     let header = match tokio::time::timeout(HEADER_TIMEOUT, read_line(&mut recv)).await {
         Ok(Ok(line)) => serde_json::from_slice::<StreamHeader>(&line).ok(),
         _ => None,
@@ -138,6 +145,7 @@ async fn stream(net: Arc<Net>, device: String, send: SendStream, mut recv: RecvS
         return;
     }
     tracing::info!(peer = %device, group = %header.group, "stream-admitted");
+    super::observe_path(&connection, &header.group, &device, "incoming");
     let addresses = header
         .addresses
         .iter()

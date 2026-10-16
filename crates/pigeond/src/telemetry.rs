@@ -6,6 +6,11 @@ use crate::daemon::Daemon;
 use crate::net::Directory;
 use std::sync::Arc;
 use std::time::Duration;
+mod latency;
+mod queue;
+pub(crate) use latency::{ProtectionSample, flush_protection};
+pub(crate) use latency::{accepted, captured};
+pub(crate) use queue::Queue;
 
 /// Stores a peer's telemetry only when the roster selected this device.
 pub async fn receive(
@@ -128,19 +133,30 @@ pub async fn set_collector(d: &Daemon, value: &str) -> Vec<pigeon_proto::Respons
 }
 
 async fn sample(d: &Daemon, g: &crate::group::Group) {
-    let Ok(_busy) = g.busy.try_lock() else {
-        return;
-    };
     let pending = if g.role == pigeon_core::filter::Role::Laptop {
         match crate::capture::pending(g, "").await {
             Ok(p) => p,
-            Err(_) => return,
+            Err(error) => {
+                tracing::debug!(group = %g.id, error = %error, "telemetry-pending-unavailable");
+                return;
+            }
         }
     } else {
         std::collections::BTreeSet::new()
     };
     let mut counts = [0usize; 5];
-    for version in crate::status::observe(g, &d.device, "").await {
+    let (main, observed) = match crate::status::inventory(g, &d.device, "").await {
+        Ok(inventory) => inventory,
+        Err(error) => {
+            tracing::debug!(group = %g.id, error = %error, "telemetry-inventory-unavailable");
+            return;
+        }
+    };
+    latency::protection(g, main, &observed, &pending);
+    if let Ok(_busy) = g.busy.try_lock() {
+        flush_protection(g).await;
+    }
+    for version in observed {
         if !pending.contains(&version.path) {
             counts[usize::from(pigeon_core::state::rank(&version.state))] += 1;
         }

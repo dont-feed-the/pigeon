@@ -16,7 +16,7 @@
     "opentelemetry"
   ],
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": {
     "from": "now-1h",
@@ -49,7 +49,7 @@
         {
           "refId": "A",
           "expr": "sum by (group, state, uncertain) (pigeon_versions)",
-          "legendFormat": "{{group}} {{state}} {{command}} {{outcome}} {{direction}} {{peer}}"
+          "legendFormat": "{{group}} {{state}} uncertain={{uncertain}}"
         }
       ],
       "options": {
@@ -87,7 +87,7 @@
         {
           "refId": "A",
           "expr": "sum by (group) (pigeon_queue_bytes)",
-          "legendFormat": "{{group}} {{state}} {{command}} {{outcome}} {{direction}} {{peer}}"
+          "legendFormat": "{{group}}"
         }
       ],
       "options": {
@@ -125,7 +125,7 @@
         {
           "refId": "A",
           "expr": "histogram_quantile(0.95, sum by (le, group, command) (rate(pigeon_annex_call_duration_seconds_bucket[5m])))",
-          "legendFormat": "{{group}} {{state}} {{command}} {{outcome}} {{direction}} {{peer}}"
+          "legendFormat": "{{group}} {{command}}"
         }
       ],
       "options": {
@@ -163,7 +163,7 @@
         {
           "refId": "A",
           "expr": "sum by (group, command) (rate(pigeon_annex_call_duration_seconds_count{outcome=\"error\"}[5m]))",
-          "legendFormat": "{{group}} {{state}} {{command}} {{outcome}} {{direction}} {{peer}}"
+          "legendFormat": "{{group}} {{command}}"
         }
       ],
       "options": {
@@ -201,7 +201,7 @@
         {
           "refId": "A",
           "expr": "sum by (group, direction, peer, path) (rate(pigeon_transfer_bytes_total[5m]))",
-          "legendFormat": "{{group}} {{state}} {{command}} {{outcome}} {{direction}} {{peer}}"
+          "legendFormat": "{{group}} {{direction}} {{peer}} {{path}}"
         }
       ],
       "options": {
@@ -217,8 +217,8 @@
     {
       "id": 6,
       "type": "timeseries",
-      "title": "Deferred keys",
-      "description": "The deferred capacity queue is instrumented; ready queue classes are added with adaptive scheduling.",
+      "title": "Work batches and deferred keys",
+      "description": "Current constructed batches, including active work; deferred capacity is separate. An absent class has no measurement, not a proven zero. Samples may miss short batches.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -238,8 +238,160 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (group, class) (pigeon_queue_depth)",
-          "legendFormat": "{{group}} {{state}} {{command}} {{outcome}} {{direction}} {{peer}}"
+          "expr": "sum by (group, class, stage) (pigeon_queue_depth)",
+          "legendFormat": "{{group}} {{class}} {{stage}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Peer acceptance lag p95",
+      "description": "Wall-clock capture-to-acceptance on a peer. Future capture clocks are omitted and counted separately.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, group) (rate(pigeon_sync_lag_seconds_bucket{observation=\"peer\"}[5m])))",
+          "legendFormat": "{{group}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Observed protection lag p95",
+      "description": "First sampled unprotected to protected transition. Resolution is30 seconds plus a busy round; already-safe startup inventory is excluded.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, group) (rate(pigeon_protect_lag_seconds_bucket{observation=\"sampled-transition\"}[5m])))",
+          "legendFormat": "{{group}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Selected path observed at stream admission",
+      "description": "Admitted annex streams sample the selected connection path. Reused connections count again; subsequent migration is not attributed. Throughput path stays unknown.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (group, direction, path) (rate(pigeon_connection_observations_total[5m]))",
+          "legendFormat": "{{group}} {{direction}} {{path}} {{observation}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Clock-skew observations",
+      "description": "A future capture is a clock-skew observation, never a zero-second successful lag.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (group, observation) (rate(pigeon_lag_clock_skew_total[5m]))",
+          "legendFormat": "{{group}} {{direction}} {{path}} {{observation}}"
         }
       ],
       "options": {

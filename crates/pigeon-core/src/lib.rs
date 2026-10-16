@@ -20,6 +20,7 @@ pub mod health;
 pub mod held;
 pub mod invitation;
 pub mod journal;
+pub mod latency;
 pub mod names;
 pub mod notify;
 pub mod proposal;
