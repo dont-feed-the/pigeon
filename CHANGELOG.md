@@ -4,6 +4,14 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.3 — 2026-10-16
+
+### Added
+
+- The published purge protocol's safety guarantees are checked for arbitrary
+  custodian counts and waiting periods, including restores, cancellations,
+  restarts and delayed messages. The erase command is still not implemented.
+
 ## 0.4.2 — 2026-10-16
 
 ### Added

@@ -25,7 +25,7 @@ jobs:
           key: formal-tools-linux-x64-${{ hashFiles('scripts/check-proofs', 'scripts/run-tlc') }}
           restore-keys: formal-tools-linux-x64-
       - name: fresh proofs, actual cfg assumptions, and rejected mutations
-        run: scripts/check-proofs
+        run: scripts/check-proofs --benchmark-purge
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
