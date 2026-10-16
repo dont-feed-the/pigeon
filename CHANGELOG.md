@@ -4,7 +4,7 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
-## 0.5.9 — 2026-10-16
+## 0.5.10 — 2026-10-16
 
 ### Fixed
 
@@ -12,6 +12,19 @@ the second number, and every other pull request the third.
   "Bootstrap failed: 5: Input/output error" when macOS had not yet finished
   stopping the old pigeond; the update now waits for that, up to ten
   seconds, before starting the new one.
+
+## 0.5.9 — 2026-10-16
+
+### Changed
+
+- Routine verification uses checked proofs for two more token hand-off
+  cases and for suggestion adoption permissions. Their large finite checks
+  remain available in the weekly audit and on request.
+
+### Fixed
+
+- Release validation waits for Free to finish before checking its final
+  protection status.
 
 ## 0.5.8 — 2026-10-16
 
