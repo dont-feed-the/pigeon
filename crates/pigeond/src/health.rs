@@ -25,7 +25,7 @@ fn counts(c: pigeon_core::health::Counts) -> wire::Counts {
     }
 }
 
-async fn own_report(g: &Group, me: &str) -> Option<report_file::Status> {
+pub(crate) async fn own_report(g: &Group, me: &str) -> Option<report_file::Status> {
     let name = format!("refs/pigeon/status/{me}");
     let commit = g.git.rev(&name).await?;
     let raw = g.git.object(&commit).await.ok()?;

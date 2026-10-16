@@ -40,7 +40,6 @@ fn checking_and_unreadable_evidence_never_becomes_protected_health() {
     let vault = start(&root, sockets.path(), "vault");
     let folder = root.join("files");
     std::fs::create_dir(&folder).unwrap();
-    std::fs::write(folder.join("note.txt"), b"first bytes\n").unwrap();
     let answer = pigeon(
         &lap,
         &[
@@ -54,19 +53,29 @@ fn checking_and_unreadable_evidence_never_becomes_protected_health() {
         ],
     );
     assert!(said(&answer, "created", "group").is_some(), "{answer:?}");
+    assert_eq!(status(&lap).headline.id, "headline-empty");
+    std::fs::write(folder.join("note.txt"), b"first bytes\n").unwrap();
     join(&lap, &vault, &[&lap, &vault]);
     until(&lap, State::Protected, &[&lap, &vault]);
     std::fs::write(folder.join("note.txt"), b"second bytes\n").unwrap();
     until(&lap, State::Protected, &[&lap, &vault]);
     let session = web::login(&lap);
     let page = plain(&web::page(&session, "/"));
+    assert!(field(&page, "health-current").contains("Safe: 1"), "{page}");
     assert!(
-        field(&page, "health-current").contains("Protected: 1"),
+        field(&page, "health-retained").contains("Safe: 1"),
         "{page}"
     );
-    assert!(
-        field(&page, "health-retained").contains("Protected: 1"),
-        "{page}"
+    let backup_session = web::login(&vault);
+    eventually_within(
+        60,
+        || {
+            let page = plain(&web::page(&backup_session, "/"));
+            field(&page, "health-current").contains("Safe: 1")
+                && field(&page, "health-retained").contains("Safe: 1")
+        },
+        "backup ignored its own observed stored copies",
+        &[&lap, &vault],
     );
 
     let secret: [u8; 32] = pigeond::util::unhex(
@@ -128,12 +137,9 @@ fn checking_and_unreadable_evidence_never_becomes_protected_health() {
         &[&lap],
     );
     let page = plain(&web::page(&session, "/"));
+    assert!(field(&page, "health-current").contains("Safe: 0"), "{page}");
     assert!(
-        field(&page, "health-current").contains("Protected: 0"),
-        "{page}"
-    );
-    assert!(
-        field(&page, "health-retained").contains("Protected: 0"),
+        field(&page, "health-retained").contains("Safe: 0"),
         "{page}"
     );
     assert_ne!(status(&lap).level, Level::Safe);
@@ -159,6 +165,94 @@ fn checking_and_unreadable_evidence_never_becomes_protected_health() {
     std::fs::write(&main, original).unwrap();
     assert_eq!(
         std::fs::read(folder.join("note.txt")).unwrap(),
+        b"second bytes\n"
+    );
+}
+
+#[test]
+fn another_laptop_proves_retained_publication_after_backup_removal() {
+    let _one = SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some((_tmp, root, sockets)) = dirs() else {
+        return;
+    };
+    let lap = start(&root, sockets.path(), "lap");
+    let bob = start(&root, sockets.path(), "bob");
+    let vault = start(&root, sockets.path(), "vault");
+    let folder = root.join("files");
+    std::fs::create_dir(&folder).unwrap();
+    let answer = pigeon(
+        &lap,
+        &[
+            "create",
+            "Family",
+            folder.to_str().unwrap(),
+            "--k",
+            "1",
+            "--name",
+            "laptop",
+        ],
+    );
+    assert!(said(&answer, "created", "group").is_some(), "{answer:?}");
+    let invitation = pigeon(&lap, &["invite", "Bob"]);
+    let code = said(&invitation, "invitation", "code").unwrap();
+    let other = root.join("bob-files");
+    let joined = pigeon(
+        &bob,
+        &[
+            "join",
+            &code,
+            other.to_str().unwrap(),
+            "--name",
+            "bob-laptop",
+        ],
+    );
+    assert!(said(&joined, "joined", "group").is_some(), "{joined:?}");
+    join(&lap, &vault, &[&lap, &bob, &vault]);
+    std::fs::write(folder.join("note.txt"), b"first bytes\n").unwrap();
+    until(&lap, State::Protected, &[&lap, &bob, &vault]);
+    eventually_within(
+        60,
+        || std::fs::read(other.join("note.txt")).is_ok_and(|b| b == b"first bytes\n"),
+        "first version never reached Bob",
+        &[&lap, &bob, &vault],
+    );
+    std::fs::write(folder.join("note.txt"), b"second bytes\n").unwrap();
+    until(&lap, State::Protected, &[&lap, &bob, &vault]);
+    eventually_within(
+        60,
+        || std::fs::read(other.join("note.txt")).is_ok_and(|b| b == b"second bytes\n"),
+        "second version never reached Bob",
+        &[&lap, &bob, &vault],
+    );
+    let removed = pigeon(&lap, &["remove-computer", "vault", "--yes"]);
+    assert!(
+        said(&removed, "removed-computer", "name").is_some(),
+        "{removed:?}"
+    );
+    drop(vault);
+    for daemon in [&lap, &bob] {
+        let session = web::login(daemon);
+        eventually_within(
+            90,
+            || {
+                let page = plain(&web::page(&session, "/"));
+                let retained = field(&page, "health-retained");
+                retained.contains("Shared, not safe yet: 1")
+                    && retained.contains("Only on this computer: 0")
+                    && field(&page, "health-current").contains("Safe: 0")
+            },
+            "retained publication ignored another laptop",
+            &[&lap, &bob],
+        );
+    }
+    assert_eq!(
+        std::fs::read(folder.join("note.txt")).unwrap(),
+        b"second bytes\n"
+    );
+    assert_eq!(
+        std::fs::read(other.join("note.txt")).unwrap(),
         b"second bytes\n"
     );
 }

@@ -159,6 +159,16 @@ fn values(r: &Renderer, h: &HealthReport) -> BTreeMap<String, String> {
         values.insert(format!("health-disk-{id}"), disk(r, machine));
         values.insert(format!("health-work-{id}"), work(r, machine));
     }
+    for epoch in h.repair_epochs.iter().flatten() {
+        values.insert(
+            format!("health-epoch-{}-{}", epoch.commit, epoch.device),
+            r.catalogue().format(
+                &Message::new("web-health-epoch")
+                    .arg("name", epoch.name.as_str())
+                    .arg("when", ago(r, Some(&epoch.started_at))),
+            ),
+        );
+    }
     values
 }
 
@@ -177,7 +187,13 @@ fn membership(h: &HealthReport) -> String {
 }
 
 pub(crate) fn event(r: &Renderer, h: &HealthReport) -> String {
-    serde_json::json!({"membership": membership(h), "values": values(r,h)}).to_string()
+    let explanations: Vec<_> = r
+        .response(&pigeon_proto::Response::Health(Box::new(h.clone())))
+        .0
+        .into_iter()
+        .skip(1)
+        .collect();
+    serde_json::json!({"membership": membership(h), "values": values(r,h), "explanations": explanations}).to_string()
 }
 
 pub(crate) fn section(r: &Renderer, h: &HealthReport) -> Markup {
@@ -211,7 +227,8 @@ pub(crate) fn section(r: &Renderer, h: &HealthReport) -> Markup {
                 @if let Some(epochs) = &h.repair_epochs {
                     @if epochs.is_empty() { p { (r.id("web-health-no-epochs")) } }
                     @for epoch in epochs.iter().rev() {
-                        p { (r.catalogue().format(&Message::new("web-health-epoch").arg("name", epoch.name.as_str()).arg("when", ago(r, Some(&epoch.started_at))))) }
+                        @let id = format!("health-epoch-{}-{}", epoch.commit, epoch.device);
+                        p id=(&id) { (text(&id)) }
                     }
                 } @else { p { (r.id("web-health-unavailable")) } }
             }

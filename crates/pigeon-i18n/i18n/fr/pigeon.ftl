@@ -34,13 +34,13 @@ why-capturing = Cette modification attend d'être enregistrée et copiée sur le
 why-too-few-backups = { $have } ordinateurs de sauvegarde sur { $need } sont configurés. Pour en ajouter un : pigeon invite --backup-machine
 headline-not-safe =
     { $files ->
-        [one] { $files } fichier n'est pas encore en sécurité.
-       *[other] { $files } fichiers ne sont pas encore en sécurité.
+        [one] { $files } version de fichier n'est pas encore en sécurité.
+       *[other] { $files } versions de fichiers ne sont pas encore en sécurité.
     }
 headline-working =
     { $files ->
-        [one] Envoi de { $files } fichier aux machines de sauvegarde…
-       *[other] Envoi de { $files } fichiers aux machines de sauvegarde…
+        [one] Envoi de { $files } version de fichier aux machines de sauvegarde…
+       *[other] Envoi de { $files } versions de fichiers aux machines de sauvegarde…
     }
 headline-not-checked = Dernière confirmation de sécurité : { $when }. pigeon ne peut pas joindre le groupe en ce moment ; les changements depuis ne sont que sur cet ordinateur.
 headline-disk-full = Votre disque est plein. pigeon ne peut pas enregistrer les nouveaux changements. Libérez de l'espace ou videz la corbeille.
@@ -468,10 +468,11 @@ problem-folder-not-empty = Ce dossier n’est pas vide et n’appartient pas au 
 # Group health from replicated state (ADR 0025).
 web-health = État du groupe
 web-health-current = Fichiers actuels
-web-health-retained = Anciennes versions conservées
+web-health-retained = Autres versions conservées
 web-health-unavailable = Pas encore vérifié ; pigeon est peut-être occupé.
 web-health-no-report = Aucun état reçu pour le moment.
-web-health-counts = Protégés : { $protected } · En attente de copies de secours : { $published } · Uniquement sur cet ordinateur : { $local } · Vérification ancienne : { $uncertain } · Manquants : { $missing } · Effacés : { $erased }
+web-health-counts = En sécurité : { $protected } · Partagés, pas encore en sécurité : { $published } · Seulement sur cet ordinateur : { $local } · Pas vérifiés récemment : { $uncertain } · Manquants : { $missing } · Effacés définitivement : { $erased }
+headline-empty = Aucun fichier pour le moment. Ajoutez des fichiers dans votre dossier partagé pour commencer.
 web-health-size = { $mb } Mo
 web-health-kb = { $kb } ko
 web-health-bytes = { $bytes } o

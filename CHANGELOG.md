@@ -33,6 +33,11 @@ the second number, and every other pull request the third.
 - A backup that is checking its stored files cannot count toward the
   protected total. Unreadable accepted history asks for attention and
   shows unknown counts.
+- Other laptops count toward the sharing evidence for retained versions.
+  Replacement backups can connect when their local socket paths are long.
+- A backup's own status counts its admitted, locally observed stored copies.
+- Live file explanations change with the counts. An empty group asks for
+  files, and counts distinguish file versions and permanent erasure.
 - Restore confirms the version on this computer and points to sharing
   and approval status. Browser join confirmations use buttons throughout.
 
