@@ -33,9 +33,9 @@ mod console;
 pub use console::console_layer;
 
 /// The most the directory holds (12 §12.2).
-pub const LIMIT_BYTES: u64 = 50 * 1024 * 1024;
+pub const LIMIT_BYTES: u64 = 256 * 1024;
 /// When a file is closed and the next begun.
-pub const FILE_BYTES: u64 = 5 * 1024 * 1024;
+pub const FILE_BYTES: u64 = LIMIT_BYTES;
 
 struct Pipeline {
     local: export::Local,
