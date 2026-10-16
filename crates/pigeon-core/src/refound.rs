@@ -72,6 +72,7 @@ pub fn roster(old: &Roster, me: &DeviceId, invitation: &str) -> Option<Roster> {
                     stewards.retain(|person| person == &owner);
                     Rule::AddOnly(stewards)
                 }
+                Rule::PerPerson => Rule::PerPerson,
             };
             folder
         })

@@ -59,7 +59,7 @@ pub async fn view(
                             }
                         }
                     }
-                    p { label { input type="radio" name="kind" value="add-only" checked[rule.direct && rule.owner.is_none()]; (r.id("web-folder-rule-add-only")) } }
+                    p { label { input type="radio" name="kind" value="add-only" checked[rule.direct && rule.owner.is_none() && !rule.per_person]; (r.id("web-folder-rule-add-only")) } }
                     fieldset {
                         legend { (r.id("web-folder-rule-stewards")) }
                         p { (r.id("web-folder-rule-default-admins")) }
@@ -67,6 +67,8 @@ pub async fn view(
                             p { label { input type="checkbox" name="steward" value=(&person.id) checked[rule.stewards.contains(&person.id)]; (&person.name) } }
                         }
                     }
+                    p { label { input type="radio" name="kind" value="per-person" checked[rule.direct && rule.per_person]; (r.id("web-folder-rule-per-person")) } }
+                    p { label { input type="checkbox" name="confirm" value="rules"; (r.id("web-folder-rule-confirm-rules")) } }
                     p { label { input type="radio" name="kind" value="inherit" checked[!rule.direct]; (r.id("web-folder-rule-inherit")) } }
                     button type="submit" { (r.id("web-save")) }
                 }
@@ -112,9 +114,12 @@ pub async fn set(
                 .map(|(_, value)| value.clone())
                 .collect(),
         },
+        Some("per-person") => policy::Change::PerPerson,
         Some("inherit") => policy::Change::Inherit,
         _ => return axum::http::StatusCode::BAD_REQUEST.into_response(),
     };
+    // Raising the group's rules needs the box that says what it means.
+    let confirmed = one("confirm") == Some("rules");
     let r = web.renderer();
     pages::result(
         &r,
@@ -125,6 +130,7 @@ pub async fn set(
             Request::SetFolderRule {
                 folder: path.into(),
                 rule,
+                confirmed,
             },
         )
         .await,

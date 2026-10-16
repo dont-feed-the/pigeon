@@ -40,7 +40,7 @@ result, progress events then a result, or a `Problem` (§10.6).
 | `DebugBundle {peers}` | `pigeon debug bundle [--from NAME…]` | Settings → Advanced | [12](12-observability.md) |
 | `Folders` | `pigeon status` (by file) | Files | [08 §8.5](08-custody-loops.md) |
 | `Files {folder}` | `pigeon status FOLDER` | Files → a folder | [06 §6.2](06-status.md) |
-| `FolderRules {folder?}` · `SetFolderRule {folder, rule}` | `pigeon folder-rule [PATH [--owner PERSON \| --add-only [--steward PERSON…] \| --default]]` | Files → a folder → Sharing rule | [04 §4.3](04-roster-and-authority.md) |
+| `FolderRules {folder?}` · `SetFolderRule {folder, rule, confirmed}` | `pigeon folder-rule [PATH [--owner PERSON \| --add-only [--steward PERSON…] \| --per-person \| --default]]` | Files → a folder → Sharing rule | [04 §4.3](04-roster-and-authority.md) |
 | `Deleted` | `pigeon restore PATH` | Files → Deleted files | [10 §10.3](10-interfaces.md) |
 | `Subscribe` | — | live updates (SSE) | §10.3 |
 

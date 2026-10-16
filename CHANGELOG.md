@@ -7,6 +7,19 @@ increments the second number, and every other release the third.
 
 ## Unreleased
 
+### Added
+
+- Per-person folders: `pigeon folder-rule ~/Group/src --per-person` (or
+  *Each folder in it belongs to the person it is named after* in a folder's
+  sharing rule in `pigeon open`) makes every `src/<name>` belong to the
+  person of that name, including people who join later; others' changes
+  there become suggestions. A folder's name is the person's name in
+  lowercase letters and digits (Laurent's is `src/laurent`), and
+  `pigeon folder-rule ~/Group/src` lists them. The first such rule moves the
+  group to newer rules: pigeon lists the other computers with the pigeon
+  they last reported and asks first, as a computer running an older pigeon
+  waits for the group's changes until it is updated.
+
 ### Changed
 
 - A computer is now in one group only. `pigeon create`, `pigeon join` and

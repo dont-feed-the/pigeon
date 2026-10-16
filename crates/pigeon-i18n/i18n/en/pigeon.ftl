@@ -489,12 +489,16 @@ web-health-epochs = After computers were removed
 web-health-no-epochs = No content-holding computer has been removed.
 web-health-epoch = { $name } was removed: { $when }.
 
-cmd-folder-rule = See folder sharing rules, or let an admin change who owns a folder or decides suggestions. Use --owner me for your own folder.
+cmd-folder-rule = See folder sharing rules, or let an admin change who owns a folder or decides suggestions. Use --owner me for your own folder, and --per-person for a folder where each person owns the folder named after them.
 folder-rule-owned = { $folder }: only { $owner } can change this folder.
 folder-rule-add-only = { $folder }: everyone can add; other changes are decided by { $stewards }.
+folder-rule-per-person = { $folder }: each folder in it belongs to the person it is named after ({ $folders }); anything else in it follows the rule above it.
 folder-rule-result = The sharing rule for { $folder } is saved on this computer. Others use it after their next sharing check. View the folder's rule on another computer to confirm it has arrived.
 problem-folder-rule-path = Choose a portable subfolder using its original spelling. The group root and pigeon's own files cannot receive a folder rule.
 problem-folder-rule-person = No single current member matches “{ $name }”. Choose their name from People & machines, or use me for yourself.
+problem-rules-raise = This sharing rule needs the group’s rules { $rules }. A computer whose pigeon does not know them waits for the group’s changes until it is updated. The others last reported: { $computers }.
+hint-rules-raise = Update those computers first if you can, then confirm, or run it again with --yes.
+confirm-rules-raise = Raise the group’s rules and save this sharing rule? [y/N]
 web-folder-rule = Folder sharing rule
 web-subfolders = Subfolders
 web-folder-rule-help = Choose who can change this folder. Everyone else can suggest changes. Subfolders inherit this rule unless they have their own.
@@ -502,6 +506,8 @@ web-folder-rule-admin = An admin can change this sharing rule.
 web-folder-rule-owner = Only one person can change it
 web-folder-rule-add-only = Everyone can add; selected people decide other changes
 web-folder-rule-inherit = Inherit the rule of its parent folder
+web-folder-rule-per-person = Each folder in it belongs to the person it is named after
+web-folder-rule-confirm-rules = If this needs the group’s newer rules, raise them: a computer whose pigeon does not know them waits for changes until it is updated
 web-folder-rule-stewards = People who decide changes
 web-folder-rule-default-admins = Leave all unchecked to let the admins decide.
 
