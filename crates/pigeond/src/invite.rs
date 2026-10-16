@@ -650,17 +650,7 @@ pub async fn fetch_welcome(
         .rev(&format!("refs/pigeon/peers/{inviter}/main"))
         .await
         .ok_or("inviter-offline")?;
-    if g.git.root(&theirs).await.as_deref() != Some(group) || !g.git.contains(&theirs, commit).await
-    {
-        return Err("invite-unknown".into());
-    }
-    let roster = g.git.blob(&format!("{commit}:.pigeon/roster.toml")).await;
-    let ok = roster
-        .and_then(|b| crate::roster_file::parse(&String::from_utf8_lossy(&b)).ok())
-        .is_some_and(|doc| doc.roster.devices.contains_key(&DeviceId(me.to_owned())));
-    if !ok {
-        return Err("invite-unknown".into());
-    }
+    crate::verify::bootstrap(g, group, &theirs, commit, me).await?;
     if let Some(ga) = g
         .git
         .rev(&format!("refs/pigeon/peers/{inviter}/git-annex"))

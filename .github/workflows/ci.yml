@@ -125,6 +125,10 @@ jobs:
       - name: git-annex from Homebrew (macOS)
         if: runner.os == 'macOS'
         run: brew install git-annex
+      - name: pigeon's patched git-annex and the system git (ADR 0069)
+        uses: ./.github/actions/git-annex-pigeon
+        with:
+          required: "true"
       - name: versions
         run: git annex version | head -1 && git --version
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

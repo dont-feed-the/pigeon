@@ -357,3 +357,68 @@ async fn a_rename_and_a_concurrent_edit_merge_into_the_renamed_file() {
         (&edit, &a["Shared/a.txt"])
     );
 }
+
+#[tokio::test]
+async fn joining_checks_authority_before_adopting_any_history() {
+    let w = world().await;
+    let valid = commit(&w.git, &w.base, &[&w.genesis], 1, 1).await;
+    verify::bootstrap(&w.g, &w.genesis, &valid, &w.genesis, &dev(2).0)
+        .await
+        .unwrap();
+    let unsigned = w
+        .git
+        .run_in(
+            &[
+                "commit-tree",
+                &merge::write_tree(&w.git, &w.base).await.unwrap(),
+                "-p",
+                &w.genesis,
+            ],
+            b"unsigned history\n",
+        )
+        .await
+        .unwrap()
+        .trim()
+        .to_owned();
+    let stranger = commit(&w.git, &w.base, &[&w.genesis], 2, 7).await;
+    let raw = String::from_utf8(w.git.object(&valid).await.unwrap()).unwrap();
+    let forged = raw.replace("author pigeon", "author forged");
+    let forged = w
+        .git
+        .run_in(
+            &["hash-object", "-t", "commit", "-w", "--stdin"],
+            forged.as_bytes(),
+        )
+        .await
+        .unwrap()
+        .trim()
+        .to_owned();
+    let mut bad_tree = w.base.clone();
+    bad_tree.insert("Shared/CON.txt".into(), pointer(&w.git, 2).await);
+    let bad_path = commit(&w.git, &bad_tree, &[&w.genesis], 3, 1).await;
+    for tip in [&unsigned, &stranger, &forged, &bad_path] {
+        assert_eq!(
+            verify::bootstrap(&w.g, &w.genesis, tip, &w.genesis, &dev(2).0).await,
+            Err("join-history-unverified".into())
+        );
+        assert_eq!(
+            w.git.rev("refs/heads/main").await.as_deref(),
+            Some(w.genesis.as_str())
+        );
+    }
+    assert_eq!(
+        verify::bootstrap(&w.g, &valid, &valid, &w.genesis, &dev(2).0).await,
+        Err("invite-unknown".into())
+    );
+    let mut removed = roster(2);
+    let device = removed.devices.remove(&dev(2)).unwrap();
+    removed.removed.insert(dev(2), device.annex_uuid);
+    let mut tree = w.base.clone();
+    let text = roster_file::render(&RosterDoc { roster: removed }).unwrap();
+    tree.insert(ROSTER.into(), blob(&w.git, text.as_bytes()).await);
+    let revoked = commit(&w.git, &tree, &[&w.genesis], 4, 1).await;
+    assert_eq!(
+        verify::bootstrap(&w.g, &w.genesis, &revoked, &w.genesis, &dev(2).0).await,
+        Err("invite-not-allowed".into())
+    );
+}

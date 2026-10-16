@@ -58,3 +58,20 @@ executed pigeon but found annex at the wrong depth: Homebrew strips the
 archive's single `bin/` directory. The formula now handles both extraction
 layouts and its own `brew test` executes patched git-annex. The corrected
 formula must pass the macOS job before release.
+
+Review of the recovery bootstrap found that `fetch_welcome` checked the
+expected genesis and membership but did not run the normal authority judge
+before adopting the fetched main. All join and recovery paths now call the
+same history judge as normal synchronization, requiring an accepted tip,
+an accepted welcome commit and current membership. Regressions cover an
+unsigned commit, a forged signature, an unknown signer, a forbidden path,
+a wrong genesis and membership removed after the welcome; rejected history
+never moves main. This check is part of the candidate before publication.
+
+The formula uses Homebrew's version scheme to upgrade from the legacy
+`2.0.0-alpha.0` to the roadmap's `0.4.0`, despite the smaller major number.
+Both installation jobs passed in run 38827160363, including real macOS
+binary execution. That run's daemon tests still used stock git-annex and
+the mass-deletion case failed once; CI now requires the project's cached
+patched build and its system-git shim, as the release and lab already do.
+The corrected candidate still needs a green run before tagging.

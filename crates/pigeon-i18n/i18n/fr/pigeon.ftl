@@ -406,3 +406,4 @@ view-ready = Une copie en lecture seule est dans { $path } ; elle est supprimée
 
 setting-telemetry-device = Partager les diagnostics avec
 setting-off = Garder les diagnostics sur chaque ordinateur
+problem-join-history-unverified = Pigeon n’a pas pu vérifier l’historique de ce groupe. Demandez à la personne qui vous a invité de mettre pigeon à jour et de vous envoyer une nouvelle invitation.

@@ -58,3 +58,41 @@ pub fn code(v: &Verdict) -> &'static str {
         Verdict::Unknown(_) | Verdict::Accepted(..) => "commit-waits",
     }
 }
+
+/// Checks a joining device's complete history before any caller adopts
+/// its `main` or writes its files (09 §9.6, §9.9, ADR 0007). A matching
+/// genesis and a roster mentioning us do not establish valid signatures
+/// or permission for the commits between them.
+pub async fn bootstrap(
+    g: &Group,
+    genesis: &str,
+    tip: &str,
+    welcome: &str,
+    me: &str,
+) -> Result<(), String> {
+    if g.git.root(tip).await.as_deref() != Some(genesis) || !g.git.contains(tip, welcome).await {
+        return Err("invite-unknown".into());
+    }
+    let judged = judge(g, None, tip).await.map_err(|e| e.to_string())?;
+    if judged.accepted.as_deref() != Some(tip) || !g.lock().engine.accepted(welcome) {
+        tracing::warn!(group = %genesis, commit = %tip, stopped = ?judged.stopped, "join-history-unverified");
+        return Err("join-history-unverified".into());
+    }
+    for commit in [welcome, tip] {
+        let blob = g
+            .git
+            .blob(&format!("{commit}:.pigeon/roster.toml"))
+            .await
+            .ok_or("join-history-unverified")?;
+        let doc = crate::roster_file::parse(&String::from_utf8_lossy(&blob))
+            .map_err(|_| "join-history-unverified")?;
+        if !doc
+            .roster
+            .devices
+            .contains_key(&pigeon_core::roster::DeviceId(me.to_owned()))
+        {
+            return Err("invite-not-allowed".into());
+        }
+    }
+    Ok(())
+}

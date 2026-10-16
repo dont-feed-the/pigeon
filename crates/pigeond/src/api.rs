@@ -318,7 +318,9 @@ fn join_problem(code: &str, invitation: &str) -> Response {
         "invite-used" => with_hint(problem(code, &[], None), "hint-invite-used"),
         "inviter-offline" => with_hint(problem(code, &who, None), "hint-inviter-offline"),
         "invite-not-allowed" => problem(code, &who, None),
-        "invite-unknown" | "not-in-group" | "not-allowed" => problem(code, &[], None),
+        "join-history-unverified" | "invite-unknown" | "not-in-group" | "not-allowed" => {
+            problem(code, &[], None)
+        }
         "not-in-this-build" => problem(code, &[("command", text("join"))], None),
         other => problem("internal-error", &[], Some(other.to_owned())),
     }

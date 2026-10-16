@@ -29,6 +29,13 @@ class Formula(unittest.TestCase):
         self.assertIn('process_type :background', result)
         self.assertNotIn('/latest/', result)
 
+    def test_roadmap_versions_upgrade_past_the_legacy_alpha(self):
+        current = MODULE.formula("v0.3.2", self.sums, "dont-feed-the/pigeon")
+        legacy_sums = self.sums.replace("v0.3.2-macos", "v2.0.0-alpha.0-macos")
+        legacy = MODULE.formula("v2.0.0-alpha.0", legacy_sums, "dont-feed-the/pigeon")
+        self.assertIn("version_scheme 1", current)
+        self.assertIn("version_scheme 0", legacy)
+
     def test_missing_or_duplicate_assets_are_refused(self):
         with self.assertRaises(KeyError):
             MODULE.formula("v0.3.3", self.sums, "dont-feed-the/pigeon")

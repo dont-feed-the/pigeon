@@ -406,3 +406,4 @@ view-ready = A read-only copy is at { $path }; it is removed after seven days.
 
 setting-telemetry-device = Share diagnostics with
 setting-off = Keep diagnostics on each computer
+problem-join-history-unverified = Pigeon could not verify this group's history. Ask the person who invited you to update pigeon and send a new invitation.
