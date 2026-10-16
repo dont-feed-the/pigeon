@@ -25,6 +25,7 @@ pub mod proposal;
 pub mod queue;
 pub mod refound;
 pub mod report;
+pub mod restore;
 pub mod roster;
 pub mod sig;
 pub mod state;

@@ -89,7 +89,8 @@ pub struct RestoreForm {
     /// The file, as an absolute path.
     path: String,
     /// The version's number.
-    version: u64,
+    #[serde(default)]
+    version: Option<u64>,
 }
 
 /// *Restore this version*: `pigeon restore PATH --version N`.
@@ -104,7 +105,7 @@ pub async fn restore(
     );
     let request = Request::Restore {
         path: f.path,
-        version: Some(f.version),
+        version: f.version,
         at: None,
     };
     act(&web, &token, &f.form, request, &back).await

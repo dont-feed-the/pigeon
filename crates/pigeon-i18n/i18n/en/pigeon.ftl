@@ -110,13 +110,13 @@ help-commands = Commands:
 
 ## Results
 
-free-result = { $safe } of { $total } files are safe and their space is freed.
+free-result = { $safe } of { $total } files are safe and eligible to free. Pigeon will free their space in the background; other files wait for safe copies.
 free-waiting =
     { $files ->
         [one] 1 file is not safe yet; pigeon will free it once it is.
        *[other] { $files } files are not safe yet; pigeon will free them once they are.
     }
-keep-result = { $folder } is kept on this computer.
+keep-result = { $folder } will be kept on this computer. Files that are absent will download when a copy is reachable; check Home for progress.
 suggestions-none = No suggestion is waiting.
 suggestion-decide = { $id }  { $author } suggests a change of { $paths }, saved { $saved }. Accept it with: pigeon accept { $id }
 suggestion-other = { $id }  { $author } suggests a change of { $paths }, saved { $saved }; someone else decides.
@@ -132,6 +132,13 @@ resolved-suggest-again = Your version of { $path } is suggested again.
 undo-free = Undo: pigeon keep { $folder }
 undo-keep = Undo: pigeon free { $folder }
 restore-result = { $path } is restored on this computer; the newer version stays in its history. Check Home for sharing and protection, and Suggestions if approval is needed.
+restore-folder-result = { $path }: { $files } files restored on this computer. Newer files and saved history are kept. Check Home and Suggestions for sharing and approval.
+problem-restore-folder-incomplete = { $path }: { $files } files restored; { $skipped } could not be restored and were left unchanged. The operation needs attention. Files to check: { $paths }. Close files in use and try again; use pigeon doctor for other problems. Check Home and Suggestions for sharing and approval.
+problem-restore-in-use = { $path } changed or is being used. Pigeon left it unchanged. Open an old copy with View, or close the file and try again.
+problem-restore-folder-version = To restore a folder, choose a date with --at or omit the version option to restore its latest saved snapshot.
+web-restore-folder = Restore this folder
+web-files-arriving = Waiting for { $files } files to be available on this computer. Leave pigeon running; it will receive them when a copy is reachable.
+web-restore-folder-help = Restore a whole deleted folder from its latest saved state. Newer files and saved history are kept. Individual files are listed below.
 recovery-sheet-text = { $sheet }
 recovered = This computer is back in { $group }. Its files arrive from the backup machines; then remove the lost computers, revoke the used recovery sheet with remove-computer, and print a new sheet.
 not-shared-kind = { $path }: not shared ({ $kind })

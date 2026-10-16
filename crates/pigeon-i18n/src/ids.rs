@@ -20,6 +20,9 @@ const fn e(id: &'static str, vars: &'static [&'static str]) -> Entry {
 /// Each has a message `problem-<code>`, and may have a hint `hint-<code>`.
 pub const PROBLEMS: &[&str] = &[
     "not-in-this-build",
+    "restore-in-use",
+    "restore-folder-version",
+    "restore-folder-incomplete",
     "file-system-not-in-this-build",
     "invite-expired",
     "invite-used",
@@ -169,6 +172,16 @@ pub const MESSAGES: &[Entry] = &[
     e("undo-free", &["folder"]),
     e("undo-keep", &["folder"]),
     e("restore-result", &["path"]),
+    e("restore-folder-result", &["path", "files"]),
+    e(
+        "problem-restore-folder-incomplete",
+        &["path", "files", "skipped", "paths"],
+    ),
+    e("web-restore-folder", &[]),
+    e("web-files-arriving", &["files"]),
+    e("web-restore-folder-help", &[]),
+    e("problem-restore-in-use", &["path"]),
+    e("problem-restore-folder-version", &[]),
     e("recovery-sheet-text", &["sheet"]),
     e("recovery-title", &[]),
     e("problem-recovery-needs-backup", &[]),

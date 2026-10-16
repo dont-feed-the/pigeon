@@ -31,12 +31,30 @@ pub async fn folders(g: &Group, me: &str) -> Response {
     let n = |x: usize| u64::try_from(x).unwrap_or(u64::MAX);
     let folders = by
         .into_iter()
-        .map(|(path, files)| Folder {
-            path: path.to_owned(),
-            files: n(files.len()),
-            not_safe: n(files.iter().filter(|o| o.level != Level::Safe).count()),
-            state: crate::status::worst(files.iter().map(|o| &o.state)),
-            freed: targets.iter().any(|t| crate::evict::under(path, t)),
+        .map(|(path, files)| {
+            let freed = targets.iter().any(|t| crate::evict::under(path, t));
+            let arriving = if freed {
+                0
+            } else {
+                files
+                    .iter()
+                    .filter(|o| {
+                        !o.local
+                            || !g.worktree.as_ref().is_some_and(|wt| {
+                                std::fs::symlink_metadata(wt.join(&o.path))
+                                    .is_ok_and(|m| m.is_file())
+                            })
+                    })
+                    .count()
+            };
+            Folder {
+                path: path.to_owned(),
+                files: n(files.len()),
+                not_safe: n(files.iter().filter(|o| o.level != Level::Safe).count()),
+                state: crate::status::worst(files.iter().map(|o| &o.state)),
+                freed,
+                arriving: n(arriving),
+            }
         })
         .collect();
     Response::Folders {

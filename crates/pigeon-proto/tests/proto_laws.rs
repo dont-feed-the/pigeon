@@ -321,6 +321,7 @@ fn response(tc: &TestCase) -> Response {
                     not_safe: tc.draw(gs::integers::<u64>()),
                     state: state(tc),
                     freed: flag(tc),
+                    arriving: tc.draw(gs::integers::<u64>()),
                 })
                 .collect(),
         },

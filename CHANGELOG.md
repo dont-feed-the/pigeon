@@ -4,6 +4,19 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.9 — 2026-10-16
+
+### Added
+
+- Restore a deleted nested folder from its latest saved state, or its
+  state at a chosen time, while retaining newer files and saved history.
+
+### Fixed
+
+- Restore keeps a saved file's executable mode and reports files that
+  changed or are in use instead of claiming that they were restored.
+- Keep explains that missing files still need to download.
+
 ## 0.4.8 — 2026-10-16
 
 ### Added

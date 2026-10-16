@@ -52,6 +52,25 @@ result, progress events then a result, or a `Problem` (§10.6).
 - `pigeond` answers `Hello` with its version; a CLI of another version
   refuses with `version-mismatch`.
 
+`restore FILE` without a version selects its latest saved version,
+including the version before deletion. `restore FOLDER` selects the latest
+nonempty accepted snapshot of the folder; `--at` applies an inclusive
+author-time cutoff. A folder uses one snapshot, never a mixture of per-file
+times. Files absent from that snapshot are not deleted. `--version` is a
+file-history number; it is refused for folders with instructions to use
+`--at`. Missing nested working directories can be rebuilt, while symlinks
+and nested repositories are refused. Capture records a successful restore
+as new history, keeping earlier bytes and modes.
+
+Restores use the install journal and preserve saved executable modes.
+Changed or open files win over the restore. A folder's incomplete result
+is one final Problem with restored/unchanged counts and paths to check;
+the CLI exits unsuccessfully rather than stopping at an earlier success.
+Deleted files offers whole-folder actions only for wholly deleted subtrees;
+individual Restore selects the latest saved version. Free and keep confirm
+scheduled work; Files reports requested local copies still arriving.
+Evidence: [folder-restore-5](../reports/folder-restore-5.md).
+
 ## 10.2 The command line (ADR 0024)
 
 - One subcommand per request; completions and man pages from the same

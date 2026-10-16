@@ -87,6 +87,9 @@ fn folder(r: &Renderer, root: &str, f: &Folder, form: &str) -> Markup {
     html! {
         article {
             p { a href=(format!("/folder?path={}", enc(&path.to_string_lossy()))) { (r.folder(f)) } }
+            @if f.arriving > 0 {
+                p { (r.catalogue().format(&pigeon_i18n::Message::new("web-files-arriving").arg("files", i64::try_from(f.arriving).unwrap_or(i64::MAX)))) }
+            }
             form method="post" action=(action) {
                 input type="hidden" name="form" value=(form);
                 input type="hidden" name="folder" value=(path.to_string_lossy());
@@ -224,16 +227,46 @@ pub async fn deleted_page(
             a => other.extend(r.response(&a).0),
         }
     }
+    let current = if root.is_empty() {
+        None
+    } else {
+        web.ask(Request::Files {
+            folder: root.clone(),
+        })
+        .await
+        .into_iter()
+        .find_map(|answer| match answer {
+            Response::Files { files, .. } => {
+                Some(files.into_iter().map(|f| f.path).collect::<Vec<_>>())
+            }
+            _ => None,
+        })
+    };
+    let folders = current.as_ref().map_or_else(Vec::new, |current| {
+        deleted_folders(rows.iter().map(|f| f.path.as_str()), current)
+    });
     let body = html! {
         (list(&other))
         @if rows.is_empty() && other.is_empty() { p { (r.id("deleted-none")) } }
+        @if !folders.is_empty() {
+            p { (r.id("web-restore-folder-help")) }
+            @for folder in &folders {
+                article {
+                    p { (folder) }
+                    form method="post" action="/files/restore" {
+                        input type="hidden" name="form" value=(form.0);
+                        input type="hidden" name="path" value=(std::path::Path::new(&root).join(folder).to_string_lossy());
+                        button type="submit" { (r.id("web-restore-folder")) }
+                    }
+                }
+            }
+        }
         @for f in &rows {
             article {
                 p { (r.deleted(f)) }
                 form method="post" action="/files/restore" {
                     input type="hidden" name="form" value=(form.0);
                     input type="hidden" name="path" value=(std::path::Path::new(&root).join(&f.path).to_string_lossy());
-                    input type="hidden" name="version" value="1";
                     button type="submit" { (r.id("web-restore-deleted")) }
                 }
             }
@@ -241,4 +274,50 @@ pub async fn deleted_page(
         p { a href="/files" { (r.id("web-back")) } }
     };
     page(&r, "/files", &r.id("web-deleted"), &body)
+}
+
+/// Offer the outermost wholly deleted folders, never a partly current
+/// ancestor whose latest snapshot would omit the deleted subtree.
+fn deleted_folders<'a>(deleted: impl Iterator<Item = &'a str>, current: &[String]) -> Vec<String> {
+    let mut candidates = std::collections::BTreeSet::new();
+    for path in deleted {
+        for (index, _) in path.match_indices('/') {
+            let folder = &path[..index];
+            let prefix = format!("{folder}/");
+            if !current
+                .iter()
+                .any(|p| p == folder || p.starts_with(&prefix))
+            {
+                candidates.insert(folder.to_owned());
+            }
+        }
+    }
+    candidates
+        .iter()
+        .filter(|folder| {
+            !candidates
+                .iter()
+                .any(|parent| *folder != parent && folder.starts_with(&format!("{parent}/")))
+        })
+        .cloned()
+        .collect()
+}
+
+#[cfg(test)]
+mod restore_tests {
+    #[test]
+    fn only_wholly_deleted_subtrees_get_one_restore_action() {
+        let deleted = [
+            "Photos/Gone/a",
+            "Photos/Gone/deep/b",
+            "Photos-old/gone",
+            "whole/a",
+            "whole/deep/b",
+        ];
+        let current = vec!["Photos/current.jpg".into(), "Photos-old/current".into()];
+        assert_eq!(
+            super::deleted_folders(deleted.into_iter(), &current),
+            ["Photos/Gone", "whole"]
+        );
+    }
 }

@@ -42,6 +42,8 @@ pub struct Observed {
     pub path: String,
     /// The key.
     pub key: String,
+    /// Whether the annex content is present on this computer.
+    pub local: bool,
     /// Its state.
     pub state: State<String>,
     /// Its level.
@@ -179,6 +181,7 @@ async fn observe_at(
         out.push(Observed {
             path,
             key,
+            local: version.this_device_holds,
             state: st,
             level,
         });

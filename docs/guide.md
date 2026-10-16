@@ -263,6 +263,21 @@ sheet: its key has now been typed into a computer. Print a replacement with
 `pigeon recovery-sheet`, and keep it separately. Use `pigeon history PATH`
 and `pigeon restore PATH --version NUMBER` for older versions.
 
+For an accepted deleted folder, choose **Restore this folder** in Deleted
+files, or run `pigeon restore /path/to/Family/deleted-folder`. This brings
+back its latest saved state, including nested files. To choose an earlier
+moment, use `pigeon restore FOLDER --at 2026-10-01` (end of that day, UTC),
+or an RFC 3339 time. Newer files absent from that saved state stay in place,
+and the more recent history remains readable. If a file is open or has
+changed during the restore, pigeon leaves it alone and reports an
+incomplete restore; close it or open a read-only old copy before retrying.
+An ordinary restore does not remove a file forever.
+
+Free and Keep schedule local work. Files may remain present briefly after
+Free, and missing files still need to arrive after Keep. The Files page
+says when requested local copies are still arriving; an offline backup
+must reconnect before they can be downloaded.
+
 Both computers need a version supporting the sheet-signed recovery exchange.
 An older recovery exchange is refused. Recovery metadata transfers have a
 120-second deadline and a 64 MiB limit; file content arrives separately

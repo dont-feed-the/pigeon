@@ -101,6 +101,7 @@ pub async fn tips(g: &Group) -> Vec<String> {
 pub async fn versions(g: &Group, rel: &str) -> Vec<(String, String)> {
     let mut remaining = 100;
     let mut keys: Vec<(String, String)> = Vec::new();
+    let mut last_mode = None;
     for tip in tips(g).await {
         if remaining == 0 {
             break;
@@ -119,12 +120,23 @@ pub async fn versions(g: &Group, rel: &str) -> Vec<(String, String)> {
             let Some(key) = pointer_key(&blob) else {
                 continue;
             };
+            let Some(mode) = g
+                .git
+                .tree(c)
+                .await
+                .ok()
+                .and_then(|tree| tree.get(rel).map(|entry| entry.mode.clone()))
+            else {
+                continue;
+            };
             if let Some(last) = keys.last_mut()
                 && last.1 == key
+                && last_mode.as_ref() == Some(&mode)
             {
                 c.clone_into(&mut last.0);
             } else {
                 keys.push((c.to_owned(), key));
+                last_mode = Some(mode);
             }
         }
     }

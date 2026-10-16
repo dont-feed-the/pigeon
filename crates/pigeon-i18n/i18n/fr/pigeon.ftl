@@ -110,13 +110,13 @@ help-commands = Commandes :
 
 ## Résultats
 
-free-result = { $safe } fichiers sur { $total } sont en sécurité et leur espace est libéré.
+free-result = { $safe } fichiers sur { $total } sont en sécurité et peuvent être libérés. Pigeon libérera leur espace en arrière-plan ; les autres fichiers attendent des copies sûres.
 free-waiting =
     { $files ->
         [one] { $files } fichier n'est pas encore en sécurité ; pigeon le libérera dès qu'il le sera.
        *[other] { $files } fichiers ne sont pas encore en sécurité ; pigeon les libérera dès qu'ils le seront.
     }
-keep-result = { $folder } est gardé sur cet ordinateur.
+keep-result = { $folder } sera gardé sur cet ordinateur. Les fichiers absents seront téléchargés dès qu’une copie sera joignable ; consultez Accueil pour suivre l’avancement.
 suggestions-none = Aucune suggestion n'attend.
 suggestion-decide = { $id }  { $author } suggère une modification de { $paths }, enregistrée { $saved }. Acceptez-la avec : pigeon accept { $id }
 suggestion-other = { $id }  { $author } suggère une modification de { $paths }, enregistrée { $saved } ; quelqu'un d'autre décide.
@@ -132,6 +132,13 @@ resolved-suggest-again = Votre version de { $path } est suggérée à nouveau.
 undo-free = Annuler : pigeon keep { $folder }
 undo-keep = Annuler : pigeon free { $folder }
 restore-result = { $path } est restauré sur cet ordinateur ; la version plus récente reste dans son historique. Consultez Accueil pour le partage et la protection, et Suggestions si une approbation est nécessaire.
+restore-folder-result = { $path } : { $files } fichiers restaurés sur cet ordinateur. Les fichiers plus récents et l’historique sont conservés. Consultez Accueil et Suggestions pour le partage et l’approbation.
+problem-restore-folder-incomplete = { $path } : { $files } fichiers restaurés ; { $skipped } n’ont pas pu être restaurés et sont restés inchangés. L’opération nécessite votre attention. Fichiers à vérifier : { $paths }. Fermez les fichiers utilisés et réessayez ; lancez pigeon doctor pour les autres problèmes. Consultez Accueil et Suggestions pour le partage et l’approbation.
+problem-restore-in-use = { $path } a changé ou est en cours d’utilisation. Pigeon l’a laissé inchangé. Ouvrez une ancienne copie avec Voir, ou fermez le fichier et réessayez.
+problem-restore-folder-version = Pour restaurer un dossier, choisissez une date avec --at ou omettez l’option de version pour restaurer son dernier état enregistré.
+web-restore-folder = Restaurer ce dossier
+web-files-arriving = En attente de { $files } fichiers pour qu’ils soient disponibles sur cet ordinateur. Laissez pigeon fonctionner ; il les recevra dès qu’une copie sera joignable.
+web-restore-folder-help = Restaurez un dossier entièrement supprimé dans son dernier état enregistré. Les fichiers plus récents et l’historique sont conservés. Les fichiers individuels figurent ci-dessous.
 recovery-sheet-text = { $sheet }
 recovered = Cet ordinateur est de retour dans { $group }. Ses fichiers arrivent depuis les machines de sauvegarde ; retirez ensuite les ordinateurs perdus, révoquez la fiche utilisée avec remove-computer et imprimez une nouvelle fiche.
 not-shared-kind = { $path } : non partagé ({ $kind })

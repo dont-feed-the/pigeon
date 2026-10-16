@@ -557,6 +557,9 @@ pub struct Folder {
     pub state: State,
     /// Whether its space is freed on this computer (or is being freed).
     pub freed: bool,
+    /// Requested local files that have not arrived or been installed yet.
+    #[serde(default)]
+    pub arriving: u64,
 }
 
 /// A file of the group, with the state of its current version.
