@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -30,6 +31,8 @@ jobs:
         run: scripts/check-adr-index
       - name: every cited section of the spec exists
         run: scripts/check-spec-refs
+      - name: dependency archive verification
+        run: python3 -B -m unittest discover -s scripts/tests -p 'test_restore_git_annex.py'
       - name: E25 stock hang budget and patched trial count
         run: python3 -B -m unittest discover -s lab/git-annex/tests
 
