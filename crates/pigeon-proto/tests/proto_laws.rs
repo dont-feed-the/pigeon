@@ -28,10 +28,14 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(48)) {
-        48 => Request::ReadText {
+    match tc.draw(gs::integers::<u8>().max_value(50)) {
+        50 => Request::ReadText {
             path: text(tc),
             limit: tc.draw(gs::integers::<u64>()),
+        },
+        49 => Request::ForgetChoice { folder: text(tc) },
+        48 => Request::Sync {
+            folder: tc.draw(gs::booleans()).then(|| text(tc)),
         },
         47 => Request::RemoveDeviceId { device: text(tc) },
         46 => Request::Capacity,
@@ -212,8 +216,19 @@ fn version(tc: &TestCase) -> VersionStatus {
 }
 
 fn response(tc: &TestCase) -> Response {
-    match tc.draw(gs::integers::<u8>().max_value(21)) {
-        21 => Response::Text {
+    match tc.draw(gs::integers::<u8>().max_value(22)) {
+        21 => Response::Sync {
+            root: text(tc),
+            folders: (0..tc.draw(gs::integers::<u8>().max_value(3)))
+                .map(|_| pigeon_proto::api::SyncFolder {
+                    path: text(tc),
+                    kept: tc.draw(gs::booleans()),
+                    chosen: tc.draw(gs::booleans()),
+                    others: tc.draw(gs::booleans()).then(|| text(tc)),
+                })
+                .collect(),
+        },
+        22 => Response::Text {
             text: text(tc),
             size: tc.draw(gs::integers::<u64>()),
             truncated: flag(tc),

@@ -77,6 +77,13 @@ pub async fn bootstrap(
     let judged = judge(g, None, tip).await.map_err(|e| e.to_string())?;
     if judged.accepted.as_deref() != Some(tip) || !g.lock().engine.accepted(welcome) {
         tracing::warn!(group = %genesis, commit = %tip, stopped = ?judged.stopped, "join-history-unverified");
+        // A history this release cannot read, written under newer rules or
+        // formats (ADR 0048), asks for an update here, not of the inviter.
+        if let Some((_, Verdict::Unknown(why))) = &judged.stopped
+            && *why != "parent"
+        {
+            return Err("update-needed".into());
+        }
         return Err("join-history-unverified".into());
     }
     for commit in [welcome, tip] {
