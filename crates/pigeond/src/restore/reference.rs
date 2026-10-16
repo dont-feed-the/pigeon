@@ -101,6 +101,21 @@ impl Intent {
                 .filter(|p| paths.contains(*p))
                 .cloned()
                 .collect();
+            // Record only a stat verified against the requested bytes, not a
+            // newer save made between installation and binding the suggestion.
+            let mut verified = std::collections::BTreeMap::new();
+            for path in &installed {
+                let stat = match self.changes.get(path).and_then(Option::as_ref) {
+                    Some(entry) => {
+                        let key = crate::git::pointer_key(&g.git.object(&entry.oid).await?);
+                        key.and_then(|key| {
+                            super::guard::verified(&worktree.join(path), &key, &entry.mode)
+                        })
+                    }
+                    None => None,
+                };
+                verified.insert(path, stat.map(|s| s.tuple()));
+            }
             crate::suggest::record(
                 g,
                 worktree,
@@ -111,6 +126,11 @@ impl Intent {
                 &self.changes,
             )
             .await?;
+            for (path, stat) in verified {
+                if let Some(divergence) = table.paths.get_mut(path) {
+                    divergence.mine_stat = stat;
+                }
+            }
         }
         crate::conflicts_file::write(g, &table).map_err(|e| invalid(&e))
     }

@@ -42,6 +42,13 @@ pub(crate) enum Put {
     InUse,
 }
 
+/// The file observed before an explicit restore yielded the worktree lock.
+/// A later save, creation, deletion or mode change must reach capture first.
+pub(crate) struct RestoreSource<'a> {
+    pub key: Option<&'a str>,
+    pub stat: Option<pigeon_sys::fs::Stat>,
+}
+
 /// What one round of install did.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Installed {
@@ -99,11 +106,11 @@ pub(crate) async fn put_restore(
     g: &Group,
     rel: &str,
     key: &str,
-    current: Option<&str>,
+    source: RestoreSource<'_>,
     mode: &str,
     t: &Tracer,
 ) -> Result<Put, String> {
-    put_mode(g, rel, key, current, None, Some(mode), t).await
+    put_mode(g, rel, key, source.key, None, Some((mode, source.stat)), t).await
 }
 
 async fn put_mode(
@@ -112,7 +119,7 @@ async fn put_mode(
     key: &str,
     current: Option<&str>,
     entry: Option<&Entry>,
-    mode: Option<&str>,
+    mode: Option<(&str, Option<pigeon_sys::fs::Stat>)>,
     t: &Tracer,
 ) -> Result<Put, String> {
     if crate::capture_file::pending(g) {
@@ -133,7 +140,8 @@ async fn put_mode(
     {
         use std::os::unix::fs::PermissionsExt;
         let mode = std::fs::Permissions::from_mode(mode_bits(
-            mode.or(entry.map(|e| e.mode.as_str())),
+            mode.map(|(mode, _)| mode)
+                .or(entry.map(|e| e.mode.as_str())),
             &file,
         ));
         let _ = std::fs::set_permissions(&stage, mode);
@@ -146,7 +154,9 @@ async fn put_mode(
     let st = stat_of(&file);
     // The caller's dirty scan precedes staging. A creation/deletion in
     // that gap must reach capture, rather than become a new install.
-    if entry.is_some() && current.is_some() != st.is_some() {
+    if (entry.is_some() && current.is_some() != st.is_some())
+        || mode.is_some_and(|(_, expected)| lstat(&file).ok() != Some(expected))
+    {
         std::fs::remove_file(&stage).map_err(|e| e.to_string())?;
         start.interrupted("idle").await;
         return Ok(Put::Raced);
@@ -195,7 +205,11 @@ async fn put_mode(
         let _ = std::fs::create_dir_all(dir);
     }
     let check = trace.begin(if st.is_some() { "Check" } else { "MoveAside" });
-    if st.is_some() && (stat_of(&aside) != st || !is_old(&aside, current)) {
+    if st.is_some()
+        && (stat_of(&aside) != st
+            || !is_old(&aside, current)
+            || mode.is_some_and(|(_, expected)| lstat(&aside).ok() != Some(expected)))
+    {
         rollback(g, seq, &aside, &file, Some(&stage))?;
         check.finish("idle");
         return Ok(Put::InUse);

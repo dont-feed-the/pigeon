@@ -34,6 +34,9 @@ the second number, and every other pull request the third.
 - If restored contents are unavailable, the new saved version or suggestion
   remains requested across restarts. The command explains the wait, keeps
   existing local files, and can finish when a copy becomes available.
+- A save, deletion or executable-bit change made while restore checks history
+  stays in place, even if pigeon has already saved that change. Members can
+  retry a waiting restore without losing their intervening saved suggestions.
 
 ## 0.5.8 — 2026-10-16
 

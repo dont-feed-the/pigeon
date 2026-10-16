@@ -123,13 +123,22 @@ pub(super) async fn restore(
         Err(error) => return vec![problem("internal-error", &[], Some(error))],
     };
     let files = pigeon_core::restore::files(&selected, rel);
-    let Some(main) = g.git.rev("refs/heads/main").await else {
-        return vec![problem("internal-error", &[], None)];
-    };
-    let current = match g.git.keys(&main).await {
-        Ok(current) => current,
+    let index = match g.git.index().await {
+        Ok(index) => index,
         Err(error) => return vec![problem("internal-error", &[], Some(error.to_string()))],
     };
+    let mut current = std::collections::BTreeMap::new();
+    for path in files.keys() {
+        if let Some(entry) = index.get(path) {
+            let bytes = match g.git.object(&entry.oid).await {
+                Ok(bytes) => bytes,
+                Err(e) => return vec![problem("internal-error", &[], Some(e.to_string()))],
+            };
+            if let Some(key) = crate::git::pointer_key(&bytes) {
+                current.insert(path.clone(), key);
+            }
+        }
+    }
     let mut needed = crate::settings::reserve_bytes(g.role, &g.git_dir);
     let mut downloads = BTreeSet::new();
     let mut absent = false;
@@ -153,24 +162,30 @@ pub(super) async fn restore(
             None,
         )];
     }
-    let intent = if absent {
-        let Some(worktree) = &g.worktree else {
-            return vec![problem("not-in-group", &[], None)];
+    let Some(worktree) = &g.worktree else {
+        return vec![problem("not-in-group", &[], None)];
+    };
+    let mut before = std::collections::BTreeMap::new();
+    for (path, (key, _)) in &files {
+        let Some(observed) = super::guard::Before::saved(
+            g,
+            &d.device,
+            path,
+            current.get(path).map(String::as_str),
+            key,
+        )
+        .await
+        else {
+            return vec![problem("restore-in-use", &[("path", text(path))], None)];
         };
+        before.insert(path.clone(), observed);
+    }
+    let intent = if absent {
         // A reference is an explicit request even if fetching later fails.
         // Refuse obvious private/writer obstructions before publishing it.
         for path in files.keys() {
             let file = worktree.join(path);
-            let clear = match pigeon_sys::fs::lstat(&file) {
-                Ok(None) => true,
-                Ok(Some(stat)) => {
-                    stat.is_regular()
-                        && pigeon_sys::writers::scan(stat.id).is_clear()
-                        && crate::evict::is_old(&file, current.get(path).map(String::as_str))
-                }
-                Err(_) => false,
-            };
-            if !clear {
+            if !before[path].clear(&file) {
                 return vec![problem("restore-in-use", &[("path", text(path))], None)];
             }
         }
@@ -208,22 +223,6 @@ pub(super) async fn restore(
             return vec![problem(code, &[], None)];
         }
     }
-    let index = match g.git.index().await {
-        Ok(index) => index,
-        Err(e) => return vec![problem("internal-error", &[], Some(e.to_string()))],
-    };
-    let mut current = std::collections::BTreeMap::new();
-    for path in files.keys() {
-        if let Some(entry) = index.get(path) {
-            let bytes = match g.git.object(&entry.oid).await {
-                Ok(bytes) => bytes,
-                Err(e) => return vec![problem("internal-error", &[], Some(e.to_string()))],
-            };
-            if let Some(key) = crate::git::pointer_key(&bytes) {
-                current.insert(path.clone(), key);
-            }
-        }
-    }
     let mut restored = 0i64;
     let mut installed = BTreeSet::new();
     let mut errors = Vec::new();
@@ -232,15 +231,13 @@ pub(super) async fn restore(
             errors.push(problem("restore-in-use", &[("path", text(path))], None));
             continue;
         }
-        match crate::install::put_restore(
-            g,
-            path,
-            key,
-            current.get(path).map(String::as_str),
-            mode,
-            &d.tracer,
-        )
-        .await
+        if super::guard::verified(&worktree.join(path), key, mode).is_some() {
+            restored += 1;
+            installed.insert(path.clone());
+            continue;
+        }
+        match crate::install::put_restore(g, path, key, before[path].source(), mode, &d.tracer)
+            .await
         {
             Ok(Put::Done(_)) => {
                 restored += 1;

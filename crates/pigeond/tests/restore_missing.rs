@@ -11,6 +11,7 @@
 mod common;
 use common::*;
 use pigeon_proto::Response;
+use sha2::Digest;
 use std::{path::Path, process::Command};
 
 fn git(d: &Daemon, root: &Path, args: &[&str]) -> String {
@@ -278,4 +279,34 @@ fn a_member_requests_absent_bytes_as_a_signed_suggestion_without_changing_main()
     );
     assert_eq!(std::fs::read(&bob_file).unwrap(), new);
     assert_eq!(git(&bob, &bob_folder, &["rev-parse", "HEAD"]), main);
+    let supply = root.join("available-copy.bin");
+    std::fs::write(&supply, old).unwrap();
+    git(
+        &bob,
+        &bob_folder,
+        &["annex", "setkey", key, supply.to_str().unwrap()],
+    );
+    let private = b"member's own newer save before retry\0\xfb\n";
+    std::fs::write(&bob_file, private).unwrap();
+    let restored = pigeon(
+        &bob,
+        &["restore", bob_file.to_str().unwrap(), "--version", "1"],
+    );
+    assert!(
+        said(&restored, "restore-result", "path").is_some(),
+        "{restored:?}"
+    );
+    assert_eq!(std::fs::read(&bob_file).unwrap(), old);
+    assert_eq!(git(&bob, &bob_folder, &["rev-parse", "HEAD"]), main);
+    let private_key = format!(
+        "SHA256E-s{}--{}.txt",
+        private.len(),
+        pigeond::util::hex(&sha2::Sha256::digest(private))
+    );
+    let retained = git(
+        &bob,
+        &bob_folder,
+        &["annex", "contentlocation", &private_key],
+    );
+    assert_eq!(std::fs::read(bob_folder.join(retained)).unwrap(), private);
 }
