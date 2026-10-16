@@ -98,3 +98,11 @@ retention is 60 seconds. The normal JSON log level does not filter away
 console events, and runtime instrumentation is excluded from the OTLP
 bridge. This is independent of the group collector and changes no file
 protection decisions.
+
+Cumulative metric snapshots take priority over traces in the bounded outbound
+queue. A newer snapshot supersedes an older queued snapshot for the same
+group; verbose traces cannot indefinitely starve the operator measurements.
+
+Acceptance and protection percentiles use cumulative observations since each
+process started. They can display the first observed save in a quiet group;
+they are not five-minute rates. Other rate panels need successive exports.

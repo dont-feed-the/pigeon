@@ -6,6 +6,11 @@ the second number, and every other pull request the third.
 
 ## 0.4.13 — 2026-10-16
 
+### Fixed
+- Verbose traces cannot crowd out the latest operator metrics; diagnostic
+  tracing respects the selected log level while the optional console can
+  still observe runtime tasks.
+
 ### Added
 
 - The optional operator dashboard measures peer acceptance and observed

@@ -97,17 +97,20 @@ pub fn init(dir: PathBuf) {
     let registry = tracing_subscriber::registry();
     #[cfg(feature = "tokio-console")]
     let registry = registry.with(pigeon_telemetry::console_layer());
-    let _ = tracing::subscriber::set_global_default(
-        registry
-            .with(
-                log.with_filter(tracing_subscriber::filter::filter_fn(move |m| {
-                    *m.level() <= max
-                })),
-            )
-            .with(
-                pigeon_telemetry::layer().with_filter(tracing_subscriber::filter::filter_fn(|m| {
-                    !m.target().starts_with("tokio") && !m.target().starts_with("runtime")
-                })),
-            ),
-    );
+    let _ =
+        tracing::subscriber::set_global_default(
+            registry
+                .with(
+                    log.with_filter(tracing_subscriber::filter::filter_fn(move |m| {
+                        *m.level() <= max
+                    })),
+                )
+                .with(pigeon_telemetry::layer().with_filter(
+                    tracing_subscriber::filter::filter_fn(move |m| {
+                        *m.level() <= max
+                            && !m.target().starts_with("tokio")
+                            && !m.target().starts_with("runtime")
+                    }),
+                )),
+        );
 }

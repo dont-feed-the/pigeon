@@ -34,19 +34,29 @@ impl Local {
             resource: Arc::new(Mutex::new(Resource::builder_empty().build())),
         }
     }
-    fn write(&self, line: &Value) {
+    pub(crate) fn write(&self, line: &Value) {
         self.store(line);
         let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
         for (group, part) in super::route::split(line) {
             let n = serde_json::to_vec(&part).map_or(256 * 1024, |b| b.len());
             // At most 256 KiB per request; 1 MiB queued for the device.
             if n + 2 <= 256 * 1024 {
+                if part.get("resourceMetrics").is_some() {
+                    // Cumulative snapshots supersede older queued snapshots.
+                    // Verbose spans must not starve the operator's inventory.
+                    pending.retain(|(g, record, _)| {
+                        g != &group || record.get("resourceMetrics").is_none()
+                    });
+                }
                 pending.push_back((group, part, n));
             }
         }
         let mut size: usize = pending.iter().map(|p| p.2).sum();
         while size > 1024 * 1024 {
-            if let Some((_, _, n)) = pending.pop_front() {
+            let oldest_trace = pending
+                .iter()
+                .position(|(_, record, _)| record.get("resourceSpans").is_some());
+            if let Some((_, _, n)) = pending.remove(oldest_trace.unwrap_or(0)) {
                 size -= n;
             } else {
                 break;
@@ -60,15 +70,21 @@ impl Local {
         let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
         let mut out = Vec::new();
         let mut size = 2;
-        pending.retain(|(g, line, n)| {
-            if g == group && size + n < 256 * 1024 {
-                out.push(line.clone());
-                size += n + 1;
-                false
-            } else {
-                true
-            }
-        });
+        // Metrics first, then FIFO traces, within the same wire bound.
+        for metrics in [true, false] {
+            pending.retain(|(g, line, n)| {
+                if g == group
+                    && line.get("resourceMetrics").is_some() == metrics
+                    && size + n < 256 * 1024
+                {
+                    out.push(line.clone());
+                    size += n + 1;
+                    false
+                } else {
+                    true
+                }
+            });
+        }
         out
     }
 }

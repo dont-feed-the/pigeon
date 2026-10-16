@@ -49,5 +49,36 @@ The reference `grafana/otel-lgtm` stack starts locally from verified digest
 dashboard and Prometheus parses all ten queries. Empty query results at
 this setup stage are not data acceptance evidence.
 
-Final real-device regression, actual SDK payload ingestion/query results,
-normal-build usability and final pre-commit checks remain pending.
+The acceptance metadata reader initially used `git log`, which the command
+allow-list correctly refused. It now uses permitted `rev-list` metadata.
+Verbose trace traffic also crowded cumulative metrics out of the bounded
+outbound queue. New metric snapshots now supersede older queued snapshots
+for their group, are sent before traces, and survive trace-only eviction.
+A regression floods the queue before and after a metric and proves that
+the latest snapshot stays first, within 256 KiB, without crossing groups.
+
+Both real-device telemetry tests passed in 121.64 seconds: collector consent
+and disable, offline unprotected sampling, exact Free/Keep bytes, peer
+acceptance, sampled protection, selected direct paths and all four actual
+batch classes. The backend received actual SDK payloads, not constructed
+metric fixtures. LGTM accepted 5 metric and 118 trace payloads. Lag count
+and bucket series exist. A strengthened regression passed both tests in
+152.19 seconds and required two distinct genuine SDK export timestamps for
+both lag measurements. LGTM accepted its 7 metric and 183 trace payloads.
+All ten dashboard queries parse; nine return real series, including four
+throughput series and all implemented batch classes. Clock skew is absent
+because this run had no skew; no artificial zero was injected.
+
+Lag panels use cumulative p95 since process start so the first observed
+save in a quiet group remains visible. The imported SDK buckets yield
+48.75 seconds for peer acceptance and 98.75 seconds for observed protection
+in this run; these are bucket estimates, not exact event durations. Rate
+panels use successive exports. Diagnostic tracing respects the selected log
+level while the separate optional console can still enable runtime traces.
+
+The five independent normal-build usability sessions used a frozen matching
+0.4.13 interface candidate before the operator-only metadata/queue follow-up.
+Their exact bytes and safety results, and the UI/join failures they found,
+are recorded in the separate M4 usability report. They do not validate this
+final diagnostic exporter binary. Full all-target lab/trace clippy and
+repository checks pass. The final complete workspace run is pending.

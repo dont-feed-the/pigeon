@@ -256,7 +256,7 @@
       "id": 7,
       "type": "timeseries",
       "title": "Peer acceptance lag p95",
-      "description": "Wall-clock capture-to-acceptance on a peer. Future capture clocks are omitted and counted separately.",
+      "description": "Wall-clock capture-to-acceptance on a peer. Future capture clocks are omitted and counted separately. Percentile of observations since process start; this remains useful for a quiet group with its first observed save.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -276,7 +276,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, group) (rate(pigeon_sync_lag_seconds_bucket{observation=\"peer\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, group) (pigeon_sync_lag_seconds_bucket{observation=\"peer\"}))",
           "legendFormat": "{{group}}"
         }
       ],
@@ -294,7 +294,7 @@
       "id": 8,
       "type": "timeseries",
       "title": "Observed protection lag p95",
-      "description": "First sampled unprotected to protected transition. Resolution is30 seconds plus a busy round; already-safe startup inventory is excluded.",
+      "description": "First sampled unprotected to protected transition. Resolution is30 seconds plus a busy round; already-safe startup inventory is excluded. Percentile of observations since process start; this remains useful for a quiet group with its first observed save.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -314,7 +314,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, group) (rate(pigeon_protect_lag_seconds_bucket{observation=\"sampled-transition\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, group) (pigeon_protect_lag_seconds_bucket{observation=\"sampled-transition\"}))",
           "legendFormat": "{{group}}"
         }
       ],

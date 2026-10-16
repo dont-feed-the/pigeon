@@ -225,3 +225,42 @@ fn a_group_snapshot_drops_other_resources_even_when_their_records_are_empty() {
     assert!(json.contains("g1-secret"));
     assert!(!json.contains("g2-secret"));
 }
+
+#[test]
+fn verbose_traces_cannot_starve_the_latest_cumulative_metric_snapshot() {
+    use serde_json::json;
+    let dir = tempfile::tempdir().unwrap();
+    let exporter = super::export::Local::new(dir.path().to_path_buf());
+    let attrs = json!([{"key":"group","value":{"stringValue":"g1"}}]);
+    let metrics = |n| {
+        json!({"resourceMetrics":[{"scopeMetrics":[{"metrics":[{
+            "name":"pigeon.versions", "gauge":{"dataPoints":[{"asDouble":n,"attributes":attrs}]}
+        }]}]}]})
+    };
+    exporter.write(&metrics(1.0));
+    let trace = json!({"resourceSpans":[{"scopeSpans":[{"spans":[{
+        "name":"noisy", "attributes":attrs, "status":{"message":"x".repeat(90_000)}
+    }]}]}]});
+    for _ in 0..30 {
+        exporter.write(&trace);
+    }
+    exporter.write(&metrics(2.0));
+    for _ in 0..30 {
+        exporter.write(&trace);
+    }
+    assert!(exporter.take("another-group").is_empty());
+    let taken = exporter.take("g1");
+    assert!(taken[0].get("resourceMetrics").is_some());
+    assert_eq!(
+        taken
+            .iter()
+            .filter(|r| r.get("resourceMetrics").is_some())
+            .count(),
+        1
+    );
+    assert_eq!(
+        taken[0]["resourceMetrics"][0]["scopeMetrics"][0]["metrics"][0]["gauge"]["dataPoints"][0]["asDouble"],
+        2.0
+    );
+    assert!(serde_json::to_vec(&taken).unwrap().len() <= 256 * 1024);
+}

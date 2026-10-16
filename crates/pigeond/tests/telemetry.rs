@@ -203,12 +203,24 @@ fn real_acceptance_protection_paths_and_work_batches_reach_the_backend() {
         120,
         || {
             let records = backend.records.lock().unwrap();
-            let protected = !metric(&records, "pigeon.protect.lag").is_empty();
-            let peer_acceptance = metric(&records, "pigeon.sync.lag").iter().any(|m| {
-                m["histogram"]["dataPoints"]
-                    .as_array()
-                    .is_some_and(|p| p.iter().any(|p| attribute(p, "observation", "peer")))
-            });
+            let samples = |name, observation| {
+                metric(&records, name)
+                    .iter()
+                    .flat_map(|m| {
+                        m["histogram"]["dataPoints"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                    })
+                    .filter(|p| attribute(p, "observation", observation))
+                    .filter_map(|p| p["timeUnixNano"].as_str())
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .len()
+            };
+            // Two genuine SDK exports allow rate-based dashboard queries;
+            // a single snapshot proves delivery, not a five-minute rate.
+            let protected = samples("pigeon.protect.lag", "sampled-transition") >= 2;
+            let peer_acceptance = samples("pigeon.sync.lag", "peer") >= 2;
             let direct = metric(&records, "pigeon.connection.observations")
                 .iter()
                 .any(|m| {
