@@ -121,13 +121,15 @@ struct ShortSocket {
 /// parent can already be near sun_path's limit. Each registration owns a
 /// different directory, so an old helper cannot unlink a newer alias.
 fn short_link(socket: &Path) -> std::io::Result<Option<ShortSocket>> {
+    use std::os::unix::fs::PermissionsExt;
     if socket.as_os_str().len() <= MAX_SOCKET_PATH {
         return Ok(None);
     }
-    // /tmp is a short POSIX path on both supported platforms. TempDir
-    // creates it with mode 0700 and removes it on every return path.
+    // /tmp is a short POSIX path on both supported platforms. Request
+    // owner-only creation explicitly: TempDir's default follows umask.
     let directory = tempfile::Builder::new()
         .prefix("pigeon-ipc-")
+        .permissions(std::fs::Permissions::from_mode(0o700))
         .tempdir_in("/tmp")?;
     let path = directory.path().join("annex.sock");
     std::os::unix::fs::symlink(socket, &path)?;

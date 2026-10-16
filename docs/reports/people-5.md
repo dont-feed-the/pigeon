@@ -171,3 +171,14 @@ proofs and verification reuse for unchanged formal inputs. The superseded
 378ff5d CI jobs were cancelled and the rollup rebased again. The incoming
 change affects proofs, documentation and version metadata, not application
 code. Its five proof-cache identity and provenance regressions also pass.
+
+Run 38875492801 passed the daemon shards and other completed checks but
+failed the socket-alias privacy regression: with the runner's umask, the
+temporary directory had mode 0755, not 0700. TempDir's default follows
+umask. Both the socket alias and the private in-place join staging now
+request mode 0700 at creation, avoiding a chmod window. The regression is
+rerun under umask 022; the existing assertion remains unchanged.
+The corrected alias check passed under umask 022, followed by all 40 daemon
+unit tests and both complete refound crash/restart tests under that umask.
+Final all-target Clippy and repository rules passed again. The hosted run
+must validate this correction before publication.

@@ -41,6 +41,8 @@ needed after the M3 candidate ([report](docs/reports/people-5.md)).
   remain available even when verbose traces fill the export queue.
 - Backup release validation uses the service account's private socket.
   Retrying publication builds the original tag and its matching sources.
+- Temporary socket aliases and in-place join staging are created with
+  owner-only permissions regardless of the account's usual umask.
 
 ## 0.4.3 — 2026-10-16
 

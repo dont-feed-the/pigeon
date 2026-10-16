@@ -4,6 +4,7 @@
 //! can be the destination of its metadata connection (09 §9.9).
 
 use std::collections::BTreeMap;
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -36,6 +37,7 @@ pub(crate) async fn prepare(d: &Daemon, inv: &Invitation, uuid: &str) -> Result<
     std::fs::create_dir_all(&d.dirs.state).map_err(|e| e.to_string())?;
     let directory = tempfile::Builder::new()
         .prefix("join-stage-")
+        .permissions(std::fs::Permissions::from_mode(0o700))
         .tempdir_in(&d.dirs.state)
         .map_err(|e| e.to_string())?;
     let git = Git::new(directory.path(), d.env.clone());
