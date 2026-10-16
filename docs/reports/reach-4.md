@@ -75,3 +75,9 @@ binary execution. That run's daemon tests still used stock git-annex and
 the mass-deletion case failed once; CI now requires the project's cached
 patched build and its system-git shim, as the release and lab already do.
 The corrected candidate still needs a green run before tagging.
+
+Upstream 0.3.5's macOS dependency-build fix is included: git-annex builds
+on macOS 15 while keeping the existing artifact/cache names for newer
+macOS runners. The old candidate's Linux Rust job and real macOS Homebrew
+installation passed in run 38830164002. The combined candidate is checked
+again after integrating upstream; publication still waits for its tag.
