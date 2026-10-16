@@ -232,11 +232,11 @@ async fn switch(
     position: Option<usize>,
 ) -> Result<(), String> {
     let path = old.worktree.clone().unwrap_or_else(|| old.git_dir.clone());
-    let g = std::sync::Arc::new(
-        Group::open(new, &path, &d.env)
-            .await
-            .ok_or("refounded repository missing")?,
-    );
+    let mut g = Group::open(new, &path, &d.env)
+        .await
+        .ok_or("refounded repository missing")?;
+    crate::shared::configure(&mut g, d.config.bridge_storage.as_ref())?;
+    let g = std::sync::Arc::new(g);
     let busy = g.busy.lock().await;
     remember(&g).await;
     d.serve_group(g.clone(), None).await;

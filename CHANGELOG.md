@@ -4,6 +4,33 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## Unreleased
+
+### Added
+
+- Optional catalogue traces let bridge operators check complete listings and
+  revision-pinned refreshes against a TLA+ model.
+- Nextcloud desktop and mobile clients can connect through `pigeon-bridge`.
+  Each authorization creates its own Pigeon peer. The bridge's web portal
+  lets users review suggestions, resolve conflicts and revoke a client.
+- A bridge can reuse a laptop or custodian's immutable file storage. The
+  first-custodian quick start explains server setup and client connections.
+
+### Fixed
+
+- Leaving waits for a peer that learned the device's membership; an older
+  roster cannot acknowledge a removal it has never seen.
+- Storage sharing leaves git-annex lock files and retention timestamps intact;
+  only actual file content is deduplicated.
+- Connecting a bridge to existing storage finishes sharing retained objects
+  before registration succeeds, even when background transfers are stalled.
+- Nextcloud desktop clients can finish chunked uploads using their relative
+  destination paths.
+- New clients can join after suggestions have been accepted or declined;
+  joining fetches their signed proposal evidence before checking the history.
+- A decision received before its suggestion no longer prevents that peer
+  from receiving later edits once the suggestion arrives.
+
 ## 0.5.1 — 2026-10-16
 
 ### Fixed

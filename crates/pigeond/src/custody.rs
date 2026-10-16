@@ -72,11 +72,8 @@ async fn fetch(g: &Group, id: &str) -> Result<(), crate::git::Error> {
     }
 }
 
-/// One round of accept: answers whether `main` moved. A peer whose fetch
-/// fails is unreachable for this round: place sends it nothing.
-pub async fn accept(g: &Group, me: &str, tracer: &Tracer) -> bool {
-    let mut fetched = Vec::new();
-    let mut unreachable = BTreeSet::new();
+/// Configures fetch remotes under the repository lock, before network waits.
+pub async fn prepare_accept(g: &Group, me: &str) -> Vec<String> {
     let peers = peers(g, me);
     for (id, uuid, _) in &peers {
         if let Err(e) = ensure_remote(&g.git, id, uuid).await {
@@ -85,11 +82,19 @@ pub async fn accept(g: &Group, me: &str, tracer: &Tracer) -> bool {
     }
     g.reload_remotedaemon(peers.iter().map(|(id, _, _)| id.clone()).collect())
         .await;
+    peers.into_iter().map(|(id, _, _)| id).collect()
+}
+
+/// Fetches only objects and peer refs, without holding the file-operation lock.
+/// It never moves `main`, edits the index, or changes the working tree.
+pub async fn fetch_ready(g: &Group, peers: &[String]) -> Vec<String> {
+    let mut fetched = Vec::new();
+    let mut unreachable = BTreeSet::new();
     // Every peer at once: one whose fetch hangs until its timeout must not
     // hold back what the others bring (16 §16.4).
     let fetches = peers
         .iter()
-        .map(|(id, _, _)| async move { (id.clone(), fetch(g, id).await) });
+        .map(|id| async move { (id.clone(), fetch(g, id).await) });
     let mut history_queue = crate::telemetry::Queue::start(&g.id, "history", "fetch", peers.len());
     for (id, result) in crate::util::join_all(fetches.collect()).await {
         history_queue.complete(1);
@@ -113,6 +118,12 @@ pub async fn accept(g: &Group, me: &str, tracer: &Tracer) -> bool {
         }
     }
     g.lock().unreachable = unreachable;
+    fetched
+}
+
+/// Validates fetched history and advances `main` under the repository lock.
+/// A peer whose fetch failed is unreachable for this round: place skips it.
+pub async fn accept(g: &Group, fetched: Vec<String>, tracer: &Tracer) -> bool {
     if fetched.is_empty() {
         return false;
     }
@@ -279,6 +290,10 @@ pub async fn place(g: &Group, me: &str) -> usize {
                 let Work::Protect { key, size, .. } = work else {
                     continue;
                 };
+                if g.shared.is_some() && crate::restore::bring(g, &key).await.is_err() {
+                    left += size;
+                    continue;
+                }
                 for id in lacking {
                     if failed.contains(&id) {
                         left += size;
@@ -321,6 +336,15 @@ pub async fn place(g: &Group, me: &str) -> usize {
                 let Work::Protect { key, size, .. } = work else {
                     continue;
                 };
+                if crate::shared::provider_hydrate(g, &key)
+                    .await
+                    .is_ok_and(|here| here)
+                    && let Some(object) = present(g, &key).await
+                    && crate::net::sync::sync_object(&object).is_ok()
+                {
+                    made += 1;
+                    continue;
+                }
                 let args = ["annex", "get", "--json", "--key", key.as_str()];
                 match g.git.run_for(&args, TRANSFER_TIMEOUT).await {
                     Ok(_) => {

@@ -82,7 +82,13 @@ pub async fn check(g: &Group) -> usize {
     let mut changed = 0;
     let current = local_config(&g.git).await;
     let reserve = reserve_bytes(g.role, &g.git_dir);
-    for (k, v) in wanted_config(g.role, &empty.to_string_lossy(), reserve) {
+    let immutable =
+        g.shared.is_some() || !matches!(crate::shared_pool::registration(&g.git_dir), Ok(None));
+    for (k, mut v) in wanted_config(g.role, &empty.to_string_lossy(), reserve) {
+        // Shared objects must never become writable working-tree hard links.
+        if immutable && k == "annex.thin" {
+            v = "false".into();
+        }
         if current.get(&k.to_ascii_lowercase()) != Some(&v)
             && g.git.run(&["config", &k, &v]).await.is_ok()
         {

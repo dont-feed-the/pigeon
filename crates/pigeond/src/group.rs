@@ -111,6 +111,8 @@ pub struct Group {
     pub git: Git,
     /// pigeon's files in the repository.
     pub files: RepoFiles,
+    /// A shared immutable store, when this is a managed sparse bridge peer.
+    pub shared: Option<crate::config::BridgeStorage>,
     /// What the loops know.
     pub known: Mutex<Known>,
     /// Held by whatever changes the repository: a round of the loops, or a
@@ -177,6 +179,7 @@ impl Group {
             worktree,
             git: Git::new(dir, env.clone()),
             files,
+            shared: None,
             known: Mutex::new(Known::default()),
             busy: tokio::sync::Mutex::new(()),
             daemon: tokio::sync::Mutex::new(None),
@@ -207,6 +210,7 @@ impl Group {
     pub(crate) fn history_judge(&self, genesis: &str) -> Group {
         Group {
             id: genesis.to_owned(),
+            shared: None,
             role: self.role,
             git_dir: self.git_dir.clone(),
             worktree: self.worktree.clone(),

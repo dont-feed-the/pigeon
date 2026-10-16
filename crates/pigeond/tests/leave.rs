@@ -141,3 +141,87 @@ fn a_laptop_leaves_once_a_peer_has_its_removal() {
         "{status:?}"
     );
 }
+
+#[test]
+fn a_peer_that_never_learned_the_join_cannot_acknowledge_the_leave() {
+    let _one = SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some((_tmp, root, sockets)) = dirs() else {
+        return;
+    };
+    let s = sockets.path();
+    let a1 = start(&root, s, "a1");
+    let c1 = start(&root, s, "c1");
+    let a2 = start(&root, s, "a2");
+    let folder = root.join("ana");
+    let created = pigeon(&a1, &["create", "Family", folder.to_str().unwrap()]);
+    assert!(said(&created, "created", "group").is_some(), "{created:?}");
+    join(&a1, &c1, &[&a1, &c1]);
+    // The backup returns with a valid roster from before the second join.
+    // Its first NotInRoster after the leave is therefore no acknowledgement.
+    let _ = pigeon(&c1, &["pause"]);
+    drop(c1);
+    let answer = pigeon(&a1, &["invite", "ana"]);
+    let code = said(&answer, "invitation", "code").unwrap();
+    let joined = pigeon(
+        &a2,
+        &[
+            "join",
+            &code,
+            root.join("ana-2").to_str().unwrap(),
+            "--name",
+            "ana-2",
+        ],
+    );
+    assert!(said(&joined, "joined", "group").is_some(), "{joined:?}");
+    let _ = pigeon(&a1, &["pause"]);
+    let leaving = pigeon(&a2, &["leave", "--yes"]);
+    assert!(said(&leaving, "leaving", "name").is_some(), "{leaving:?}");
+    let c1 = start(&root, s, "c1");
+    let all = [&a1, &c1, &a2];
+    eventually_within(
+        60,
+        || {
+            logs(&[&c1])
+                .lines()
+                .filter(|line| line.contains("stream-refused") && line.contains("NotInRoster"))
+                .count()
+                >= 3
+                || !root.join("ana-2/.git").exists()
+        },
+        "the stale backup did not refuse the unknown joining device",
+        &all,
+    );
+    // Let several one-second leave rounds observe that refusal while the
+    // only peer that knows the membership still cannot accept the removal.
+    for _ in 0..20 {
+        assert!(
+            root.join("ana-2/.git").exists(),
+            "a stale roster acknowledged an unseen removal\n{}",
+            logs(&all)
+        );
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
+    let again = pigeon(&a2, &["leave", "--yes"]);
+    assert!(
+        again
+            .iter()
+            .any(|r| matches!(r, Response::Said { message } if message.id == "leaving-already")),
+        "a stale roster acknowledged an unseen removal: {again:?}\n{}",
+        logs(&all)
+    );
+    let _ = pigeon(&a1, &["resume"]);
+    eventually_within(
+        180,
+        || !machines(&a1).contains(&"ana-2".to_owned()),
+        "the actual member did not accept the removal",
+        &all,
+    );
+    eventually_within(
+        180,
+        || !root.join("ana-2/.git").exists(),
+        "the witnessed leave did not finish",
+        &all,
+    );
+}

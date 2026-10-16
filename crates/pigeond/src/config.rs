@@ -36,6 +36,19 @@ pub struct Config {
     /// The groups of this device.
     #[serde(default)]
     pub groups: Vec<GroupEntry>,
+    /// Shared content and sparse client overlays, only for managed bridge peers.
+    #[serde(default)]
+    pub bridge_storage: Option<BridgeStorage>,
+}
+
+/// A managed bridge peer's immutable content pool and existing storage node.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BridgeStorage {
+    /// Shared pool, on the same filesystem as the client's repository.
+    pub store: PathBuf,
+    /// A laptop or custodian daemon serving this group on a private local socket.
+    pub source_socket: PathBuf,
 }
 
 /// `[telemetry]`: configured locally, never learned from another member.

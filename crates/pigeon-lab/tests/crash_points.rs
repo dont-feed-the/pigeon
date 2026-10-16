@@ -63,6 +63,9 @@ fn the_crash_points_are_pigeonds() {
             "join-in-place.after-main",
             "join-in-place.after-index",
             "join-in-place.after-config",
+            "bridge-before-capture",
+            "bridge-hide-after-flag",
+            "bridge-hide-after-remove",
         ]
         .map(str::to_owned),
     );

@@ -333,7 +333,7 @@ async fn recover_inner(
     g.reload_roster().await;
     crate::trace_roster::moved(&d.tracer, &g, "Merge", None).await;
     hide_all(&g, &theirs).await?;
-    let _g = d.add_group(g, &path).await;
+    let _g = d.add_group(g, &path).await?;
     d.wake.notify_one();
     Ok(s.name)
 }

@@ -309,3 +309,8 @@ that a conflict event already put at one of its slot's copies is not shown
 again as that slot's copy (`Copied`): seeds 24 and 197 of models-full's 200
 found the code showing it twice, under a second name ` 2`, once a copy was
 edited or a re-frozen side met the other.
+
+`BridgeCatalogue` checks the Nextcloud bridge's paginated reads and pinned
+post-save refreshes. `BridgeCatalogueTrace` checks observed RPCs and returned
+metadata; [the guide](../../docs/bridge-catalogue-traces.md) describes its scope,
+regressions and deliberate trace corruptions.

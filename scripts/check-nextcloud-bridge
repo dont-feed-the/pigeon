@@ -1,0 +1,368 @@
+#!/usr/bin/env python3
+"""Exercise the bridge over HTTP with real, separately signed Pigeon peers.
+
+Build pigeon-bridge, pigeond, pigeon, and git-annex-p2p-iroh first. The matching
+git-annex must be on PATH. PIGEON_BIN selects the binary directory (target/debug
+by default). No external server or desktop UI is needed; all peers use loopback.
+"""
+
+import base64
+from contextlib import closing
+import hashlib
+import http.client as http_client
+import json
+import os
+from pathlib import Path
+import signal
+import socket
+import subprocess
+import tempfile
+import time
+import urllib.parse
+import xml.etree.ElementTree as ET
+from html.parser import HTMLParser
+
+
+ROOT = Path(__file__).resolve().parent.parent
+BIN = Path(os.environ.get("PIGEON_BIN", ROOT / "target/debug")).resolve()
+
+
+class Inputs(HTMLParser):
+    def __init__(self, body):
+        super().__init__()
+        self.values = {}
+        self.feed(body.decode())
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "input" and "name" in attrs:
+            self.values[attrs["name"]] = attrs.get("value", "")
+
+
+def rpc(path, request):
+    with socket.socket(socket.AF_UNIX) as connection:
+        connection.settimeout(180)
+        connection.connect(str(path))
+        connection.sendall(json.dumps(dict(id=1, **request)).encode() + b"\n")
+        with connection.makefile("rb") as stream:
+            while True:
+                body = json.loads(stream.readline(1024 * 1024 + 1))
+                if body["type"] != "Progress":
+                    assert body["type"] != "Problem", f"Pigeon refused {request['type']}: {body.get('code')}"
+                    return body
+
+
+def until(test, message, seconds=120):
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        try:
+            result = test()
+            if result:
+                return result
+        except (ConnectionError, OSError, http_client.HTTPException):
+            pass
+        time.sleep(0.25)
+    raise AssertionError(message)
+
+
+def run():
+    processes = []
+    with tempfile.TemporaryDirectory(prefix="pbridge-", dir="/tmp") as directory:
+        root = Path(directory)
+
+        def start(name, arguments, env=None):
+            log = (root / f"{name}.log").open("ab")
+            process = subprocess.Popen(arguments, env=env, stdin=subprocess.DEVNULL,
+                                       stdout=log, stderr=log, start_new_session=True)
+            log.close()
+            processes.append(process)
+            return process
+
+        def daemon(name):
+            home = root / name
+            (home / "config").mkdir(parents=True)
+            (home / "config/config.toml").write_text(
+                'notifications = false\n[network]\nbind="127.0.0.1:0"\n'
+                'mdns=false\nrelays="off"\n[loops]\ninterval_seconds=1\n')
+            sock = root / f"{name}.sock"
+            env = dict(os.environ, PIGEON_SOCKET=str(sock))
+            start(name, [str(BIN / "pigeond"), "--home", str(home)], env)
+            until(lambda: sock.exists(), f"{name} did not start")
+            return sock
+
+        try:
+            alice = daemon("alice")
+            bob = daemon("bob")
+            files = root / "group"
+            (files / "Docs").mkdir(parents=True)
+            (files / "Docs/review.txt").write_text("Alice's original\n")
+            rpc(alice, dict(type="Create", name="Bridge test", folder=str(files), k=1, device_name="Alice control"))
+            invitation = rpc(alice, dict(type="Invite", person="Bob", admin=False, custodian=False))
+            rpc(bob, dict(type="Join", invitation=invitation["message"]["args"]["code"],
+                          folder=str(root / "bob-files"), keep=True, name="Bob control"))
+            with socket.socket() as listener:
+                listener.bind(("127.0.0.1", 0))
+                port = listener.getsockname()[1]
+            origin = f"http://127.0.0.1:{port}"
+            password = "a test portal password"
+            password_hash = subprocess.check_output([str(BIN / "pigeon-bridge"), "hash-password"],
+                                                    input=password.encode()).decode().strip()
+            config = root / "bridge.toml"
+            config.write_text(f'listen="127.0.0.1:{port}"\npublic_url="{origin}"\n'
+                              f'state_dir="{root / "bridge"}"\npigeond="{BIN / "pigeond"}"\n'
+                              'peer_network="off"\nmax_upload_bytes=33554432\n'
+                              f'[users.alice]\npassword_hash="{password_hash}"\ncontrol_socket="{alice}"\n'
+                              f'[users.bob]\npassword_hash="{password_hash}"\ncontrol_socket="{bob}"\n')
+
+            def http(method, path, body=b"", headers=None, credentials=None, cookie=None):
+                request_headers = dict(headers or {})
+                if credentials:
+                    request_headers["Authorization"] = "Basic " + base64.b64encode(
+                        f"{credentials['loginName']}:{credentials['appPassword']}".encode()).decode()
+                if cookie:
+                    request_headers["Cookie"] = cookie
+                with closing(http_client.HTTPConnection("127.0.0.1", port, timeout=180)) as connection:
+                    connection.request(method, path, body, request_headers)
+                    response = connection.getresponse()
+                    return response.status, dict(response.getheaders()), response.read()
+
+            def start_bridge():
+                process = start("bridge", [str(BIN / "pigeon-bridge"), "--config", str(config)])
+                until(lambda: http("GET", "/status.php")[0] == 200, "Bridge did not start")
+                return process
+
+            bridge = start_bridge()
+
+            def login(username):
+                status, headers, _ = http("POST", "/login", urllib.parse.urlencode(
+                    dict(username=username, password=password)),
+                    {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin})
+                assert status == 303, "Portal sign-in failed"
+                cookie = headers["set-cookie"].split(";", 1)[0]
+                _, _, body = http("GET", "/", cookie=cookie)
+                return cookie, Inputs(body).values["token"]
+
+            cookie_a, csrf_a = login("alice")
+            cookie_b, csrf_b = login("bob")
+
+            def connect(cookie, name):
+                status, _, body = http("POST", "/index.php/login/v2", headers={"User-Agent": name})
+                assert status == 200
+                flow = json.loads(body)
+                path = urllib.parse.urlparse(flow["login"]).path
+                status, _, body = http("GET", path, cookie=cookie)
+                assert status == 200
+                csrf = Inputs(body).values["csrf"]
+                status, _, body = http("POST", path, urllib.parse.urlencode(dict(csrf=csrf, name=name)),
+                                    {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin}, cookie=cookie)
+                assert status == 200, f"Client provisioning failed ({status}): {body.decode(errors='replace')}"
+                status, _, body = http("POST", "/login/v2/poll", urllib.parse.urlencode(dict(token=flow["poll"]["token"])),
+                                       {"Content-Type": "application/x-www-form-urlencoded"})
+                assert status == 200
+                return json.loads(body)
+
+            a = connect(cookie_a, "Alice desktop")
+            a2 = connect(cookie_a, "Alice second client")
+            b = connect(cookie_b, "Bob phone")
+            state_path = root / "bridge/clients.json"
+            clients = json.loads(state_path.read_text())["clients"]
+            ids = {c["name"]: c["id"] for c in clients.values()}
+            peer_roots = {name: root / "bridge/peers" / cid / "files" for name, cid in ids.items()}
+            group_id = rpc(alice, dict(type="Bridge", operation={"kind": "info"}))["result"]["group"]
+
+            def pooled(body):
+                digest = hashlib.sha256(body).hexdigest()
+                return root / "bridge/content" / group_id / digest[:2] / digest
+
+            def annex_objects(folder, body):
+                digest = hashlib.sha256(body).hexdigest()
+                return [p for p in (folder / ".git/annex/objects").rglob("*") if p.is_file() and p.name == p.parent.name and f"--{digest}" in p.name]
+
+            assert len({c["device"] for c in clients.values()}) == 3
+            assert len({c["annex_uuid"] for c in clients.values()}) == 3
+            until(lambda: {c["device"] for c in clients.values()} <= {m["device"] for m in rpc(alice, dict(type="Machines"))["machines"]},
+                  "Client roster entries did not reach the other control peer")
+            print("PASS: three authorizations create three roster peers and distinct annex UUIDs", flush=True)
+
+            def dav(credentials, method, path, body=b"", headers=None):
+                user = credentials["loginName"]
+                return http(method, f"/remote.php/dav/files/{user}/{path}", body, headers, credentials)
+
+            until(lambda: dav(a, "PROPFIND", "Docs", headers={"Depth": "0"})[0] == 207,
+                  "Initial group files did not arrive")
+            status, headers, _ = dav(a, "PUT", "Docs/file.txt", b"first version\n",
+                                      {"If-None-Match": "*", "X-OC-Mtime": "1600000000"})
+            assert status == 201
+            etag = headers["etag"]
+            assert headers["x-oc-mtime"] == "accepted"
+            until(lambda: dav(a2, "GET", "Docs/file.txt")[2] == b"first version\n", "Second peer did not receive upload")
+            assert not (peer_roots["Alice desktop"] / "Docs/file.txt").exists()
+            assert not (peer_roots["Alice second client"] / "Docs/file.txt").exists()
+            shared = pooled(b"first version\n")
+            for name in ["Alice desktop", "Alice second client"]:
+                refs = annex_objects(peer_roots[name], b"first version\n")
+                assert refs and all(os.path.samefile(shared, ref) for ref in refs), "A client duplicated shared content"
+            print("PASS: accepted files stay sparse and client annexes share immutable bytes", flush=True)
+            assert dav(a, "PUT", "Docs/file.txt", b"stale", {"If-Match": '"wrong"'})[0] == 412
+            assert dav(a, "GET", "Docs/file.txt")[2] == b"first version\n"
+            assert dav(a, "GET", "Docs/file.txt", headers={"Range": "bytes=0-4"})[2] == b"first"
+            status, headers, _ = dav(a, "MOVE", "Docs/file.txt", headers={"Destination": origin + "/remote.php/dav/files/alice/Docs/renamed.txt"})
+            assert status == 201
+            assert dav(a, "GET", "Docs/file.txt")[0] == 404
+            assert dav(a, "GET", "Docs/renamed.txt")[2] == b"first version\n"
+            print("PASS: signed replication, conditional writes, ranged reads, and renames", flush=True)
+
+            until(lambda: dav(b, "GET", "Docs/review.txt")[2] == b"Alice's original\n", "Bob did not receive the original")
+            status, headers, _ = dav(b, "PUT", "Docs/review.txt", b"Bob's suggestion\n")
+            assert status == 204 and headers["x-pigeon-suggested"] == "1"
+            assert dav(b, "GET", "Docs/review.txt")[2] == b"Bob's suggestion\n"
+            assert dav(a, "GET", "Docs/review.txt")[2] == b"Alice's original\n"
+            assert os.path.samefile(peer_roots["Bob phone"] / "Docs/review.txt", pooled(b"Bob's suggestion\n"))
+            assert not (peer_roots["Alice desktop"] / "Docs/review.txt").exists()
+            proposals = until(lambda: rpc(alice, dict(type="Proposals"))["proposals"], "The control peer did not receive a suggestion")
+            status, _, body = http("GET", "/suggestions", cookie=cookie_a)
+            assert status == 200 and b"Docs/review.txt" in body
+            status, _, _ = http("POST", "/decide", urllib.parse.urlencode(dict(csrf=csrf_a, proposal=proposals[0]["id"], decision="accept")),
+                                {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin}, cookie=cookie_a)
+            assert status == 200
+            until(lambda: dav(a, "GET", "Docs/review.txt")[2] == b"Bob's suggestion\n", "Accepted suggestion did not reach Alice's client")
+            until(lambda: not (peer_roots["Bob phone"] / "Docs/review.txt").exists(), "Accepted suggestion kept a full client file")
+            print("PASS: proposed upload has a private peer view and can be accepted in the portal", flush=True)
+
+            # Alice edits a fresh slot; Bob's edit is declined and then resolved in his portal.
+            assert dav(a, "PUT", "Docs/decline.txt", b"keep this\n")[0] == 201
+            until(lambda: dav(b, "GET", "Docs/decline.txt")[2] == b"keep this\n", "New review file did not reach Bob")
+            assert dav(b, "PUT", "Docs/decline.txt", b"please change\n")[1]["x-pigeon-suggested"] == "1"
+            proposals = until(lambda: [p for p in rpc(alice, dict(type="Proposals"))["proposals"] if "Docs/decline.txt" in p["paths"]], "No suggestion to decline")
+            assert http("POST", "/decide", urllib.parse.urlencode(dict(csrf=csrf_a, proposal=proposals[0]["id"], decision="decline", note="Keep the original")),
+                        {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin}, cookie=cookie_a)[0] == 200
+            bob_id = ids["Bob phone"]
+            until(lambda: b"conflict" in http("GET", f"/clients/{bob_id}", cookie=cookie_b)[2], "Decline did not appear in Bob's portal")
+            assert http("POST", f"/clients/{bob_id}/resolve", urllib.parse.urlencode(dict(csrf=csrf_b, path="Docs/decline.txt", choice="take-group")),
+                        {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin}, cookie=cookie_b)[0] == 200
+            until(lambda: dav(b, "GET", "Docs/decline.txt")[2] == b"keep this\n", "Taking the group version failed")
+            assert http("GET", f"/clients/{ids['Alice desktop']}", cookie=cookie_b)[0] == 403
+            print("PASS: decline, conflict resolution, and portal user isolation", flush=True)
+
+            upload = "/remote.php/dav/uploads/alice/test-upload"
+            destination = origin + "/remote.php/dav/files/alice/Docs/chunked.bin"
+            assert http("MKCOL", upload, headers={"Destination": destination}, credentials=a)[0] == 201
+            assert http("PUT", upload + "/00001", b"hello ", {"Destination": destination}, a)[0] == 201
+            assert http("PUT", upload + "/00002", b"world", {"Destination": destination}, a)[0] == 201
+            status, _, body = http("PROPFIND", upload, headers={"Depth": "1"}, credentials=a)
+            assert status == 207 and b"00001" in body and b"00002" in body
+            assert http("GET", upload + "/00001", credentials=a)[0] == 403
+            assert http("GET", upload + "/00001", credentials=a2)[0] == 404
+            assert dav(a, "GET", "Docs/chunked.bin")[0] == 404
+            assert http("MOVE", upload + "/.file", headers={"Destination": destination, "OC-Total-Length": "12"}, credentials=a)[0] == 400
+            assert http("MOVE", upload + "/.file", headers={"Destination": urllib.parse.urlparse(destination).path, "OC-Total-Length": "11",
+                        "OC-Checksum": "SHA256:" + hashlib.sha256(b"hello world").hexdigest()}, credentials=a)[0] == 201
+            assert dav(a, "GET", "Docs/chunked.bin")[2] == b"hello world"
+            print("PASS: isolated chunk staging, length validation, and complete-file publication", flush=True)
+
+            def root_etag():
+                status, _, body = dav(a, "PROPFIND", "", headers={"Depth": "0"})
+                assert status == 207
+                return ET.fromstring(body).find(".//{DAV:}getetag").text
+
+            old_etag = root_etag()
+            (files / "Docs/deep").mkdir(exist_ok=True)
+            (files / "Docs/deep/native.txt").write_text("native Pigeon edit\n")
+            rpc(alice, dict(type="Status"))
+            until(lambda: root_etag() != old_etag, "Deep native edit did not change the DAV root ETag")
+            until(lambda: dav(a, "GET", "Docs/deep/native.txt")[2] == b"native Pigeon edit\n", "Native edit did not reach DAV")
+            source_file = files / "Docs/mutable-source.txt"
+            source_body = b"laptop version one\n"
+            source_file.write_bytes(source_body)
+            until(lambda: any(f["path"] == "Docs/mutable-source.txt" for f in rpc(alice, dict(type="Bridge", operation={"kind": "snapshot", "cursor": None, "limit": 1000}))["result"].get("files", [])),
+                  "The laptop did not capture its source file")
+            until(lambda: dav(a2, "GET", "Docs/mutable-source.txt")[2] == source_body, "Laptop source version did not reach DAV")
+            retained = pooled(source_body)
+            until(lambda: (refs := annex_objects(files, source_body)) and all(os.path.samefile(retained, ref) for ref in refs),
+                  "Laptop immutable objects were not shared")
+            assert source_file.stat().st_mode & 0o200
+            source_file.write_bytes(b"laptop version two\n")
+            assert retained.read_bytes() == source_body, "An in-place laptop save modified the pool"
+            until(lambda: any(f["path"] == "Docs/mutable-source.txt" and f["etag"].startswith(hashlib.sha256(b"laptop version two\n").hexdigest()) for f in rpc(alice, dict(type="Bridge", operation={"kind": "snapshot", "cursor": None, "limit": 1000}))["result"].get("files", [])),
+                  "The laptop did not capture its in-place save")
+            until(lambda: dav(a2, "GET", "Docs/mutable-source.txt")[2] == b"laptop version two\n", "Updated laptop version did not reach DAV")
+            assert retained.read_bytes() == source_body
+            print("PASS: laptop objects are shared while in-place working-file saves preserve retained versions", flush=True)
+            if executable := os.environ.get("NEXTCLOUDCMD"):
+                credentials = connect(cookie_a, "Nextcloud command client")
+                local = root / "nextcloud-client"
+                local.mkdir()
+
+                def sync():
+                    result = subprocess.run([executable, "--max-sync-retries", "1", "--user", "alice", str(local), origin],
+                                            input=(credentials["appPassword"] + "\n").encode(),
+                                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180)
+                    output = result.stdout.replace(credentials["appPassword"].encode(), b"[redacted]")
+                    (root / "nextcloud-client.log").write_bytes(output)
+                    assert result.returncode == 0, f"The real Nextcloud client exited {result.returncode}; see its diagnostic log"
+
+                sync()
+                assert (local / "Docs/deep/native.txt").read_bytes() == b"native Pigeon edit\n"
+                (local / "client-upload.txt").write_bytes(b"uploaded by Nextcloud\n")
+                # This exceeds the normal 10 MiB chunk threshold.
+                (local / "large-client-upload.bin").write_bytes(b"chunked Nextcloud upload\n" * 550000)
+                sync()
+                until(lambda: dav(a, "GET", "client-upload.txt")[2] == b"uploaded by Nextcloud\n", "Nextcloud upload did not replicate")
+                assert dav(credentials, "HEAD", "large-client-upload.bin")[1]["content-length"] == str((local / "large-client-upload.bin").stat().st_size)
+                (local / "client-upload.txt").unlink()
+                sync()
+                until(lambda: dav(a, "GET", "client-upload.txt")[0] == 404, "Nextcloud deletion did not replicate")
+                print("PASS: real Nextcloud command client download, upload, large-file upload, and delete", flush=True)
+            before = json.loads(state_path.read_text())["clients"]
+            bridge.send_signal(signal.SIGINT)
+            bridge.wait(timeout=15)
+            bridge = start_bridge()
+            assert dav(a, "GET", "Docs/renamed.txt")[2] == b"first version\n"
+            after = json.loads(state_path.read_text())["clients"]
+            assert {i:c["device"] for i,c in before.items()} == {i:c["device"] for i,c in after.items()}
+            aid = ids["Alice desktop"]
+            assert before[aid]["metadata"]["Docs/renamed.txt"]["id"] == after[aid]["metadata"]["Docs/renamed.txt"]["id"]
+            assert after[aid]["metadata"]["Docs/renamed.txt"]["modified"] == 1600000000
+            cookie_a, csrf_a = login("alice")
+            assert http("POST", f"/clients/{aid}/revoke", urllib.parse.urlencode(dict(token=csrf_a)),
+                        {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin}, cookie=cookie_a)[0] == 303
+            assert dav(a, "GET", "Docs/renamed.txt")[0] == 401
+            assert dav(a2, "GET", "Docs/renamed.txt")[0] == 200
+            print("PASS: deep-change discovery, persistent identities/metadata, and individual revocation", flush=True)
+        except Exception:
+            # Keep only non-secret daemon diagnostics on failure; HTTP credentials are never logged.
+            for log in root.glob("*.log"):
+                print(f"Diagnostic log: {log.name}\n{log.read_text(errors='replace')[-3000:]}")
+            for log in root.rglob("pigeond-*.ndjson"):
+                lines = log.read_text(errors="replace").splitlines()
+                important = [line for line in lines if '"level":"WARN"' in line or '"level":"ERROR"' in line]
+                print(f"Native diagnostic: {log.relative_to(root)}\n" + "\n".join(important[-8:] + lines[-5:]))
+            for sock in [root / "alice.sock", root / "bob.sock", *root.glob("bridge/run/*.sock")]:
+                try:
+                    print(f"Catalogue {sock.name}: {rpc(sock, dict(type='Bridge', operation={'kind':'snapshot', 'cursor':None, 'limit':1000}))}")
+                except (OSError, ValueError, AssertionError):
+                    pass
+            raise
+        finally:
+            for process in reversed(processes):
+                if process.poll() is None:
+                    os.killpg(process.pid, signal.SIGTERM)
+            for process in processes:
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    os.killpg(process.pid, signal.SIGKILL)
+            # Also clean supervised peers if the bridge aborted before its shutdown hook.
+            for entry in Path("/proc").iterdir():
+                if not entry.name.isdigit():
+                    continue
+                try:
+                    arguments = (entry / "cmdline").read_bytes().split(b"\0")
+                    if str(root / "bridge/peers").encode() + b"/" in b"\0".join(arguments):
+                        os.killpg(int(entry.name), signal.SIGTERM)
+                except (OSError, ProcessLookupError):
+                    pass
+
+
+if __name__ == "__main__":
+    run()

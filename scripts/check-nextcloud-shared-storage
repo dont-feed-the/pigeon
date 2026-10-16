@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+"""Verify storage reuse with an existing laptop/custodian and distinct client peers.
+
+Build the matching programs with pigeond/lab; keep git-annex on PATH. This tests
+shared inodes, sparse trees, independent keys, backup counts, retained versions,
+source loss and restart. Select --provider laptop to check in-place source saves.
+All repositories and processes are temporary.
+"""
+
+import argparse
+import base64
+from contextlib import closing
+import hashlib
+import http.client as http_client
+import json
+import os
+from pathlib import Path
+import runpy
+import signal
+import socket
+import stat
+import subprocess
+import tempfile
+import time
+import urllib.parse
+
+
+ROOT = Path(__file__).resolve().parent.parent
+helpers = runpy.run_path(str(ROOT / "scripts/check-nextcloud-bridge"))
+rpc, until, Inputs, BIN = (helpers[name] for name in ["rpc", "until", "Inputs", "BIN"])
+
+
+def run(provider="custodian"):
+    processes = []
+    with tempfile.TemporaryDirectory(prefix="pgnshared-", dir="/tmp") as directory:
+        root = Path(directory)
+
+        def start(name, args, env=None):
+            with (root / f"{name}.log").open("ab") as log:
+                process = subprocess.Popen(args, env=env, stdin=subprocess.DEVNULL,
+                                           stdout=log, stderr=log, start_new_session=True)
+            processes.append(process)
+            return process
+
+        def stop(process):
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGTERM)
+                process.wait(timeout=15)
+
+        def daemon(name):
+            home = root / name
+            (home / "config").mkdir(parents=True)
+            (home / "config/config.toml").write_text('notifications=false\n[network]\nbind="127.0.0.1:0"\nmdns=false\nrelays="off"\n[loops]\ninterval_seconds=1\n')
+            sock = root / f"{name}.sock"
+            process = start(name, [str(BIN / "pigeond"), "--home", str(home)], dict(os.environ, PIGEON_SOCKET=str(sock)))
+            until(lambda: sock.exists(), "Daemon did not start")
+            return sock, process
+
+        def objects(repo, body, bare=False):
+            digest = hashlib.sha256(body).hexdigest()
+            folder = repo / ("annex/objects" if bare else ".git/annex/objects")
+            return [p for p in folder.rglob("*") if p.is_file() and p.name == p.parent.name and f"--{digest}" in p.name]
+
+        try:
+            control, control_process = daemon("control")
+            source, source_process = daemon("source") if provider == "custodian" else (control, control_process)
+            files = root / "files"
+            files.mkdir()
+            original = b"one immutable version for every client\n"
+            (files / "original.txt").write_bytes(original)
+            rpc(control, dict(type="Create", name="Shared storage", folder=str(files), k=2, device_name="Control"))
+            rpc(control, dict(type="Status"))
+            bare = provider == "custodian"
+            if bare:
+                invite = rpc(control, dict(type="Invite", person="", admin=False, custodian=True, name="Storage"))
+                repository = root / "source.git"
+                rpc(source, dict(type="Join", invitation=invite["message"]["args"]["code"], folder=str(repository), keep=False, name="Storage"))
+            else:
+                repository = files
+            source_object = until(lambda: objects(repository, original, bare=bare), "Provider did not retain the initial file")[0]
+            with socket.socket() as listener:
+                listener.bind(("127.0.0.1", 0))
+                port = listener.getsockname()[1]
+            origin = f"http://127.0.0.1:{port}"
+            password = "test portal password"
+            password_hash = subprocess.check_output([str(BIN / "pigeon-bridge"), "hash-password"], input=password.encode()).decode().strip()
+            config = root / "bridge.toml"
+            config.write_text(f'listen="127.0.0.1:{port}"\npublic_url="{origin}"\nstate_dir="{root / "bridge"}"\npigeond="{BIN / "pigeond"}"\npeer_network="off"\n[users.alice]\npassword_hash="{password_hash}"\ncontrol_socket="{control}"\nstorage_socket="{source}"\n')
+
+            def http(method, path, body=b"", headers=None, credentials=None, cookie=None):
+                headers = dict(headers or {})
+                if credentials:
+                    value = f"{credentials['loginName']}:{credentials['appPassword']}"
+                    headers["Authorization"] = "Basic " + base64.b64encode(value.encode()).decode()
+                if cookie:
+                    headers["Cookie"] = cookie
+                with closing(http_client.HTTPConnection("127.0.0.1", port, timeout=180)) as connection:
+                    connection.request(method, path, body, headers)
+                    response = connection.getresponse()
+                    return response.status, dict(response.getheaders()), response.read()
+
+            def start_bridge():
+                process = start("bridge", [str(BIN / "pigeon-bridge"), "--config", str(config)])
+                until(lambda: http("GET", "/status.php")[0] == 200, "Bridge did not start")
+                return process
+
+            bridge = start_bridge()
+            status, headers, _ = http("POST", "/login", urllib.parse.urlencode(dict(username="alice", password=password)),
+                                       {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin})
+            assert status == 303
+            cookie = headers["set-cookie"].split(";", 1)[0]
+
+            def connect(name):
+                status, _, body = http("POST", "/index.php/login/v2")
+                assert status == 200
+                flow = json.loads(body)
+                path = urllib.parse.urlparse(flow["login"]).path
+                status, _, body = http("GET", path, cookie=cookie)
+                assert status == 200
+                csrf = Inputs(body).values["csrf"]
+                assert http("POST", path, urllib.parse.urlencode(dict(csrf=csrf, name=name)),
+                            {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin}, cookie=cookie)[0] == 200
+                status, _, body = http("POST", "/login/v2/poll", urllib.parse.urlencode(dict(token=flow["poll"]["token"])),
+                                       {"Content-Type": "application/x-www-form-urlencoded"})
+                assert status == 200
+                return json.loads(body)
+
+            clients = [connect("Desktop"), connect("Phone")]
+            state_path = root / "bridge/clients.json"
+            records = json.loads(state_path.read_text())["clients"]
+            assert len({c["device"] for c in records.values()}) == 2
+            assert len({c["annex_uuid"] for c in records.values()}) == 2
+            group = rpc(control, dict(type="Bridge", operation={"kind": "info"}))["result"]["group"]
+            digest = hashlib.sha256(original).hexdigest()
+            pool = root / "bridge/content" / group / digest[:2] / digest
+
+            def dav(client, method, path, body=b"", headers=None):
+                return http(method, f"/remote.php/dav/files/alice/{path}", body, headers, client)
+
+            for client in clients:
+                until(lambda: dav(client, "GET", "original.txt")[2] == original, "Client cannot read the custodian version")
+            until(lambda: os.path.samefile(source_object, pool), "The provider body was copied")
+            for record in records.values():
+                folder = root / "bridge/peers" / record["id"] / "files"
+                refs = objects(folder, original)
+                assert refs and all(os.path.samefile(pool, p) for p in refs)
+                assert not (folder / "original.txt").exists(), "A complete client file was materialized"
+                info = rpc(root / "bridge/run" / f'{record["id"]}.sock', dict(type="Bridge", operation={"kind": "info"}))["result"]
+                assert info["shared"]
+            machines = rpc(control, dict(type="Machines"))["machines"]
+            assert sum(m["custodian"] for m in machines) == int(bare)
+            assert all(not m["custodian"] for m in machines if m["device"] in {r["device"] for r in records.values()})
+            report = rpc(root / "bridge/run" / f'{next(iter(records))}.sock', dict(type="Status"))
+            assert report["state"] != "protected", "Shared client aliases counted as independent backups"
+            print(f"PASS: one {provider} inode serves two distinct sparse peers without adding backup copies", flush=True)
+
+            changed = b"a newer version saved through a client\n"
+            status, _, _ = dav(clients[0], "PUT", "original.txt", changed)
+            assert status == 204
+            until(lambda: dav(clients[1], "GET", "original.txt")[2] == changed, "A hidden-file overwrite did not replicate")
+            assert pool.read_bytes() == original, "A new save changed retained history"
+            assert dav(clients[1], "PUT", "same-bytes.bin", changed)[0] == 201
+            new_digest = hashlib.sha256(changed).hexdigest()
+            new_pool = root / "bridge/content" / group / new_digest[:2] / new_digest
+            until(lambda: (refs := objects(repository, changed, bare=bare)) and all(os.path.samefile(new_pool, p) for p in refs),
+                  "New provider versions did not reuse the registered pool")
+            for record in records.values():
+                folder = root / "bridge/peers" / record["id"] / "files"
+                assert all(os.path.samefile(new_pool, p) for p in objects(folder, changed))
+                assert not (folder / "original.txt").exists()
+            print("PASS: hidden-file overwrites retain old bytes and new provider/client versions share storage", flush=True)
+
+            current = changed
+            if not bare:
+                live = files / "original.txt"
+                until(lambda: live.read_bytes() == changed, "Provider did not install the client save")
+                assert live.stat().st_mode & 0o200
+                assert not os.path.samefile(live, new_pool)
+                # ADR 0071 treats a save within ten seconds of an install as
+                # concurrent. Exercise an ordinary later save, as the lab does.
+                time.sleep(12)
+                current = b"an in-place laptop save\n"
+                live.write_bytes(current)
+                assert new_pool.read_bytes() == changed
+                def captured():
+                    snapshot = rpc(control, dict(type="Bridge", operation={"kind":"snapshot", "cursor":None, "limit":1000}))["result"]
+                    return any(f["path"] == "original.txt" and not f["diverging"] and f["etag"].startswith(hashlib.sha256(current).hexdigest()) for f in snapshot.get("files", []))
+                until(captured, "Laptop in-place save was not accepted at its original path")
+                until(lambda: dav(clients[1], "GET", "original.txt")[2] == current, "Laptop in-place save did not reach the client")
+                assert new_pool.read_bytes() == changed
+                print("PASS: writable laptop files stay independent of retained immutable versions", flush=True)
+
+            for client in clients:
+                until(lambda: dav(client, "GET", "original.txt")[2] == current,
+                      "Client catalogue did not catch up before stopping the provider")
+            stop(source_process)
+            permissions = source_object.parent.stat().st_mode
+            source_object.parent.chmod(permissions | stat.S_IWUSR)
+            source_object.unlink()
+            source_object.parent.chmod(permissions)
+            assert pool.read_bytes() == original, "Removing the provider reference lost pinned bytes"
+            before = {k: (v["device"], v["annex_uuid"]) for k, v in records.items()}
+            stop(bridge)
+            bridge = start_bridge()
+            after = json.loads(state_path.read_text())["clients"]
+            assert before == {k: (v["device"], v["annex_uuid"]) for k, v in after.items()}
+            assert dav(clients[0], "GET", "original.txt")[2] == current
+            assert dav(clients[1], "GET", "same-bytes.bin")[2] == changed
+            assert pool.read_bytes() == original
+            print("PASS: cached versions survive provider removal and bridge restart with stable identities", flush=True)
+        except Exception:
+            for log in root.glob("*.log"):
+                print(f"Diagnostic log: {log.name}\n{log.read_text(errors='replace')[-2500:]}")
+            for log in root.rglob("pigeond-*.ndjson"):
+                lines = log.read_text(errors="replace").splitlines()
+                important = [line for line in lines if '"level":"WARN"' in line or '"level":"ERROR"' in line]
+                print(f"Native diagnostic: {log.relative_to(root)}\n" + "\n".join(important[-8:] + lines[-5:]))
+            raise
+        finally:
+            for process in reversed(processes):
+                if process.poll() is None:
+                    try:
+                        stop(process)
+                    except subprocess.TimeoutExpired:
+                        os.killpg(process.pid, signal.SIGKILL)
+                        process.wait()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--provider", choices=["custodian", "laptop"], default="custodian")
+    run(parser.parse_args().provider)

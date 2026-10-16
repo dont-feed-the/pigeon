@@ -3,9 +3,9 @@
 //!
 //! The removal waits in `<git_dir>/pigeon/leaving`. A peer has it once its
 //! `main`, as last fetched, holds it, or once it refuses this device as
-//! `not-in-roster`, which only a peer that accepted the removal does
-//! (09 §9.3); peers that refused it so before do not count. Meanwhile each
-//! round does nothing else: what this device would capture or install now
+//! `not-in-roster` after previously including this device (09 §9.3).
+//! Peers that refused it before, or never learned its join, do not count.
+//! Meanwhile each round does nothing else: what it would capture or install now
 //! its peers would revoke (04 §4.4). Then the group leaves `config.toml`,
 //! its remotedaemon stops and, for a folder, the files it does not hold
 //! (pointer files) go, and `.git` and `.pigeon` move to
@@ -130,7 +130,9 @@ fn peers(roster: &pigeon_core::roster::Roster, me: &DeviceId) -> Vec<String> {
 }
 
 /// Whether a peer has the removal `l`: its fetched `main` holds it, or it
-/// refuses this device since. With no peer at all, at once.
+/// refuses this device since previously including it. A stale roster that
+/// never learned the join also refuses it, but proves no removal was saved.
+/// With no peer at all, at once.
 async fn seen(d: &Daemon, g: &Group, l: &Leaving) -> bool {
     let me = DeviceId(d.device.clone());
     let Some(doc) = g.roster() else {
@@ -141,13 +143,18 @@ async fn seen(d: &Daemon, g: &Group, l: &Leaving) -> bool {
         return true;
     }
     for p in &peers {
-        if !l.refusing.contains(p) && d.node.refusal(p, &g.id) == Some(Refusal::NotInRoster) {
-            return true;
-        }
         let theirs = format!("refs/pigeon/peers/{p}/main");
         if g.git
             .ok(&["merge-base", "--is-ancestor", &l.commit, &theirs])
             .await
+        {
+            return true;
+        }
+        if !l.refusing.contains(p)
+            && d.node.refusal(p, &g.id) == Some(Refusal::NotInRoster)
+            && let Some(bytes) = g.git.blob(&format!("{theirs}:.pigeon/roster.toml")).await
+            && let Ok(doc) = crate::roster_file::parse(&String::from_utf8_lossy(&bytes))
+            && doc.roster.devices.contains_key(&me)
         {
             return true;
         }

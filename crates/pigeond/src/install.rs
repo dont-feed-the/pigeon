@@ -455,7 +455,7 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
         Some(d) => d,
         None => crate::capture::dirty(g).await?,
     };
-    let freed = crate::evict::targets(g);
+    let freed = crate::shared_overlay::targets(g);
     let before = crate::evict::hidden_paths(g).await;
     let mut hidden = before.clone();
     let mut queue = crate::telemetry::Queue::start(&g.id, "download", "install", changed.len());

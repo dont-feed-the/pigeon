@@ -24,6 +24,13 @@ pigeon-telemetry = { path = "crates/pigeon-telemetry" }
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "query", "form"] }
 clap = { version = "4.6", default-features = false, features = ["std", "derive", "error-context"] }
 clap_complete = { version = "4.6", default-features = false, features = ["unstable-dynamic"] }
+argon2 = "0.5"
+base64 = "0.22"
+httpdate = "1.0"
+percent-encoding = "2.3"
+quick-xml = "0.42"
+subtle = "2.6"
+url = "2.5"
 data-encoding = "2.11"
 dirs = "7.0"
 fluent-bundle = "0.16"

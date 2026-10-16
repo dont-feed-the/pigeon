@@ -37,4 +37,9 @@ pigeon status                    # are my files safe?
 
 More: [using pigeon](docs/guide.md), [developing pigeon](docs/development.md).
 
+[Quick start: your first custodian and Nextcloud bridge](docs/nextcloud-quick-start.md):
+bootstrap a new group on a fresh server, connect each app as its own peer, and
+review suggestions in the browser. See the [bridge reference](docs/nextcloud-bridge.md)
+for details.
+
 MIT OR Apache-2.0.
