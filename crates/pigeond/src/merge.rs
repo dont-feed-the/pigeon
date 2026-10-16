@@ -389,8 +389,12 @@ async fn about(
     (before, writers): (&Tree, &Writers),
     roster: &Roster,
 ) -> Result<Option<(authority::Deciders, pigeon_core::roster::PersonId)>, Error> {
-    let kept = crate::proposal::kept(&g.git).await;
-    let Some((device, _)) = kept.into_iter().find(|(_, c)| c == x) else {
+    // A historical decision must be verifiable from its signed objects,
+    // even when its proposal lives in an archive rather than a live ref.
+    let Ok(raw) = g.git.object(x).await else {
+        return Ok(None);
+    };
+    let Ok(signer) = pigeon_core::sig::verify(&raw) else {
         return Ok(None);
     };
     let Some(base) = crate::proposal::base(g, x).await? else {
@@ -407,8 +411,21 @@ async fn about(
     let Some(Ok(at_roster)) = roster_at(&g.git, &g.git.tree(&base).await?).await else {
         return Ok(None);
     };
-    let signer = pigeon_core::roster::DeviceId(device);
     let tree = g.git.tree(x).await?;
+    // Ordinary file proposals change no pigeon metadata. This guard also
+    // prevents a decision object from recursively naming itself or another
+    // decision as its proposal. Validate the same signature/tree/permission
+    // rule as live proposal admission before using the claimed author.
+    if authority::delta(&at, &tree)
+        .iter()
+        .any(|p| authority::is_pigeon_path(p))
+        || !matches!(
+            Box::pin(judge_proposal(g, &raw, &base, &tree)).await?,
+            Verdict::Refused(Refusal::NotAllowed(_))
+        )
+    {
+        return Ok(None);
+    }
     Ok(commit::about(
         roster, &at_roster, &signer, &at, &tree, before, writers,
     ))

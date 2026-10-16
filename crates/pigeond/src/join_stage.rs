@@ -124,43 +124,13 @@ pub(crate) async fn prepare(d: &Daemon, inv: &Invitation, uuid: &str) -> Result<
 
 /// Keep only archive links actually named by validated signed roots.
 async fn archives(g: &Group, root: &str, expected_old: &str) -> Result<String, String> {
-    let mut cursor = root.to_owned();
-    let mut first = None;
-    let mut seen = std::collections::BTreeSet::new();
-    for _ in 0..32 {
-        if !seen.insert(cursor.clone()) {
-            return Err("join-history-unverified".into());
-        }
-        let raw = g.git.object(&cursor).await.map_err(|e| e.to_string())?;
-        let Some((old, tip)) = crate::refound::refounded(&raw) else {
-            return first.ok_or_else(|| "join-history-unverified".into());
-        };
-        if first.is_none() && old != expected_old {
-            return Err("join-history-unverified".into());
-        }
-        if g.git.root(&tip).await.as_deref() != Some(old.as_str()) {
-            return Err("join-history-unverified".into());
-        }
-        let judge = g.history_judge(&old);
-        if crate::verify::judge(&judge, None, &tip)
-            .await
-            .map_err(|e| e.to_string())?
-            .accepted
-            .as_deref()
-            != Some(tip.as_str())
-        {
-            return Err("join-history-unverified".into());
-        }
-        g.git
-            .update_ref(&crate::refound::archive_ref(&old), &tip, None)
-            .await
-            .map_err(|e| e.to_string())?;
-        if first.is_none() {
-            first = Some(tip);
-        }
-        cursor = old;
+    let chain = crate::archive_chain::retain(g, root)
+        .await
+        .map_err(|_| "join-history-unverified".to_owned())?;
+    match chain.first() {
+        Some((old, tip)) if old == expected_old => Ok(tip.clone()),
+        _ => Err("join-history-unverified".into()),
     }
-    Err("join-history-unverified".into())
 }
 
 pub(crate) fn persist(verified: Verified) -> (PathBuf, String, String, Source) {

@@ -129,6 +129,10 @@ struct World {
 }
 
 async fn world() -> World {
+    world_with_roster(roster(2)).await
+}
+
+async fn world_with_roster(roster: Roster) -> World {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("repo.git");
     let env = GitEnv {
@@ -146,7 +150,7 @@ async fn world() -> World {
     git.run(&["config", "user.email", "pigeon@localhost"])
         .await
         .unwrap();
-    let text = roster_file::render(&RosterDoc { roster: roster(2) }).unwrap();
+    let text = roster_file::render(&RosterDoc { roster }).unwrap();
     let mut base = Tree::new();
     base.insert(ROSTER.into(), blob(&git, text.as_bytes()).await);
     base.insert("Shared/a.txt".into(), pointer(&git, 0).await);
@@ -427,7 +431,9 @@ async fn joining_checks_authority_before_adopting_any_history() {
 async fn a_decision_waits_for_its_signed_proposal_and_can_be_judged_again() {
     use pigeon_core::authority::{Decided, Verdict, decision_path};
     use pigeond::decision_file::{DecisionDoc, render};
-    let w = world().await;
+    let mut roster = roster(2);
+    roster.folders[0].rule = Rule::AddOnly([PersonId("ana".into())].into());
+    let w = world_with_roster(roster).await;
     let mut proposed = w.base.clone();
     proposed.insert("Shared/a.txt".into(), pointer(&w.git, 2).await);
     let proposal = commit(&w.git, &proposed, &[&w.genesis], 30, 2).await;
@@ -453,6 +459,13 @@ async fn a_decision_waits_for_its_signed_proposal_and_can_be_judged_again() {
         "pigeon: decline a suggestion",
     )
     .await;
+    let raw_proposal = w.git.object(&proposal).await.unwrap();
+    let loose =
+        w.g.git_dir
+            .join("objects")
+            .join(&proposal[..2])
+            .join(&proposal[2..]);
+    std::fs::remove_file(&loose).unwrap();
     let first = verify::judge(&w.g, None, &decision).await.unwrap();
     assert_eq!(first.accepted.as_deref(), Some(w.genesis.as_str()));
     assert!(matches!(
@@ -460,16 +473,61 @@ async fn a_decision_waits_for_its_signed_proposal_and_can_be_judged_again() {
         Some((_, Verdict::Unknown("decision")))
     ));
     assert!(w.g.lock().engine.outcome(&decision).is_none());
-    w.git
-        .update_ref(
-            &pigeond::proposal::name(&dev(2).0, &proposal),
-            &proposal,
-            None,
+    let restored = w
+        .git
+        .run_in(
+            &["hash-object", "-t", "commit", "-w", "--stdin"],
+            &raw_proposal,
         )
         .await
         .unwrap();
+    assert_eq!(restored.trim(), proposal);
+    // No live proposal ref: signed object proof also works for archives.
     let second = verify::judge(&w.g, None, &decision).await.unwrap();
     assert_eq!(second.accepted.as_deref(), Some(decision.as_str()));
     assert!(second.stopped.is_none());
     assert!(!w.g.lock().verdicts.contains_key(&decision));
+}
+
+#[tokio::test]
+async fn a_decision_cannot_treat_an_authorized_or_unknown_signer_commit_as_a_proposal() {
+    use pigeon_core::authority::{Decided, decision_path};
+    use pigeond::decision_file::{DecisionDoc, render};
+    for signer in [1, 99] {
+        let mut r = roster(2);
+        r.folders[0].rule = Rule::AddOnly([PersonId("ana".into())].into());
+        let w = world_with_roster(r).await;
+        let mut proposed = w.base.clone();
+        proposed.insert("Shared/a.txt".into(), pointer(&w.git, 7).await);
+        let proposal = commit(&w.git, &proposed, &[&w.genesis], 30, signer).await;
+        let mut tree = w.base.clone();
+        let doc = render(&DecisionDoc {
+            proposal: proposal.clone(),
+            verdict: Decided::Rejected,
+            note: None,
+        });
+        tree.insert(decision_path(&proposal), blob(&w.git, doc.as_bytes()).await);
+        let decision = commit(&w.git, &tree, &[&w.genesis], 60, 1).await;
+        let judged = verify::judge(&w.g, None, &decision).await.unwrap();
+        assert_ne!(judged.accepted.as_deref(), Some(decision.as_str()));
+        assert!(!w.g.lock().engine.accepted(&decision));
+    }
+}
+
+#[tokio::test]
+async fn peer_metadata_cannot_be_admitted_as_an_ordinary_file_suggestion() {
+    let w = world().await;
+    let mut tree = w.base.clone();
+    tree.insert(
+        ".pigeon/unrecognized.txt".into(),
+        blob(&w.git, b"unapproved metadata").await,
+    );
+    let proposal = commit(&w.git, &tree, &[&w.genesis], 30, 2).await;
+    let incoming = format!(
+        "refs/pigeon/peers/fixture/proposals/{}/{proposal}",
+        dev(2).0
+    );
+    w.git.update_ref(&incoming, &proposal, None).await.unwrap();
+    assert_eq!(pigeond::proposal::take(&w.g, "fixture").await, 0);
+    assert!(pigeond::proposal::kept(&w.git).await.is_empty());
 }

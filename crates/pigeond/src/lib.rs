@@ -9,6 +9,7 @@
 
 pub mod admission;
 pub mod api;
+mod archive_chain;
 pub mod asides;
 pub mod capture;
 pub mod capture_file;

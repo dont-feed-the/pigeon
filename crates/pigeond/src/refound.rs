@@ -79,21 +79,8 @@ pub async fn remember(g: &Group) {
 /// `refs/pigeon/archive/<old group>/main` (ADR 0047).
 pub async fn adopt(g: &Group) {
     remember(g).await;
-    let Ok(raw) = g.git.object(&g.id).await else {
-        return;
-    };
-    let Some((old, old_main)) = refounded(&raw) else {
-        return;
-    };
-    let name = archive_ref(&old);
-    if g.git.rev(&name).await.is_some() {
-        return;
-    }
-    let commit = format!("{old_main}^{{commit}}");
-    if g.git.ok(&["cat-file", "-e", &commit]).await
-        && g.git.update_ref(&name, &old_main, None).await.is_ok()
-    {
-        tracing::info!(group = %g.id, old = %old, "archive-kept");
+    if let Err(error) = crate::archive_chain::retain(g, &g.id).await {
+        tracing::debug!(group = %g.id, %error, "archive-validation-waits");
     }
 }
 

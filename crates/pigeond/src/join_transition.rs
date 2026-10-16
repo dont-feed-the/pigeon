@@ -92,31 +92,10 @@ async fn import(g: &Group, plan: &Plan) -> Result<(), String> {
         ])
         .await
         .map_err(|e| e.to_string())?;
-    let archives = format!("{prefix}pigeon/archive/");
-    let refs = g
-        .git
-        .run(&[
-            "for-each-ref",
-            "--format=%(refname) %(objectname)",
-            &archives,
-        ])
-        .await
-        .map_err(|e| e.to_string())?;
-    for line in refs.lines() {
-        let Some((name, tip)) = line.split_once(' ') else {
-            return Err("bad staging ref".into());
-        };
-        let Some(old) = name
-            .strip_prefix(&archives)
-            .and_then(|s| s.strip_suffix("/main"))
-        else {
-            continue;
-        };
-        if g.git.root(tip).await.as_deref() != Some(old) {
-            return Err("bad staging archive".into());
-        }
-        archive(g, old, tip).await?;
-    }
+    // Rebuild canonical archive refs from the signed chain, including
+    // proposal proofs imported from the private stage's refs. Never copy
+    // arbitrary incoming archive names into the serving namespace.
+    crate::archive_chain::retain(g, &plan.group).await?;
     if let Some(source) = &plan.source {
         crate::settings::ensure_remote(&g.git, &source.device, &source.uuid)
             .await

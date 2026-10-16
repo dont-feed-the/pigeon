@@ -256,10 +256,38 @@ pub fn annex_present() -> bool {
 /// One test at a time: each runs three daemons.
 pub static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+/// A generated annex fixture: git-annex makes object directories read-only.
+/// Restore owner traversal/write permission before TempDir removes our tree;
+/// otherwise successful suites leak enough fixtures to hit the disk reserve.
+pub struct FixtureDir(tempfile::TempDir);
+impl Drop for FixtureDir {
+    fn drop(&mut self) {
+        use std::os::unix::fs::PermissionsExt;
+        let mut dirs = vec![self.0.path().to_path_buf()];
+        while let Some(dir) = dirs.pop() {
+            let Ok(meta) = std::fs::symlink_metadata(&dir) else {
+                continue;
+            };
+            if !meta.is_dir() {
+                continue;
+            }
+            let _ = std::fs::set_permissions(
+                &dir,
+                std::fs::Permissions::from_mode(meta.permissions().mode() | 0o700),
+            );
+            for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+                if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+                    dirs.push(entry.path());
+                }
+            }
+        }
+    }
+}
+
 /// A temporary root and a short private directory for the sockets: a unix
 /// socket's path holds about 100 bytes, and macOS's temporary directory is
 /// long. `None` without git-annex, unless it is required.
-pub fn dirs() -> Option<(tempfile::TempDir, PathBuf, tempfile::TempDir)> {
+pub fn dirs() -> Option<(FixtureDir, PathBuf, tempfile::TempDir)> {
     if !annex_present() {
         assert!(
             std::env::var_os("PIGEON_REQUIRE_GIT_ANNEX").is_none(),
@@ -274,7 +302,7 @@ pub fn dirs() -> Option<(tempfile::TempDir, PathBuf, tempfile::TempDir)> {
         .prefix("pgn")
         .tempdir_in("/tmp")
         .unwrap();
-    Some((tmp, root, sockets))
+    Some((FixtureDir(tmp), root, sockets))
 }
 
 /// Waits up to 60 s for `done`, else fails with `what` and the logs.

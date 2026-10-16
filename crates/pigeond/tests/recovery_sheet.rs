@@ -101,6 +101,77 @@ fn a_sheet_recovers_an_admin_from_someone_elses_backup() {
     until(&alice, State::Protected, &[&alice, &bob, &vault]);
     std::fs::write(fa.join("recipe.txt"), b"three apples\n").unwrap();
     until(&alice, State::Protected, &[&alice, &bob, &vault]);
+    eventually_within(
+        120,
+        || std::fs::read(fb.join("recipe.txt")).is_ok_and(|b| b == b"three apples\n"),
+        "Bob receives latest recipe",
+        &[&alice, &bob, &vault],
+    );
+    assert!(pigeon(&bob, &["people"]).iter().any(|r| matches!(r,
+        Response::People { people } if people.iter().any(|p| p.this_person && !p.admin))));
+    until(&bob, State::Protected, &[&alice, &bob, &vault]);
+    eventually_within(
+        120,
+        || {
+            let journal = fb.join(".git/pigeon/install.ndjson");
+            std::fs::metadata(&journal).is_ok_and(|m| m.len() == 0)
+                && std::process::Command::new("git")
+                    .arg("-C")
+                    .arg(&fb)
+                    .env("GIT_OPTIONAL_LOCKS", "0")
+                    .args(["status", "--porcelain", "--", "recipe.txt"])
+                    .output()
+                    .is_ok_and(|o| o.status.success() && o.stdout.is_empty())
+        },
+        "incoming installation fully settles before participant edit",
+        &[&alice, &bob, &vault],
+    );
+    // ADR 0071 deliberately treats an edit within ten seconds of an
+    // incoming install as a conflict copy. This fixture needs a suggestion.
+    std::thread::sleep(std::time::Duration::from_secs(12));
+    std::fs::write(fb.join("recipe.txt"), b"Bob's declined recipe\n").unwrap();
+    let proposals = || {
+        pigeon(&alice, &["suggestions"])
+            .into_iter()
+            .find_map(|r| match r {
+                Response::Proposals { proposals } => Some(proposals),
+                _ => None,
+            })
+            .unwrap_or_default()
+    };
+    eventually_within(
+        120,
+        || !proposals().is_empty(),
+        "real recipe suggestion",
+        &[&alice, &bob, &vault],
+    );
+    let proposal = proposals()[0].id.clone();
+    let declined = pigeon(
+        &alice,
+        &["decline", &proposal, "--note", "Keep the three apples"],
+    );
+    assert!(said(&declined, "declined-suggestion", "author").is_some());
+    let vault_repo = pigeond::config::load(&vault.home.join("config/config.toml"))
+        .unwrap()
+        .groups[0]
+        .path
+        .clone();
+    eventually_within(
+        120,
+        || {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&vault_repo)
+                .args(["ls-tree", "-r", "--name-only", "refs/heads/main"])
+                .output()
+                .is_ok_and(|o| {
+                    String::from_utf8_lossy(&o.stdout)
+                        .contains(&format!(".pigeon/decisions/{proposal}.toml"))
+                })
+        },
+        "backup receives decline before losing laptops",
+        &[&alice, &bob, &vault],
+    );
     let printed = pigeon(&alice, &["recovery-sheet"]);
     let sheet_text = said(&printed, "recovery-sheet-text", "sheet").unwrap();
     assert!(pigeon(&alice, &["people"]).iter().any(|a| matches!(a,
