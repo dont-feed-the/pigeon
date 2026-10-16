@@ -12,16 +12,18 @@ are normative. `scripts/run-tlc` runs the configurations: the fast set in
 `ci`, the fast/full sets nightly and on release tags in `models-full` (ADR 0026). Both workflows first
 run `scripts/check-proofs`: parameterized TLAPS safety proofs, checks that
 their assumptions cover the actual configurations, and mutations that must
-fail. The proof-covered `AnnexDrop_design4` and `Purge_full3` rows are `audit` checks: TLC still
-runs them on Monday's nightly run, release tags and by hand (`scripts/run-tlc --audit`), or when explicitly
-named, but no longer on every nightly run. See
+fail. The proof-covered `AnnexDrop_design4`, `Purge_full3` and `T_n42o4` rows
+are `audit` checks: a separate TLC job runs them on Mondays even without
+new commits, and by hand (`scripts/run-tlc --audit-only`) or when explicitly
+named. Release tags check fresh proofs instead of repeating those graphs. See
 [the proof scope and tool measurements](../../docs/model-proofs.md).
 State counts are those of
 the run that last changed a model.
 
 The full workflow partitions `expected.tsv` over four runners using
-`scripts/run-tlc --full --shard INDEX 4` (indices 0–3), adding `--audit`
-on Monday's nightly run, release tags and by hand. Every selected row runs once;
+`scripts/run-tlc --full --balanced --shard INDEX 4` (indices 0–3).
+`costs.tsv` supplies longest-first scheduling estimates; unknown cases still
+run with a two-second estimate. Every selected row runs once;
 each model keeps TLC's automatic worker count. Trace validation uses
 `scripts/check-code-traces --seeds 200 --jobs 4 --heap 2g`: four independent
 JVMs on one runner, each with at most a 2 GiB heap. Trace workers keep separate
@@ -47,7 +49,7 @@ scenario deadlines stay the same.
 | `T_nononce` | `CustodyTokens` | `violation:TokensNeverLost` | offers without nonces lose tokens |
 | `T_nonce` | `CustodyTokens` | `pass` | nonces make the hand-off safe |
 | `T_n42o3`, `T_n31o5`, `T_n32o5` | `CustodyTokens` | `pass` (fast set) | N, K and offers varied |
-| `T_n42o4` | `CustodyTokens` | `pass` (full set) | N = 4, K = 2, 4 offers |
+| `T_n42o4` | `CustodyTokens` | `pass` (audit) | N = 4, K = 2, 4 offers. `CustodyTokensProof` proves all four invariants for arbitrary valid counts and offer bounds; [proof and measurements](../../docs/custody-token-proof.md). |
 | `AnnexDrop_design` | `AnnexDrop` | `pass` (fast set) | git-annex's verified drop as pigeon uses it (ADR 0046, [09 §9.4](../../docs/spec/09-network-and-joining.md)): each custodian drops only its own copy, under its removal lock, once it has locked, or seen present by a check that honours removal locks, K copies among those its location log lists; location logs go stale, partitions cut a drop off, a lock expires under a stalled drop, a custodian is marked `dead`, a new copy is made. The key stays on K custodians (INV_K) and a locked copy stays (LockedStays); 3 custodians, K = 2: 406 880 distinct states, 11 s on 1 worker |
 | `AnnexDrop_ranked` | `AnnexDrop` | `pass` (fast set) | with git-annex's P2P check, which ignores removal locks, a drop that counts only custodians ranked above its own is safe: the alternative [09 §9.4](../../docs/spec/09-network-and-joining.md) rejects, for liveness |
 | `AnnexDrop_design4`, `AnnexDrop_gets2`, `AnnexDrop_ranked4` | `AnnexDrop` | `pass` (`design4`: audit; others: full set) | the design with 4 custodians, without expiry or new copies (4 518 880 distinct states, 4.5 minutes on 1 worker); with two new copies (1 259 520, 35 s); the ranked drop with 4 custodians (970 240, 44 s). `AnnexDropProof` proves the first configuration's safety for every finite custodian set, feasible K and MaxGets; the expiry-enabled and ranked checks remain separate. |
@@ -82,7 +84,7 @@ scenario deadlines stay the same.
 | `Evict_journal` | `Evict` | `violation:NoDeletion` | capture that does not skip a path whose file is aside: the hide's window is captured as a deletion |
 | `Evict_lockfile` | `Evict` | `violation:temporal` | a stale `info/sparse-checkout.lock` kept after a crash: the hide never completes, and FreeLive fails (E15b) |
 | `Purge_full` | `Purge` | `pass` (fast set) | [08 §8.6](../../docs/spec/08-custody-loops.md): a restore or cancel that reaches any custodian before its seal keeps the content (KeepWins); nothing is dropped before the waiting period (WaitingPeriod); a dropped copy returns only for an uncovered reference (NoResurrection); 2 custodians (one holds the key), 2 laptops (one offline with a copy), restarts, any message order |
-| `Purge_full3` | `Purge` | `pass` (audit) | 3 custodians, 2 of them holding the key, and the deciding laptop with a copy: 12.4 million states, 2 minutes. `PurgeProof` proves all three safety properties for arbitrary device counts and waiting periods under its assumptions; [the proof evaluation](../../docs/purge-proof.md) schedules this finite cross-check weekly, on releases and on request |
+| `Purge_full3` | `Purge` | `pass` (audit) | 3 custodians, 2 of them holding the key, and the deciding laptop with a copy: 12.4 million states, 2 minutes. `PurgeProof` proves all three safety properties for arbitrary device counts and waiting periods under its assumptions; [the proof evaluation](../../docs/purge-proof.md) schedules this finite cross-check weekly and on request |
 | `Purge_seals` | `Purge` | `violation:KeepWins` | accepting every seal without merging the sealers' `main` loses a cancel |
 | `Purge_none` | `Purge` | `violation:KeepWins` | dropping when one's own waiting period ends (ADR 0018's first mechanism) loses a restore that reached another custodian |
 | `PurgeMembership_fenced` | `PurgeMembership` | `pass` (fast set) | Prototype membership handshake: one original custodian, a joining backup and an offline deciding laptop; pending acknowledgement fences old-roster seals, activation merges acknowledgement histories, completed epochs survive admission. Checks KeepWins, NoResurrection and no fresh backup refetch after a drop. This is a protocol design model, not yet daemon conformance. |

@@ -20,6 +20,13 @@ A release is made by pushing a tag `v` + the workspace's version
 and adds its entry to [CHANGELOG.md](../CHANGELOG.md), as
 [AGENTS.md](../AGENTS.md) says.
 
+Linux CI, lab and slice checks gate publication. macOS tests run periodically
+through `macos-background`; both platforms' release archives still build.
+Track actual publication, candidate lead time and blocking jobs with
+`python3 scripts/release-kpi`; its [KPI definition and targets](release-kpi.md)
+explain the hourly reports. An immutable candidate can be retried using the
+release workflow's `tag` input while retaining its original source commit.
+
 ## Try it on one computer
 
 `scripts/try-pigeon` starts three pigeon daemons side by side in

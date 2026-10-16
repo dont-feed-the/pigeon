@@ -1,7 +1,7 @@
 # Checks of main and release-tag pushes and pull requests: repository rules,
 # the fast TLA+ models with their expected verdicts (ADR 0026) in three shards,
 # the catalogue model on every schedule of its cases (spec 05 §5.2), the Rust
-# workspace on Linux (and macOS on tags, 14 §14.6), pigeond's
+# workspace on Linux (macOS runs periodically, 14 §14.6), pigeond's
 # daemons-on-one-host tests in four shards, and runs of pigeon-core checked by
 # TLC (ADR 0008, 13 §13.13). This is the pull-request tier and should finish
 # in about ten minutes; lab.yml joins it, slice.yml runs on main and tags,
@@ -9,7 +9,7 @@
 #
 # Caches are saved from main only: a pull request restores main's cache and
 # keeps its own build, so pull requests no longer evict main's caches.
-# Every macOS job, including installation checks, runs on version tags only.
+# macos-background.yml reuses these jobs periodically without gating releases.
 name: ci
 
 on:
@@ -17,13 +17,19 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  workflow_call:
+    inputs:
+      platform:
+        description: macos for periodic background validation; Linux for publication
+        type: string
+        default: linux
 
 permissions:
   contents: read
   actions: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ inputs.platform || 'linux' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
@@ -34,9 +40,11 @@ env:
 
 jobs:
   proofs:
+    if: inputs.platform != 'macos'
     uses: ./.github/workflows/proofs.yml
 
   repository:
+    if: inputs.platform != 'macos'
     name: repository rules
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -49,11 +57,12 @@ jobs:
       - name: every cited section of the spec exists
         run: scripts/check-spec-refs
       - name: dependency archive verification
-        run: python3 -B -m unittest discover -s scripts/tests -p 'test_restore_git_annex.py'
+        run: python3 -B -m unittest discover -s scripts/tests
       - name: E25 stock hang budget and patched trial count
         run: python3 -B -m unittest discover -s lab/git-annex/tests
 
   catalogue:
+    if: inputs.platform != 'macos'
     name: catalogue model
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -67,7 +76,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(startsWith(github.ref, 'refs/tags/v') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
+        os: ${{ fromJSON(inputs.platform == 'macos' && '["macos-latest"]' || '["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
@@ -119,7 +128,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(startsWith(github.ref, 'refs/tags/v') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
+        os: ${{ fromJSON(inputs.platform == 'macos' && '["macos-latest"]' || '["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     env:
@@ -176,6 +185,11 @@ jobs:
         run: cargo clippy --workspace --all-targets --features pigeond/tokio-console --locked -- -D warnings
       - name: tests, laws and the git-annex contract tests (13 §13.6)
         run: cargo test --workspace --locked --no-fail-fast
+      - name: relay discovery and transfers on Linux
+        if: runner.os == 'Linux'
+        env:
+          PIGEON_NET_TESTS: "1"
+        run: cargo test -p pigeond --test relay --locked
       - name: the format fixtures, golden and next-format files (ADR 0048, 13 §13.6)
         run: cargo test -p pigeond --test formats --locked
       - name: licences, advisories and sources (cargo deny, ADR 0019)
@@ -216,8 +230,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(startsWith(github.ref, 'refs/tags/v') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
+        os: ${{ fromJSON(inputs.platform == 'macos' && '["macos-latest"]' || '["ubuntu-24.04"]') }}
         shard: [0, 1, 2, 3]
+      max-parallel: ${{ inputs.platform == 'macos' && 1 || 4 }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
@@ -313,6 +328,7 @@ jobs:
           key: ${{ steps.cache.outputs.cache-primary-key }}
 
   code-traces:
+    if: inputs.platform != 'macos'
     name: runs of pigeon-core checked by TLC
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -353,6 +369,7 @@ jobs:
           key: ${{ steps.cache.outputs.cache-primary-key }}
 
   driver-traces:
+    if: inputs.platform != 'macos'
     name: daemon observations checked by TLC
     runs-on: ubuntu-24.04
     timeout-minutes: 30

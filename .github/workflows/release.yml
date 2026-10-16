@@ -7,6 +7,7 @@
 # People install it with the release's pigeon-install, and `pigeon update`
 # fetches the next one the same way.
 name: release
+run-name: release ${{ inputs.tag || github.ref_name }}
 
 on:
   push:
@@ -93,6 +94,9 @@ jobs:
   publish:
     name: install, then publish
     needs: [target, git-annex, build]
+    concurrency:
+      group: release-publication
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 150
     permissions:
@@ -158,19 +162,21 @@ jobs:
           sudo sh "$p/bin/pigeon-install" --system --prefix "$p" --uninstall
           test ! -d "$p/bin"
           sudo test -s /var/lib/pigeon/device-key
-      - name: the tag's CI, lab, slice and reach must pass before publication
-        run: scripts/wait-release-checks --repository "$GITHUB_REPOSITORY" --sha "${{ needs.target.outputs.sha }}" --tag "$TAG"
+      - name: the tag's Linux CI, lab and slice must pass before publication
+        run: |
+          git fetch --no-tags origin "$GITHUB_SHA"
+          git show "$GITHUB_SHA:scripts/wait-release-checks" > "$RUNNER_TEMP/wait-release-checks"
+          python3 "$RUNNER_TEMP/wait-release-checks" --repository "$GITHUB_REPOSITORY" \
+            --sha "${{ needs.target.outputs.sha }}" --tag "$TAG"
       - name: the release
         id: published
         run: |
           d=$RUNNER_TEMP/releases/download/$TAG
-          git fetch origin main
-          current=$(git show origin/main:Cargo.toml | sed -n 's/^version = "\(.*\)"$/\1/p' | head -n 1)
-          latest=false
+          git show "$GITHUB_SHA:scripts/release-latest" > "$RUNNER_TEMP/release-latest"
+          latest=$(python3 "$RUNNER_TEMP/release-latest" --repository "$GITHUB_REPOSITORY" --tag "$TAG")
           case "${TAG#v}" in
             *-*) set -- --prerelease --latest=false ;;
-            "$current") set -- --latest; latest=true ;;
-            *) set -- --latest=false ;;
+            *) if [ "$latest" = true ]; then set -- --latest; else set -- --latest=false; fi ;;
           esac
           echo "latest=$latest" >> "$GITHUB_OUTPUT"
           gh release create "$TAG" --title "pigeon $TAG" --generate-notes "$@" "$d"/*

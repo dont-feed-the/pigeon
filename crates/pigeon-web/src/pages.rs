@@ -32,7 +32,8 @@ const SECTIONS: &[(&str, &str)] = &[
 ];
 
 const STYLE: &str = "body{font-family:system-ui,sans-serif;max-width:46rem;margin:2rem auto;\
-padding:0 1rem;line-height:1.5;color:#1b1b1b}nav a{margin-right:1.2rem}\
+padding:0 1rem;line-height:1.5;color:#1b1b1b;background:#fff}main{overflow-wrap:anywhere}\
+nav a{margin-right:1.2rem;display:inline-block}\
 nav a[aria-current]{font-weight:bold}h1{font-size:1.5rem}li{margin:.3rem 0}\
 article{border-top:1px solid #ccc;padding:.5rem 0}form{display:inline-block;margin-right:1rem}\
 .capacity-details{overflow-wrap:anywhere}\
@@ -40,6 +41,8 @@ textarea{max-width:100%;box-sizing:border-box}\
 .recovery-instructions{overflow-wrap:anywhere}.recovery-instructions p{margin:.25rem 0}\
 .recovery-code{overflow-wrap:anywhere;white-space:pre-wrap;font-size:.7rem}\
 .recovery-qr svg{width:100%;max-width:32rem;height:auto}\
+@media (prefers-color-scheme:dark){:root{color-scheme:dark}body{color:#e6e6e6;background:#161616}\
+article{border-color:#444}}\
 @media print{nav,.no-print{display:none}body{margin:0;max-width:none}.recovery-qr svg{max-width:12cm}}";
 
 /// Puts each `headline` event's text in the page's headline.
@@ -78,7 +81,10 @@ fn document(r: &Renderer, here: &str, headline: &str, body: &Markup, live: bool)
                 head {
                     meta charset="utf-8";
                     meta name="viewport" content="width=device-width, initial-scale=1";
-                    title { (r.id("web-title")) }
+                    title {
+                        @if !live { (headline) " – " }
+                        (r.id("web-title"))
+                    }
                     style { (STYLE) }
                 }
                 body {
@@ -98,7 +104,12 @@ fn document(r: &Renderer, here: &str, headline: &str, body: &Markup, live: bool)
                         }
                     }
                     main {
-                        h1 id=(if live { "headline" } else { "title" }) { (headline) }
+                        @if live {
+                            h1 id="headline" aria-live="polite" { (headline) }
+                            noscript { p { (r.id("web-noscript")) } }
+                        } @else {
+                            h1 id="title" { (headline) }
+                        }
                         (body)
                     }
                     @if live { script id="live" src=(r.url("/live.js")) data-events=(r.url("/events")) {} }
@@ -194,9 +205,9 @@ pub async fn home(
         crate::held::section(&web, &r, &form.0).await
     };
     let body = html! {
+        ul id="health-explanations" { @for line in &rest { li { (line.trim()) } } }
         (held)
         @if let Some(health) = &health { (crate::health::section(&r, health)) }
-        ul id="health-explanations" { @for line in &rest { li { (line.trim()) } } }
         @if no_group && r.mount.is_none() {
             p { (r.id("web-setup-help")) }
             p { a href=(r.url("/join")) { (r.id("web-setup")) } }
@@ -296,6 +307,16 @@ pub fn result(r: &Renderer, here: &str, mut lines: Vec<String>) -> Html<String> 
     // An action result must keep its own title. Home's live status would
     // replace a join refusal with "not in a group" after five seconds.
     document(r, here, &title, &body, false)
+}
+
+/// Any other path: a page that says there is none, with the navigation.
+pub async fn not_found(State(web): State<Arc<Web>>) -> (axum::http::StatusCode, Html<String>) {
+    let r = web.renderer();
+    let body = html! { p { a href=(r.url("/")) { (r.id("web-nav-home")) } } };
+    (
+        axum::http::StatusCode::NOT_FOUND,
+        document(&r, "", &r.id("web-not-found"), &body, false),
+    )
 }
 
 /// The headline every 5 seconds, as `headline` events.

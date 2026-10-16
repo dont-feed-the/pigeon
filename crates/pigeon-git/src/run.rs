@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
@@ -91,14 +91,38 @@ impl Repo {
         input: Option<&[u8]>,
         timeout: Duration,
     ) -> Result<Output> {
-        let out = self.run_status(args, input, timeout).await?;
-        match out.0 {
-            Some(0) => Ok(out.1),
-            status => Err(Error::Failed {
+        let started = Instant::now();
+        let mut waits = 0;
+        loop {
+            let out = self
+                .run_status(args, input, timeout.saturating_sub(started.elapsed()))
+                .await?;
+            if out.0 == Some(0) {
+                return Ok(out.1);
+            }
+            let stderr_tail = tail(&out.1.stderr);
+            let delay = Duration::from_millis(50);
+            // Both commands acquire the index lock before publishing their
+            // atomic index change. Git housekeeping can own it despite the
+            // daemon's worktree lock. Never retry ref updates, annex commands,
+            // other exit failures, or remove a lock. Share the old write-tree
+            // retry policy, bounded by one second and the caller's deadline.
+            if matches!(args.first(), Some(&"write-tree" | &"update-index"))
+                && out.0 == Some(128)
+                && stderr_tail.contains("Unable to create '")
+                && stderr_tail.contains("index.lock': File exists.")
+                && waits < 20
+                && started.elapsed().saturating_add(delay) < timeout.min(Duration::from_secs(1))
+            {
+                waits += 1;
+                tokio::time::sleep(delay).await;
+                continue;
+            }
+            return Err(Error::Failed {
                 argv: args.iter().map(|s| (*s).to_owned()).collect(),
-                status,
-                stderr_tail: tail(&out.1.stderr),
-            }),
+                status: out.0,
+                stderr_tail,
+            });
         }
     }
 

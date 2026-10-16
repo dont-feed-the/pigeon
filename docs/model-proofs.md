@@ -20,6 +20,7 @@ there is no separately maintained transition relation.
 | `CaptureTransactionProof.Safety` | `Spec => []CapturedBeforeDisplacement`: every displaced value was committed | Any `Values` containing the initial value `1`, including infinite sets; `Off = {}`. Any execution length, saves, staging, commit failures, rollback, receives and installs described by `CaptureTransaction`. It does not model annex object durability or daemon crashes at finer I/O boundaries. |
 | `AnnexDropProof.Safety` | `Spec => [](TypeOK /\ LockedStays /\ INV_K)`: a locked copy stays present and at least K copies remain | Any finite `Cust`, natural `K <= Cardinality(Cust)`, and natural `MaxGets`; safe checks, named remotes, no trusted repositories, no log-only proof, **no lock expiry**. Any execution length, partitions, stale logs, aborts, dead markings, and gets admitted by `AnnexDrop`. It does not cover force drops, disk faults, corruption, ranked P2P checks or expiry. |
 | `PurgeProof.Safety` | `Spec => [](KeepWins /\ WaitingPeriod /\ NoResurrection)` | Full-mode purge; any nonempty custodian set disjoint from laptops, valid decider and initial holders, at least one initial copy, natural waiting period and time bound. Covers all original actions and message orders. Purge is not yet implemented; see [scope and proof structure](purge-proof.md). |
+| `CustodyTokensProof.Safety` | `Spec => [](TokensNeverLost /\ TokenHolderHasContent /\ KCopies /\ AtMostOneToken)` | Any natural `N`, `K <= N` and `MaxOffers`; fresh nonces and non-idempotent acknowledgements. Covers the original initial state and every original action for any execution length. This is the exploratory token hand-off model, not git-annex or the implemented custody protocol. See [proof and timings](custody-token-proof.md). |
 
 The capture proof keeps the staged value and prior committed index across a
 failure. Only an idle install may displace the index, and that index is
@@ -40,13 +41,17 @@ silently outgrow the proof's assumptions or add an unproved invariant.
 Deadlock/liveness checks and operator overrides are refused for proof
 coverage. Every `audit` row must have a checked proof/configuration mapping.
 
-Four protocol mutations must leave actual unproved TLAPS obligations:
+Protocol mutations must leave actual unproved TLAPS obligations:
 removing the idle install guard, failing to retain the committed value,
 removing the K-copy threshold, and ignoring a shared lock when starting a
-drop. Four configuration mutations must fail the coverage check: enabling
-expiry, P2P presence checks, trusted repositories, or log-only proofs.
+drop. Purge's three guard mutations and the token protocol's nonce-match
+and duplicate-ack mutations must also produce actual TLC counterexamples.
+Configuration mutations must fail the coverage check: enabling
+expiry, P2P presence checks, trusted repositories, log-only proofs,
+nonce-free token replies or idempotent acknowledgements, plus the unsupported
+purge configurations described in [purge-proof.md](purge-proof.md).
 Syntax errors, tool failures and timeouts do not count as detected mutations.
-A fifth mutation adds an invariant that is true initially but false later;
+Another mutation adds an invariant that is true initially but false later;
 the generated theorem must fail. Omitted proofs and missing `Safety`
 theorems fail the runner.
 
@@ -56,9 +61,10 @@ The proof job runs before the fast and full model jobs.
 `AnnexDrop_design4` moves from the routine full set to `audit`: the proof
 covers that instance and all larger finite custodian sets, every feasible K
 and every natural get bound. The same finite instance still runs with TLC
-on Monday's nightly run, release tags, by hand, and when explicitly named. This retains an independent
+on Monday's audit, by hand, and when explicitly named. This retains an independent
 finite cross-check while removing a redundant graph traversal from each
-routine nightly run.
+routine nightly and release run. Release tags still check fresh proofs;
+they no longer repeat the proved finite graphs.
 
 `Purge_full3` also runs as an audit. `PurgeProof.Safety` establishes every
 invariant in its configuration: `KeepWins`, `WaitingPeriod` and
@@ -67,6 +73,21 @@ there are no temporal properties, overrides or deadlock checks to leave
 unproved. The smaller `Purge_full` positive case and both negative purge
 configurations stay in the fast set. See the fresh validation and timing
 in [purge-proof.md](purge-proof.md#independent-checks-and-timing).
+
+`T_n42o4` is also an audit: its new proof establishes all four configured
+properties, not just token preservation. All smaller positive token cases
+and both negative designs remain in the fast set. Audit graphs run in a
+separate job on Mondays even if main has not moved, and on manual workflow
+runs. `scripts/run-tlc --audit-only` runs precisely these graphs;
+`--audit` retains its existing meaning of every configuration.
+
+The four ordinary full shards use `--balanced` and `models/tla/costs.tsv`.
+Longest-first placement separates the expensive remaining cases; missing
+estimates default to two seconds and never exclude a row. This changes
+scheduling only. Applying the new partition to the completed CI timings
+predicts roughly 14–15 minutes for the longest shard instead of 20–21;
+actual runner performance and queueing still need to be measured. See
+[the calculation and limits](custody-token-proof.md#effect-on-full-shards).
 
 All other model frequencies remain. In particular, `AnnexDrop_design` and
 `AnnexDrop_gets2` have expiry enabled; the ranked and deliberately unsafe
@@ -87,7 +108,10 @@ scripts/check-proofs --benchmark --include-slow
 scripts/run-tlc --full
 scripts/run-tlc AnnexDrop_design4
 scripts/run-tlc Purge_full3
+scripts/run-tlc T_n42o4
+scripts/run-tlc --audit-only
 scripts/run-tlc --audit
+scripts/run-tlc --full --balanced --shard 0 4
 ```
 
 The first command downloads and checks SHA-256 pins for TLAPS 1.5.0 and
@@ -116,8 +140,8 @@ worker and a 1 GiB heap, TLAPS two workers). They are not CI benchmarks:
 | Apalache capture induction, base + step + implication | 21.1 s | Arbitrary execution length over the chosen three values |
 | Apalache unguarded-install counterexample, length 6 | 7.16 s | Detects the existing negative design |
 
-The complete proof job also checks mutations; it took about one minute with
-tools already installed. A fresh download and TLAPS installation took about
+The complete four-family proof job also checks mutations; it took 189 seconds
+with tools already installed on 16 October 2026. A fresh download and TLAPS installation took about
 55 seconds and was tested separately. Cache
 restoration/download and first installation add overhead; the approximately
 30-fold improvement above compares the drop proof and coverage check with
@@ -196,8 +220,9 @@ require evidence about those particular links and properties.
 The CI proof job may reuse a successful verification from main only when
 all formal inputs have identical paths and contents. `scripts/proof-inputs`
 hashes every model/configuration (including nested libraries), the expected
-verdict manifest, both proof/TLC runners and their embedded tool pins, the
-cache helper and its tests, and the entire reusable proof workflow. Renaming,
+verdict manifest and scheduling estimates, both proof/TLC runners and their
+embedded tool pins, the cache helper and formal tests, and both the proof
+and full-model workflows. Renaming,
 adding or deleting an input changes the key. Generated TLAPS fingerprints
 are excluded; fresh checks still use `--nofp`.
 

@@ -37,28 +37,9 @@ pub async fn stage_file(
 
 /// Commits the index on `main`, whose head is `parent`.
 pub async fn commit_index(git: &Git, parent: Option<&str>, message: &str) -> Result<String, Error> {
-    // Git's background housekeeping may briefly own the index even while
-    // the group's busy lock serializes pigeon's writers. write-tree fails
-    // before producing a tree when it cannot acquire that lock; retry only
-    // that failure, without removing a lock or repeating a ref update.
-    let mut waits = 0;
-    let tree = loop {
-        match git.run(&["write-tree"]).await {
-            Ok(tree) => break tree.trim().to_owned(),
-            Err(Error::Failed {
-                status: Some(128),
-                stderr_tail,
-                ..
-            }) if waits < 20
-                && stderr_tail.contains("Unable to create '")
-                && stderr_tail.contains("index.lock': File exists.") =>
-            {
-                waits += 1;
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-            }
-            Err(error) => return Err(error),
-        }
-    };
+    // The checked driver shares the bounded index-lock retry with capture's
+    // update-index calls. commit-tree and the ref CAS are still never retried.
+    let tree = git.run(&["write-tree"]).await?.trim().to_owned();
     let parents: Vec<&str> = parent.into_iter().collect();
     let commit = git.commit_tree(&tree, &parents, message).await?;
     git.update_ref("refs/heads/main", &commit, parent).await?;

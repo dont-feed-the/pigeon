@@ -38,6 +38,9 @@ pub struct Known {
     pub roster_index_pending: bool,
     /// Repair history changes only when the removed-device set grows.
     pub health_repair_epochs: Option<(BTreeSet<String>, Vec<pigeon_proto::health::RepairEpoch>)>,
+    /// The last count of suggestions awaiting a decision, which Home shows
+    /// while another operation holds the group busy.
+    pub health_suggestions: Option<u64>,
     /// When each peer was last heard of, by device ID.
     pub heard: BTreeMap<String, i64>,
     /// Direct addresses by device ID.

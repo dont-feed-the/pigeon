@@ -88,6 +88,29 @@ pub struct Refounded {
     pub at: String,
 }
 
+/// The `pgn1-` invitation in `pasted`, as a person pastes it from a message:
+/// wrapped over lines, or as the whole `pigeon join pgn1-… FOLDER` line.
+/// The code's parts are the longest run of words after `pgn1-` that decodes
+/// to an invitation. Text holding no `pgn1-` is answered trimmed, so that
+/// the join refuses it as before.
+pub fn invitation(pasted: &str) -> String {
+    let Some(start) = pasted.find("pgn1-") else {
+        return pasted.trim().to_owned();
+    };
+    let words: Vec<&str> = pasted[start + 5..].split_whitespace().collect();
+    let decodes = |body: &str| {
+        data_encoding::BASE32_NOPAD
+            .decode(body.to_ascii_uppercase().as_bytes())
+            .ok()
+            .is_some_and(|b| serde_json::from_slice::<serde_json::Value>(&b).is_ok())
+    };
+    (1..=words.len())
+        .rev()
+        .map(|n| words[..n].concat())
+        .find(|body| decodes(body))
+        .map_or_else(|| pasted.trim().to_owned(), |body| format!("pgn1-{body}"))
+}
+
 /// The group's name and what the `pgn1-` invitation `code` says of its
 /// refounding, if it is one to a refounded group; for the question the
 /// CLI asks before joining.
@@ -99,4 +122,37 @@ pub fn refounded(code: &str) -> Option<(String, Refounded)> {
     let v: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
     let r = serde_json::from_value(v.get("refounded")?.clone()).ok()?;
     Some((v.get("name")?.as_str()?.to_owned(), r))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn code() -> String {
+        let json = br#"{"group":"g","name":"Family"}"#;
+        let body = data_encoding::BASE32_NOPAD
+            .encode(json)
+            .to_ascii_lowercase();
+        format!("pgn1-{body}")
+    }
+
+    #[test]
+    fn a_pasted_invitation_is_found_wrapped_or_inside_its_command() {
+        let code = code();
+        let (a, b) = code.split_at(20);
+        assert_eq!(invitation(&format!("  {code}\n")), code);
+        assert_eq!(invitation(&format!("{a}\n{b}")), code);
+        assert_eq!(invitation(&format!("{a} {b}")), code);
+        assert_eq!(invitation(&format!("pigeon join {code} family")), code);
+        assert_eq!(
+            invitation(&format!("pigeon join {code} /home/c/Family")),
+            code
+        );
+    }
+
+    #[test]
+    fn text_holding_no_invitation_is_only_trimmed() {
+        assert_eq!(invitation(" garbage \n"), "garbage");
+        assert_eq!(invitation("pgn1-!!"), "pgn1-!!");
+    }
 }

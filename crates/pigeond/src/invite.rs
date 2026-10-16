@@ -244,11 +244,11 @@ pub fn invite(d: &Daemon, g: &Group, ask: Ask<'_>) -> Result<String, &'static st
                 admin: ask.admin,
             }),
         ),
-        _ => return Err("invite-not-allowed"),
+        _ => return Err("invite-admin-only"),
     };
     let name = ask.name.trim();
     if !name.is_empty() && doc.roster.devices.values().any(|x| x.name == name) {
-        return Err("invite-not-allowed");
+        return Err("device-name-taken");
     }
     let role = if ask.custodian { "custodian" } else { "laptop" };
     let secret = random::<32>().map_err(|_| "not-allowed")?;

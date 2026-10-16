@@ -37,6 +37,11 @@ on:
       - packaging/check-install
   workflow_call:
     inputs:
+      verify_macos:
+        description: Run macOS tests in periodic background validation
+        required: false
+        default: false
+        type: boolean
       source_ref:
         description: Immutable commit supplying the pinned git-annex and installer
         required: false
@@ -68,7 +73,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON((startsWith(github.ref, 'refs/tags/v') || inputs.source_ref != '') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
+        os: ${{ fromJSON(inputs.verify_macos && '["macos-latest"]' || (startsWith(github.ref, 'refs/tags/v') || inputs.source_ref != '') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
     # The build stays on macOS 15: on the macos-26 image, linking GHC's
     # programs failed on the SDK's .tbd files ("unknown architecture"), and
     # v0.3.4 had no release. What it builds runs on later macOS too.
@@ -125,21 +130,24 @@ jobs:
           tar -C ~ -xzf "$t"
           echo "STOCK=$HOME/git-annex.linux" >> "$GITHUB_ENV"
       - name: the stock git-annex from Homebrew (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && inputs.verify_macos
         run: |
           brew install git-annex
           echo "STOCK=$(brew --prefix)/bin" >> "$GITHUB_ENV"
       - name: E23 with pigeon's git-annex, concurrent drops over P2P keep their copies
+        if: runner.os != 'macOS' || inputs.verify_macos
         run: |
           export PATH=~/.cache/pigeon-git-annex-dist/bin:$PATH
           git annex version --raw; echo
           python3 lab/git-annex/ga-e23-p2p-drop.py | tee -a "$GITHUB_STEP_SUMMARY"
       - name: E25 with pigeon's git-annex, 500 fetches over P2P and no hang
+        if: runner.os != 'macOS' || inputs.verify_macos
         timeout-minutes: 20
         run: |
           export PATH=~/.cache/pigeon-git-annex-dist/bin:$PATH
           python3 lab/git-annex/ga-e25-relay-stress.py 500 | tee -a "$GITHUB_STEP_SUMMARY"
       - name: negative control, E23 with the stock git-annex (asserts the bug)
+        if: runner.os != 'macOS' || inputs.verify_macos
         continue-on-error: true
         timeout-minutes: 20
         run: |
@@ -147,6 +155,7 @@ jobs:
           git annex version --raw; echo
           python3 lab/git-annex/ga-e23-p2p-drop.py | tee -a "$GITHUB_STEP_SUMMARY"
       - name: negative control, E25 with the stock git-annex (up to three hangs)
+        if: runner.os != 'macOS' || inputs.verify_macos
         continue-on-error: true
         timeout-minutes: 5
         run: |
@@ -159,7 +168,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON((startsWith(github.ref, 'refs/tags/v') || inputs.source_ref != '') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
+        os: ${{ fromJSON(inputs.verify_macos && '["macos-latest"]' || '["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
@@ -199,7 +208,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON((startsWith(github.ref, 'refs/tags/v') || inputs.source_ref != '') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
+        os: ${{ fromJSON(inputs.verify_macos && '["macos-latest"]' || '["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:

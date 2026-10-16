@@ -54,6 +54,7 @@ headline-machine-full = { $machine } is full; it waits until space is freed on i
 headline-machine-no-capacity = { $machine } has no room for { $files } files: it needs { $missing_mb } MB more free space. Free up space on it, or add another backup machine.
 headline-machine-lost = { $machine } no longer finds its backup folder; it counts for nothing until it is set up again.
 why-machine-offline = { $machine } has been offline since { $since }.
+why-machine-not-heard = { $machine } has not been heard from yet on this computer.
 why-safe-copies = { $have } of { $need } safe copies
 next-when-back = Nothing to do: they will be safe when { $machine } is back.
 next-repairing = Repairing: { $files } files are being copied to another backup machine.
@@ -110,7 +111,7 @@ help-commands = Commands:
 
 ## Results
 
-free-result = { $safe } of { $total } files are safe and eligible to free. Pigeon will free their space in the background; other files wait for safe copies.
+free-result = Files safe and eligible to free: { $safe } of { $total }. Pigeon will free their space in the background; other files wait for safe copies.
 free-waiting =
     { $files ->
         [one] 1 file is not safe yet; pigeon will free it once it is.
@@ -134,7 +135,7 @@ undo-keep = Undo: pigeon free { $folder }
 restore-result = { $path } is restored on this computer. Restoring older contents saves a new current version and keeps the existing history. Check Home for sharing and protection, and Suggestions if approval is needed.
 restore-folder-result = { $path }: { $files } files restored on this computer. Newer files and saved history are kept. Check Home and Suggestions for sharing and approval.
 problem-restore-folder-incomplete = { $path }: { $files } files restored; { $skipped } could not be restored and were left unchanged. The operation needs attention. Files to check: { $paths }. Close files in use and try again; use pigeon doctor for other problems. Check Home and Suggestions for sharing and approval.
-problem-restore-in-use = { $path } changed or is being used. Pigeon left it unchanged. Open an old copy with View, or close the file and try again.
+problem-restore-in-use = { $path } changed or is being used. Pigeon left it unchanged. Open an old version with “Open a copy”, or close the file and try again.
 problem-restore-folder-version = To restore a folder, choose a date with --at or omit the version option to restore its latest saved snapshot.
 web-restore-folder = Restore this folder
 web-files-arriving = Waiting for { $files } files to be available on this computer. Leave pigeon running; it will receive them when a copy is reachable.
@@ -369,7 +370,7 @@ file-row = { $path }: { $state }
 web-restore = Restore this version
 web-view = Download a copy
 web-versions = Versions
-deleted-none = No file was deleted.
+deleted-none = No deleted files to bring back.
 deleted-row = { $path }, deleted { $deleted }
 web-deleted = Deleted files
 web-restore-deleted = Restore
@@ -468,8 +469,7 @@ problem-recovery-needs-backup = Add a backup machine before preparing a recovery
 
 problem-join-incomplete = The new group was verified, but recovery could not finish. Restart pigeon to finish the recorded operation. Your old history is kept.
 problem-repository-busy = This repository has an unfinished file update. Let pigeon finish it, or restart pigeon before trying recovery again.
-problem-folder-not-empty = This folder is not empty and does not belong to the group being recovered. Choose an empty folder or the existing repository of the refounded group.
-
+problem-folder-not-empty = This folder already has files in it. Choose an empty or new folder; to rejoin a refounded group, choose the folder of its existing repository.
 # Group health from replicated state (ADR 0025).
 web-health = Group health
 web-health-current = Current files
@@ -487,7 +487,11 @@ web-health-disk = Stored: { $used } · Free: { $free } · Limit: { $limit } · R
 web-health-full = This disk needs more free space.
 web-health-lost = This backup reports its repository lost.
 web-health-checking = Checking stored files; these copies do not count as protected yet.
-web-health-queue = Waiting to send: { $send } · To receive: { $receive } · Waiting for space: { $deferred } items, { $missing } needed
+web-health-queue =
+    { $deferred ->
+        [one] Waiting to send: { $send } · To receive: { $receive } · Waiting for space: 1 item, { $missing } needed
+       *[other] Waiting to send: { $send } · To receive: { $receive } · Waiting for space: { $deferred } items, { $missing } needed
+    }
 web-health-report = Storage and work report: { $when }.
 web-health-report-old = Storage and work report is not recent: { $when }. New contact does not update these figures.
 web-health-suggestions = Suggestions awaiting a decision: { $count }
@@ -519,7 +523,11 @@ web-view-suggestion = Review suggested file
 suggestion-deletes-file = This suggestion deletes { $path }. The shared file stays unchanged until the suggestion is accepted.
 
 space-title = Backup storage
-space-need = Required storage for { $copies } backup copies: current files { $current } bytes; history { $history } bytes; suggestions { $suggestions } bytes.
+space-need =
+    { $copies ->
+        [one] Required storage for 1 backup copy: current files { $current } bytes; history { $history } bytes; suggestions { $suggestions } bytes.
+       *[other] Required storage for { $copies } backup copies: current files { $current } bytes; history { $history } bytes; suggestions { $suggestions } bytes.
+    }
 space-offered = Configured capacity for this content: { $bytes } bytes. Each backup computer counts for at most one copy, including computers with no recent storage report.
 space-overflow = Extra copies: { $bytes } bytes, from reported locations.
 space-overflow-unknown = Extra copies have not been checked.
@@ -582,3 +590,13 @@ problem-scrub-ledger = The integrity-check record on { $machine } could not be r
 scrub-report-time = Reported { $when }. This observation is not refreshed by new contact.
 erase-needs-backup = Add a backup machine before preparing erasing.
 problem-erase-needs-backup = Add a backup machine before preparing erasing.
+
+web-health-suggestions-unavailable = Suggestions awaiting a decision: not checked yet.
+web-health-separator = {": "}
+web-not-found = There is no page here.
+web-noscript = This page updates by itself only with JavaScript. Reload it to see the latest state.
+problem-invite-admin-only = Only an admin of the group can invite a new person or another admin. You can invite another computer of your own, or a backup machine.
+problem-device-name-taken = A computer in the group is already called { $name }. Choose another name.
+problem-folder-not-absolute = “{ $folder }” is not a full folder path. Enter one that starts with /, such as /home/you/Family.
+problem-name-empty = Give the group and this computer a name.
+problem-copies-zero = A group needs at least one backup copy.

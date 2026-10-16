@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""A newer published stable release becomes latest even when main advanced.
+
+An older retry or a prerelease cannot displace a later stable publication.
+"""
+
+import argparse
+import json
+import re
+import subprocess
+
+
+def version(tag):
+    match = re.fullmatch(r"v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([\w.-]+))?", tag)
+    if not match:
+        raise ValueError("invalid release version")
+    return tuple(map(int, match.groups()[:3])), match[4]
+
+
+def should_latest(tag, published):
+    wanted, prerelease = version(tag)
+    if prerelease:
+        return False
+    if published is None:
+        return True
+    previous, previous_prerelease = version(published)
+    return previous_prerelease is not None or wanted >= previous
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repository", required=True)
+    parser.add_argument("--tag", required=True)
+    args = parser.parse_args()
+    if not re.fullmatch(r"[\w.-]+/[\w.-]+", args.repository):
+        parser.error("invalid repository")
+    response = subprocess.run(["gh", "api", f"repos/{args.repository}/releases/latest"],
+                              capture_output=True, text=True, timeout=60)
+    if response.returncode:
+        if "HTTP 404" not in response.stderr:
+            raise SystemExit("Could not read the latest publication; release publication stopped.")
+        published = None
+    else:
+        published = json.loads(response.stdout)["tag_name"]
+    print("true" if should_latest(args.tag, published) else "false")
+
+
+if __name__ == "__main__":
+    main()

@@ -121,7 +121,7 @@ fn values(r: &Renderer, h: &HealthReport) -> BTreeMap<String, String> {
         (
             "health-suggestions",
             h.suggestions.map_or_else(
-                || r.id("web-health-unavailable"),
+                || r.id("web-health-suggestions-unavailable"),
                 |n| {
                     r.catalogue()
                         .format(&Message::new("web-health-suggestions").arg("count", number(n)))
@@ -209,7 +209,7 @@ pub(crate) fn section(r: &crate::Renderer, h: &HealthReport) -> Markup {
     let text = |id: &str| values.get(id).map_or("", String::as_str);
     html! {
         section id="health" data-membership=(membership(h)) aria-labelledby="health-title" {
-            h2 id="health-title" { (r.id("web-health")) ": " span id="health-group" { (text("health-group")) } }
+            h2 id="health-title" { (r.id("web-health")) (r.id("web-health-separator")) span id="health-group" { (text("health-group")) } }
             h3 { (r.id("web-health-current")) }
             p id="health-current" { (text("health-current")) }
             h3 { (r.id("web-health-retained")) }
