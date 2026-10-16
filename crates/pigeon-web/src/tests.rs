@@ -593,7 +593,7 @@ async fn a_held_deletion_is_shared_once_confirmed_or_brought_back() {
         .unwrap();
     let ask = body(ask).await;
     assert!(
-        ask.contains("Delete the files of h1 for everyone?"),
+        ask.contains("Delete these 3 files for everyone (Photos/a.jpg)?") && !ask.contains(" h1 "),
         "{ask}"
     );
     assert!(!ask.contains("h1/Share"), "{ask}");

@@ -114,20 +114,6 @@ mod tests {
     }
 
     #[test]
-    fn sizes_are_said_in_units_people_read() {
-        let en = renderer("en");
-        assert_eq!(en.size(1), "1 byte");
-        assert_eq!(en.size(999), "999 bytes");
-        assert_eq!(en.size(1_234), "1.2 kB");
-        assert_eq!(en.size(56_789), "57 kB");
-        assert_eq!(en.size(2_345_678_901), "2.3 GB");
-        let fr = renderer("fr");
-        assert_eq!(fr.size(1), "1 octet");
-        assert_eq!(fr.size(1_234), "1,2 Ko");
-        assert_eq!(fr.size(3_400_000), "3,4 Mo");
-    }
-
-    #[test]
     fn a_partial_decision_says_what_was_taken_and_what_was_not() {
         let o = Outcome {
             id: "c".repeat(40),

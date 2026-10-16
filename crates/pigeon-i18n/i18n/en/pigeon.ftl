@@ -126,7 +126,11 @@ time-expires =
     }
 number-decimal = { $whole }.{ $tenth }
 number-thousands = { $high },{ $low }
-size-bytes = { $size } B
+size-bytes =
+    { $plural ->
+        [one] { $size } byte
+       *[other] { $size } bytes
+    }
 size-kb = { $size } kB
 size-mb = { $size } MB
 size-gb = { $size } GB

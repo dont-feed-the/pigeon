@@ -126,8 +126,12 @@ async fn freeing_asks_first_then_again_while_the_backups_are_quiet() {
             .unwrap(),
     )
     .await;
-    assert!(folder.contains("Photos/a.jpg: Safe, not on this computer"));
-    assert!(folder.contains("Photos/b.jpg: Safe<"));
+    // The folder page names its files from that folder.
+    assert!(
+        folder.contains(">a.jpg: Safe, not on this computer<"),
+        "{folder}"
+    );
+    assert!(folder.contains(">b.jpg: Safe<"), "{folder}");
     let file = body(
         app.clone()
             .oneshot(get("/file?path=%2Fg%2FPhotos%2Fa.jpg", HOST, Some(&cookie)))

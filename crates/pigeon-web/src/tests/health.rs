@@ -105,7 +105,7 @@ async fn home_shows_replicated_health_and_preserves_report_age_without_telemetry
     assert!(page.contains("Not checked recently: 4") && page.contains("Safe: 5"));
     assert!(page.contains("Suggestions awaiting a decision: 6"));
     assert!(page.contains("New contact does not update these figures"));
-    assert!(page.contains("Waiting to send: 1 B") && page.contains("To receive: 2 kB"));
+    assert!(page.contains("Waiting to send: 1 byte") && page.contains("To receive: 2 kB"));
     assert!(page.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
     assert!(!page.contains("<script>alert("));
     assert!(page.contains("src=\"/live.js\"") && page.contains("data-events=\"/events\""));

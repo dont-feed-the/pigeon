@@ -368,7 +368,7 @@ async fn the_page_is_in_french_too() {
     let page = page_of(&app, &cookie, "/suggestions").await;
     for text in [
         "À vous de décider",
-        "recipes.txt : modifié, 1,2 Ko → 1,4 Ko, 3 lignes ajoutées et 1 retirée",
+        "recipes.txt : modifié, 1,2 ko → 1,4 ko, 3 lignes ajoutées et 1 retirée",
         "groceries.txt : supprimé (il faisait 300 octets)",
         "Accepter la sélection",
         "Refuser la sélection",

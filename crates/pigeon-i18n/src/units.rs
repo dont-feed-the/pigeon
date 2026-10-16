@@ -104,7 +104,14 @@ pub(crate) fn size(cat: &Catalogue, bytes: u64) -> String {
     } else {
         grouped(cat, (b + base / 2) / base)
     };
-    cat.format(&Message::new(UNITS[unit]).arg("size", text))
+    let message = Message::new(UNITS[unit]).arg("size", text);
+    // Bytes are said in words, "1 byte", "300 bytes", which need a plural.
+    let message = if unit == 0 {
+        message.arg("plural", i64::try_from(bytes).unwrap_or(i64::MAX))
+    } else {
+        message
+    };
+    cat.format(&message)
 }
 
 /// `n` with the language's digit grouping, by thousands.
@@ -140,8 +147,10 @@ mod tests {
     #[test]
     fn sizes_take_the_largest_unit_and_the_language_marks() {
         let (en, fr) = (cat("en"), cat("fr"));
-        assert_eq!(size(&en, 0), "0 B");
-        assert_eq!(size(&en, 999), "999 B");
+        assert_eq!(size(&en, 0), "0 bytes");
+        assert_eq!(size(&en, 1), "1 byte");
+        assert_eq!(size(&fr, 1), "1 octet");
+        assert_eq!(size(&en, 999), "999 bytes");
         assert_eq!(size(&en, 1000), "1 kB");
         assert_eq!(size(&en, 1500), "1.5 kB");
         assert_eq!(size(&en, 29_339_021_312), "29.3 GB");

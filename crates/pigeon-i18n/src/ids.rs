@@ -176,7 +176,7 @@ pub const MESSAGES: &[Entry] = &[
     e("time-expires", &["moment", "clock", "date"]),
     e("number-decimal", &["whole", "tenth"]),
     e("number-thousands", &["high", "low"]),
-    e("size-bytes", &["size"]),
+    e("size-bytes", &["size", "plural"]),
     e("size-kb", &["size"]),
     e("size-mb", &["size"]),
     e("size-gb", &["size"]),

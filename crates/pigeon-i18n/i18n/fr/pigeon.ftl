@@ -134,7 +134,11 @@ time-expires =
     }
 number-decimal = { $whole },{ $tenth }
 number-thousands = { $high } { $low }
-size-bytes = { $size } o
+size-bytes =
+    { $plural ->
+        [one] { $size } octet
+       *[other] { $size } octets
+    }
 size-kb = { $size } ko
 size-mb = { $size } Mo
 size-gb = { $size } Go

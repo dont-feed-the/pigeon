@@ -82,7 +82,7 @@ fn bundle_vars(src: &'static str) -> Vec<(String, BTreeSet<String>)> {
 }
 
 /// The variables that select a variant rather than appear in the text.
-const SELECTORS: &[&str] = &["who", "why", "moment", "index", "backups"];
+const SELECTORS: &[&str] = &["who", "why", "moment", "index", "backups", "plural"];
 
 fn sample(var: &str) -> Arg {
     // Counts select plural forms; everything else is a text.

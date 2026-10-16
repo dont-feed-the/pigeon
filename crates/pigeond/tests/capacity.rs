@@ -129,7 +129,17 @@ fn shared_keys_and_declined_suggestions_remain_visible_and_count_once() {
             && page.contains("declined")
     );
     assert!(page.contains("no spare backup machine") && page.contains("Configured capacity"));
-    assert!(!page.contains("smaller than one copy") && !page.contains(" bytes"));
+    assert!(!page.contains("smaller than one copy"));
+    // Sizes are said in kB, MB or GB from 1,000 bytes on: never a raw count.
+    let raw = page.match_indices(" bytes").any(|(at, _)| {
+        let digits: String = page[..at]
+            .chars()
+            .rev()
+            .take_while(char::is_ascii_digit)
+            .collect();
+        digits.len() > 3
+    });
+    assert!(!raw, "{page}");
     let settings = web::page(&session, "/settings");
     assert!(settings.contains("href=\"/space\""));
     pigeon(&alice, &["settings", "language", "fr"]);

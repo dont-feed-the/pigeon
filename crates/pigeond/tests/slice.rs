@@ -118,7 +118,7 @@ fn local_published_protected_then_free_and_keep() {
     // The folder's page lists its file; the file's page its version.
     let listed = common::web::page(&web, &format!("/folder?path={}", sub.display()));
     assert!(
-        listed.contains("sub/2019/big.bin: Safe, not on this computer"),
+        listed.contains(">big.bin: Safe, not on this computer<"),
         "{listed}"
     );
     assert!(listed.contains("action=\"/files/free\"") && listed.contains("action=\"/files/keep\""));
