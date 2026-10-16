@@ -416,8 +416,8 @@ jobs:
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
       - name: observations and every semantic, schema and pipeline mutant
         run: python3 scripts/check-driver-traces
-      - name: isolated trace workers preserve every verdict and coverage failure
-        run: python3 -B -m unittest discover -s models/tests -p test_lab_trace_workers.py -v
+      - name: trace workers and eager witnesses preserve verdicts and coverage failures
+        run: python3 -B -m unittest discover -s models/tests -v
       - name: save the Rust cache (main only)
         if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

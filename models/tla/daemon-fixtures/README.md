@@ -18,7 +18,22 @@ gaps are events for other paths or specifications in the full log.
   Git clears skip-worktree during restart because the file is visible.
   The complete path observations and original clocks are retained.
 
-`scripts/check-driver-traces` checks all three with TLC. Removing the
+- `keep-recovery-retries-a.ndjson` and `keep-recovery-retries-b.ndjson`:
+  `dont-feed-the/pigeon` v0.5.13 run 38963802150, job 117185158655,
+  artifact 12075336489, S9-random-015 at 2101edb. Keep crashes during
+  index update; a stale Git lock leaves repeated failed recovery attempts
+  before recovery succeeds. The two complete path projections retain all
+  observations, including cancellation, clocks and retries. These took
+  most of that shard's 16-minute trace replay.
+- `release-hidden-writer.ndjson`: the native
+  `tracing::driver_traces_release_changed_aside` integration test at
+  5df9b31, generated with `--features tla-trace,lab`. A retained inode is
+  written through a handle the scan did not see. The eager search cannot
+  explain it, and must retry the full model, which accepts it.
+
+`scripts/check-driver-traces` checks the first three with TLC;
+`models/tests/test_install_witness.py` checks the recovery retry histories.
+Removing the
 release boundary, clearing skip-worktree without a visible path, and
 omitting durable journal completion must fail. Global clock continuity is checked on
 full logs by `check-lab-traces`, rather than on these path projections.

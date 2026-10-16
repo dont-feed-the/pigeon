@@ -42,7 +42,12 @@ Telemetry goes over authenticated `pigeon/telemetry/1` iroh streams. The
 receiver checks the roster membership and collector choice before accepting
 a body; every record must name that stream's group. It stamps the source
 identity from QUIC, then writes local files and forwards to the configured
-backend. Unknown devices and mixed-group batches are refused.
+backend. Unknown devices and mixed-group batches are refused. When it
+forwards, the collector adds names from its signed roster beside the IDs:
+`device_name` (the sending computer, on every point and span), `peer_name`
+and `group_name`, and `pigeon.device.name` and `pigeon.group.name` on the
+resource. Names never come from what a sender claims. The dashboard groups
+by these names and has a Group selector.
 
 Local files rotate and retain at most 256 KiB. The SDK queues at most
 2,048 spans; the outbound group queue holds at most 1 MiB and batches are at
