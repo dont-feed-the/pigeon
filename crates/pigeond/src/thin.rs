@@ -67,12 +67,11 @@ pub async fn rethin_for_lab(g: &Group, me: &str, t: &Tracer) -> usize {
 }
 
 async fn rethin_after(g: &Group, me: &str, t: &Tracer, quiet_seconds: i64) -> usize {
-        if crate::capture_file::pending(g)
+    if crate::capture_file::pending(g)
         || crate::evict::unsettled(g)
         || g.shared.is_some()
         || !matches!(crate::shared_pool::registration(&g.git_dir), Ok(None))
     {
-
         return 0;
     }
     let Some(wt) = g.worktree.clone() else {

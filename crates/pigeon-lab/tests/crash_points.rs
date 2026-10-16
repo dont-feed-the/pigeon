@@ -1,6 +1,11 @@
 //! Inventory all daemon crash checkpoints: slice, install-driver and bridge
 //! recovery regressions exercise their respective seams.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, reason = "tests")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "tests"
+)]
 
 use std::collections::BTreeSet;
 use std::path::Path;

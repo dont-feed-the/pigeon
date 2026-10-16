@@ -88,11 +88,15 @@ pub fn destination(app: &App, user: &str, headers: &HeaderMap) -> Result<String>
         .get("Destination")
         .and_then(|h| h.to_str().ok())
         .ok_or_else(|| bad("Destination is required"))?;
-    let url = url::Url::parse(url).map_err(bad)?;
-    if url.origin() != app.config.origin().map_err(unavailable)?.origin()
-        || url.query().is_some()
-        || url.fragment().is_some()
-    {
+    // The desktop client sends an absolute URL when creating the upload,
+    // but an origin-relative path when moving its final .file resource.
+    let origin = app.config.origin().map_err(unavailable)?;
+    let url = if url.starts_with('/') && !url.starts_with("//") {
+        origin.join(url).map_err(bad)?
+    } else {
+        url::Url::parse(url).map_err(bad)?
+    };
+    if url.origin() != origin.origin() || url.query().is_some() || url.fragment().is_some() {
         return Err(forbidden());
     }
     match resource(url.path(), user)? {
