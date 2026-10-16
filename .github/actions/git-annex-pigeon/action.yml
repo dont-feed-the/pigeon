@@ -6,7 +6,8 @@
 # PATH), so pigeon's build runs with the system's git (14 §14.3). On a miss
 # it fails if `required`, and otherwise warns and leaves the stock git-annex
 # in use: the first push of a new patch set runs before git-annex.yml has
-# built it.
+# built it. A build already in ~/.cache/pigeon-git-annex-dist, such as the
+# artifact git-annex.yml's own jobs unpack there, is used without the cache.
 name: pigeon's git-annex
 description: Puts the cached build of third_party/git-annex first on PATH.
 inputs:
@@ -16,18 +17,23 @@ inputs:
 outputs:
   hit:
     description: Whether the cached build is on PATH.
-    value: ${{ steps.restore.outputs.cache-hit == 'true' }}
+    value: ${{ steps.present.outputs.hit == 'true' || steps.restore.outputs.cache-hit == 'true' }}
 runs:
   using: composite
   steps:
+    - id: present
+      shell: bash
+      run: |
+        if [ -x ~/.cache/pigeon-git-annex-dist/bin/git-annex ]; then echo hit=true >> "$GITHUB_OUTPUT"; fi
     - id: restore
+      if: steps.present.outputs.hit != 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/pigeon-git-annex-dist
         key: git-annex-pigeon-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/git-annex/VERSION', 'third_party/git-annex/build.sh', 'third_party/git-annex/patches/**') }}
     - shell: bash
       env:
-        HIT: ${{ steps.restore.outputs.cache-hit }}
+        HIT: ${{ steps.present.outputs.hit == 'true' || steps.restore.outputs.cache-hit == 'true' }}
         REQUIRED: ${{ inputs.required }}
       run: |
         if [ "$HIT" = true ]; then

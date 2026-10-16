@@ -4,6 +4,15 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.3.6 — 2026-10-16
+
+### Fixed
+
+- The release is published again: 0.3.5's release checks lost pigeon's
+  git-annex build when GitHub's cache evicted it, so 0.3.5 was never
+  published. They now take the build from the release itself. 0.3.6 holds
+  the same changes as 0.3.5.
+
 ## 0.3.5 — 2026-10-16
 
 ### Fixed
