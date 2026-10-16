@@ -198,12 +198,12 @@ pub async fn client(
     let Some(session) = auth::session(&app, &headers).await else {
         return Ok(Redirect::to("/login").into_response());
     };
+    let lock = app.client_lock(&id).await;
+    let _lock = lock.lock().await;
     let c = owned(&app, &session.user, &id).await?;
     if c.revoked {
         return Ok(page(&c.name, html! { p { "This client’s access has been revoked. Its retained peer data remains on the bridge." } }).into_response());
     }
-    let lock = app.client_lock(&id).await;
-    let _lock = lock.lock().await;
     let socket = app.peers.checked(&c).await.map_err(unavailable)?;
     let status = rpc::call(
         &socket,
@@ -275,12 +275,12 @@ pub async fn file(
     headers: HeaderMap,
 ) -> Result<Response> {
     let session = auth::session(&app, &headers).await.ok_or_else(forbidden)?;
+    let lock = app.client_lock(&id).await;
+    let _lock = lock.lock().await;
     let c = owned(&app, &session.user, &id).await?;
     if c.revoked {
         return Err(forbidden());
     }
-    let lock = app.client_lock(&id).await;
-    let _lock = lock.lock().await;
     let index = index::load(&app, &c).await?;
     let node = index
         .nodes
@@ -307,12 +307,12 @@ pub async fn resolve(
 ) -> Result<Response> {
     let session = auth::session(&app, &headers).await.ok_or_else(forbidden)?;
     auth::csrf(&session, &form.csrf)?;
+    let lock = app.client_lock(&id).await;
+    let _lock = lock.lock().await;
     let c = owned(&app, &session.user, &id).await?;
     if c.revoked || !index::path_valid(&form.path) {
         return Err(forbidden());
     }
-    let lock = app.client_lock(&id).await;
-    let _lock = lock.lock().await;
     let socket = app.peers.checked(&c).await.map_err(unavailable)?;
     let root = match index::reply(
         rpc::bridge(&socket, pigeon_proto::bridge::Operation::Info)

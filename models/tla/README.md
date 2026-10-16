@@ -318,3 +318,31 @@ edited or a re-frozen side met the other.
 post-save refreshes. `BridgeCatalogueTrace` checks observed RPCs and returned
 metadata; [the guide](../../docs/bridge-catalogue-traces.md) describes its scope,
 regressions and deliberate trace corruptions.
+
+`BridgeSync` checks observed DAV transactions from a loaded view through Apply,
+pinned refresh and constructed HTTP response. `BridgeSyncSystem` explores the
+conditional-save and suggestion interface with two clients. It takes native
+catalogue updates as inputs; it does not implement distributed native merging.
+`BridgeLifecycle` checks persisted identities, selected daemon sockets and local
+revocation, including across restarts. Their trace adapters consume actual
+observations without supplying missing operations.
+
+`MultiDeviceAuthority` separates person permissions from device signatures and
+individual removal for two same-person bridge clients and two regular peers.
+Its good and fair-exchange configurations use two decision/removal events; the
+full configuration permits three events with at most one removal, of client A.
+Negative configurations check faulty policies and required scenario reachability.
+This complements `Authority` without changing its existing proof contracts.
+
+`BridgeSharedStorage` checks one key's immutable pool publication, retry after
+an interrupted sync, private aliases and custody failure domains. Pool GC and
+physical power-loss durability are outside its scope. The
+[bridge system guide](../../docs/bridge-system-verification.md) connects these
+models with real multi-peer scenarios and records their trust boundaries.
+
+`BridgeSparseConflict` covers a sparse accepted version acquiring a conflict
+name, preserving real local files, and narrowly repairing phantom overlays left
+by the old branch ordering. Negative controls reproduce both the synthetic
+overlay and its fetch stall, or remove individual recovery guards. The
+[sparse conflict guide](../../docs/bridge-sparse-conflict.md) records the exact
+filesystem and catalogue assumptions and corresponding native regressions.

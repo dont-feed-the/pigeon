@@ -68,11 +68,15 @@ jobs:
           restore-keys: rust-ubuntu-24.04-
       - name: the pinned toolchain (rust-toolchain.toml)
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
       - name: matching bridge, daemon, CLI and transport binaries
         id: build
         run: |
           cargo build --locked -p pigeon-bridge -p pigeond -p pigeon -p git-annex-p2p-iroh \
-            --features pigeond/lab
+            --features pigeond/lab,pigeon-bridge/tla-trace
       - name: share an existing laptop's storage
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: python3 scripts/check-nextcloud-shared-storage --provider laptop
@@ -81,7 +85,16 @@ jobs:
         run: cargo test --locked -p pigeond --features lab --test decision_retry
       - name: share an existing custodian's storage
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        id: shared-custodian
+        env:
+          PIGEON_TRACE: "1"
+          PIGEON_TRACE_DIR: ${{ runner.temp }}/bridge-system-traces
         run: python3 scripts/check-nextcloud-shared-storage --provider custodian
+      - name: check real multi-peer identity and DAV transaction observations
+        if: ${{ !cancelled() && steps.shared-custodian.outcome == 'success' }}
+        run: |
+          python3 scripts/check-bridge-lifecycle-traces "${{ runner.temp }}/bridge-system-traces"
+          python3 scripts/check-bridge-sync-traces "${{ runner.temp }}/bridge-system-traces"
       - name: portal, WebDAV and real Nextcloud synchronization
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: python3 scripts/check-nextcloud-bridge
@@ -121,6 +134,10 @@ jobs:
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
       - name: real RPC pages, concurrent reads, bounded retries and corrupted observations
         run: python3 scripts/check-bridge-catalogue-traces
+      - name: persisted identities, queued revocation and corrupted observations
+        run: python3 scripts/check-bridge-lifecycle-traces
+      - name: conditional saves, uncertain responses and corrupted observations
+        run: python3 scripts/check-bridge-sync-traces
 
   selected-checks:
     name: Bridge selection verified

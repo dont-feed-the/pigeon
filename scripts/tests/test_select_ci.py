@@ -43,6 +43,11 @@ class DependencyGroups(unittest.TestCase):
     def test_annex_changes_cover_stock_contract_and_runtime_users(self):
         self.assertEqual(self.groups("third_party/git-annex/patches/fix.patch"), MODULE.RUNTIME | {"lab", "packaging"})
 
+    def test_bridge_contract_changes_also_replay_real_multi_peer_transactions(self):
+        self.assertEqual(self.groups("models/tla/BridgeSyncTrace.tla"), MODULE.FORMAL | {"bridge"})
+        for path in ["scripts/check-bridge-lifecycle-traces", "scripts/check-bridge-sync-traces"]:
+            self.assertEqual(self.groups(path), {"bridge", "bridge_traces"})
+
     def test_mixed_changes_union_all_required_consumers(self):
         self.assertEqual(self.groups("docs/note.md", "packaging/pigeon-service", "models/tla/Purge.tla"),
                          MODULE.FORMAL | {"packaging"})

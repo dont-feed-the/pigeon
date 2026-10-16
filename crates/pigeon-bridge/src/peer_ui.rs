@@ -32,6 +32,9 @@ impl Backend {
                 return Err(forbidden());
             }
             let socket = self.app.peers.checked(&client).await.map_err(unavailable)?;
+            self.app
+                .lifecycle_trace
+                .route(&client, &session.user, &socket);
             rpc::call(&socket, request).await.map_err(unavailable)
         } else {
             let session = auth::session(&self.app, &self.headers)
@@ -43,6 +46,9 @@ impl Backend {
                 .users
                 .get(&session.user)
                 .ok_or_else(forbidden)?;
+            self.app
+                .lifecycle_trace
+                .control(&session.user, &user.control_socket);
             rpc::call(&user.control_socket, request)
                 .await
                 .map_err(unavailable)

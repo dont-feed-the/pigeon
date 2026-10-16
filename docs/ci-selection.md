@@ -18,6 +18,7 @@ none of its required checks was weakened or made optional.
 | Root README, handoff, changelog or Markdown under `docs/` | No expensive jobs |
 | Installer, service scripts, packaging tests or Homebrew formula | Packaging |
 | Formal models, configurations or proof tooling | Proofs, fast models and core/daemon/bridge trace validation |
+| Bridge protocol models or their trace checkers | Their formal/trace checks and the real multi-peer Nextcloud integration |
 | Bridge crate | Rust workspace, real Nextcloud integration and bridge traces |
 | Other existing Rust crates | Rust workspace, daemon shards, core/daemon/bridge traces and real Nextcloud integration |
 | Patched git-annex or its laboratory scripts | Runtime consumers above, stock git-annex laboratory and packaging |

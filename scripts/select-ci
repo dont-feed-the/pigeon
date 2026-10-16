@@ -98,6 +98,8 @@ def classify(paths, ignored=()):
             groups = RUNTIME
         elif path.startswith("models/catalogue/"):
             groups = {"catalogue", "code_traces", "bridge_traces"}
+        elif path.startswith("models/tla/Bridge"):
+            groups = FORMAL | {"bridge"}
         elif path.startswith("models/") or path in {"scripts/check-proofs", "scripts/proof-inputs",
                 "scripts/run-tlc", "scripts/trace-to-tla", "scripts/check-authority-folds"} or path.startswith("scripts/formal/"):
             groups = FORMAL
@@ -105,6 +107,8 @@ def classify(paths, ignored=()):
             groups = {"bridge"}
         elif path == "scripts/check-bridge-catalogue-traces":
             groups = {"bridge_traces"}
+        elif path in {"scripts/check-bridge-lifecycle-traces", "scripts/check-bridge-sync-traces"}:
+            groups = {"bridge", "bridge_traces"}
         elif path in {"scripts/check-code-traces", "scripts/check-driver-traces"}:
             groups = FORMAL
         elif path.startswith("scripts/tests/test_proof_"):

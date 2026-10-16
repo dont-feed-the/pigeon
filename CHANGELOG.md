@@ -4,7 +4,7 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
-## 0.5.11 — 2026-10-16
+## 0.5.12 — 2026-10-16
 
 ### Changed
 
@@ -12,6 +12,25 @@ the second number, and every other pull request the third.
   installer and formal-model changes avoid unrelated expensive jobs, while
   shared dependencies, unknown paths and CI changes retain broader checks.
   Releases and periodic validation still run the full set.
+
+## 0.5.11 — 2026-10-16
+
+### Fixed
+
+- A client-management page, download or conflict action queued behind client
+  revocation now checks the updated access state before contacting that peer.
+- Reusing a shared content object after an interrupted publication completes
+  its directory sync before reporting success.
+- Pending suggestions keep their author's identity after the signing client
+  is revoked, so the person's remaining devices can still manage them.
+- Concurrent saves from separate clients no longer leave a hidden conflict
+  that stops later synchronization. Existing affected peers recover when the
+  saved version is safely retained under its conflict filename.
+
+### Changed
+
+- Client revocation addresses the saved signing key directly, so a change to
+  a computer's name cannot redirect its roster removal.
 
 ## 0.5.10 — 2026-10-16
 
