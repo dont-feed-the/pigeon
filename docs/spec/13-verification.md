@@ -306,7 +306,7 @@ from this specification as follows, each to close before S1–S11 run
   stops serving once its repository is lost, and reports no proposals,
   scrub or purge;
 - the creator's person ID is `$USER`, and a joining device is named by
-  `join --name`, else `<host name>-<6 hex digits of its device ID>`;
+  `join --name`, else `<computer name>-<6 hex digits of its device ID>`;
 - the CLI parses its arguments with `clap` and completes them in the
   shell, but has no colour ([10 §10.2](10-interfaces.md));
 - one round runs, per group, the settings check, free and keep toward each

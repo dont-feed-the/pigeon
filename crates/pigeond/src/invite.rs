@@ -175,14 +175,6 @@ fn parse(addresses: &[String]) -> Vec<std::net::SocketAddr> {
     addresses.iter().filter_map(|a| a.parse().ok()).collect()
 }
 
-fn hostname() -> String {
-    std::fs::read_to_string("/etc/hostname")
-        .ok()
-        .map(|h| h.trim().to_owned())
-        .filter(|h| !h.is_empty())
-        .unwrap_or_else(|| "backup".to_owned())
-}
-
 /// The name of this computer's account, which a person who gives none
 /// is called: `$USER`, else `Me`.
 pub fn account() -> String {
@@ -245,7 +237,7 @@ pub async fn join(d: &Daemon, ask: Ask) -> Result<String, String> {
         } else {
             Role::Laptop
         },
-        name: given(ask.name).unwrap_or_else(|| format!("{}-{short}", hostname())),
+        name: given(ask.name).unwrap_or_else(|| format!("{}-{short}", pigeon_sys::host::name())),
         inv,
     };
     match j.role {

@@ -353,15 +353,6 @@ pub fn absolute(path: &str) -> String {
         .into_owned()
 }
 
-fn hostname() -> String {
-    std::fs::read_to_string("/etc/hostname")
-        .ok()
-        .or_else(|| std::env::var("HOSTNAME").ok())
-        .map(|h| h.trim().to_owned())
-        .filter(|h| !h.is_empty())
-        .unwrap_or_else(|| "computer".to_owned())
-}
-
 /// The arguments before `--`, where options are.
 fn options(args: &[String]) -> impl Iterator<Item = &str> {
     args.iter().map(String::as_str).take_while(|a| *a != "--")
@@ -421,7 +412,7 @@ fn action(c: Command) -> Action {
             name,
             folder: absolute(folder.or(at).as_deref().unwrap_or(".")),
             k,
-            device_name: device_name.unwrap_or_else(hostname),
+            device_name: device_name.unwrap_or_else(pigeon_sys::host::name),
         }),
         Command::Invite => send(Request::Invite),
         Command::Join {

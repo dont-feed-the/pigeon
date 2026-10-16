@@ -3046,9 +3046,11 @@ dependencies = [
 name = "pigeon-sys"
 version = "0.5.13"
 dependencies = [
+ "core-foundation",
  "dirs",
  "libc",
  "rustix",
+ "system-configuration-sys",
  "tempfile",
  "thiserror 2.0.21",
 ]

@@ -37,6 +37,14 @@ increments the second number, and every other release the third.
 - `pigeon update` updates the installation it belongs to, wherever it is.
   On a backup machine, `sudo /opt/pigeon/bin/pigeon update` now works too.
 
+### Fixed
+
+- A Mac that runs `pigeon join` without `--name` is listed under its own
+  name, such as "Robin’s MacBook Air-49d313", instead of "backup-49d313",
+  which made a laptop look like a backup machine; `pigeon create` names it
+  "Robin’s MacBook Air" instead of "computer". On a Mac pigeon takes the
+  name of System Settings → General → Sharing, elsewhere the host name.
+
 ### Removed
 
 - The Homebrew tap. On a Mac installed with Homebrew, run

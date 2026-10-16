@@ -152,7 +152,9 @@ unpadded base32 of its JSON (`invitations_round_trip`):
 the line did not give: the folder (the group's name in the home folder by
 default; none for a backup machine) and the person's name (the account's,
 `$USER`, by default). `--name` names the computer in the roster, else
-`<host name>-<6 hex digits of its device ID>` **[no ADR]**.
+`<computer name>-<6 hex digits of its device ID>`, the computer name being
+the one of Sharing settings on macOS and the host name up to its first dot
+elsewhere (`pigeon-sys::host`) **[no ADR]**.
 
 | # | Who | Step |
 |---|---|---|
