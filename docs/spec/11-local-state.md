@@ -14,7 +14,8 @@
   (`state-format-too-new`), an older one upgraded by an atomic rewrite.
 - **One writer**, `pigeond` (ADR 0011); people may also edit `config.toml`.
 - **Atomic writes:** temporary file in the same directory, fsync, rename,
-  fsync the directory.
+  fsync the directory. `update-wanted` alone is written in place: it holds
+  no state, and its write is the signal the supervisors watch.
 
 ## 11.2 Per-user files
 
@@ -24,6 +25,7 @@
 | `<config>/device-key` · `device-key.pub` | the device key, OpenSSH format, mode 0600 ([09 §9.1](09-network-and-joining.md)) |
 | `<state>/logs/` | JSON log lines, daily files, seven kept (ADR 0022, [12](12-observability.md)) |
 | `<state>/telemetry/` | the bounded local OTLP-JSON files (ADR 0025) |
+| `<state>/update-wanted` | the newer release a peer runs; each write asks the supervisor for the automatic update ([14 §14.5](14-platforms-and-packaging.md), ADR 0076) |
 | `<state>/traces/` | trace events, only with the `tla-trace` feature (ADR 0008) |
 | `<cache>/view/` | read-only copies opened by `pigeon view` (ADR 0035) |
 | `<cache>/bin/` | links first in the children's `PATH`: the transport helper, and `git-remote-p2p-annex` where git-annex installs none ([14 §14.3](14-platforms-and-packaging.md)) |

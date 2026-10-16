@@ -7,6 +7,19 @@ increments the second number, and every other release the third.
 
 ## Unreleased
 
+### Added
+
+- pigeon updates itself. Every computer and backup machine installs the
+  latest release once a day, and within minutes when another computer of
+  the group runs a newer release. The update downloads the installer
+  afresh from GitHub, so a release that broke pigeon is replaced by the
+  next one. It shows nothing; `journalctl --user -u pigeon-update`
+  (macOS: `~/Library/Logs/pigeon/update.log`) tells what it did.
+  `pigeon update --auto off` turns it off and `--auto on` back on; to
+  install with it off, use `curl … | sh -s -- --auto off`. A build of main
+  is never replaced. Installations from before this release get it after
+  one `pigeon update`.
+
 ### Changed
 
 - A computer is now in one group only. `pigeon create`, `pigeon join` and
@@ -19,6 +32,8 @@ increments the second number, and every other release the third.
   it at once, even as the group's last admin computer; its files stay in
   the folder. It used to refuse, so a group created by mistake could not be
   left.
+- `pigeon update` updates the installation it belongs to, wherever it is.
+  On a backup machine, `sudo /opt/pigeon/bin/pigeon update` now works too.
 
 ### Fixed
 
@@ -30,6 +45,12 @@ increments the second number, and every other release the third.
 - A computer that left its last group and then created or joined another
   one, without restarting pigeon, no longer changes identity at the next
   restart, which made the new group no longer recognise it.
+
+### Removed
+
+- The Homebrew tap. On a Mac installed with Homebrew, run
+  `brew services stop pigeon` and `brew uninstall pigeon`, then the
+  install line of the README; your folders, groups and device key stay.
 
 ## 0.5.12 — 2026-10-16
 

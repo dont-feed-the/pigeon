@@ -80,6 +80,7 @@ pub mod trace;
 mod trace_index;
 pub mod trace_roster;
 pub mod trace_state;
+pub mod update;
 pub mod util;
 pub mod verify;
 pub mod view;

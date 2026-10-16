@@ -60,7 +60,7 @@ asks for none. Grouped by file, so that a few ADRs could cover them.
 | 13 | the first build's port kept in `<state>/port`, direct addresses in a stream's header and a join's welcome, re-thinning by hard link on every file system, of a file unchanged for a minute and hashed before it is moved aside, `disk-full` when free space is below `annex.diskreserve`; a backup machine writes and signs a recovery's roster commit itself, where ADR 0047 has the sheet key sign (§13.12) |
 | 13 | mandatory storage-boundary observations, their corrupted variants and missing-coverage checks; these do not claim full filesystem-driver refinement (§13.3) |
 | [14](14-platforms-and-packaging.md) | minimum OS versions (§14.1); the file-system list (§14.2); minimum git and git-annex per platform, and the platforms pigeon's git-annex is built for (§14.3); the `MemoryHigh` value (§14.4) |
-| 14 | the Homebrew tap and release signing (§14.5); the crate layout, edition and pinned toolchain (§14.6); `hmac`, `sha2`, `data-encoding`, `qrcode`, `rustix`, `libc` (§14.7) |
+| 14 | release signing (§14.5, ADR 0076); the crate layout, edition and pinned toolchain (§14.6); `hmac`, `sha2`, `data-encoding`, `qrcode`, `rustix`, `libc` (§14.7) |
 | [15](15-resource-use.md), within ADR 0037 | the shaper's constants and history exchange on metered networks (§15.3); disk-busy thresholds and back-off (§15.4); presets (§15.6); the reference tree and memory budget (§15.7) |
 
 ### Rules that were Proposed ADRs

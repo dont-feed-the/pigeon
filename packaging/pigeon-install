@@ -4,17 +4,20 @@
 # --version's, checked against its SHA256SUMS; with --main, main's latest
 # commit, built in PREFIX/src. The new copy of this script places it: the
 # programs in PREFIX/bin (the old ones in bin.previous), git-annex (14 §14.3),
-# a link in ~/.local/bin, pigeond's unit or agent (14 §14.4) and the launcher
-# (ADR 0029). A release already here is not fetched again. With --join, which
-# takes the rest of the arguments, it then runs `pigeon join` on the terminal.
+# a link in ~/.local/bin, pigeond's unit or agent (14 §14.4) with the
+# automatic update (ADR 0076), and the launcher (ADR 0029). A release already
+# here is not fetched again. With --join, which takes the rest of the
+# arguments, it then runs `pigeon join` on the terminal.
 #
 #   curl -fsSL https://github.com/dont-feed-the/pigeon/releases/latest/download/pigeon-install | sh
-#   pigeon-install [--version vX.Y.Z | --main | --rollback | --uninstall] [--system]
+#   pigeon-install [--version vX.Y.Z | --main | --rollback | --uninstall | --auto on|off] [--system]
 #   pigeon-install --join INVITATION [FOLDER] [--person NAME] [--backup-machine]
 #
-# --rollback puts PREFIX/bin.previous back; --no-service starts nothing.
-# PIGEON_RELEASES names a directory laid out as GitHub's releases, and
-# PIGEON_REPOSITORY the repository --main fetches, for tests.
+# --auto turns the automatic update on or off, installing only where nothing
+# is; --unattended, its own run, leaves an update turned off and a build of
+# main alone. --rollback puts PREFIX/bin.previous back; --no-service starts
+# nothing. PIGEON_RELEASES names a directory laid out as GitHub's releases,
+# and PIGEON_REPOSITORY the repository --main fetches, for tests.
 set -eu
 
 releases=${PIGEON_RELEASES:-https://github.com/dont-feed-the/pigeon/releases}
@@ -57,7 +60,7 @@ esac
 # quote ARG: ARG as one word of sh, for eval.
 quote() { printf "'%s' " "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
 
-version= rollback= main= uninstall= system= service=1 place= custom_prefix= joining= join_args=
+version= rollback= main= uninstall= system= service=1 place= custom_prefix= joining= join_args= auto= unattended=
 while [ $# -gt 0 ]; do
   case $1 in
     --join)
@@ -70,14 +73,23 @@ while [ $# -gt 0 ]; do
     --rollback) rollback=1; shift ;;
     --main) main=1; shift ;;
     --uninstall) uninstall=1; shift ;;
+    --auto)
+      case ${2:-} in on | off) auto=$2 ;; *) die "--auto needs on or off" ;; esac
+      shift 2 ;;
+    --unattended) unattended=1; shift ;;
     --system) system=1; shift ;;
     --prefix) prefix=${2:?--prefix needs a directory}; custom_prefix=1; shift 2 ;;
     --no-service) service=; shift ;;
     --place) place=${2:?}; shift 2 ;;
-    -h | --help) sed -n '2,14s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,15s/^# \{0,1\}//p' "$0"; exit 0 ;;
     *) die "unknown argument $1" ;;
   esac
 done
+# An installation that the system unit runs is a backup machine's.
+if [ -z "$system" ] && [ "$os" = linux ] && [ "$(id -u)" = 0 ] && [ -n "$custom_prefix" ] &&
+  grep -qF "ExecStart=\"$prefix/bin/pigeond\"" /etc/systemd/system/pigeond.service 2>/dev/null; then
+  system=1
+fi
 if [ -n "$system" ]; then
   [ "$os" = linux ] || die "backup services require Linux"
   [ "$(id -u)" = 0 ] || die "run --system as root"
@@ -87,8 +99,8 @@ case $prefix in /*) ;; *) die "--prefix must name an absolute directory" ;; esac
 if [ -d "$prefix" ]; then prefix=$(cd "$prefix" && pwd -P); fi
 case $prefix in / | /usr | /usr/local | /opt | /bin | /sbin) die "use a directory reserved for pigeon" ;; esac
 if [ -z "$place" ]; then
-  case "${version:+v}${main:+m}${rollback:+r}${uninstall:+u}" in
-    ??*) die "choose one of --version, --main, --rollback and --uninstall" ;;
+  case "${version:+v}${main:+m}${rollback:+r}${uninstall:+u}${auto:+a}${unattended:+n}" in
+    ??*) die "choose one of --version, --main, --rollback, --uninstall and --auto" ;;
   esac
 fi
 
@@ -187,6 +199,30 @@ if [ -n "$uninstall" ]; then
   rm -rf "$prefix/bin" "$prefix/bin.previous" "$prefix/git-annex" "$prefix/git-annex.linux"
   say "pigeon is uninstalled; your folders, repositories, settings and device key are kept"
   exit 0
+fi
+
+# The choice of the automatic update (ADR 0076), kept in PREFIX across
+# installations. An installation whose helper knows it applies it at once;
+# else the latest release is installed, and applies it.
+if [ -n "$auto" ]; then
+  mkdir -p "$prefix"
+  if [ "$auto" = off ]; then : >"$prefix/auto-update-off"; else rm -f "$prefix/auto-update-off"; fi
+  helper="$prefix/bin/pigeon-service"
+  if [ -x "$helper" ] && grep -q -- --update-only "$helper"; then
+    if [ -n "$service" ]; then
+      if [ -n "$system" ]; then set -- --system; else set --; fi
+      "$helper" --prefix "$prefix" --update-only "$@"
+    fi
+    say "the automatic update is $auto"
+    finish
+  fi
+fi
+
+# The automatic update's run leaves alone what a person chose.
+if [ -n "$unattended" ]; then
+  if [ ! -d "$prefix/bin" ]; then say "pigeon is not installed in $prefix"; exit 0; fi
+  if [ -f "$prefix/auto-update-off" ]; then say "the automatic update is off"; exit 0; fi
+  case $(installed bin) in *+g*) say "pigeon $(installed bin), a build of main, stays"; exit 0 ;; esac
 fi
 
 if [ -n "$rollback" ]; then

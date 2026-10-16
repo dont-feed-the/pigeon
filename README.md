@@ -15,17 +15,9 @@ curl -fsSL https://github.com/dont-feed-the/pigeon/releases/latest/download/pige
 
 ## Update
 
-```sh
-pigeon update
-```
-
-Apple Silicon Macs can also use the Homebrew tap:
-
-```sh
-brew tap dont-feed-the/pigeon https://github.com/dont-feed-the/pigeon
-brew install pigeon
-brew services start pigeon
-```
+pigeon updates itself every day, and within minutes when another computer
+of the group runs a newer release. `pigeon update` updates now;
+`pigeon update --auto off` turns the automatic update off.
 
 ## Use
 
