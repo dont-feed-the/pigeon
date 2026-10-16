@@ -112,15 +112,25 @@ fn local_published_protected_then_free_and_keep() {
     let web = common::web::login(&lap);
     let files = common::web::page(&web, "/files");
     assert!(
-        files.contains("sub: Safe, 1 file") && !files.contains("Waiting for 1 file"),
+        files.contains("data-name=\"sub\"")
+            && files.contains("1 file")
+            && !files.contains("Waiting for 1 file"),
         "{files}"
     );
-    // The nested page offers actions for this scope; the parent does not
-    // promise that intentionally freed files will download themselves.
+    // The nested page says it is not on this computer and offers to keep
+    // it; the parent does not promise that freed files download themselves.
     // The folder's page lists its file; the file's page its version.
     let listed = common::web::page(&web, &format!("/folder?path={}", sub.display()));
-    assert!(listed.contains("sub/2019/big.bin: Safe"), "{listed}");
-    assert!(listed.contains("action=\"/files/free\"") && listed.contains("action=\"/files/keep\""));
+    assert!(
+        listed.contains("data-name=\"big.bin\"") && listed.contains("Safe"),
+        "{listed}"
+    );
+    assert!(
+        listed.contains("action=\"/files/keep\"")
+            && !listed.contains("action=\"/files/free\"")
+            && listed.contains("This folder is not on this computer"),
+        "{listed}"
+    );
     assert!(listed.contains(&format!("name=\"folder\" value=\"{}\"", sub.display())));
     let file = common::web::page(
         &web,
@@ -205,7 +215,7 @@ fn local_published_protected_then_free_and_keep() {
     // its last version back (ux.md §6.2).
     std::fs::remove_file(folder.join("a.txt")).unwrap();
     eventually(
-        || common::web::page(&web, "/deleted").contains("a.txt, deleted"),
+        || common::web::page(&web, "/deleted").contains("data-name=\"a.txt\""),
         "a.txt is not under Deleted files",
         &all,
     );

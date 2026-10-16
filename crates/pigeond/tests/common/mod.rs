@@ -205,6 +205,29 @@ pub fn pigeon(d: &Daemon, args: &[&str]) -> Vec<Response> {
     all
 }
 
+/// Sends `request` to `d`'s socket, for a request no command sends; its
+/// result, progress left out.
+pub fn ask(d: &Daemon, request: &pigeon_proto::Request) -> Vec<Response> {
+    use std::io::{BufRead, Write};
+    let mut stream = std::os::unix::net::UnixStream::connect(&d.socket).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(180)))
+        .unwrap();
+    stream
+        .write_all(&pigeon_proto::encode(1, request).unwrap())
+        .unwrap();
+    let mut reader = std::io::BufReader::new(stream);
+    let mut line = String::new();
+    loop {
+        line.clear();
+        assert!(reader.read_line(&mut line).unwrap() > 0, "no answer");
+        let reply: pigeon_proto::Envelope<Response> = serde_json::from_str(&line).unwrap();
+        if !matches!(reply.body, Response::Progress { .. }) {
+            return vec![reply.body];
+        }
+    }
+}
+
 /// The text argument `name` of the message `id` that `rs` say.
 pub fn said(rs: &[Response], id: &str, name: &str) -> Option<String> {
     rs.iter().find_map(|r| match r {

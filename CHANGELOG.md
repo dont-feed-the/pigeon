@@ -39,11 +39,46 @@ increments the second number, and every other release the third.
   install with it off, use `curl … | sh -s -- --auto off`. A build of main
   is never replaced. Installations from before this release get it after
   one `pigeon update`.
+- `pigeon open` looks and works like a file manager. A sidebar holds the
+  sections and, on every page, whether your files are safe. **Files** shows
+  the folder you are in as a table, folders first, each with an icon by
+  kind, its state ("All safe", "2 not safe yet", "Only on this computer"),
+  its size and when it last changed; click a column to sort, type in the
+  box to filter by name, and follow the trail at the top to go back up.
+  Select a row (or its ⓘ) to see its details beside the table: its state,
+  who can change it, and a file's latest versions, each with *Open a copy*
+  and *Restore this version*, or a folder's *Keep on this computer* and
+  *Free up space*. Actions now run without leaving the page and say their
+  result in a message at the bottom. Dates show in your own time zone, and
+  the interface follows your system's light or dark mode.
+- Choose which folders are on this computer in `pigeon open`: every folder
+  in **Files** says whether it is on this computer, and whose it is when it
+  is someone else's folder ("Robin’s folder, not on this computer"), with
+  *Keep on this computer* or *Free up space*; a folder you chose says
+  "Your choice", with *Use the default*. **Folders on this computer**, under
+  Files, shows all the group's folders as a tree with a box each: tick or
+  untick them, folders inside following, and *Apply*. Folders not on this
+  computer stay safe on the backup machines, and freeing one waits until
+  its files are safe there.
+- A folder's README shows under its files, as on code-hosting sites:
+  `README.md` (or `README.markdown`) as formatted text, else `README` or
+  `README.txt` as plain text. Its links to files and folders of the group
+  open them in pigeon; pictures and links elsewhere are shown as links,
+  never loaded. A README whose folder is not on this computer, or longer
+  than 128 KB, says so, with a link to its page.
 
 ### Changed
 
 - `pigeon update` updates the installation it belongs to, wherever it is.
   On a backup machine, `sudo /opt/pigeon/bin/pigeon update` now works too.
+- Building pigeon from source now also needs Node.js 22.12 or later with
+  npm, which build the web interface's script; `pigeon update --main` and
+  `scripts/install-local` say so before building if it is missing. The
+  released programs need nothing new.
+- Release validation runs the same 50 random crash schedules in parallel
+  within each Linux shard, using different seeds. Longer filesystem trace
+  checks first try a faster witness search, retaining the full search and
+  all safety checks if it cannot explain the observations.
 
 ### Fixed
 
@@ -74,13 +109,6 @@ increments the second number, and every other release the third.
 - The Homebrew tap. On a Mac installed with Homebrew, run
   `brew services stop pigeon` and `brew uninstall pigeon`, then the
   install line of the README; your folders, groups and device key stay.
-
-### Changed
-
-- Release validation runs the same 50 random crash schedules in parallel
-  within each Linux shard, using different seeds. Longer filesystem trace
-  checks first try a faster witness search, retaining the full search and
-  all safety checks if it cannot explain the observations.
 
 ## 0.5.13 — 2026-10-16
 

@@ -138,6 +138,15 @@ pub enum Request {
         /// A file.
         path: String,
     },
+    /// The start of the accepted current version of a file, as text, for
+    /// the web's folder page (a README shown under its files). Read only
+    /// from content already on this computer; never fetched.
+    ReadText {
+        /// A file of the group, as an absolute path.
+        path: String,
+        /// At most this many bytes, which the daemon caps.
+        limit: u64,
+    },
     /// `pigeon restore PATH [--version N | --at TIME]`.
     Restore {
         /// A file or folder.
@@ -383,6 +392,16 @@ pub enum Response {
         /// Newest first.
         versions: Vec<VersionStatus>,
     },
+    /// The answer to `ReadText`.
+    Text {
+        /// The first bytes of the file, as UTF-8 (invalid sequences
+        /// replaced), cut at a character boundary.
+        text: String,
+        /// The whole file's size in bytes.
+        size: u64,
+        /// Whether `text` is only the start of the file.
+        truncated: bool,
+    },
     /// The answer to `Proposals`.
     Proposals {
         /// Oldest first.
@@ -605,6 +624,9 @@ pub struct Folder {
     /// Requested local files that have not arrived or been installed yet.
     #[serde(default)]
     pub arriving: u64,
+    /// The size in bytes of its files' current versions, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
 }
 
 /// A file of the group, with the state of its current version.
@@ -614,6 +636,13 @@ pub struct FileEntry {
     pub path: String,
     /// The state of its current version.
     pub state: State,
+    /// The size in bytes of its current version, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
+    /// When the copy on this computer last changed, RFC 3339; absent when
+    /// the file is not on this computer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub modified: Option<String>,
 }
 
 /// A folder and whether this computer keeps it (08 §8.5).

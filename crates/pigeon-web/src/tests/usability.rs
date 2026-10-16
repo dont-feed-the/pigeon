@@ -31,6 +31,8 @@ impl Backend for Recording {
                 files: vec![pigeon_proto::api::FileEntry {
                     path: "holiday.txt".into(),
                     state: State::Published,
+                    size: None,
+                    modified: None,
                 }],
             }],
             pigeon_proto::Request::Join {

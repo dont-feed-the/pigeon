@@ -456,6 +456,7 @@ impl Renderer {
                     .collect(),
                 false,
             ),
+            Response::Text { text, .. } => (vec![text.clone()], false),
             Response::Done
             | Response::Bridge { .. }
             | Response::Hello { .. }

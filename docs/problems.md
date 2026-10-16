@@ -57,6 +57,7 @@ are in `crates/pigeon-i18n/i18n/en/pigeon.ftl`; `{ $x }` is an argument.
 | `peer-too-new` | `P-PEER-TOO-NEW` | { $peer } runs a newer pigeon that this one can't follow. | — | … newer | ADR 0048 |
 | `settings-check` | `P-SETTINGS-CHECK` | The group's settings on this computer were changed outside pigeon; freeing space waits until they are restored. | — | the settings check could not put a setting back | [03 §3.5](spec/03-repository-and-roles.md) |
 | `receiving` | `P-RECEIVING` | A copy of this folder is still arriving. | Try again in a moment. | `keep` while a copy arrives | [10 §10.6](spec/10-interfaces.md) |
+| `content-not-here` | `P-CONTENT-NOT-HERE` | The content of { $path } is not on this computer. | Keep its folder on this computer to read it here, or open a copy from its page. | the web's folder page reads a README whose content is not on this computer (`ReadText` never fetches it) | [10 §10.3](spec/10-interfaces.md) |
 | `unknown-computer` | `P-UNKNOWN-COMPUTER` | The group has no computer named { $name }. | See the names with: pigeon machines | `remove-computer` with a name the roster lacks | [10 §10.6](spec/10-interfaces.md) |
 | `usage` | `P-USAGE` | “{ $command }” was given the wrong arguments. | See: pigeon help | the CLI's arguments do not parse (exit code 2) | [10 §10.2](spec/10-interfaces.md) |
 | `not-a-pigeon-repository` | `P-NOT-A-PIGEON-REPOSITORY` | This folder is not shared with pigeon. | — | a path that is no group's folder | [10 §10.6](spec/10-interfaces.md) |

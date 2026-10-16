@@ -28,7 +28,11 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(49)) {
+    match tc.draw(gs::integers::<u8>().max_value(50)) {
+        50 => Request::ReadText {
+            path: text(tc),
+            limit: tc.draw(gs::integers::<u64>()),
+        },
         49 => Request::ForgetChoice { folder: text(tc) },
         48 => Request::Sync {
             folder: tc.draw(gs::booleans()).then(|| text(tc)),
@@ -212,7 +216,7 @@ fn version(tc: &TestCase) -> VersionStatus {
 }
 
 fn response(tc: &TestCase) -> Response {
-    match tc.draw(gs::integers::<u8>().max_value(21)) {
+    match tc.draw(gs::integers::<u8>().max_value(22)) {
         21 => Response::Sync {
             root: text(tc),
             folders: (0..tc.draw(gs::integers::<u8>().max_value(3)))
@@ -223,6 +227,11 @@ fn response(tc: &TestCase) -> Response {
                     others: tc.draw(gs::booleans()).then(|| text(tc)),
                 })
                 .collect(),
+        },
+        22 => Response::Text {
+            text: text(tc),
+            size: tc.draw(gs::integers::<u64>()),
+            truncated: flag(tc),
         },
         20 => Response::FolderRules(Box::new(pigeon_proto::policy::Report {
             root: text(tc),
@@ -350,6 +359,7 @@ fn response(tc: &TestCase) -> Response {
                     state: state(tc),
                     freed: flag(tc),
                     arriving: tc.draw(gs::integers::<u64>()),
+                    size: flag(tc).then(|| tc.draw(gs::integers::<u64>())),
                 })
                 .collect(),
         },
@@ -359,6 +369,8 @@ fn response(tc: &TestCase) -> Response {
                 .map(|_| FileEntry {
                     path: text(tc),
                     state: state(tc),
+                    size: flag(tc).then(|| tc.draw(gs::integers::<u64>())),
+                    modified: maybe_text(tc),
                 })
                 .collect(),
         },

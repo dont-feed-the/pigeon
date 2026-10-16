@@ -175,6 +175,12 @@ jobs:
             target
           key: rust-${{ matrix.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: rust-${{ matrix.os }}-
+      - name: Node, which builds the web interface's script (ADR 0077)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: crates/pigeon-web/client/.nvmrc
+          cache: npm
+          cache-dependency-path: crates/pigeon-web/client/package-lock.json
       - name: the pinned toolchain (rust-toolchain.toml)
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
       - name: cargo-nextest at its pinned version
@@ -285,6 +291,12 @@ jobs:
             target
           key: rust-lab-${{ matrix.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: rust-lab-${{ matrix.os }}-
+      - name: Node, which builds the web interface's script (ADR 0077)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: crates/pigeon-web/client/.nvmrc
+          cache: npm
+          cache-dependency-path: crates/pigeon-web/client/package-lock.json
       - name: the pinned toolchain (rust-toolchain.toml)
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
       - name: cargo-nextest at its pinned version
@@ -412,6 +424,12 @@ jobs:
         with:
           path: ~/.cache/pigeon
           key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
+      - name: Node, which builds the web interface's script (ADR 0077)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: crates/pigeon-web/client/.nvmrc
+          cache: npm
+          cache-dependency-path: crates/pigeon-web/client/package-lock.json
       - name: the pinned toolchain (rust-toolchain.toml)
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
       - name: observations and every semantic, schema and pipeline mutant

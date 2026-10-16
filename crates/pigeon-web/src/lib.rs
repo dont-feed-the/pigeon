@@ -1,7 +1,8 @@
-//! pigeon's local web interface (ADR 0021, 10 §10.3): pages rendered on
-//! the server from the requests of 10 §10.1, in the person's language
-//! (ADR 0028), refreshed by server-sent events, that work without
-//! JavaScript. It writes nothing itself: every page asks [`Backend`].
+//! pigeon's local web interface (ADRs 0021, 0077, 10 §10.3): pages rendered
+//! on the server from the requests of 10 §10.1, in the person's language
+//! (ADR 0028), that work without JavaScript, enhanced by an embedded client
+//! script that follows server-sent events. It writes nothing itself: every
+//! page asks [`Backend`].
 //!
 //! Who may see them: the server listens on 127.0.0.1 only. `pigeon open`
 //! asks `pigeond` for a link holding a single-use token of 256 random bits
@@ -27,19 +28,27 @@ use axum::routing::{get, post};
 use pigeon_i18n::Catalogue;
 
 mod actions;
+mod assets;
+mod browse;
+mod details;
 mod erase;
 mod files;
 mod folder_rules;
+mod format;
 mod health;
 mod held;
+mod icons;
 mod join;
 mod leave;
 mod machines;
 mod pages;
+mod readme;
 mod recovery;
 mod render;
 mod settings;
+mod shell;
 mod space;
+mod sync;
 mod view;
 
 use render::Renderer;
@@ -87,6 +96,11 @@ impl std::fmt::Debug for Web {
             .field("port", &self.port)
             .finish_non_exhaustive()
     }
+}
+
+/// The client script's path under a mount, for hosts that check it.
+pub fn script_path() -> String {
+    format!("/assets/{}", assets::SCRIPT.name)
 }
 
 /// Seconds since the epoch.
@@ -185,7 +199,9 @@ impl Web {
             .fallback(pages::not_found)
             .route_layer(middleware::from_fn_with_state(self.clone(), session))
             .route("/login", get(login))
+            .route("/assets/{name}", get(assets::serve))
             .layer(middleware::from_fn_with_state(self.clone(), same_origin))
+            .layer(middleware::from_fn(assets::headers))
             .with_state(self.clone())
     }
 
@@ -196,23 +212,22 @@ impl Web {
     pub fn embedded_router(self: &Arc<Web>, form_token: String) -> Router {
         self.pages()
             .layer(axum::Extension(FormToken(form_token)))
+            .route("/assets/{name}", get(assets::serve))
             .with_state(self.clone())
     }
 
     fn pages(&self) -> Router<Arc<Web>> {
         let routes = Router::new()
             .route("/", get(pages::home))
-            .route("/live.js", get(pages::script))
-            .route("/copy.js", get(machines::copy_script))
             .route("/machines", get(machines::machines))
             .route("/machines/remove", post(machines::remove))
             .route("/machines/recovery-sheet", post(recovery::sheet))
             .route("/suggestions", get(pages::suggestions))
             .route("/events", get(pages::events))
-            .route("/files", get(files::files))
+            .route("/files", get(browse::files))
             .route("/space", get(space::page))
             .route("/erase", get(erase::view).post(erase::submit))
-            .route("/folder", get(files::folder_page))
+            .route("/folder", get(browse::folder_page))
             .route(
                 "/folder-rule",
                 get(folder_rules::view).post(folder_rules::set),
@@ -236,6 +251,8 @@ impl Web {
             routes
                 .route("/files/keep", post(actions::keep))
                 .route("/files/free", post(actions::free))
+                .route("/files/forget", post(sync::forget_choice))
+                .route("/folders", get(sync::view).post(sync::apply))
         } else {
             routes
         };

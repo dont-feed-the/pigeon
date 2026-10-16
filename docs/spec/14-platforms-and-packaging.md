@@ -168,7 +168,7 @@ applies it. The update shows nothing and is retried the next day.
 | `pigeon-git` | lib | drivers for git and git-annex: batch processes, JSON parsing, contract tests (ADRs 0004, 0010) | yes |
 | `pigeon-sys` | lib | the platform layer: renames, signals, `fadvise`, pressure, battery and metered probes, sockets (ADR 0037) | yes |
 | `pigeon-telemetry` | lib | the only crate depending on `opentelemetry*` (ADR 0025) | yes |
-| `pigeon-web` | lib | axum routes and maud pages (ADR 0021) | through `pigeon-proto` |
+| `pigeon-web` | lib | axum routes and maud pages, and the embedded TypeScript client (ADR 0077) | through `pigeon-proto` |
 | `pigeond` | bin | the daemon: loops, iroh endpoint, socket, web server | yes |
 | `pigeon` | bin | the CLI (ADR 0024) | socket only; `update` runs the installer beside it (§14.5) |
 | `git-annex-p2p-iroh` | bin | the transport helper (ADR 0006) | socket and stdio only |

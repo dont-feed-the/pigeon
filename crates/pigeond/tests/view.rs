@@ -9,9 +9,9 @@ mod common;
 
 use std::os::unix::fs::PermissionsExt;
 
-use common::{SERIAL, dirs, eventually_within, pigeon, said, start, until};
-use pigeon_proto::Response;
+use common::{SERIAL, ask, dirs, eventually_within, pigeon, said, start, until};
 use pigeon_proto::api::State;
+use pigeon_proto::{Request, Response};
 
 #[test]
 fn a_version_opens_as_a_read_only_copy_outside_the_folder() {
@@ -59,5 +59,71 @@ fn a_version_opens_as_a_read_only_copy_outside_the_folder() {
         none.iter()
             .any(|r| matches!(r, Response::Problem(p) if p.code == "no-such-version")),
         "{none:?}"
+    );
+}
+
+/// `ReadText`, the web's README: the start of the accepted version, read
+/// from this computer, and nothing outside the group's annexed files.
+#[test]
+fn read_text_answers_the_start_of_an_accepted_file_and_nothing_else() {
+    let _one = SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some((_tmp, root, sockets)) = dirs() else {
+        return;
+    };
+    let a1 = start(&root, sockets.path(), "a1");
+    let all = [&a1];
+    let fa = root.join("ana");
+    std::fs::create_dir_all(fa.join("docs")).unwrap();
+    std::fs::write(fa.join("docs/README.md"), "# Docs\n\nHello, world.\n").unwrap();
+    let f = fa.to_str().unwrap();
+    let created = pigeon(&a1, &["create", "Family", f, "--k", "1", "--name", "ana-1"]);
+    assert!(said(&created, "created", "group").is_some(), "{created:?}");
+    until(&a1, State::Local, &all);
+    let read = |path: String, limit: u64| ask(&a1, &Request::ReadText { path, limit });
+    let readme = format!("{f}/docs/README.md");
+    eventually_within(
+        120,
+        || {
+            read(readme.clone(), 1000).iter().any(|r| {
+                matches!(r, Response::Text { text, size: 22, truncated: false }
+                    if text == "# Docs\n\nHello, world.\n")
+            })
+        },
+        "the README was never readable",
+        &all,
+    );
+    let listed = ask(
+        &a1,
+        &Request::Files {
+            folder: format!("{f}/docs"),
+        },
+    );
+    assert!(
+        matches!(listed.as_slice(), [Response::Files { files, .. }]
+            if files.iter().any(|e| e.path == "docs/README.md"
+                && e.size == Some(22) && e.modified.is_some())),
+        "the listing has the README's size and time: {listed:?}"
+    );
+    let start = read(readme.clone(), 6);
+    assert!(
+        matches!(start.as_slice(), [Response::Text { text, size: 22, truncated: true }] if text == "# Docs"),
+        "{start:?}"
+    );
+    for refused in [format!("{f}/.pigeon/roster.toml"), format!("{f}/docs")] {
+        let answer = read(refused, 1000);
+        assert!(
+            matches!(answer.as_slice(), [Response::Problem(p)] if p.code == "no-such-version"),
+            "{answer:?}"
+        );
+    }
+    let outside = read(
+        root.join("elsewhere.txt").to_string_lossy().into_owned(),
+        10,
+    );
+    assert!(
+        matches!(outside.as_slice(), [Response::Problem(p)] if p.code == "not-in-group"),
+        "{outside:?}"
     );
 }

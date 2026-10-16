@@ -5,7 +5,8 @@
 //! while the folder keeps the person's own; `--version N` any version of
 //! the history, numbered from 1, the oldest, as `history` numbers them;
 //! neither, the current one. Copies older than seven days are removed at
-//! each view.
+//! each view. `ReadText` instead answers the start of the group's current
+//! version as text, for the web's README, from content already here.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -114,6 +115,77 @@ pub async fn view(d: &Daemon, path: &Path, version: Option<u64>, group: bool) ->
         }],
         Err(e) => vec![problem("internal-error", &[], Some(e.to_string()))],
     }
+}
+
+/// The most `ReadText` answers, whatever it asks for: even escaped as
+/// JSON control characters, six bytes each, it fits one line of the socket.
+pub const READ_CAP: u64 = 128 << 10;
+
+/// `ReadText`: the first `limit` bytes of the accepted current version of
+/// `path`, a file of the group. Only annexed files of `main` are read, so
+/// neither pigeon's own files nor anything outside the folder is; and only
+/// from this computer's content, which is never fetched for it.
+pub async fn text(d: &Daemon, path: &Path, limit: u64) -> Vec<Response> {
+    let Some(g) = d.group_at(path).or_else(|| d.group_at(path.parent()?)) else {
+        return vec![problem("not-in-group", &[], None)];
+    };
+    let Some(rel) = relative(&g, path) else {
+        return vec![problem("not-in-group", &[], None)];
+    };
+    let keys = match g.git.rev("refs/heads/main").await {
+        Some(m) => g.git.keys(&m).await.unwrap_or_default(),
+        None => Default::default(),
+    };
+    let Some(key) = keys.get(&rel) else {
+        let args = [
+            ("path", Arg::Text(rel)),
+            ("version", Arg::Text("main".into())),
+        ];
+        return vec![problem("no-such-version", &args, None)];
+    };
+    let Some(object) = crate::custody::present(&g, key).await else {
+        return vec![problem(
+            "content-not-here",
+            &[("path", Arg::Text(rel))],
+            None,
+        )];
+    };
+    match read_start(&object, limit.min(READ_CAP)) {
+        Ok((text, size, truncated)) => vec![Response::Text {
+            text,
+            size,
+            truncated,
+        }],
+        Err(e) => vec![problem("internal-error", &[], Some(e.to_string()))],
+    }
+}
+
+/// The first `limit` bytes of `file` as UTF-8, cut at a character
+/// boundary, with the file's size and whether more follows.
+fn read_start(file: &Path, limit: u64) -> std::io::Result<(String, u64, bool)> {
+    use std::io::Read;
+    let f = std::fs::File::open(file)?;
+    let size = f.metadata()?.len();
+    let mut bytes = Vec::new();
+    f.take(limit).read_to_end(&mut bytes)?;
+    let truncated = size > limit;
+    Ok((utf8_start(bytes, truncated), size, truncated))
+}
+
+/// `bytes` as text; when `cut`, an incomplete last character is dropped
+/// rather than shown as a replacement.
+fn utf8_start(mut bytes: Vec<u8>, cut: bool) -> String {
+    if cut {
+        for _ in 0..3 {
+            match std::str::from_utf8(&bytes) {
+                Err(e) if e.error_len().is_none() => {
+                    bytes.truncate(e.valid_up_to());
+                }
+                _ => break,
+            }
+        }
+    }
+    String::from_utf8_lossy(&bytes).into_owned()
 }
 
 /// Open only a changed path from a currently pending, verified proposal.
@@ -253,6 +325,28 @@ mod tests {
         assert_ne!(
             native.metadata().unwrap().ino(),
             object.metadata().unwrap().ino()
+        );
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used, reason = "test fixtures")]
+    fn read_text_answers_the_start_cut_at_a_character() {
+        let temp = tempfile::tempdir().unwrap();
+        let file = temp.path().join("README.md");
+        std::fs::write(&file, "# Été\nbody").unwrap();
+        assert_eq!(
+            super::read_start(&file, 100).unwrap(),
+            ("# Été\nbody".to_owned(), 12, false)
+        );
+        // "É" is two bytes: three bytes end inside it, so it is dropped.
+        assert_eq!(
+            super::read_start(&file, 3).unwrap(),
+            ("# ".to_owned(), 12, true)
+        );
+        assert_eq!(super::read_start(&file, 4).unwrap().0, "# \u{c9}");
+        assert_eq!(
+            super::utf8_start(vec![b'a', 0xff, b'b'], false),
+            "a\u{fffd}b"
         );
     }
 }

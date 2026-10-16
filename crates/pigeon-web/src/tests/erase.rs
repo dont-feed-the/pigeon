@@ -270,7 +270,10 @@ async fn mounted_erase_keeps_review_forms_and_results_in_the_selected_peer() {
             .map(|rest| rest.split('"').next().unwrap())
         {
             assert!(
-                value.starts_with(prefix) || value == "/clients/selected",
+                value.starts_with(prefix)
+                    || value == "/clients/selected"
+                    // The file manager's accessibility link stays on this page.
+                    || value.starts_with('#'),
                 "{attribute}{value}"
             );
         }
