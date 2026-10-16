@@ -230,7 +230,7 @@ systemctl --user status pigeon-control.service pigeon-custodian.service pigeon-b
 ```
 
 The bridge starts with both native services but can keep serving cached files
-if the custodian is temporarily stopped. New authorizations and review need
+if the custodian is temporarily stopped. New authorizations and account-level review need
 the control peer.
 
 All three services should be running. On a server with a browser, open
