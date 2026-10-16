@@ -311,6 +311,8 @@ jobs:
       - name: this shard's daemons-on-one-host tests
         env:
           SHARD: ${{ matrix.shard }}
+          # Where a failed test keeps its directory, uploaded below.
+          TMPDIR: ${{ runner.temp }}/pigeon-tests
         # The lab tests of pigeond are the test files that start with
         # `#![cfg(feature = "lab")]`. nextest deals them out across the four
         # shards one test at a time (`slice`, not `count`, which splits each
@@ -319,10 +321,19 @@ jobs:
         # word splitting of `$lab` needs bash.
         shell: bash
         run: |
+          mkdir -p "$TMPDIR"
           lab=$(grep -l '^#!\[cfg(feature = "lab")\]' crates/pigeond/tests/*.rs | xargs -n1 basename | sed 's/\.rs$//')
           filter=$(printf 'binary(=%s) | ' $lab)
           cargo nextest run -p pigeond --features lab --locked \
             --partition "slice:$((SHARD + 1))/4" -E "${filter% | }"
+      - name: the directories of failed tests, with each daemon's full logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: failed-daemon-tests-${{ matrix.os }}-shard-${{ matrix.shard }}
+          path: ${{ runner.temp }}/pigeon-tests
+          if-no-files-found: ignore
+          retention-days: 14
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         if: matrix.shard == 3
         with:

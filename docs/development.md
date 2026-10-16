@@ -18,6 +18,9 @@ Then copy the three programs to `bin/` of the directory above
 Or let `scripts/install-local` do it all: it builds the checkout as it is,
 uncommitted changes included, and installs it as `pigeon update --main`
 does, the previous programs kept for `pigeon update --rollback`.
+`scripts/install-remote HOST` builds it here and installs it the same way
+on another Linux machine over ssh, once it checked that the machine can run
+it; that machine needs only rsync.
 A release is made by pushing a tag `v` + the workspace's version
 (`.github/workflows/release.yml`). Pull requests leave the version alone
 and add their entries under `## Unreleased` in
