@@ -34,6 +34,15 @@ impl Loops for Api {
         })
     }
 
+    fn recovery_bundle(
+        &self,
+        group: String,
+        device: String,
+    ) -> Answer<Option<crate::net::recovery::Bundle>> {
+        let d = self.0.clone();
+        Box::pin(async move { crate::recovery::bundle(&d, &group, &device).await })
+    }
+
     fn telemetry(
         &self,
         group: String,

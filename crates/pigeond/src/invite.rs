@@ -497,6 +497,9 @@ pub fn request(d: &Daemon, inv: &Invitation, name: &str, uuid: &str) -> Result<J
         capacity: None,
         addresses: d.addresses().iter().map(ToString::to_string).collect(),
         new_device: None,
+        recovery_commit: None,
+        recovery_addresses: Vec::new(),
+        recovery_version: None,
     })
 }
 

@@ -42,6 +42,16 @@ pub struct Join {
     /// QUIC handshake authenticated, is the authority.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub new_device: Option<String>,
+    /// A sheet-signed roster commit, pulled from the authenticated recovery
+    /// endpoint before the custodian accepts the new computer (ADR 0047).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recovery_commit: Option<String>,
+    /// Direct addresses of the temporary endpoint using the sheet key.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recovery_addresses: Vec<String>,
+    /// Recovery exchange version; older custodian-signed recovery is refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recovery_version: Option<u32>,
 }
 
 /// The inviter's answer.

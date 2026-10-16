@@ -132,7 +132,7 @@ undo-free = Undo: pigeon keep { $folder }
 undo-keep = Undo: pigeon free { $folder }
 restore-result = { $path } is restored; the newer version stays in its history.
 recovery-sheet-text = { $sheet }
-recovered = This computer is back in { $group }. Its files arrive from the backup machines; then remove the lost computers and print a new recovery sheet.
+recovered = This computer is back in { $group }. Its files arrive from the backup machines; then remove the lost computers, revoke the used recovery sheet with remove-computer, and print a new sheet.
 not-shared-kind = { $path }: not shared ({ $kind })
 doctor-lab-build = This is a lab build: its status reports are marked, and no release counts them.
 doctor-version = { $program } { $found } (at least { $minimum } is needed)
@@ -407,3 +407,5 @@ view-ready = A read-only copy is at { $path }; it is removed after seven days.
 setting-telemetry-device = Share diagnostics with
 setting-off = Keep diagnostics on each computer
 problem-join-history-unverified = Pigeon could not verify this group's history. Ask the person who invited you to update pigeon and send a new invitation.
+
+problem-recovery-not-allowed = This recovery sheet is no longer authorized by the backup machine. Use a current sheet and update pigeon on both computers.

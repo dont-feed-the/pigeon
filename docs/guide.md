@@ -220,3 +220,28 @@ pigeon is built milestone by milestone ([roadmap](roadmap.md)):
   (scrub);
 - **v0.7:** large and busy files, and resource limits;
 - **v1.0:** after weeks of daily use with no data lost.
+
+## Recover after losing every laptop
+
+Keep a recovery sheet somewhere separate from your computers. Anyone who
+has it can add computers for its admin. Save the output of
+`pigeon recovery-sheet` privately or print it; pigeon does not keep the key.
+The command waits until a backup has received the sheet's roster entry.
+
+On a fresh computer, save the sheet's complete text in a private file, then
+run `pigeon recover /path/to/sheet /path/to/new-empty-folder`. Keep the
+surviving backup online. The new computer checks the group's signed history,
+uses the sheet to sign its new device, and waits for the backup to fetch and
+verify that addition. Files then arrive into the new folder. A backup owned
+by another member works too; it cannot sign as you.
+
+Run `pigeon machines` to find the lost computers and the used recovery
+sheet. Remove each with `pigeon remove-computer NAME --yes`, including the
+sheet: its key has now been typed into a computer. Print a replacement with
+`pigeon recovery-sheet`, and keep it separately. Use `pigeon history PATH`
+and `pigeon restore PATH --version NUMBER` for older versions.
+
+Both computers need a version supporting the sheet-signed recovery exchange.
+An older recovery exchange is refused. Recovery metadata transfers have a
+120-second deadline and a 64 MiB limit; file content arrives separately
+through the normal, checked annex transport.

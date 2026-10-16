@@ -7,29 +7,25 @@
 //! machines with their addresses, as text and as one `pgr1-…` code with a
 //! checksum, once a backup machine has that commit. No computer keeps the
 //! key. `recover SHEET FOLDER` (a fresh
-//! machine) dials a backup machine of the sheet with the sheet's key and
-//! joins the machine as a laptop of the admin on `pigeon/join/1`; the
-//! backup machine checks that the recovery device may add it (04 §4.3)
-//! and writes the roster commit, as an inviter does: in this build commits
-//! are not signed (13 §13.12). The machine then takes `main` from it,
-//! checked from the genesis the sheet names, hides every file, and the
-//! loops bring them back like a kept folder (08 §8.5).
+//! machine) validates the custodian's history, signs its own addition with
+//! the sheet key, and serves that commit until the custodian pulls and
+//! verifies it. The backup machine never signs on the admin's behalf.
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use data_encoding::BASE32_NOPAD;
-use pigeon_core::roster::{Device, DeviceId, Edit, PersonId, Role as DeviceRole, apply, may_sign};
+use pigeon_core::roster::{Device, DeviceId, Edit, Role as DeviceRole, apply, may_sign};
 use pigeon_proto::Response;
 use pigeon_proto::api::Arg;
-use pigeon_proto::join::{JOIN_VERSION, Join, JoinAnswer};
+use pigeon_proto::join::{Join, JoinAnswer};
 use serde::{Deserialize, Serialize};
 
 use crate::api::problem;
 use crate::daemon::Daemon;
 use crate::group::Group;
-use crate::settings::{ensure_remote, init_annex};
+use crate::settings::init_annex;
 use crate::status::msg;
 use crate::util::{hex, random, sha256_hex, unhex};
 
@@ -81,7 +77,8 @@ pub fn decode(text: &str) -> Option<Sheet> {
     let bytes = BASE32_NOPAD
         .decode(body.to_ascii_uppercase().as_bytes())
         .ok()?;
-    serde_json::from_slice(&bytes).ok()
+    let sheet: Sheet = serde_json::from_slice(&bytes).ok()?;
+    (sheet.v == 1).then_some(sheet)
 }
 
 fn text(s: &str) -> Arg {
@@ -213,63 +210,12 @@ fn render(s: &Sheet) -> String {
 /// A backup machine's side of a join that a recovery device `device`
 /// sends for the new machine `new` of its person.
 pub async fn welcome(d: &Daemon, device: &str, new: &str, join: &Join) -> JoinAnswer {
-    let refused = |code: &str| JoinAnswer::Refused {
-        code: code.to_owned(),
-    };
-    for g in d.groups() {
-        let _busy = g.busy.lock().await;
-        let Some(mut doc) = g.roster() else {
-            continue;
-        };
-        let signer = DeviceId(device.to_owned());
-        let Some(r) = doc.roster.devices.get(&signer) else {
-            continue;
-        };
-        if r.role != DeviceRole::Recovery {
-            return refused("invite-not-allowed");
-        }
-        let added = Device {
-            person: PersonId(r.person.0.clone()),
-            name: join.device_name.clone(),
-            role: DeviceRole::Laptop,
-            annex_uuid: Some(join.annex_uuid.clone()),
-            maxsize: None,
-        };
-        let change = [Edit::AddDevice(DeviceId(new.to_owned()), added)];
-        if !may_sign(&doc.roster, &signer, &change) {
-            return refused("invite-not-allowed");
-        }
-        let applied = apply(&doc.roster, &change);
-        if applied.skipped.is_some() {
-            return refused("invite-not-allowed");
-        }
-        doc.roster = applied.roster;
-        let message = format!("pigeon: add {} with a recovery sheet", join.device_name);
-        let commit = match crate::change::commit_roster(&g, &doc, &message, &d.tracer).await {
-            Ok(c) => c,
-            Err(e) => {
-                tracing::warn!(group = %g.id, error = %e, "recover-commit-failed");
-                return refused("not-allowed");
-            }
-        };
-        let _ = ensure_remote(&g.git, new, &join.annex_uuid).await;
-        let addresses = join
-            .addresses
-            .iter()
-            .filter_map(|a| a.parse().ok())
-            .collect();
-        g.set_addresses(new, addresses);
-        tracing::info!(group = %g.id, recovery = %device, peer = %new, commit = %commit, "recovered-device");
-        d.wake.notify_one();
-        let annex_uuid = g.lock().annex_uuid.clone().unwrap_or_default();
-        let peers = g.known_addresses(new);
-        return JoinAnswer::Welcome {
-            commit,
-            annex_uuid,
-            peers,
-        };
-    }
-    refused("invite-unknown")
+    crate::recovery_exchange::welcome(d, device, new, join).await
+}
+
+/// Read-only metadata for an authenticated recovery sheet.
+pub async fn bundle(d: &Daemon, group: &str, device: &str) -> Option<crate::net::recovery::Bundle> {
+    crate::recovery_exchange::bundle(d, group, device).await
 }
 
 /// `pigeon recover SHEET [FOLDER] [--from NAME]`, on a fresh machine.
@@ -286,6 +232,9 @@ pub async fn recover(
         Err(code) if code.contains(' ') => {
             tracing::warn!(error = %code, "recover-failed");
             vec![problem("internal-error", &[], Some(code))]
+        }
+        Err(code) if matches!(code.as_str(), "invite-not-allowed" | "inviter-offline") => {
+            vec![problem("recovery-not-allowed", &[], None)]
         }
         Err(code) => vec![problem(&code, &[], None)],
     }
@@ -337,66 +286,26 @@ async fn recover_inner(
     git.run(&["annex", "numcopies", &k]).await.map_err(fail)?;
     git.run(&["annex", "mincopies", &k]).await.map_err(fail)?;
     drop(pending);
-    let request = Join {
-        v: JOIN_VERSION,
-        traceparent: None,
-        invitation_hash: String::new(),
-        proof: String::new(),
-        device_name: name,
-        role: "laptop".to_owned(),
-        annex_uuid: uuid,
-        capacity: None,
-        addresses: d.addresses().iter().map(ToString::to_string).collect(),
-        new_device: Some(d.device.clone()),
-    };
-    let (custodian, commit, their_uuid, peers) =
-        dial(d, &s, &secret, from.as_deref(), &request).await?;
-    ensure_remote(&git, &custodian.device, &their_uuid)
-        .await
-        .map_err(fail)?;
+    let node = recovery_node(d, &secret).await?;
     let g = Group::open(&s.group, &path, &d.env)
         .await
         .ok_or("not-a-repository")?;
     g.set_token(&token);
-    for c in &s.custodians {
-        g.set_addresses(&c.device, parse(&c.addresses));
-    }
-    g.learn_peers(&peers);
-    let g = d.add_group(g, &path).await;
-    // No round may capture before every annexed file is hidden: a file of
-    // the index missing from the folder would read as a deletion (S10).
-    let busy = g.busy.lock().await;
-    let theirs =
-        crate::invite::fetch_welcome(&g, &custodian.device, &s.group, &commit, &d.device).await?;
-    g.git
-        .update_ref("refs/heads/main", &theirs, None)
-        .await
-        .map_err(|e| e.to_string())?;
-    d.tracer
-        .event(crate::trace::Act::Merge, &[("commit", &theirs)]);
+    let result =
+        crate::recovery_exchange::recover(d, &g, &s, &secret, &node, &name, &uuid, from.as_deref())
+            .await;
+    node.close().await;
+    let theirs = result?;
     g.reload_roster().await;
     hide_all(&g, &theirs).await?;
-    drop(busy);
+    let _g = d.add_group(g, &path).await;
     d.wake.notify_one();
     Ok(s.name)
 }
 
-/// Direct addresses by device ID, as a welcome gives them.
-type Peers = std::collections::BTreeMap<String, Vec<String>>;
-
-fn parse(addresses: &[String]) -> Vec<SocketAddr> {
-    addresses.iter().filter_map(|a| a.parse().ok()).collect()
-}
-
-/// Joins with the sheet's key through the first backup machine of the
-/// sheet (or `from`) that welcomes it, trying them for two minutes.
-async fn dial(
-    d: &Daemon,
-    s: &Sheet,
-    secret: &[u8; 32],
-    from: Option<&str>,
-    request: &Join,
-) -> Result<(SheetCustodian, String, String, Peers), String> {
+/// A temporary endpoint that authenticates with the sheet, never the new
+/// computer's long-lived key. Its secret is never written to disk.
+async fn recovery_node(d: &Daemon, secret: &[u8; 32]) -> Result<crate::net::Node, String> {
     let mut bind: SocketAddr = d
         .config
         .network
@@ -404,40 +313,14 @@ async fn dial(
         .parse()
         .map_err(|e| format!("[network] bind: {e}"))?;
     bind.set_port(0);
-    let node = crate::net::Node::bind(&crate::net::NetConfig {
+    crate::net::Node::bind(&crate::net::NetConfig {
         secret_key: *secret,
         bind,
         mdns: false,
         reach: d.config.network.reach().map_err(|e| e.to_string())?,
     })
     .await
-    .map_err(|e| e.to_string())?;
-    let targets: Vec<&SheetCustodian> = s
-        .custodians
-        .iter()
-        .filter(|c| from.is_none_or(|f| c.name == f || c.device == f))
-        .collect();
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(120);
-    let mut last = "inviter-offline".to_owned();
-    while tokio::time::Instant::now() < deadline {
-        for c in &targets {
-            match node.join(&c.device, parse(&c.addresses), request).await {
-                Ok(JoinAnswer::Welcome {
-                    commit,
-                    annex_uuid,
-                    peers,
-                }) => {
-                    node.close().await;
-                    return Ok(((*c).clone(), commit, annex_uuid, peers));
-                }
-                Ok(JoinAnswer::Refused { code }) => last = code,
-                Err(e) => tracing::info!(peer = %c.device, error = %e, "recover-dial-failed"),
-            }
-        }
-        tokio::time::sleep(Duration::from_secs(2)).await;
-    }
-    node.close().await;
-    Err(last)
+    .map_err(|e| e.to_string())
 }
 
 /// Takes `main`'s tree into the index with every annexed file hidden and

@@ -6,6 +6,7 @@
 /// git subcommands pigeon runs, besides `annex` and `--version`. `init`,
 /// `config` and `remote` set a repository up (`create`, `join`).
 const GIT: &[&str] = &[
+    "bundle",
     "cat-file",
     "rev-list",
     "for-each-ref",
@@ -110,6 +111,13 @@ pub fn check(argv: &[String]) -> Result<(), &'static str> {
         if !GIT.contains(&first.as_str()) {
             return Err("git subcommand not in 03 §3.7");
         }
+        if first == "bundle"
+            && !argv
+                .get(1)
+                .is_some_and(|s| matches!(s.as_str(), "create" | "list-heads"))
+        {
+            return Err("bundle only creates or lists read-only recovery metadata");
+        }
         if first == "cat-file" && !argv.iter().any(|a| a.starts_with("--batch")) {
             return Err("cat-file runs in batch mode");
         }
@@ -163,6 +171,8 @@ mod tests {
             "cat-file --batch",
             "status --porcelain=v2 -z -uall --ignored=traditional",
             "fetch c",
+            "bundle create /private/recovery main",
+            "bundle list-heads /private/recovery",
             "annex add --no-check-gitignore --batch --json",
             "annex get --key K",
             "annex copy --to c --batch-keys --json",
@@ -184,6 +194,8 @@ mod tests {
         for bad in [
             "",
             "push c main",
+            "bundle unbundle /private/recovery",
+            "bundle verify /private/recovery",
             "merge x",
             "checkout main",
             "pull",

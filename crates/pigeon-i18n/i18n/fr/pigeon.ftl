@@ -132,7 +132,7 @@ undo-free = Annuler : pigeon keep { $folder }
 undo-keep = Annuler : pigeon free { $folder }
 restore-result = { $path } est restauré ; la version plus récente reste dans son historique.
 recovery-sheet-text = { $sheet }
-recovered = Cet ordinateur est de retour dans { $group }. Ses fichiers arrivent depuis les machines de sauvegarde ; retirez ensuite les ordinateurs perdus et imprimez une nouvelle fiche de récupération.
+recovered = Cet ordinateur est de retour dans { $group }. Ses fichiers arrivent depuis les machines de sauvegarde ; retirez ensuite les ordinateurs perdus, révoquez la fiche utilisée avec remove-computer et imprimez une nouvelle fiche.
 not-shared-kind = { $path } : non partagé ({ $kind })
 doctor-lab-build = Ceci est une version de laboratoire : ses rapports d'état sont marqués, et aucune version publiée ne les compte.
 doctor-version = { $program } { $found } (il faut au moins { $minimum })
@@ -407,3 +407,5 @@ view-ready = Une copie en lecture seule est dans { $path } ; elle est supprimée
 setting-telemetry-device = Partager les diagnostics avec
 setting-off = Garder les diagnostics sur chaque ordinateur
 problem-join-history-unverified = Pigeon n’a pas pu vérifier l’historique de ce groupe. Demandez à la personne qui vous a invité de mettre pigeon à jour et de vous envoyer une nouvelle invitation.
+
+problem-recovery-not-allowed = Cette fiche de récupération n’est plus autorisée par la machine de sauvegarde. Utilisez une fiche actuelle et mettez pigeon à jour sur les deux ordinateurs.

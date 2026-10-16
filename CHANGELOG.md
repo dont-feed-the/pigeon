@@ -4,6 +4,17 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.2 — 2026-10-16
+
+### Fixed
+
+- `pigeon recover` signs a new computer's roster entry with the recovery
+  sheet's key. The surviving backup pulls and verifies that entry, so a
+  backup belonging to another member can restore an admin without gaining
+  that admin's authority.
+- Recovery checks the custodian's signed history before writing files and
+  admits recovery keys only to a bounded, read-only metadata exchange.
+
 ## 0.4.1 — 2026-10-16
 
 ### Added

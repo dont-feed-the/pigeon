@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 pub const ALPN_ANNEX: &[u8] = b"pigeon/annex/1";
 /// The join exchange (09 §9.6).
 pub const ALPN_JOIN: &[u8] = b"pigeon/join/1";
+/// Read-only metadata for an authenticated recovery sheet (ADR 0047).
+pub const ALPN_RECOVERY: &[u8] = b"pigeon/recovery/1";
 /// OTLP to the group's telemetry device (ADR 0025).
 pub const ALPN_TELEMETRY: &[u8] = b"pigeon/telemetry/1";
 /// `pigeon debug bundle` requests (12).
