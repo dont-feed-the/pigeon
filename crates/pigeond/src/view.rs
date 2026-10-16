@@ -44,18 +44,17 @@ pub fn sweep(dir: &Path) {
             .is_some_and(|age| age > KEPT);
         if old {
             let p = e.path();
-            make_writable(&p);
+            make_removable(&p);
             let _ = std::fs::remove_dir_all(&p);
         }
     }
 }
 
-fn make_writable(dir: &Path) {
+fn make_removable(dir: &Path) {
     use std::os::unix::fs::PermissionsExt;
+    // Unlinking a read-only file needs a writable parent, not a writable
+    // file. A shared view can be a hard link to an immutable pool object.
     let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o755));
-    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
-        let _ = std::fs::set_permissions(e.path(), std::fs::Permissions::from_mode(0o644));
-    }
 }
 
 /// `pigeon view`.
@@ -104,7 +103,12 @@ pub async fn view(d: &Daemon, path: &Path, version: Option<u64>, group: bool) ->
     };
     let views = d.dirs.cache.join("view");
     sweep(&views);
-    match write_copy(&views, &object, &copy_name(&rel, &label)) {
+    match write_copy(
+        &views,
+        &object,
+        &copy_name(&rel, &label),
+        g.shared.is_some(),
+    ) {
         Ok(at) => vec![Response::Said {
             message: crate::status::msg("view-ready", &[("path", text(&at.to_string_lossy()))]),
         }],
@@ -164,7 +168,12 @@ pub async fn suggestion(d: &Daemon, id: &str, path: &Path) -> Vec<Response> {
     };
     let views = d.dirs.cache.join("view");
     sweep(&views);
-    match write_copy(&views, &object, &copy_name(&rel, "suggested version")) {
+    match write_copy(
+        &views,
+        &object,
+        &copy_name(&rel, "suggested version"),
+        g.shared.is_some(),
+    ) {
         Ok(copy) => vec![crate::api::said(
             "view-ready",
             &[("path", Arg::Text(copy.to_string_lossy().into_owned()))],
@@ -173,15 +182,25 @@ pub async fn suggestion(d: &Daemon, id: &str, path: &Path) -> Vec<Response> {
     }
 }
 
-/// Copies `object` to a new directory of `views` as `name`, read-only.
-fn write_copy(views: &Path, object: &Path, name: &str) -> std::io::Result<PathBuf> {
+/// A read-only view. Managed peers pin their already immutable object on
+/// the same filesystem; native working peers keep an independent snapshot.
+fn write_copy(views: &Path, object: &Path, name: &str, shared: bool) -> std::io::Result<PathBuf> {
     use std::os::unix::fs::PermissionsExt;
     let id = crate::util::hex(&crate::util::random::<8>()?);
     let dir = views.join(id);
     std::fs::create_dir_all(&dir)?;
     let at = dir.join(name);
-    std::fs::copy(object, &at)?;
-    std::fs::set_permissions(&at, std::fs::Permissions::from_mode(0o444))?;
+    if shared {
+        if object.metadata()?.permissions().mode() & 0o222 != 0 {
+            return Err(std::io::Error::other(
+                "A shared view requires immutable content",
+            ));
+        }
+        std::fs::hard_link(object, &at)?;
+    } else {
+        std::fs::copy(object, &at)?;
+        std::fs::set_permissions(&at, std::fs::Permissions::from_mode(0o444))?;
+    }
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555))?;
     Ok(at)
 }
@@ -201,5 +220,39 @@ mod tests {
             "Makefile (group's version)"
         );
         assert_eq!(copy_name(".bashrc", "version 1"), ".bashrc (version 1)");
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used, reason = "test fixtures")]
+    fn shared_views_pin_immutable_bytes_and_cleanup_never_makes_the_object_writable() {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let temp = tempfile::tempdir().unwrap();
+        let object = temp.path().join("object");
+        std::fs::write(&object, b"retained version").unwrap();
+        let views = temp.path().join("views");
+        assert!(write_copy(&views, &object, "writable.txt", true).is_err());
+        std::fs::set_permissions(&object, std::fs::Permissions::from_mode(0o444)).unwrap();
+        let copy = write_copy(&views, &object, "retained.txt", true).unwrap();
+        assert_eq!(
+            copy.metadata().unwrap().ino(),
+            object.metadata().unwrap().ino()
+        );
+        let old = std::fs::FileTimes::new().set_modified(SystemTime::UNIX_EPOCH);
+        std::fs::File::open(copy.parent().unwrap())
+            .unwrap()
+            .set_times(old)
+            .unwrap();
+        sweep(&views);
+        assert!(!copy.exists());
+        assert_eq!(
+            object.metadata().unwrap().permissions().mode() & 0o777,
+            0o444
+        );
+        assert_eq!(std::fs::read(&object).unwrap(), b"retained version");
+        let native = write_copy(&views, &object, "native.txt", false).unwrap();
+        assert_ne!(
+            native.metadata().unwrap().ino(),
+            object.metadata().unwrap().ino()
+        );
     }
 }

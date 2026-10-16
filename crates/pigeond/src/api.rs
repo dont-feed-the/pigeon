@@ -107,6 +107,11 @@ fn not_in_this_build(command: &str) -> Vec<Response> {
 
 /// The path of `path` in `g`'s folder, `/`-separated.
 pub fn relative(g: &Group, path: &Path) -> Option<String> {
+    if g.shared.is_some() {
+        // Sparse catalogues intentionally have no on-disk parent folders.
+        // Reuse restore's lexical resolution and symlink/repository guards.
+        return crate::restore::path::relative(g, path);
+    }
     let wt = g.worktree.as_ref()?;
     let abs = std::fs::canonicalize(path).ok().or_else(|| {
         let parent = std::fs::canonicalize(path.parent()?).ok()?;

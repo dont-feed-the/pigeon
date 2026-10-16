@@ -4,7 +4,7 @@
 use crate::group::Group;
 use std::path::{Component, Path};
 
-pub(super) fn relative(g: &Group, path: &Path) -> Option<String> {
+pub(crate) fn relative(g: &Group, path: &Path) -> Option<String> {
     let root = g.worktree.as_ref()?;
     let path = std::path::absolute(path).ok()?;
     let rel = path.strip_prefix(root).ok()?;

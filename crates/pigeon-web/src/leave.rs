@@ -3,11 +3,11 @@
 
 use std::sync::Arc;
 
+use crate::Renderer;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Form};
 use maud::{Markup, html};
-use pigeon_i18n::render::Renderer;
 use pigeon_proto::Request;
 
 use crate::machines::expired;
@@ -18,7 +18,7 @@ use crate::{FormToken, Web};
 pub fn form(r: &Renderer, form: &str) -> Markup {
     html! {
         article {
-            form method="post" action="/leave" {
+            form method="post" action=(r.url("/leave")) {
                 input type="hidden" name="form" value=(form);
                 button type="submit" { (r.id("web-leave")) }
             }
@@ -48,12 +48,12 @@ pub async fn leave(
     let r = web.renderer();
     if !f.yes {
         let body = html! {
-            form method="post" action="/leave" {
+            form method="post" action=(r.url("/leave")) {
                 input type="hidden" name="form" value=(f.form);
                 input type="hidden" name="yes" value="true";
                 button type="submit" { (r.id("web-leave")) }
             }
-            p { a href="/settings" { (r.id("web-back")) } }
+            p { a href=(r.url("/settings")) { (r.id("web-back")) } }
         };
         return page(&r, "/settings", &r.id("web-leave-confirm"), &body).into_response();
     }

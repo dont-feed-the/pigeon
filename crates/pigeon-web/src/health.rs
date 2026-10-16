@@ -196,7 +196,7 @@ pub(crate) fn event(r: &Renderer, h: &HealthReport) -> String {
     serde_json::json!({"membership": membership(h), "values": values(r,h), "explanations": explanations}).to_string()
 }
 
-pub(crate) fn section(r: &Renderer, h: &HealthReport) -> Markup {
+pub(crate) fn section(r: &crate::Renderer, h: &HealthReport) -> Markup {
     let values = values(r, h);
     let text = |id: &str| values.get(id).map_or("", String::as_str);
     html! {
@@ -206,7 +206,7 @@ pub(crate) fn section(r: &Renderer, h: &HealthReport) -> Markup {
             p id="health-current" { (text("health-current")) }
             h3 { (r.id("web-health-retained")) }
             p id="health-retained" { (text("health-retained")) }
-            p { a href="/suggestions" id="health-suggestions" { (text("health-suggestions")) } }
+            p { a href=(r.url("/suggestions")) id="health-suggestions" { (text("health-suggestions")) } }
             p id="health-repair" { (text("health-repair")) }
             p id="health-omitted" { (text("health-omitted")) }
             details {
@@ -220,7 +220,7 @@ pub(crate) fn section(r: &Renderer, h: &HealthReport) -> Markup {
                         p id=(format!("health-work-{id}")) { (text(&format!("health-work-{id}"))) }
                     }
                 }
-                p { a href="/machines" { (r.id("web-nav-machines")) } }
+                p { a href=(r.url("/machines")) { (r.id("web-nav-machines")) } }
             }
             details {
                 summary { (r.id("web-health-epochs")) }

@@ -6,12 +6,12 @@
 
 use std::sync::Arc;
 
+use crate::Renderer;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Response};
 use axum::{Extension, Form};
 use maud::{Markup, html};
-use pigeon_i18n::render::Renderer;
 use pigeon_proto::Request;
 use pigeon_proto::api::Setting;
 
@@ -45,14 +45,14 @@ pub async fn settings(
     let body = html! {
         (list(&other))
         @for s in &rows { (setting(&r, s, &form.0)) }
-        p { a href="/space" { (r.id("space-title")) } }
+        p { a href=(r.url("/space")) { (r.id("space-title")) } }
         p { (r.id("status-freshness")) }
         (pausing(&r, &form.0))
-        (crate::leave::form(&r, &form.0))
+        @if r.mount.is_none() { (crate::leave::form(&r, &form.0)) }
         h2 { (r.id("web-diagnostics")) }
-        p { a href="/doctor" { (r.id("web-doctor")) } }
+        p { a href=(r.url("/doctor")) { (r.id("web-doctor")) } }
         p { (r.id("web-diagnostics-consent")) }
-        form method="post" action="/settings/diagnostics" {
+        form method="post" action=(r.url("/settings/diagnostics")) {
             input type="hidden" name="form" value=(&form.0);
             label for="diagnostic-peer" { (r.id("web-diagnostic-peer")) }
             select id="diagnostic-peer" name="peer" {
@@ -99,7 +99,7 @@ fn setting(r: &Renderer, s: &Setting, form: &str) -> Markup {
     let id = format!("setting-{}", s.key);
     html! {
         article {
-            form method="post" action="/settings" {
+            form method="post" action=(r.url("/settings")) {
                 input type="hidden" name="form" value=(form);
                 input type="hidden" name="key" value=(s.key);
                 label for=(id) { (r.id(&id)) " " }
@@ -119,7 +119,7 @@ fn setting(r: &Renderer, s: &Setting, form: &str) -> Markup {
 fn pausing(r: &Renderer, form: &str) -> Markup {
     html! {
         article {
-            form method="post" action="/pause" {
+            form method="post" action=(r.url("/pause")) {
                 input type="hidden" name="form" value=(form);
                 label for="pause-for" { (r.id("web-pause")) " " }
                 select id="pause-for" name="duration" {
@@ -130,7 +130,7 @@ fn pausing(r: &Renderer, form: &str) -> Markup {
                 " "
                 button type="submit" { (r.id("web-pause")) }
             }
-            form method="post" action="/resume" {
+            form method="post" action=(r.url("/resume")) {
                 input type="hidden" name="form" value=(form);
                 button type="submit" { (r.id("web-resume")) }
             }
@@ -219,6 +219,13 @@ pub async fn save(
             value: f.value.clone(),
         })
         .await;
+    if f.key == "language" && answers.iter().any(|a| {
+        matches!(a, pigeon_proto::Response::Said { message } if message.id == "setting-changed")
+    }) {
+        let setting = pigeon_i18n::Setting::parse(&f.value).unwrap_or(pigeon_i18n::Setting::Auto);
+        let system = pigeon_i18n::system_languages(|key| std::env::var(key).ok());
+        web.set_lang(pigeon_i18n::choose(&setting, &system));
+    }
     // After the answer, so that a new language shows at once.
     let r = web.renderer();
     let lines = answers.iter().flat_map(|a| {

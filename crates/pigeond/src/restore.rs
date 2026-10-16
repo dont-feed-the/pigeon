@@ -23,7 +23,7 @@ use crate::group::Group;
 use crate::install::Put;
 
 mod folder;
-mod path;
+pub(crate) mod path;
 
 fn text(s: &str) -> Arg {
     Arg::Text(s.to_owned())
