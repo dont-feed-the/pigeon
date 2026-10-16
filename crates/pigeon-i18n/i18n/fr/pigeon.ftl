@@ -31,6 +31,17 @@ headline-checking = Le dossier local n'a pas pu être vérifié. Lancez : pigeon
 headline-inventory-unreadable = Pigeon ne peut pas vérifier toutes les versions enregistrées pour le moment.
 headline-too-few-backups = Pas encore en sécurité : ajoutez un ordinateur de sauvegarde.
 why-capturing = Cette modification attend d'être enregistrée et copiée sur les ordinateurs de sauvegarde.
+why-differs = Votre copie diffère de la version du groupe. Choisissez laquelle garder.
+why-name = Son nom ne fonctionne pas sur tous les ordinateurs. Renommez-le.
+why-held-deletion = Il a été supprimé avec beaucoup d’autres fichiers. pigeon attend votre choix : les supprimer pour tout le monde, ou les faire revenir.
+why-capture-failed =
+    pigeon n’a pas pu enregistrer cette modification : { $why ->
+        [disk-full] le disque est plein
+        [no-access] il n’a pas le droit de lire le fichier
+        [busy] un autre programme utilisait le dossier
+       *[other] un problème est survenu
+    }. Il réessaiera.
+why-removed = Cet ordinateur ne fait plus partie du groupe : ce fichier n’est donc plus sauvegardé.
 why-too-few-backups = { $have } ordinateurs de sauvegarde sur { $need } sont configurés. Pour en ajouter un : pigeon invite --backup-machine
 headline-not-safe =
     { $files ->
@@ -53,6 +64,7 @@ headline-machine-missing =
 headline-machine-full = { $machine } est pleine ; elle attend qu'on y libère de l'espace.
 headline-machine-no-capacity = { $machine } n'a pas la place pour { $files } fichiers : il lui faut { $missing_mb } Mo d'espace libre en plus. Libérez-y de l'espace, ou ajoutez une autre machine de sauvegarde.
 headline-machine-lost = { $machine } ne trouve plus son dossier de sauvegarde ; elle ne compte plus jusqu'à ce qu'elle soit réinstallée.
+headline-removed = Cet ordinateur a été retiré du groupe. Ses fichiers restent dans son dossier, mais ils ne sont plus partagés ni sauvegardés. Pour les partager à nouveau, demandez une nouvelle invitation à quelqu’un du groupe.
 why-machine-offline = { $machine } est hors ligne depuis { $since }.
 why-machine-not-heard = Cet ordinateur n’a pas encore eu de nouvelles de { $machine }.
 why-safe-copies = { $have } sur { $need } copies de sauvegarde
@@ -231,6 +243,7 @@ joined-renamed =
        *[computer] Cet ordinateur fait maintenant partie de « { $group } ». Les fichiers du groupe arrivent dans son dossier.
     } Un autre ordinateur du groupe s’appelait déjà { $asked } : celui-ci s’appelle donc { $name }.
 removed-computer = { $name } est retiré du groupe ; ses copies ne comptent plus.
+removed-from-group = Cet ordinateur ne fait plus partie du groupe : voici le groupe tel qu’il le connaissait. Pour partager à nouveau des fichiers, demandez une nouvelle invitation à quelqu’un du groupe.
 bundle-written = Le diagnostic est dans { $path }. Rien n'a été envoyé.
 machine-row = { $name } : { $kind }, dernier contact { $heard }
 machine-kind-custodian = machine de sauvegarde

@@ -18,7 +18,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use pigeon_core::filter::Role;
-use pigeon_core::roster::{DeviceId, Edit, Role as DeviceRole, apply, may_sign};
+use pigeon_core::roster::{DeviceId, Edit, apply, may_sign};
 use pigeon_proto::Response;
 use pigeon_proto::api::Arg;
 use pigeon_proto::stream::Refusal;
@@ -27,6 +27,7 @@ use serde::{Deserialize, Serialize};
 use crate::api::problem;
 use crate::daemon::Daemon;
 use crate::group::Group;
+use crate::removed::peers;
 use crate::status::msg;
 
 /// The removal this device waits to see on a peer.
@@ -118,17 +119,6 @@ pub fn signs_for_an_admin(roster: &pigeon_core::roster::Roster) -> bool {
         .any(|x| roster.persons.get(&x.person).is_some_and(|p| p.admin))
 }
 
-/// The devices of `roster` other than `me` that serve git (not recovery
-/// sheets).
-fn peers(roster: &pigeon_core::roster::Roster, me: &DeviceId) -> Vec<String> {
-    roster
-        .devices
-        .iter()
-        .filter(|(id, x)| *id != me && x.role != DeviceRole::Recovery)
-        .map(|(id, _)| id.0.clone())
-        .collect()
-}
-
 /// Whether a peer has the removal `l`: its fetched `main` holds it, or it
 /// refuses this device since previously including it. A stale roster that
 /// never learned the join also refuses it, but proves no removal was saved.
@@ -150,12 +140,7 @@ async fn seen(d: &Daemon, g: &Group, l: &Leaving) -> bool {
         {
             return true;
         }
-        if !l.refusing.contains(p)
-            && d.node.refusal(p, &g.id) == Some(Refusal::NotInRoster)
-            && let Some(bytes) = g.git.blob(&format!("{theirs}:.pigeon/roster.toml")).await
-            && let Ok(doc) = crate::roster_file::parse(&String::from_utf8_lossy(&bytes))
-            && doc.roster.devices.contains_key(&me)
-        {
+        if !l.refusing.contains(p) && crate::removed::refuses_after_knowing(d, g, p, &me).await {
             return true;
         }
     }

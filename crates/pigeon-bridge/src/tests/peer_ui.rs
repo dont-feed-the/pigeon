@@ -118,7 +118,10 @@ async fn peer(app: &App, client: Option<Client>) -> Arc<Mutex<Vec<Rpc>>> {
                                 decide: true,
                                 force: false,
                                 mine: false,
+                                files: Vec::new(),
                             }],
+                            decided: Vec::new(),
+                            root: String::new(),
                         },
                         Rpc::Folders => Answer::Folders {
                             root: "/Family".into(),
@@ -180,7 +183,7 @@ async fn shared_pages_and_actions_select_the_client_or_personal_control_peer() {
         );
         let page = text(page).await;
         assert!(page.contains(&selected.id) && !page.contains(&other.id));
-        assert!(page.contains(&format!("action=\"{prefix}/suggestions/accept\"")));
+        assert!(page.contains(&format!("action=\"{prefix}/suggestions/decide\"")));
         assert!(page.contains("name=\"form\" value=\"alice-form\""));
         assert!(page.contains("Docs/a &amp; b.txt"));
         assert_eq!(
@@ -197,7 +200,7 @@ async fn shared_pages_and_actions_select_the_client_or_personal_control_peer() {
         );
     }
     let account = text(request(app.clone(), "GET", "/peer/suggestions", COOKIE, "").await).await;
-    assert!(account.contains("control") && account.contains("action=\"/peer/suggestions/accept\""));
+    assert!(account.contains("control") && account.contains("action=\"/peer/suggestions/decide\""));
     assert_eq!(
         request(
             app.clone(),

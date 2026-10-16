@@ -223,6 +223,7 @@ pub async fn file_page(
     Query(at): Query<At>,
 ) -> Html<String> {
     let r = web.renderer();
+    let differs = crate::conflicts::on_file(&web, &r, &at.path, &form.0).await;
     let mut rows = Vec::new();
     let mut other = Vec::new();
     for answer in web
@@ -234,11 +235,12 @@ pub async fn file_page(
         match answer {
             Response::History { versions } => rows = versions,
             Response::Progress { .. } => {}
+            // The block below explains a differing copy and how to settle it.
+            Response::Said { message } if differs.is_some() && message.id == "why-differs" => {}
             a => other.extend(r.response(&a).0),
         }
     }
     let newest = rows.iter().map(|v| v.number).max();
-    let differs = crate::conflicts::on_file(&web, &r, &at.path, &form.0).await;
     // While this copy differs, the newest version is the group's, not this file.
     let current = r.id(if differs.is_some() {
         "web-version-group-current"

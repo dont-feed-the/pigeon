@@ -82,7 +82,7 @@ fn bundle_vars(src: &'static str) -> Vec<(String, BTreeSet<String>)> {
 }
 
 /// The variables that select a variant rather than appear in the text.
-const SELECTORS: &[&str] = &["who", "unit"];
+const SELECTORS: &[&str] = &["who", "unit", "why"];
 
 fn sample(var: &str) -> Arg {
     // Counts select plural forms; everything else is a text.
@@ -198,6 +198,23 @@ fn plurals_and_isolation() {
             .starts_with("Photos will be kept on this computer.")
     );
     assert_eq!(cat.format(&Message::new("no-such-id")), "no-such-id");
+}
+
+#[test]
+fn a_failed_save_names_its_cause_in_plain_words() {
+    let en = Catalogue::new(&"en".parse().unwrap(), false);
+    let fr = Catalogue::new(&"fr".parse().unwrap(), false);
+    let full = Message::new("why-capture-failed").arg("why", "disk-full");
+    assert_eq!(
+        en.format(&full),
+        "pigeon could not save this change: the disk is full. It will try again."
+    );
+    assert_eq!(
+        fr.format(&full),
+        "pigeon n’a pas pu enregistrer cette modification : le disque est plein. Il réessaiera."
+    );
+    let odd = Message::new("why-capture-failed").arg("why", "anything");
+    assert!(en.format(&odd).contains("something went wrong"));
 }
 
 #[test]

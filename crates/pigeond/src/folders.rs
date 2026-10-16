@@ -40,6 +40,8 @@ async fn listing(
                 local: true,
                 state: pigeon_core::state::State::Local(pigeon_core::state::Reason::Sending),
                 level: Level::Working,
+                since: crate::util::now(),
+                silent: None,
             },
         );
     }

@@ -214,6 +214,17 @@ person (ADR 0017), and visible in the history.
   `RemovalRevokesAdded`, `RemovedSilenced`). They count in no catalogue or
   roster and show as suggestions of the device's person. *I lost a
   computer* offers to remove the devices the lost one added.
+- The removed device learns it **[no ADR]** (`pigeond/src/removed.rs`,
+  `tests/status_truth.rs`): once the roster of its accepted `main` no
+  longer lists it, or a peer refuses it as `not-in-roster` although the
+  roster last fetched from that peer listed it (as for `pigeon leave`, a
+  peer that never learned its join proves nothing), no backup machine
+  counts on it any more ([06 §6.5](06-status.md)): its headline says, at
+  *Needs you*, that it was removed, that its files stay in its folder but
+  are no longer shared or backed up, and to ask someone in the group for
+  a new invitation; its lists of people and machines say they are the
+  group as it last knew it. A device leaving or finishing an in-place join
+  is not removed.
 - Removal cannot unshare what the device already fetched (ADR 0017).
   `pigeon leave` **[no ADR]** signs the device's own removal, then deletes
   its key and, if asked, its copy of the folder.
