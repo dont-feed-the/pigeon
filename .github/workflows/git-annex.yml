@@ -40,6 +40,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: git-annex-${{ github.ref }}
@@ -72,12 +73,9 @@ jobs:
       - id: key
         run: echo "key=git-annex-pigeon-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/git-annex/VERSION', 'third_party/git-annex/build.sh', 'third_party/git-annex/patches/**') }}" >> "$GITHUB_OUTPUT"
       - id: dist
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/pigeon-git-annex-dist
-          key: ${{ steps.key.outputs.key }}
+        uses: ./.github/actions/git-annex-pigeon
       - name: Stack, its GHC and the snapshot's packages (cache)
-        if: steps.dist.outputs.cache-hit != 'true'
+        if: steps.dist.outputs.hit != 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -85,15 +83,15 @@ jobs:
             ~/.cache/pigeon-git-annex/bin
           key: stack-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/git-annex/VERSION') }}
       - name: the C libraries GHC links (Linux)
-        if: steps.dist.outputs.cache-hit != 'true' && runner.os == 'Linux'
+        if: steps.dist.outputs.hit != 'true' && runner.os == 'Linux'
         run: sudo apt-get install -y -q libgmp-dev libffi-dev zlib1g-dev libnuma-dev pkg-config
       - name: build pigeon's git-annex
-        if: steps.dist.outputs.cache-hit != 'true'
+        if: steps.dist.outputs.hit != 'true'
         run: |
           start=$(date +%s)
           third_party/git-annex/build.sh ~/.cache/pigeon-git-annex-dist/bin
           echo "cold build: $(( ($(date +%s) - start) / 60 )) min on ${{ matrix.os }}" | tee -a "$GITHUB_STEP_SUMMARY"
-      - if: steps.dist.outputs.cache-hit != 'true'
+      - if: steps.dist.outputs.hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/pigeon-git-annex-dist

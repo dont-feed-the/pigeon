@@ -36,6 +36,7 @@ pub async fn settings(
     let body = html! {
         (list(&other))
         @for s in &rows { (setting(&r, s, &form.0)) }
+        p { (r.id("status-freshness")) }
         (pausing(&r, &form.0))
         (crate::leave::form(&r, &form.0))
     };
@@ -173,12 +174,21 @@ pub async fn save(
     }
     let answers = web
         .ask(Request::SetSettings {
-            key: f.key,
-            value: f.value,
+            key: f.key.clone(),
+            value: f.value.clone(),
         })
         .await;
     // After the answer, so that a new language shows at once.
     let r = web.renderer();
-    let lines = answers.iter().flat_map(|a| r.response(a).0).collect();
+    let lines = answers.iter().flat_map(|a| {
+        if matches!(a, pigeon_proto::Response::Said { message } if message.id == "setting-changed") {
+            let message = pigeon_i18n::Message::new("web-setting-saved")
+                .arg("key", r.id(&format!("setting-{}", f.key)))
+                .arg("value", label(&r, &f.key, &f.value));
+            vec![r.catalogue().format(&message)]
+        } else {
+            r.response(a).0
+        }
+    }).collect();
     pages::result(&r, "/settings", lines).into_response()
 }

@@ -132,9 +132,13 @@ fn kind(worktree: &Path, path: &str) -> Option<&'static str> {
 
 /// `git status` of the folder (07 §7.3 step 2).
 async fn status(g: &Group) -> Result<Vec<Entry>, Error> {
-    let out = g
-        .git
-        .repo
+    // Status may run alongside an install. Git must not refresh or lock
+    // the index as a side effect of this observation.
+    let mut repo = g.git.repo.clone();
+    repo.env
+        .extra
+        .push(("GIT_OPTIONAL_LOCKS".into(), "0".into()));
+    let out = repo
         .run(
             &[
                 "status",
@@ -168,6 +172,28 @@ fn letters(e: Entry) -> Option<(char, char, String)> {
         Entry::Untracked { path } | Entry::Ignored { path } => Some(('?', '?', path)),
         Entry::Unmerged { .. } => None,
     }
+}
+
+/// Local changes that have not yet become a captured version. Status reads
+/// these even while a round holds the group lock: the last committed tree
+/// cannot establish that a newly saved file is safe (06 §6.2).
+pub(crate) async fn pending(g: &Group, prefix: &str) -> Result<BTreeSet<String>, Error> {
+    let Some(worktree) = &g.worktree else {
+        return Ok(BTreeSet::new());
+    };
+    let table = crate::conflicts_file::read(g).unwrap_or_default();
+    Ok(status(g)
+        .await?
+        .into_iter()
+        .filter_map(letters)
+        .filter(|(_, y, path)| {
+            !is_pigeon_path(path)
+                && crate::evict::under(path, prefix)
+                && !crate::suggest::unchanged(worktree, &table, path, *y == 'D')
+                && (*y == 'D' || kind(worktree, path).is_none())
+        })
+        .map(|(_, _, path)| path)
+        .collect())
 }
 
 /// The paths whose file differs from the index, untracked ones included:

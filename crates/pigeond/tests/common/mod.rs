@@ -183,12 +183,17 @@ pub fn status(d: &Daemon) -> StatusReport {
     }
 }
 
-/// Polls the laptop's status until its state is `want`.
+/// Waits for captured versions to reach `want`. A pending save is local
+/// too, but is not yet a history entry that the next test step may use.
 pub fn until(lap: &Daemon, want: State, all: &[&Daemon]) -> StatusReport {
     let deadline = Instant::now() + Duration::from_secs(120);
     loop {
         let s = status(lap);
-        if s.state == want {
+        let capturing = s
+            .versions
+            .iter()
+            .any(|v| v.reason.as_ref().is_some_and(|r| r.id == "why-capturing"));
+        if s.state == want && !capturing {
             return s;
         }
         if Instant::now() > deadline {

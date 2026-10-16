@@ -22,6 +22,15 @@ level-not-checked = Not checked recently
 ## Headlines: what, then why and what next (ux.md §4)
 
 headline-safe = Everything is safe. Checked { $ago }.
+headline-capturing =
+    { $files ->
+        [one] Checking 1 changed file; it is not safe yet.
+       *[other] Checking { $files } changed files; they are not safe yet.
+    }
+headline-checking = The local folder could not be checked. Run: pigeon doctor
+headline-too-few-backups = Not safe yet: add a backup machine.
+why-capturing = This change is waiting to be captured and copied to the backup machines.
+why-too-few-backups = { $have } of { $need } backup machines are set up. Add one with: pigeon invite --backup-machine
 headline-not-safe =
     { $files ->
         [one] 1 file is not safe yet.
@@ -204,7 +213,7 @@ problem-commit-malformed = A change from { $machine } is not well formed, so it 
 problem-commit-waits = A change from { $machine } waits for a newer pigeon ({ $commit }).
 problem-repository-lost = The files of { $machine } were lost or replaced.
 problem-daemon-not-running = pigeon is not running on this computer.
-hint-daemon-not-running = Start it, then check with: pigeon doctor
+hint-daemon-not-running = Run pigeon open to start it, then check with: pigeon doctor
 problem-version-mismatch = This pigeon command and the running pigeon are different versions.
 hint-version-mismatch = Restart pigeon.
 problem-not-installed = This pigeon was not installed from a release, so it cannot update itself.
@@ -247,6 +256,21 @@ web-decline-note = Why (optional)
 web-back = Back
 web-form-expired = This page is out of date. Reload it and try again.
 web-nav-files = Files
+web-root-files = Files in the shared folder
+web-setup = Join or create a group
+web-setup-help = Ask someone in the group for an invitation, or create a group for your family or team. Choose an absolute folder path on this computer. A backup machine needs no shared folder.
+web-join = Join the group
+web-create = Create a group
+web-invitation = Invitation
+web-invitation-ready = Invitation ready
+web-invite-handoff = Send this invitation to the person joining. On the other computer, install and open pigeon, choose Join or create a group, and paste the code within 24 hours. Keep this computer online until joining finishes.
+web-invitation-code = Invitation code
+web-command-line = Command-line instructions
+web-local-folder = Folder on this computer
+web-computer-name = This computer's name
+web-group-name = Group name
+web-backup-copies = Number of backup machines needed for safety
+status-freshness = A safety check is recent for one hour. If no backup machine has been heard from for an hour, pigeon says it has not checked recently; that does not mean files have been lost. A machine silent for 24 hours stops counting toward safe copies. A new change may show Sending for up to ten minutes; it is safe only once enough backup machines hold it.
 web-keep = Keep on this computer
 web-free = Free up space
 folders-none = The group has no folder yet.
@@ -262,6 +286,7 @@ folder-row-freed =
     }
 web-nav-settings = Settings
 web-save = Save
+web-setting-saved = { $key }: { $value }.
 setting-row = { $key } = { $value }
 setting-changed = { $key } is now { $value }.
 setting-language = Language
@@ -378,3 +403,5 @@ drop-done = { $files } files hidden, { $dropped } contents removed from this com
 confirm-drop = Remove this computer's copy anyway? What no other machine has is lost. [y/N]
 cmd-view = Open a read-only copy of a version of a file, outside the folder
 view-ready = A read-only copy is at { $path }; it is removed after seven days.
+
+problem-join-history-unverified = Pigeon could not verify this group's history. Ask the person who invited you to update pigeon and send a new invitation.

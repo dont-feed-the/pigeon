@@ -20,6 +20,7 @@ serde.workspace = true
 tokio = { workspace = true, features = ["fs"] }
 
 [dev-dependencies]
+data-encoding.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 tower.workspace = true
 

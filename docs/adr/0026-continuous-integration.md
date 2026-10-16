@@ -27,7 +27,7 @@ needs (ADR 0008); the nightly of 6 October 2026 has it.
   the repository rules (`scripts/check-file-length-and-header`,
   `scripts/check-adr-index`) and the fast set of models. `models-full` runs
   every configuration when a model or the runner changes, weekly, and by hand.
-- Three tiers since 0.3.7. Pull requests run `ci` and `lab`, about ten
+- Three tiers since 0.4.1. Pull requests run `ci` and `lab`, about ten
   minutes, with the fast models and pigeond's daemon tests in shards. A push
   to main adds `slice` without its S9 crash schedules. Release tags and the
   nightly run (skipped when main has not moved) add `models-full` and S9.

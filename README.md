@@ -10,13 +10,21 @@ server, and tells you whether they are safe.
 Linux (x86_64) or macOS (Apple silicon):
 
 ```sh
-curl -fsSL https://github.com/mariogeiger/pigeon/releases/latest/download/pigeon-install | sh
+curl -fsSL https://github.com/dont-feed-the/pigeon/releases/latest/download/pigeon-install | sh
 ```
 
 ## Update
 
 ```sh
 pigeon update
+```
+
+Apple Silicon Macs can also use the Homebrew tap:
+
+```sh
+brew tap dont-feed-the/pigeon https://github.com/dont-feed-the/pigeon
+brew install pigeon
+brew services start pigeon
 ```
 
 ## Use

@@ -19,6 +19,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -43,6 +44,8 @@ jobs:
         run: scripts/check-adr-index
       - name: every cited section of the spec exists
         run: scripts/check-spec-refs
+      - name: dependency archive verification
+        run: python3 -B -m unittest discover -s scripts/tests -p 'test_restore_git_annex.py'
       - name: E25 stock hang budget and patched trial count
         run: python3 -B -m unittest discover -s lab/git-annex/tests
 
@@ -54,6 +57,33 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: every schedule keeps the merge laws; the old rules fail as expected
         run: python3 models/catalogue/catalogue.py
+
+  packaging:
+    name: install, rollback and uninstall (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: checked archives, supervisor configuration and preserved user data
+        run: python3 -B -m unittest discover -s packaging/tests -v
+      - name: the tap formula parses
+        run: ruby -c Formula/pigeon.rb
+      - name: the Homebrew tap installs its published binaries and patched git-annex
+        if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+        run: |
+          brew tap dont-feed-the/pigeon "$GITHUB_WORKSPACE"
+          brew install dont-feed-the/pigeon/pigeon
+          brew test dont-feed-the/pigeon/pigeon
+          "$(brew --prefix dont-feed-the/pigeon/pigeon)/git-annex/bin/git-annex" version --raw
+          brew uninstall dont-feed-the/pigeon/pigeon
+          brew untap dont-feed-the/pigeon
 
   models:
     name: TLA+ models (fast set, shard ${{ matrix.shard }})
@@ -116,6 +146,10 @@ jobs:
       - name: git-annex from Homebrew (macOS)
         if: runner.os == 'macOS'
         run: brew install git-annex
+      - name: pigeon's patched git-annex and the system git (ADR 0069)
+        uses: ./.github/actions/git-annex-pigeon
+        with:
+          required: "true"
       - name: versions
         run: git annex version | head -1 && git --version
       - name: restore main's Rust cache
@@ -210,6 +244,10 @@ jobs:
       - name: git-annex from Homebrew (macOS)
         if: runner.os == 'macOS'
         run: brew install git-annex
+      - name: pigeon's patched git-annex and the system git (ADR 0069)
+        uses: ./.github/actions/git-annex-pigeon
+        with:
+          required: "true"
       - name: versions
         run: git annex version | head -1 && git --version
       - name: restore main's Rust cache
@@ -235,16 +273,17 @@ jobs:
           SHARD: ${{ matrix.shard }}
         # Seconds on ubuntu-24.04 (run 38843601664): held 386; suggestions
         # 254, unsettled 21, restore 16, view 8, drop 7; people 198, resolve
-        # 152; slice 161, leave 85, refound 55. Every lab test is in a shard.
+        # 152; slice 161, leave 85, refound 55; status_pending is newer. Every
+        # lab test is in a shard.
         run: |
           case "$SHARD" in
             0) tests="held" ;;
-            1) tests="suggestions unsettled restore view drop" ;;
+            1) tests="suggestions unsettled restore view drop status_pending" ;;
             2) tests="people resolve" ;;
             3) tests="slice leave refound" ;;
           esac
           all=$(grep -l '^#!\[cfg(feature = "lab")\]' crates/pigeond/tests/*.rs | xargs -n1 basename | sed 's/\.rs$//' | sort)
-          listed=$(echo held suggestions unsettled restore view drop people resolve slice leave refound | tr ' ' '\n' | sort)
+          listed=$(echo held suggestions unsettled restore view drop status_pending people resolve slice leave refound | tr ' ' '\n' | sort)
           [ "$all" = "$listed" ] || { echo "::error::a lab test of pigeond is in no shard of ci.yml"; diff <(echo "$all") <(echo "$listed"); exit 1; }
           args=(); for t in $tests; do args+=(--test "$t"); done
           cargo test -p pigeond --features lab --locked --no-fail-fast "${args[@]}"
