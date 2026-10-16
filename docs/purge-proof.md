@@ -52,31 +52,56 @@ as detected proof mutations.
 
 ## Independent checks and timing
 
-Both `Purge_full` and `Purge_full3` retain their existing TLC frequencies
-while the proof and its cost are evaluated. The smaller positive instance,
-existing negative protocol configurations, E14 and implementation checks
-remain independent. No test is removed on the strength of an unchecked
-proof or an assumed speedup.
+`Purge_full3` is a proof-covered audit: TLC runs it on Monday's nightly
+run, every release tag, manual full checks, and when explicitly named.
+`Purge_full` and the negative protocol configurations remain in the fast
+set. E14, implementation traces and crash tests retain their checks.
 
-Run `scripts/check-proofs --benchmark-purge` for the roots, property
-bridges, configuration checks and all mutants, plus the large finite purge
-graph with one TLC worker. Logs and per-command timings go to
-`target/formal-proofs`. The development container cannot reliably start solver processes, so the
-draft used a clean GitHub Actions runner.
+The full-model workflow requires successful proof verification before its
+model jobs. The proof runner already checked `Purge_full3`'s root theorem,
+actual configured invariants, constants and guard mutations before this
+schedule change. Moving the row to `audit` therefore adds no recurring
+proof work. The existing audit-coverage check refuses a row without a
+registered, checked proof; changed formal inputs invalidate the verification
+cache. Scheduled, manual and release proof checks stay fresh.
 
-On CI run 38871798059, the purge root proof took 12.363 s, its configured
-property bridge 0.227 s, and its parameter coverage 0.944 s: 13.534 s total.
-All three guard mutations left unproved obligations and produced actual
-TLC safety counterexamples; they took 64.510 s together. The four unsupported
-configuration checks also passed, at about 0.45 s apiece. The subsequent
-one-worker, 1 GiB finite benchmark did not complete before the ten-minute
-job deadline; this is not a completed baseline or a passing workflow.
+On 16 October 2026, fresh checks completed in this workspace with pinned
+TLAPS 1.5.0 and TLC 1.7.4, OpenJDK 21.0.12.1, Python 3.12.14, Linux x86_64
+and four CPU cores. Proof commands used `--nofp --threads 2`; the finite
+check used four workers and a 4 GiB maximum heap. Single samples, excluding
+tool installation:
 
-The existing full-model run measured this finite configuration at 142 s
-with TLC's automatic workers/heap. These are different workloads, not a
-paired speedup measurement. Adding about 80 s to every pull request merely
-to save a nightly traversal would be a poor trade when several PRs run
-each day. Both finite purge checks therefore retain their frequency.
-Instead, [CI reuses identical successful main verification](model-proofs.md#reusing-unchanged-proof-results);
-the root and all mutations run fresh whenever their formal inputs change.
-The benchmark stays opt-in.
+| Check | Wall time |
+|---|---:|
+| Purge root theorem | 11.161 s |
+| Actual configured-property theorem | 0.201 s |
+| Actual configuration's parameter coverage | 0.782 s |
+| Purge proof and coverage total | 12.144 s |
+| `Purge_full3` finite exploration | 203.2 s |
+| All three proof families, coverage and all mutations | 122.748 s |
+
+All 28 proof-suite commands returned their required verdicts. In particular,
+each of the three purge guard mutations left real TLAPS obligations
+unproved and produced a TLC counterexample to the original safety claims.
+The four unsupported purge configurations were rejected. The unmodified
+large finite configuration completed with no invariant violation.
+
+This removes one large graph traversal from each ordinary non-audit
+nightly run. The complete proof suite was already required; its mutation
+cost is unchanged. PR model timings are unchanged because the large purge
+case was not in their fast set. These measurements describe this workspace,
+not a prediction of CI timings or total workflow savings.
+
+Reproduce the checks with:
+
+```sh
+scripts/check-proofs
+scripts/run-tlc Purge_full3 --workers 4 --heap 4g
+scripts/run-tlc Purge_full Purge_seals Purge_none
+```
+
+Proof logs and per-command times go to `target/formal-proofs` by default.
+The older `scripts/check-proofs --benchmark-purge` option uses one TLC
+worker and a 1 GiB heap; its earlier ten-minute CI timeout was not a
+completed finite baseline. The completed measurement above uses the
+explicit worker and heap settings shown here.

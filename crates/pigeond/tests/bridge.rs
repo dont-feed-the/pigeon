@@ -190,7 +190,8 @@ fn large_catalogues_page_over_the_real_socket_and_writes_stay_bounded() {
         )
         .unwrap()
         .len()
-            < 1024
+            < 1024,
+        "unexpected bridge write response: {result:?}"
     );
     let Reply::Applied {
         revision: updated,
