@@ -39,7 +39,15 @@ with originals retained for separate export.
 - A real two-daemon integration checked two old versions and an exact
   read-only copy on a rejoined bare backup; it passed in 6.19 seconds.
 - Bare-path escape checks, translation/catalogue checks and full-target
-  Clippy passed. Independent normal-build retesting is still pending.
+  Clippy passed.
+- The independent participant reran both original admin-owned and
+  member-owned backup fixtures with the normal 0.4.7 build. Default
+  `--deleted` export recovered the exact archived deleted bytes without
+  an internal ref in 54–55 milliseconds. Current and older exports stayed
+  exact. History and read-only views exposed current, older and deleted
+  versions through virtual paths absent on disk. Copies were mode 0444,
+  outside the repository; annex token, object bytes and inodes were
+  unchanged. The full harness exited successfully and cleaned its daemons.
 
 The user accepted agent participants as usability evidence. No cross-OS
 CI, nightly streak or soak result is claimed by these local checks.
