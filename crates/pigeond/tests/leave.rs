@@ -1,9 +1,9 @@
-//! `pigeon leave` (09 §9.7): Ana's only laptop may not leave, being the
-//! group's last admin computer; once a backup machine and her second
-//! laptop joined, the second laptop leaves. Its removal reaches the first
-//! laptop, which drops it from the machines; the leaver then forgets the
-//! group, keeps its files as plain files without `.git`, and, in no group
-//! any more, deletes its device key.
+//! `pigeon leave` (09 §9.7): alone in the group, Ana's laptop leaves it at
+//! once and creates it again with the same key. Once a backup machine and
+//! her second laptop joined, the second laptop leaves. Its removal reaches
+//! the first laptop, which drops it from the machines; the leaver then
+//! forgets the group, keeps its files as plain files without `.git`, and,
+//! in no group any more, deletes its device key.
 //!
 //! Needs what `tests/slice.rs` needs: git-annex, and `pigeon` and
 //! `git-annex-p2p-iroh` built next to `pigeond`.
@@ -54,11 +54,25 @@ fn a_laptop_leaves_once_a_peer_has_its_removal() {
     let f = fa.to_str().unwrap();
     let created = pigeon(&a1, &["create", "Family", f, "--k", "1", "--name", "ana-1"]);
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
+    let key = a1.home.join("config/device-key");
+    let before = std::fs::read_to_string(&key).unwrap();
     let alone = pigeon(&a1, &["leave", "--yes"]);
     assert_eq!(
-        problem(&alone).as_deref(),
-        Some("leave-last-admin"),
+        said(&alone, "left", "group").as_deref(),
+        Some("Family"),
         "{alone:?}"
+    );
+    assert!(!fa.join(".git").exists(), "the folder keeps no repository");
+    assert_eq!(
+        std::fs::read_to_string(fa.join("a.txt")).unwrap(),
+        "first\n"
+    );
+    let again = pigeon(&a1, &["create", "Family", f, "--k", "1", "--name", "ana-1"]);
+    assert!(said(&again, "created", "group").is_some(), "{again:?}");
+    assert_eq!(
+        std::fs::read_to_string(&key).unwrap(),
+        before,
+        "the running key is written back"
     );
 
     join(&a1, &c1, &all);

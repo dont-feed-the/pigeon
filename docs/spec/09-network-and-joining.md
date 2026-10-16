@@ -197,15 +197,18 @@ person (ADR 0075), and visible in the history.
   `pigeon leave` **[no ADR]** signs the device's own removal, then deletes
   its key and, if asked, its copy of the folder.
 
-Coded so far (`pigeond/src/leave.rs`, `tests/leave.rs`): `pigeon leave`
-refuses the group's last admin computer (`leave-last-admin`: no device of
-an admin, recovery sheets included, would remain), signs the removal and
-records it in `.git/pigeon/leaving` ([11 §11.3](11-local-state.md)). Until
-a peer has it, the group's rounds do nothing else, and the device still
-serves it. A peer has it once its fetched `main` holds it or it refuses
-the device as `not-in-roster` (§9.3). Then the group leaves `config.toml`,
-pointer files of content not here are deleted, `.git` and `.pigeon` move
-to `<state>/left/<group>-<time>/`, so the folder keeps its files as plain
+Coded so far (`pigeond/src/leave.rs`, `tests/leave.rs`): a computer that
+is the group's only machine (recovery sheets aside) has nobody to tell: it
+forgets the group at once, as below, without signing a removal. Otherwise
+`pigeon leave` refuses the group's last admin computer (`leave-last-admin`:
+no device of an admin, recovery sheets included, would remain), signs the
+removal and records it in `.git/pigeon/leaving`
+([11 §11.3](11-local-state.md)). Until a peer has it, the group's rounds
+do nothing else, and the device still serves it. A peer has it once its
+fetched `main` holds it or it refuses the device as `not-in-roster`
+(§9.3). Then the group leaves `config.toml`, pointer files of content not
+here are deleted, `.git` and `.pigeon` move to
+`<state>/left/<group>-<time>/`, so the folder keeps its files as plain
 files, and the device key goes once no group is left; the running
 `pigeond` keeps it, and writes it back for the next group it serves, so
 the device ID that group's roster names survives a restart. A custodian's

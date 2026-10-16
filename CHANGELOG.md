@@ -7,6 +7,13 @@ increments the second number, and every other release the third.
 
 ## Unreleased
 
+### Changed
+
+- `pigeon leave` on a computer that is the only machine of its group leaves
+  it at once, even as the group's last admin computer; its files stay in
+  the folder. It used to refuse, so a group created by mistake could not be
+  left.
+
 ### Fixed
 
 - A computer that left its last group and then created or joined another
