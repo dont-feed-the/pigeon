@@ -13,15 +13,37 @@ use pigeon_core::roster::{DeviceId, Edit, Role as DeviceRole, apply, may_sign};
 use pigeon_proto::Response;
 use pigeon_proto::api::{self, Arg, VersionStatus};
 
-use crate::api::{problem, relative};
+use crate::api::problem;
 use crate::daemon::Daemon;
 use crate::git::pointer_key;
 use crate::group::Group;
 use crate::status::msg;
 use crate::util::rfc3339;
 
+#[cfg(test)]
+mod tests;
+
 fn text(s: &str) -> Arg {
     Arg::Text(s.to_owned())
+}
+
+/// A catalogue path for read-only commands. Bare repositories have no
+/// working files: resolve their virtual paths lexically, without reading
+/// similarly named repository state files or requiring parent folders.
+pub(crate) fn relative(g: &Group, path: &Path) -> Option<String> {
+    if g.worktree.is_some() {
+        return crate::api::relative(g, path);
+    }
+    let rel = path.strip_prefix(&g.git_dir).ok()?;
+    let mut parts = Vec::new();
+    for part in rel.components() {
+        match part {
+            std::path::Component::Normal(part) => parts.push(part.to_str()?),
+            std::path::Component::CurDir => {}
+            _ => return None,
+        }
+    }
+    (!parts.is_empty()).then(|| parts.join("/"))
 }
 
 /// Current history followed by the verified archived histories named by

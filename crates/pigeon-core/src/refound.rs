@@ -6,10 +6,50 @@
 //! Laws (`tests/refound.rs`, 1000 cases each): the result is valid and has
 //! only the refounder; paths, rule kinds and group settings survive; paper
 //! keys and unknown devices cannot refound; refounding is idempotent.
+//! Signed archive-link laws are in `tests/refound_archive.rs` (1000 each).
 
 use std::collections::BTreeMap;
 
 use crate::roster::{DeviceId, Role, Roster, Rule};
+
+/// A signed root's explicit link to an old group's immutable history.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Archive {
+    /// The old genesis.
+    pub group: String,
+    /// The exact old tip named by the root.
+    pub main: String,
+}
+
+/// Reads one unambiguous refounding trailer from a correctly signed root.
+/// This authenticates the link, not the old history's authority. Callers
+/// must also check its canonical ref and genesis before following it.
+pub fn archive(raw: &[u8]) -> Option<Archive> {
+    crate::sig::verify(raw).ok()?;
+    if !crate::authority::parents(raw).is_empty() {
+        return None;
+    }
+    let text = std::str::from_utf8(raw).ok()?;
+    let (_, message) = text.split_once("\n\n")?;
+    let mut links = message
+        .lines()
+        .filter_map(|line| line.strip_prefix("Pigeon-Refound:"));
+    let line = links.next()?;
+    if links.next().is_some() {
+        return None;
+    }
+    let mut words = line.split_whitespace();
+    let (group, main) = (words.next()?, words.next()?);
+    let oid = |s: &str| {
+        s.len() == 40
+            && s.bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    };
+    (words.next().is_none() && oid(group) && oid(main)).then(|| Archive {
+        group: group.into(),
+        main: main.into(),
+    })
+}
 
 /// A new group's roster, preserving the old group's folder boundaries.
 pub fn roster(old: &Roster, me: &DeviceId) -> Option<Roster> {

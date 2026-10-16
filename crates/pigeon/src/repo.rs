@@ -3,7 +3,7 @@
 //! and an index of the git-annex objects present, laptop or custodian, bare
 //! or not.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
@@ -99,6 +99,46 @@ impl Repo {
         self.line(&["log", "-1", "--format=%ct", commit])
             .and_then(|t| t.parse().ok())
             .unwrap_or(0)
+    }
+
+    /// Current history followed by at most 31 signed archive links.
+    /// Offline export checks the signature binding each link, canonical
+    /// archive ref and old genesis. It does not run the daemon's authority
+    /// fold; export remains a local, content-hash-checked rescue operation.
+    pub fn histories(&self, commit: &str) -> Result<Vec<String>, ()> {
+        let mut current = commit.to_owned();
+        let mut histories = Vec::new();
+        let mut seen = BTreeSet::new();
+        for _ in 0..32 {
+            if !seen.insert(current.clone()) {
+                return Err(());
+            }
+            histories.push(current.clone());
+            let root = self
+                .line(&["rev-list", "--max-parents=0", &current])
+                .ok_or(())?;
+            let raw = self.out(&["cat-file", "commit", &root]).ok_or(())?;
+            let claimed = String::from_utf8_lossy(&raw)
+                .lines()
+                .any(|l| l.starts_with("Pigeon-Refound:"));
+            let Some(link) = pigeon_core::refound::archive(&raw) else {
+                return if claimed { Err(()) } else { Ok(histories) };
+            };
+            let reference = format!("refs/pigeon/archive/{}/main^{{commit}}", link.group);
+            if self
+                .line(&["rev-parse", "--verify", "-q", &reference])
+                .as_deref()
+                != Some(&link.main)
+                || self
+                    .line(&["rev-list", "--max-parents=0", &link.main])
+                    .as_deref()
+                    != Some(&link.group)
+            {
+                return Err(());
+            }
+            current = link.main;
+        }
+        Err(())
     }
 
     /// The blobs and links of `treeish`, recursively, with `paths` only if

@@ -13,8 +13,9 @@ use std::time::{Duration, SystemTime};
 use pigeon_proto::Response;
 use pigeon_proto::api::Arg;
 
-use crate::api::{problem, relative};
+use crate::api::problem;
 use crate::daemon::Daemon;
+use crate::history::relative;
 
 /// How long a copy stays.
 pub const KEPT: Duration = Duration::from_secs(7 * 24 * 3600);

@@ -269,6 +269,27 @@ repository or reinitialize annex. File history includes the verified
 old group. An invitation belongs to its issuing group; issue fresh ones
 after refounding or upgrading from a build with unbound invitations.
 
+## Export files without running pigeon
+
+Run `pigeon export --to /path/to/new-empty-folder --deleted /path/to/backup.git`
+to copy current and deleted files from a backup, without a daemon, network
+or secret key. After refounding it follows the signed archive links too.
+Deleted files go under `.deleted/`; `MANIFEST.tsv` records exported files.
+Every annex object is checked against its size and SHA-256.
+
+Give several repositories to recover files spread across incomplete
+backups. `MISSING.tsv` lists missing or damaged content and destination
+conflicts; keep the original repositories until those entries are resolved.
+Export does not follow an output symlink as a directory or overwrite an
+already exported file. If an archive link cannot be checked, deleted-file
+export explains the problem rather than silently claiming completeness.
+Current files can still be exported without `--deleted`.
+
+While a backup is running, `pigeon history /path/to/backup.git/folder/file`
+and `pigeon view /path/to/backup.git/folder/file --version 1` read its
+retained catalogue. These are virtual paths: the backup has no working
+folder, and view makes a separate read-only copy.
+
 ## Gather diagnostics with another member
 
 Diagnostics can contain file names and member activity. `pigeon debug bundle`

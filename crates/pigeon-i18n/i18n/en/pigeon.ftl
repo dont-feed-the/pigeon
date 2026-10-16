@@ -407,6 +407,7 @@ view-ready = A read-only copy is at { $path }; it is removed after seven days.
 setting-telemetry-device = Share diagnostics with
 setting-off = Keep diagnostics on each computer
 problem-join-history-unverified = Pigeon could not verify this group's history. Ask the person who invited you to update pigeon and send a new invitation.
+problem-export-history-unverified = Pigeon could not verify the archived history. Keep this repository and ask another member for a complete copy before exporting deleted files.
 
 problem-recovery-not-allowed = This recovery sheet can no longer add computers. Use a current sheet, or ask an admin for an invitation.
 

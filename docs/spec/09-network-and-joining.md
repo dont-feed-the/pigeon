@@ -296,7 +296,16 @@ tools are those of ADR 0047, which fixes their formats:
   `annex/objects` or, for an unlocked file, its working tree; a file takes
   its name only once its SHA-256 matches the key. `--deleted` writes the
   last version of each deleted file under `.deleted/`; `MISSING.tsv` lists
-  what is missing or damaged. A backup machine writes `RECOVERY.txt` in its
+  what is missing, damaged or blocked by a destination conflict. Deleted
+  discovery follows the signed refounding chain, requiring each canonical
+  archive ref and old genesis to match the root's signed link. A broken
+  link refuses deleted-file export explicitly. This offline rescue checks
+  link signatures and content hashes; it does not run the daemon's complete
+  authority fold. Output files never replace another exported file, and
+  exported symlinks cannot become destination directories. Metadata names
+  avoid user paths under portable case folding. `history` and read-only
+  `view` also accept virtual file paths below a bare backup repository.
+  A backup machine writes `RECOVERY.txt` in its
   repository directory each round the note changes (`pigeond/src/recovery_txt.rs`).
 - **Replacing a custodian:** the failed one is removed (§9.7) and its
   replacement joins as a new device. A surviving disk gets a new UUID and

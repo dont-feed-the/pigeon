@@ -4,6 +4,17 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.7 — 2026-10-16
+
+### Fixed
+
+- Offline `pigeon export --deleted` includes files deleted in the signed
+  archive chain after refounding, without needing to name an old commit.
+- `history` and read-only `view` accept file paths within a bare backup
+  repository, including files that exist only in its retained history.
+- Export refuses broken archive links and reports destination conflicts,
+  retaining already exported files and avoiding writes through output symlinks.
+
 ## 0.4.6 — 2026-10-16
 
 ### Fixed

@@ -445,3 +445,10 @@ each main/index/configuration seam for both refounding and a bare backup
 rejoining in place. Restart must finish without an inviter, with unchanged
 annex identity, object bytes and inodes. These supplement welcome history
 validation; a private replay journal does not authorize remote history.
+
+Offline archive-link laws (`tests/refound_archive.rs`, 1000 cases each)
+cover exact signed-root links, unsigned or changed bytes, non-root commits,
+and malformed or ambiguous trailers. Export integration tests cover nested
+archives, missing/substituted/unsigned links, output symlink conflicts,
+temporary-name collisions and case-folded metadata names. Bare-backup
+integration checks old history and exact read-only views after rejoining.

@@ -407,6 +407,7 @@ view-ready = Une copie en lecture seule est dans { $path } ; elle est supprimée
 setting-telemetry-device = Partager les diagnostics avec
 setting-off = Garder les diagnostics sur chaque ordinateur
 problem-join-history-unverified = Pigeon n’a pas pu vérifier l’historique de ce groupe. Demandez à la personne qui vous a invité de mettre pigeon à jour et de vous envoyer une nouvelle invitation.
+problem-export-history-unverified = Pigeon n’a pas pu vérifier l’historique archivé. Conservez ce dépôt et demandez une copie complète à un autre membre avant d’exporter les fichiers supprimés.
 
 problem-recovery-not-allowed = Cette fiche de récupération ne peut plus ajouter d’ordinateurs. Utilisez une fiche actuelle ou demandez une invitation à un administrateur.
 
