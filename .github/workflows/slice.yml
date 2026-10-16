@@ -144,8 +144,9 @@ jobs:
           if-no-files-found: ignore
 
   # 13 §13.12's 50 random S9 crash schedules per release, in two shards of 25
-  # beside the slice job: one schedule takes 50-90 s, which does not fit
-  # the slice job's 90 minutes. S9-random left slice::BLOCKED once both
+  # beside the slice job. Each Linux shard runs two independent processes,
+  # with separate disks, reports and seeds; macOS keeps one. Job names and
+  # case counts remain the publication gate's 50 schedules. S9-random left slice::BLOCKED once both
   # runners passed every shard (run 38660637841, f5dddd6): a failure fails
   # the push.
   s9-random:
@@ -219,9 +220,14 @@ jobs:
       - name: 25 random S9 crash schedules
         env:
           PIGEON_LAB_BIN: ${{ github.workspace }}/target/lab/bin
-          PIGEON_LAB_OUT: ${{ github.workspace }}/target/lab/out
-          HEGEL_TEST_CASES: "25"
-        run: cargo test --locked --release -p pigeon-lab --test s9_exec
+          S9_JOBS: ${{ runner.os == 'Linux' && '2' || '1' }}
+          SHARD: ${{ matrix.shard }}
+          RUN_ID: ${{ github.run_id }}
+        # Fresh seeds on each run, disjoint across shards and reproducible
+        # from the logged seed. Retrying a run repeats its schedules.
+        run: |
+          rm -rf target/lab/out
+          scripts/check-s9-schedules --cases 25 --jobs "$S9_JOBS" --seed "$((RUN_ID * 4 + SHARD * 2))" --out target/lab/out
       - name: their trace logs, checked by TLC
         if: always()
         env:

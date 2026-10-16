@@ -170,6 +170,19 @@ pub enum Request {
     OpenWeb,
     /// The group's folders, for the web's Files page (ux.md §6.2).
     Folders,
+    /// `pigeon sync [PATH]`: every folder, under one if given, and whether
+    /// this computer keeps it (08 §8.5).
+    Sync {
+        /// Only this folder and those in it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        folder: Option<String>,
+    },
+    /// `pigeon sync PATH --default`: forgets this computer's choices of a
+    /// folder and inside it, which then follows its default again.
+    ForgetChoice {
+        /// The folder.
+        folder: String,
+    },
     /// The files under a folder, for the web's folder page (ux.md §6.2).
     Files {
         /// The folder.
@@ -427,6 +440,13 @@ pub enum Response {
     },
     /// The answer to `FreePreview`.
     FreePreview(FreePreview),
+    /// The answer to `Sync`.
+    Sync {
+        /// The group's folder on this computer.
+        root: String,
+        /// The folders, parents before their children.
+        folders: Vec<SyncFolder>,
+    },
     /// The answer to `Files`.
     Files {
         /// The group's folder on this computer.
@@ -712,6 +732,22 @@ pub struct FreePreview {
     /// Whether that is too long ago to confirm their copies now; freeing
     /// then asks again (`Evict {confirmed}`).
     pub quiet: bool,
+}
+
+/// A folder and whether this computer keeps it (08 §8.5).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SyncFolder {
+    /// Its path in the group's folder.
+    pub path: String,
+    /// Whether its files are on this computer (or are coming).
+    pub kept: bool,
+    /// Whether this computer chose for this folder itself, rather than
+    /// following the folder holding it or the default.
+    pub chosen: bool,
+    /// Another person's folder of a per-person folder, which this computer
+    /// does not keep unless it chooses to: its owner's name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub others: Option<String>,
 }
 
 /// A file deleted from the group, which `Restore` brings back.

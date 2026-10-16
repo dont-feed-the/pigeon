@@ -145,6 +145,18 @@ A new choice for a parent replaces older choices below it. `freed.json`
 format 1 stores these choices; legacy lists are read as Free choices. The
 pure `keep_targets` algebra and its three 1000-case laws define this rule.
 
+Other people's folders of a per-person folder ([04 §4.3](04-roster-and-authority.md))
+are Free by default on a laptop **[no ADR]**: `F/<id>` for every person
+`<id>` other than this computer's, as the folder rules resolve it, unless
+this computer chose for that folder or a folder holding it (a choice inside
+it still wins its subtree). The default is not stored: it follows the roster,
+so a person who joins later gets a folder that others do not keep, and a
+computer never receives what it was never asked to keep. `pigeon sync
+[PATH]` lists every folder with whether it is kept, chosen, or another
+person's; `pigeon sync PATH --default` forgets the choices of PATH and
+inside it. A path inside a folder that is not kept is absent from disk;
+commands resolve it from its nearest folder that exists.
+
 ## 8.6 Purge: erase forever (ADR 0018)
 
 Not yet coded; `Purge.tla` checks the protocol and E14 asserts it with

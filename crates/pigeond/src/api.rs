@@ -113,10 +113,16 @@ pub fn relative(g: &Group, path: &Path) -> Option<String> {
         return crate::restore::path::relative(g, path);
     }
     let wt = g.worktree.as_ref()?;
-    let abs = std::fs::canonicalize(path).ok().or_else(|| {
-        let parent = std::fs::canonicalize(path.parent()?).ok()?;
-        Some(parent.join(path.file_name()?))
-    })?;
+    // A path in a folder this computer does not keep is absent from disk
+    // (08 §8.5): the nearest folder that exists, then the names below it.
+    let mut missing = Vec::new();
+    let mut existing = path;
+    while !existing.exists() {
+        missing.push(existing.file_name()?);
+        existing = existing.parent()?;
+    }
+    let mut abs = std::fs::canonicalize(existing).ok()?;
+    abs.extend(missing.iter().rev());
     let rel = abs.strip_prefix(wt).ok()?;
     Some(
         rel.components()
@@ -250,6 +256,8 @@ pub(crate) async fn handle(d: &Arc<Daemon>, request: Request) -> Vec<Response> {
             crate::drop::drop(d, Path::new(&path), confirmed).await
         }
         Request::Keep { folder } => keep(d, Path::new(&folder)).await,
+        Request::Sync { folder } => crate::sync::list(d, folder.as_deref().map(Path::new)).await,
+        Request::ForgetChoice { folder } => crate::sync::forget(d, Path::new(&folder)).await,
         Request::Machines => machines(d),
         Request::People => people(d).await,
         Request::OpenWeb => match d.web.get() {
@@ -432,6 +440,7 @@ fn join_problem(code: &str, invitation: &str, person: Option<&str>) -> Response 
             problem(code, &[("person", text(&person))], None)
         }
         "join-history-unverified"
+        | "update-needed"
         | "invite-unknown"
         | "already-in-group"
         | "not-in-group"

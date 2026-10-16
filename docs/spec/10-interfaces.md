@@ -20,6 +20,7 @@ result, progress events then a result, or a `Problem` (§10.6).
 | `Invite` | `pigeon invite` | People → Invite | [09 §9.6](09-network-and-joining.md) |
 | `Join {invitation, folder, keep, name?, person?, existing, custodian}` | `pigeon join INVITATION [FOLDER] [--person NAME] [--name NAME] [--backup-machine]` | Welcome → Join | [09 §9.6](09-network-and-joining.md) |
 | `Keep {folder}` · `Evict {folder, confirmed}` · `FreePreview {folder}` | `pigeon keep PATH` · `pigeon free PATH [--yes]` | Files → *Keep on this computer* · *Free up space*, confirmed | [08 §8.5](08-custody-loops.md) |
+| `Sync {folder?}` · `ForgetChoice {folder}` | `pigeon sync [PATH]` · `pigeon sync PATH --default` | Files → which folders are on this computer | [08 §8.5](08-custody-loops.md) |
 | `Drop {path, confirmed}` | `pigeon free --without-checking PATH` | — (CLI only, ux.md §2.2) | [08 §8.7](08-custody-loops.md) |
 | `History {path}` | `pigeon history PATH` | a file's page | [05](05-catalogue-and-names.md) |
 | `View {path, version \| group}` | `pigeon view PATH [--version N \| --group]` | *Open a copy*, *Open Paul's version* | [07 §7.6](07-capture-and-install.md) |

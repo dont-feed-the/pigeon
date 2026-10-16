@@ -363,8 +363,13 @@ every transfer, which kept the first runs at *published*. In `slice.yml`
 run 38660637841 (15 October 2026, at f5dddd6) S1–S13, every S9 point and
 S9's 50 random schedules pass on both runners, and `slice::BLOCKED` is
 empty. The random schedules run in a job of their own, two shards of 25
-per runner, as 50 at about 10 s (Linux) to 60 s (macOS) each do not fit
-beside the scenarios. Their last failure, one macOS case of 50, was a stale
+per runner. Each Linux shard uses two independent processes (13 and 12
+cases); macOS uses one. `scripts/check-s9-schedules` separates their disks,
+socket namespaces, reports and hegel databases, waits for every process and
+fails if any fails. Seeds vary with the workflow run ID, are disjoint across
+shards and are logged for replay; a retry keeps its seeds. The fixed late
+capture crash-supervision regression runs once per shard, and TLC checks
+every process's traces before publication. Their last failure, one macOS case of 50, was a stale
 `.git/index.lock` left by a stopped daemon's git; pigeond now removes stale
 locks (11 §11.4).
 

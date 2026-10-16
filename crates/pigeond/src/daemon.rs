@@ -271,7 +271,7 @@ impl Daemon {
             tracing::warn!(group = %g.id, error = %e, "shared-storage-waits");
             return;
         }
-        crate::report::receive(g, &self.device).await;
+        crate::report::receive(g, &self.device, &self.dirs.update_wanted()).await;
         self.note_lost(g);
         {
             let mut step = round.child("place");

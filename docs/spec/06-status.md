@@ -59,7 +59,7 @@ main = "<commit id of its main>"
 proposals = ["<commit id>"]         # tips of the proposal chains it keeps outside main (ADR 0046)
 checking = false                    # custodians: true while a restored repository is re-checked (ADR 0046)
 lab = false                         # true from a lab build (13 §13.12); a release build never counts it
-versions = { pigeon = "1.0.0", git_annex = "10.20261006-pigeon1", git = "2.55.0" }
+versions = { pigeon = "1.0.0", git_annex = "10.20261006-pigeon1", git = "2.55.0" }  # a build of main: "1.0.0+g<commit>"
 
 [disk]                              # bytes
 used = 812_000_000_000

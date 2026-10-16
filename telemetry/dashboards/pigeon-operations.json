@@ -48,8 +48,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (group, state, uncertain) (pigeon_versions)",
-          "legendFormat": "{{group}} {{state}} uncertain={{uncertain}}"
+          "expr": "sum by (device_name, state, uncertain) (pigeon_versions{group_name=~\"$group\"})",
+          "legendFormat": "{{device_name}} {{state}} uncertain={{uncertain}}"
         }
       ],
       "options": {
@@ -86,8 +86,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (group) (pigeon_queue_bytes)",
-          "legendFormat": "{{group}}"
+          "expr": "sum by (device_name) (pigeon_queue_bytes{group_name=~\"$group\"})",
+          "legendFormat": "{{device_name}}"
         }
       ],
       "options": {
@@ -124,8 +124,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, group, command) (rate(pigeon_annex_call_duration_seconds_bucket[5m])))",
-          "legendFormat": "{{group}} {{command}}"
+          "expr": "histogram_quantile(0.95, sum by (le, device_name, command) (rate(pigeon_annex_call_duration_seconds_bucket{group_name=~\"$group\"}[5m])))",
+          "legendFormat": "{{device_name}} {{command}}"
         }
       ],
       "options": {
@@ -162,8 +162,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (group, command) (rate(pigeon_annex_call_duration_seconds_count{outcome=\"error\"}[5m]))",
-          "legendFormat": "{{group}} {{command}}"
+          "expr": "sum by (device_name, command) (rate(pigeon_annex_call_duration_seconds_count{outcome=\"error\", group_name=~\"$group\"}[5m]))",
+          "legendFormat": "{{device_name}} {{command}}"
         }
       ],
       "options": {
@@ -200,8 +200,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (group, direction, peer, path) (rate(pigeon_transfer_bytes_total[5m]))",
-          "legendFormat": "{{group}} {{direction}} {{peer}} {{path}}"
+          "expr": "sum by (device_name, direction, peer_name, path) (rate(pigeon_transfer_bytes_total{group_name=~\"$group\"}[5m]))",
+          "legendFormat": "{{device_name}} {{direction}} {{peer_name}} {{path}}"
         }
       ],
       "options": {
@@ -238,8 +238,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (group, class, stage) (pigeon_queue_depth)",
-          "legendFormat": "{{group}} {{class}} {{stage}}"
+          "expr": "sum by (device_name, class, stage) (pigeon_queue_depth{group_name=~\"$group\"})",
+          "legendFormat": "{{device_name}} {{class}} {{stage}}"
         }
       ],
       "options": {
@@ -276,8 +276,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, group) (pigeon_sync_lag_seconds_bucket{observation=\"peer\"}))",
-          "legendFormat": "{{group}}"
+          "expr": "histogram_quantile(0.95, sum by (le, device_name) (pigeon_sync_lag_seconds_bucket{observation=\"peer\", group_name=~\"$group\"}))",
+          "legendFormat": "{{device_name}}"
         }
       ],
       "options": {
@@ -314,8 +314,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, group) (pigeon_protect_lag_seconds_bucket{observation=\"sampled-transition\"}))",
-          "legendFormat": "{{group}}"
+          "expr": "histogram_quantile(0.95, sum by (le, device_name) (pigeon_protect_lag_seconds_bucket{observation=\"sampled-transition\", group_name=~\"$group\"}))",
+          "legendFormat": "{{device_name}}"
         }
       ],
       "options": {
@@ -352,8 +352,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (group, direction, path) (rate(pigeon_connection_observations_total[5m]))",
-          "legendFormat": "{{group}} {{direction}} {{path}} {{observation}}"
+          "expr": "sum by (device_name, direction, path) (rate(pigeon_connection_observations_total{group_name=~\"$group\"}[5m]))",
+          "legendFormat": "{{device_name}} {{direction}} {{path}} {{observation}}"
         }
       ],
       "options": {
@@ -390,8 +390,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (group, observation) (rate(pigeon_lag_clock_skew_total[5m]))",
-          "legendFormat": "{{group}} {{direction}} {{path}} {{observation}}"
+          "expr": "sum by (device_name, observation) (rate(pigeon_lag_clock_skew_total{group_name=~\"$group\"}[5m]))",
+          "legendFormat": "{{device_name}} {{direction}} {{path}} {{observation}}"
         }
       ],
       "options": {
@@ -406,7 +406,35 @@
     }
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "name": "group",
+        "label": "Group",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": {
+          "query": "label_values(pigeon_versions, group_name)",
+          "refId": "group"
+        },
+        "definition": "label_values(pigeon_versions, group_name)",
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "refresh": 2,
+        "sort": 1
+      }
+    ]
   },
   "annotations": {
     "list": []

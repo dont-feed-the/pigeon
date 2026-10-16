@@ -28,6 +28,8 @@ ACTIONS = {"Capture", "Start", "TakeGroup", "MoveAside", "Scan", "Check", "Renam
            "Index", "Done", "Release", "Recover", "RecoverEnd", "Cleanup", "Conflict", "Resolve", "Withdraw", "Decide", "Reconcile", "Adopt"}
 
 
+WITNESS_MIN_TRANSITIONS = 32
+
 FILESYSTEM_SPECS = {"CaptureInstall", "Evict", "Thin", "Restore", "Resolve"}
 
 
@@ -214,8 +216,22 @@ SPECIFICATION TraceSpec
 INVARIANT TraceNotConsumed
 CHECK_DEADLOCK FALSE
 """
-        (work / "CaptureInstallTrace_good.cfg").write_text(config)
-        got, output = tlc.run(tlc.tlc_jar(), "CaptureInstallTrace_good", "CaptureInstallTrace", java, "1", "2g", models=work)
+        # The eager relation is a conjunction with TraceNext, with identical
+        # bounds and safety checks. Acceptance supplies a full-model witness;
+        # rejection/timeout is inconclusive. Short streams already replay
+        # cheaply, so reserve the shortcut for longer histories.
+        searches = [("TraceSpec", None)]
+        if len(events) >= WITNESS_MIN_TRANSITIONS:
+            searches.insert(0, ("EagerTraceSpec", 60))
+        for trace_spec, deadline in searches:
+            (work / "CaptureInstallTrace_good.cfg").write_text(
+                config.replace("SPECIFICATION TraceSpec", f"SPECIFICATION {trace_spec}"))
+            got, output = tlc.run(tlc.tlc_jar(), "CaptureInstallTrace_good", "CaptureInstallTrace",
+                                  java, "1", "2g", models=work, timeout=deadline)
+            if got == "trace:accepted":
+                return got
+            if trace_spec == "EagerTraceSpec" and diagnostics:
+                print(f"eager witness search: {got}; retrying full TraceSpec ({len(events)} transitions)", flush=True)
         if got != "trace:accepted" and diagnostics:
             print(tlc.excerpt(output), file=sys.stderr)
         return got

@@ -173,5 +173,16 @@ TraceNext == l <= Len(TraceLog) /\
      /\ (Ev.vars.ok /\ ~Ev.vars.crashed /\ Ev.action # "Cleanup" => pc' = Ev.vars.phase)
      /\ l' = l + 1 /\ budget' = 0 /\ segment' = "gap" /\ UNCHANGED driverVars
 TraceSpec == TraceInit /\ [][TraceNext]_<<driverVars, l, budget, segment>>
+(* A witness-search shortcut only. Every eager step is a TraceNext step;
+   prefer matching checkpoints and omit hidden writer handles. A driver
+   that can already explain its output need not wait for person steps.
+   Rejection here is inconclusive and must retry the full TraceSpec. *)
+EagerTraceNext ==
+  /\ TraceNext
+  /\ hid' = {}
+  /\ (segment = "gap" /\ Match(Projection, Ev.vars.before) /\ ENABLED DriverStep => segment' = "before")
+  /\ (segment = "before" /\ ENABLED (DriverStep /\ Match(Projection', Ev.vars.after)) => segment' = "after")
+  /\ (segment = "after" /\ Match(Projection, Ev.vars.after) => l' = l + 1)
+EagerTraceSpec == TraceInit /\ [][EagerTraceNext]_<<driverVars, l, budget, segment>>
 TraceNotConsumed == l <= Len(TraceLog)
 =============================================================================

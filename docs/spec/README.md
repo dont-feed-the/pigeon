@@ -113,7 +113,7 @@ sync of hot files (proposal §1).
 | 0006 helper, 0011 one daemon, 0016 relays, 0047 recovery, 0075 joining | [09](09-network-and-joining.md) |
 | 0021, 0023, 0024, 0027, 0028, 0029 interfaces, errors, words, messages | [06](06-status.md), [10](10-interfaces.md) |
 | 0036 local state; 0022, 0025 logs and telemetry; 0008, 0012, 0026 evidence | [11](11-local-state.md), [12](12-observability.md), [13](13-verification.md) |
-| 0005, 0032 platforms; 0019 licence; 0069 git-annex delivery; 0037 resources | [14](14-platforms-and-packaging.md), [15](15-resource-use.md) |
+| 0005, 0032 platforms; 0019 licence; 0069 git-annex delivery; 0037 resources; 0076 automatic update | [14](14-platforms-and-packaging.md), [15](15-resource-use.md) |
 | 0046 protected; 0048 versioned formats | [02](02-guarantees.md), [04](04-roster-and-authority.md), [06](06-status.md), [08](08-custody-loops.md), [09](09-network-and-joining.md), [13](13-verification.md) |
 
 0030 is Rejected, 0033 Superseded; the 27 withdrawn ADRs are rules or

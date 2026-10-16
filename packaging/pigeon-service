@@ -1,20 +1,28 @@
 #!/bin/sh
-# Installs or removes pigeond's supervisor configuration (spec 14 §14.4).
+# Installs or removes pigeond's supervisor configuration (spec 14 §14.4) and
+# the automatic update beside it (14 §14.5, ADR 0076): a daily timer, and a
+# watch on the file pigeond writes when a peer runs a newer release. Both
+# run the latest release's pigeon-install, fetched afresh, so that no program
+# of the installation takes part in its own repair. The file auto-update-off
+# in the installation's directory leaves the update out.
 # A system installation creates the pigeon account and its state directories;
 # removing the service always keeps that account and all group data.
-# --print renders the unit or agent without changing the machine.
+# --update-only leaves pigeond as it runs; --print renders pigeond's unit or
+# agent without changing the machine, --print-update the update's.
 set -eu
 
 die() { echo "pigeon-service: $*" >&2; exit 1; }
 os=$(uname -s)
-system= stop= print= start=1 prefix=
+system= stop= print= start=1 prefix= only=
 while [ $# -gt 0 ]; do
   case $1 in
     --prefix) prefix=${2:?--prefix needs a directory}; shift 2 ;;
     --system) system=1; shift ;;
     --stop) stop=1; shift ;;
-    --print) print=1; shift ;;
+    --print) print=pigeond; shift ;;
+    --print-update) print=update; shift ;;
     --no-start) start=; shift ;;
+    --update-only) only=update; shift ;;
     *) die "unknown argument $1" ;;
   esac
 done
@@ -90,62 +98,218 @@ UNIT
   fi
 }
 
-if [ -n "$print" ]; then render; exit 0; fi
+
+# The update: the latest release's pigeon-install, downloaded whole before it
+# runs, with --unattended, which leaves a build of main and a choice of
+# auto-update-off alone (14 §14.5).
+releases=https://github.com/dont-feed-the/pigeon/releases
+updater="f=\$(mktemp) || exit 1; if curl -fsSL --retry 3 -o \"\$f\" $releases/latest/download/pigeon-install; then sh \"\$f\" --unattended \"\$@\"; s=\$?; else s=1; fi; rm -f \"\$f\"; exit \$s"
+# The file pigeond writes in its state directory (11 §11.2) when a peer
+# runs a newer release.
 if [ "$os" = Darwin ]; then
-  plist="$HOME/Library/LaunchAgents/org.pigeon.pigeond.plist"
-  job="gui/$(id -u)/org.pigeon.pigeond"
+  wanted="$HOME/Library/Logs/pigeon/update-wanted"
+elif [ -n "$system" ]; then
+  wanted=%L/pigeon/update-wanted
+else
+  wanted=%S/pigeon/update-wanted
+fi
+
+# Renders the update's systemd unit of KIND: service, timer or path.
+update_unit() {
+  case $1 in
+    service)
+      cat <<UNIT
+# Written by pigeon-service (spec 14 §14.5).
+[Unit]
+Description=pigeon's update to its latest release
+${system:+After=network-online.target
+Wants=network-online.target
+}
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c '$(printf '%s' "$updater" | sed 's/\$/$$/g')' pigeon-update --prefix "$(unit_path "$prefix")"${system:+ --system}
+Nice=10
+IOSchedulingClass=idle
+UNIT
+      ;;
+    timer)
+      cat <<UNIT
+# Written by pigeon-service (spec 14 §14.5).
+[Unit]
+Description=pigeon's daily update
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1d
+FixedRandomDelay=true
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+      ;;
+    path)
+      cat <<UNIT
+# Written by pigeon-service (spec 14 §14.5).
+[Unit]
+Description=pigeon's update when a peer runs a newer release
+
+[Path]
+PathChanged=$wanted
+Unit=pigeon-update.service
+
+[Install]
+WantedBy=paths.target
+UNIT
+      ;;
+  esac
+}
+
+# Renders the update's agent, at a minute of the day fixed for this machine.
+update_agent() {
+  minute=$(printf '%s' "$(hostname)$prefix" | cksum | cut -d' ' -f1)
+  minute=$((minute % 1440))
+  cat <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>org.pigeon.update</string>
+  <key>ProgramArguments</key><array>
+    <string>/bin/sh</string><string>-c</string><string>$(xml "$updater")</string>
+    <string>pigeon-update</string><string>--prefix</string><string>$(xml "$prefix")</string>
+  </array>
+  <key>StartCalendarInterval</key><dict>
+    <key>Hour</key><integer>$((minute / 60))</integer>
+    <key>Minute</key><integer>$((minute % 60))</integer>
+  </dict>
+  <key>WatchPaths</key><array><string>$(xml "$wanted")</string></array>
+  <key>StandardOutPath</key><string>$(xml "$HOME/Library/Logs/pigeon/update.log")</string>
+  <key>StandardErrorPath</key><string>$(xml "$HOME/Library/Logs/pigeon/update.log")</string>
+  <key>ProcessType</key><string>Background</string>
+</dict></plist>
+PLIST
+}
+
+render_update() {
+  if [ "$os" = Darwin ]; then
+    update_agent
+  else
+    for kind in service timer path; do
+      echo "# pigeon-update.$kind"
+      update_unit $kind
+    done
+  fi
+}
+
+# Puts stdin in FILE; fails, changing nothing, when FILE holds it already.
+write() {
+  t=$(mktemp "$1.XXXXXX")
+  cat >"$t"
+  if cmp -s "$t" "$1"; then rm -f "$t"; return 1; fi
+  mv "$t" "$1"
+}
+
+if [ "$print" = pigeond ]; then render; exit 0; fi
+if [ "$print" = update ]; then render_update; exit 0; fi
+uid=$(id -u)
+if [ -n "$system" ]; then
+  [ "$uid" = 0 ] || die "run the system installation as root"
+  units=/etc/systemd/system
+  ctl() { systemctl "$@"; }
+else
+  units="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+  ctl() { systemctl --user "$@"; }
+fi
+# Stops launchd's job NAME. bootout returns before launchd has torn the job
+# down, and bootstrapping before then fails with "Input/output error"; so
+# this waits up to ten seconds.
+bootout() {
+  job="gui/$uid/$1"
   launchctl bootout "$job" 2>/dev/null || true
-  # bootout returns before launchd has torn the job down, and bootstrapping
-  # before then fails with "Input/output error"; wait up to ten seconds.
   tries=100
   while launchctl print "$job" >/dev/null 2>&1; do
     tries=$((tries - 1))
-    [ "$tries" -gt 0 ] || die "launchd still runs pigeond ten seconds after stopping it"
+    [ "$tries" -gt 0 ] || die "launchd still runs $2 ten seconds after stopping it"
     sleep 0.1
   done
-  if [ -n "$stop" ]; then rm -f "$plist"; exit 0; fi
-  mkdir -p "${plist%/*}"
-  render > "$plist"
-  [ -z "$start" ] || launchctl bootstrap "gui/$(id -u)" "$plist"
-elif [ -n "$system" ]; then
-  [ "$(id -u)" = 0 ] || die "run the system installation as root"
-  unit=/etc/systemd/system/pigeond.service
+}
+# Whether a systemd manager answers: a person's session may have none.
+manager() { [ -n "$system" ] || systemctl --user show-environment >/dev/null 2>&1; }
+
+# Writes pigeond's unit or agent and (re)starts it; with --stop, removes it.
+supervise_pigeond() {
+  if [ "$os" = Darwin ]; then
+    plist="$HOME/Library/LaunchAgents/org.pigeon.pigeond.plist"
+    bootout org.pigeon.pigeond pigeond
+    if [ -n "$stop" ]; then rm -f "$plist"; return; fi
+    mkdir -p "${plist%/*}"
+    render >"$plist"
+    [ -z "$start" ] || launchctl bootstrap "gui/$uid" "$plist"
+    return
+  fi
+  unit="$units/pigeond.service"
   if [ -n "$stop" ]; then
-    systemctl disable --now pigeond.service
+    if manager; then ctl disable --now pigeond.service; fi
     rm -f "$unit"
-    systemctl daemon-reload
-    exit 0
+    if [ -n "$system" ]; then ctl daemon-reload; fi
+    return
   fi
-  if ! id pigeon >/dev/null 2>&1; then
-    useradd --system --user-group --home-dir /var/lib/pigeon --create-home \
-      --shell "$(command -v nologin)" pigeon
-  fi
-  [ "$(id -u pigeon)" != 0 ] || die "the pigeon account must not be root"
-  install -d -o pigeon -g pigeon -m 0750 /var/lib/pigeon /var/log/pigeon /var/cache/pigeon
-  render > "$unit"
-  systemctl daemon-reload
-  if [ -n "$start" ]; then
-    systemctl enable --quiet pigeond.service
-    systemctl restart pigeond.service
-  fi
-else
-  unit="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/pigeond.service"
-  if [ -n "$stop" ]; then
-    if systemctl --user show-environment >/dev/null 2>&1; then
-      systemctl --user disable --now pigeond.service
+  if [ -n "$system" ]; then
+    if ! id pigeon >/dev/null 2>&1; then
+      useradd --system --user-group --home-dir /var/lib/pigeon --create-home \
+        --shell "$(command -v nologin)" pigeon
     fi
-    rm -f "$unit"
-    exit 0
+    [ "$(id -u pigeon)" != 0 ] || die "the pigeon account must not be root"
+    install -d -o pigeon -g pigeon -m 0750 /var/lib/pigeon /var/log/pigeon /var/cache/pigeon
   fi
-  mkdir -p "${unit%/*}"
-  render > "$unit"
-  if [ -n "$start" ]; then
-    if systemctl --user show-environment >/dev/null 2>&1; then
-      systemctl --user daemon-reload
-      systemctl --user enable --quiet pigeond.service
-      systemctl --user restart pigeond.service
-    else
-      echo "pigeon-service: no systemd user session; start $prefix/bin/pigeond yourself"
+  mkdir -p "$units"
+  render >"$unit"
+  [ -n "$start" ] || return 0
+  if manager; then
+    ctl daemon-reload
+    ctl enable --quiet pigeond.service
+    ctl restart pigeond.service
+  else
+    echo "pigeon-service: no systemd user session; start $prefix/bin/pigeond yourself"
+  fi
+}
+
+# Writes the update's timer and watch and starts them; never restarts a run
+# in progress, which may be the one installing this. With --stop or
+# auto-update-off, removes them.
+supervise_update() {
+  if [ "$os" = Darwin ]; then
+    agent="$HOME/Library/LaunchAgents/org.pigeon.update.plist"
+    if [ -n "$stop" ] || [ -f "$prefix/auto-update-off" ]; then
+      bootout org.pigeon.update "the update"
+      rm -f "$agent"
+      return
     fi
+    mkdir -p "${agent%/*}" "${wanted%/*}"
+    [ -e "$wanted" ] || : >"$wanted"
+    if update_agent | write "$agent"; then bootout org.pigeon.update "the update"; fi
+    if [ -n "$start" ] && ! launchctl print "gui/$uid/org.pigeon.update" >/dev/null 2>&1; then
+      launchctl bootstrap "gui/$uid" "$agent"
+    fi
+    return
   fi
-fi
+  if [ -n "$stop" ] || [ -f "$prefix/auto-update-off" ]; then
+    if manager; then
+      ctl disable --now pigeon-update.timer pigeon-update.path 2>/dev/null || true
+    fi
+    rm -f "$units/pigeon-update.service" "$units/pigeon-update.timer" "$units/pigeon-update.path"
+    if manager; then ctl daemon-reload; fi
+    return
+  fi
+  mkdir -p "$units"
+  for kind in service timer path; do
+    update_unit $kind | write "$units/pigeon-update.$kind" || true
+  done
+  if [ -n "$start" ] && manager; then
+    ctl daemon-reload
+    ctl enable --quiet --now pigeon-update.timer pigeon-update.path
+  fi
+}
+
+[ -n "$only" ] || supervise_pigeond
+supervise_update
