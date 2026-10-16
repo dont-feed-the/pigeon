@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+"""Restore an exact-source, successful git-annex build when its cache vanished.
+
+Only push/dispatch runs in this repository, on ancestors of this checkout,
+may supply an archive. Its producer must pass, source inputs must match,
+GitHub's artifact digest must hold, and architecture/version must match.
+"""
+
+import hashlib
+import io
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import struct
+import subprocess
+import sys
+import tarfile
+import tempfile
+import urllib.request
+import zipfile
+
+LIMIT = 64 * 1024 * 1024
+INPUTS = ["third_party/git-annex/VERSION", "third_party/git-annex/build.sh",
+          "third_party/git-annex/patches/"]
+
+
+class Redirect(urllib.request.HTTPRedirectHandler):
+    """A signed artifact URL needs no GitHub bearer credential."""
+    def redirect_request(self, request, fp, code, message, headers, url):
+        if not url.startswith("https://"):
+            raise ValueError("non-HTTPS artifact redirect")
+        redirected = super().redirect_request(request, fp, code, message, headers, url)
+        redirected.remove_header("Authorization")
+        return redirected
+
+
+class GitHub:
+    def __init__(self, repository, token):
+        if not re.fullmatch(r"[\w.-]+/[\w.-]+", repository):
+            raise ValueError("invalid repository")
+        self.base = f"https://api.github.com/repos/{repository}"
+        self.token = token
+        self.opener = urllib.request.build_opener(Redirect())
+
+    def read(self, path, limit=LIMIT):
+        headers = {"Accept": "application/vnd.github+json", "User-Agent": "pigeon-build-restore"}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        with self.opener.open(urllib.request.Request(self.base + path, headers=headers), timeout=60) as response:
+            data = response.read(limit + 1)
+        if len(data) > limit:
+            raise ValueError("artifact response exceeds limit")
+        return data
+
+    def json(self, path):
+        return json.loads(self.read(path, 4 * 1024 * 1024))
+
+
+def git(*args, check=True):
+    binary = "/usr/bin/git" if sys.platform.startswith("linux") else "git"
+    return subprocess.run([binary, *args], check=check, capture_output=True, text=True, timeout=60)
+
+
+def matching_source(commit):
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        return False
+    if git("cat-file", "-e", f"{commit}^{{commit}}", check=False).returncode:
+        git("fetch", "-q", "--no-tags", "--no-write-fetch-head", "--depth=1", "origin", commit)
+    result = git("diff", "--quiet", commit, "--", *INPUTS, check=False)
+    if result.returncode not in (0, 1):
+        raise ValueError("could not compare build sources")
+    return result.returncode == 0
+
+
+def architecture(path, wanted):
+    with path.open("rb") as file:
+        header = file.read(32)
+    if header[:4] == b"\x7fELF" and len(header) >= 20:
+        endian = "<" if header[5] == 1 else ">"
+        return struct.unpack_from(endian + "H", header, 18)[0] == {"X64": 62, "ARM64": 183}.get(wanted)
+    endian = {b"\xcf\xfa\xed\xfe": "<", b"\xfe\xed\xfa\xcf": ">"}.get(header[:4])
+    return bool(endian and len(header) >= 8 and struct.unpack_from(endian + "I", header, 4)[0]
+                == {"X64": 0x1000007, "ARM64": 0x100000c}.get(wanted))
+
+
+def extract(data, digest, destination):
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest or "") or digest[7:] != hashlib.sha256(data).hexdigest():
+        raise ValueError("artifact digest mismatch")
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        files = [entry for entry in archive.infolist() if not entry.is_dir()]
+        if len(files) != 1 or files[0].file_size > LIMIT or not files[0].filename.endswith(".tar.gz"):
+            raise ValueError("unexpected artifact contents")
+        packed = archive.read(files[0])
+    with tarfile.open(fileobj=io.BytesIO(packed), mode="r:gz") as archive:
+        members = []
+        for member in archive:
+            if len(members) >= 1000:
+                raise ValueError("too many archive entries")
+            members.append(member)
+        if sum(m.size for m in members) > 512 * 1024 * 1024:
+            raise ValueError("expanded artifact exceeds limit")
+        for member in members:
+            if member.name != "bin" and not member.name.startswith("bin/"):
+                raise ValueError("unexpected archive path")
+            if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):
+                raise ValueError("unexpected archive entry")
+        archive.extractall(destination, members=members, filter="data")
+    binary = destination / "bin/git-annex"
+    if not binary.is_file() or binary.is_symlink():
+        raise ValueError("missing regular git-annex binary")
+    return binary
+
+
+def runs(api):
+    candidates = []
+    if os.environ.get("GITHUB_RUN_ID", "").isdigit():
+        candidates.append(api.json(f"/actions/runs/{os.environ['GITHUB_RUN_ID']}"))
+    for workflow in ("git-annex.yml", "release.yml"):
+        candidates.extend(api.json(f"/actions/workflows/{workflow}/runs?per_page=30")["workflow_runs"])
+    seen = set()
+    for run in candidates:
+        if run["id"] not in seen:
+            seen.add(run["id"])
+            yield run
+
+
+def restore(api, repository, platform, arch, destination):
+    label = {"Linux": "ubuntu-24.04", "macOS": "macos-latest"}.get(platform)
+    if not label or arch not in ("X64", "ARM64"):
+        raise ValueError("unsupported dependency platform")
+    name = f"git-annex-pigeon-{label}"
+    head = git("rev-parse", "HEAD").stdout.strip()
+    version = next(line.split("=", 1)[1].strip() for line in Path(INPUTS[0]).read_text().splitlines()
+                   if line.startswith("PIGEON_VERSION="))
+    for run in runs(api):
+        if run.get("event") not in ("push", "workflow_dispatch") or (run.get("head_repository") or {}).get("full_name") != repository:
+            continue
+        commit = run["head_sha"]
+        if not re.fullmatch(r"[0-9a-f]{40}", commit):
+            continue
+        if commit != head and api.json(f"/compare/{commit}...{head}").get("status") not in ("ahead", "identical"):
+            continue
+        if not matching_source(commit):
+            continue
+        jobs = api.json(f"/actions/runs/{run['id']}/jobs?per_page=100")["jobs"]
+        if not any(j["name"].split(" / ")[-1] == f"git-annex ({label})" and j.get("conclusion") == "success" for j in jobs):
+            continue
+        artifacts = api.json(f"/actions/runs/{run['id']}/artifacts?per_page=100")["artifacts"]
+        for artifact in artifacts:
+            if artifact["name"] != name or artifact.get("expired") or artifact.get("size_in_bytes", LIMIT + 1) > LIMIT:
+                continue
+            with tempfile.TemporaryDirectory(prefix="pigeon-build-restore-") as work:
+                work = Path(work)
+                binary = extract(api.read(f"/actions/artifacts/{int(artifact['id'])}/zip"), artifact.get("digest"), work)
+                if not architecture(binary, arch):
+                    continue
+                got = subprocess.run([str(binary), "version", "--raw"], capture_output=True, text=True, check=True, timeout=15).stdout.strip()
+                if got != version:
+                    raise ValueError("artifact version mismatch")
+                destination.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(work / "bin", destination / "bin", symlinks=True, dirs_exist_ok=True)
+            print(f"restored verified {version} artifact from run {run['id']}")
+            return True
+    return False
+
+
+def main():
+    try:
+        repository = os.environ["GITHUB_REPOSITORY"]
+        api = GitHub(repository, os.environ.get("PIGEON_GITHUB_TOKEN", ""))
+        return 0 if restore(api, repository, os.environ["RUNNER_OS"], os.environ["RUNNER_ARCH"],
+                            Path.home() / ".cache/pigeon-git-annex-dist") else 1
+    except (KeyError, ValueError, OSError, subprocess.SubprocessError, tarfile.TarError, zipfile.BadZipFile):
+        # Do not print signed download URLs, authorization headers or bodies.
+        print("could not restore a verified git-annex artifact", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
