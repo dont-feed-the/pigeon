@@ -99,6 +99,11 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- A Mac that runs `pigeon join` without `--name` is listed under its own
+  name, such as "Robin’s MacBook Air-49d313", instead of "backup-49d313",
+  which made a laptop look like a backup machine; `pigeon create` names it
+  "Robin’s MacBook Air" instead of "computer". On a Mac pigeon takes the
+  name of System Settings → General → Sharing, elsewhere the host name.
 - "Sending…" no longer outlasts its ten minutes because other files were
   saved meanwhile: each file's wait counts from when it was saved.
 - A computer removed from the group no longer says "Everything is safe": it

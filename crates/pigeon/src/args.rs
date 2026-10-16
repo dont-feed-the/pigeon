@@ -369,7 +369,7 @@ pub fn absolute(path: &str) -> String {
         .into_owned()
 }
 
-/// The files of a suggestion named on the command line (ADR 0077): a file
+/// The files of a suggestion named on the command line (ADR 0078): a file
 /// here is made absolute; a name that is not here, such as a new file the
 /// suggestion adds, is a path in the group's folder as `pigeon
 /// suggestions` lists it.
@@ -384,15 +384,6 @@ fn chosen(files: &[String]) -> Vec<String> {
             }
         })
         .collect()
-}
-
-fn hostname() -> String {
-    std::fs::read_to_string("/etc/hostname")
-        .ok()
-        .or_else(|| std::env::var("HOSTNAME").ok())
-        .map(|h| h.trim().to_owned())
-        .filter(|h| !h.is_empty())
-        .unwrap_or_else(|| "computer".to_owned())
 }
 
 /// The arguments before `--`, where options are.
@@ -455,7 +446,7 @@ fn action(c: Command) -> Action {
             name,
             folder: absolute(folder.or(at).as_deref().unwrap_or(".")),
             k,
-            device_name: device_name.unwrap_or_else(hostname),
+            device_name: device_name.unwrap_or_else(pigeon_sys::host::name),
             person,
         }),
         Command::Invite => send(Request::Invite),
