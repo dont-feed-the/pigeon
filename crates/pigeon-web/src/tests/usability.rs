@@ -33,6 +33,7 @@ impl Backend for Recording {
                     state: State::Published,
                     size: None,
                     modified: None,
+                    freed: false,
                 }],
             }],
             pigeon_proto::Request::Join {

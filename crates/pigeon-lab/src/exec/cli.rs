@@ -170,9 +170,15 @@ pub fn status(path: Option<&Path>, not_shared: bool) -> Vec<String> {
     a
 }
 
-/// `pigeon free PATH`, `pigeon keep PATH`.
+/// `pigeon free PATH --yes`, `pigeon keep PATH`: a scenario frees whether
+/// or not the backup machines were heard from recently (08 §8.5).
 pub fn free_or_keep(verb: &str, path: &Path) -> Vec<String> {
-    vec![s(verb), p(path), s("--json")]
+    let mut a = vec![s(verb), p(path)];
+    if verb == "free" {
+        a.push(s("--yes"));
+    }
+    a.push(s("--json"));
+    a
 }
 
 /// `pigeon restore PATH --version N`.

@@ -50,6 +50,7 @@ fn forms(r: &Renderer, token: &str, join: &JoinForm, create: &CreateForm) -> Mar
             p { label for="group-name" { (r.id("web-group-name")) } " " input id="group-name" name="group" required value=(&create.group); }
             p { label for="create-folder" { (r.id("web-local-folder")) } " " input id="create-folder" name="folder" required value=(&create.folder); }
             p { label for="create-name" { (r.id("web-computer-name")) } " " input id="create-name" name="name" required value=(&create.name); }
+            p { label for="create-person" { (r.id("web-your-name")) } " " input id="create-person" name="person" autocomplete="name" value=(&create.person); }
             p { label for="copies" { (r.id("web-backup-copies")) } " " input id="copies" type="number" name="k" value=(k) min="1" required; }
             button type="submit" class="primary" { (r.id("web-create")) }
         }
@@ -135,7 +136,13 @@ pub async fn join(
         let message = pigeon_i18n::Message::new("web-join-refounded")
             .arg("group", group)
             .arg("name", refounded.by)
-            .arg("date", refounded.at.get(..10).unwrap_or(&refounded.at));
+            .arg(
+                "date",
+                pigeon_proto::time::parse_rfc3339(&refounded.at).map_or_else(
+                    || refounded.at.get(..10).unwrap_or(&refounded.at).to_owned(),
+                    |at| r.date(at),
+                ),
+            );
         let body = confirm(&r, &message, &f, invitation, true, f.existing);
         return page(&r, "/join", &r.id("web-join"), &body).into_response();
     }
@@ -212,6 +219,10 @@ pub struct CreateForm {
     folder: String,
     #[serde(default)]
     name: String,
+    /// The creator's name as the others see it; the daemon chooses one
+    /// when it is empty.
+    #[serde(default)]
+    person: String,
     #[serde(default)]
     k: String,
 }
@@ -230,6 +241,7 @@ pub async fn create(
         folder: folder(&f.folder),
         k: f.k.trim().parse().unwrap_or(0),
         device_name: f.name.trim().to_owned(),
+        person: nonempty(&f.person),
     };
     let answers = web.ask(request).await;
     outcome(&web, &token.0, answers, &JoinForm::default(), &f).await

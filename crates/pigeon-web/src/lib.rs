@@ -30,10 +30,12 @@ use pigeon_i18n::Catalogue;
 mod actions;
 mod assets;
 mod browse;
+mod conflicts;
 mod details;
 mod files;
 mod folder_rules;
 mod format;
+mod free;
 mod health;
 mod held;
 mod icons;
@@ -47,10 +49,16 @@ mod render;
 mod settings;
 mod shell;
 mod space;
+mod suggestions;
 mod sync;
 mod view;
 
-use render::Renderer;
+use render::{Banner, Renderer};
+
+tokio::task_local! {
+    /// The pause banner of the page being served (`banner`).
+    static BANNER: Option<Banner>;
+}
 
 /// A peer UI mounted by a server that authenticates its users itself.
 /// Paths are trusted, same-origin absolute paths without a trailing slash.
@@ -185,7 +193,24 @@ impl Web {
 
     fn renderer(&self) -> Renderer {
         let lang = self.lang.lock().unwrap_or_else(|p| p.into_inner()).clone();
-        Renderer::new(Catalogue::new(&lang, false), now(), self.mount.clone())
+        let mut r = Renderer::new(Catalogue::new(&lang, false), now(), self.mount.clone());
+        r.banner = BANNER.try_with(Clone::clone).ok().flatten();
+        r
+    }
+
+    /// The pause in force, if any (15 §15.6), with the session's form token
+    /// `form` for its *Share again*.
+    async fn banner(&self, form: &str) -> Option<Banner> {
+        self.ask(pigeon_proto::Request::Paused)
+            .await
+            .into_iter()
+            .find_map(|answer| match answer {
+                pigeon_proto::Response::Said { message } => Some(Banner {
+                    message,
+                    form: form.to_owned(),
+                }),
+                _ => None,
+            })
     }
 
     async fn ask(&self, request: pigeon_proto::Request) -> Vec<pigeon_proto::Response> {
@@ -215,13 +240,13 @@ impl Web {
             .with_state(self.clone())
     }
 
-    fn pages(&self) -> Router<Arc<Web>> {
+    fn pages(self: &Arc<Web>) -> Router<Arc<Web>> {
         let routes = Router::new()
             .route("/", get(pages::home))
             .route("/machines", get(machines::machines))
             .route("/machines/remove", post(machines::remove))
             .route("/machines/recovery-sheet", post(recovery::sheet))
-            .route("/suggestions", get(pages::suggestions))
+            .route("/suggestions", get(suggestions::page_of))
             .route("/events", get(pages::events))
             .route("/files", get(browse::files))
             .route("/space", get(space::page))
@@ -244,24 +269,29 @@ impl Web {
             .route("/files/view", post(view::view))
             .route("/suggestions/view", post(view::view))
             .route("/suggestions/accept", post(actions::accept))
-            .route("/suggestions/decline", post(actions::decline));
+            .route("/suggestions/decline", post(actions::decline))
+            .route("/suggestions/decide", post(suggestions::decide))
+            .route("/suggestions/all", post(suggestions::all));
         let routes = if self.mount.as_ref().is_none_or(|m| m.storage_controls) {
             routes
                 .route("/files/keep", post(actions::keep))
                 .route("/files/free", post(actions::free))
                 .route("/files/forget", post(sync::forget_choice))
                 .route("/folders", get(sync::view).post(sync::apply))
+                // A bridge's managed clients resolve on its own page (10 §10.3).
+                .route("/files/resolve", post(conflicts::resolve))
         } else {
             routes
         };
-        if self.mount.is_some() {
+        let routes = if self.mount.is_some() {
             routes
         } else {
             routes
                 .route("/join", get(join::setup).post(join::join))
                 .route("/create", post(join::create))
                 .route("/leave", post(leave::leave))
-        }
+        };
+        routes.layer(middleware::from_fn_with_state(self.clone(), banner))
     }
 
     fn hosts(&self) -> [String; 2] {
@@ -306,6 +336,23 @@ async fn session(State(web): State<Arc<Web>>, mut request: Request, next: Next) 
     } else {
         (StatusCode::FORBIDDEN, pages::refused(&web, "web-forbidden")).into_response()
     }
+}
+
+/// Asks for the pause in force before a page is shown, so that every page
+/// says it (15 §15.6). Only page views ask: an action's result says its
+/// own outcome, and the live updates and script need no banner.
+async fn banner(State(web): State<Arc<Web>>, request: Request, next: Next) -> Response {
+    let path = request.uri().path();
+    if request.method() != axum::http::Method::GET || path == "/events" || path == "/live.js" {
+        return next.run(request).await;
+    }
+    let form = request
+        .extensions()
+        .get::<FormToken>()
+        .map(|f| f.0.clone())
+        .unwrap_or_default();
+    let banner = web.banner(&form).await;
+    BANNER.scope(banner, next.run(request)).await
 }
 
 fn header_str(headers: &HeaderMap, name: header::HeaderName) -> Option<String> {

@@ -62,6 +62,9 @@ pub struct FolderForm {
     form: String,
     /// The folder, as an absolute path.
     folder: String,
+    /// How many times *Free up space* was confirmed (`free.rs`).
+    #[serde(default)]
+    confirm: u8,
 }
 
 /// *Keep on this computer*: `pigeon keep FOLDER`.
@@ -74,14 +77,22 @@ pub async fn keep(
     act(&web, &token, &f.form, request, "/files").await
 }
 
-/// *Free up space*: `pigeon free FOLDER`.
+/// *Free up space*: says what it will do and asks first, then asks again
+/// while the backup machines are quiet, then `pigeon free FOLDER`
+/// (`free.rs`).
 pub async fn free(
     State(web): State<Arc<Web>>,
     Extension(token): Extension<FormToken>,
     Form(f): Form<FolderForm>,
 ) -> Response {
-    let request = Request::Evict { folder: f.folder };
-    act(&web, &token, &f.form, request, "/files").await
+    if token.0.is_empty() || f.form != token.0 {
+        return (
+            StatusCode::FORBIDDEN,
+            pages::refused(&web, "web-form-expired"),
+        )
+            .into_response();
+    }
+    crate::free::step(&web, &f.form, &f.folder, f.confirm).await
 }
 
 /// The form that restores a version.

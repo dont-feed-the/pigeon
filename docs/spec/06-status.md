@@ -134,6 +134,28 @@ Every version not *protected* has one **reason** (ADR 0027):
 | `erased(decision)` | "This version of *scan-12.pdf* was erased on 12 November 2026 (Roy's decision)." |
 | `in-use(path)` | "*tarte.docx* is open in another application; pigeon will update it when it is closed." ([07 §7.5](07-capture-and-install.md)) |
 | `settings-check` | "Checking the group's settings; freeing space waits until it is done." ([03 §3.5](03-repository-and-roles.md)) |
+| `removed` | "This computer is no longer in the group, so this file is not backed up." ([09 §9.7](09-network-and-joining.md)) |
+
+*Sending* and *group-unreachable* become `custodian-offline(names, since)`
+once every custodian the version waits for (those not holding it with its
+commit, a lost one aside) has been silent for 5 minutes; "not heard from
+yet" when one never was **[no ADR]**.
+
+A change not captured yet is *local*, with its own reason **[no ADR]**
+(`pigeond::status_why`; message ids in brackets, which clients such as
+the web's conflicts view rely on):
+
+| Reason | Example sentence (en) |
+|---|---|
+| `differs` (`why-differs`) | "Your copy differs from the group's version. Choose which to keep." ([07 §7.6](07-capture-and-install.md), `pigeon conflicts`) |
+| `name` (`why-name`) | "Its name does not work on every computer. Rename it." ([05 §5.4](05-catalogue-and-names.md)) |
+| `held` (`why-held-deletion`) | "It was deleted along with many other files. pigeon waits for you to choose: delete them for everyone, or bring them back." |
+| `capture-failed(why)` (`why-capture-failed`) | "pigeon could not save this change: the disk is full. It will try again." — after 2 failed captures in a row; `why` is `disk-full`, `no-access`, `busy` or `other` |
+| `capturing` (`why-capturing`) | "This change is waiting to be saved and copied to the backup machines." |
+
+A file's history (`pigeon history`, the web's file page) adds this reason
+when the file on this computer is such a change, so its page never shows
+only the group's versions as *Safe* while the copy here differs.
 
 The custodians that *would* hold a key are those `sizebalanced` assigns it
 to, as git-annex's `find --want-get` says for each **[no ADR: method]**.
@@ -145,7 +167,7 @@ Five levels, the headline being their join (`headline`, ADR 0027, ux.md §4):
 | Level | Shown when |
 |---|---|
 | **Needs you** | only a person can fix it: disk full; a backup machine silent for over 7 days (for admins and its owner); a held mass deletion or name; a conflict for this person (ADR 0034); a suggestion waiting over 3 days for this person; this computer removed; capacity short (admins and custodian owners, [08 §8.9](08-custody-loops.md)); a lost repository (admins and its owner); erased content came back (deciders, [08 §8.6](08-custody-loops.md)) |
-| **Not safe yet** | a version *local* or *published* for longer than the grace period (default 10 min); a *missing* one after it |
+| **Not safe yet** | a version *local* or *published* for longer than the grace period (default 10 min); a *missing* one after it. The grace counts from the version itself: from the commit time of the `main` in which this computer first saw its key not safe (kept in memory; a restart sees it anew); a later commit does not restart it **[no ADR]** |
 | **Not checked recently** | no custodian heard within `stale_after`; a *protected* version older than it |
 | **Working** | capture or transfer under way, all younger than the grace period |
 | **Safe** | every version *protected* within `stale_after`; "2 items of your folder aren't shared" when so ([07 §7.9](07-capture-and-install.md)) |
@@ -183,6 +205,7 @@ owner of a missing machine and the admins see the same fact.
 | mass deletion | more than 100 files, or a whole top-level folder | ux.md §8.6 |
 | `stale_after` → *uncertain* | 1 hour | **[no ADR]** |
 | `offline_after`: a silent custodian stops counting | 24 hours | **[no ADR]** |
+| custodians a version waits for all silent → its reason names them | 5 minutes | **[no ADR]** |
 | status report period | 10 minutes | **[no ADR]** |
 
 All are settings with tested defaults for the usability test (ux.md §11).

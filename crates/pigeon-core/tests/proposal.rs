@@ -1,14 +1,17 @@
 //! Laws of adopting a proposal (04 §4.4 rule 7, 04 §4.5; pigeon-core
 //! `proposal`), on random trees of a few paths: a base, a proposal that
-//! changes some of its paths, and a `main` that changed some meanwhile.
+//! changes some of its paths, and a `main` that changed some meanwhile;
+//! and of a decision that accepts some of its files (ADR 0078).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod common;
+
+use std::collections::BTreeSet;
 
 use common::{flag, int};
 use hegel::TestCase;
 use pigeon_core::authority::{Entry, Tree, delta};
 use pigeon_core::names::{self, Stamp};
-use pigeon_core::proposal::{adoption, adopts};
+use pigeon_core::proposal::{adoption, adopts, holds, partial};
 
 const PATHS: [&str; 5] = ["a.txt", "b.txt", "d/c.txt", "d/e", "f"];
 const WHEN: Stamp = Stamp {
@@ -103,4 +106,38 @@ fn adopting_on_an_unchanged_main_is_the_proposal(tc: TestCase) {
     let once = adoption(&base, &proposal, &main, "Cid", WHEN);
     let twice = adoption(&base, &proposal, &once, "Cid", WHEN);
     assert_eq!(twice, once);
+}
+
+/// Some of the paths of `changes`.
+fn some(tc: &TestCase, changes: &BTreeSet<String>) -> BTreeSet<String> {
+    changes.iter().filter(|_| flag(tc)).cloned().collect()
+}
+
+#[hegel::test(test_cases = 1000)]
+fn a_partial_decision_is_the_adoption_on_the_files_it_accepts(tc: TestCase) {
+    let (base, proposal, main) = draw(&tc);
+    let changes = delta(&base, &proposal);
+    let all = adoption(&base, &proposal, &main, "Cid", WHEN);
+    let none = BTreeSet::new();
+    assert_eq!(partial(&base, &proposal, &main, "Cid", WHEN, &changes), all);
+    assert_eq!(partial(&base, &proposal, &main, "Cid", WHEN, &none), main);
+    let accepted = some(&tc, &changes);
+    let t = partial(&base, &proposal, &main, "Cid", WHEN, &accepted);
+    for p in &changes {
+        if accepted.contains(p) {
+            assert!(holds(&base, &proposal, &main, &t, p), "{p}");
+            assert_eq!(t.get(p), all.get(p), "{p}");
+        } else {
+            assert_eq!(t.get(p), main.get(p), "{p}");
+        }
+    }
+    // It adds only the conflict copies of the files it accepts, and
+    // changes nothing the proposal did not.
+    for q in delta(&main, &t) {
+        let of = changes
+            .iter()
+            .find(|p| **p == q || names::is_copy_of(&q, p));
+        let of = of.unwrap_or_else(|| panic!("{q} is no change of the proposal"));
+        assert!(accepted.contains(of), "{q} of {of} was declined");
+    }
 }

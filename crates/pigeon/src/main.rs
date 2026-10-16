@@ -20,6 +20,7 @@ use std::os::unix::net::UnixStream;
 use std::process::ExitCode;
 use std::time::Duration;
 
+use pigeon_proto::api::Removal;
 use pigeon_proto::{Envelope, LineDecoder, Message, PROTOCOL_VERSION, Problem, Request, Response};
 
 use crate::args::Action;
@@ -151,6 +152,17 @@ fn show(out: &Renderer, json: bool, r: &Response) -> (bool, bool) {
 fn exchange(out: &Renderer, json: bool, request: &Request) -> ExitCode {
     let (_, problem) = show(out, json, &answer(out, json, request));
     ExitCode::from(u8::from(problem))
+}
+
+/// [`exchange`], and the code of the daemon's problem it ended with.
+fn exchange_coded(out: &Renderer, json: bool, request: &Request) -> (ExitCode, Option<String>) {
+    let last = answer(out, json, request);
+    let code = match &last {
+        Response::Problem(p) => Some(p.code.clone()),
+        _ => None,
+    };
+    let (_, problem) = show(out, json, &last);
+    (ExitCode::from(u8::from(problem)), code)
 }
 
 /// Sends `request` and shows its progress: answers its last response,
@@ -287,6 +299,7 @@ fn run() -> ExitCode {
             ExitCode::from(1)
         }
         Action::Send(Request::Drop { path, .. }) => drop(&out, &line, path),
+        Action::Send(Request::Evict { folder, .. }) => free(&out, &line, folder),
         Action::Send(Request::SetFolderRule { folder, rule, .. }) => {
             folder_rule(&out, &line, folder, rule)
         }
@@ -351,6 +364,28 @@ fn drop(out: &Renderer, line: &args::Line, path: &str) -> ExitCode {
     exchange(out, line.json, &send(true))
 }
 
+/// `pigeon free PATH` (08 §8.5): while no backup machine has been heard
+/// from recently, the daemon says so (`backups-quiet`), and pigeon asks
+/// before it frees; with `--yes`, it frees at once.
+fn free(out: &Renderer, line: &args::Line, folder: &str) -> ExitCode {
+    let send = |confirmed| Request::Evict {
+        folder: folder.to_owned(),
+        confirmed,
+    };
+    let (code, problem) = exchange_coded(out, line.json, &send(line.yes));
+    if problem.as_deref() != Some("backups-quiet") {
+        return code;
+    }
+    let question = Message {
+        id: "confirm-free-quiet".to_owned(),
+        args: std::collections::BTreeMap::new(),
+    };
+    if let Err(code) = confirmed(out, line, &question) {
+        return code;
+    }
+    exchange(out, line.json, &send(true))
+}
+
 /// `pigeon folder-rule PATH …` (04 §4.3): a rule that raises the group's
 /// rules (ADR 0048) first says which computers may wait for changes, then
 /// asks; `--yes` confirms at once.
@@ -401,21 +436,26 @@ fn question(request: &Request) -> Option<Message> {
     match request {
         Request::DebugBundle { .. } => Some(ask("confirm-debug-bundle", &[])),
         Request::AllowDebug { peer } => Some(ask("confirm-debug-allow", &[("name", peer)])),
-        Request::RemoveDevice { name } => {
-            let kind = if recovery_key(name) {
-                "confirm-revoke-sheet"
-            } else {
-                "confirm-remove-computer"
-            };
-            Some(ask(kind, &[("name", name)]))
-        }
+        Request::RemoveDevice { name } => Some(match removal(name) {
+            Removal::Sheet => ask("confirm-revoke-sheet", &[("name", name)]),
+            Removal::Computer => ask("confirm-remove-computer", &[("name", name)]),
+            Removal::Backup { left, needed } if left < needed => {
+                let mut question = ask("confirm-remove-backup-unsafe", &[("name", name)]);
+                for (k, n) in [("left", left), ("needed", needed)] {
+                    let n = pigeon_proto::Arg::Number(i64::from(n));
+                    question.args.insert(k.to_owned(), n);
+                }
+                question
+            }
+            Removal::Backup { .. } => ask("confirm-remove-backup", &[("name", name)]),
+        }),
         Request::Leave => Some(ask("confirm-leave", &[])),
         Request::Join { invitation, .. } => {
             let (group, r) = pigeon_proto::join::refounded(invitation)?;
-            let date = r.at.get(..10).unwrap_or(&r.at);
+            // The renderer words the time as a local date.
             Some(ask(
                 "confirm-join-refounded",
-                &[("group", &group), ("name", &r.by), ("date", date)],
+                &[("group", &group), ("name", &r.by), ("date", &r.at)],
             ))
         }
         Request::Refound { .. } => Some(ask("confirm-refound", &[])),
@@ -427,25 +467,23 @@ fn question(request: &Request) -> Option<Message> {
     }
 }
 
-/// Reads the paper-key role before wording a removal confirmation. A
-/// failed lookup retains the ordinary computer-removal confirmation.
-fn recovery_key(name: &str) -> bool {
+/// Reads the device's role, and the backup machines that would be left,
+/// before wording a removal confirmation (09 §9.7). A failed lookup
+/// retains the ordinary computer-removal confirmation.
+fn removal(name: &str) -> Removal {
     let Ok(mut client) = Client::open(None) else {
-        return false;
+        return Removal::Computer;
     };
     if client.send(2, &Request::Machines).is_err() {
-        return false;
+        return Removal::Computer;
     }
     while let Ok(answer) = client.next() {
         match answer.body {
-            Response::Machines { machines } => {
-                return machines.iter().any(|m| m.name == name && m.recovery);
-            }
             Response::Progress { .. } => {}
-            _ => return false,
+            other => return Removal::of(&[other], name),
         }
     }
-    false
+    Removal::Computer
 }
 
 /// Asks `question`, on a terminal only (10 §10.2).

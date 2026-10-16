@@ -184,12 +184,24 @@ fn hostname() -> String {
 }
 
 /// The name of this computer's account, which a person who gives none
-/// is called: `$USER`, else `Me`.
+/// is called: `$USER`, else the computer's name, never a placeholder such
+/// as "Me" that the others in the group would see as a name.
 pub fn account() -> String {
     std::env::var("USER")
         .ok()
-        .filter(|u| !u.trim().is_empty())
-        .unwrap_or_else(|| "Me".to_owned())
+        .map(|u| u.trim().to_owned())
+        .filter(|u| !u.is_empty())
+        .unwrap_or_else(computer)
+}
+
+/// This computer's name, for a person who gave none and has no `$USER`.
+fn computer() -> String {
+    std::fs::read_to_string("/etc/hostname")
+        .ok()
+        .or_else(|| std::env::var("HOSTNAME").ok())
+        .map(|h| h.trim().to_owned())
+        .filter(|h| !h.is_empty())
+        .unwrap_or_else(|| "person".to_owned())
 }
 
 /// What a joining device asks.
@@ -343,25 +355,28 @@ pub fn admitter_addresses(admitter: &Admitter) -> Vec<std::net::SocketAddr> {
     parse(&admitter.addresses)
 }
 
-/// A backup machine's join: its bare repository, then the welcome.
+/// A backup machine's join: its bare repository, then the welcome. A join
+/// that fails takes back what it made ([`crate::join_attempt`]).
 async fn join_backup(d: &Daemon, j: &Joining, folder: Option<String>) -> Result<String, String> {
     let path = folder.map_or_else(
         || d.dirs.config.join(format!("{}.git", j.inv.group)),
         PathBuf::from,
     );
-    std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
-    let path = std::fs::canonicalize(&path).map_err(|e| e.to_string())?;
-    if crate::join_in_place::applies(d, j, &path).await {
-        return crate::join_in_place::join(d, j, &path).await;
+    let attempt = crate::join_attempt::Attempt::begin(&path, true)?;
+    if crate::join_in_place::applies(d, j, &attempt.path).await {
+        return crate::join_in_place::join(d, j, &attempt.path).await;
     }
-    if std::fs::read_dir(&path)
-        .map_err(|e| e.to_string())?
-        .next()
-        .is_some()
-    {
+    if !attempt.empty()? {
         return Err("folder-not-empty".into());
     }
-    let git = crate::git::Git::new(&path, d.env.clone());
+    attempt.run(d, backup_in(d, j, &attempt.path)).await?;
+    Ok(j.inv.name.clone())
+}
+
+/// A backup machine's join itself, in the empty directory `path`.
+async fn backup_in(d: &Daemon, j: &Joining, path: &std::path::Path) -> Result<(), String> {
+    use crate::join_attempt::{remember_uuid, reuse_uuid, serve_verified};
+    let git = crate::git::Git::new(path, d.env.clone());
     let fail = |e: crate::git::Error| e.to_string();
     git.run(&["init", "-q", "--bare", "-b", "main"])
         .await
@@ -373,32 +388,45 @@ async fn join_backup(d: &Daemon, j: &Joining, folder: Option<String>) -> Result<
     git.run(&["config", "user.email", &email])
         .await
         .map_err(fail)?;
-    let pending = Group::open("pending", &path, &d.env)
+    let pending = Group::open("pending", path, &d.env)
         .await
         .ok_or("not-a-repository")?;
     crate::settings::check(&pending).await;
+    reuse_uuid(d, &j.inv.group, &git).await?;
     let (uuid, token) = init_annex(&git, pigeon_core::filter::Role::Custodian, &j.name, j.inv.k)
         .await
         .map_err(fail)?;
+    remember_uuid(d, &j.inv.group, &uuid);
     let w = dial(d, j, &uuid).await?;
     ensure_remote(&git, &w.admitter.device, &w.annex_uuid)
         .await
         .map_err(fail)?;
-    let g = Group::open(&j.inv.group, &path, &d.env)
+    let g = Group::open(&j.inv.group, path, &d.env)
         .await
         .ok_or("not-a-repository")?;
     g.set_token(&token);
     g.set_addresses(&w.admitter.device, admitter_addresses(&w.admitter));
     g.learn_peers(&w.peers);
-    let g = d.add_group(g, &path).await?;
-    let theirs = fetch_welcome(&g, &w.admitter.device, &j.inv.group, &w.commit, &d.device).await?;
-    g.git
-        .update_ref("refs/heads/main", &theirs, None)
-        .await
-        .map_err(|e| e.to_string())?;
-    g.reload_roster().await;
+    let welcomed = &w;
+    serve_verified(d, g, path, |g| async move {
+        let theirs = fetch_welcome(
+            &g,
+            &welcomed.admitter.device,
+            &j.inv.group,
+            &welcomed.commit,
+            &d.device,
+        )
+        .await?;
+        g.git
+            .update_ref("refs/heads/main", &theirs, None)
+            .await
+            .map_err(|e| e.to_string())?;
+        g.reload_roster().await;
+        Ok(())
+    })
+    .await?;
     d.wake.notify_one();
-    Ok(j.inv.name.clone())
+    Ok(())
 }
 
 /// Fetches `main` from `admitter` for a new device `me`, checks that its

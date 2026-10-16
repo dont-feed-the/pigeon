@@ -23,8 +23,13 @@ pub struct Report {
     pub overflow: Option<u64>,
     /// Sum of min(offered limit, one copy of all retained content).
     pub configured: u64,
-    /// Capacity below 1.25 times required content.
-    pub short: bool,
+    /// The backup machines whose storage limit is below one copy.
+    #[serde(default)]
+    pub limited: Vec<String>,
+    /// Exactly K backup machines: none is spare, as each counts for at
+    /// most one copy.
+    #[serde(default)]
+    pub no_spare: bool,
     /// Signed observations, including report times and missing evidence.
     pub machines: Vec<crate::health::MachineHealth>,
     /// Retained suggestions, including declined and withdrawn ones.

@@ -153,6 +153,12 @@ the line did not give: the folder (the group's name in the home folder by
 default; none for a backup machine) and the person's name (the account's,
 `$USER`, by default). `--name` names the computer in the roster, else
 `<host name>-<6 hex digits of its device ID>` **[no ADR]**.
+A name another device has gets made unique at step 3, and the join's
+answer (`joined-renamed`) tells the new device's person the name it got.
+A join that fails takes back what it made: the group is served only once
+its welcome is checked, and its folder holds nothing of the attempt
+(`pigeond/src/join_attempt.rs`, `tests/join_retry.rs`), so a retry in the
+same folder starts clean **[no ADR]**.
 
 | # | Who | Step |
 |---|---|---|
@@ -175,6 +181,20 @@ default; none for a backup machine) and the person's name (the account's,
   it (§9.7). Joining in place the refounding of the group it is in
   replaces that group, and goes on (§9.9).
 
+A join either completes or takes back what it made **[no ADR]**
+(`pigeond/src/join_attempt.rs`, `tests/join_retry.rs`): the new device
+serves the group, in `config.toml` and to its peers, only once step 5 has
+passed; until then the group is pending and no round reads it. On any
+failure, a refusal or an inviter that stays unreachable included, it
+forgets the group and removes what it wrote: the repository, pigeon's own
+files, the files of the group's tree it wrote that are unchanged, and the
+folder if the join made it. A join starts only in an empty or new folder,
+so nothing that was there before is touched, and a retry in the same folder
+starts clean. The annex UUID is kept in `<state>/joins/<group>`
+([11 §11.2](11-local-state.md)) until the join succeeds, so that a retry
+after step 3 resumes the welcome with the same UUID. The web's requests
+run to their end even when the browser leaves (10 §10.3).
+
 **Safety words** (ux.md §8.2) **[no ADR: safety words]**: both screens show
 three words from a fixed list of 2048, by the first 33 bits of
 `SHA-256("pigeon-words-1" ‖ secret ‖ new device ID)`, with "You are joining
@@ -193,12 +213,31 @@ person (ADR 0075), and visible in the history.
   custodian's copies stop counting and repair starts
   ([08 §8.4](08-custody-loops.md)); the CLI first says how many files will
   have fewer safe copies meanwhile.
+- The question before it is done (`confirm-remove-computer`,
+  `web-remove-confirm`) says what becomes of the files: a computer's stay
+  on it but are shared no more, and it can be invited again. A backup
+  machine has its own question (`confirm-remove-backup`,
+  `web-remove-backup-confirm`), and when fewer backup machines than K
+  would be left it says plainly that the files will not be safe until one
+  is added (`remove-backup-unsafe`; `Machines` tells K as `copies`)
+  **[no ADR]**.
 - Commits it signed that the removal had seen stay valid; those it had not
   seen are **revoked** wherever the removal arrives, with the keys they
   added and what those keys sign (04 §4.4, ADR 0051; `Authority.tla`
   `RemovalRevokesAdded`, `RemovedSilenced`). They count in no catalogue or
   roster and show as suggestions of the device's person. *I lost a
   computer* offers to remove the devices the lost one added.
+- The removed device learns it **[no ADR]** (`pigeond/src/removed.rs`,
+  `tests/status_truth.rs`): once the roster of its accepted `main` no
+  longer lists it, or a peer refuses it as `not-in-roster` although the
+  roster last fetched from that peer listed it (as for `pigeon leave`, a
+  peer that never learned its join proves nothing), no backup machine
+  counts on it any more ([06 §6.5](06-status.md)): its headline says, at
+  *Needs you*, that it was removed, that its files stay in its folder but
+  are no longer shared or backed up, and to ask someone in the group for
+  a new invitation; its lists of people and machines say they are the
+  group as it last knew it. A device leaving or finishing an in-place join
+  is not removed.
 - Removal cannot unshare what the device already fetched (ADR 0017), and
   does not change the group's invitation (ADR 0075).
   `pigeon leave` **[no ADR]** signs the device's own removal, then deletes
@@ -268,8 +307,15 @@ tools are those of ADR 0047, which fixes their formats:
   sheets keep the complete text with an explicit QR fallback. Public roster
   history identifies when all a person's sheets name older backup devices,
   and the page recommends a replacement. A sheet is refused before adding
-  a key if no backup has joined; if no backup receives its roster commit
-  before the deadline, the unprinted key is revoked.
+  a key if no backup has joined, or if none answers a fetch at once
+  (`recovery-backup-offline`): nothing is signed then. If no backup
+  receives its roster commit within two minutes, the unprinted key is
+  revoked (`recovery-not-received`); adding, waiting and revoking run in a
+  task of their own, so a client that leaves does not stop them. The
+  sheet's device is named `YYYY-MM-DD-xxxxxx` after the day it was printed
+  and 6 hex digits of its ID; the sheet prints that name (`label` in its
+  code) and the People page lists it as a paper recovery sheet printed on
+  that day **[no ADR]**.
 - **Refounding:** `pigeon refound [REPOSITORY]` signs a new genesis with the
   last accepted tree and the refounder as only admin, keeping the old
   history replicated and its keys in `keys()`; existing folders join the new

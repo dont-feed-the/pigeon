@@ -1,7 +1,8 @@
 //! Settings (ux.md §6.5): this computer's settings of `config.toml` (11
 //! §11.2), each a choice and a *Save* button that becomes `SetSettings`.
 //! A new language shows from the answer on. *Pause* and *Share again* are
-//! `pigeon pause` and `pigeon resume` (15 §15.6); *Leave the group* is
+//! `pigeon pause` and `pigeon resume` (15 §15.6), only the one that
+//! applies; *Leave the group* is
 //! `pigeon leave` (`leave.rs`).
 
 use std::sync::Arc;
@@ -36,7 +37,7 @@ pub async fn settings(
     }
     let mut peers = Vec::new();
     for answer in web.ask(Request::Machines).await {
-        if let pigeon_proto::Response::Machines { machines } = answer {
+        if let pigeon_proto::Response::Machines { machines, .. } = answer {
             peers = machines
                 .into_iter()
                 .filter(|m| !m.this_device && !m.recovery)
@@ -138,8 +139,20 @@ fn setting(r: &Renderer, s: &Setting, form: &str) -> Markup {
     }
 }
 
-/// The pause: a duration and *Pause*, and *Share again*.
+/// The pause, with only the action that applies: while sharing, a
+/// duration and *Pause*; while paused, the pause and *Share again*.
 fn pausing(r: &Renderer, form: &str) -> Markup {
+    if let Some(banner) = &r.banner {
+        return html! {
+            article {
+                p { (r.text(&banner.message)) }
+                form method="post" action=(r.url("/resume")) {
+                    input type="hidden" name="form" value=(form);
+                    button type="submit" { (r.id("web-resume")) }
+                }
+            }
+        };
+    }
     html! {
         div class="inline-forms" {
             form method="post" action=(r.url("/pause")) class="setting-row" data-inline {
@@ -152,10 +165,6 @@ fn pausing(r: &Renderer, form: &str) -> Markup {
                 }
                 " "
                 button type="submit" { (r.id("web-pause")) }
-            }
-            form method="post" action=(r.url("/resume")) data-inline {
-                input type="hidden" name="form" value=(form);
-                button type="submit" { (r.id("web-resume")) }
             }
         }
     }
@@ -206,8 +215,13 @@ async fn answer(web: &Arc<Web>, token: &FormToken, form: &str, request: Request)
         )
             .into_response();
     }
+    let pause = matches!(request, Request::Pause { .. } | Request::Resume);
     let answers = web.ask(request).await;
-    let r = web.renderer();
+    let mut r = web.renderer();
+    // The result of *Pause* or *Share again* shows the pause it leaves.
+    if pause {
+        r.banner = web.banner(form).await;
+    }
     let lines = answers.iter().flat_map(|a| r.response(a).0).collect();
     pages::result(&r, "/settings", lines).into_response()
 }

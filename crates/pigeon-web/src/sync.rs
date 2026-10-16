@@ -236,13 +236,25 @@ pub async fn apply(
         .filter(|f| shown.contains(&f.path))
         .cloned()
         .collect();
+    let changes = plan(&folders, &keep);
+    let confirmed = fields
+        .iter()
+        .find(|(key, _)| key == "confirm")
+        .and_then(|(_, value)| value.parse::<u8>().ok())
+        .unwrap_or(0);
+    if let Some(response) = confirmation(&web, &r, &sync, &changes, &fields, confirmed).await {
+        return response;
+    }
     let mut lines = Vec::new();
-    for (path, kept) in plan(&folders, &keep) {
+    for (path, kept) in changes {
         let folder = sync.abs(&path);
         let request = if kept {
             Request::Keep { folder }
         } else {
-            Request::Evict { folder }
+            Request::Evict {
+                folder,
+                confirmed: confirmed > 1,
+            }
         };
         lines.extend(pages::lines(&web, &r, request).await);
     }
@@ -250,6 +262,67 @@ pub async fn apply(
         lines.push(r.id("web-sync-unchanged"));
     }
     pages::result(&r, "/folders", lines).into_response()
+}
+
+/// Preview every folder being freed before changing any choice. Quiet
+/// backups require a second confirmation, as the individual action does.
+async fn confirmation(
+    web: &Web,
+    r: &Renderer,
+    sync: &Sync,
+    changes: &[(String, bool)],
+    fields: &[(String, String)],
+    confirmed: u8,
+) -> Option<Response> {
+    let mut previews = Vec::new();
+    for (path, kept) in changes {
+        if *kept {
+            continue;
+        }
+        let answers = web
+            .ask(Request::FreePreview {
+                folder: sync.abs(path),
+            })
+            .await;
+        let Some(preview) = answers.iter().find_map(|answer| match answer {
+            Answer::FreePreview(preview) => Some(preview.clone()),
+            _ => None,
+        }) else {
+            let lines = answers
+                .iter()
+                .flat_map(|answer| r.response(answer).0)
+                .collect();
+            return Some(pages::result(r, "/folders", lines).into_response());
+        };
+        previews.push((path, preview));
+    }
+    let quiet = previews.iter().any(|(_, preview)| preview.quiet);
+    if previews.is_empty() || confirmed > 1 || (confirmed == 1 && !quiet) {
+        return None;
+    }
+    let next = if confirmed == 0 { 1 } else { 2 };
+    let label = if confirmed == 0 {
+        "web-free"
+    } else {
+        "web-free-anyway"
+    };
+    let body = html! {
+        @for (path, preview) in &previews {
+            h2 { (path) }
+            (pages::list(&r.free_preview(preview)))
+        }
+        form method="post" action=(r.url("/folders")) {
+            @for (key, value) in fields {
+                @if matches!(key.as_str(), "form" | "keep" | "shown") {
+                    input type="hidden" name=(key) value=(value);
+                }
+            }
+            input type="hidden" name="confirm" value=(next);
+            button type="submit" { (r.id(label)) }
+        }
+        p { a href=(r.url("/folders")) { (r.id("web-free-cancel")) } }
+    };
+    Some(page(r, "/folders", &r.id("web-sync-title"), &body).into_response())
 }
 
 /// The form of *Use the default*.

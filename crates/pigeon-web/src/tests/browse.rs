@@ -30,7 +30,7 @@ async fn the_group_folder_lists_folders_first_with_sizes_and_states() {
         page.contains("Not on this computer"),
         "Photos 2019 is freed"
     );
-    assert!(page.contains("48 kB") && page.contains("940 MB"), "sizes");
+    assert!(page.contains("48.2 kB") && page.contains("940 MB"), "sizes");
     assert!(
         page.contains("ft ft-sheet") && page.contains("ft ft-folder"),
         "icons by kind"

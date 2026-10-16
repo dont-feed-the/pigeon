@@ -193,7 +193,15 @@ pub async fn history(d: &Daemon, path: &Path) -> Vec<Response> {
             reason: None,
         });
     }
-    vec![Response::History { versions }]
+    // The file on this computer may be none of these versions: say why,
+    // such as a copy that differs from the group's (`why-differs`); the web
+    // shows it above the versions.
+    let local = crate::status_why::Local::read(&g);
+    let changed = crate::capture::pending(&g, &rel)
+        .await
+        .is_ok_and(|p| p.contains(&rel));
+    let note = (changed || local.differs(&rel)).then(|| local.reason(&rel));
+    crate::status_why::noted(note, Response::History { versions })
 }
 
 /// `pigeon remove-computer NAME`.

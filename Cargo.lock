@@ -3013,6 +3013,7 @@ dependencies = [
  "fluent-langneg",
  "fluent-syntax",
  "pigeon-proto",
+ "pigeon-sys",
  "qrcode",
  "serde",
  "serde_json",

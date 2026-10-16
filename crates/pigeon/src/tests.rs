@@ -30,16 +30,18 @@ fn commands_map_to_requests() {
     assert_eq!(
         l.action,
         Action::Send(Request::Evict {
-            folder: absolute("docs")
+            folder: absolute("docs"),
+            confirmed: false,
         })
     );
     assert_eq!(
-        line("create Family /tmp/f --k 1 --name lap").action,
+        line("create Family /tmp/f --k 1 --name lap --person Inès").action,
         Action::Send(Request::Create {
             name: "Family".into(),
             folder: "/tmp/f".into(),
             k: 1,
             device_name: "lap".into(),
+            person: Some("Inès".into()),
         })
     );
     assert_eq!(line("invite").action, Action::Send(Request::Invite));
@@ -263,6 +265,7 @@ fn responses_render_without_placeholders() {
             state: State::Published,
             versions: vec![version(State::Published), version(State::Missing)],
             not_shared: Vec::new(),
+            paused: None,
         }),
         Response::Machines {
             machines: vec![
@@ -283,6 +286,7 @@ fn responses_render_without_placeholders() {
                     this_device: true,
                 },
             ],
+            copies: Some(1),
         },
         Response::History {
             versions: vec![version(State::Protected)],

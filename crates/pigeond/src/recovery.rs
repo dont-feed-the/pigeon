@@ -13,6 +13,7 @@
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use data_encoding::BASE32_NOPAD;
@@ -42,6 +43,10 @@ pub struct Sheet {
     pub k: u32,
     /// The admin whose device the sheet is.
     pub person: String,
+    /// The sheet's name in the roster, `YYYY-MM-DD-xxxxxx`, as the People
+    /// page lists it; empty on a sheet printed before it was shown.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub label: String,
     /// The recovery device's ed25519 secret key, hex.
     pub key: String,
     /// The backup machines when it was printed.
@@ -88,41 +93,67 @@ fn text(s: &str) -> Arg {
     Arg::Text(s.to_owned())
 }
 
-/// `pigeon recovery-sheet`, on an admin's laptop.
-pub async fn sheet(d: &Daemon) -> Vec<Response> {
+/// `pigeon recovery-sheet`, on an admin's laptop. The work runs in its
+/// own task: a client that goes away (a closed browser tab) must not stop
+/// it between adding the sheet to the roster and revoking it unprinted.
+pub async fn sheet(d: &Arc<Daemon>) -> Vec<Response> {
+    let d = d.clone();
+    tokio::spawn(async move { sheet_inner(&d).await })
+        .await
+        .unwrap_or_else(|e| vec![problem("internal-error", &[], Some(e.to_string()))])
+}
+
+async fn sheet_inner(d: &Daemon) -> Vec<Response> {
     let Some(g) = d.default_group() else {
         return vec![problem("not-in-group", &[], None)];
     };
-    let busy = g.busy.lock().await;
-    let Some(mut doc) = g.roster() else {
+    let me = DeviceId(d.device.clone());
+    let Some(doc) = g.roster() else {
         return vec![problem("not-in-group", &[], None)];
     };
-    let me = DeviceId(d.device.clone());
     let Some(person) = doc.roster.devices.get(&me).map(|x| x.person.clone()) else {
         return vec![problem("not-in-group", &[], None)];
     };
     if !doc.roster.persons.get(&person).is_some_and(|p| p.admin) {
         return vec![problem("not-allowed", &[], None)];
     }
-    if !doc
+    let backups: Vec<(String, String)> = doc
         .roster
         .devices
-        .values()
-        .any(|x| x.role == DeviceRole::Custodian)
-    {
+        .iter()
+        .filter(|(_, x)| x.role == DeviceRole::Custodian)
+        .map(|(id, x)| (id.0.clone(), x.name.clone()))
+        .collect();
+    if backups.is_empty() {
         return vec![problem("recovery-needs-backup", &[], None)];
     }
+    // Nothing is signed until a backup machine answers: a sheet that no
+    // backup could receive would only be revoked again (09 §9.9).
+    let ids: Vec<String> = backups.iter().map(|(id, _)| id.clone()).collect();
+    if !crate::custody::any_reachable(&g, &d.device, &ids).await {
+        let names: Vec<&str> = backups.iter().map(|(_, n)| n.as_str()).collect();
+        return vec![problem(
+            "recovery-backup-offline",
+            &[("machines", text(&names.join(", ")))],
+            None,
+        )];
+    }
+    let busy = g.busy.lock().await;
+    let Some(mut doc) = g.roster() else {
+        return vec![problem("not-in-group", &[], None)];
+    };
     let Ok(secret) = random::<32>() else {
         return vec![problem("internal-error", &[], None)];
     };
     let id = crate::net::device_id(&iroh::SecretKey::from_bytes(&secret).public());
+    let label = format!(
+        "{}-{}",
+        crate::util::date(crate::util::now()),
+        id.get(..6).unwrap_or_default()
+    );
     let added = Device {
         person: person.clone(),
-        name: format!(
-            "{}-{}",
-            crate::util::date(crate::util::now()),
-            id.get(..6).unwrap_or_default()
-        ),
+        name: label.clone(),
         role: DeviceRole::Recovery,
         annex_uuid: None,
         maxsize: None,
@@ -158,7 +189,7 @@ pub async fn sheet(d: &Daemon) -> Vec<Response> {
                 }
             }
         }
-        return vec![problem("peer-unreachable", &[], None)];
+        return vec![problem("recovery-not-received", &[], None)];
     }
     let addresses = g.lock().addresses.clone();
     let custodians: Vec<SheetCustodian> = doc
@@ -181,6 +212,7 @@ pub async fn sheet(d: &Daemon) -> Vec<Response> {
         name: doc.roster.group.clone(),
         k: doc.roster.k,
         person: person.0.clone(),
+        label,
         key: hex(&secret),
         custodians,
     };
@@ -226,8 +258,8 @@ async fn reached_custodian(d: &Daemon, g: &Group, commit: &str) -> bool {
 /// The sheet as a person reads it.
 fn render(s: &Sheet) -> String {
     let mut out = format!(
-        "pigeon recovery sheet\nGroup: {} ({})\nPerson: {}\nBackup machines:\n",
-        s.name, s.group, s.person
+        "pigeon recovery sheet\nGroup: {} ({})\nPerson: {}\nThis sheet: {}\nBackup machines:\n",
+        s.name, s.group, s.person, s.label
     );
     for c in &s.custodians {
         out.push_str(&format!("  {} {}\n", c.name, c.device));
@@ -407,6 +439,7 @@ mod tests {
             name: "Family".into(),
             k: 2,
             person: "ines".into(),
+            label: "2026-10-16-abc123".into(),
             key: "00".repeat(32),
             custodians: vec![SheetCustodian {
                 device: "dd".into(),

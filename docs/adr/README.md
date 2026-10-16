@@ -148,3 +148,4 @@ passes; 16 §16.3 lists where each rule now lives.
 | [0075](0075-one-invitation-per-group-shared-as-a-line.md) | One invitation per group, shared as a line that installs and joins | Accepted |
 | [0076](0076-pigeon-updates-itself-from-the-latest-release.md) | pigeon updates itself from the latest release, daily and when a peer is newer | Accepted |
 | [0077](0077-the-web-interface-ships-a-bundled-typescript-client.md) | The web interface ships a bundled TypeScript client, built with Node | Accepted |
+| [0078](0078-a-suggestion-is-decided-file-by-file-in-one-decision.md) | A suggestion is decided file by file, in one decision | Proposed |

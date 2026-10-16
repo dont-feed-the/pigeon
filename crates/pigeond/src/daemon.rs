@@ -121,7 +121,7 @@ impl Daemon {
     /// Writes the key this daemon runs with back to `<config>/device-key`
     /// when leaving the last group deleted it (09 §9.7): the new group's
     /// roster names this device, which must stay the same after a restart.
-    fn keep_key(&self) -> Result<(), String> {
+    pub(crate) fn keep_key(&self) -> Result<(), String> {
         let path = self.dirs.device_key();
         if path.exists() {
             return Ok(());
@@ -213,7 +213,9 @@ impl Daemon {
                 }
             }
             let mut step = round.child("capture");
-            if let Err(e) = crate::capture::capture(g, &self.device, &self.tracer).await {
+            let captured = crate::capture::capture(g, &self.device, &self.tracer).await;
+            crate::status_why::note_capture(g, captured.as_ref().err());
+            if let Err(e) = captured {
                 tracing::warn!(group = %g.id, error = %e, "capture-failed");
                 step.fail(&e.to_string());
                 settled = false;
@@ -268,6 +270,8 @@ impl Daemon {
         if !self.current_group(g).await {
             return;
         }
+        // Peers that refuse this computer tell it that it was removed.
+        crate::removed::note(self, g).await;
         if crate::pause::now(self).is_some() || crate::leave::leaving(g).is_some() {
             return;
         }

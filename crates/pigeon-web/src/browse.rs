@@ -16,7 +16,7 @@ use pigeon_i18n::Message;
 use pigeon_proto::api::{FileEntry, State};
 use pigeon_proto::{Request, Response};
 
-use crate::format::{folder_state, rank, size, state, when};
+use crate::format::{folder_state, rank, size, when};
 use crate::icons::{file_icon, icon};
 use crate::pages::{bare, list};
 use crate::{FormToken, Renderer, Web};
@@ -174,7 +174,7 @@ pub(crate) fn rows_of(root: &str, prefix: &str, listed: &[FileEntry]) -> Vec<Row
                 files: 1,
                 size: f.size,
                 modified: f.modified.clone(),
-                freed: false,
+                freed: f.freed,
                 arriving: 0,
                 sync: None,
             }),
@@ -534,7 +534,7 @@ fn table_row(
                 }
             }
             td class="col-state" {
-                @if row.folder { (folder_state(r, row.state, row.not_safe)) } @else { (state(r, row.state)) }
+                @if row.folder { (folder_state(r, row.state, row.not_safe)) } @else { (crate::format::file_state(r, row.state, row.freed)) }
             }
             td class="num col-size" { @if let Some(s) = row.size { (size(r, s)) } }
             td class="when col-when" { @if let Some(m) = &row.modified { (when(r, m)) } }
@@ -591,6 +591,7 @@ mod tests {
             state,
             size: Some(size),
             modified: Some(modified.into()),
+            freed: false,
         }
     }
 

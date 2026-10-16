@@ -10,6 +10,7 @@ state-protected = En sécurité
 state-uncertain = Pas vérifié depuis { $since }
 state-missing = Aucune copie n'est trouvée
 state-erased = Effacé
+state-not-here = { $state }, pas sur cet ordinateur
 
 ## Niveaux du titre (ux.md §4)
 
@@ -31,6 +32,17 @@ headline-checking = Le dossier local n'a pas pu être vérifié. Lancez : pigeon
 headline-inventory-unreadable = Pigeon ne peut pas vérifier toutes les versions enregistrées pour le moment.
 headline-too-few-backups = Pas encore en sécurité : ajoutez un ordinateur de sauvegarde.
 why-capturing = Cette modification attend d'être enregistrée et copiée sur les ordinateurs de sauvegarde.
+why-differs = Votre copie diffère de la version du groupe. Choisissez laquelle garder.
+why-name = Son nom ne fonctionne pas sur tous les ordinateurs. Renommez-le.
+why-held-deletion = Il a été supprimé avec beaucoup d’autres fichiers. pigeon attend votre choix : les supprimer pour tout le monde, ou les faire revenir.
+why-capture-failed =
+    pigeon n’a pas pu enregistrer cette modification : { $why ->
+        [disk-full] le disque est plein
+        [no-access] il n’a pas le droit de lire le fichier
+        [busy] un autre programme utilisait le dossier
+       *[other] un problème est survenu
+    }. Il réessaiera.
+why-removed = Cet ordinateur ne fait plus partie du groupe : ce fichier n’est donc plus sauvegardé.
 why-too-few-backups = { $have } ordinateurs de sauvegarde sur { $need } sont configurés. Pour en ajouter un, lancez dessus la ligne qu'affiche pigeon invite, avec --backup-machine à la fin.
 headline-not-safe =
     { $files ->
@@ -53,7 +65,8 @@ headline-machine-missing =
 headline-machine-full = { $machine } est pleine ; elle attend qu'on y libère de l'espace.
 headline-machine-no-capacity = { $machine } n'a pas la place pour { $files } fichiers : il lui faut { $missing_mb } Mo d'espace libre en plus. Libérez-y de l'espace, ou ajoutez une autre machine de sauvegarde.
 headline-machine-lost = { $machine } ne trouve plus son dossier de sauvegarde ; elle ne compte plus jusqu'à ce qu'elle soit réinstallée.
-why-machine-offline = { $machine } est hors ligne depuis { $since }.
+headline-removed = Cet ordinateur a été retiré du groupe. Ses fichiers restent dans son dossier, mais ils ne sont plus partagés ni sauvegardés. Pour les partager à nouveau, demandez à quelqu’un du groupe sa ligne d’invitation et rejoignez-le à nouveau.
+why-machine-offline = { $machine } a donné des nouvelles pour la dernière fois { $since }.
 why-machine-not-heard = Cet ordinateur n’a pas encore eu de nouvelles de { $machine }.
 why-safe-copies = { $have } sur { $need } copies de sauvegarde
 next-when-back = Rien à faire : ils seront en sécurité quand { $machine } sera de retour.
@@ -79,6 +92,58 @@ time-days-ago =
     }
 time-never = jamais
 
+## Temps à venir, à l’heure locale de cet ordinateur, et tailles (units.rs)
+
+time-clock = { $hour } h { $minute }
+time-month =
+    { $index ->
+        [1] janvier
+        [2] février
+        [3] mars
+        [4] avril
+        [5] mai
+        [6] juin
+        [7] juillet
+        [8] août
+        [9] septembre
+        [10] octobre
+        [11] novembre
+       *[12] décembre
+    }
+time-date =
+    { $day ->
+        [1] 1er { $month }
+       *[other] { $day } { $month }
+    }
+time-date-year =
+    { $day ->
+        [1] 1er { $month } { $year }
+       *[other] { $day } { $month } { $year }
+    }
+time-until =
+    { $moment ->
+        [today] jusqu’à { $clock }
+        [tomorrow] jusqu’à demain à { $clock }
+       *[other] jusqu’au { $date } à { $clock }
+    }
+time-expires =
+    { $moment ->
+        [today] expire à { $clock }
+        [tomorrow] expire demain à { $clock }
+       *[other] expire le { $date } à { $clock }
+    }
+number-decimal = { $whole },{ $tenth }
+number-thousands = { $high } { $low }
+size-bytes =
+    { $plural ->
+        [one] { $size } octet
+       *[other] { $size } octets
+    }
+size-kb = { $size } ko
+size-mb = { $size } Mo
+size-gb = { $size } Go
+size-tb = { $size } To
+
 ## Commandes de la tranche de sécurité (13 §13.12)
 
 cmd-create = Créer un groupe dont cet ordinateur est le premier membre
@@ -93,8 +158,8 @@ cmd-free = Libérer l'espace d'un dossier sur cet ordinateur
 cmd-keep = Garder un dossier sur cet ordinateur
 cmd-sync = Voir quels dossiers sont sur cet ordinateur ; --default rend à un dossier son choix par défaut
 cmd-suggestions = Lister les suggestions qui attendent une décision
-cmd-accept = Accepter une suggestion dans les fichiers du groupe
-cmd-decline = Refuser une suggestion, en disant pourquoi si vous voulez
+cmd-accept = Accepter une suggestion dans les fichiers du groupe ; nommez des fichiers pour n’accepter qu’eux et refuser les autres
+cmd-decline = Refuser une suggestion, en disant pourquoi si vous voulez ; nommez des fichiers pour ne refuser qu’eux et accepter les autres
 cmd-conflicts = Lister vos fichiers qui diffèrent de la version du groupe
 cmd-resolve = Choisir pour un fichier qui diffère : la version du groupe, la vôtre en copie, ou la suggérer à nouveau
 cmd-remove-computer = Retirer du groupe un ordinateur perdu ou mis à la retraite
@@ -118,6 +183,34 @@ free-waiting =
         [one] { $files } fichier n'est pas encore en sécurité ; pigeon le libérera dès qu'il le sera.
        *[other] { $files } fichiers ne sont pas encore en sécurité ; pigeon les libérera dès qu'ils le seront.
     }
+free-preview-leave =
+    { $files ->
+        [one] { $files } fichier sera retiré de cet ordinateur.
+       *[other] Ces { $files } fichiers seront retirés de cet ordinateur.
+    }
+free-preview-stay =
+    { $files ->
+        [one] Il reste en sécurité sur les machines de sauvegarde : { $machines }.
+       *[other] Ils restent en sécurité sur les machines de sauvegarde : { $machines }.
+    }
+free-preview-none = Aucun fichier ici n’est encore en sécurité sur les machines de sauvegarde ; rien ne quitte donc cet ordinateur pour l’instant.
+free-preview-undo = « Garder sur cet ordinateur » les ramène quand vous voulez.
+problem-backups-quiet =
+    { $backups ->
+        [one] La machine de sauvegarde { $machines } a donné des nouvelles pour la dernière fois { $heard } ; pigeon ne peut donc pas confirmer pour l’instant qu’elle a toujours ces fichiers.
+       *[other] Les machines de sauvegarde ({ $machines }) ont donné des nouvelles pour la dernière fois { $heard } ; pigeon ne peut donc pas confirmer pour l’instant qu’elles ont toujours ces fichiers.
+    }
+free-backups-never =
+    { $backups ->
+        [one] pigeon n’a encore jamais eu de nouvelles de la machine de sauvegarde { $machines } ; il ne peut donc pas confirmer qu’elle a ces fichiers.
+       *[other] pigeon n’a encore jamais eu de nouvelles des machines de sauvegarde ({ $machines }) ; il ne peut donc pas confirmer qu’elles ont ces fichiers.
+    }
+hint-backups-quiet = Si vous continuez, les fichiers quitteront cet ordinateur dès que pigeon aura des nouvelles des machines de sauvegarde et aura confirmé leurs copies, même en votre absence.
+confirm-free-quiet = Libérer l’espace quand même ? [o/N]
+web-free-title = Libérer l’espace de { $folder } ?
+web-free-quiet-title = Les machines de sauvegarde n’ont pas donné de nouvelles
+web-free-anyway = Libérer l’espace quand même
+web-free-cancel = Annuler
 keep-result = { $folder } sera gardé sur cet ordinateur. Les fichiers absents seront téléchargés dès qu’une copie sera joignable ; consultez Accueil pour suivre l’avancement.
 suggestions-none = Aucune suggestion n'attend.
 suggestion-decide = { $id }  { $author } suggère une modification de { $paths }, enregistrée { $saved }. Acceptez-la avec : pigeon accept { $id }
@@ -125,12 +218,65 @@ suggestion-other = { $id }  { $author } suggère une modification de { $paths },
 suggestion-yours = { $id }  Votre modification de { $paths }, enregistrée { $saved }, attend une décision.
 accepted-suggestion = La suggestion de { $author } est maintenant dans les fichiers du groupe.
 declined-suggestion = La suggestion de { $author } est refusée ; la personne sera prévenue.
+decided-all-accepted =
+    { $count ->
+        [one] Vous avez accepté la modification de { $author } ({ $paths }). Nous préviendrons { $author }.
+       *[other] Vous avez accepté les { $count } modifications de { $author } ({ $paths }). Nous préviendrons { $author }.
+    }
+decided-all-declined =
+    { $count ->
+        [one] Vous avez refusé la modification de { $author } ({ $paths }). Nous préviendrons { $author }.
+       *[other] Vous avez refusé les { $count } modifications de { $author } ({ $paths }). Nous préviendrons { $author }.
+    }
+decided-some = Vous avez accepté { $accepted } des modifications de { $author } ({ $accepted-paths }) et refusé { $declined } ({ $declined-paths }). Nous préviendrons { $author }.
+suggestion-file-added = { $path } : nouveau fichier, { $after }
+suggestion-file-changed = { $path } : modifié, { $before } → { $after }
+suggestion-file-changed-lines =
+    { $path } : modifié, { $before } → { $after }, { $added ->
+        [one] { $added } ligne ajoutée
+       *[other] { $added } lignes ajoutées
+    } et { $removed ->
+        [one] { $removed } retirée
+       *[other] { $removed } retirées
+    }
+suggestion-file-deleted = { $path } : supprimé (il faisait { $before })
+suggestion-file-renamed = { $path } : renommé, il s’appelait { $from } ; contenu inchangé ({ $after })
+suggestion-files-hint = Pour n’accepter que certains fichiers et refuser les autres : pigeon accept { $id } FICHIER…
+suggestion-outcome-accepted =
+    { $count ->
+        [one] { $by } a accepté votre modification ({ $paths }), { $when }.
+       *[other] { $by } a accepté vos { $count } modifications ({ $paths }), { $when }.
+    }
+suggestion-outcome-declined =
+    { $count ->
+        [one] { $by } a refusé votre modification ({ $paths }), { $when }.
+       *[other] { $by } a refusé vos { $count } modifications ({ $paths }), { $when }.
+    }
+suggestion-outcome-some = { $by } a accepté { $accepted } de vos modifications ({ $accepted-paths }) et en a refusé { $declined } ({ $declined-paths }), { $when }.
+suggestion-outcome-someone = Quelqu’un
+suggestion-outcome-note = Note de { $by } : « { $note } »
+suggestion-outcome-kept = Les fichiers refusés restent tels que vous les avez enregistrés sur cet ordinateur ; personne d’autre n’a votre version.
 conflicts-none = Chaque fichier ici est la version du groupe.
 conflict-waiting = { $path } : votre suggestion attend une décision.
 conflict-choose = { $path } : votre version diffère de celle du groupe. Choisissez avec : pigeon resolve
 resolved-take-group = { $path } est de nouveau la version du groupe ; la vôtre reste dans son historique.
 resolved-keep-copy = Votre version de { $path } est gardée sous { $dest } ; { $path } est de nouveau la version du groupe.
 resolved-suggest-again = Votre version de { $path } est suggérée à nouveau.
+web-conflicts = Fichiers différents de la version du groupe
+web-conflict-row = { $path } : votre copie ici est différente de la version du groupe. Ouvrez-la pour choisir ce que vous gardez.
+web-conflict-row-waiting = { $path } : votre copie ici est différente de la version du groupe ; votre modification attend une décision.
+web-conflict-heading = Votre copie est différente
+web-conflict-explain = Votre copie de { $name } est différente de la version du groupe. Choisissez quoi faire ; rien n’est perdu.
+web-conflict-waiting-explain = Votre copie de { $name } est différente de la version du groupe : votre modification a été suggérée et attend une décision. Vous pouvez attendre ou choisir maintenant ; rien n’est perdu.
+web-resolve-take-group = Prendre la version du groupe
+web-resolve-take-group-help = Ce fichier devient la version du groupe. La vôtre n’est pas supprimée : pigeon la garde dans son historique, mais plus comme fichier dans votre dossier. Pour la garder comme fichier, choisissez « Garder la mienne en copie ».
+web-resolve-take-group-waiting-help = Votre suggestion est retirée et ce fichier devient la version du groupe. pigeon garde la vôtre dans son historique, mais plus comme fichier dans votre dossier. Pour la garder comme fichier, choisissez « Garder la mienne en copie ».
+web-resolve-keep-copy = Garder la mienne en copie
+web-resolve-keep-copy-help = Votre version est enregistrée dans un nouveau fichier, sous le nom ci-dessous, à côté de celui-ci, et partagée avec le groupe. Ce fichier devient la version du groupe.
+web-resolve-copy-name = Nom de votre copie
+web-resolve-copy-suffix = ma copie
+web-resolve-suggest-again = Suggérer à nouveau
+web-resolve-suggest-again-help = Votre version reste dans ce fichier et est de nouveau suggérée au groupe. La version du groupe reste telle quelle jusqu’à ce que votre suggestion soit acceptée.
 undo-free = Annuler : pigeon keep { $folder }
 undo-keep = Annuler : pigeon free { $folder }
 restore-result = { $path } est restauré sur cet ordinateur ; la version plus récente reste dans son historique. Consultez Accueil pour le partage et la protection, et Suggestions si une approbation est nécessaire.
@@ -161,7 +307,13 @@ joined =
         [backup-machine] Cette machine de sauvegarde garde maintenant des copies pour « { $group } ».
        *[computer] Cet ordinateur fait maintenant partie de « { $group } ». Les fichiers du groupe arrivent dans son dossier.
     }
+joined-renamed =
+    { $who ->
+        [backup-machine] Cette machine de sauvegarde garde maintenant des copies pour « { $group } ».
+       *[computer] Cet ordinateur fait maintenant partie de « { $group } ». Les fichiers du groupe arrivent dans son dossier.
+    } Un autre ordinateur du groupe s’appelait déjà { $asked } : celui-ci s’appelle donc { $name }.
 removed-computer = { $name } est retiré du groupe ; ses copies ne comptent plus.
+removed-from-group = Cet ordinateur ne fait plus partie du groupe : voici le groupe tel qu’il le connaissait. Pour partager à nouveau des fichiers, demandez à quelqu’un du groupe sa ligne d’invitation et rejoignez-le à nouveau.
 bundle-written = Le diagnostic est dans { $path }. Rien n'a été envoyé.
 machine-row = { $name } : { $kind }, dernier contact { $heard }
 machine-kind-custodian = machine de sauvegarde
@@ -174,7 +326,13 @@ cmd-deleted = Les fichiers supprimés du groupe, que restore fait revenir
 machine-this = { $name } : cet ordinateur
 version-row = { $number }. { $saved } : { $state }
 waiting-row = { $path } : { $state }
-confirm-remove-computer = Retirer { $name } du groupe ? Ses copies ne compteront plus. [o/N]
+confirm-remove-computer = Retirer { $name } du groupe ? Ses fichiers y restent, mais ne sont plus partagés avec le groupe, et ses copies ne comptent plus. Vous pourrez l’inviter à nouveau plus tard. [o/N]
+confirm-remove-backup = Retirer la machine de sauvegarde { $name } du groupe ? Les copies qu’elle garde ne comptent plus ; les autres machines de sauvegarde prennent le relais. Vous pourrez l’inviter à nouveau plus tard. [o/N]
+confirm-remove-backup-unsafe = Retirer la machine de sauvegarde { $name } du groupe ? { $left ->
+        [0] Après cela, le groupe n’aura plus aucune machine de sauvegarde. Aucun de vos fichiers ne sera en sécurité tant que vous n’en aurez pas ajouté une.
+        [one] Après cela, le groupe n’aura plus qu’une machine de sauvegarde, alors qu’il lui en faut { $needed } pour que vos fichiers soient en sécurité. Ils ne le seront pas tant que vous n’en aurez pas ajouté une autre.
+       *[other] Après cela, le groupe n’aura plus que { $left } machines de sauvegarde, alors qu’il lui en faut { $needed } pour que vos fichiers soient en sécurité. Ils ne le seront pas tant que vous n’en aurez pas ajouté une autre.
+    } Vous pourrez l’inviter à nouveau plus tard. [o/N]
 confirm-yes = oui
 confirm-leave = Retirer cet ordinateur du groupe ? Ses fichiers restent dans le dossier, mais il cesse de les partager. [o/N]
 confirm-refound = Refonder le groupe avec vous pour seul administrateur ? Il devient un nouveau groupe : chaque autre membre le rejoint à nouveau par une invitation de votre part, et l'ancien historique reste lisible. [o/N]
@@ -192,11 +350,15 @@ hint-file-system-not-in-this-build = Choisissez un dossier sur ext4 (Linux) ou A
 problem-invite-unknown = Le groupe ne connaît pas cette invitation.
 problem-invite-not-allowed = { $inviter } ne peut pas ajouter cet ordinateur au groupe.
 problem-inviter-offline = L'ordinateur de { $inviter } est injoignable pour le moment.
-hint-inviter-offline = Réessayez quand l'ordinateur de { $inviter } est allumé.
+hint-inviter-offline = Réessayez quand l'ordinateur de { $inviter } est allumé. Rien n’a été gardé sur cet ordinateur : vous pouvez reprendre le même dossier.
 problem-not-in-group = Cet ordinateur n'est pas membre du groupe.
 problem-not-allowed = Vous n'avez pas le droit de faire cela dans ce groupe.
 problem-suggestion-unknown = Aucune suggestion en attente ne s'appelle { $id }.
 hint-suggestion-unknown = Voyez-les avec : pigeon suggestions
+problem-suggestion-file-unknown = { $path } ne fait pas partie des fichiers de cette suggestion.
+hint-suggestion-file-unknown = Voyez ses fichiers avec : pigeon suggestions
+problem-no-files-chosen = Choisissez au moins un fichier de la suggestion.
+hint-no-files-chosen = Voyez ses fichiers avec : pigeon suggestions
 problem-not-diverging = { $path } est déjà la version du groupe.
 hint-not-diverging = Voyez les fichiers qui diffèrent avec : pigeon conflicts
 problem-changed-since = { $path } a été enregistré de nouveau depuis ; rien n'a été remplacé.
@@ -258,11 +420,32 @@ web-login = Ouvrir pigeon dans votre navigateur : { $url }
 web-suggestion-decide = { $author } suggère une modification de { $paths }, enregistrée { $saved }.
 web-suggestion-other = { $author } suggère une modification de { $paths }, enregistrée { $saved } ; quelqu'un d'autre décide.
 web-suggestion-yours = Votre modification de { $paths }, enregistrée { $saved }, attend une décision.
+web-suggestion-label = la modification de { $paths } par { $author }
 web-accept = Accepter
-web-override-reason = Raison de la dérogation administrateur
+web-override-reason = Pourquoi vous l’acceptez quand même (obligatoire)
 web-managed-client = Voici le pair Pigeon de votre appareil sur la passerelle. Choisissez les fichiers à garder hors ligne dans votre application Nextcloud.
 web-decline = Refuser
 web-decline-note = Pourquoi (facultatif)
+web-suggestions-for-you = À vous de décider
+web-suggestions-yours = Vos suggestions
+web-suggestions-others = À quelqu’un d’autre de décider
+web-suggestions-decided = Vos suggestions décidées récemment
+web-suggestion-files = Fichiers de cette suggestion
+web-suggestion-choose = Tous les fichiers sont sélectionnés. « Accepter la sélection » accepte les fichiers sélectionnés et refuse les autres ; « Refuser la sélection » refuse les fichiers sélectionnés et accepte les autres.
+web-review-file = Examiner { $path }
+web-accept-selected = Accepter la sélection
+web-decline-selected = Refuser la sélection
+web-note-for = Note pour { $author } sur les fichiers refusés (facultatif)
+web-decide-all = { $count } suggestions vous attendent. Pour toutes les décider d’un coup, avec tous leurs fichiers :
+web-accept-all = Tout accepter
+web-decline-all = Tout refuser
+web-decided-all =
+    { $count ->
+        [one] Vous avez décidé { $count } suggestion.
+       *[other] Vous avez décidé { $count } suggestions.
+    }
+web-decide-all-skipped = La suggestion de { $author } modifie quelque chose que personne ne peut normalement modifier : un administrateur peut quand même l’accepter, en disant pourquoi. Décidez-la à part.
+web-file-suggestion-waiting = Votre modification de ce fichier, enregistrée { $saved }, attend une décision. En attendant, les autres gardent la version du groupe.
 web-back = Retour
 web-form-expired = Cette page n'est plus à jour. Rechargez-la et réessayez.
 web-nav-files = Fichiers
@@ -288,8 +471,8 @@ folder-row =
     }
 folder-row-freed =
     { $files ->
-        [one] { $path } : { $state }, { $files } fichier ; son espace est libéré sur cet ordinateur
-       *[other] { $path } : { $state }, { $files } fichiers ; leur espace est libéré sur cet ordinateur
+        [one] { $path } : { $state }, { $files } fichier, pas sur cet ordinateur
+       *[other] { $path } : { $state }, { $files } fichiers, pas sur cet ordinateur
     }
 web-nav-settings = Réglages
 web-save = Enregistrer
@@ -310,9 +493,9 @@ problem-setting-value = « { $value } » n'est pas une valeur possible de « { $
 hint-setting-value = Voyez les valeurs avec : pigeon settings
 cmd-pause = Mettre le partage en pause un moment (par exemple 2h), ou jusqu'à resume
 cmd-resume = Reprendre le partage après une pause
-headline-paused = Le partage est en pause jusqu'à { $until }. Les changements ne sont enregistrés que sur cet ordinateur.
+headline-paused = Le partage est en pause { $until }. Les changements ne sont enregistrés que sur cet ordinateur.
 headline-paused-until-resume = Le partage est en pause. Les changements ne sont enregistrés que sur cet ordinateur jusqu'à la reprise.
-paused-until = Le partage est en pause jusqu'à { $until }.
+paused-until = Le partage est en pause { $until }.
 paused-until-resume = Le partage est en pause jusqu'à ce que vous le repreniez.
 resumed = Le partage reprend.
 cmd-leave = Retirer cet ordinateur du groupe ; ses fichiers restent
@@ -323,7 +506,11 @@ cmd-refound = Refonder le groupe avec vous pour seul administrateur, quand aucun
 refounded = { $group } est refondé avec { $name } pour seul administrateur. Invitez à nouveau les autres : leurs dossiers le rejoignent sur place.
 cmd-held = Changements que pigeon retient jusqu'à votre choix : suppressions à partager ou annuler, noms à renommer
 held-none = Rien n'est retenu.
-held-row = { $id } : { $reason } ({ $files } fichiers, depuis { $since }) : { $paths }
+held-row =
+    { $files ->
+        [one] { $id } : { $reason } ({ $files } fichier, depuis { $since }) : { $paths }
+       *[other] { $id } : { $reason } ({ $files } fichiers, depuis { $since }) : { $paths }
+    }
 held-mass-deletion = { $files } fichiers supprimés d'un coup
 held-top-folder = le dossier { $folder } supprimé
 held-shared = { $files } suppressions vont atteindre les autres ordinateurs.
@@ -351,7 +538,14 @@ hint-held-choice = Voyez ses choix avec : pigeon held
 problem-held-rename-taken = { $to } existe déjà.
 hint-held-rename-taken = Renommez-le vous-même ; pigeon le capture dès que son nom marche partout.
 web-remove = Retirer
-web-remove-confirm = Retirer { $name } du groupe ? Ses copies ne compteront plus.
+web-remove-confirm = Retirer { $name } du groupe ? Ses fichiers y restent, mais ne sont plus partagés avec le groupe, et ses copies ne comptent plus. Vous pourrez l’inviter à nouveau plus tard.
+web-remove-backup-confirm = Retirer la machine de sauvegarde { $name } du groupe ? Les copies qu’elle garde ne comptent plus. Vous pourrez l’inviter à nouveau plus tard.
+remove-backup-unsafe =
+    { $left ->
+        [0] Après cela, le groupe n’aura plus aucune machine de sauvegarde. Aucun de vos fichiers ne sera en sécurité tant que vous n’en aurez pas ajouté une.
+        [one] Après cela, le groupe n’aura plus qu’une machine de sauvegarde, alors qu’il lui en faut { $needed } pour que vos fichiers soient en sécurité. Ils ne le seront pas tant que vous n’en aurez pas ajouté une autre.
+       *[other] Après cela, le groupe n’aura plus que { $left } machines de sauvegarde, alors qu’il lui en faut { $needed } pour que vos fichiers soient en sécurité. Ils ne le seront pas tant que vous n’en aurez pas ajouté une autre.
+    }
 web-invite = Inviter
 files-none = Ce dossier n'a encore aucun fichier.
 sync-none = Le groupe n’a encore aucun dossier.
@@ -364,6 +558,9 @@ file-row = { $path } : { $state }
 web-restore = Restaurer cette version
 web-view = Télécharger une copie
 web-versions = Versions
+web-version-current = version actuelle
+web-version-group-current = version actuelle du groupe
+web-version-label = version { $number }, enregistrée { $saved }
 deleted-none = Aucun fichier supprimé à récupérer.
 deleted-row = { $path }, supprimé { $deleted }
 web-deleted = Fichiers supprimés
@@ -398,7 +595,12 @@ web-held = Changements en attente de votre choix
 web-held-share = Supprimer pour tout le monde
 web-held-bring-back = Les faire revenir
 web-held-rename = Renommer en { $suggested }
-web-held-share-confirm = Supprimer les fichiers de { $batch } pour tout le monde ? Ils restent dans l'historique.
+web-held-share-confirm =
+    { $files ->
+        [one] Supprimer ce fichier pour tout le monde ({ $paths }) ? Il reste dans l’historique : on peut encore le faire revenir.
+       *[other] Supprimer ces { $files } fichiers pour tout le monde ({ $paths }) ? Ils restent dans l’historique : on peut encore les faire revenir.
+    }
+web-held-row = { $reason }, { $since } : { $paths }
 web-leave = Quitter le groupe
 web-leave-confirm = Retirer cet ordinateur du groupe ? Ses fichiers restent dans le dossier, mais il cesse de les partager.
 cmd-free-without-checking = Retirer la copie de cet ordinateur même si c'est la dernière
@@ -412,6 +614,9 @@ drop-done = { $files } fichiers masqués, { $dropped } contenus retirés de cet 
 confirm-drop = Retirer quand même la copie de cet ordinateur ? Ce qu'aucune autre machine n'a est perdu. [o/N]
 cmd-view = Ouvrir une copie en lecture seule d'une version d'un fichier, hors du dossier
 view-ready = Une copie en lecture seule est dans { $path } ; elle est supprimée après sept jours.
+view-name-group = version du groupe
+view-name-version = version { $number }
+view-name-suggested = version suggérée
 
 setting-telemetry-device = Partager les diagnostics avec
 setting-off = Garder les diagnostics sur chaque ordinateur
@@ -420,7 +625,8 @@ problem-export-history-unverified = Pigeon n’a pas pu vérifier l’historique
 
 problem-recovery-not-allowed = Cette fiche de récupération ne peut plus ajouter d’ordinateurs. Utilisez une fiche actuelle ou demandez une invitation à un administrateur.
 
-machine-recovery = { $name } : clé de récupération sur papier
+machine-recovery = { $name } : fiche de récupération sur papier imprimée le { $date }
+machine-recovery-undated = { $name } : fiche de récupération sur papier
 web-revoke-sheet = Révoquer la fiche de récupération
 
 revoked-sheet = { $name } est révoquée ; cette fiche de récupération ne peut plus ajouter d’ordinateurs.
@@ -431,7 +637,7 @@ progress-remove = Retrait de { $name } ; attente des vérifications du groupe.
 progress-recovery-sheet = Préparation d’une fiche de récupération et attente de sa réception par une machine de sauvegarde.
 progress-recover = Récupération de cet ordinateur ; vérification de l’historique de la sauvegarde et de l’autorisation du nouvel ordinateur.
 
-confirm-revoke-sheet = Révoquer { $name } ? Cette clé sur papier ne pourra plus ajouter d’ordinateurs. [o/N]
+confirm-revoke-sheet = Révoquer { $name } ? Cette fiche de récupération sur papier ne pourra plus ajouter d’ordinateurs. [o/N]
 
 cmd-debug-allow = Autoriser un diagnostic pour un ordinateur choisi pendant dix minutes
 debug-allowed = { $name } peut recueillir les diagnostics de ce groupe une seule fois, noms de fichiers inclus. Cette autorisation expire dans dix minutes. Redémarrer pigeon annule cette autorisation.
@@ -449,6 +655,7 @@ action-cancelled = Annulé.
 recovery-title = Fiche de récupération pigeon
 recovery-group = Groupe : { $name } ({ $group })
 recovery-person = Personne : { $name }
+recovery-sheet-name = Cette fiche : { $name }, comme sur la page Membres et machines
 recovery-backups = Machines de sauvegarde :
 recovery-secret = Gardez cette fiche comme un passeport : quiconque la détient peut ajouter des ordinateurs en votre nom. Imprimez-la et rangez-la en lieu sûr ; ne l’envoyez à personne.
 recovery-instructions = Sur un nouvel ordinateur, enregistrez le code dans un fichier texte et lancez : pigeon recover CE-FICHIER DOSSIER
@@ -460,6 +667,8 @@ web-recovery-print-help = Utilisez la commande Imprimer de votre navigateur pour
 recovery-refresh-recommendation = Les machines de sauvegarde ont changé depuis la préparation des fiches de récupération de { $name }. Préparez une nouvelle fiche avec les machines actuelles.
 
 problem-recovery-needs-backup = Ajoutez une machine de sauvegarde avant de préparer une fiche de récupération. Une sauvegarde doit recevoir l’autorisation de la fiche pour pouvoir vous aider à revenir.
+problem-recovery-backup-offline = Aucune machine de sauvegarde n’a répondu ({ $machines }). Une machine de sauvegarde doit recevoir la fiche avant son impression. Allumez-en une et connectez-la, puis préparez à nouveau la fiche. Rien n’a été modifié.
+problem-recovery-not-received = Aucune machine de sauvegarde n’a reçu la fiche à temps : elle a donc été annulée et il n’y a rien à imprimer. Vérifiez qu’une machine de sauvegarde est allumée, puis préparez à nouveau la fiche.
 
 problem-join-incomplete = Le nouveau groupe a été vérifié, mais la récupération n’a pas pu se terminer. Redémarrez pigeon pour terminer l’opération enregistrée. Votre ancien historique est conservé.
 problem-repository-busy = Ce dépôt contient une mise à jour de fichier inachevée. Laissez pigeon la terminer, ou redémarrez pigeon avant de réessayer la récupération.
@@ -472,9 +681,6 @@ web-health-unavailable = Pas encore vérifié ; pigeon est peut-être occupé.
 web-health-no-report = Aucun état reçu pour le moment.
 web-health-counts = En sécurité : { $protected } · Partagés, pas encore en sécurité : { $published } · Seulement sur cet ordinateur : { $local } · Pas vérifiés récemment : { $uncertain } · Manquants : { $missing } · Effacés définitivement : { $erased }
 headline-empty = Aucun fichier pour le moment. Ajoutez des fichiers dans votre dossier partagé pour commencer.
-web-health-size = { $mb } Mo
-web-health-kb = { $kb } ko
-web-health-bytes = { $bytes } o
 web-health-no-limit = non définie
 web-health-paper = Une clé papier ne conserve aucun fichier.
 web-health-disk = Conservés : { $used } · Libres : { $free } · Limite : { $limit } · Réserve : { $reserve }
@@ -524,26 +730,28 @@ suggestion-deletes-file = Cette suggestion supprime { $path }. Le fichier partag
 space-title = Espace de sauvegarde
 space-need =
     { $copies ->
-        [one] Stockage nécessaire pour { $copies } copie de sauvegarde : fichiers actuels { $current } octets ; historique { $history } octets ; suggestions { $suggestions } octets.
-       *[other] Stockage nécessaire pour { $copies } copies de sauvegarde : fichiers actuels { $current } octets ; historique { $history } octets ; suggestions { $suggestions } octets.
+        [one] Stockage nécessaire pour { $copies } copie de sauvegarde : fichiers actuels { $current } ; historique { $history } ; suggestions { $suggestions }.
+       *[other] Stockage nécessaire pour { $copies } copies de sauvegarde : fichiers actuels { $current } ; historique { $history } ; suggestions { $suggestions }.
     }
-space-offered = Capacité configurée pour ce contenu : { $bytes } octets. Chaque ordinateur de sauvegarde compte pour une copie au maximum, même sans état de stockage récent.
-space-overflow = Copies supplémentaires : { $bytes } octets, selon les emplacements signalés.
+space-offered = Capacité configurée pour ce contenu : { $bytes }. Chaque ordinateur de sauvegarde compte pour une copie au maximum, même sans état de stockage récent.
+space-overflow = Copies supplémentaires : { $bytes }, selon les emplacements signalés.
 space-overflow-unknown = Les copies supplémentaires n’ont pas été vérifiées.
-space-short = La capacité de sauvegarde configurée a moins de 25 % de marge. Ajoutez un autre ordinateur de sauvegarde, ou augmentez une limite inférieure à une copie. L’espace disque libre signalé par chaque ordinateur est affiché ci-dessous.
-space-disk = Stockage utilisé { $used } octets ; libre { $free } octets ; limite { $limit } ; réserve { $reserve } octets.
-space-proposal = Suggestion { $id }, { $state }, enregistrée { $when } : { $bytes } octets supplémentaires avant les copies de sauvegarde.
+space-limit-low = La limite de stockage de { $machines } est inférieure à une copie des fichiers du groupe : cette machine ne peut pas tout garder. Une autre machine de sauvegarde, ou une limite plus haute, compense.
+space-no-spare = Il n’y a pas de machine de sauvegarde en réserve : si l’une d’elles cesse de fonctionner, vos fichiers ne sont plus en sécurité jusqu’à son remplacement. Ajouter une autre machine de sauvegarde évite cela.
+space-disk = Stockage utilisé { $used } ; libre { $free } ; limite { $limit } ; réserve { $reserve }.
+space-proposal = Une suggestion enregistrée { $when }, { $state } : { $bytes } de plus sur chaque machine de sauvegarde.
 space-shared = Un contenu commun est compté une seule fois dans les totaux et peut apparaître dans plusieurs suggestions. Les suggestions refusées restent jusqu’à leur effacement.
 space-open = en attente d’une décision
 space-adopted = acceptée
 space-rejected = refusée
 space-withdrawn = retirée
-space-snapshot = { $group }, vérifié le { $when }.
+space-snapshot = { $group }, vérifié { $when }.
 
 web-health-suggestions-unavailable = Suggestions en attente d’une décision : pas encore vérifiées.
 web-health-separator = {" : "}
 web-not-found = Il n’y a pas de page ici.
 web-noscript = Cette page ne se met à jour d’elle-même qu’avec JavaScript. Rechargez-la pour voir l’état le plus récent.
+web-skip = Aller au contenu
 problem-folder-not-absolute = « { $folder } » n’est pas un chemin de dossier complet. Indiquez-en un qui commence par /, par exemple /home/vous/Famille.
 problem-name-empty = Donnez un nom au groupe et à cet ordinateur.
 problem-copies-zero = Un groupe a besoin d’au moins une copie de sauvegarde.
@@ -561,7 +769,6 @@ web-join-existing = { $person } fait déjà partie de « { $group } ». Cliquez 
 web-copy = Copier
 web-invite-help = Pour ajouter quelqu'un à « { $group } », un autre ordinateur ou une machine de sauvegarde, partagez cette ligne ; elle installe pigeon et rejoint le groupe. Sur une machine de sauvegarde, ajoutez --backup-machine à la fin. Quiconque l'a peut rejoindre, avec les droits de la personne qu'il dit être.
 progress-join = Adhésion : en attente de la réponse de l'ordinateur d'un administrateur du groupe…
-web-skip = Aller au contenu
 web-sections = Sections
 web-status = État :
 web-breadcrumb = Emplacement

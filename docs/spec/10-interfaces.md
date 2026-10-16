@@ -4,7 +4,7 @@
 > the local web interface, notifications, messages and problems. Words are
 > ux.md's; operations are the other files'.
 
-## 10.1 One request API (ADRs 0021, 0077)
+## 10.1 One request API (ADRs 0021, 0077, 0078)
 
 Every operation is one **request type**, defined once in `pigeon-proto` and
 carried over the local socket ([09 §9.3](09-network-and-joining.md);
@@ -16,17 +16,17 @@ result, progress events then a result, or a `Problem` (§10.6).
 |---|---|---|---|
 | `Status {path?, not_shared}` | `pigeon status [PATH] [--not-shared]` | Home; the folder view's *Not shared* list | [06](06-status.md), [07 §7.9](07-capture-and-install.md) |
 | `Health` | — | Home's headline, current and older counts, timestamped capacity and queues, suggestions and repair epochs | [12 §12.2](12-observability.md) |
-| `Create {name, folder, k, device_name}` | `pigeon create NAME` | Welcome → Create | [04 §4.1](04-roster-and-authority.md) |
+| `Create {name, folder, k, device_name, person?}` | `pigeon create NAME [--person NAME]` | Welcome → Create (*Your name*) | [04 §4.1](04-roster-and-authority.md) |
 | `Invite` | `pigeon invite` | People → Invite | [09 §9.6](09-network-and-joining.md) |
 | `Join {invitation, folder, keep, name?, person?, existing, custodian}` | `pigeon join INVITATION [FOLDER] [--person NAME] [--name NAME] [--backup-machine]` | Welcome → Join | [09 §9.6](09-network-and-joining.md) |
-| `Keep {folder}` · `Evict {folder}` | `pigeon keep PATH` · `pigeon free PATH` | Files → *Keep on this computer* | [08 §8.5](08-custody-loops.md) |
+| `Keep {folder}` · `Evict {folder, confirmed}` · `FreePreview {folder}` | `pigeon keep PATH` · `pigeon free PATH [--yes]` | Files → *Keep on this computer* · *Free up space*, confirmed | [08 §8.5](08-custody-loops.md) |
 | `Sync {folder?}` · `ForgetChoice {folder}` | `pigeon sync [PATH]` · `pigeon sync PATH --default` | Files → which folders are on this computer | [08 §8.5](08-custody-loops.md) |
 | `Drop {path, confirmed}` | `pigeon free --without-checking PATH` | — (CLI only, ux.md §2.2) | [08 §8.7](08-custody-loops.md) |
 | `History {path}` | `pigeon history PATH` | a file's page | [05](05-catalogue-and-names.md) |
 | `View {path, version \| group}` | `pigeon view PATH [--version N \| --group]` | *Open a copy*, *Open Paul's version* | [07 §7.6](07-capture-and-install.md) |
 | `Restore {path, version \| at}` | `pigeon restore PATH [--version N \| --at TIME]` | *Restore this version*, Deleted files | [05 §5.1](05-catalogue-and-names.md) |
 | `Deleted {path?}` | `pigeon deleted [PATH]` | Files → Deleted files | [05 §5.1](05-catalogue-and-names.md) |
-| `Proposals` · `Accept {proposal, override?}` · `Reject {proposal, note?}` | `pigeon suggestions` · `pigeon accept ID [--override REASON]` · `pigeon decline ID [--note TEXT]` | Suggestions | [04 §4.5, §4.6](04-roster-and-authority.md) |
+| `Proposals` · `Accept {proposal, override?}` · `Reject {proposal, note?}` · `DecideFiles {proposal, paths, accept, note?, override?}` | `pigeon suggestions` · `pigeon accept ID [FILE…] [--override REASON]` · `pigeon decline ID [FILE…] [--note TEXT]` | Suggestions | [04 §4.5, §4.6](04-roster-and-authority.md), ADR 0078 |
 | `Conflicts` · `Resolve {path, choice}` | `pigeon conflicts` · `pigeon resolve PATH --take-group \| --keep-copy DEST \| --suggest-again` | Suggestions → Yours, Home | [07 §7.6](07-capture-and-install.md) |
 | `People` · `Machines` | `pigeon people` · `pigeon machines` | People & machines | [04 §4.2](04-roster-and-authority.md) |
 | `RemoveDevice {name}` · `Leave` | `pigeon remove-computer NAME` · `pigeon leave` | *I lost a computer* · Settings | [09 §9.7](09-network-and-joining.md) |
@@ -35,7 +35,7 @@ result, progress events then a result, or a `Problem` (§10.6).
 | — | `pigeon export --to DIR [--at DATE\|COMMIT] [--deleted] [REPOSITORY…]` | — (without `pigeond`) | [09 §9.9](09-network-and-joining.md) |
 | `Purge {path}` · `CancelPurge {id}` | `pigeon erase PATH` · `pigeon erase --cancel ID` | *Erase forever* | [08 §8.6](08-custody-loops.md) |
 | `Held` · `ReleaseHeld {batch, choice}` | `pigeon held` · `pigeon held ID --share \| --bring-back \| --rename` | Home → Needs you | [07 §7.4](07-capture-and-install.md) |
-| `Pause {duration?}` · `Resume` | `pigeon pause [DURATION]` · `pigeon resume` | Settings | [15](15-resource-use.md) |
+| `Pause {duration?}` · `Resume` · `Paused` | `pigeon pause [DURATION]` · `pigeon resume` | Settings; the pause banner of every page | [15](15-resource-use.md) |
 | `GetSettings` · `SetSettings {…}` | `pigeon settings [KEY [VALUE]]` | Settings | [11 §11.2](11-local-state.md) |
 | `Doctor {details}` | `pigeon doctor [--details]` | Settings → Advanced | §10.7 |
 | `DebugBundle {peers}` | `pigeon debug bundle [--from NAME…]` | Settings → Advanced | [12](12-observability.md) |
@@ -117,8 +117,9 @@ signed history. Evidence: [folder-rules-5](../reports/folder-rules-5.md).
 
 Coded so far (`crates/pigeon-web`, `pigeond/src/web.rs`): the binding, the
 login token and cookie, the `Host`/`Origin` check, Home, Suggestions and
-Machines pages read through the same handler as the socket, and an SSE
-headline; Files lists the top-level folders (`Folders`) with *Keep on this
+Machines pages read through the same handler as the socket, each request
+in a task of its own that runs to its end even when the browser leaves, as
+on the socket, and an SSE headline; Files lists the top-level folders (`Folders`) with *Keep on this
 computer* or *Free up space*; Settings changes `language` and
 `notifications` (`GetSettings`, `SetSettings`, also `pigeon settings`), a
 new language showing at once; People & machines shows the line that joins
@@ -128,12 +129,31 @@ a per-session form token. A folder's page lists its files (`Files`), a file's pa
 its versions (`History`) with *Restore this version* (`Restore`);
 Deleted files lists what `main` deleted (`Deleted`), each with *Restore*.
 Settings also pauses for an hour, a day or until *Share again* (`Pause`,
-`Resume`, also `pigeon pause` and `pigeon resume`, 15 §15.6).
+`Resume`, also `pigeon pause` and `pigeon resume`, 15 §15.6), offering
+only the action that applies; while paused, every page opens with a banner
+saying until when, with *Share again* (`Paused`, asked before each page).
+*Free up space* asks first: which files leave this computer, the backup
+machines they stay on, and that *Keep on this computer* brings them back
+(`FreePreview`); while no backup machine has been heard from within the
+hour that makes a check recent, `Evict` answers `backups-quiet` and the
+page asks a second time, saying when they were last in touch, before
+`Evict {confirmed}`. `pigeon free` asks that second question too, or takes
+`--yes`. A freed file reads "Safe, not on this computer" in Files, on its
+folder's page and on its own page (`Files` marks it `freed`).
+Times to come read as local times ("until 14:38", "expires tomorrow at
+09:00") and sizes as "29.3 GB", in the person's language.
 People & machines lists the people first (`People`, also `pigeon people`);
 `pigeon deleted` lists Deleted files.
 Home lists the held deletions (`Held`) with *Delete for everyone*, asked
 again, and *Bring them back* (`ReleaseHeld`); Settings has *Leave the
 group*, asked again (`Leave`).
+Home also lists the files whose copy here differs from the group's
+(`Conflicts`, 07 §7.6), each a link to its page; there *Take the group's
+version*, *Keep mine as a copy* (named next to the file) and, unless the
+suggestion still waits, *Suggest again* are `Resolve`, each saying where
+both versions go. A file's page marks its current version. Every page opens
+with a skip link to `main`, and a repeated button names its row (version,
+computer, suggestion or folder) in visually hidden text.
 axe-core (`scripts/check-a11y`, in CI) checks the mockups and every page of
 the test backend in English and French, without colour contrast, which
 needs a layout engine. Not yet: the other settings, the other actions.
@@ -301,3 +321,18 @@ pending verified proposal is eligible. The daemon returns a read-only copy
 outside the shared folder, or explains that the proposal deletes that path.
 Review does not adopt the proposal or replace accepted bytes. The web uses
 a checked POST before downloading the copy.
+
+The Suggestions page (ADR 0078) groups the suggestions this person
+decides, their own, and the others'. Each lists its files with what
+changes in each, in words and sizes, and *Review* for each file still
+there afterwards. On one this person decides every file has a checkbox,
+ticked: *Accept selected* accepts the ticked files and declines the
+others, *Decline selected* the reverse, with a note for the author; an
+admin override asks its reason before accepting only. With several,
+*Accept all* and *Decline all* decide every file of each, except one that
+needs an override, which is named. The result says which files were
+accepted and which declined, and that the author will be told. The
+author sees their suggestions decided in the last 30 days, file by file,
+with the note, and a file's page shows their suggestion of it that waits
+or was decided. Every form works without JavaScript: the review buttons
+belong to forms of their own, and Enter in the note submits nothing.

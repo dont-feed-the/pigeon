@@ -9,6 +9,36 @@ increments the second number, and every other release the third.
 
 ### Added
 
+- Files whose copy on this computer differs from the group's version are
+  listed on Home. Each one's page explains the difference and lets you take
+  the group's version, keep yours as a copy next to it, or suggest yours
+  again, saying where each version goes (as `pigeon conflicts` and
+  `pigeon resolve` do). A file's page also marks its current version.
+- Suggestions can be decided file by file. Each file of a suggestion says
+  what changes in it (new, changed with its size before and after and, for
+  small text files, the lines added and removed, deleted or renamed) and
+  has its own Review button. Untick files, then choose *Accept selected* or
+  *Decline selected*, with a note; with several suggestions, *Accept all*
+  and *Decline all* decide them at once. From the command line:
+  `pigeon accept ID FILE…` or `pigeon decline ID FILE… --note "why"`.
+- Whoever made a suggestion sees, on Suggestions, on each file's page and
+  in `pigeon suggestions`, which of their files were accepted or declined,
+  by whom, and the note.
+- *Free up space* first says which files will leave this computer, which
+  backup machines keep them, and that *Keep on this computer* brings them
+  back. If no backup machine has been in touch for an hour, it asks a
+  second time and says when they were last heard from. `pigeon free` asks
+  the same question, or takes `--yes`. Freed files read "Safe, not on this
+  computer".
+- While sharing is paused, every page says "Sharing is paused until 14:38"
+  with *Share again*, even when something else needs you, and
+  `pigeon status` adds the pause under any other headline.
+- `pigeon create --person NAME` and a "Your name" field on the Create form
+  set how the others in the group see you; without it pigeon uses your user
+  name, else the computer's name, never "Me".
+- A printed recovery sheet shows its own name, and People & machines lists
+  it as "paper recovery sheet printed on <date>".
+- Every page starts with a "Skip to content" link for keyboard users.
 - `pigeon open` looks and works like a file manager. A sidebar holds the
   sections and, on every page, whether your files are safe. **Files** shows
   the folder you are in as a table, folders first, each with an icon by
@@ -39,6 +69,29 @@ increments the second number, and every other release the third.
 
 ### Changed
 
+- Files not shared yet say why: your copy differs from the group's version;
+  its name does not work on every computer; it is a deletion waiting for
+  your choice; or pigeon could not save it and will try again.
+- When the backup machines a file waits for have not been heard from for a
+  few minutes, `pigeon status` and Home say which one, instead of
+  "Sending…".
+- Removing a backup machine asks its own question and, if fewer backup
+  machines than the group needs would be left, says plainly that your files
+  will not be safe until you add one. Removing a computer says its files
+  stay on it but are no longer shared, and that you can invite it again.
+- Preparing a recovery sheet first checks that a backup machine answers; if
+  none does, it says which to turn on, and nothing is changed.
+- Times read as local times ("until 14:38", "expires tomorrow at 13:35")
+  and sizes as "29.3 GB" ("29,3 Go" in French). Held deletions and the Space
+  page name files and dates instead of internal ids.
+- Settings shows only the pause action that applies. Copies opened with
+  *Open a copy* are named in your language.
+- When the computer name you chose was taken, joining tells you the name it
+  got.
+- Screen readers hear which version, computer, suggestion or folder a
+  repeated button acts on. On phones, buttons, fields and menu links are
+  easier to tap. A folder's page is titled with its name, shows names from
+  that folder, and *Back* goes to the parent folder.
 - Building pigeon from source now also needs Node.js 22.12 or later with
   npm, which build the web interface's script; `pigeon update --main` and
   `scripts/install-local` say so before building if it is missing. The
@@ -46,6 +99,20 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- "Sending…" no longer outlasts its ten minutes because other files were
+  saved meanwhile: each file's wait counts from when it was saved.
+- A computer removed from the group no longer says "Everything is safe": it
+  says it was removed, that its files stay in its folder but are no longer
+  shared or backed up, and to join again with the group's invitation line.
+- The Space page no longer warns of "less than 25% spare" whenever the
+  group has exactly as many backup machines as it needs. It warns only when
+  a storage limit is below one copy, and otherwise says, as information,
+  that there is no spare backup machine.
+- A join that fails or cannot reach the inviter no longer leaves a
+  half-joined group: trying again in the same folder works.
+- A recovery sheet whose page was closed while waiting no longer stays in
+  the group unprinted: pages finish their work, or undo it, even when the
+  browser leaves.
 - The file manager's script, stylesheet and icon load when it is opened
   through a bridge client's own pages.
 - A slow or unavailable computer no longer delays accepting new versions

@@ -1,5 +1,6 @@
-//! An unreachable backup must not leave an unprinted paper key in the
-//! roster, suppressing the advice that protects a sole admin (09 §9.9).
+//! An unreachable backup must not leave an unprinted recovery sheet in the
+//! roster, suppressing the advice that protects a sole admin: nothing is
+//! signed until a backup machine answers (09 §9.9).
 #![cfg(feature = "lab")]
 #![allow(clippy::unwrap_used, reason = "tests")]
 
@@ -8,7 +9,7 @@ use common::*;
 use pigeon_proto::{Response, api::State};
 
 #[test]
-fn an_unprinted_sheet_is_revoked_when_no_backup_receives_it() {
+fn no_sheet_is_signed_while_no_backup_machine_answers() {
     let _one = SERIAL
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -53,11 +54,19 @@ fn an_unprinted_sheet_is_revoked_when_no_backup_receives_it() {
     assert!(
         failed
             .iter()
-            .any(|a| matches!(a, Response::Problem(p) if p.code == "peer-unreachable")),
+            .any(|a| matches!(a, Response::Problem(p) if p.code == "recovery-backup-offline")),
         "{failed:?}"
     );
+    // Checked before anything is signed: the history has no sheet at all.
+    let log = std::process::Command::new("git")
+        .args(["log", "--format=%s", "main"])
+        .current_dir(&folder)
+        .output()
+        .unwrap();
+    let log = String::from_utf8_lossy(&log.stdout);
+    assert!(!log.contains("recovery sheet"), "{log}");
     assert!(pigeon(&alice, &["machines"]).iter().all(|a| match a {
-        Response::Machines { machines } => machines.iter().all(|m| !m.recovery),
+        Response::Machines { machines, .. } => machines.iter().all(|m| !m.recovery),
         _ => true,
     }));
     assert!(pigeon(&alice, &["people"]).iter().any(|a| matches!(a,

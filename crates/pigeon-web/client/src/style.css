@@ -327,6 +327,9 @@ ul.plain-list.card { padding: 2px 18px; }
 details > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .suggestion-paths { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
 
+/* A pause remains visible while another status needs attention. */
+.pause-banner { border: 2px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 16px; }
+
 /* The tree of folders on this computer. */
 .tree { list-style: none; margin: 0; padding: 0; }
 .tree .tree { padding-left: 22px; margin-left: 8px; border-left: 1px solid var(--line); }
@@ -342,6 +345,8 @@ details > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
   .details { position: static; max-height: none; }
 }
 @media (max-width: 760px) {
+  button, select, input:not([type=checkbox]):not([type=radio]), .nav a { min-height: 44px; box-sizing: border-box; }
+  input[type=checkbox], input[type=radio] { width: 24px; height: 24px; }
   .shell { flex-direction: column; }
   .sidebar { width: auto; height: auto; position: static; padding: 8px; flex-direction: row; flex-wrap: wrap; align-items: center; }
   .brand { padding: 4px 8px; }

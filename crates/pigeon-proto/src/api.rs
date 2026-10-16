@@ -61,6 +61,11 @@ pub enum Request {
         k: u32,
         /// This computer's name in the roster.
         device_name: String,
+        /// The creator's name as the others see it (`--person`); absent
+        /// from an older client, and then the daemon's `$USER`, else the
+        /// computer's name.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        person: Option<String>,
     },
     /// `pigeon invite`: the line to share, which joins the group (09 §9.6).
     Invite,
@@ -94,8 +99,20 @@ pub enum Request {
         /// A folder or file.
         folder: String,
     },
-    /// `pigeon free PATH`.
+    /// `pigeon free PATH` (08 §8.5). While no backup machine has been
+    /// heard from recently, it answers the problem `backups-quiet` unless
+    /// `confirmed`.
     Evict {
+        /// A folder or file.
+        folder: String,
+        /// The person was told that the backup machines have not been
+        /// heard from recently, and frees anyway.
+        #[serde(default)]
+        confirmed: bool,
+    },
+    /// What *Free up space* would do, for its confirmation (08 §8.5):
+    /// answered with `FreePreview`.
+    FreePreview {
         /// A folder or file.
         folder: String,
     },
@@ -209,6 +226,9 @@ pub enum Request {
     },
     /// `pigeon resume`.
     Resume,
+    /// The pause in force, for the banner of every web page (15 §15.6):
+    /// `Said` with its words, or `Done` while sharing.
+    Paused,
     /// `pigeon remove-computer NAME`.
     RemoveDevice {
         /// The computer's name in the roster.
@@ -270,6 +290,28 @@ pub enum Request {
         /// Why, for its author.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         note: Option<String>,
+    },
+    /// `pigeon accept ID PATH…` · `pigeon decline ID PATH… [--note TEXT]`:
+    /// one decision on every file of a proposal, the files named accepted
+    /// and the others declined, or the reverse (ADR 0077). A new request,
+    /// so that an older `pigeond` refuses it rather than deciding the
+    /// whole proposal.
+    DecideFiles {
+        /// The proposal's commit, or a prefix of it.
+        proposal: String,
+        /// Files of the proposal, relative to the group or absolute within
+        /// it; a file renamed counts with its old name.
+        paths: Vec<String>,
+        /// Whether the files named are accepted (and the others declined),
+        /// or declined (and the others accepted).
+        accept: bool,
+        /// Why some are declined, for its author.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        note: Option<String>,
+        /// The Force reason (04 §4.6), when nobody may make a change it
+        /// accepts.
+        #[serde(default, rename = "override", skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
     },
     /// `pigeon conflicts`: the paths whose file differs from the group's
     /// version on this computer (07 §7.6).
@@ -366,6 +408,10 @@ pub enum Response {
     Machines {
         /// The roster's devices.
         machines: Vec<Machine>,
+        /// The backup machines a version needs to be safe (the roster's
+        /// K); absent from an older daemon.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        copies: Option<u32>,
     },
     /// The answer to `Held`.
     Held {
@@ -396,6 +442,13 @@ pub enum Response {
     Proposals {
         /// Oldest first.
         proposals: Vec<Suggestion>,
+        /// This person's suggestions decided lately, newest first (ADR
+        /// 0077).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        decided: Vec<Outcome>,
+        /// The group's folder on this computer, which the paths are in.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        root: String,
     },
     /// The answer to `Folders`.
     Folders {
@@ -404,6 +457,8 @@ pub enum Response {
         /// Its top-level folders, by path.
         folders: Vec<Folder>,
     },
+    /// The answer to `FreePreview`.
+    FreePreview(FreePreview),
     /// The answer to `Sync`.
     Sync {
         /// The group's folder on this computer.
@@ -547,6 +602,10 @@ pub struct StatusReport {
     /// Paths not shared, with why (07 §7.9).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub not_shared: Vec<NotShared>,
+    /// The pause in force, said even when the headline is about something
+    /// else (15 §15.6).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paused: Option<Message>,
 }
 
 /// A path that is not shared, and why.
@@ -598,6 +657,55 @@ pub struct Machine {
     pub this_device: bool,
 }
 
+/// What removing a device of the roster does, for the question asked
+/// before it is done (09 §9.7).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Removal {
+    /// A computer: its files stay on it but are shared no more.
+    Computer,
+    /// A backup machine: `left` stay, and versions need `needed` to be
+    /// safe.
+    Backup {
+        /// The backup machines left after it.
+        left: u32,
+        /// The roster's K.
+        needed: u32,
+    },
+    /// A paper recovery sheet, revoked.
+    Sheet,
+}
+
+impl Removal {
+    /// The removal of `name`, from the answers to `Machines`; a computer
+    /// when they do not say otherwise. K is 1 from an older daemon that
+    /// does not tell it, so that removing the last backup machine still
+    /// warns.
+    pub fn of(answers: &[Response], name: &str) -> Removal {
+        for answer in answers {
+            let Response::Machines { machines, copies } = answer else {
+                continue;
+            };
+            let Some(m) = machines.iter().find(|m| m.name == name) else {
+                continue;
+            };
+            if m.recovery {
+                return Removal::Sheet;
+            }
+            if m.custodian {
+                let others = machines
+                    .iter()
+                    .filter(|o| o.custodian && !o.recovery && o.name != name)
+                    .count();
+                return Removal::Backup {
+                    left: u32::try_from(others).unwrap_or(u32::MAX),
+                    needed: copies.unwrap_or(1),
+                };
+            }
+        }
+        Removal::Computer
+    }
+}
+
 /// A top-level folder of the group (ux.md §6.2).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Folder {
@@ -633,6 +741,26 @@ pub struct FileEntry {
     /// the file is not on this computer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub modified: Option<String>,
+    /// Its space is freed: it is not on this computer (08 §8.5).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub freed: bool,
+}
+
+/// What freeing a folder's space would do (08 §8.5).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FreePreview {
+    /// The files under it.
+    pub files: u64,
+    /// Those safe on the backup machines, which leave this computer.
+    pub safe: u64,
+    /// The names of the group's backup machines.
+    pub backups: Vec<String>,
+    /// When a backup machine was last heard from, RFC 3339; none if never.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub heard_at: Option<String>,
+    /// Whether that is too long ago to confirm their copies now; freeing
+    /// then asks again (`Evict {confirmed}`).
+    pub quiet: bool,
 }
 
 /// A folder and whether this computer keeps it (08 §8.5).
@@ -693,6 +821,66 @@ pub struct Suggestion {
     /// Whether it is this person's.
     #[serde(default)]
     pub mine: bool,
+    /// What it changes, file by file: a rename is one file (ADR 0077).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<SuggestedFile>,
+}
+
+/// What a suggestion changes in one file (ADR 0077).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SuggestedFile {
+    /// Its path in the group's folder; for a rename, the new one.
+    pub path: String,
+    /// How it changes.
+    pub change: FileChange,
+    /// For a rename, the path it had.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
+    /// Its size before, in bytes; absent for a new file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<u64>,
+    /// Its size after, in bytes; absent for a deletion.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after: Option<u64>,
+    /// For a small text file whose two versions this computer holds, the
+    /// lines added and the lines removed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lines: Option<(u64, u64)>,
+}
+
+/// How a suggestion changes a file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FileChange {
+    /// A new file.
+    Added,
+    /// Its content changes.
+    Changed,
+    /// It is deleted.
+    Deleted,
+    /// It moves to a new name, its content unchanged.
+    Renamed,
+}
+
+/// A suggestion of this person that was decided (ADR 0077): which of its
+/// files were accepted and which declined, by whom, and why.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Outcome {
+    /// The proposal's commit.
+    pub id: String,
+    /// The name of the person who decided.
+    pub by: String,
+    /// When, RFC 3339.
+    pub decided_at: String,
+    /// The files now in the group's version.
+    #[serde(default)]
+    pub accepted: Vec<String>,
+    /// The files declined.
+    #[serde(default)]
+    pub declined: Vec<String>,
+    /// The decider's note.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
 }
 
 /// A held batch of deletions (07 §7.4).
