@@ -1,7 +1,8 @@
 # pigeon's git-annex (ADR 0069, third_party/git-annex): builds the pinned
 # release with pigeon's patches on GitHub's Linux and macOS runners, caches
 # the binaries by patch set for slice.yml and models-full.yml (through
-# .github/actions/git-annex-pigeon) and uploads them, then proves the
+# .github/actions/git-annex-pigeon) and uploads them; this workflow's own
+# jobs take the artifact, which no cache eviction removes. It then proves the
 # patches against the stock build: E23 races two drops over P2P, which keep
 # their copies with pigeon's build and lose them with the stock one, and
 # E25 runs 500 fetches over P2P, none of which may hang with pigeon's build.
@@ -136,7 +137,7 @@ jobs:
           python3 lab/git-annex/ga-e25-relay-stress.py 500 --stop-after-hangs 3 | tee -a "$GITHUB_STEP_SUMMARY"
 
   consumer:
-    name: the cached build as slice.yml gets it (${{ matrix.os }})
+    name: the build as slice.yml puts it on PATH (${{ matrix.os }})
     needs: git-annex
     strategy:
       fail-fast: false
@@ -156,6 +157,12 @@ jobs:
       - name: the stock git-annex first, as slice.yml installs it (macOS)
         if: runner.os == 'macOS'
         run: brew install git-annex
+      - name: this run's build, from its artifact (a cache entry may be evicted)
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: git-annex-pigeon-${{ matrix.os }}
+          path: ${{ runner.temp }}/artifact
+      - run: mkdir -p ~/.cache/pigeon-git-annex-dist && tar -C ~/.cache/pigeon-git-annex-dist -xzf "$RUNNER_TEMP/artifact/git-annex-pigeon-${{ matrix.os }}.tar.gz"
       - uses: ./.github/actions/git-annex-pigeon
         with:
           required: "true"
@@ -184,15 +191,13 @@ jobs:
           grep -qx "PIGEON_VERSION=$PIGEON_VERSION" packaging/install-git-annex
           grep -qx "STOCK_SHA256=$GIT_ANNEX_SHA256" packaging/install-git-annex
           grep -qx "STOCK_VERSION=$GIT_ANNEX_VERSION" packaging/install-git-annex
-      - id: key
-        run: echo "key=git-annex-pigeon-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/git-annex/VERSION', 'third_party/git-annex/build.sh', 'third_party/git-annex/patches/**') }}" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: this run's build, from its artifact (a cache entry may be evicted)
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          path: ~/.cache/pigeon-git-annex-dist
-          key: ${{ steps.key.outputs.key }}
-          fail-on-cache-miss: true
+          name: git-annex-pigeon-${{ matrix.os }}
+          path: ${{ runner.temp }}/artifact
       - name: the archive, as the git-annex job uploads it
-        run: tar -C ~/.cache/pigeon-git-annex-dist -czf "$RUNNER_TEMP/git-annex-pigeon.tar.gz" bin
+        run: mv "$RUNNER_TEMP/artifact/git-annex-pigeon-${{ matrix.os }}.tar.gz" "$RUNNER_TEMP/git-annex-pigeon.tar.gz"
       - name: the stock git-annex first in PATH (Linux, a link, so that the system's git stays)
         if: runner.os == 'Linux'
         run: |
