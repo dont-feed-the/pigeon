@@ -40,6 +40,7 @@ pub mod history;
 pub mod install;
 pub mod invite;
 pub mod join;
+mod join_attempt;
 pub mod join_in_place;
 mod join_stage;
 mod join_transition;

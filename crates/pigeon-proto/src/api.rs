@@ -58,6 +58,11 @@ pub enum Request {
         k: u32,
         /// This computer's name in the roster.
         device_name: String,
+        /// The creator's name as the others see it (`--person`); absent
+        /// from an older client, and then the daemon's `$USER`, else the
+        /// computer's name.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        person: Option<String>,
     },
     /// `pigeon invite [--admin] [--backup-machine] PERSON`.
     Invite {
@@ -345,6 +350,10 @@ pub enum Response {
     Machines {
         /// The roster's devices.
         machines: Vec<Machine>,
+        /// The backup machines a version needs to be safe (the roster's
+        /// K); absent from an older daemon.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        copies: Option<u32>,
     },
     /// The answer to `Held`.
     Held {
@@ -577,6 +586,55 @@ pub struct Machine {
     /// Whether it is this computer.
     #[serde(default)]
     pub this_device: bool,
+}
+
+/// What removing a device of the roster does, for the question asked
+/// before it is done (09 §9.7).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Removal {
+    /// A computer: its files stay on it but are shared no more.
+    Computer,
+    /// A backup machine: `left` stay, and versions need `needed` to be
+    /// safe.
+    Backup {
+        /// The backup machines left after it.
+        left: u32,
+        /// The roster's K.
+        needed: u32,
+    },
+    /// A paper recovery sheet, revoked.
+    Sheet,
+}
+
+impl Removal {
+    /// The removal of `name`, from the answers to `Machines`; a computer
+    /// when they do not say otherwise. K is 1 from an older daemon that
+    /// does not tell it, so that removing the last backup machine still
+    /// warns.
+    pub fn of(answers: &[Response], name: &str) -> Removal {
+        for answer in answers {
+            let Response::Machines { machines, copies } = answer else {
+                continue;
+            };
+            let Some(m) = machines.iter().find(|m| m.name == name) else {
+                continue;
+            };
+            if m.recovery {
+                return Removal::Sheet;
+            }
+            if m.custodian {
+                let others = machines
+                    .iter()
+                    .filter(|o| o.custodian && !o.recovery && o.name != name)
+                    .count();
+                return Removal::Backup {
+                    left: u32::try_from(others).unwrap_or(u32::MAX),
+                    needed: copies.unwrap_or(1),
+                };
+            }
+        }
+        Removal::Computer
+    }
 }
 
 /// A top-level folder of the group (ux.md §6.2).

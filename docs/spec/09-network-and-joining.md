@@ -142,7 +142,9 @@ person (ux.md §8) **[no ADR: reading]**, creates a one-time invitation:
   any other name is a new person, whose ID is the name's ASCII letters and
   digits in lowercase (`person` if none), with a number if a person has it
   (`a_new_persons_id_is_fresh`) **[no ADR]**. A device name already in the
-  roster gets `-` and 6 hex digits of the device ID at step 3.
+  roster gets `-` and 6 hex digits of the device ID at step 3, and the
+  join's answer (`joined-renamed`) tells the new device's person the name
+  it got.
 - **Who may invite:** for a new person, an admin's device; for a new device
   of person P, an admin's device or one of P's (ADR 0017).
 - The inviter keeps the issuing group, secret, its SHA-256, purpose and expiry in
@@ -166,6 +168,20 @@ person (ux.md §8) **[no ADR: reading]**, creates a one-time invitation:
 | 4 | inviter | answers `Welcome {commit, annex_uuid}` (its own UUID), or a refusal that becomes a Problem ([10 §10.6](10-interfaces.md)): `P-INVITE-EXPIRED`, `P-INVITE-USED`, `invite-unknown`, `invite-not-allowed` |
 | 5 | new device | fetches over `pigeon/annex/1`, validates the history from the genesis named in the invitation (another root is refused), checks that `commit` adds its own ID, and installs the folders to keep ([07](07-capture-and-install.md)) |
 
+A join either completes or takes back what it made **[no ADR]**
+(`pigeond/src/join_attempt.rs`, `tests/join_retry.rs`): the new device
+serves the group, in `config.toml` and to its peers, only once step 5 has
+passed; until then the group is pending and no round reads it. On any
+failure, a refusal or an inviter that stays unreachable included, it
+forgets the group and removes what it wrote: the repository, pigeon's own
+files, the files of the group's tree it wrote that are unchanged, and the
+folder if the join made it. A join starts only in an empty or new folder,
+so nothing that was there before is touched, and a retry in the same folder
+starts clean. The annex UUID is kept in `<state>/joins/<group>`
+([11 §11.2](11-local-state.md)) until the join succeeds, so that a retry
+after step 3 resumes the welcome with the same UUID. The web's requests
+run to their end even when the browser leaves (10 §10.3).
+
 **Safety words** (ux.md §8.2) **[no ADR: safety words]**: both screens show
 three words from a fixed list of 2048, by the first 33 bits of
 `SHA-256("pigeon-words-1" ‖ secret ‖ new device ID)`, with "You are joining
@@ -184,6 +200,14 @@ person (ADR 0017), and visible in the history.
   custodian's copies stop counting and repair starts
   ([08 §8.4](08-custody-loops.md)); the CLI first says how many files will
   have fewer safe copies meanwhile.
+- The question before it is done (`confirm-remove-computer`,
+  `web-remove-confirm`) says what becomes of the files: a computer's stay
+  on it but are shared no more, and it can be invited again. A backup
+  machine has its own question (`confirm-remove-backup`,
+  `web-remove-backup-confirm`), and when fewer backup machines than K
+  would be left it says plainly that the files will not be safe until one
+  is added (`remove-backup-unsafe`; `Machines` tells K as `copies`)
+  **[no ADR]**.
 - Commits it signed that the removal had seen stay valid; those it had not
   seen are **revoked** wherever the removal arrives, with the keys they
   added and what those keys sign (04 §4.4, ADR 0051; `Authority.tla`
@@ -253,8 +277,15 @@ tools are those of ADR 0047, which fixes their formats:
   sheets keep the complete text with an explicit QR fallback. Public roster
   history identifies when all a person's sheets name older backup devices,
   and the page recommends a replacement. A sheet is refused before adding
-  a key if no backup has joined; if no backup receives its roster commit
-  before the deadline, the unprinted key is revoked.
+  a key if no backup has joined, or if none answers a fetch at once
+  (`recovery-backup-offline`): nothing is signed then. If no backup
+  receives its roster commit within two minutes, the unprinted key is
+  revoked (`recovery-not-received`); adding, waiting and revoking run in a
+  task of their own, so a client that leaves does not stop them. The
+  sheet's device is named `YYYY-MM-DD-xxxxxx` after the day it was printed
+  and 6 hex digits of its ID; the sheet prints that name (`label` in its
+  code) and the People page lists it as a paper recovery sheet printed on
+  that day **[no ADR]**.
 - **Refounding:** `pigeon refound [REPOSITORY]` signs a new genesis with the
   last accepted tree and the refounder as only admin, keeping the old
   history replicated and its keys in `keys()`; existing folders join the new

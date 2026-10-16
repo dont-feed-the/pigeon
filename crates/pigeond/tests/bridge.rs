@@ -118,6 +118,7 @@ fn large_catalogues_page_over_the_real_socket_and_writes_stay_bounded() {
                 folder: files.display().to_string(),
                 k: 1,
                 device_name: "Paged peer".into(),
+                person: None,
             }
         )
         .unwrap(),
@@ -277,7 +278,8 @@ fn an_interrupted_bridge_batch_replays_and_file_preconditions_survive_rebase() {
                 name: "Bridge test".into(),
                 folder: files.display().to_string(),
                 k: 1,
-                device_name: "Bridge peer".into()
+                device_name: "Bridge peer".into(),
+                person: None,
             }
         )
         .unwrap(),

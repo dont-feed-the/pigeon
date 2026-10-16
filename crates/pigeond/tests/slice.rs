@@ -84,7 +84,7 @@ fn local_published_protected_then_free_and_keep() {
 
     let machines = pigeon(&lap, &["machines"]);
     match machines.as_slice() {
-        [Response::Machines { machines }] => {
+        [Response::Machines { machines, .. }] => {
             let mut names: Vec<&str> = machines.iter().map(|m| m.name.as_str()).collect();
             names.sort_unstable();
             assert_eq!(names, ["c1", "c2", "lap"]);

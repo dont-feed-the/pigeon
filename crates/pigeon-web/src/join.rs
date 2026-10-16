@@ -44,6 +44,7 @@ fn forms(r: &Renderer, token: &str, join: &JoinForm, create: &CreateForm) -> Mar
             p { label for="group-name" { (r.id("web-group-name")) } " " input id="group-name" name="group" required value=(&create.group); }
             p { label for="create-folder" { (r.id("web-local-folder")) } " " input id="create-folder" name="folder" required value=(&create.folder); }
             p { label for="create-name" { (r.id("web-computer-name")) } " " input id="create-name" name="name" required value=(&create.name); }
+            p { label for="create-person" { (r.id("web-your-name")) } " " input id="create-person" name="person" autocomplete="name" value=(&create.person); }
             p { label for="copies" { (r.id("web-backup-copies")) } " " input id="copies" type="number" name="k" value=(k) min="1" required; }
             button type="submit" { (r.id("web-create")) }
         }
@@ -162,6 +163,10 @@ pub struct CreateForm {
     folder: String,
     #[serde(default)]
     name: String,
+    /// The creator's name as the others see it; the daemon chooses one
+    /// when it is empty.
+    #[serde(default)]
+    person: String,
     #[serde(default)]
     k: String,
 }
@@ -180,6 +185,7 @@ pub async fn create(
         folder: folder(&f.folder),
         k: f.k.trim().parse().unwrap_or(0),
         device_name: f.name.trim().to_owned(),
+        person: nonempty(&f.person),
     };
     outcome(&web, &token.0, request, &JoinForm::default(), &f).await
 }

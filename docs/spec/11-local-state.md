@@ -25,6 +25,7 @@
 | `<state>/logs/` | JSON log lines, daily files, seven kept (ADR 0022, [12](12-observability.md)) |
 | `<state>/telemetry/` | the bounded local OTLP-JSON files (ADR 0025) |
 | `<state>/traces/` | trace events, only with the `tla-trace` feature (ADR 0008) |
+| `<state>/joins/<group>` | the annex UUID of a join not yet done, so that a retry the inviter already welcomed resumes it; removed once the join succeeds ([09 §9.6](09-network-and-joining.md)) |
 | `<cache>/view/` | read-only copies opened by `pigeon view` (ADR 0035) |
 | `<cache>/bin/` | links first in the children's `PATH`: the transport helper, and `git-remote-p2p-annex` where git-annex installs none ([14 §14.3](14-platforms-and-packaging.md)) |
 | `<runtime>/pigeon/` | the socket, its lock file and the web port ([09 §9.3](09-network-and-joining.md)) |

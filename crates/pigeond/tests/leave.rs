@@ -27,7 +27,7 @@ fn machines(d: &common::Daemon) -> Vec<String> {
     pigeon(d, &["machines"])
         .into_iter()
         .flat_map(|r| match r {
-            Response::Machines { machines } => machines.into_iter().map(|m| m.name).collect(),
+            Response::Machines { machines, .. } => machines.into_iter().map(|m| m.name).collect(),
             _ => Vec::new(),
         })
         .collect()

@@ -19,6 +19,8 @@ mod folder_rules;
 mod health;
 #[path = "tests/mounted.rs"]
 mod mounted;
+#[path = "tests/people.rs"]
+mod people;
 #[path = "tests/recovery.rs"]
 mod recovery;
 #[path = "tests/setup.rs"]
@@ -113,6 +115,7 @@ impl Backend for Fixed {
                         this_device: name == "mine",
                     })
                     .into(),
+                copies: None,
             }],
             pigeon_proto::Request::RemoveDevice { name } => {
                 vec![said("removed-computer", "name", name)]

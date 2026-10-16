@@ -107,7 +107,7 @@ pub fn invitations() -> ArgValueCandidates {
 /// `debug bundle --from`.
 pub fn machines() -> ArgValueCandidates {
     listed(Request::Machines, |r, answer| match answer {
-        Response::Machines { machines } => machines
+        Response::Machines { machines, .. } => machines
             .iter()
             .filter(|m| !m.this_device)
             .map(|m| candidate(&m.name, r.machine(m)))

@@ -12,7 +12,16 @@ struct Backend(Arc<Daemon>);
 impl pigeon_web::Backend for Backend {
     fn request(&self, request: pigeon_proto::Request) -> pigeon_web::Answer {
         let d = self.0.clone();
-        Box::pin(async move { crate::api::handle(&d, request).await })
+        // In its own task: a browser that leaves drops the page's future,
+        // but a join or a recovery sheet half done must still finish or
+        // take back what it did, as on the local socket.
+        let task = tokio::spawn(async move { crate::api::handle(&d, request).await });
+        Box::pin(async move {
+            task.await.unwrap_or_else(|e| {
+                let error = Some(e.to_string());
+                vec![crate::api::problem("internal-error", &[], error)]
+            })
+        })
     }
 }
 
