@@ -91,7 +91,9 @@ skip the configured month or claim physical purge completion.
 - Wider refounded archive and initial-preparation recovery conformance.
 - Initial upgrade contention: different concurrent requests may split
   immutable choices and remain blocked. No retry may silently change a
-  vote; a safe recovery protocol needs separate modelling and evidence.
+  vote. Explicit refounding creates a fresh authority domain; the finite
+  model below checks this separation, while a real split-vote recovery
+  scenario and broader implementation traces still need evidence.
 - Release validation on both supported runners, followed by the tag and
   publication gates. This checkpoint supplies no longitudinal test claim.
 
@@ -179,3 +181,16 @@ reading old bytes across two signed refoundings. The backup-history test,
 all three public erasure lifecycle tests and all three mutation-gate tests
 also passed. This supplies recovery evidence, not arbitrary membership
 churn or a completed longitudinal release gate.
+
+## Initial-preparation model
+
+`PurgeUpgrade` models two competing readiness requests, durable per-device
+choices, a restored local repository and an explicit new genesis with
+rejoining participants. A split can stay blocked indefinitely; retry never
+changes an old vote. Each domain's activation needs its own complete current
+participant consent and a nonempty backup quorum. The two-participant
+configuration passes; mutations that forget a choice, accept a partial
+quorum or copy old-domain votes produce the expected safety counterexamples.
+The three-participant configuration checks the same rules with another
+possible conflicting voter. This is finite design evidence; it does not
+establish arbitrary churn, automatic recovery or daemon conformance.

@@ -56,6 +56,12 @@ one device cannot establish the causal order or survive recovery safely.
   update-needed rather than silently accepting erasure metadata under their
   earlier authority rules. No erasure is submitted on the person's behalf
   while this readiness step is incomplete.
+- Concurrent initial requests can split those immutable choices. Ordinary
+  retry or local repository recovery must preserve them, even if preparation
+  then waits indefinitely. Explicit refounding creates a different authority
+  domain with fresh preparation after rejoining; it never edits old votes or
+  treats their signatures as the new participants' consent (proposed ADR
+  0077). The old group's pending activity can still finish there.
 - Pending membership is a derived admission phase, not an arbitrary change
   to an existing device's identity, role or annex UUID. A configured backup
   without its required activation witness is shown as checking, never

@@ -131,3 +131,8 @@ StorageTrace_bad	StorageTrace	fast	trace:rejected:1
 BridgeCatalogue_good	BridgeCatalogue	fast	pass
 BridgeCatalogue_bad	BridgeCatalogue	fast	violation:Consistent
 BridgeCatalogue_pinned	BridgeCatalogue	fast	pass
+PurgeUpgrade_design	PurgeUpgrade	fast	pass
+PurgeUpgrade_three	PurgeUpgrade	fast	pass
+PurgeUpgrade_forget	PurgeUpgrade	fast	violation:OneChoicePerDomain
+PurgeUpgrade_partial	PurgeUpgrade	fast	violation:ValidCertificate
+PurgeUpgrade_old_votes	PurgeUpgrade	fast	violation:ValidCertificate
