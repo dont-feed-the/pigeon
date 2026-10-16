@@ -197,7 +197,7 @@ pigeon accept ID            # or: pigeon decline ID --note "why"
 ```
 
 An admin can choose a different rule for a folder. In Files, open the
-folder and choose **Sharing rule**. Give it an owner, or choose add-only
+folder and choose **Folder sharing rule**. Give it an owner, or choose add-only
 and the people who decide suggestions. Anyone may add a new file in an
 add-only folder; changes and deletions wait for those people. Leaving the
 steward selection empty means the current admins.
@@ -217,6 +217,9 @@ Use a person's exact current name or their ID from `pigeon folder-rule --json`.
 rule applies again, or add-only with the admins if there is none. Deeper
 rules stay in place. Use the folder's saved spelling, including case;
 rules in this format match that spelling. Only admins can change rules.
+Other computers use the new rule after their next sharing check. In the
+usability sessions this sometimes took about a minute. Check the effective
+rule on another computer before relying on the change there.
 
 ### Everyday commands
 

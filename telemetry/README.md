@@ -57,3 +57,27 @@ Transport bytes include protocol traffic. The path label is `unknown`
 until connection-path instrumentation is added; it never claims direct or
 relay evidence that was not measured. Sync/protection lag, process resource
 metrics and per-class ready queue depths remain to be instrumented for M6.
+
+## Optional Tokio task console
+
+For a local development session, build the matching binaries with Tokio's
+unstable task tracing and pigeon's optional feature:
+
+```sh
+RUSTFLAGS="--cfg tokio_unstable" cargo build -p pigeon -p pigeond -p git-annex-p2p-iroh --features pigeond/tokio-console
+PIGEON_TOKIO_CONSOLE=1 target/debug/pigeond
+# In another terminal, with tokio-console installed:
+tokio-console http://127.0.0.1:6669
+```
+
+Use the appropriate build directory if `CARGO_TARGET_DIR` is set. This
+opens a local debug endpoint containing runtime/task activity. Stop the
+debug daemon before starting the installed daemon again. The feature alone
+does not start a listener; the switch also requires a debug build with
+`tokio_unstable`. Release builds return no console layer. The address is
+fixed to 127.0.0.1:6669 and console environment settings cannot expose it
+on another interface. Events and per-client buffers are bounded; task
+retention is 60 seconds. The normal JSON log level does not filter away
+console events, and runtime instrumentation is excluded from the OTLP
+bridge. This is independent of the group collector and changes no file
+protection decisions.

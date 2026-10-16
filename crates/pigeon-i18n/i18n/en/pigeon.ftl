@@ -499,11 +499,12 @@ web-health-epoch = { $name } was removed: { $when }.
 
 cmd-folder-rule = See folder sharing rules, or let an admin change who owns a folder or decides suggestions. Use --owner me for your own folder.
 folder-rule-owned = { $folder }: only { $owner } can change this folder.
-folder-rule-add-only = { $folder }: everyone can add; { $stewards } decide other changes.
-folder-rule-result = The sharing rule for { $folder } is saved. Other computers receive it when they reconnect.
+folder-rule-add-only = { $folder }: everyone can add; other changes are decided by { $stewards }.
+folder-rule-result = The sharing rule for { $folder } is saved on this computer. Others use it after their next sharing check. View the folder's rule on another computer to confirm it has arrived.
 problem-folder-rule-path = Choose a portable subfolder using its original spelling. The group root and pigeon's own files cannot receive a folder rule.
 problem-folder-rule-person = No single current member matches “{ $name }”. Choose their name from People & machines, or use me for yourself.
 web-folder-rule = Folder sharing rule
+web-subfolders = Subfolders
 web-folder-rule-help = Choose who can change this folder. Everyone else can suggest changes. Subfolders inherit this rule unless they have their own.
 web-folder-rule-admin = An admin can change this sharing rule.
 web-folder-rule-owner = Only one person can change it

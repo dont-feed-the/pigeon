@@ -148,6 +148,7 @@ pub const MESSAGES: &[Entry] = &[
     e("web-doctor", &[]),
     e("hint-transport-helper-unavailable", &[]),
     e("web-folder-rule", &[]),
+    e("web-subfolders", &[]),
     e("web-folder-rule-help", &[]),
     e("web-folder-rule-admin", &[]),
     e("web-folder-rule-owner", &[]),

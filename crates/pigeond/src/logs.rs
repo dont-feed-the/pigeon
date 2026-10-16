@@ -9,12 +9,11 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use tracing::field::{Field, Visit};
-use tracing::{Event, Level, Metadata, Subscriber};
+use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::{Layer, layer::Context, prelude::*};
 
 struct JsonLog {
     dir: PathBuf,
-    max: Level,
     file: Mutex<Option<(String, std::fs::File)>>,
 }
 
@@ -66,9 +65,6 @@ impl JsonLog {
 }
 
 impl<S: Subscriber> Layer<S> for JsonLog {
-    fn enabled(&self, metadata: &Metadata<'_>, _: Context<'_, S>) -> bool {
-        *metadata.level() <= self.max
-    }
     fn on_event(&self, event: &Event<'_>, _: Context<'_, S>) {
         let mut fields = Fields(serde_json::Map::new());
         event.record(&mut fields);
@@ -96,12 +92,22 @@ pub fn init(dir: PathBuf) {
     };
     let log = JsonLog {
         dir,
-        max,
         file: Mutex::new(None),
     };
+    let registry = tracing_subscriber::registry();
+    #[cfg(feature = "tokio-console")]
+    let registry = registry.with(pigeon_telemetry::console_layer());
     let _ = tracing::subscriber::set_global_default(
-        tracing_subscriber::registry()
-            .with(log)
-            .with(pigeon_telemetry::layer()),
+        registry
+            .with(
+                log.with_filter(tracing_subscriber::filter::filter_fn(move |m| {
+                    *m.level() <= max
+                })),
+            )
+            .with(
+                pigeon_telemetry::layer().with_filter(tracing_subscriber::filter::filter_fn(|m| {
+                    !m.target().starts_with("tokio") && !m.target().starts_with("runtime")
+                })),
+            ),
     );
 }

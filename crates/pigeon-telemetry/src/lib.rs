@@ -27,6 +27,10 @@ use serde_json::Value;
 
 pub use file::{prune, tail};
 pub use metrics::{AnnexCall, counter, histogram};
+#[cfg(feature = "tokio-console")]
+mod console;
+#[cfg(feature = "tokio-console")]
+pub use console::console_layer;
 
 /// The most the directory holds (12 §12.2).
 pub const LIMIT_BYTES: u64 = 50 * 1024 * 1024;

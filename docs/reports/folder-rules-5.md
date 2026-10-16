@@ -36,7 +36,7 @@ or conformance claim is made here.
   admin stewards, direct/inherited scope and editability across split reads.
   The existing framing laws include both new requests and the response.
 - Web tests check repeated steward fields, CSRF refusal, escaped names and
-  a French ordinary member's read-only view. All 22 web and 12 i18n tests
+  a French ordinary member's read-only view. All 23 web and 12 i18n tests
   pass.
 - A real two-laptop test configures an owned folder, refuses an ordinary
   member's rule edit, holds their content change as a suggestion, then
@@ -46,5 +46,42 @@ or conformance claim is made here.
   final test passes in 10.16 seconds. An initial fixture update raced
   Git's index lock; the fixture now retries only that specific lock error.
 
-Normal-build independent usability and the complete pre-commit checks
-remain pending and will be recorded before the patch is marked ready.
+Two independent normal-build sessions used real invitations and ordinary
+members, without fixture role edits. The CLI three-laptop session observed
+all requested owner, steward, inherited reset, alias/person refusal and
+private-open-byte outcomes. An ordinary steward accepted a third person's
+suggestion without an admin override. Open editor and untracked draft bytes
+stayed exact, with the draft absent from group history and both peers.
+
+The raw CLI harness retained two false initial checks: an all-peer sample
+ran before the third copy arrived, and an empty history was incorrectly
+expected to fail. Later exact-byte and group-view observations establish
+the requested outcomes; this is not reported as 52 unqualified passes.
+Some rules and edits took 30–59 seconds to propagate; others took 2–3
+seconds. The acknowledgement and guide now explain the next sharing check
+and how to confirm the effective rule on another computer. No fast-sync
+performance claim is made.
+
+The French Chromium session verified owner selection, repeated stewards,
+implicit admins, inherited reset and ordinary read-only controls, then
+observed an ordinary steward's exact accepted edit and a non-steward's new
+file. Neither no-backup group claimed Safe. Names containing markup stayed
+literal and escaped. It found missing navigation into nested folders and
+singular-name grammar; the corrected normal-build replay followed real
+English and French Subfolders links into the child's sharing controls,
+without adapted URLs. Both languages fit a 390px viewport. Exact prior
+file bytes remained intact after replay.
+
+Both sessions stopped and independently verified all owned daemons and
+Chromium absent. The initial frozen package omitted the transport helper;
+supplying it corrected that test prerequisite. Its false-completeness
+doctor finding has its separate follow-up. The wrong initial JSON ID
+instruction now points to `folder-rule --json`. Low-priority remaining
+findings: plain effective-rule output does not name the inherited parent,
+and the generic path refusal does not spell out the conflicting saved
+name. JSON distinguishes direct rules; the guide explains inheritance.
+
+All 32 accessibility pages, including writable/read-only sharing forms in
+both languages, pass axe's non-layout WCAG checks with zero violations.
+The complete pre-commit checks pass. M4's operator-dashboard work and its
+five-participant exit protocol remain separate.

@@ -88,6 +88,14 @@ People see group health in the web interface, without telemetry
 ([10 §10.3](10-interfaces.md)); developers use any OTLP back end
 (reference: `grafana/docker-otel-lgtm`).
 
+The optional `pigeond/tokio-console` feature enables local task inspection
+only in a debug build compiled with `--cfg tokio_unstable` and run with
+`PIGEON_TOKIO_CONSOLE=1`. It fixes the listener to 127.0.0.1:6669; release
+builds and ordinary starts install no console layer. Runtime spans are
+filtered per layer, independently of the daily log level, and are excluded
+from OTLP. See [telemetry setup](../../telemetry/README.md) and
+[debug-console evidence](../reports/console-5.md).
+
 ## 12.3 Trace events (ADR 0008)
 
 A run of the real system is checked against the TLA+ specifications

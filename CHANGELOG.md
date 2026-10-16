@@ -4,6 +4,13 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.12 — 2026-10-16
+
+### Added
+
+- Developers can inspect Tokio tasks with an optional debug build and an
+  explicit local switch. The console listens only on this computer.
+
 ## 0.4.11 — 2026-10-16
 
 ### Fixed
