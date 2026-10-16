@@ -98,6 +98,12 @@ impl Dirs {
         self.state.join("port")
     }
 
+    /// The file `pigeond` writes when a peer runs a newer release; its
+    /// supervisor answers a change with the automatic update (14 §14.5).
+    pub fn update_wanted(&self) -> PathBuf {
+        self.state.join("update-wanted")
+    }
+
     /// Daily JSON log files (ADR 0022).
     pub fn logs(&self) -> PathBuf {
         self.state.join("logs")

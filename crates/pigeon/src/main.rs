@@ -306,16 +306,25 @@ fn run() -> ExitCode {
 }
 
 /// Replaces this process with `pigeon-install`, which a release puts beside
-/// `pigeon` in pigeon's `bin/`; returns only if it cannot run.
+/// `pigeon` in pigeon's `bin/`, on the installation this program is part
+/// of; returns only if it cannot run.
 fn update(args: &[String]) -> std::io::Error {
     use std::os::unix::process::CommandExt;
-    let installer = std::env::current_exe()
-        .and_then(std::fs::canonicalize)
-        .map(|exe| exe.with_file_name("pigeon-install"));
-    match installer {
-        Ok(at) if at.is_file() => std::process::Command::new(at).args(args).exec(),
-        Ok(at) => std::io::Error::new(std::io::ErrorKind::NotFound, at.display().to_string()),
-        Err(e) => e,
+    let exe = match std::env::current_exe().and_then(std::fs::canonicalize) {
+        Ok(exe) => exe,
+        Err(e) => return e,
+    };
+    let installer = exe.with_file_name("pigeon-install");
+    match exe.parent().and_then(std::path::Path::parent) {
+        Some(prefix) if installer.is_file() => std::process::Command::new(installer)
+            .arg("--prefix")
+            .arg(prefix)
+            .args(args)
+            .exec(),
+        _ => std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            installer.display().to_string(),
+        ),
     }
 }
 

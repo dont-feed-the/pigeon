@@ -92,20 +92,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: checked archives, supervisor configuration and preserved user data
         run: python3 -B -m unittest discover -s packaging/tests -v
-      - name: the tap formula parses
-        run: ruby -c Formula/pigeon.rb
-      - name: the Homebrew tap installs its published binaries and patched git-annex
-        if: runner.os == 'macOS'
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: 1
-          HOMEBREW_NO_INSTALL_CLEANUP: 1
-        run: |
-          brew tap dont-feed-the/pigeon "$GITHUB_WORKSPACE"
-          brew install dont-feed-the/pigeon/pigeon
-          brew test dont-feed-the/pigeon/pigeon
-          "$(brew --prefix dont-feed-the/pigeon/pigeon)/git-annex/bin/git-annex" version --raw
-          brew uninstall dont-feed-the/pigeon/pigeon
-          brew untap dont-feed-the/pigeon
 
   models:
     needs: [changes, proofs]

@@ -21,6 +21,27 @@ increments the second number, and every other release the third.
   computer, `pigeon free` sends it away again, and `pigeon sync` lists every
   folder with whether it is on this computer and why;
   `pigeon sync PATH --default` returns a folder to its default.
+- pigeon updates itself. Every computer and backup machine installs the
+  latest release once a day, and within minutes when another computer of
+  the group runs a newer release. The update downloads the installer
+  afresh from GitHub, so a release that broke pigeon is replaced by the
+  next one. It shows nothing; `journalctl --user -u pigeon-update`
+  (macOS: `~/Library/Logs/pigeon/update.log`) tells what it did.
+  `pigeon update --auto off` turns it off and `--auto on` back on; to
+  install with it off, use `curl … | sh -s -- --auto off`. A build of main
+  is never replaced. Installations from before this release get it after
+  one `pigeon update`.
+
+### Changed
+
+- `pigeon update` updates the installation it belongs to, wherever it is.
+  On a backup machine, `sudo /opt/pigeon/bin/pigeon update` now works too.
+
+### Removed
+
+- The Homebrew tap. On a Mac installed with Homebrew, run
+  `brew services stop pigeon` and `brew uninstall pigeon`, then the
+  install line of the README; your folders, groups and device key stay.
 
 ### Changed
 

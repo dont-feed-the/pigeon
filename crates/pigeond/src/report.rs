@@ -6,7 +6,8 @@
 //! `report::judge` says (signed by the roster device it names, known
 //! format and fields, later than the last; from a release build, unless
 //! this is a lab build), is then kept, raises when its device was heard
-//! of, and is relayed at `refs/pigeon/status/<device>`.
+//! of, and is relayed at `refs/pigeon/status/<device>`. One saying its
+//! device runs a newer release asks for the automatic update (14 §14.5).
 //!
 //! What the reports say reaches `status` and `doctor`: a peer that is full
 //! (`disk-full`), short of room (`no-capacity`) or has lost its repository
@@ -47,7 +48,7 @@ async fn versions(g: &Group) -> Versions {
         .await
         .unwrap_or_default();
     let v = Versions {
-        pigeon: env!("CARGO_PKG_VERSION").to_owned(),
+        pigeon: crate::update::own(),
         git_annex: annex.lines().next().unwrap_or_default().trim().to_owned(),
         git: pigeon_git::version::parse_git(&git)
             .map(|(a, b, c)| format!("{a}.{b}.{c}"))
@@ -199,8 +200,9 @@ async fn write(g: &Group, me: &str, status: &Status) -> Result<String, crate::gi
 }
 
 /// Reads the reports fetched and relayed here, keeps those that count,
-/// and relays them; answers how many counted.
-pub async fn receive(g: &Group, me: &str) -> usize {
+/// relays them, and follows a newer release they name through `wanted`
+/// (`crate::update`); answers how many counted.
+pub async fn receive(g: &Group, me: &str, wanted: &Path) -> usize {
     let Some(doc) = g.roster() else {
         return 0;
     };
@@ -258,6 +260,7 @@ pub async fn receive(g: &Group, me: &str) -> usize {
         let Some(status) = status else {
             continue;
         };
+        crate::update::follow(wanted, &status.versions.pigeon);
         {
             let mut k = g.lock();
             k.reports.offer(id.clone(), offer.seen.clone());
