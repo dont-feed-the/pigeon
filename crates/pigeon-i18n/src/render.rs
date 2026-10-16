@@ -22,6 +22,11 @@ impl Renderer {
         Renderer { cat, now }
     }
 
+    /// This renderer's fixed observation time.
+    pub(crate) fn now(&self) -> i64 {
+        self.now
+    }
+
     /// Its catalogue.
     pub fn catalogue(&self) -> &Catalogue {
         &self.cat
@@ -154,11 +159,32 @@ impl Renderer {
             .arg("name", p.name.as_str())
             .arg("role", self.id(role))
             .arg("machines", p.machines.join(", "));
-        self.cat.format(&msg)
+        let mut line = self.cat.format(&msg);
+        if p.recovery_recommended {
+            line.push(' ');
+            line.push_str(&self.cat.format(
+                &crate::Message::new("recovery-recommendation").arg("name", p.name.as_str()),
+            ));
+        }
+        if p.recovery_refresh_recommended {
+            line.push(' ');
+            line.push_str(
+                &self.cat.format(
+                    &crate::Message::new("recovery-refresh-recommendation")
+                        .arg("name", p.name.as_str()),
+                ),
+            );
+        }
+        line
     }
 
     /// A machine of the roster.
     pub fn machine(&self, m: &Machine) -> String {
+        if m.recovery {
+            return self
+                .cat
+                .format(&crate::Message::new("machine-recovery").arg("name", m.name.as_str()));
+        }
         if m.this_device {
             let msg = crate::Message::new("machine-this").arg("name", m.name.as_str());
             return self.cat.format(&msg);
@@ -202,6 +228,46 @@ impl Renderer {
     }
 
     /// A top-level folder's line (ux.md §6.2).
+    pub fn folder_rule(
+        &self,
+        rule: &pigeon_proto::policy::Rule,
+        people: &[pigeon_proto::policy::Person],
+    ) -> String {
+        let name = |id: &str| {
+            people
+                .iter()
+                .find(|p| p.id == id)
+                .map_or_else(|| id.to_owned(), |p| p.name.clone())
+        };
+        let path = if rule.path.is_empty() {
+            "."
+        } else {
+            &rule.path
+        };
+        let message = match &rule.owner {
+            Some(owner) => crate::Message::new("folder-rule-owned")
+                .arg("folder", path)
+                .arg("owner", name(owner)),
+            None => crate::Message::new("folder-rule-add-only")
+                .arg("folder", path)
+                .arg(
+                    "stewards",
+                    if rule.stewards.is_empty() {
+                        people
+                            .iter()
+                            .filter(|p| p.admin)
+                            .map(|p| p.name.clone())
+                            .collect::<Vec<_>>()
+                    } else {
+                        rule.stewards.iter().map(|id| name(id)).collect::<Vec<_>>()
+                    }
+                    .join(", "),
+                ),
+        };
+        self.cat.format(&message)
+    }
+
+    /// A top-level folder's line (ux.md §6.2).
     pub fn folder(&self, f: &pigeon_proto::api::Folder) -> String {
         let id = if f.freed {
             "folder-row-freed"
@@ -239,10 +305,27 @@ impl Renderer {
     /// The lines of a response, and whether they go to standard error.
     pub fn response(&self, r: &Response) -> (Vec<String>, bool) {
         match r {
+            Response::FolderRules(report) => (
+                report
+                    .rules
+                    .iter()
+                    .map(|rule| self.folder_rule(rule, &report.people))
+                    .collect(),
+                false,
+            ),
+            Response::Said { message } if message.id == "recovery-sheet-text" => {
+                let sheet = match message.args.get("sheet") {
+                    Some(Arg::Text(sheet)) => crate::recovery::terminal(&self.cat, sheet),
+                    _ => self.text(message),
+                };
+                (vec![sheet], false)
+            }
             Response::Said { message } => (vec![self.text(message)], false),
             Response::Progress { message, .. } => (vec![self.text(message)], true),
             Response::Problem(p) => (self.problem(p), true),
             Response::Status(s) => (self.status(s), false),
+            Response::Capacity(report) => (crate::capacity::lines(self, report), false),
+            Response::Health(h) => (self.status(&h.status), false),
             Response::Machines { machines } => {
                 (machines.iter().map(|m| self.machine(m)).collect(), false)
             }

@@ -113,11 +113,8 @@ pub(crate) fn write_sparse(g: &Group, hidden: &BTreeSet<String>) {
     let _ = pigeon_sys::fs::write_atomic(&file, text.as_bytes());
 }
 
-pub(crate) fn targets(g: &Group) -> BTreeSet<String> {
-    std::fs::read_to_string(g.root().join("freed.json"))
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_default()
+pub(crate) fn targets(g: &Group) -> pigeon_core::keep_targets::Targets {
+    crate::keep_targets::read(g)
 }
 
 /// Orders the requests that change a target against the loop's check
@@ -130,17 +127,11 @@ fn targets_lock() -> std::sync::MutexGuard<'static, ()> {
 
 /// Records whether the folder `prefix` is to be freed (`pigeon free`) or
 /// kept (`pigeon keep`); the loops do the rest, and never record one.
-pub fn set_target(g: &Group, prefix: &str, freed: bool) {
+pub fn set_target(g: &Group, prefix: &str, freed: bool) -> Result<(), String> {
     let _order = targets_lock();
     let mut t = targets(g);
-    if freed {
-        t.insert(prefix.to_owned());
-    } else {
-        t.retain(|p| !under(p, prefix));
-    }
-    if let Ok(text) = serde_json::to_vec(&t) {
-        let _ = pigeon_sys::fs::write_atomic(&g.root().join("freed.json"), &text);
-    }
+    t.set(prefix, freed);
+    crate::keep_targets::write(g, t)
 }
 
 pub(crate) fn record(g: &Group, r: &Record) -> Result<(), String> {
@@ -261,8 +252,11 @@ pub async fn free_with(
         }
         let trace = Checkpoint::new(t, g, &o.path, seq, "free").await;
         let order = targets_lock();
-        if !targets(g).contains(prefix) {
+        if !targets(g).is_freed(prefix) {
             break;
+        }
+        if !targets(g).is_freed(&o.path) {
+            continue;
         }
         let hidden_now = hide(g, &wt, seq, &o.path, &o.key, &trace);
         drop(order);
@@ -297,7 +291,7 @@ pub async fn free_with(
         }
     }
     done.hidden = observed.iter().filter(|o| hidden.contains(&o.path)).count();
-    if targets(g).contains(prefix) {
+    if targets(g).is_freed(prefix) {
         done.dropped = drop_hidden(g, &hidden, prefix, check).await;
     }
     truncate_if_done(g);
@@ -308,8 +302,8 @@ pub async fn free_with(
 /// became protected since is hidden and dropped (08 §8.5, step 5). The
 /// round runs it before capture, so a restart first resumes the transition.
 pub async fn free_targets(g: &Group, me: &str, t: &Tracer) {
-    for prefix in targets(g) {
-        if let Err(e) = free(g, me, &prefix, t).await {
+    for prefix in targets(g).free_roots() {
+        if let Err(e) = free(g, me, prefix, t).await {
             tracing::warn!(group = %g.id, prefix = %prefix, error = %e, "free-failed");
         }
     }
@@ -321,16 +315,17 @@ async fn drop_hidden(g: &Group, hidden: &BTreeSet<String>, prefix: &str, check: 
         return 0;
     };
     let keys = g.git.keys(&main).await.unwrap_or_default();
+    let freed = targets(g);
     let visible: BTreeSet<&String> = keys
         .iter()
-        .filter(|(p, _)| !hidden.contains(*p))
+        .filter(|(p, _)| !hidden.contains(*p) || !freed.is_freed(p))
         .map(|(_, k)| k)
         .collect();
     let k = crate::status::settings(g).k.to_string();
     let mut dropped = 0;
     let wanted: BTreeSet<&String> = keys
         .iter()
-        .filter(|(p, _)| hidden.contains(*p) && under(p, prefix))
+        .filter(|(p, _)| hidden.contains(*p) && under(p, prefix) && freed.is_freed(p))
         .map(|(_, k)| k)
         .collect();
     for key in wanted {
@@ -368,7 +363,7 @@ pub async fn keep(g: &Group, t: &Tracer) -> Result<usize, String> {
     let wt = g.worktree.clone().ok_or("not-in-group")?;
     let freed = targets(g);
     let mut hidden = hidden_paths(g).await;
-    if hidden.iter().all(|p| freed.iter().any(|f| under(p, f))) {
+    if hidden.iter().all(|p| freed.is_freed(p)) {
         return Ok(0);
     }
     let main = g.git.rev("refs/heads/main").await.ok_or("not-in-group")?;
@@ -383,10 +378,11 @@ pub async fn keep(g: &Group, t: &Tracer) -> Result<usize, String> {
         .collect();
     let wanted: Vec<(String, String)> = hidden
         .iter()
-        .filter(|p| !freed.iter().any(|f| under(p, f)))
+        .filter(|p| !freed.is_freed(p))
         .filter_map(|p| Some((p.clone(), keys.get(p)?.clone())))
         .collect();
     let mut objects = BTreeMap::new();
+    let mut queue = crate::telemetry::Queue::start(&g.id, "download", "keep", wanted.len());
     for (_, key) in &wanted {
         if objects.contains_key(key) {
             continue;
@@ -405,6 +401,7 @@ pub async fn keep(g: &Group, t: &Tracer) -> Result<usize, String> {
     let mut moved = Vec::new();
     let mut raced = Vec::new();
     for (path, key) in &wanted {
+        queue.complete(1);
         let stage = g.files.stage(seq);
         let object = objects.get(key).ok_or("receiving")?;
         let start = Span::begin(t, g, path, seq, "Start", "keep").await;

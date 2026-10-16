@@ -13,6 +13,18 @@ fn line(args: &str) -> crate::args::Line {
 
 #[test]
 fn commands_map_to_requests() {
+    assert_eq!(
+        line("status --capacity").action,
+        Action::Send(Request::Capacity)
+    );
+    assert_eq!(
+        line("status some/path --capacity").action,
+        Action::Usage("status".into())
+    );
+    assert_eq!(
+        line("status --not-shared --capacity").action,
+        Action::Usage("status".into())
+    );
     let l = line("free docs --json");
     assert!(l.json);
     assert_eq!(
@@ -232,11 +244,8 @@ fn commands_and_options_complete_with_their_help() {
     assert_eq!(shared.len(), 1, "{shared:?}");
     assert!(!shared[0].1.is_empty(), "{shared:?}");
     let debug: Vec<String> = completed("debug ").into_iter().map(|c| c.0).collect();
-    assert_eq!(
-        debug.first().map(String::as_str),
-        Some("bundle"),
-        "{debug:?}"
-    );
+    assert!(debug.iter().any(|c| c == "bundle"), "{debug:?}");
+    assert!(debug.iter().any(|c| c == "allow"), "{debug:?}");
 }
 
 fn version(state: State) -> VersionStatus {
@@ -277,6 +286,7 @@ fn responses_render_without_placeholders() {
                     name: "nas".into(),
                     device: "ab".into(),
                     custodian: true,
+                    recovery: false,
                     heard_at: Some("2026-10-14T09:00:00Z".into()),
                     this_device: false,
                 },
@@ -284,6 +294,7 @@ fn responses_render_without_placeholders() {
                     name: "lap".into(),
                     device: "cd".into(),
                     custodian: false,
+                    recovery: false,
                     heard_at: None,
                     this_device: true,
                 },

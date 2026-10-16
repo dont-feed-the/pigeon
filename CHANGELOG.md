@@ -4,6 +4,44 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.5.0 — 2026-10-16
+
+Milestone M4, the interface and recovery, with the installation repairs
+needed after the M3 candidate ([report](docs/reports/people-5.md)).
+
+### Added
+
+- Home explains current files and retained versions separately. The Space
+  page and `pigeon status --capacity` show distinct storage needs, retained
+  suggestions and dated reports from each backup machine.
+- Read older and deleted files with History and View, restore an entire
+  nested folder, and inspect a suggestion's actual contents before deciding.
+- Admins can change folder sharing rules and print a private recovery sheet
+  in English or French. Surviving backups can recover an admin; refounding
+  retains old history, and export works without a running pigeon daemon.
+- Free up space and Keep on this computer work in nested folder pages.
+  A kept child overrides its freed parent without downloading its siblings.
+- Doctor checks the transport helper and offers installation remedies in
+  the terminal and Settings. Peer debug bundles require one-use consent.
+- Optional group diagnostics connect requests, daemon work and network
+  operations. The operator dashboard shows measured acceptance and
+  protection delays, queues and transport observations.
+
+### Fixed
+
+- Joining, paper recovery and refounding retain the signed proposal proofs
+  needed to verify earlier suggestion decisions.
+- A temporary Git index lock no longer refuses a computer whose membership
+  has already been committed; metadata repair resumes after a restart.
+- People settings preserve unrelated private staged files and open saves.
+  Files lists pending local work and excludes intentionally freed children
+  from its promise to download files.
+- Restore preserves executable modes and reports files still in use.
+- Local diagnostics retain at most 256 KiB. Current operator measurements
+  remain available even when verbose traces fill the export queue.
+- Backup release validation uses the service account's private socket.
+  Retrying publication builds the original tag and its matching sources.
+
 ## 0.4.3 — 2026-10-16
 
 ### Added

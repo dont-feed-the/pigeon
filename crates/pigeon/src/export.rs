@@ -7,7 +7,7 @@
 //! `--deleted` adds the last version of each deleted file under `.deleted/`.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{Read, Write};
+use std::io::{Read, Seek, Write};
 use std::path::{Path, PathBuf};
 
 use pigeon_core::export::{self as core, Row};
@@ -68,9 +68,10 @@ impl Sources {
 }
 
 /// Copies `from` to `to` while hashing it; its size and SHA-256 hex.
-fn copy_hashing(from: &Path, to: &Path) -> std::io::Result<(u64, String)> {
+fn copy_hashing(from: &Path, output: &mut std::fs::File) -> std::io::Result<(u64, String)> {
     let mut input = std::fs::File::open(from)?;
-    let mut output = std::fs::File::create(to)?;
+    output.set_len(0)?;
+    output.rewind()?;
     let mut hash = Sha256::new();
     let mut buf = vec![0u8; 1 << 16];
     let mut size = 0u64;
@@ -102,15 +103,44 @@ enum Wrote {
     File(u64, String),
     Missing(String),
     Mismatch(String),
+    Blocked(String),
+}
+
+/// Deleted paths from different trees can collide as file versus folder.
+/// Never follow an already-exported symlink as a destination directory.
+fn parents(root: &Path, dest: &Path) -> std::io::Result<()> {
+    let parent = dest
+        .parent()
+        .ok_or_else(|| std::io::Error::other("no destination parent"))?;
+    let relative = parent.strip_prefix(root).map_err(std::io::Error::other)?;
+    let mut at = root.to_path_buf();
+    for component in relative.components() {
+        if !matches!(component, std::path::Component::Normal(_)) {
+            return Err(std::io::Error::other("invalid destination component"));
+        }
+        at.push(component);
+        match std::fs::symlink_metadata(&at) {
+            Ok(metadata) if metadata.is_dir() && !metadata.is_symlink() => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => std::fs::create_dir(&at)?,
+            _ => return Err(std::io::Error::other("destination path conflict")),
+        }
+    }
+    Ok(())
 }
 
 /// Writes the content of `entry` at `dest`.
-fn write_one(entry: &Entry, dest: &Path, blobs: &mut Blobs, sources: &Sources) -> Wrote {
+fn write_one(
+    entry: &Entry,
+    root: &Path,
+    dest: &Path,
+    blobs: &mut Blobs,
+    sources: &Sources,
+) -> Wrote {
     let Some(blob) = blobs.read(&entry.oid) else {
         return Wrote::Missing(entry.oid.clone());
     };
-    if let Some(parent) = dest.parent() {
-        let _ = std::fs::create_dir_all(parent);
+    if parents(root, dest).is_err() {
+        return Wrote::Blocked(entry.oid.clone());
     }
     let link = entry.mode == "120000";
     let key = if link {
@@ -122,29 +152,43 @@ fn write_one(entry: &Entry, dest: &Path, blobs: &mut Blobs, sources: &Sources) -
         let made = if link {
             std::os::unix::fs::symlink(String::from_utf8_lossy(&blob).as_ref(), dest)
         } else {
-            std::fs::write(dest, &blob)
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(dest)
+                .and_then(|mut file| {
+                    file.write_all(&blob)?;
+                    file.sync_all()
+                })
         };
         if made.is_err() {
-            return Wrote::Missing(entry.oid.clone());
+            return Wrote::Blocked(entry.oid.clone());
         }
         return Wrote::File(blob.len() as u64, hex(&Sha256::digest(&blob)));
     };
-    let part = dest.with_file_name(format!(
-        ".{}.pigeon-part",
-        dest.file_name().unwrap_or_default().to_string_lossy()
-    ));
+    let Some(parent) = dest.parent() else {
+        return Wrote::Blocked(key);
+    };
+    let Ok(mut part) = tempfile::NamedTempFile::new_in(parent) else {
+        return Wrote::Blocked(key);
+    };
     let mut seen = false;
     for (from, object) in sources.candidates(&key, &entry.path) {
-        let Ok((size, digest)) = copy_hashing(&from, &part) else {
+        let Ok((size, digest)) = copy_hashing(&from, part.as_file_mut()) else {
             continue;
         };
         seen |= object;
-        if core::matches(&key, size, &digest) && std::fs::rename(&part, dest).is_ok() {
+        if core::matches(&key, size, &digest) {
+            if !matches!(
+                pigeon_sys::fs::rename_noreplace(part.path(), dest),
+                Ok(pigeon_sys::fs::Renamed::Done)
+            ) {
+                return Wrote::Blocked(key);
+            }
             set_mode(dest, entry.mode == "100755");
             return Wrote::File(size, digest);
         }
     }
-    let _ = std::fs::remove_file(&part);
     if seen {
         Wrote::Mismatch(key)
     } else {
@@ -206,16 +250,23 @@ pub fn run(e: &Export) -> Result<Vec<Message>, Box<Problem>> {
     let deleted_dir = core::free_name(".deleted", &paths);
     let mut deleted = 0;
     if e.deleted {
-        for (path, by) in history.last_changes(&commit, true) {
-            if paths.contains(&path) || !core::exported(&path) || !core::safe(&path) {
-                continue;
-            }
-            let before = format!("{}^", by[0]);
-            for t in history.tree(&before, &[&path]) {
-                let c = changes.get(&t.path).cloned().unwrap_or_else(unknown);
-                let dest = format!("{deleted_dir}/{}", t.path);
-                deleted += 1;
-                jobs.push((t, dest, c));
+        let tips = history
+            .histories(&commit)
+            .map_err(|()| problem("export-history-unverified", &[]))?;
+        let mut seen = paths.clone();
+        for tip in tips {
+            let changes = history.last_changes(&tip, false);
+            for (path, by) in history.last_changes(&tip, true) {
+                if !seen.insert(path.clone()) || !core::exported(&path) || !core::safe(&path) {
+                    continue;
+                }
+                let before = format!("{}^", by[0]);
+                for t in history.tree(&before, &[&path]) {
+                    let c = changes.get(&t.path).cloned().unwrap_or_else(unknown);
+                    let dest = format!("{deleted_dir}/{}", t.path);
+                    deleted += 1;
+                    jobs.push((t, dest, c));
+                }
             }
         }
     }
@@ -225,7 +276,7 @@ pub fn run(e: &Export) -> Result<Vec<Message>, Box<Problem>> {
     let mut rows = Vec::new();
     let mut missing: Vec<(String, String, &str)> = Vec::new();
     for (t, dest, [commit, author, date]) in &jobs {
-        match write_one(t, &to.join(dest), &mut blobs, &sources) {
+        match write_one(t, to, &to.join(dest), &mut blobs, &sources) {
             Wrote::File(size, sha256) => rows.push(Row {
                 path: dest.clone(),
                 size,
@@ -236,13 +287,21 @@ pub fn run(e: &Export) -> Result<Vec<Message>, Box<Problem>> {
             }),
             Wrote::Missing(key) => missing.push((dest.clone(), key, "missing")),
             Wrote::Mismatch(key) => missing.push((dest.clone(), key, "damaged")),
+            Wrote::Blocked(key) => missing.push((dest.clone(), key, "destination-conflict")),
         }
     }
     let mut taken: BTreeSet<String> = jobs.iter().map(|j| j.1.clone()).collect();
     let manifest = core::free_name("MANIFEST.tsv", &taken);
     taken.insert(manifest.clone());
     let write = |name: &str, body: &str| {
-        std::fs::write(to.join(name), body).map_err(|_| problem("internal-error", &[]))
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(to.join(name))
+            .map_err(|_| problem("internal-error", &[]))?;
+        file.write_all(body.as_bytes())
+            .and_then(|()| file.sync_all())
+            .map_err(|_| problem("internal-error", &[]))
     };
     write(&manifest, &core::manifest(&rows))?;
     let dir = to.display().to_string();

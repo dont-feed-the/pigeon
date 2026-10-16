@@ -28,18 +28,19 @@ headline-capturing =
        *[other] Vérification de { $files } fichiers modifiés ; ils ne sont pas encore en sécurité.
     }
 headline-checking = Le dossier local n'a pas pu être vérifié. Lancez : pigeon doctor
+headline-inventory-unreadable = Pigeon ne peut pas vérifier toutes les versions enregistrées pour le moment.
 headline-too-few-backups = Pas encore en sécurité : ajoutez un ordinateur de sauvegarde.
 why-capturing = Cette modification attend d'être enregistrée et copiée sur les ordinateurs de sauvegarde.
 why-too-few-backups = { $have } ordinateurs de sauvegarde sur { $need } sont configurés. Pour en ajouter un : pigeon invite --backup-machine
 headline-not-safe =
     { $files ->
-        [one] { $files } fichier n'est pas encore en sécurité.
-       *[other] { $files } fichiers ne sont pas encore en sécurité.
+        [one] { $files } version de fichier n'est pas encore en sécurité.
+       *[other] { $files } versions de fichiers ne sont pas encore en sécurité.
     }
 headline-working =
     { $files ->
-        [one] Envoi de { $files } fichier aux machines de sauvegarde…
-       *[other] Envoi de { $files } fichiers aux machines de sauvegarde…
+        [one] Envoi de { $files } version de fichier aux machines de sauvegarde…
+       *[other] Envoi de { $files } versions de fichiers aux machines de sauvegarde…
     }
 headline-not-checked = Dernière confirmation de sécurité : { $when }. pigeon ne peut pas joindre le groupe en ce moment ; les changements depuis ne sont que sur cet ordinateur.
 headline-disk-full = Votre disque est plein. pigeon ne peut pas enregistrer les nouveaux changements. Libérez de l'espace ou videz la corbeille.
@@ -109,13 +110,13 @@ help-commands = Commandes :
 
 ## Résultats
 
-free-result = { $safe } fichiers sur { $total } sont en sécurité et leur espace est libéré.
+free-result = { $safe } fichiers sur { $total } sont en sécurité et peuvent être libérés. Pigeon libérera leur espace en arrière-plan ; les autres fichiers attendent des copies sûres.
 free-waiting =
     { $files ->
         [one] { $files } fichier n'est pas encore en sécurité ; pigeon le libérera dès qu'il le sera.
        *[other] { $files } fichiers ne sont pas encore en sécurité ; pigeon les libérera dès qu'ils le seront.
     }
-keep-result = { $folder } est gardé sur cet ordinateur.
+keep-result = { $folder } sera gardé sur cet ordinateur. Les fichiers absents seront téléchargés dès qu’une copie sera joignable ; consultez Accueil pour suivre l’avancement.
 suggestions-none = Aucune suggestion n'attend.
 suggestion-decide = { $id }  { $author } suggère une modification de { $paths }, enregistrée { $saved }. Acceptez-la avec : pigeon accept { $id }
 suggestion-other = { $id }  { $author } suggère une modification de { $paths }, enregistrée { $saved } ; quelqu'un d'autre décide.
@@ -130,13 +131,23 @@ resolved-keep-copy = Votre version de { $path } est gardée sous { $dest } ; { $
 resolved-suggest-again = Votre version de { $path } est suggérée à nouveau.
 undo-free = Annuler : pigeon keep { $folder }
 undo-keep = Annuler : pigeon free { $folder }
-restore-result = { $path } est restauré ; la version plus récente reste dans son historique.
+restore-result = { $path } est restauré sur cet ordinateur ; la version plus récente reste dans son historique. Consultez Accueil pour le partage et la protection, et Suggestions si une approbation est nécessaire.
+restore-folder-result = { $path } : { $files } fichiers restaurés sur cet ordinateur. Les fichiers plus récents et l’historique sont conservés. Consultez Accueil et Suggestions pour le partage et l’approbation.
+problem-restore-folder-incomplete = { $path } : { $files } fichiers restaurés ; { $skipped } n’ont pas pu être restaurés et sont restés inchangés. L’opération nécessite votre attention. Fichiers à vérifier : { $paths }. Fermez les fichiers utilisés et réessayez ; lancez pigeon doctor pour les autres problèmes. Consultez Accueil et Suggestions pour le partage et l’approbation.
+problem-restore-in-use = { $path } a changé ou est en cours d’utilisation. Pigeon l’a laissé inchangé. Ouvrez une ancienne copie avec Voir, ou fermez le fichier et réessayez.
+problem-restore-folder-version = Pour restaurer un dossier, choisissez une date avec --at ou omettez l’option de version pour restaurer son dernier état enregistré.
+web-restore-folder = Restaurer ce dossier
+web-files-arriving = En attente de { $files } fichiers pour qu’ils soient disponibles sur cet ordinateur. Laissez pigeon fonctionner ; il les recevra dès qu’une copie sera joignable.
+web-restore-folder-help = Restaurez un dossier entièrement supprimé dans son dernier état enregistré. Les fichiers plus récents et l’historique sont conservés. Les fichiers individuels figurent ci-dessous.
 recovery-sheet-text = { $sheet }
-recovered = Cet ordinateur est de retour dans { $group }. Ses fichiers arrivent depuis les machines de sauvegarde ; retirez ensuite les ordinateurs perdus et imprimez une nouvelle fiche de récupération.
+recovered = Cet ordinateur est de retour dans { $group }. Ses fichiers arrivent depuis les machines de sauvegarde ; retirez ensuite les ordinateurs perdus, révoquez la fiche utilisée avec remove-computer et imprimez une nouvelle fiche.
 not-shared-kind = { $path } : non partagé ({ $kind })
 doctor-lab-build = Ceci est une version de laboratoire : ses rapports d'état sont marqués, et aucune version publiée ne les compte.
 doctor-version = { $program } { $found } (il faut au moins { $minimum })
 doctor-ok = Tout ce dont pigeon a besoin est en place.
+web-doctor = Vérifier l’installation
+problem-transport-helper-unavailable = Le programme de transport de pigeon manque, ne fonctionne pas ou appartient à une autre version.
+hint-transport-helper-unavailable = Réinstallez cette version de pigeon avec tous ses programmes, puis redémarrez pigeon et relancez pigeon doctor.
 created = Le groupe « { $group } » est créé. Ajoutez une machine de sauvegarde avec : pigeon invite --backup-machine
 invitation =
     { $who ->
@@ -170,6 +181,7 @@ confirm-yes = oui
 confirm-leave = Retirer cet ordinateur du groupe ? Ses fichiers restent dans le dossier, mais il cesse de les partager. [o/N]
 confirm-refound = Refonder le groupe avec vous pour seul administrateur ? Il devient un nouveau groupe : chaque autre membre le rejoint à nouveau par une invitation de votre part, et l'ancien historique reste lisible. [o/N]
 confirm-join-refounded = { $group } a été refondé par { $name } le { $date } : le rejoindre, c'est accepter { $name } comme administrateur. Rejoindre ? [o/N]
+web-join-refounded = { $group } a été refondé par { $name } le { $date }. Le rejoindre, c'est accepter { $name } comme administrateur. Cliquez sur Rejoindre pour continuer.
 confirm-held-share = Supprimer les fichiers de { $batch } pour tout le monde ? Ils restent dans l'historique. [o/N]
 
 ## Problèmes (10 §10.6, ADR 0023) : problem-<code>, et hint-<code> s'il y en a un
@@ -404,4 +416,117 @@ confirm-drop = Retirer quand même la copie de cet ordinateur ? Ce qu'aucune aut
 cmd-view = Ouvrir une copie en lecture seule d'une version d'un fichier, hors du dossier
 view-ready = Une copie en lecture seule est dans { $path } ; elle est supprimée après sept jours.
 
+setting-telemetry-device = Partager les diagnostics avec
+setting-off = Garder les diagnostics sur chaque ordinateur
 problem-join-history-unverified = Pigeon n’a pas pu vérifier l’historique de ce groupe. Demandez à la personne qui vous a invité de mettre pigeon à jour et de vous envoyer une nouvelle invitation.
+problem-export-history-unverified = Pigeon n’a pas pu vérifier l’historique archivé. Conservez ce dépôt et demandez une copie complète à un autre membre avant d’exporter les fichiers supprimés.
+
+problem-recovery-not-allowed = Cette fiche de récupération ne peut plus ajouter d’ordinateurs. Utilisez une fiche actuelle ou demandez une invitation à un administrateur.
+
+machine-recovery = { $name } : clé de récupération sur papier
+web-revoke-sheet = Révoquer la fiche de récupération
+
+revoked-sheet = { $name } est révoquée ; cette fiche de récupération ne peut plus ajouter d’ordinateurs.
+web-revoke-confirm = Révoquer { $name } ? Cette fiche de récupération ne pourra plus ajouter d’ordinateurs.
+
+progress-restore = Restauration de { $path } ; attente des vérifications du groupe et des copies disponibles.
+progress-remove = Retrait de { $name } ; attente des vérifications du groupe.
+progress-recovery-sheet = Préparation d’une fiche de récupération et attente de sa réception par une machine de sauvegarde.
+progress-recover = Récupération de cet ordinateur ; vérification de l’historique de la sauvegarde et de l’autorisation du nouvel ordinateur.
+
+confirm-revoke-sheet = Révoquer { $name } ? Cette clé sur papier ne pourra plus ajouter d’ordinateurs. [o/N]
+
+cmd-debug-allow = Autoriser un diagnostic pour un ordinateur choisi pendant dix minutes
+debug-allowed = { $name } peut recueillir les diagnostics de ce groupe une seule fois, noms de fichiers inclus. Cette autorisation expire dans dix minutes. Redémarrer pigeon annule cette autorisation.
+problem-debug-not-allowed = { $name } n’a pas autorisé de diagnostic. Demandez à sa personne d’ouvrir les réglages et d’autoriser un diagnostic pour cet ordinateur, puis réessayez.
+confirm-debug-bundle = Enregistrer les diagnostics, noms de fichiers inclus, dans un fichier local privé ? Les autres ordinateurs ne partagent qu’avec leur propre autorisation. [o/N]
+confirm-debug-allow = Autoriser { $name } à recueillir une partie des diagnostics de ce groupe, noms de fichiers inclus, pendant les dix prochaines minutes ? [o/N]
+progress-debug-bundle = Collecte des diagnostics ; les ordinateurs choisis ne partagent qu’avec l’autorisation de leur personne.
+web-diagnostics = Partager un diagnostic une fois
+web-diagnostics-consent = J’accepte de partager une fois les diagnostics de ce groupe, noms de fichiers inclus, pendant les dix prochaines minutes avec l’ordinateur choisi.
+web-diagnostic-peer = Ordinateur recevant le diagnostic
+web-allow-diagnostics = Autoriser un diagnostic
+
+action-cancelled = Annulé.
+
+recovery-title = Fiche de récupération pigeon
+recovery-group = Groupe : { $name } ({ $group })
+recovery-person = Personne : { $name }
+recovery-backups = Machines de sauvegarde :
+recovery-secret = Gardez cette fiche comme un passeport : quiconque la détient peut ajouter des ordinateurs en votre nom. Imprimez-la et rangez-la en lieu sûr ; ne l’envoyez à personne.
+recovery-instructions = Sur un nouvel ordinateur, enregistrez le code dans un fichier texte et lancez : pigeon recover CE-FICHIER DOSSIER
+recovery-qr-too-large = Cette fiche contient trop d’informations pour un seul code QR. Gardez le code texte complet sur cette fiche ; il fonctionne de la même manière.
+recovery-recommendation = { $name } n’a qu’un seul ordinateur pouvant signer. Imprimez une fiche de récupération ou ajoutez un second ordinateur pour pouvoir revenir si vous perdez cet ordinateur.
+web-print-recovery = Préparer une fiche de récupération
+web-recovery-print-help = Utilisez la commande Imprimer de votre navigateur pour imprimer cette page. Gardez le code texte complet avec le code QR. Fermez cette page une fois la fiche rangée en lieu sûr.
+
+recovery-refresh-recommendation = Les machines de sauvegarde ont changé depuis la préparation des fiches de récupération de { $name }. Préparez une nouvelle fiche avec les machines actuelles.
+
+problem-recovery-needs-backup = Ajoutez une machine de sauvegarde avant de préparer une fiche de récupération. Une sauvegarde doit recevoir l’autorisation de la fiche pour pouvoir vous aider à revenir.
+
+problem-join-incomplete = Le nouveau groupe a été vérifié, mais la récupération n’a pas pu se terminer. Redémarrez pigeon pour terminer l’opération enregistrée. Votre ancien historique est conservé.
+problem-repository-busy = Ce dépôt contient une mise à jour de fichier inachevée. Laissez pigeon la terminer, ou redémarrez pigeon avant de réessayer la récupération.
+problem-folder-not-empty = Ce dossier n’est pas vide et n’appartient pas au groupe à récupérer. Choisissez un dossier vide ou le dépôt existant du groupe refondé.
+
+# Group health from replicated state (ADR 0025).
+web-health = État du groupe
+web-health-current = Fichiers actuels
+web-health-retained = Autres versions conservées
+web-health-unavailable = Pas encore vérifié ; pigeon est peut-être occupé.
+web-health-no-report = Aucun état reçu pour le moment.
+web-health-counts = En sécurité : { $protected } · Partagés, pas encore en sécurité : { $published } · Seulement sur cet ordinateur : { $local } · Pas vérifiés récemment : { $uncertain } · Manquants : { $missing } · Effacés définitivement : { $erased }
+headline-empty = Aucun fichier pour le moment. Ajoutez des fichiers dans votre dossier partagé pour commencer.
+web-health-size = { $mb } Mo
+web-health-kb = { $kb } ko
+web-health-bytes = { $bytes } o
+web-health-no-limit = non définie
+web-health-paper = Une clé papier ne conserve aucun fichier.
+web-health-disk = Conservés : { $used } · Libres : { $free } · Limite : { $limit } · Réserve : { $reserve }
+web-health-full = Ce disque a besoin de plus d’espace libre.
+web-health-lost = Cette machine de secours signale la perte de son dépôt.
+web-health-checking = Vérification des fichiers conservés ; ces copies ne comptent pas encore pour la protection.
+web-health-queue = À envoyer : { $send } · À recevoir : { $receive } · En attente d’espace : { $deferred } éléments, { $missing } nécessaires
+web-health-report = État du stockage et des tâches : { $when }.
+web-health-report-old = État du stockage et des tâches ancien : { $when }. Un nouveau contact ne met pas ces chiffres à jour.
+web-health-suggestions = Suggestions en attente d’une décision : { $count }
+web-health-repair = Contenus marqués à recopier : { $count }
+web-health-updated = Vue mise à jour : { $when }. Les chiffres de stockage portent leur propre date.
+web-health-omitted = { $count } autres explications de fichiers ne sont pas affichées ici. Choisissez un dossier dans Fichiers.
+web-health-machines = Ordinateurs, contacts et stockage
+web-health-epochs = Après le retrait d’ordinateurs
+web-health-no-epochs = Aucun ordinateur conservant des fichiers n’a été retiré.
+web-health-epoch = { $name } a été retiré : { $when }.
+
+cmd-folder-rule = Voir les règles de partage, ou laisser un administrateur choisir le propriétaire d’un dossier ou qui décide des suggestions. --owner me désigne votre dossier.
+folder-rule-owned = { $folder } : seul { $owner } peut modifier ce dossier.
+folder-rule-add-only = { $folder } : tout le monde peut ajouter ; les autres modifications sont décidées par { $stewards }.
+folder-rule-result = La règle de partage de { $folder } est enregistrée sur cet ordinateur. Les autres l’appliqueront après leur prochaine vérification du partage. Consultez la règle du dossier sur un autre ordinateur pour vérifier son arrivée.
+problem-folder-rule-path = Choisissez un sous-dossier au nom portable, avec son orthographe d’origine. La racine du groupe et les fichiers propres à pigeon ne peuvent pas recevoir de règle.
+problem-folder-rule-person = Aucun membre actuel unique ne correspond à « { $name } ». Choisissez son nom dans Personnes et machines, ou utilisez me pour vous-même.
+web-folder-rule = Règle de partage du dossier
+web-subfolders = Sous-dossiers
+web-folder-rule-help = Choisissez qui peut modifier ce dossier. Les autres peuvent suggérer des modifications. Les sous-dossiers héritent de cette règle sauf s’ils ont la leur.
+web-folder-rule-admin = Un administrateur peut modifier cette règle de partage.
+web-folder-rule-owner = Une seule personne peut le modifier
+web-folder-rule-add-only = Tout le monde peut ajouter ; les personnes choisies décident des autres modifications
+web-folder-rule-inherit = Hériter de la règle du dossier parent
+web-folder-rule-stewards = Personnes qui décident des modifications
+web-folder-rule-default-admins = Ne cochez personne pour laisser les administrateurs décider.
+
+web-view-suggestion = Examiner le fichier suggéré
+suggestion-deletes-file = Cette suggestion supprime { $path }. Le fichier partagé reste inchangé tant que la suggestion n’est pas acceptée.
+
+space-title = Espace de sauvegarde
+space-need = Stockage nécessaire pour { $copies } copies de sauvegarde : fichiers actuels { $current } octets ; historique { $history } octets ; suggestions { $suggestions } octets.
+space-offered = Capacité configurée pour ce contenu : { $bytes } octets. Chaque ordinateur de sauvegarde compte pour une copie au maximum, même sans état de stockage récent.
+space-overflow = Copies supplémentaires : { $bytes } octets, selon les emplacements signalés.
+space-overflow-unknown = Les copies supplémentaires n’ont pas été vérifiées.
+space-short = La capacité de sauvegarde configurée a moins de 25 % de marge. Ajoutez un autre ordinateur de sauvegarde, ou augmentez une limite inférieure à une copie. L’espace disque libre signalé par chaque ordinateur est affiché ci-dessous.
+space-disk = Stockage utilisé { $used } octets ; libre { $free } octets ; limite { $limit } ; réserve { $reserve } octets.
+space-proposal = Suggestion { $id }, { $state }, enregistrée { $when } : { $bytes } octets supplémentaires avant les copies de sauvegarde.
+space-shared = Un contenu commun est compté une seule fois dans les totaux et peut apparaître dans plusieurs suggestions. Les suggestions refusées restent jusqu’à leur effacement.
+space-open = en attente d’une décision
+space-adopted = acceptée
+space-rejected = refusée
+space-withdrawn = retirée
+space-snapshot = { $group }, vérifié le { $when }.

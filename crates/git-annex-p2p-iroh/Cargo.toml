@@ -9,6 +9,7 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+pigeon-telemetry.workspace = true
 pigeon-proto.workspace = true
 pigeon-sys.workspace = true
 

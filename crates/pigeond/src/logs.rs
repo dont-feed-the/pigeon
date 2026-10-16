@@ -1,19 +1,19 @@
 //! `pigeond`'s logs (12 §12.1, ADR 0022): one JSON object per line, in
 //! `<state>/logs/pigeond-YYYY-MM-DD.ndjson` (UTC), with the time, the level,
 //! the target, the event's name and its fields. A minimal `tracing`
-//! subscriber writes them; spans are not recorded (13 §13.12).
+//! layer writes them; a second layer records spans through the shared
+//! OpenTelemetry pipeline (ADR 0025).
 
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
 use tracing::field::{Field, Visit};
-use tracing::span::{Attributes, Id, Record};
-use tracing::{Event, Level, Metadata, Subscriber};
+use tracing::{Event, Level, Subscriber};
+use tracing_subscriber::{Layer, layer::Context, prelude::*};
 
 struct JsonLog {
     dir: PathBuf,
-    max: Level,
     file: Mutex<Option<(String, std::fs::File)>>,
 }
 
@@ -64,16 +64,8 @@ impl JsonLog {
     }
 }
 
-impl Subscriber for JsonLog {
-    fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-        *metadata.level() <= self.max
-    }
-    fn new_span(&self, _: &Attributes<'_>) -> Id {
-        Id::from_u64(1)
-    }
-    fn record(&self, _: &Id, _: &Record<'_>) {}
-    fn record_follows_from(&self, _: &Id, _: &Id) {}
-    fn event(&self, event: &Event<'_>) {
+impl<S: Subscriber> Layer<S> for JsonLog {
+    fn on_event(&self, event: &Event<'_>, _: Context<'_, S>) {
         let mut fields = Fields(serde_json::Map::new());
         event.record(&mut fields);
         let mut map = serde_json::Map::new();
@@ -88,8 +80,6 @@ impl Subscriber for JsonLog {
         line.push(b'\n');
         self.write(&line);
     }
-    fn enter(&self, _: &Id) {}
-    fn exit(&self, _: &Id) {}
 }
 
 /// Sends `tracing` events to the daily files in `dir`; `PIGEON_LOG=debug`
@@ -102,8 +92,25 @@ pub fn init(dir: PathBuf) {
     };
     let log = JsonLog {
         dir,
-        max,
         file: Mutex::new(None),
     };
-    let _ = tracing::subscriber::set_global_default(log);
+    let registry = tracing_subscriber::registry();
+    #[cfg(feature = "tokio-console")]
+    let registry = registry.with(pigeon_telemetry::console_layer());
+    let _ =
+        tracing::subscriber::set_global_default(
+            registry
+                .with(
+                    log.with_filter(tracing_subscriber::filter::filter_fn(move |m| {
+                        *m.level() <= max
+                    })),
+                )
+                .with(pigeon_telemetry::layer().with_filter(
+                    tracing_subscriber::filter::filter_fn(move |m| {
+                        *m.level() <= max
+                            && !m.target().starts_with("tokio")
+                            && !m.target().starts_with("runtime")
+                    }),
+                )),
+        );
 }

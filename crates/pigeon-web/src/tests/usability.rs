@@ -11,7 +11,7 @@ impl Backend for Recording {
     fn request(&self, request: pigeon_proto::Request) -> Answer {
         self.0.lock().unwrap().push(request.clone());
         let answer = match request {
-            pigeon_proto::Request::Status { .. } => {
+            pigeon_proto::Request::Status { .. } | pigeon_proto::Request::Health => {
                 vec![Response::Problem(pigeon_proto::Problem {
                     code: "not-in-group".into(),
                     message: Message {
@@ -54,6 +54,17 @@ fn form_token(page: &str) -> &str {
         .split('"')
         .next()
         .unwrap()
+}
+
+#[test]
+fn an_action_result_keeps_its_explanation_without_live_home_updates() {
+    let (web, _) = recording();
+    let renderer = web.renderer();
+    let title = renderer.id("problem-join-history-unverified");
+    let result = crate::pages::result(&renderer, "/", vec![title.clone()]).0;
+    assert!(result.contains(&title));
+    assert!(!result.contains("EventSource"));
+    assert!(!result.contains("id=\"headline\""));
 }
 
 #[tokio::test]
@@ -175,4 +186,118 @@ async fn joining_a_refounded_group_waits_for_the_second_confirmation() {
             .count(),
         1
     );
+}
+
+#[tokio::test]
+async fn diagnostic_disclosure_requires_a_checked_local_consent_and_valid_form() {
+    let (web, backend) = recording();
+    let app = web.router();
+    let cookie = logged_in(&app, &web).await;
+    let page = body(
+        app.clone()
+            .oneshot(get("/settings", HOST, Some(&cookie)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    let form = form_token(&page);
+    for (fields, status) in [
+        (format!("form={form}&peer=peer"), StatusCode::BAD_REQUEST),
+        (
+            format!("form={form}&peer=peer&consent=false"),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "form=forged&peer=peer&consent=true".to_owned(),
+            StatusCode::FORBIDDEN,
+        ),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(post("/settings/diagnostics", &cookie, &fields))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), status);
+    }
+    assert!(
+        !backend
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|r| matches!(r, pigeon_proto::Request::AllowDebug { .. }))
+    );
+    app.oneshot(post(
+        "/settings/diagnostics",
+        &cookie,
+        &format!("form={form}&peer=peer&consent=true"),
+    ))
+    .await
+    .unwrap();
+    assert_eq!(
+        backend
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|r| matches!(r, pigeon_proto::Request::AllowDebug { .. }))
+            .count(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn suggestion_review_uses_the_exact_proposal_path_and_checked_form() {
+    let (web, backend) = recording();
+    let app = web.router();
+    let cookie = logged_in(&app, &web).await;
+    let page = body(
+        app.clone()
+            .oneshot(get("/join", HOST, Some(&cookie)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    let token = form_token(&page);
+    backend.0.lock().unwrap().clear();
+    let params = "proposal=c0ffee&path=Photos%2F2019%2Fa.jpg";
+    let response = app
+        .clone()
+        .oneshot(post(
+            "/suggestions/view",
+            &cookie,
+            &format!("form=forged&{params}"),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert!(backend.0.lock().unwrap().is_empty());
+    let response = app
+        .clone()
+        .oneshot(post(
+            "/suggestions/view",
+            &cookie,
+            &format!("form={token}&{params}"),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        backend.0.lock().unwrap().as_slice(),
+        &[pigeon_proto::Request::ViewSuggestion {
+            proposal: "c0ffee".into(),
+            path: "Photos/2019/a.jpg".into(),
+        }]
+    );
+    backend.0.lock().unwrap().clear();
+    let response = app
+        .oneshot(post(
+            "/suggestions/view",
+            &cookie,
+            &format!("form={token}&{params}&version=1"),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(backend.0.lock().unwrap().is_empty());
 }

@@ -55,9 +55,9 @@ pub struct Installed {
     pub deferred: usize,
 }
 
-fn mode_bits(entry: Option<&Entry>, file: &Path) -> u32 {
-    let exec = match entry {
-        Some(e) => e.mode == "100755",
+fn mode_bits(mode: Option<&str>, file: &Path) -> u32 {
+    let exec = match mode {
+        Some(mode) => mode == "100755",
         None => lstat(file)
             .ok()
             .flatten()
@@ -90,6 +90,31 @@ pub(crate) async fn put(
     entry: Option<&Entry>,
     t: &Tracer,
 ) -> Result<Put, String> {
+    put_mode(g, rel, key, current, entry, None, t).await
+}
+
+/// An explicit restore keeps the saved executable mode while leaving
+/// the index for capture to record the restore as a new version.
+pub(crate) async fn put_restore(
+    g: &Group,
+    rel: &str,
+    key: &str,
+    current: Option<&str>,
+    mode: &str,
+    t: &Tracer,
+) -> Result<Put, String> {
+    put_mode(g, rel, key, current, None, Some(mode), t).await
+}
+
+async fn put_mode(
+    g: &Group,
+    rel: &str,
+    key: &str,
+    current: Option<&str>,
+    entry: Option<&Entry>,
+    mode: Option<&str>,
+    t: &Tracer,
+) -> Result<Put, String> {
     if crate::capture_file::pending(g) {
         return Err("capture-pending".to_owned());
     }
@@ -107,7 +132,10 @@ pub(crate) async fn put(
     std::fs::copy(&object, &stage).map_err(|e| e.to_string())?;
     {
         use std::os::unix::fs::PermissionsExt;
-        let mode = std::fs::Permissions::from_mode(mode_bits(entry, &file));
+        let mode = std::fs::Permissions::from_mode(mode_bits(
+            mode.or(entry.map(|e| e.mode.as_str())),
+            &file,
+        ));
         let _ = std::fs::set_permissions(&stage, mode);
     }
     std::fs::File::open(&stage)
@@ -430,7 +458,9 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
     let freed = crate::evict::targets(g);
     let before = crate::evict::hidden_paths(g).await;
     let mut hidden = before.clone();
+    let mut queue = crate::telemetry::Queue::start(&g.id, "download", "install", changed.len());
     for path in changed {
+        queue.complete(1);
         let (w, h) = (want.get(path), have.get(path));
         if is_pigeon_path(path) || path == ".gitattributes" {
             own(g, path, w).await;
@@ -470,7 +500,7 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
             done.deferred += 1;
             continue;
         }
-        if hidden.contains(path) || freed.iter().any(|f| crate::evict::under(path, f)) {
+        if hidden.contains(path) || freed.is_freed(path) {
             let ok = index_entry(g, path, w).await.is_ok();
             if ok && w.is_some() {
                 let _ = g

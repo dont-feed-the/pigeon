@@ -23,7 +23,11 @@ pub struct ViewForm {
     /// The file, as an absolute path.
     path: String,
     /// The version's number.
-    version: u64,
+    #[serde(default)]
+    version: Option<u64>,
+    /// A pending suggestion instead of accepted history.
+    #[serde(default)]
+    proposal: Option<String>,
 }
 
 /// `POST /files/view`: the copy as a download, or what went wrong.
@@ -39,20 +43,32 @@ pub async fn view(
         )
             .into_response();
     }
-    let back = format!(
-        "/file?path={}",
-        form_urlencoded::byte_serialize(f.path.as_bytes()).collect::<String>()
-    );
+    if f.proposal.is_some() && f.version.is_some() {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    let (back, request) = match f.proposal {
+        Some(proposal) => (
+            "/suggestions".to_owned(),
+            Request::ViewSuggestion {
+                proposal,
+                path: f.path,
+            },
+        ),
+        None => (
+            format!(
+                "/file?path={}",
+                form_urlencoded::byte_serialize(f.path.as_bytes()).collect::<String>()
+            ),
+            Request::View {
+                path: f.path,
+                version: f.version,
+                group: false,
+            },
+        ),
+    };
     let r = web.renderer();
     let mut lines = Vec::new();
-    for answer in web
-        .ask(Request::View {
-            path: f.path,
-            version: Some(f.version),
-            group: false,
-        })
-        .await
-    {
+    for answer in web.ask(request).await {
         if let pigeon_proto::Response::Said { message } = &answer
             && message.id == "view-ready"
             && let Some(Arg::Text(copy)) = message.args.get("path")

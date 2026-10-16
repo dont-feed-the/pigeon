@@ -67,7 +67,9 @@ pub async fn drop(d: &Daemon, path: &Path, confirmed: bool) -> Vec<Response> {
         return vec![warning, preview];
     }
     let _busy = g.busy.lock().await;
-    crate::evict::set_target(&g, &prefix, true);
+    if let Err(error) = crate::evict::set_target(&g, &prefix, true) {
+        return vec![problem("internal-error", &[], Some(error))];
+    }
     let freed = match crate::evict::free_with(&g, &d.device, &prefix, &d.tracer, false).await {
         Ok(f) => f,
         Err(e) => return vec![problem("internal-error", &[], Some(e))],

@@ -13,6 +13,8 @@ publish.workspace = true
 lab = ["pigeon-sys/lab"]
 # Trace events for checking runs against TLA+ (12 §12.3, ADR 0008).
 tla-trace = ["pigeon-core/tla-trace"]
+# ADR 0025: opt-in task inspection in debug builds only.
+tokio-console = ["pigeon-telemetry/tokio-console", "tokio/tracing"]
 
 [dependencies]
 notify-rust.workspace = true
@@ -32,13 +34,14 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
+tempfile.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "net", "fs", "signal"] }
 toml_edit.workspace = true
 tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [dev-dependencies]
 hegeltest.workspace = true
-tempfile.workspace = true
 
 [lints]
 workspace = true

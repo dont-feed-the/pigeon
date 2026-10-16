@@ -98,16 +98,17 @@ fn a_time_between_two_saves_restores_the_first() {
 
     // Each round left a trace of spans in the telemetry directory (12 §12.2).
     let lines = pigeon_telemetry::tail(&a1.home.join("state/telemetry"), 1000);
-    let spans: Vec<serde_json::Value> = lines
-        .iter()
-        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
-        .filter_map(|v| {
-            v["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
-                .as_object()
-                .cloned()
-        })
-        .map(serde_json::Value::Object)
-        .collect();
+    let mut spans = Vec::new();
+    for line in &lines {
+        let Ok(batch) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        for resource in batch["resourceSpans"].as_array().into_iter().flatten() {
+            for scope in resource["scopeSpans"].as_array().into_iter().flatten() {
+                spans.extend(scope["spans"].as_array().into_iter().flatten().cloned());
+            }
+        }
+    }
     let in_a_round = |s: &serde_json::Value| {
         spans.iter().any(|r| {
             r["name"] == "round" && r["traceId"] == s["traceId"] && r["spanId"] == s["parentSpanId"]
@@ -117,6 +118,6 @@ fn a_time_between_two_saves_restores_the_first() {
         spans
             .iter()
             .any(|s| s["name"] == "capture" && in_a_round(s)),
-        "{lines:?}"
+        "capture must be a child of a round in the exported SDK spans"
     );
 }

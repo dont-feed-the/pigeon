@@ -42,18 +42,21 @@ fn local_published_protected_then_free_and_keep() {
     let all = [&lap, &c1, &c2];
 
     let folder = root.join("folder");
-    std::fs::create_dir_all(folder.join("sub")).unwrap();
+    std::fs::create_dir_all(folder.join("sub/2019")).unwrap();
     let big: Vec<u8> = (0u32..300_000)
         .map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8)
         .collect();
-    std::fs::write(folder.join("sub/big.bin"), &big).unwrap();
+    std::fs::write(folder.join("sub/2019/big.bin"), &big).unwrap();
     std::fs::write(folder.join("a.txt"), b"hello\n").unwrap();
     let f = folder.to_str().unwrap();
     let created = pigeon(&lap, &["create", "Family", f, "--k", "2", "--name", "lap"]);
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
 
     let s = until(&lap, State::Local, &all);
-    assert!(s.versions.iter().any(|v| v.path == "sub/big.bin"), "{s:?}");
+    assert!(
+        s.versions.iter().any(|v| v.path == "sub/2019/big.bin"),
+        "{s:?}"
+    );
 
     join(&lap, &c1, &all);
     until(&lap, State::Published, &all);
@@ -90,7 +93,7 @@ fn local_published_protected_then_free_and_keep() {
         other => panic!("machines: {other:?}"),
     }
 
-    let sub = folder.join("sub");
+    let sub = folder.join("sub/2019");
     let freed = pigeon(&lap, &["free", sub.to_str().unwrap()]);
     assert_eq!(
         said(&freed, "free-result", "safe").as_deref(),
@@ -107,12 +110,16 @@ fn local_published_protected_then_free_and_keep() {
     let web = common::web::login(&lap);
     let files = common::web::page(&web, "/files");
     assert!(
-        files.contains("sub: Safe, 1 file; its space is freed") && files.contains("/files/keep"),
+        files.contains("sub: Safe, 1 file") && !files.contains("Waiting for 1 file"),
         "{files}"
     );
+    // The nested page offers actions for this scope; the parent does not
+    // promise that intentionally freed files will download themselves.
     // The folder's page lists its file; the file's page its version.
     let listed = common::web::page(&web, &format!("/folder?path={}", sub.display()));
-    assert!(listed.contains("sub/big.bin: Safe"), "{listed}");
+    assert!(listed.contains("sub/2019/big.bin: Safe"), "{listed}");
+    assert!(listed.contains("action=\"/files/free\"") && listed.contains("action=\"/files/keep\""));
+    assert!(listed.contains(&format!("name=\"folder\" value=\"{}\"", sub.display())));
     let file = common::web::page(
         &web,
         &format!("/file?path={}", sub.join("big.bin").display()),
@@ -148,6 +155,39 @@ fn local_published_protected_then_free_and_keep() {
         &all,
     );
     assert_eq!(std::fs::read(sub.join("big.bin")).unwrap(), big);
+
+    // A later child Keep overrides its parent's Free, without bringing
+    // back a sibling; the persisted exception also covers future files.
+    let parent = folder.join("sub");
+    std::fs::create_dir_all(parent.join("2020")).unwrap();
+    std::fs::write(parent.join("2020/sibling.txt"), b"stay freed\n").unwrap();
+    eventually(
+        || {
+            pigeon(&lap, &["status", parent.join("2020/sibling.txt").to_str().unwrap()])
+            .iter().any(|r| matches!(r, Response::Status(report) if report.versions.iter().any(|v| v.path == "sub/2020/sibling.txt" && v.state == State::Protected)))
+        },
+        "sibling not safe",
+        &all,
+    );
+    pigeon(&lap, &["free", parent.to_str().unwrap()]);
+    eventually(
+        || !sub.join("big.bin").exists() && !parent.join("2020/sibling.txt").exists(),
+        "parent not freed",
+        &all,
+    );
+    pigeon(&lap, &["keep", sub.to_str().unwrap()]);
+    eventually(
+        || sub.join("big.bin").exists(),
+        "child Keep lost to parent Free",
+        &all,
+    );
+    assert_eq!(std::fs::read(sub.join("big.bin")).unwrap(), big);
+    assert!(!parent.join("2020/sibling.txt").exists());
+    let local = std::fs::read_to_string(folder.join(".git/pigeon/freed.json")).unwrap();
+    assert!(
+        local.contains("sub/2019") && local.contains("false"),
+        "{local}"
+    );
 
     let history = pigeon(&lap, &["history", folder.join("a.txt").to_str().unwrap()]);
     match history.as_slice() {

@@ -28,7 +28,28 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(40)) {
+    match tc.draw(gs::integers::<u8>().max_value(46)) {
+        46 => Request::Capacity,
+        45 => Request::ViewSuggestion {
+            proposal: text(tc),
+            path: text(tc),
+        },
+        43 => Request::FolderRules {
+            folder: maybe_text(tc),
+        },
+        44 => Request::SetFolderRule {
+            folder: text(tc),
+            rule: match tc.draw(gs::integers::<u8>().max_value(2)) {
+                0 => pigeon_proto::policy::Change::Inherit,
+                1 => pigeon_proto::policy::Change::Owned { person: text(tc) },
+                _ => pigeon_proto::policy::Change::AddOnly {
+                    stewards: (0..tc.draw(gs::integers::<u8>().max_value(3)))
+                        .map(|_| text(tc))
+                        .collect(),
+                },
+            },
+        },
+        42 => Request::Health,
         0 => Request::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -84,6 +105,7 @@ fn request(tc: &TestCase) -> Request {
         },
         35 => Request::Leave,
         36 => Request::Held,
+        41 => Request::AllowDebug { peer: text(tc) },
         40 => Request::Refound {
             repository: flag(tc).then(|| text(tc)),
         },
@@ -189,7 +211,13 @@ fn version(tc: &TestCase) -> VersionStatus {
 }
 
 fn response(tc: &TestCase) -> Response {
-    match tc.draw(gs::integers::<u8>().max_value(19)) {
+    match tc.draw(gs::integers::<u8>().max_value(20)) {
+        20 => Response::FolderRules(Box::new(pigeon_proto::policy::Report {
+            root: text(tc),
+            rules: Vec::new(),
+            people: Vec::new(),
+            can_edit: flag(tc),
+        })),
         0 => Response::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },
@@ -233,6 +261,7 @@ fn response(tc: &TestCase) -> Response {
                     name: text(tc),
                     device: text(tc),
                     custodian: flag(tc),
+                    recovery: flag(tc),
                     heard_at: maybe_text(tc),
                     this_device: flag(tc),
                 })
@@ -267,6 +296,9 @@ fn response(tc: &TestCase) -> Response {
                 .map(|_| PersonEntry {
                     name: text(tc),
                     admin: flag(tc),
+                    this_person: flag(tc),
+                    recovery_recommended: flag(tc),
+                    recovery_refresh_recommended: flag(tc),
                     machines: (0..tc.draw(gs::integers::<u8>().max_value(2)))
                         .map(|_| text(tc))
                         .collect(),
@@ -315,6 +347,7 @@ fn response(tc: &TestCase) -> Response {
                     not_safe: tc.draw(gs::integers::<u64>()),
                     state: state(tc),
                     freed: flag(tc),
+                    arriving: tc.draw(gs::integers::<u64>()),
                 })
                 .collect(),
         },
@@ -378,6 +411,7 @@ fn an_envelope_is_one_line(tc: TestCase) {
 fn requests_round_trip(tc: TestCase) {
     let sent: Vec<Envelope<Request>> = (0..tc.draw(gs::integers::<u8>().max_value(6)))
         .map(|i| Envelope {
+            traceparent: None,
             id: u64::from(i),
             body: request(&tc),
         })
@@ -442,7 +476,11 @@ fn responses_round_trip(tc: TestCase) {
     decoder.push(&encode(3, &r).unwrap());
     assert_eq!(
         decoder.next_line::<Response>().unwrap(),
-        Some(Envelope { id: 3, body: r })
+        Some(Envelope {
+            id: 3,
+            body: r,
+            traceparent: None
+        })
     );
 }
 

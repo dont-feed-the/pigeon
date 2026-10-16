@@ -41,8 +41,10 @@ the separate-network evidence.
 
 ## Release gates
 
-The M3 release candidate is 0.4.0. It remains untagged until it passes CI on both
-platforms, installation/uninstallation checks and the relay scenario.
+The M3 release candidate was tagged v0.4.0 after its branch checks passed.
+Its tag-specific checks and publication failures are recorded below; it
+was not published. The M4 rollup carries the repairs and requires its own
+hosted checks on both platforms, installation/uninstallation and relay.
 The Homebrew tap initially points to the already published alpha; the
 release workflow replaces its formula after publishing the candidate.
 CI also installs the tap's real published binaries on macOS, and the
@@ -93,3 +95,31 @@ regressions cover source drift, provenance, failed builds, archive escapes
 and credential stripping on download redirects. This avoids treating an
 evicted cache as a reason to use stock git-annex. The repaired workflow
 still needs its own green run.
+## Publication retry and the service account
+
+The annotated v0.4.0 tag remains at fdf6e0f. Its archive builds, personal
+installation and git-annex proofs passed, but release run 38856608114
+stopped at the actual backup-service doctor call before publishing assets.
+The workflow called the local client as root while the service socket is
+owned by pigeon. `net/socket.rs` admits exactly the socket owner's UID;
+a different account is correctly refused, including root. This test command
+was wrong; the account check is retained.
+
+The corrected release test first verifies the other-account refusal, then
+runs doctor as pigeon and checks key ownership and preserved data on
+uninstall. A retry resolves the original annotated version tag, checks its
+manifest and builds its exact commit, including the matching pinned
+annex source; its tag-specific CI gates still apply. A newer workflow's
+commit cannot substitute for the tag's programs or satisfy those gates.
+The `release-target` regression proves this across a later workflow version
+and rejects a wrong version and malformed tag inputs. All fifteen packaging
+regressions and actionlint 1.7.12 pass. A cross-UID local probe could not
+start because this workspace is an unprivileged UID 1000 without chown;
+it is not counted as a pass. The corrected hosted service check must pass
+before publication. No immutable release tag is moved.
+
+Only the release matching main's workspace version updates latest and the
+Homebrew tap; historical retries publish versioned assets without making
+an older installer current. The unpublished development patch stack is combined into the 0.5.0
+candidate, following the user’s request for one current-main CI run. The
+failed v0.4.0 tag is retained without moving it or waiving its failed check.

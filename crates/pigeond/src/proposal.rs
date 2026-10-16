@@ -80,7 +80,7 @@ pub async fn base(g: &Group, commit: &str) -> Result<Option<String>, Error> {
 }
 
 /// Whether `commit`, named as `device`'s, is a proposal to keep.
-async fn valid(g: &Group, device: &str, commit: &str) -> Result<bool, Error> {
+pub(crate) async fn valid(g: &Group, device: &str, commit: &str) -> Result<bool, Error> {
     let raw = g.git.object(commit).await?;
     if !pigeon_core::sig::verify(&raw).is_ok_and(|d| d.0 == device) {
         return Ok(false);
@@ -93,6 +93,18 @@ async fn valid(g: &Group, device: &str, commit: &str) -> Result<bool, Error> {
         return Ok(false);
     };
     let after = g.git.tree(commit).await?;
+    let before = g
+        .lock()
+        .engine
+        .base(std::slice::from_ref(&base))
+        .map(|v| v.tree.clone());
+    if before.is_none_or(|before| {
+        pigeon_core::authority::delta(&before, &after)
+            .iter()
+            .any(|p| pigeon_core::authority::is_pigeon_path(p))
+    }) {
+        return Ok(false);
+    }
     let verdict = crate::merge::judge_proposal(g, &raw, &base, &after).await?;
     Ok(matches!(verdict, Verdict::Refused(Refusal::NotAllowed(_))))
 }

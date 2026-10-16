@@ -112,29 +112,29 @@ pub async fn serve_socket(net: Arc<Net>, listener: UnixListener) {
 /// holds 104 bytes on macOS and 108 on Linux, the final NUL included.
 const MAX_SOCKET_PATH: usize = 100;
 
-/// A short symbolic link next to `pigeond`'s socket for remotedaemon's
-/// socket, when that path is too long to connect to; `None` if it is not.
-fn short_link(own: &Path, group: &str, socket: &Path) -> std::io::Result<Option<PathBuf>> {
+struct ShortSocket {
+    path: PathBuf,
+    _directory: tempfile::TempDir,
+}
+
+/// A private, short alias for remotedaemon's socket. The daemon's own
+/// parent can already be near sun_path's limit. Each registration owns a
+/// different directory, so an old helper cannot unlink a newer alias.
+fn short_link(socket: &Path) -> std::io::Result<Option<ShortSocket>> {
     if socket.as_os_str().len() <= MAX_SOCKET_PATH {
         return Ok(None);
     }
-    let name: String = group
-        .chars()
-        .filter(char::is_ascii_alphanumeric)
-        .take(16)
-        .collect();
-    // Named after this daemon's own socket too: daemons that share a
-    // directory (the lab's, a test's) must not replace each other's link.
-    let stem = own
-        .file_stem()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let link = own.with_file_name(format!("{stem}-annex-{name}.sock"));
-    if link.symlink_metadata().is_ok() {
-        std::fs::remove_file(&link)?;
-    }
-    std::os::unix::fs::symlink(socket, &link)?;
-    Ok(Some(link))
+    // /tmp is a short POSIX path on both supported platforms. TempDir
+    // creates it with mode 0700 and removes it on every return path.
+    let directory = tempfile::Builder::new()
+        .prefix("pigeon-ipc-")
+        .tempdir_in("/tmp")?;
+    let path = directory.path().join("annex.sock");
+    std::os::unix::fs::symlink(socket, &path)?;
+    Ok(Some(ShortSocket {
+        path,
+        _directory: directory,
+    }))
 }
 
 fn problem(code: &str, details: Option<String>) -> Response {
@@ -177,6 +177,8 @@ async fn client(net: Arc<Net>, stream: UnixStream) -> Result<(), NetError> {
             decoder.push(&buf[..n]);
         };
         let id = request.id;
+        let mut span = pigeon_telemetry::remote_span("request", request.traceparent.as_deref());
+        span.set("device", net.node.device_id());
         match request.body {
             Request::Hello { .. } => {
                 let hello = Response::Hello {
@@ -193,9 +195,8 @@ async fn client(net: Arc<Net>, stream: UnixStream) -> Result<(), NetError> {
                     return reply(&mut wr, id, &problem("not-a-pigeon-repository", None)).await;
                 };
                 let addresses = net.directory.addresses(&device);
-                let opened = net
-                    .node
-                    .open_annex_stream(&device, &repo.group, addresses)
+                let opened = span
+                    .in_scope(net.node.open_annex_stream(&device, &repo.group, addresses))
                     .await;
                 let (mut send, mut recv) = match opened {
                     Ok(s) => s,
@@ -232,6 +233,30 @@ async fn client(net: Arc<Net>, stream: UnixStream) -> Result<(), NetError> {
                 let (a, b) = tokio::join!(up, down);
                 tracing::debug!(peer = %device, ms = started.elapsed().as_millis(),
                     up = ?a, down = ?b, "connect-ended");
+                if let Ok(n) = &a {
+                    pigeon_telemetry::counter(
+                        "pigeon.transfer.bytes",
+                        *n,
+                        &[
+                            ("direction", "sent"),
+                            ("peer", &device),
+                            ("path", "unknown"),
+                            ("group", &repo.group),
+                        ],
+                    );
+                }
+                if let Ok(n) = &b {
+                    pigeon_telemetry::counter(
+                        "pigeon.transfer.bytes",
+                        *n,
+                        &[
+                            ("direction", "received"),
+                            ("peer", &device),
+                            ("path", "unknown"),
+                            ("group", &repo.group),
+                        ],
+                    );
+                }
                 a?;
                 b?;
                 return Ok(());
@@ -248,25 +273,66 @@ async fn client(net: Arc<Net>, stream: UnixStream) -> Result<(), NetError> {
                         .unwrap_or_else(|| repo.git_dir.clone())
                         .join(path);
                 }
-                let link = short_link(&net.socket_path, &repo.group, &path)?;
-                let target = link.clone().unwrap_or(path);
+                let link = short_link(&path)?;
+                let target = link.as_ref().map_or(path, |link| link.path.clone());
                 let registration = net.listeners.register(&repo.group, target);
                 reply(&mut wr, id, &Response::Listening).await?;
                 while rd.read(&mut buf).await.map(|n| n > 0).unwrap_or(false) {}
                 net.listeners.unregister(&repo.group, registration);
-                if let Some(link) = link {
-                    let _ = std::fs::remove_file(link);
-                }
+                drop(link);
                 return Ok(());
             }
             other => match &net.loops {
                 Some(loops) => {
-                    for response in loops.request(other).await {
+                    for response in span.in_scope(loops.request(other)).await {
                         reply(&mut wr, id, &response).await?;
                     }
                 }
                 None => reply(&mut wr, id, &problem("not-in-this-build", None)).await?,
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, reason = "socket regression fixtures")]
+    use super::*;
+    use std::os::unix::{
+        fs::{PermissionsExt, symlink},
+        net::{UnixListener, UnixStream},
+    };
+
+    #[test]
+    fn long_socket_alias_is_private_connectable_and_owned_by_one_registration() {
+        let short = tempfile::tempdir_in("/tmp").unwrap();
+        let server = short.path().join("server.sock");
+        let listener = UnixListener::bind(&server).unwrap();
+        let long = short.path().join("long-parent-".repeat(12));
+        std::fs::create_dir(&long).unwrap();
+        let original = long.join("remote.sock");
+        symlink(&server, &original).unwrap();
+        assert!(original.as_os_str().len() > MAX_SOCKET_PATH);
+        let first = short_link(&original).unwrap().unwrap();
+        let second = short_link(&original).unwrap().unwrap();
+        assert_ne!(first.path, second.path);
+        assert!(second.path.as_os_str().len() <= MAX_SOCKET_PATH);
+        assert_eq!(
+            std::fs::metadata(second.path.parent().unwrap())
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o700
+        );
+        let old_path = first.path.clone();
+        drop(first);
+        assert!(!old_path.exists());
+        let stream = UnixStream::connect(&second.path).unwrap();
+        let _accepted = listener.accept().unwrap();
+        drop(stream);
+        let path = second.path.clone();
+        drop(second);
+        assert!(!path.exists());
     }
 }

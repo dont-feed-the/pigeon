@@ -118,19 +118,22 @@ fn a_free_name_is_never_a_tree_path_nor_a_folder_of_one(tc: TestCase) {
     let taken: BTreeSet<String> = (0..index(&tc, 6))
         .map(|_| {
             let top = pick(&tc, &names);
-            if flag(&tc) {
-                top.to_owned()
+            let top = if flag(&tc) {
+                top.to_lowercase()
             } else {
-                format!("{top}/x")
-            }
+                top.to_owned()
+            };
+            if flag(&tc) { top } else { format!("{top}/x") }
         })
         .collect();
     let base = pick(&tc, &["MANIFEST.tsv", ".deleted"]);
     let name = free_name(base, &taken);
     assert!(name.starts_with(base));
     for p in &taken {
+        let folded_path = pigeon_core::names::fold(p);
+        let folded_name = pigeon_core::names::fold(&name);
         assert!(
-            p != &name && !p.starts_with(&format!("{name}/")),
+            folded_path != folded_name && !folded_path.starts_with(&format!("{folded_name}/")),
             "{p} {name}"
         );
     }

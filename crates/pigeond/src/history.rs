@@ -13,40 +13,132 @@ use pigeon_core::roster::{DeviceId, Edit, Role as DeviceRole, apply, may_sign};
 use pigeon_proto::Response;
 use pigeon_proto::api::{self, Arg, VersionStatus};
 
-use crate::api::{problem, relative};
+use crate::api::problem;
 use crate::daemon::Daemon;
 use crate::git::pointer_key;
 use crate::group::Group;
 use crate::status::msg;
 use crate::util::rfc3339;
 
+#[cfg(test)]
+mod tests;
+
 fn text(s: &str) -> Arg {
     Arg::Text(s.to_owned())
 }
 
-/// The versions of `rel` in `main`'s history, newest first, each with the
-/// commit that saved it, among the last 100 that touch it.
-pub async fn versions(g: &Group, rel: &str) -> Vec<(String, String)> {
-    let out = g
-        .git
-        .run(&["rev-list", "--max-count=100", "refs/heads/main", "--", rel])
-        .await
-        .unwrap_or_default();
-    let mut keys: Vec<(String, String)> = Vec::new();
-    for c in out.lines() {
-        let Some(blob) = g.git.blob(&format!("{c}:{rel}")).await else {
-            continue;
-        };
-        let Some(key) = pointer_key(&blob) else {
-            continue;
-        };
-        if let Some(last) = keys.last_mut()
-            && last.1 == key
-        {
-            c.clone_into(&mut last.0);
-            continue;
+/// A catalogue path for read-only commands. Bare repositories have no
+/// working files: resolve their virtual paths lexically, without reading
+/// similarly named repository state files or requiring parent folders.
+pub(crate) fn relative(g: &Group, path: &Path) -> Option<String> {
+    if g.worktree.is_some() {
+        return crate::api::relative(g, path);
+    }
+    let rel = path.strip_prefix(&g.git_dir).ok()?;
+    let mut parts = Vec::new();
+    for part in rel.components() {
+        match part {
+            std::path::Component::Normal(part) => parts.push(part.to_str()?),
+            std::path::Component::CurDir => {}
+            _ => return None,
         }
-        keys.push((c.to_owned(), key));
+    }
+    (!parts.is_empty()).then(|| parts.join("/"))
+}
+
+/// Current history followed by the verified archived histories named by
+/// signed refounding trailers. Each archive gets its own in-memory judge.
+/// Successful immutable tips are cached without changing the live fold.
+pub async fn tips(g: &Group) -> Vec<String> {
+    let Some(mut tip) = g.git.rev("refs/heads/main").await else {
+        return Vec::new();
+    };
+    let mut seen = std::collections::BTreeSet::new();
+    let mut tips = Vec::new();
+    for _ in 0..32 {
+        if !seen.insert(tip.clone()) {
+            break;
+        }
+        tips.push(tip.clone());
+        let Some(root) = g.git.root(&tip).await else {
+            break;
+        };
+        let Ok(raw) = g.git.object(&root).await else {
+            break;
+        };
+        if pigeon_core::sig::verify(&raw).is_err() {
+            break;
+        }
+        let Some((old, old_main)) = crate::refound::refounded(&raw) else {
+            break;
+        };
+        if g.git
+            .rev(&crate::refound::archive_ref(&old))
+            .await
+            .as_deref()
+            != Some(&old_main)
+            || g.git.root(&old_main).await.as_deref() != Some(&old)
+        {
+            break;
+        }
+        if !g.lock().verified_archives.contains(&old_main) {
+            let judge = g.history_judge(&old);
+            if !crate::verify::judge(&judge, None, &old_main)
+                .await
+                .is_ok_and(|j| j.accepted.as_deref() == Some(&old_main))
+            {
+                break;
+            }
+            g.lock().verified_archives.insert(old_main.clone());
+        }
+        tip = old_main;
+    }
+    tips
+}
+
+/// The versions of `rel`, newest first, across main and its verified
+/// archive chain, among the last 100 commits touching the path.
+pub async fn versions(g: &Group, rel: &str) -> Vec<(String, String)> {
+    let mut remaining = 100;
+    let mut keys: Vec<(String, String)> = Vec::new();
+    let mut last_mode = None;
+    for tip in tips(g).await {
+        if remaining == 0 {
+            break;
+        }
+        let limit = format!("--max-count={remaining}");
+        let out = g
+            .git
+            .run(&["rev-list", &limit, &tip, "--", rel])
+            .await
+            .unwrap_or_default();
+        for c in out.lines() {
+            remaining -= 1;
+            let Some(blob) = g.git.blob(&format!("{c}:{rel}")).await else {
+                continue;
+            };
+            let Some(key) = pointer_key(&blob) else {
+                continue;
+            };
+            let Some(mode) = g
+                .git
+                .tree(c)
+                .await
+                .ok()
+                .and_then(|tree| tree.get(rel).map(|entry| entry.mode.clone()))
+            else {
+                continue;
+            };
+            if let Some(last) = keys.last_mut()
+                && last.1 == key
+                && last_mode.as_ref() == Some(&mode)
+            {
+                c.clone_into(&mut last.0);
+            } else {
+                keys.push((c.to_owned(), key));
+                last_mode = Some(mode);
+            }
+        }
     }
     keys
 }
@@ -122,6 +214,11 @@ pub async fn remove_device(d: &Daemon, name: &str) -> Vec<Response> {
     else {
         return vec![problem("unknown-computer", &[("name", text(name))], None)];
     };
+    let recovery = doc
+        .roster
+        .devices
+        .get(&id)
+        .is_some_and(|d| d.role == DeviceRole::Recovery);
     let change = [Edit::RemoveDevice(id.clone())];
     if id.0 == d.device || !may_sign(&doc.roster, &DeviceId(d.device.clone()), &change) {
         return vec![problem("not-allowed", &[], None)];
@@ -133,7 +230,14 @@ pub async fn remove_device(d: &Daemon, name: &str) -> Vec<Response> {
     }
     d.wake.notify_one();
     vec![Response::Said {
-        message: msg("removed-computer", &[("name", text(name))]),
+        message: msg(
+            if recovery {
+                "revoked-sheet"
+            } else {
+                "removed-computer"
+            },
+            &[("name", text(name))],
+        ),
     }]
 }
 
@@ -173,6 +277,9 @@ pub async fn doctor(d: &Daemon, _details: bool) -> Vec<Response> {
     }
     if pigeon_sys::lab::LAB {
         out.push(progress(msg("doctor-lab-build", &[])));
+    }
+    if let Err(detail) = crate::doctor::helper(&d.env).await {
+        out.push(problem("transport-helper-unavailable", &[], Some(detail)));
     }
     for g in d.groups() {
         if crate::status::disk_full(&g) {
@@ -221,9 +328,12 @@ pub async fn doctor(d: &Daemon, _details: bool) -> Vec<Response> {
     }
     match bad {
         Some(p) => out.push(p),
-        None => out.push(Response::Said {
-            message: msg("doctor-ok", &[]),
-        }),
+        None if !out.iter().any(|r| matches!(r, Response::Problem(_))) => {
+            out.push(Response::Said {
+                message: msg("doctor-ok", &[]),
+            });
+        }
+        None => {}
     }
     out
 }
@@ -247,8 +357,9 @@ fn line(program: &str, found: &str, minimum: &str) -> Response {
     ))
 }
 
-/// `pigeon debug bundle`: this device's part, as one JSON file (12).
-pub async fn debug_bundle(d: &Daemon) -> Vec<Response> {
+/// This computer’s local diagnostic snapshot (12).
+pub async fn snapshot(d: &Daemon) -> serde_json::Value {
+    pigeon_telemetry::flush();
     let now = crate::util::now();
     let log = d
         .dirs
@@ -274,7 +385,7 @@ pub async fn debug_bundle(d: &Daemon) -> Vec<Response> {
             "main": g.git.rev("refs/heads/main").await,
         }));
     }
-    let bundle = serde_json::json!({
+    serde_json::json!({
         "format": 1,
         "device": d.device,
         "time": rfc3339(now),
@@ -282,11 +393,22 @@ pub async fn debug_bundle(d: &Daemon) -> Vec<Response> {
         "groups": groups,
         "log_tail": tail,
         "telemetry_tail": pigeon_telemetry::tail(&d.dirs.state.join("telemetry"), 500),
-    });
+    })
+}
+
+/// `pigeon debug bundle`: this computer's local part, saved privately.
+pub async fn debug_bundle(d: &Daemon) -> Vec<Response> {
+    let bundle = snapshot(d).await;
+    write_bundle(d, &bundle)
+}
+
+/// Saves a diagnostic bundle locally; no network exporter reads it.
+pub fn write_bundle(d: &Daemon, bundle: &serde_json::Value) -> Vec<Response> {
+    let now = crate::util::now();
     let dir = crate::api::bundle_dir(d);
     let path = dir.join(format!("bundle-{now}.json"));
     let _ = std::fs::create_dir_all(&dir);
-    match serde_json::to_vec_pretty(&bundle)
+    match serde_json::to_vec_pretty(bundle)
         .map_err(std::io::Error::other)
         .and_then(|b| crate::util::write_private(&path, &b))
     {

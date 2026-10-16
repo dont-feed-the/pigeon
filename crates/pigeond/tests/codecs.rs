@@ -154,6 +154,7 @@ fn roster_doc(tc: &TestCase) -> RosterDoc {
             group: word(tc),
             k: tc.draw(gs::integers::<u32>().min_value(1).max_value(5)),
             retention_days: tc.draw(gs::integers::<u32>().max_value(3650)),
+            telemetry_device: tc.draw(gs::booleans()).then(|| device_id(tc)),
             relay: tc
                 .draw(gs::booleans())
                 .then(|| format!("https://{}.example.org", word(tc))),
@@ -313,6 +314,7 @@ fn a_new_persons_id_is_fresh(tc: TestCase) {
         group: "g".into(),
         k: 1,
         retention_days: 30,
+        telemetry_device: None,
         relay: None,
         persons: BTreeMap::new(),
         devices: BTreeMap::new(),
@@ -416,7 +418,7 @@ fn recovery_sheets_round_trip(tc: TestCase) {
             .collect(),
     };
     let code = encode(&sheet);
-    let text = format!("pigeon recovery sheet\n  {code}\nKeep it safe.\n");
+    let text = format!("pigeon recovery sheet\nGroup: pgr1-not-a-code\n  {code}\nKeep it safe.\n");
     assert_eq!(decode(&text), Some(sheet));
     let at = tc.draw(
         gs::integers::<usize>()

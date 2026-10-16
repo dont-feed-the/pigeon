@@ -224,7 +224,7 @@ async fn driver_traces_free_keep_and_thin() {
         pigeond::thin::rethin_for_lab(&l.g, &dev(1).0, &l.t).await,
         1
     );
-    pigeond::evict::set_target(&l.g, "", true);
+    pigeond::evict::set_target(&l.g, "", true).unwrap();
     assert_eq!(
         pigeond::evict::free(&l.g, &dev(1).0, "", &l.t)
             .await
@@ -233,7 +233,7 @@ async fn driver_traces_free_keep_and_thin() {
         1
     );
     assert!(!l.wt.join("a.txt").exists());
-    pigeond::evict::set_target(&l.g, "", false);
+    pigeond::evict::set_target(&l.g, "", false).unwrap();
     assert_eq!(pigeond::evict::keep(&l.g, &l.t).await.unwrap(), 1);
     assert_eq!(read(&l, "a.txt"), "protected contents\n");
 }

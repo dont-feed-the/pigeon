@@ -9,6 +9,7 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+pigeon-telemetry.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 pigeon-core.workspace = true
@@ -18,6 +19,8 @@ pigeon-sys.workspace = true
 toml_edit.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+
+tempfile.workspace = true
 
 [lints]
 workspace = true

@@ -90,7 +90,9 @@ pub async fn accept(g: &Group, me: &str, tracer: &Tracer) -> bool {
     let fetches = peers
         .iter()
         .map(|(id, _, _)| async move { (id.clone(), fetch(g, id).await) });
+    let mut history_queue = crate::telemetry::Queue::start(&g.id, "history", "fetch", peers.len());
     for (id, result) in crate::util::join_all(fetches.collect()).await {
+        history_queue.complete(1);
         match result {
             Ok(()) => {
                 g.lock().heard.insert(id.clone(), crate::util::now());
@@ -156,6 +158,7 @@ pub async fn accept(g: &Group, me: &str, tracer: &Tracer) -> bool {
                 g.reload_roster().await;
                 crate::trace_roster::moved(tracer, g, "Merge", ours.as_deref()).await;
                 tracing::info!(group = %g.id, peer = %id, commit = %target, "accepted");
+                crate::telemetry::accepted(g, ours.as_deref(), &target).await;
                 moved = true;
             }
             Err(e) => tracing::warn!(group = %g.id, error = %e, "accept-ref-failed"),
@@ -270,7 +273,9 @@ pub async fn place(g: &Group, me: &str) -> usize {
     match g.role {
         Role::Laptop => {
             let mut failed = g.lock().unreachable.clone();
-            for (work, lacking) in crate::admission::items(g, me, &keys).await {
+            let items = crate::admission::items(g, me, &keys).await;
+            let mut queue = crate::telemetry::Queue::start(&g.id, "protect", "send", items.len());
+            for (work, lacking) in items {
                 let Work::Protect { key, size, .. } = work else {
                     continue;
                 };
@@ -297,10 +302,13 @@ pub async fn place(g: &Group, me: &str) -> usize {
                         }
                     }
                 }
+                queue.complete(1);
             }
         }
         Role::Custodian => {
             let plan = crate::admission::plan(g, me, &keys).await;
+            let mut queue =
+                crate::telemetry::Queue::start(&g.id, "protect", "receive", plan.admitted.len());
             left = plan
                 .deferred
                 .iter()
@@ -326,6 +334,7 @@ pub async fn place(g: &Group, me: &str) -> usize {
                         left += size;
                     }
                 }
+                queue.complete(1);
             }
         }
     }

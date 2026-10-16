@@ -7,7 +7,8 @@
 //! fields hold; content matches a key exactly when its size and SHA-256 are
 //! the key's; a safe path stays below the export directory and every path
 //! with a `..`, `.git` or absolute component is refused; a pointer gives back
-//! its key; a free name is never a tree path nor a folder of one.
+//! its key; a free name is never a tree path nor a folder of one under
+//! portable case folding. Each law runs 1000 generated cases.
 
 use std::collections::BTreeSet;
 
@@ -94,12 +95,14 @@ pub fn exported(path: &str) -> bool {
 }
 
 /// `base`, or `base-2`, `base-3`…: the first name that is neither a path of
-/// `taken` nor the top folder of one.
+/// `taken` nor the top folder of one, under portable case folding.
 pub fn free_name(base: &str, taken: &BTreeSet<String>) -> String {
+    let taken: BTreeSet<String> = taken.iter().map(|p| crate::names::fold(p)).collect();
     let busy = |n: &str| {
+        let n = crate::names::fold(n);
         taken
             .iter()
-            .any(|p| p == n || p.strip_prefix(n).is_some_and(|r| r.starts_with('/')))
+            .any(|p| p == &n || p.strip_prefix(&n).is_some_and(|r| r.starts_with('/')))
     };
     let mut n = 1u64;
     let mut name = base.to_owned();

@@ -172,7 +172,7 @@ jobs:
       - name: formatted with rustfmt
         run: cargo fmt --all --check
       - name: clippy without warnings
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: cargo clippy --workspace --all-targets --features pigeond/tokio-console --locked -- -D warnings
       - name: tests, laws and the git-annex contract tests (13 §13.6)
         run: cargo test --workspace --locked --no-fail-fast
       - name: the format fixtures, golden and next-format files (ADR 0048, 13 §13.6)
@@ -278,16 +278,17 @@ jobs:
         # Seconds on ubuntu-24.04 (run 38843601664): held 386; suggestions
         # 254, unsettled 21, restore 16, view 8, drop 7; people 198, resolve
         # 152; slice 161, leave 85, refound 55; status_pending is newer. Every
-        # lab test is in a shard.
+        # lab test is in a shard. Recovery, capacity and interface regressions
+        # join these shards rather than starting another workflow.
         run: |
           case "$SHARD" in
-            0) tests="held" ;;
-            1) tests="suggestions unsettled restore view drop status_pending" ;;
-            2) tests="people resolve" ;;
-            3) tests="slice leave refound" ;;
+            0) tests="held recovery_print" ;;
+            1) tests="suggestions unsettled restore view drop status_pending capacity folder_rules restore_folder" ;;
+            2) tests="people resolve health debug_consent" ;;
+            3) tests="slice leave refound backup_history refound_restart recovery_sheet invitation_resume" ;;
           esac
           all=$(grep -l '^#!\[cfg(feature = "lab")\]' crates/pigeond/tests/*.rs | xargs -n1 basename | sed 's/\.rs$//' | sort)
-          listed=$(echo held suggestions unsettled restore view drop status_pending people resolve slice leave refound | tr ' ' '\n' | sort)
+          listed=$(echo held recovery_print suggestions unsettled restore view drop status_pending capacity folder_rules restore_folder people resolve health debug_consent slice leave refound backup_history refound_restart recovery_sheet invitation_resume | tr ' ' '\n' | sort)
           [ "$all" = "$listed" ] || { echo "::error::a lab test of pigeond is in no shard of ci.yml"; diff <(echo "$all") <(echo "$listed"); exit 1; }
           args=(); for t in $tests; do args+=(--test "$t"); done
           cargo test -p pigeond --features lab --locked --no-fail-fast "${args[@]}"

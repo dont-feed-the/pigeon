@@ -87,6 +87,10 @@ Exit:
 - install and uninstall are tested in CI;
 - Mario, Guillaume and Laurent run pigeon on their own machines.
 
+M3 implementation and dogfood assurance: [reach report](reports/reach-4.md).
+The v0.4.0 candidate was tagged but stopped before publication; the M4
+rollup includes the release repairs. It is not reported as a published release.
+
 ## M4. For people: v0.5
 
 - `pigeon-web` (ADR 0021) shows plain words and one headline status
@@ -101,6 +105,11 @@ Exit:
 
 Exit: a usability test with people who did not build pigeon, which sets the
 thresholds of [06 §6.7](spec/06-status.md).
+
+Implementation and local exit evidence: [M4 report](reports/people-5.md).
+Five independent agent usability sessions are accepted by the user for
+this gate, with initial failures and focused retakes recorded. The 0.5.0
+candidate still requires combined hosted checks and publication.
 
 ## M5. Deletion and scrub: v0.6
 

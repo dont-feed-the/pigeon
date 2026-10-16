@@ -17,10 +17,13 @@ use std::time::Duration;
 use pigeon_proto::Response;
 use pigeon_proto::api::Arg;
 
-use crate::api::{problem, relative};
+use crate::api::problem;
 use crate::daemon::Daemon;
 use crate::group::Group;
 use crate::install::Put;
+
+mod folder;
+mod path;
 
 fn text(s: &str) -> Arg {
     Arg::Text(s.to_owned())
@@ -69,12 +72,15 @@ pub async fn restore(
     let Some(g) = d.group_at(path).or_else(|| d.group_at(path.parent()?)) else {
         return vec![problem("not-in-group", &[], None)];
     };
-    let Some(rel) = relative(&g, path) else {
+    let Some(rel) = self::path::relative(&g, path) else {
         return vec![problem("not-in-group", &[], None)];
     };
     let _busy = g.busy.lock().await;
     if let Err(e) = crate::capture::capture(&g, &d.device, &d.tracer).await {
-        tracing::warn!(group = %g.id, error = %e, "capture-failed");
+        return vec![problem("internal-error", &[], Some(e.to_string()))];
+    }
+    if folder::is_folder(&g, &rel).await {
+        return folder::restore(d, &g, &rel, version, at).await;
     }
     let mut versions = crate::history::versions(&g, &rel).await;
     versions.reverse();
@@ -92,12 +98,12 @@ pub async fn restore(
             found
         }
     };
-    let n = version.unwrap_or(1);
+    let n = version.unwrap_or(versions.len().try_into().unwrap_or(u64::MAX));
     let wanted = usize::try_from(n)
         .ok()
         .and_then(|i| i.checked_sub(1))
         .and_then(|i| versions.get(i));
-    let Some((_, key)) = wanted.cloned() else {
+    let Some((commit, key)) = wanted.cloned() else {
         let args = [("path", text(&rel)), ("version", Arg::Number(n as i64))];
         return vec![problem("no-such-version", &args, None)];
     };
@@ -116,11 +122,22 @@ pub async fn restore(
         Err(code) => return vec![problem(code, &[], None)],
     }
     let current = versions.last().map(|(_, k)| k.clone());
-    match crate::install::put(&g, &rel, &key, current.as_deref(), None, &d.tracer).await {
-        Ok(Put::Done(_) | Put::Raced) => {}
-        Ok(Put::InUse) => {
-            let e = "the file is being written; try again".to_owned();
-            return vec![problem("internal-error", &[], Some(e))];
+    let mode = g
+        .git
+        .tree(&commit)
+        .await
+        .ok()
+        .and_then(|t| t.get(&rel).map(|e| e.mode.clone()));
+    let Some(mode) = mode else {
+        return vec![problem("internal-error", &[], None)];
+    };
+    if !self::path::parents_clear(&g, &rel) {
+        return vec![problem("restore-in-use", &[("path", text(&rel))], None)];
+    }
+    match crate::install::put_restore(&g, &rel, &key, current.as_deref(), &mode, &d.tracer).await {
+        Ok(Put::Done(_)) => {}
+        Ok(Put::InUse | Put::Raced) => {
+            return vec![problem("restore-in-use", &[("path", text(&rel))], None)];
         }
         Err(e) => return vec![problem("internal-error", &[], Some(e))],
     }
