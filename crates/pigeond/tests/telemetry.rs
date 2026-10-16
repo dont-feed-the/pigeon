@@ -188,8 +188,17 @@ fn real_acceptance_protection_paths_and_work_batches_reach_the_backend() {
     );
     let _ = pigeon(&alice, &["free", folder.join("Media").to_str().unwrap()]);
     eventually(
-        || !file.exists(),
-        "actual free before requested keep",
+        || {
+            // Thin/install also move the path aside briefly. Only the
+            // skip-worktree bit distinguishes an indexed Free from that window.
+            !file.exists()
+                && std::process::Command::new("git")
+                    .current_dir(&folder)
+                    .args(["ls-files", "-v", "--", "Media/exact.bin"])
+                    .output()
+                    .is_ok_and(|out| out.status.success() && out.stdout.starts_with(b"S "))
+        },
+        "actual indexed free before requested keep",
         &[&alice, &backup],
     );
     let _ = pigeon(&alice, &["keep", folder.join("Media").to_str().unwrap()]);
@@ -228,21 +237,23 @@ fn real_acceptance_protection_paths_and_work_batches_reach_the_backend() {
                         .as_array()
                         .is_some_and(|p| p.iter().any(|p| attribute(p, "path", "direct")))
                 });
+            let queue_classes: std::collections::BTreeSet<_> =
+                metric(&records, "pigeon.queue.depth")
+                    .iter()
+                    .flat_map(|m| m["gauge"]["dataPoints"].as_array().into_iter().flatten())
+                    .flat_map(|p| p["attributes"].as_array().into_iter().flatten())
+                    .filter(|a| a["key"] == "class")
+                    .filter_map(|a| a["value"]["stringValue"].as_str())
+                    .collect();
             let queues = ["capture", "history", "protect", "download"]
                 .iter()
-                .all(|class| {
-                    metric(&records, "pigeon.queue.depth").iter().any(|m| {
-                        m["gauge"]["dataPoints"]
-                            .as_array()
-                            .is_some_and(|p| p.iter().any(|p| attribute(p, "class", class)))
-                    })
-                });
+                .all(|class| queue_classes.contains(class));
             let flags = [protected, peer_acceptance, direct, queues];
             let mut previous = last_flags.lock().unwrap();
             if *previous != flags {
                 let _ = writeln!(
                     std::io::stderr(),
-                    "operator metric conditions [protection, acceptance, direct, queues]: {flags:?}"
+                    "operator metric conditions [protection, acceptance, direct, queues]: {flags:?}; queue classes: {queue_classes:?}"
                 );
                 *previous = flags;
             }
