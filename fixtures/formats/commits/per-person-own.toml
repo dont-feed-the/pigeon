@@ -1,0 +1,12 @@
+about = "Ben's laptop adds a file to Work/ben, the folder per-person Work gives Ben."
+verdict = "accepted"
+roster = "known/group-per-person.toml"
+signer = 2
+message = "pigeon: capture"
+
+[before]
+"Shared/a.jpg" = "/annex/objects/SHA256E-s7--b236e74d49a5152abeec27d7e176a2e7976aec064f3389ef0b4a69ed1cfc5378.jpg\n"
+"Ana/notes.txt" = "/annex/objects/SHA256E-s5--ab5aa97074c454a0632057e704220d9a6678fbf773a0a5806fc09b8173b07309.txt\n"
+
+[after]
+"Work/ben/shot-001.blend" = "/annex/objects/SHA256E-s10--77a9172242d265415f2beb7d420d125e5f3de91fc7c64ca01a15bee8658ee0b8.blend\n"

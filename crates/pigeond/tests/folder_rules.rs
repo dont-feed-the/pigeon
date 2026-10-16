@@ -235,3 +235,108 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
     assert!(!root.join("cara-files/private-draft.txt").exists());
     drop(writer);
 }
+
+/// A per-person folder (04 §4.3, rules 2): setting it raises the group's
+/// rules once the admin confirms; then each person's folder in it is
+/// theirs, so Bob's files in `src/bob` are shared and his file in Ana's
+/// `src/ana` waits as a suggestion.
+#[test]
+fn a_per_person_folder_gives_each_person_theirs() {
+    let _one = SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some((_tmp, root, sockets)) = dirs() else {
+        return;
+    };
+    let lap = start(&root, sockets.path(), "lap");
+    let bob = start(&root, sockets.path(), "bob");
+    let folder = root.join("Film");
+    let src = folder.join("src");
+    std::fs::create_dir_all(src.join("ana")).unwrap();
+    std::fs::write(src.join("ana/plan.txt"), b"Ana's plan\n").unwrap();
+    let created = pigeon(
+        &lap,
+        &[
+            "create",
+            "Film",
+            folder.to_str().unwrap(),
+            "--k",
+            "1",
+            "--name",
+            "ana-laptop",
+        ],
+    );
+    assert!(said(&created, "created", "group").is_some(), "{created:?}");
+    let code = invitation(&lap);
+    let other = root.join("bob-film");
+    let joined = pigeon(
+        &bob,
+        &[
+            "join",
+            &code,
+            "--person",
+            "Bob",
+            other.to_str().unwrap(),
+            "--name",
+            "bob-laptop",
+        ],
+    );
+    assert!(said(&joined, "joined", "group").is_some(), "{joined:?}");
+    eventually_within(
+        90,
+        || std::fs::read(other.join("src/ana/plan.txt")).is_ok_and(|b| b == b"Ana's plan\n"),
+        "initial data not installed",
+        &[&lap, &bob],
+    );
+
+    let src_path = src.to_str().unwrap();
+    let asked = pigeon(&lap, &["folder-rule", src_path, "--per-person"]);
+    assert!(
+        asked
+            .iter()
+            .any(|r| matches!(r, Response::Problem(p) if p.code == "needs-confirmation")),
+        "{asked:?}"
+    );
+    assert!(
+        !report(&lap, &src).rules[0].per_person,
+        "saved without confirmation"
+    );
+    let saved = pigeon(&lap, &["folder-rule", src_path, "--per-person", "--yes"]);
+    assert!(
+        said(&saved, "folder-rule-result", "folder").is_some(),
+        "{saved:?}"
+    );
+    let mine = report(&lap, &src.join("bob"));
+    assert_eq!(mine.rules[0].owner.as_deref(), Some("bob"), "{mine:?}");
+    assert!(!mine.rules[0].direct);
+    eventually_within(
+        90,
+        || report(&bob, &other.join("src")).rules[0].per_person,
+        "per-person rule not shared",
+        &[&lap, &bob],
+    );
+
+    std::fs::create_dir_all(other.join("src/bob")).unwrap();
+    std::fs::write(other.join("src/bob/shot.txt"), b"Bob's shot\n").unwrap();
+    std::fs::write(other.join("src/ana/bob.txt"), b"Bob in Ana's folder\n").unwrap();
+    eventually_within(
+        120,
+        || std::fs::read(src.join("bob/shot.txt")).is_ok_and(|b| b == b"Bob's shot\n"),
+        "Bob's own file not shared",
+        &[&lap, &bob],
+    );
+    eventually_within(
+        120,
+        || {
+            pigeon(&lap, &["suggestions"])
+                .iter()
+                .any(|r| matches!(r, Response::Proposals { proposals } if !proposals.is_empty()))
+        },
+        "Bob's file in Ana's folder not suggested",
+        &[&lap, &bob],
+    );
+    assert!(
+        !src.join("ana/bob.txt").exists(),
+        "Bob changed Ana's folder"
+    );
+}

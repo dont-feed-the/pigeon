@@ -24,6 +24,9 @@ pub enum Request {
         folder: String,
         /// New rule or inheritance.
         rule: crate::policy::Change,
+        /// The person confirmed raising the group's `rules` (ADR 0048).
+        #[serde(default)]
+        confirmed: bool,
     },
     /// Group health from accepted state and signed reports (ADR 0025).
     Health,
