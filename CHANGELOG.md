@@ -4,7 +4,7 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
-## Unreleased
+## 0.5.2 — 2026-10-16
 
 ### Changed
 
@@ -23,6 +23,11 @@ the second number, and every other pull request the third.
 
 ### Fixed
 
+- The Linux system-install check captures the expected refusal from another
+  account on the CLI's error channel before checking the service user.
+- macOS release validation now accounts for Git refreshing a visible file
+  after Keep is interrupted, while still checking journal recovery and
+  rejecting unsafe transitions.
 - Leaving waits for a peer that learned the device's membership; an older
   roster cannot acknowledge a removal it has never seen.
 - Storage sharing leaves git-annex lock files and retention timestamps intact;

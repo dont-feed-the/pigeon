@@ -1,8 +1,9 @@
 # Report: directory aliases during in-place rejoining
 
-16 October 2026. Version 0.5.1 is the publication candidate for the completed
+16 October 2026. Version 0.5.1 was a publication candidate for the completed
 [M4 implementation](people-5.md). The v0.5.0 tag remains immutable at
-`d8ede326c86c9140420a6b7a833fe63457346766`; it was not published.
+`d8ede326c86c9140420a6b7a833fe63457346766`; it was not published. The 0.5.1 tag also stopped before publication;
+see the [0.5.2 correction](release-052.md).
 
 ## What stopped v0.5.0
 
