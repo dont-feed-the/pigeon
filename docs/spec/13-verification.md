@@ -31,12 +31,12 @@ actual `CaptureTransaction`, `AnnexDrop` and `Purge` actions (ADR 0073). They re
 execution-length and small-domain bounds under their stated assumptions;
 TLC evaluates those assumptions against each covered configuration. The
 drop proof requires no lock expiry, safe checks, and no trusted or log-only
-copies. Only its covered `AnnexDrop_design4` finite check moves to the
-audit set. Expiry-enabled, ranked, negative, liveness and implementation
+copies. The covered `AnnexDrop_design4` and `Purge_full3` finite checks run
+in the audit set. Expiry-enabled, ranked, negative, liveness and implementation
 trace checks retain their existing frequency. See
 [model-proofs.md](../model-proofs.md) for exact claims and measurements. The [purge proof](../purge-proof.md)
-checks the planned protocol; purge is not yet coded, and its finite checks
-retain their frequency during evaluation.
+checks the planned protocol; purge is not yet coded. Its smaller positive
+case stays in the fast set, alongside its negative protocol cases.
 
 | Model | Invariants; liveness | Specified in |
 |---|---|---|

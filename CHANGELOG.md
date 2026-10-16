@@ -8,6 +8,8 @@ the second number, and every other pull request the third.
 
 ### Changed
 
+- Nightly verification uses the parameterized purge safety proof; its large
+  finite cross-check runs weekly, on releases and on request.
 - Pull requests and main pushes use Ubuntu runners. Version tags also run
   macOS validation, including installation, rollback and uninstall checks.
 
