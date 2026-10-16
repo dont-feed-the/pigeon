@@ -85,12 +85,14 @@ impl Git {
 
     /// Runs `git args…` within `timeout`.
     pub async fn run_for(&self, args: &[&str], timeout: Duration) -> Result<String, Error> {
+        let _lease = self.purge_gate.before_mutation(args).await;
         let _mutation = self.purge_gate.mutation(args);
         Ok(self.repo.run(args, None, timeout).await?.text())
     }
 
     /// Runs `git args…` with `input` on its stdin.
     pub async fn run_in(&self, args: &[&str], input: &[u8]) -> Result<String, Error> {
+        let _lease = self.purge_gate.before_mutation(args).await;
         let _mutation = self.purge_gate.mutation(args);
         let out = self
             .repo
@@ -101,6 +103,7 @@ impl Git {
 
     /// Whether `git args…` exits 0.
     pub async fn ok(&self, args: &[&str]) -> bool {
+        let _lease = self.purge_gate.before_mutation(args).await;
         let _mutation = self.purge_gate.mutation(args);
         matches!(
             self.repo

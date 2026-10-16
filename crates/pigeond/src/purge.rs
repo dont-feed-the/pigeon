@@ -254,7 +254,9 @@ async fn evaluate(g: &Group, me: &str, allow_drop: bool) -> Result<(), crate::gi
     }
     if allow_drop {
         for key in released {
-            if g.git.purge_gate.policy().waiting {
+            let _lease = g.git.purge_gate.erasure().await;
+            let policy = g.git.purge_gate.policy();
+            if policy.waiting || !policy.released.contains(&key) {
                 return Err(invalid("ref mutation interrupted purge drops"));
             }
             if crate::custody::present(g, &key).await.is_none() {

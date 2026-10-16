@@ -22,6 +22,9 @@ pub struct Gate {
     writers: AtomicU64,
     reading: RwLock<Reading>,
     pending: Arc<ContentPolicy>,
+    // Metadata writers share leases so parallel fetches stay parallel.
+    // Physical erasure takes the exclusive lease through its child exit.
+    updates: Arc<tokio::sync::RwLock<()>>,
 }
 
 impl Default for Gate {
@@ -38,11 +41,31 @@ impl Default for Gate {
                 waiting: true,
                 released: Default::default(),
             }),
+            updates: Default::default(),
         }
     }
 }
 
 impl Gate {
+    /// Wrapped retained-ref writers may run together, but cannot cross an
+    /// actual forced drop. Acquire this before invalidating or spawning Git.
+    pub async fn before_mutation(
+        &self,
+        args: &[&str],
+    ) -> Option<tokio::sync::OwnedRwLockReadGuard<()>> {
+        if dirty(args) {
+            Some(self.updates.clone().read_owned().await)
+        } else {
+            None
+        }
+    }
+
+    /// Keep through the drop child's exit. The caller must recheck the
+    /// published policy after acquiring this lease, including its key.
+    pub async fn erasure(&self) -> tokio::sync::OwnedRwLockWriteGuard<()> {
+        self.updates.clone().write_owned().await
+    }
+
     /// Whether purge metadata has required a complete reading.
     pub fn armed(&self) -> bool {
         self.armed.load(Ordering::SeqCst)
@@ -95,22 +118,25 @@ impl Gate {
     /// mutation. Immutable objects and replaceable status refs do not dirty
     /// a completed reference scan.
     pub fn mutation(self: &Arc<Self>, args: &[&str]) -> Option<Mutation> {
-        let dirty = match args.first().copied() {
-            Some("fetch") => true,
-            Some("update-ref") => args.iter().any(|arg| {
-                *arg == "--stdin"
-                    || *arg == "refs/heads/main"
-                    || arg.starts_with(crate::proposal::PREFIX)
-                    || arg.starts_with(crate::refound::ARCHIVE)
-            }),
-            _ => false,
-        };
-        if !dirty {
+        if !dirty(args) {
             return None;
         }
         self.writers.fetch_add(1, Ordering::SeqCst);
         self.revision.fetch_add(1, Ordering::SeqCst);
         Some(Mutation(self.clone()))
+    }
+}
+
+fn dirty(args: &[&str]) -> bool {
+    match args.first().copied() {
+        Some("fetch") => true,
+        Some("update-ref") => args.iter().any(|arg| {
+            *arg == "--stdin"
+                || *arg == "refs/heads/main"
+                || arg.starts_with(crate::proposal::PREFIX)
+                || arg.starts_with(crate::refound::ARCHIVE)
+        }),
+        _ => false,
     }
 }
 
@@ -129,6 +155,32 @@ impl Drop for Mutation {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn parallel_metadata_writers_and_physical_erasure_cannot_overlap() {
+        use std::future::{Future, poll_fn};
+        use std::task::Poll;
+        let gate = Arc::new(Gate::default());
+        let args = ["fetch", "peer"];
+        let first = gate.before_mutation(&args).await;
+        let second = gate.before_mutation(&args).await;
+        let mut erase = Box::pin(gate.erasure());
+        assert!(poll_fn(|cx| Poll::Ready(erase.as_mut().poll(cx).is_pending())).await);
+        drop(first);
+        assert!(poll_fn(|cx| Poll::Ready(erase.as_mut().poll(cx).is_pending())).await);
+        drop(second);
+        let erase = erase.await;
+        let mut writer = Box::pin(gate.before_mutation(&args));
+        assert!(poll_fn(|cx| Poll::Ready(writer.as_mut().poll(cx).is_pending())).await);
+        // Object reads and status publication need no retained-ref lease.
+        assert!(
+            gate.before_mutation(&["cat-file", "--batch"])
+                .await
+                .is_none()
+        );
+        drop(erase);
+        assert!(writer.await.is_some());
+    }
 
     #[test]
     fn a_scan_cannot_publish_across_a_writer_or_its_cancellation() {
