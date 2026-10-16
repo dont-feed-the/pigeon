@@ -114,7 +114,10 @@ pub fn s2() -> Scenario {
         wait(l.sees(&a, Kind::Protected), 120),
         wait(l.lacks(&a), 60),
         expect(l.no_pointers(docs)),
-        expect(l.sees(&a, Kind::Protected)),
+        // The rename makes the path absent before the journal/index
+        // transition ends. Status may conservatively call that in-flight
+        // deletion local; require the same protected outcome once settled.
+        wait(l.sees(&a, Kind::Protected), 120),
     ];
     scenario(
         "S2",

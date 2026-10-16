@@ -49,7 +49,7 @@ fresh Group, preserving dirty and staged bytes; unknown/torn markers stop
 capture without being replaced. These are process-crash tests, not power-loss
 observations.
 
-The signed Git integration suite has 20 tests at this checkpoint. The physical purge
+The signed Git integration suite has 21 tests at this checkpoint. The physical purge
 test drops an actual historical annex object only after signed completion,
 and preserves current objects, private staged entries and working bytes.
 It also removes the provider pool name, keeps another group's hard link,
@@ -92,8 +92,8 @@ skip the configured month or claim physical purge completion.
 - Initial upgrade contention: different concurrent requests may split
   immutable choices and remain blocked. No retry may silently change a
   vote. Explicit refounding creates a fresh authority domain; the finite
-  model below checks this separation, while a real split-vote recovery
-  scenario and broader implementation traces still need evidence.
+  model and signed-history fixture below check this separation; actual
+  network partition recovery and broader implementation traces still need evidence.
 - Release validation on both supported runners, followed by the tag and
   publication gates. This checkpoint supplies no longitudinal test claim.
 
@@ -194,3 +194,28 @@ quorum or copy old-domain votes produce the expected safety counterexamples.
 The three-participant configuration checks the same rules with another
 possible conflicting voter. This is finite design evidence; it does not
 establish arbitrary churn, automatic recovery or daemon conformance.
+
+A signed-history fixture now drives three independent production receipt
+stores through competing accepted snapshots. Two devices choose one request
+and the third another. Reopening the stores and merging both histories keeps
+those choices and refuses activation. Mere extra requests do not produce a
+split warning; independently verified conflicting signed acknowledgements
+do. The CLI and browser explain that waiting alone cannot resolve it and
+describe explicit refounding, without offering a misleading retry button.
+
+The fixture then creates a real signed refounding genesis and new roster
+additions. Old reports cannot activate that group. Each original receipt
+store can acknowledge a fresh request under the new group while its old
+choice remains unchanged; all new signed acknowledgements permit activation.
+This is a production-adapter test with serial metadata snapshots and explicit
+signed roster additions. It is not a live network partition or a replacement
+for the separate real CLI refound/rejoin scenario.
+
+The v0.5.8 Linux S2 run recorded one immediate status assertion failure
+after the visible file disappeared; its eviction and roster traces were
+accepted by TLC. File absence can precede completion of the asynchronous
+journal/index transition. S2 now waits, with the existing 120-second bound,
+for its same final Protected condition. It still requires the unprotected
+file to remain visible, then disappear without a pointer after protection.
+The immutable v0.5.8 tag is unchanged; its one failed job is being rerun and
+the first failure is retained as evidence.

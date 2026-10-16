@@ -9,6 +9,7 @@ use std::sync::Mutex;
 struct Erase {
     calls: Mutex<Vec<pigeon_proto::Request>>,
     ready: bool,
+    split: bool,
 }
 impl Backend for Erase {
     fn request(&self, request: pigeon_proto::Request) -> Answer {
@@ -35,7 +36,10 @@ impl Backend for Erase {
                         name: "Backup <script>".into(),
                     }],
                     open_decisions: Vec::new(),
-                    problem: None,
+                    problem: self.split.then(|| Message {
+                        id: "erase-preparation-split".into(),
+                        args: Default::default(),
+                    }),
                 },
             }),
             _ => Result::Submitted {
@@ -57,6 +61,7 @@ async fn erase_get_only_previews_and_post_requires_both_form_and_history_tokens(
         let backend = Arc::new(Erase {
             calls: Mutex::new(Vec::new()),
             ready: true,
+            split: false,
         });
         let web = Web::new(backend.clone(), lang.parse().unwrap(), 4321);
         let app = web.router();
@@ -136,6 +141,7 @@ async fn unready_erase_offers_preparation_without_any_confirmation_form() {
     let backend = Arc::new(Erase {
         calls: Mutex::new(Vec::new()),
         ready: false,
+        split: false,
     });
     let web = Web::new(backend.clone(), "fr".parse().unwrap(), 4321);
     let app = web.router();
@@ -190,11 +196,48 @@ async fn unready_erase_offers_preparation_without_any_confirmation_form() {
 }
 
 #[tokio::test]
+async fn split_preparation_explains_explicit_recovery_without_retry_or_erasure_buttons() {
+    for lang in ["en", "fr"] {
+        let backend = Arc::new(Erase {
+            calls: Mutex::new(Vec::new()),
+            ready: false,
+            split: true,
+        });
+        let web = Web::new(backend.clone(), lang.parse().unwrap(), 4321);
+        let app = web.router();
+        let cookie = logged_in(&app, &web).await;
+        let html = body(
+            app.oneshot(get("/erase?path=%2FFamily%2Fold.txt", HOST, Some(&cookie)))
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert!(html.contains("pigeon refound"));
+        assert!(
+            !html.contains("erase-preparation-split"),
+            "the message must be translated"
+        );
+        assert!(!html.contains("value=\"prepare\"") && !html.contains("value=\"confirm\""));
+        assert!(
+            !html.contains("Erasing is waiting for the current computers")
+                && !html.contains("L’effacement attend la fin de la préparation")
+        );
+        assert!(matches!(
+            backend.calls.lock().unwrap().as_slice(),
+            [pigeon_proto::Request::Erase {
+                operation: Operation::Preview { .. }
+            }]
+        ));
+    }
+}
+
+#[tokio::test]
 async fn mounted_erase_keeps_review_forms_and_results_in_the_selected_peer() {
     let prefix = "/clients/selected/peer";
     let backend = Arc::new(Erase {
         calls: Mutex::new(Vec::new()),
         ready: true,
+        split: false,
     });
     let web = Web::embedded(
         backend.clone(),

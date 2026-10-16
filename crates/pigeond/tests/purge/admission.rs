@@ -215,3 +215,188 @@ async fn restoring_a_repository_or_losing_its_receipts_cannot_forget_a_signed_fe
     assert!(g.lock().admission_error.is_none());
     assert_eq!(g.lock().admission_acknowledgements.len(), 1);
 }
+
+async fn request(w: &World, base: &str, at: i64) -> (Request, String) {
+    let request = Request {
+        format: 1,
+        kind: AdmissionKind::Upgrade,
+        base: base.into(),
+        device: None,
+    };
+    let mut tree = w.git.tree(base).await.unwrap();
+    tree.insert(
+        request.path().unwrap(),
+        blob(&w.git, request.render().unwrap().as_bytes()).await,
+    );
+    let head = commit(&w.git, &tree, &[base], at, 1).await;
+    (request, head)
+}
+
+#[tokio::test]
+async fn split_initial_choices_survive_restart_and_recover_only_in_a_new_authority_domain() {
+    // Serial accepted snapshots simulate two partitioned metadata views;
+    // each participant has its own production Store outside the repository.
+    // Signed reports below carry exactly the choice exposed by that Store.
+    let w = world().await;
+    pigeond::git::set_signer(key(3));
+    let original_roster = w.g.roster().unwrap();
+    let state = tempfile::tempdir().unwrap();
+    let paths: Vec<_> = (1..=3)
+        .map(|n| state.path().join(format!("peer-{n}.toml")))
+        .collect();
+    let (a, a_head) = request(&w, &w.genesis, 1).await;
+    move_main(&w, &a_head, &w.genesis).await;
+    for n in [1_u8, 3] {
+        Store::open(paths[usize::from(n - 1)].clone())
+            .round(&w.g, &dev(n).0)
+            .await;
+        assert!(w.g.lock().admission_error.is_none());
+        assert_eq!(
+            w.g.lock().admission_acknowledgements[0].request,
+            a.id().unwrap()
+        );
+        report(&w, &a_head, &a, n).await;
+    }
+    let mut branch = w.base.clone();
+    branch.insert("Shared/other.txt".into(), pointer(&w.git, 1).await);
+    let b_base = commit(&w.git, &branch, &[&w.genesis], 2, 1).await;
+    let (b, b_head) = request(&w, &b_base, 3).await;
+    assert_ne!(a.id().unwrap(), b.id().unwrap());
+    move_main(&w, &b_head, &a_head).await;
+    Store::open(paths[1].clone()).round(&w.g, &dev(2).0).await;
+    assert!(w.g.lock().admission_error.is_none());
+    assert_eq!(
+        w.g.lock().admission_acknowledgements[0].request,
+        b.id().unwrap()
+    );
+    let merged = merge::merge(&w.g, &a_head, &b_head).await.unwrap().unwrap();
+    move_main(&w, &merged, &b_head).await;
+    assert!(
+        pigeond::erase_state::readiness(&w.g, &merged)
+            .await
+            .unwrap()
+            .problem
+            .is_none(),
+        "an additional unacknowledged request alone does not establish split votes"
+    );
+    for n in 1_u8..=3 {
+        Store::open(paths[usize::from(n - 1)].clone())
+            .round(&w.g, &dev(n).0)
+            .await;
+        assert!(w.g.lock().admission_error.is_none());
+        let chosen = if n == 2 { &b } else { &a };
+        assert_eq!(
+            w.g.lock().admission_acknowledgements[0].request,
+            chosen.id().unwrap()
+        );
+        report(&w, &merged, chosen, n).await;
+    }
+    assert!(!pigeond::admission_publish::round(&w.g).await.unwrap());
+    let readiness = pigeond::erase_state::readiness(&w.g, &merged)
+        .await
+        .unwrap();
+    assert!(!readiness.ready);
+    assert_eq!(readiness.problem.unwrap().id, "erase-preparation-split");
+    assert_eq!(w.g.roster().unwrap().roster.rules, 1);
+    assert_eq!(
+        pigeond::membership::read(&w.g, &merged)
+            .await
+            .unwrap()
+            .requests
+            .len(),
+        2
+    );
+
+    let old_group = w.genesis.clone();
+    let tree = pigeond::refound::new_tree(&w.g, &merged, &dev(1))
+        .await
+        .unwrap();
+    let message = format!("pigeon: refound\n\nPigeon-Refound: {old_group} {merged}");
+    let new_root = commit_with(&w.git, &tree, &[], (10, 1), &message).await;
+    w.g.git
+        .update_ref(&pigeond::refound::archive_ref(&old_group), &merged, None)
+        .await
+        .unwrap();
+    w.g.git
+        .update_ref("refs/heads/main", &new_root, Some(&merged))
+        .await
+        .unwrap();
+    let g = Group::open(&new_root, &w.g.git_dir, &GitEnv::default())
+        .await
+        .unwrap();
+    let w = World {
+        g,
+        genesis: new_root.clone(),
+        base: tree,
+        ..w
+    };
+    merge::judge_history(&w.g, std::slice::from_ref(&new_root))
+        .await
+        .unwrap();
+    assert!(w.g.lock().engine.accepted(&new_root));
+    assert!(
+        pigeond::purge_state::active(&w.g, &new_root)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        pigeond::membership::read(&w.g, &new_root)
+            .await
+            .unwrap()
+            .requests
+            .is_empty()
+    );
+    // Explicit signed additions stand for the peers' new invitations;
+    // old votes are not copied into this authority-domain tree.
+    let mut tree = w.base.clone();
+    tree.insert(
+        ROSTER.into(),
+        blob(
+            &w.git,
+            roster_file::render(&original_roster).unwrap().as_bytes(),
+        )
+        .await,
+    );
+    let joined = commit(&w.git, &tree, &[&new_root], 11, 1).await;
+    move_main(&w, &joined, &new_root).await;
+    let (fresh, requested) = request(&w, &joined, 12).await;
+    move_main(&w, &requested, &joined).await;
+    assert!(
+        !pigeond::admission_publish::round(&w.g).await.unwrap(),
+        "old signed votes cannot activate the new group"
+    );
+    for n in 1_u8..=3 {
+        let path = &paths[usize::from(n - 1)];
+        Store::open(path.clone()).round(&w.g, &dev(n).0).await;
+        assert!(w.g.lock().admission_error.is_none());
+        assert_eq!(
+            w.g.lock().admission_acknowledgements[0].request,
+            fresh.id().unwrap()
+        );
+        let ledger = pigeond::admission_receipts::Ledger::load(path).unwrap();
+        assert_eq!(
+            ledger.upgrade(&old_group),
+            Some(
+                if n == 2 {
+                    b.id().unwrap()
+                } else {
+                    a.id().unwrap()
+                }
+                .as_str()
+            )
+        );
+        assert_eq!(
+            ledger.upgrade(&new_root),
+            Some(fresh.id().unwrap().as_str())
+        );
+        report(&w, &requested, &fresh, n).await;
+    }
+    assert!(pigeond::admission_publish::round(&w.g).await.unwrap());
+    assert_eq!(w.g.roster().unwrap().roster.rules, 2);
+    let current = w.g.git.rev("refs/heads/main").await.unwrap();
+    let readiness = pigeond::erase_state::readiness(&w.g, &current)
+        .await
+        .unwrap();
+    assert!(readiness.ready && readiness.problem.is_none());
+}

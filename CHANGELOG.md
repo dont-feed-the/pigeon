@@ -26,6 +26,8 @@ the second number, and every other pull request the third.
   after its backup machines rejoin.
 - New versions keep arriving while erasure is prepared or old groups are
   checked. Routine peer metadata fetches no longer interrupt those transfers.
+- If computers agree to conflicting erasure preparations, the preview
+  explains why it cannot proceed and how an admin can recover explicitly.
 
 ## 0.5.8 — 2026-10-16
 

@@ -103,6 +103,7 @@ pub const PROBLEMS: &[&str] = &[
 /// Every message of the catalogue.
 pub const MESSAGES: &[Entry] = &[
     e("erase-needs-backup", &[]),
+    e("erase-preparation-split", &[]),
     e("problem-erase-needs-backup", &[]),
     e("scrub-report-time", &["when"]),
     e("scrub-no-pass", &[]),

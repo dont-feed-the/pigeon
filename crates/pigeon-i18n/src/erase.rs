@@ -8,6 +8,9 @@ fn readiness(r: &Renderer, state: &Readiness) -> Vec<String> {
     let mut out = Vec::new();
     if let Some(problem) = &state.problem {
         out.push(r.text(problem));
+        if problem.id == "erase-preparation-split" {
+            return out;
+        }
     }
     if state.ready {
         out.push(r.id("erase-ready"));

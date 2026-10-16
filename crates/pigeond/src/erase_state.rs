@@ -43,12 +43,14 @@ pub async fn readiness(g: &Group, main: &str) -> Result<Readiness, Error> {
     } else {
         BTreeSet::new()
     };
-    let requests: Vec<_> = if state.upgrade.is_none() {
-        state.requests.values().take(1).collect()
+    let initial = state.upgrade.is_none();
+    let requests: Vec<_> = if initial {
+        state.requests.values().collect()
     } else {
         state.pending.values().collect()
     };
-    for request in requests {
+    let mut voted_requests = 0;
+    for (index, request) in requests.into_iter().enumerate() {
         let kind = match &request.device {
             Some(device) => pigeon_core::admission::Kind::Custodian(device.clone()),
             None => pigeon_core::admission::Kind::Upgrade,
@@ -64,12 +66,20 @@ pub async fn readiness(g: &Group, main: &str) -> Result<Readiness, Error> {
         };
         let required = view.required();
         let offered = crate::admission_publish::offers(g, main, request, &required).await?;
-        missing.extend(required.into_iter().filter(|id| !offered.contains_key(id)));
+        voted_requests += usize::from(!offered.is_empty());
+        if !initial || index == 0 {
+            missing.extend(required.into_iter().filter(|id| !offered.contains_key(id)));
+        }
+        if initial && voted_requests > 1 {
+            break;
+        }
     }
     let problem = if g.lock().admission_error.is_some() {
         Some(crate::status::msg("erase-checking", &[]))
     } else if crate::membership::configured(&roster).is_empty() {
         Some(crate::status::msg("erase-needs-backup", &[]))
+    } else if initial && voted_requests > 1 {
+        Some(crate::status::msg("erase-preparation-split", &[]))
     } else {
         None
     };

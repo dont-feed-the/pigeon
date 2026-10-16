@@ -589,6 +589,7 @@ scrub-machine = Integrity checks on { $machine }:
 problem-scrub-ledger = The integrity-check record on { $machine } could not be read. Keep it and gather a debug bundle before repairing local state.
 scrub-report-time = Reported { $when }. This observation is not refreshed by new contact.
 erase-needs-backup = Add a backup machine before preparing erasing.
+erase-preparation-split = Computers agreed to different preparations, so erasing cannot start. An admin can create a separate group with pigeon refound, invite its computers again, then prepare erasing there. The old group’s requests remain in the old group.
 problem-erase-needs-backup = Add a backup machine before preparing erasing.
 
 web-health-suggestions-unavailable = Suggestions awaiting a decision: not checked yet.

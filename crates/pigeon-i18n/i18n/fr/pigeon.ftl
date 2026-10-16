@@ -589,6 +589,7 @@ scrub-machine = Contrôles d’intégrité sur { $machine } :
 problem-scrub-ledger = L’état du contrôle d’intégrité sur { $machine } est illisible. Conservez-le et rassemblez un rapport de diagnostic avant de réparer l’état local.
 scrub-report-time = Signalé { $when }. Un nouveau contact ne met pas cette observation à jour.
 erase-needs-backup = Ajoutez une machine de sauvegarde avant de préparer l’effacement.
+erase-preparation-split = Les ordinateurs ont accepté des préparations différentes ; l’effacement ne peut donc pas commencer. Un administrateur peut créer un groupe distinct avec pigeon refound, y inviter à nouveau les ordinateurs, puis y préparer l’effacement. Les demandes de l’ancien groupe restent dans cet ancien groupe.
 problem-erase-needs-backup = Ajoutez une machine de sauvegarde avant de préparer l’effacement.
 
 web-health-suggestions-unavailable = Suggestions en attente d’une décision : pas encore vérifiées.
