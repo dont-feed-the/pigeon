@@ -93,3 +93,30 @@ regressions cover source drift, provenance, failed builds, archive escapes
 and credential stripping on download redirects. This avoids treating an
 evicted cache as a reason to use stock git-annex. The repaired workflow
 still needs its own green run.
+## Publication retry and the service account
+
+The annotated v0.4.0 tag remains at fdf6e0f. Its archive builds, personal
+installation and git-annex proofs passed, but release run 38856608114
+stopped at the actual backup-service doctor call before publishing assets.
+The workflow called the local client as root while the service socket is
+owned by pigeon. `net/socket.rs` admits exactly the socket owner's UID;
+a different account is correctly refused, including root. This test command
+was wrong; the account check is retained.
+
+The corrected release test first verifies the other-account refusal, then
+runs doctor as pigeon and checks key ownership and preserved data on
+uninstall. A retry resolves the original annotated version tag, checks its
+manifest and builds its exact commit, including the matching pinned
+annex source; its tag-specific CI gates still apply. A newer workflow's
+commit cannot substitute for the tag's programs or satisfy those gates.
+The `release-target` regression proves this across a later workflow version
+and rejects a wrong version and malformed tag inputs. All fifteen packaging
+regressions and actionlint 1.7.12 pass. A cross-UID local probe could not
+start because this workspace is an unprivileged UID 1000 without chown;
+it is not counted as a pass. The corrected hosted service check must pass
+before publication. No immutable release tag is moved.
+
+Only the release matching main's workspace version updates latest and the
+Homebrew tap; historical retries publish versioned assets without making
+an older installer current. Patch tags are published in batches with main
+held at the final version, and the next milestone waits for that publication.
