@@ -28,6 +28,7 @@ headline-capturing =
        *[other] Checking { $files } changed files; they are not safe yet.
     }
 headline-checking = The local folder could not be checked. Run: pigeon doctor
+headline-inventory-unreadable = Pigeon cannot check every saved version right now.
 headline-too-few-backups = Not safe yet: add a backup machine.
 why-capturing = This change is waiting to be captured and copied to the backup machines.
 why-too-few-backups = { $have } of { $need } backup machines are set up. Add one with: pigeon invite --backup-machine
@@ -130,7 +131,7 @@ resolved-keep-copy = Your version of { $path } is kept as { $dest }; { $path } i
 resolved-suggest-again = Your version of { $path } is suggested again.
 undo-free = Undo: pigeon keep { $folder }
 undo-keep = Undo: pigeon free { $folder }
-restore-result = { $path } is restored; the newer version stays in its history.
+restore-result = { $path } is restored on this computer; the newer version stays in its history. Check Home for sharing and protection, and Suggestions if approval is needed.
 recovery-sheet-text = { $sheet }
 recovered = This computer is back in { $group }. Its files arrive from the backup machines; then remove the lost computers, revoke the used recovery sheet with remove-computer, and print a new sheet.
 not-shared-kind = { $path }: not shared ({ $kind })
@@ -170,6 +171,7 @@ confirm-yes = yes
 confirm-leave = Remove this computer from the group? Its files stay in the folder, but it stops sharing them. [y/N]
 confirm-refound = Refound the group with you as its only admin? It becomes a new group: every other member joins it again by an invitation from you, and the old history stays readable. [y/N]
 confirm-join-refounded = { $group } was refounded by { $name } on { $date }: joining it means accepting { $name } as its admin. Join? [y/N]
+web-join-refounded = { $group } was refounded by { $name } on { $date }. Joining it means accepting { $name } as its admin. Choose Join to continue.
 confirm-held-share = Delete the files of { $batch } for everyone? They stay in the history. [y/N]
 
 ## Problems (10 §10.6, ADR 0023): problem-<code>, and hint-<code> when there is one
@@ -455,3 +457,31 @@ problem-recovery-needs-backup = Add a backup machine before preparing a recovery
 problem-join-incomplete = The new group was verified, but recovery could not finish. Restart pigeon to finish the recorded operation. Your old history is kept.
 problem-repository-busy = This repository has an unfinished file update. Let pigeon finish it, or restart pigeon before trying recovery again.
 problem-folder-not-empty = This folder is not empty and does not belong to the group being recovered. Choose an empty folder or the existing repository of the refounded group.
+
+# Group health from replicated state (ADR 0025).
+web-health = Group health
+web-health-current = Current files
+web-health-retained = Older versions being kept
+web-health-unavailable = Not checked yet; pigeon may be busy.
+web-health-no-report = No report yet.
+web-health-counts = Protected: { $protected } · Waiting for backups: { $published } · Only on this computer: { $local } · Not checked recently: { $uncertain } · Missing: { $missing } · Erased: { $erased }
+web-health-size = { $mb } MB
+web-health-kb = { $kb } kB
+web-health-bytes = { $bytes } B
+web-health-no-limit = not set
+web-health-paper = A paper key keeps no files.
+web-health-disk = Stored: { $used } · Free: { $free } · Limit: { $limit } · Reserved: { $reserve }
+web-health-full = This disk needs more free space.
+web-health-lost = This backup reports its repository lost.
+web-health-checking = Checking stored files; these copies do not count as protected yet.
+web-health-queue = Waiting to send: { $send } · To receive: { $receive } · Waiting for space: { $deferred } items, { $missing } needed
+web-health-report = Storage and work report: { $when }.
+web-health-report-old = Storage and work report is not recent: { $when }. New contact does not update these figures.
+web-health-suggestions = Suggestions awaiting a decision: { $count }
+web-health-repair = File contents marked for replacement copies: { $count }
+web-health-updated = View updated: { $when }. Storage figures carry their own report times.
+web-health-omitted = { $count } further file explanations are not listed here. Use Files to choose a folder.
+web-health-machines = Computers, contact and storage
+web-health-epochs = After computers were removed
+web-health-no-epochs = No content-holding computer has been removed.
+web-health-epoch = { $name } was removed: { $when }.

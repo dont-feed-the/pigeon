@@ -27,6 +27,7 @@ pub mod fold;
 pub mod folders;
 pub mod git;
 pub mod group;
+mod health;
 pub mod held;
 pub mod held_file;
 pub mod held_names;

@@ -80,9 +80,15 @@ pub async fn states(
     if keys.is_empty() {
         return Ok(Vec::new());
     }
-    let (heard, mut lost) = {
+    let (heard, mut lost, checking) = {
         let k = g.lock();
-        (k.heard.clone(), k.lost.clone())
+        let checking: BTreeSet<String> = k
+            .report_files
+            .iter()
+            .filter(|(_, r)| r.checking)
+            .map(|(id, _)| id.clone())
+            .collect();
+        (k.heard.clone(), k.lost.clone(), checking)
     };
     lost.extend(crate::report::lost(g));
     let mut peers = Vec::new();
@@ -121,7 +127,7 @@ pub async fn states(
                     heard: heard.get(id).copied().map(Time),
                     holds: held.contains(uuid),
                     has_commit: *named,
-                    checking: false,
+                    checking: checking.contains(id),
                     repository_lost: lost.contains(id),
                 })
                 .collect(),

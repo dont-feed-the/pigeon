@@ -26,6 +26,7 @@ use pigeon_i18n::Catalogue;
 
 mod actions;
 mod files;
+mod health;
 mod held;
 mod join;
 mod leave;

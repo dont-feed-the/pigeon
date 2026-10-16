@@ -11,6 +11,8 @@ use tower::ServiceExt;
 
 use crate::{Answer, Backend, Web};
 
+#[path = "tests/health.rs"]
+mod health;
 #[path = "tests/recovery.rs"]
 mod recovery;
 #[path = "tests/usability.rs"]
@@ -21,16 +23,18 @@ struct Fixed;
 impl Backend for Fixed {
     fn request(&self, request: pigeon_proto::Request) -> Answer {
         let answer = match request {
-            pigeon_proto::Request::Status { .. } => vec![Response::Status(StatusReport {
-                headline: Message {
-                    id: "headline-safe".into(),
-                    args: [("ago".to_owned(), pigeon_proto::Arg::Text("x".into()))].into(),
-                },
-                level: Level::Safe,
-                state: State::Protected,
-                versions: Vec::new(),
-                not_shared: Vec::new(),
-            })],
+            pigeon_proto::Request::Status { .. } | pigeon_proto::Request::Health => {
+                vec![Response::Status(StatusReport {
+                    headline: Message {
+                        id: "headline-safe".into(),
+                        args: [("ago".to_owned(), pigeon_proto::Arg::Text("x".into()))].into(),
+                    },
+                    level: Level::Safe,
+                    state: State::Protected,
+                    versions: Vec::new(),
+                    not_shared: Vec::new(),
+                })]
+            }
             pigeon_proto::Request::Proposals => vec![Response::Proposals {
                 proposals: vec![Suggestion {
                     id: "c0ffee".into(),

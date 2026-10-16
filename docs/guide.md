@@ -96,6 +96,21 @@ Homebrew installations use `brew services stop pigeon` and
 
 ## Open pigeon
 
+Home separates **Current files** from **Older versions being kept**.
+Editing or deleting a file does not release its older saved bytes. A
+recently saved change may be only on this computer while its previous
+version is already protected. The headline includes both inventories.
+
+Open **Machines, storage and work** for capacity and queued transfers.
+Those figures carry the time of each machine's signed report: a new
+connection does not make an old disk measurement current. A machine
+checking restored storage does not count toward protection yet. Unknown
+counts mean pigeon could not check the inventory; they do not mean zero
+files. Accepted computer removals are listed separately with their times.
+
+Restoring a version confirms its bytes on this computer. Check Home for
+sharing and protection; a change requiring approval appears in Suggestions.
+
 Run `pigeon open` to open the web interface. If the personal daemon is
 not running, this starts the copy installed beside the command line.
 The Home page says whether the files are safe. Files lists folders and

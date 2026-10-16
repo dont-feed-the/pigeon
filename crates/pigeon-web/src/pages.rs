@@ -1,7 +1,7 @@
 //! The pages (10 §10.3, ux.md §6): each opens with its one-line answer,
 //! under the five sections' navigation. Every word comes from the
-//! catalogue (ADR 0028); the pages hold no script but the one line that
-//! puts the headline the events bring in place.
+//! catalogue (ADR 0028). Minimal event handlers update Home's headline
+//! and health facts through text nodes; action results remain static.
 
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -11,6 +11,7 @@ use axum::Extension;
 use axum::extract::State;
 use axum::response::Html;
 use axum::response::sse::{Event, KeepAlive, Sse};
+use futures_util::StreamExt;
 use futures_util::stream::{self, Stream};
 use maud::{DOCTYPE, Markup, html};
 use pigeon_i18n::Message;
@@ -41,8 +42,13 @@ textarea{max-width:100%;box-sizing:border-box}\
 @media print{nav,.no-print{display:none}body{margin:0;max-width:none}.recovery-qr svg{max-width:12cm}}";
 
 /// Puts each `headline` event's text in the page's headline.
-const SCRIPT: &str = "new EventSource('/events').addEventListener('headline',\
-e=>{document.getElementById('headline').textContent=e.data})";
+const SCRIPT: &str = "const s=new EventSource('/events');\
+s.addEventListener('headline',e=>{const h=document.getElementById('headline');\
+if(h.textContent!==e.data)h.textContent=e.data});\
+s.addEventListener('health',e=>{const p=JSON.parse(e.data),h=document.getElementById('health');\
+if(!h||h.dataset.membership!==p.membership){location.reload();return}\
+for(const [id,value] of Object.entries(p.values)){const n=document.getElementById(id);\
+if(n&&n.textContent!==value)n.textContent=value}})";
 
 pub(crate) fn page(r: &Renderer, here: &str, headline: &str, body: &Markup) -> Html<String> {
     document(r, here, headline, body, here == "/")
@@ -109,13 +115,20 @@ pub async fn lines(web: &Web, r: &Renderer, request: Request) -> Vec<String> {
 }
 
 /// The headline and the lines under it of `pigeon status`.
-async fn status(web: &Web, r: &Renderer) -> (String, Vec<String>, bool) {
-    let answers = web
-        .ask(Request::Status {
-            path: None,
-            not_shared: false,
-        })
-        .await;
+async fn status(
+    web: &Web,
+    r: &Renderer,
+) -> (
+    String,
+    Vec<String>,
+    bool,
+    Option<Box<pigeon_proto::health::HealthReport>>,
+) {
+    let answers = web.ask(Request::Health).await;
+    let health = answers.iter().find_map(|answer| match answer {
+        Response::Health(report) => Some(report.clone()),
+        _ => None,
+    });
     let no_group = answers
         .iter()
         .any(|a| matches!(a, Response::Problem(p) if p.code == "not-in-group"));
@@ -129,7 +142,7 @@ async fn status(web: &Web, r: &Renderer) -> (String, Vec<String>, bool) {
     } else {
         all.split_off(1)
     };
-    (all.pop().unwrap_or_default(), rest, no_group)
+    (all.pop().unwrap_or_default(), rest, no_group, health)
 }
 
 pub(crate) fn list(items: &[String]) -> Markup {
@@ -143,14 +156,16 @@ pub async fn home(
     Extension(form): Extension<FormToken>,
 ) -> Html<String> {
     let r = web.renderer();
-    let (headline, rest, no_group) = status(&web, &r).await;
+    let (headline, rest, no_group, health) = status(&web, &r).await;
     let held = if no_group {
         html! {}
     } else {
         crate::held::section(&web, &r, &form.0).await
     };
     let body = html! {
-        (list(&rest)) (held)
+        (held)
+        @if let Some(health) = &health { (crate::health::section(&r, health)) }
+        (list(&rest))
         @if no_group {
             p { (r.id("web-setup-help")) }
             p { a href="/join" { (r.id("web-setup")) } }
@@ -249,11 +264,16 @@ pub async fn events(
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
         let r = web.renderer();
-        let (headline, _, _) = status(&web, &r).await;
-        Some((
-            Ok(Event::default().event("headline").data(headline)),
-            (web, false),
-        ))
-    });
+        let (headline, _, _, health) = status(&web, &r).await;
+        let mut events: Vec<Result<Event, Infallible>> =
+            vec![Ok(Event::default().event("headline").data(headline))];
+        if let Some(health) = health {
+            events.push(Ok(Event::default()
+                .event("health")
+                .data(crate::health::event(&r, &health))));
+        }
+        Some((events, (web, false)))
+    })
+    .flat_map(stream::iter);
     Sse::new(s).keep_alive(KeepAlive::default())
 }

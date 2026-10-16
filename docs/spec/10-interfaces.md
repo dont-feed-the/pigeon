@@ -15,6 +15,7 @@ result, progress events then a result, or a `Problem` (§10.6).
 | Request | CLI | Web | Specified in |
 |---|---|---|---|
 | `Status {path?, not_shared}` | `pigeon status [PATH] [--not-shared]` | Home; the folder view's *Not shared* list | [06](06-status.md), [07 §7.9](07-capture-and-install.md) |
+| `Health` | — | Home's headline, current and older counts, timestamped capacity and queues, suggestions and repair epochs | [12 §12.2](12-observability.md) |
 | `Create {name, folder, k, device_name}` | `pigeon create NAME` | Welcome → Create | [04 §4.1](04-roster-and-authority.md) |
 | `Invite {person, admin, custodian, name?}` | `pigeon invite [--admin] PERSON`, `pigeon invite --backup-machine [NAME]` | People → Invite someone | [09 §9.6](09-network-and-joining.md) |
 | `Join {invitation, folder, keep, name?}` | `pigeon join INVITATION [FOLDER] [--name NAME]` | Welcome → Join | [09 §9.6](09-network-and-joining.md) |

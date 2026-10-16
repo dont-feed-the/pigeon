@@ -78,26 +78,48 @@ pub fn settings(g: &Group) -> Settings {
 /// The state of each version of `main` under `prefix` (a path in the
 /// folder, `""` for all).
 pub async fn observe(g: &Group, me: &str, prefix: &str) -> Vec<Observed> {
+    observe_checked(g, me, prefix).await.unwrap_or_default()
+}
+
+async fn observe_checked(
+    g: &Group,
+    me: &str,
+    prefix: &str,
+) -> Result<Vec<Observed>, crate::git::Error> {
     let Some(main) = g.git.rev("refs/heads/main").await else {
-        return Vec::new();
+        return Err(crate::git::Error::Parse {
+            argv: vec!["main".into()],
+            detail: "accepted main unavailable".into(),
+        });
     };
     observe_at(g, me, prefix, &main).await
 }
 
-async fn observe_at(g: &Group, me: &str, prefix: &str, main: &str) -> Vec<Observed> {
-    let keys = g.git.keys(main).await.unwrap_or_default();
+async fn observe_at(
+    g: &Group,
+    me: &str,
+    prefix: &str,
+    main: &str,
+) -> Result<Vec<Observed>, crate::git::Error> {
+    let keys = g.git.keys(main).await?;
     let doc = g.roster();
     let saved = g.git.commit_time(main).await.unwrap_or(0);
     let now = crate::util::now();
     let s = settings(g);
-    let (heard, mut lost, reported) = {
+    let (heard, mut lost, reported, checking) = {
         let k = g.lock();
         let mains: BTreeMap<String, String> = k
             .report_files
             .iter()
             .filter_map(|(d, r)| Some((d.clone(), r.main.clone()?)))
             .collect();
-        (k.heard.clone(), k.lost.clone(), mains)
+        let checking: BTreeSet<String> = k
+            .report_files
+            .iter()
+            .filter(|(_, r)| r.checking)
+            .map(|(id, _)| id.clone())
+            .collect();
+        (k.heard.clone(), k.lost.clone(), mains, checking)
     };
     lost.extend(crate::report::lost(g));
     let mut peer_keys: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
@@ -141,7 +163,7 @@ async fn observe_at(g: &Group, me: &str, prefix: &str, main: &str) -> Vec<Observ
                     heard: heard.get(id).map(|t| Time(*t)),
                     holds: have.contains(uuid),
                     has_commit: named(id),
-                    checking: false,
+                    checking: checking.contains(id),
                     repository_lost: lost.contains(id),
                 })
                 .collect(),
@@ -161,7 +183,7 @@ async fn observe_at(g: &Group, me: &str, prefix: &str, main: &str) -> Vec<Observ
             level,
         });
     }
-    out
+    Ok(out)
 }
 
 fn proto_state(s: &State<String>) -> api::State {
@@ -228,24 +250,46 @@ pub(crate) fn worst<'a>(states: impl Iterator<Item = &'a State<String>>) -> api:
 
 /// The answer to `Status` for the versions under `prefix`.
 pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> StatusReport {
+    inventory_report(g, me, prefix, not_shared).await.0
+}
+
+/// Counts use the same main/ref snapshot and pending scan as the headline.
+pub(crate) struct Inventory {
+    pub current: Option<pigeon_core::health::Counts>,
+    pub retained: Option<pigeon_core::health::Counts>,
+}
+
+pub(crate) async fn inventory_report(
+    g: &Group,
+    me: &str,
+    prefix: &str,
+    not_shared: bool,
+) -> (StatusReport, Inventory) {
     let pending = crate::capture::pending(g, prefix).await;
     let pending_unreadable = pending.is_err();
     let pending = pending.unwrap_or_default();
-    let (observed, retained) = if prefix.is_empty() {
+    let (observed, retained, current_unreadable) = if prefix.is_empty() {
         match crate::retention::snapshot(g).await {
             Ok(snapshot) => {
                 let observed = match &snapshot.main {
                     Some(main) => observe_at(g, me, prefix, main).await,
-                    None => Vec::new(),
+                    None => Err(crate::git::Error::Parse {
+                        argv: vec!["main".into()],
+                        detail: "accepted main unavailable".into(),
+                    }),
                 };
+                let unreadable = observed.is_err();
+                let observed = observed.unwrap_or_default();
                 let current = observed.iter().map(|o| o.key.clone()).collect();
                 let retained = crate::retention::states(g, me, &current, &snapshot.tips).await;
-                (observed, retained)
+                (observed, retained, unreadable)
             }
-            Err(e) => (observe(g, me, prefix).await, Err(e)),
+            Err(e) => (Vec::new(), Err(e), true),
         }
     } else {
-        (observe(g, me, prefix).await, Ok(Vec::new()))
+        let observed = observe_checked(g, me, prefix).await;
+        let unreadable = observed.is_err();
+        (observed.unwrap_or_default(), Ok(Vec::new()), unreadable)
     };
     let history_unreadable = retained.is_err();
     let retained = retained.unwrap_or_default();
@@ -309,7 +353,8 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
     let peers = crate::report::problems(g);
     let held_table = crate::held_file::read(g);
     let (held, held_names) = (held_table.held().len(), held_table.names().len());
-    let level = if history_unreadable
+    let level = if current_unreadable
+        || history_unreadable
         || pending_unreadable
         || full
         || held > 0
@@ -324,6 +369,7 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
     };
     let name = |d: &str| Arg::Text(names.get(d).cloned().unwrap_or_else(|| d.to_owned()));
     let headline = match (level, &shortfall) {
+        _ if current_unreadable || history_unreadable => msg("headline-inventory-unreadable", &[]),
         _ if pending_unreadable => msg("headline-checking", &[]),
         _ if full => msg("headline-disk-full", &[]),
         _ if held > 0 => msg(
@@ -383,6 +429,17 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
         api::State::Local
     };
     let asked = !prefix.is_empty();
+    let inventory = Inventory {
+        current: (!current_unreadable && !pending_unreadable).then(|| {
+            pigeon_core::health::current(observed.iter().map(|o| (&o.path, &o.state)), &pending)
+        }),
+        retained: (!current_unreadable && !history_unreadable).then(|| {
+            retained.iter().map(pigeon_core::health::Counts::one).fold(
+                pigeon_core::health::Counts::default(),
+                pigeon_core::health::Counts::combine,
+            )
+        }),
+    };
     let mut versions: Vec<VersionStatus> = observed
         .iter()
         .filter(|o| !pending.contains(&o.path))
@@ -433,13 +490,16 @@ pub async fn report(g: &Group, me: &str, prefix: &str, not_shared: bool) -> Stat
         Level::NotSafeYet => api::Level::NotSafe,
         Level::NeedsYou => api::Level::NeedsYou,
     };
-    StatusReport {
-        headline,
-        level,
-        state: worst,
-        versions,
-        not_shared,
-    }
+    (
+        StatusReport {
+            headline,
+            level,
+            state: worst,
+            versions,
+            not_shared,
+        },
+        inventory,
+    )
 }
 
 #[cfg(test)]

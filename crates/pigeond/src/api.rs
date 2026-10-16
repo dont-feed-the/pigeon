@@ -127,6 +127,7 @@ pub(crate) fn group_of(d: &Daemon, path: &Path) -> Option<Arc<Group>> {
 
 pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
     match request {
+        Request::Health => crate::health::report(d).await,
         Request::Create {
             name,
             folder,

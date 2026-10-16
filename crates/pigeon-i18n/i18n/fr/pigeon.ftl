@@ -28,6 +28,7 @@ headline-capturing =
        *[other] Vérification de { $files } fichiers modifiés ; ils ne sont pas encore en sécurité.
     }
 headline-checking = Le dossier local n'a pas pu être vérifié. Lancez : pigeon doctor
+headline-inventory-unreadable = Pigeon ne peut pas vérifier toutes les versions enregistrées pour le moment.
 headline-too-few-backups = Pas encore en sécurité : ajoutez un ordinateur de sauvegarde.
 why-capturing = Cette modification attend d'être enregistrée et copiée sur les ordinateurs de sauvegarde.
 why-too-few-backups = { $have } ordinateurs de sauvegarde sur { $need } sont configurés. Pour en ajouter un : pigeon invite --backup-machine
@@ -130,7 +131,7 @@ resolved-keep-copy = Votre version de { $path } est gardée sous { $dest } ; { $
 resolved-suggest-again = Votre version de { $path } est suggérée à nouveau.
 undo-free = Annuler : pigeon keep { $folder }
 undo-keep = Annuler : pigeon free { $folder }
-restore-result = { $path } est restauré ; la version plus récente reste dans son historique.
+restore-result = { $path } est restauré sur cet ordinateur ; la version plus récente reste dans son historique. Consultez Accueil pour le partage et la protection, et Suggestions si une approbation est nécessaire.
 recovery-sheet-text = { $sheet }
 recovered = Cet ordinateur est de retour dans { $group }. Ses fichiers arrivent depuis les machines de sauvegarde ; retirez ensuite les ordinateurs perdus, révoquez la fiche utilisée avec remove-computer et imprimez une nouvelle fiche.
 not-shared-kind = { $path } : non partagé ({ $kind })
@@ -170,6 +171,7 @@ confirm-yes = oui
 confirm-leave = Retirer cet ordinateur du groupe ? Ses fichiers restent dans le dossier, mais il cesse de les partager. [o/N]
 confirm-refound = Refonder le groupe avec vous pour seul administrateur ? Il devient un nouveau groupe : chaque autre membre le rejoint à nouveau par une invitation de votre part, et l'ancien historique reste lisible. [o/N]
 confirm-join-refounded = { $group } a été refondé par { $name } le { $date } : le rejoindre, c'est accepter { $name } comme administrateur. Rejoindre ? [o/N]
+web-join-refounded = { $group } a été refondé par { $name } le { $date }. Le rejoindre, c'est accepter { $name } comme administrateur. Cliquez sur Rejoindre pour continuer.
 confirm-held-share = Supprimer les fichiers de { $batch } pour tout le monde ? Ils restent dans l'historique. [o/N]
 
 ## Problèmes (10 §10.6, ADR 0023) : problem-<code>, et hint-<code> s'il y en a un
@@ -455,3 +457,31 @@ problem-recovery-needs-backup = Ajoutez une machine de sauvegarde avant de prép
 problem-join-incomplete = Le nouveau groupe a été vérifié, mais la récupération n’a pas pu se terminer. Redémarrez pigeon pour terminer l’opération enregistrée. Votre ancien historique est conservé.
 problem-repository-busy = Ce dépôt contient une mise à jour de fichier inachevée. Laissez pigeon la terminer, ou redémarrez pigeon avant de réessayer la récupération.
 problem-folder-not-empty = Ce dossier n’est pas vide et n’appartient pas au groupe à récupérer. Choisissez un dossier vide ou le dépôt existant du groupe refondé.
+
+# Group health from replicated state (ADR 0025).
+web-health = État du groupe
+web-health-current = Fichiers actuels
+web-health-retained = Anciennes versions conservées
+web-health-unavailable = Pas encore vérifié ; pigeon est peut-être occupé.
+web-health-no-report = Aucun état reçu pour le moment.
+web-health-counts = Protégés : { $protected } · En attente de copies de secours : { $published } · Uniquement sur cet ordinateur : { $local } · Vérification ancienne : { $uncertain } · Manquants : { $missing } · Effacés : { $erased }
+web-health-size = { $mb } Mo
+web-health-kb = { $kb } ko
+web-health-bytes = { $bytes } o
+web-health-no-limit = non définie
+web-health-paper = Une clé papier ne conserve aucun fichier.
+web-health-disk = Conservés : { $used } · Libres : { $free } · Limite : { $limit } · Réserve : { $reserve }
+web-health-full = Ce disque a besoin de plus d’espace libre.
+web-health-lost = Cette machine de secours signale la perte de son dépôt.
+web-health-checking = Vérification des fichiers conservés ; ces copies ne comptent pas encore pour la protection.
+web-health-queue = À envoyer : { $send } · À recevoir : { $receive } · En attente d’espace : { $deferred } éléments, { $missing } nécessaires
+web-health-report = État du stockage et des tâches : { $when }.
+web-health-report-old = État du stockage et des tâches ancien : { $when }. Un nouveau contact ne met pas ces chiffres à jour.
+web-health-suggestions = Suggestions en attente d’une décision : { $count }
+web-health-repair = Contenus marqués à recopier : { $count }
+web-health-updated = Vue mise à jour : { $when }. Les chiffres de stockage portent leur propre date.
+web-health-omitted = { $count } autres explications de fichiers ne sont pas affichées ici. Choisissez un dossier dans Fichiers.
+web-health-machines = Ordinateurs, contacts et stockage
+web-health-epochs = Après le retrait d’ordinateurs
+web-health-no-epochs = Aucun ordinateur conservant des fichiers n’a été retiré.
+web-health-epoch = { $name } a été retiré : { $when }.

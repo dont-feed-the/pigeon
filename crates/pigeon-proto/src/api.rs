@@ -13,6 +13,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Request {
+    /// Group health from accepted state and signed reports (ADR 0025).
+    Health,
     /// The first request of a connection: the client's protocol version.
     Hello {
         /// The client's [`crate::PROTOCOL_VERSION`].
@@ -275,6 +277,8 @@ pub enum Request {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Response {
+    /// Local group health, without an optional telemetry collector.
+    Health(Box<crate::health::HealthReport>),
     /// The answer to `Hello`.
     Hello {
         /// `pigeond`'s [`crate::PROTOCOL_VERSION`].

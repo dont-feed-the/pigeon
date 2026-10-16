@@ -34,6 +34,8 @@ pub struct Known {
     pub roster: Option<RosterDoc>,
     /// The commit that roster was read from.
     pub roster_commit: Option<String>,
+    /// Repair history changes only when the removed-device set grows.
+    pub health_repair_epochs: Option<(BTreeSet<String>, Vec<pigeon_proto::health::RepairEpoch>)>,
     /// When each peer was last heard of, by device ID.
     pub heard: BTreeMap<String, i64>,
     /// Direct addresses by device ID.

@@ -11,7 +11,7 @@ impl Backend for Recording {
     fn request(&self, request: pigeon_proto::Request) -> Answer {
         self.0.lock().unwrap().push(request.clone());
         let answer = match request {
-            pigeon_proto::Request::Status { .. } => {
+            pigeon_proto::Request::Status { .. } | pigeon_proto::Request::Health => {
                 vec![Response::Problem(pigeon_proto::Problem {
                     code: "not-in-group".into(),
                     message: Message {

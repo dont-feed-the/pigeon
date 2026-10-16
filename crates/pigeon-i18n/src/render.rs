@@ -271,6 +271,7 @@ impl Renderer {
             Response::Progress { message, .. } => (vec![self.text(message)], true),
             Response::Problem(p) => (self.problem(p), true),
             Response::Status(s) => (self.status(s), false),
+            Response::Health(h) => (self.status(&h.status), false),
             Response::Machines { machines } => {
                 (machines.iter().map(|m| self.machine(m)).collect(), false)
             }

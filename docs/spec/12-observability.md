@@ -34,7 +34,21 @@ of another group are refused. Collection runs outside custody loops, with a
 that collector into OTLP HTTP forwarding. Environment variables, remote
 rosters and redirects cannot choose an external backend.
 
-The user dashboard is the web interface. The optional operator dashboard
+The user dashboard is Home. `Health` reads current-file counts and retained
+older-key counts from the same accepted ref snapshot as its headline;
+pending saves replace their path's older current state and count as local.
+An unreadable inventory is unknown and requires attention. A signed
+`checking` report excludes that custodian from protection for both
+inventories. Paper keys never count as storage.
+
+Home also shows pending suggestions, endangered retained keys, each
+machine's last contact and timestamped signed capacity/queue report, and
+effective accepted device removals that began repair. Contact does not
+refresh old capacity figures. Five-second events replace text values;
+membership or repair-history changes reload the view. This uses no OTLP
+backend. Its evidence is in [health-5](../reports/health-5.md).
+
+The optional operator dashboard
 and setup instructions live in `telemetry/`. Instrumented: version-state
 counts, pending bytes, deferred keys, annex call latency/outcome and
 transport bytes. Not yet: sync/protection lag, CPU/memory budgets and all

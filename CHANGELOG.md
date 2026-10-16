@@ -4,6 +4,25 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.8 — 2026-10-16
+
+### Added
+
+- Group health distinguishes protected files, copies still being sent,
+  local changes and checks that are no longer recent, using the group's
+  replicated state without a telemetry service.
+- Home shows separately the older versions being kept, machine capacity
+  and queued work with the time of their signed reports, pending
+  suggestions and accepted removals that started replacement work.
+
+### Fixed
+
+- A backup that is checking its stored files cannot count toward the
+  protected total. Unreadable accepted history asks for attention and
+  shows unknown counts.
+- Restore confirms the version on this computer and points to sharing
+  and approval status. Browser join confirmations use buttons throughout.
+
 ## 0.4.7 — 2026-10-16
 
 ### Fixed

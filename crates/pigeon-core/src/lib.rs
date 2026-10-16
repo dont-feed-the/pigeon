@@ -15,6 +15,7 @@ pub mod consent;
 pub mod export;
 pub mod filter;
 pub mod headline;
+pub mod health;
 pub mod held;
 pub mod invitation;
 pub mod journal;
