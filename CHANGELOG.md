@@ -6,6 +6,11 @@ the second number, and every other pull request the third.
 
 ## Unreleased
 
+### Changed
+
+- Pull requests and main pushes use Ubuntu runners. Version tags also run
+  macOS validation, including installation, rollback and uninstall checks.
+
 ### Added
 
 - Optional catalogue traces let bridge operators check complete listings and
