@@ -59,8 +59,16 @@ build directory, and needs only `git-annex` on the `PATH` or installed with
 | [`third_party/git-annex/`](../third_party/git-annex/) | the pinned git-annex and pigeon's patches |
 | [`scripts/`](../scripts/) | the checks that CI runs |
 
+Tests run with [cargo nextest](https://nexte.st), as many at once as the
+machine has cores ([`.config/nextest.toml`](../.config/nextest.toml)); a
+test must pass under that load. Install it once with
+`curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ~/.cargo/bin`
+(`latest/mac` on macOS, or `cargo install --locked cargo-nextest`);
+nextest runs no doc tests, so `cargo test --doc` checks those.
+
 ```sh
-cargo test --workspace                  # unit, property (hegel) and integration tests
+cargo nextest run --workspace --features pigeond/lab   # unit, property (hegel) and integration tests, the daemons' too
+cargo test --workspace --doc                           # doc tests
 scripts/check-file-length-and-header   # no file reaches 1000 lines; every file starts with a header
 scripts/check-adr-index                # docs/adr/README.md lists every ADR
 scripts/run-tlc                        # the fast set of TLA+ models (Java 11 or later)
@@ -68,5 +76,5 @@ scripts/run-tlc                        # the fast set of TLA+ models (Java 11 or
 
 The integration tests of `pigeond` need git-annex on the `PATH`. Under
 cargo, git ignores your global and system configuration and ignore files
-([`.cargo/config.toml`](../.cargo/config.toml)), as it does under pigeond. pigeon 0.9,
-an earlier design, is kept under the tag `v0.9.0`.
+([`.cargo/config.toml`](../.cargo/config.toml)), as it does under pigeond.
+pigeon 0.9, an earlier design, is kept under the tag `v0.9.0`.

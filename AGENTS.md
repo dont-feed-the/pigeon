@@ -3,6 +3,8 @@
 > Mission: what an agent does in this repository besides the change itself.
 
 How to build, check and release is in [docs/development.md](docs/development.md).
+Run tests with `cargo nextest run`, as it says, not `cargo test`: nextest
+runs them in parallel, and a test that fails only under that load is a bug.
 
 ## Every pull request records its change, and leaves the version alone
 
