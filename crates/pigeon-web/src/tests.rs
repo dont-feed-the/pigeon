@@ -11,6 +11,10 @@ use tower::ServiceExt;
 
 use crate::{Answer, Backend, Web};
 
+#[path = "tests/a11y.rs"]
+mod a11y;
+#[path = "tests/conflicts.rs"]
+mod conflicts;
 #[path = "tests/doctor.rs"]
 mod doctor;
 #[path = "tests/folder_rules.rs"]
@@ -184,6 +188,18 @@ impl Backend for Fixed {
                     })
                     .into(),
             }],
+            pigeon_proto::Request::Conflicts => conflicts::tarte("conflict"),
+            pigeon_proto::Request::Folders => vec![Response::Folders {
+                root: "/g".into(),
+                folders: Vec::new(),
+            }],
+            pigeon_proto::Request::Resolve { path, choice } => {
+                vec![said(
+                    "resolved-take-group",
+                    "path",
+                    format!("{path} {choice:?}"),
+                )]
+            }
             pigeon_proto::Request::View {
                 version: Some(1), ..
             } => {

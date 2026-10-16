@@ -96,7 +96,10 @@ fn machine(r: &Renderer, m: &Machine, form: &str) -> Markup {
                 form method="post" action=(r.url("/machines/remove")) {
                     input type="hidden" name="form" value=(form);
                     input type="hidden" name="name" value=(m.name);
-                    button type="submit" { (r.id(if m.recovery { "web-revoke-sheet" } else { "web-remove" })) }
+                    button type="submit" {
+                        (r.id(if m.recovery { "web-revoke-sheet" } else { "web-remove" }))
+                        (pages::hidden(&m.name))
+                    }
                 }
             }
         }
@@ -105,13 +108,14 @@ fn machine(r: &Renderer, m: &Machine, form: &str) -> Markup {
 
 /// One pending invitation, and the form that cancels it.
 fn invitation(r: &Renderer, i: &InvitationEntry, form: &str) -> Markup {
+    let line = r.invitation(i);
     html! {
         article {
-            p { (r.invitation(i)) }
+            p { (line) }
             form method="post" action=(r.url("/machines/cancel-invitation")) {
                 input type="hidden" name="form" value=(form);
                 input type="hidden" name="invitation" value=(i.id);
-                button type="submit" { (r.id("web-cancel-invitation")) }
+                button type="submit" { (r.id("web-cancel-invitation")) (pages::hidden(&line)) }
             }
         }
     }

@@ -175,7 +175,8 @@ of their own, so it is replicated without changing the catalogue
 safety state: the person's version is a proposal's content, *protected* once
 K custodians hold it ([06 §6.2](06-status.md)).
 
-Resolutions (`pigeon resolve PATH …`, or ux.md §8.8; the model's
+Resolutions (`pigeon resolve PATH …`, or the file's page on the web,
+10 §10.3, ux.md §8.8; the model's
 `TakeGroup` and `ResolveMine`):
 
 | Choice | Effect |
