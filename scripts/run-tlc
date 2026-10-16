@@ -119,7 +119,7 @@ def excerpt(output, size=3000):
     return text if len(text) <= size else text[:size // 2] + "\n...\n" + text[-size // 2:]
 
 
-def run(jar, config, module, java, workers, heap, models=None):
+def run(jar, config, module, java, workers, heap, models=None, timeout=None):
     models = MODELS if models is None else models
     with tempfile.TemporaryDirectory() as metadir:
         memory = [f"-Xmx{heap}"] if heap else []
@@ -133,7 +133,12 @@ def run(jar, config, module, java, workers, heap, models=None):
                    "-cp", str(jar), "tlc2.TLC",
                    "-workers", workers, "-metadir", metadir,
                    "-config", f"{config}.cfg", module]
-        done = subprocess.run(command, cwd=models, capture_output=True, text=True)
+        try:
+            done = subprocess.run(command, cwd=models, capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            # subprocess.run kills and reaps this JVM before returning. A
+            # deadline is an error, never an accepted/rejected model verdict.
+            return "error:timeout", f"TLC exceeded {timeout} seconds ({module}, {config})"
     trace = re.search(r"^INVARIANT\s+TraceNotConsumed\b", (models / f"{config}.cfg").read_text(), re.M)
     return verdict(done.stdout + done.stderr, bool(trace)), done.stdout + done.stderr
 

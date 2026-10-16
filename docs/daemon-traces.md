@@ -69,6 +69,16 @@ an explicit restore request, so another path's batch capture cannot become
 this path's capture. Permission and recent-install facts are observed
 inputs. Driver actions cannot be inserted to fill a missing trace step.
 
+For filesystem streams of at least 32 transitions, replay first tries
+`EagerTraceSpec`. It conjoins restrictions with `TraceNext`: advance matching
+checkpoints, prefer a driver that can already explain its output, and omit
+hidden writer handles. Every eager execution is a full-model execution, with
+identical bounds and safety checks. This search has a 60-second deadline;
+rejection, timeout or error always retries the original `TraceSpec`, with its
+original bounds and no new deadline. Short streams use that search directly.
+Neither an eager rejection nor a timeout can pass or reject a trace. Lab
+replay logs each stream before checking it and records elapsed time.
+
 A killed or cancelled process may leave a before record without an after record. Only
 a real checkpoint from a different process run can close that prefix. TLC
 must explain a completed or ineffective prefix followed by recovery.

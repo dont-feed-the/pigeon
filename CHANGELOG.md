@@ -9,6 +9,11 @@ increments the second number, and every other release the third.
 
 ### Added
 
+- The operator dashboard (`telemetry/dashboards/pigeon-operations.json`)
+  shows computers and groups by name, such as "rtx", instead of their
+  64-digit IDs, one line per computer, with a Group selector: the
+  collector adds the names from its signed roster when it forwards.
+
 - In a per-person folder, a computer no longer keeps other people's
   folders unless its person chooses to: Laurent's laptop gets `src/laurent`
   but not `src/robin`, and the folder of someone who joins later arrives
@@ -50,6 +55,10 @@ increments the second number, and every other release the third.
   npm, which build the web interface's script; `pigeon update --main` and
   `scripts/install-local` say so before building if it is missing. The
   released programs need nothing new.
+- Release validation runs the same 50 random crash schedules in parallel
+  within each Linux shard, using different seeds. Longer filesystem trace
+  checks first try a faster witness search, retaining the full search and
+  all safety checks if it cannot explain the observations.
 
 ## 0.5.13 — 2026-10-16
 

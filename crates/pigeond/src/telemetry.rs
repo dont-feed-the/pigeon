@@ -36,6 +36,25 @@ async fn forward(d: &Daemon, records: &[serde_json::Value]) {
         .ok()
         .and_then(|c| c.telemetry.endpoint);
     if let Some(endpoint) = endpoint {
+        // Names from this collector's signed rosters, beside the IDs.
+        let mut records = records.to_vec();
+        let rosters: Vec<_> = d
+            .groups()
+            .iter()
+            .filter_map(|g| Some((g.id.clone(), g.roster()?.roster)))
+            .collect();
+        pigeon_telemetry::names::name(&mut records, |kind, id| match kind {
+            pigeon_telemetry::names::Kind::Group => rosters
+                .iter()
+                .find(|(g, _)| g == id)
+                .map(|(_, r)| r.group.clone()),
+            pigeon_telemetry::names::Kind::Device => rosters.iter().find_map(|(_, r)| {
+                r.devices
+                    .get(&pigeon_core::roster::DeviceId(id.to_owned()))
+                    .map(|d| d.name.clone())
+            }),
+        });
+        let records = &records;
         // An unavailable dashboard must never delay capture or repair.
         let _ = tokio::time::timeout(
             Duration::from_secs(5),

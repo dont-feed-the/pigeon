@@ -6,6 +6,7 @@
 mod export;
 mod file;
 mod metrics;
+pub mod names;
 mod route;
 
 use std::collections::HashMap;
