@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Installs pigeon from this checkout's working tree, uncommitted changes
+# included, on another machine reached by ssh: builds it here, checks that
+# the host can run it (same system and architecture, a glibc at least as new
+# as the programs need), copies it into the host's pigeon directory, and
+# lets the host's copy of packaging/pigeon-install place it as
+# `pigeon update --main` does (the old programs in bin.previous, then pigeond
+# restarted). Other arguments go to that installer, such as --no-service or
+# --prefix DIR. The host needs rsync; it builds nothing.
+#
+#   scripts/install-remote HOST [--no-service] [--prefix DIR]
+set -euo pipefail
+
+die() { echo "install-remote: $*" >&2; exit 1; }
+say() { echo "install-remote: $*"; }
+
+[ $# -gt 0 ] && [ "${1#-}" = "$1" ] || die "usage: scripts/install-remote HOST [--no-service] [--prefix DIR]"
+host=$1
+shift
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+[ "$(uname -s)" = Linux ] || die "builds for another machine are made on Linux only"
+
+# The host's system, architecture, glibc and pigeon directory (or --prefix).
+prefix=
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  [ "${args[i]}" != --prefix ] || prefix=${args[i + 1]:-}
+done
+read -r os arch glibc default < <(ssh "$host" \
+  'echo "$(uname -s) $(uname -m) $(getconf GNU_LIBC_VERSION 2>/dev/null | cut -d" " -f2) ${XDG_DATA_HOME:-$HOME/.local/share}/pigeon"') ||
+  die "could not reach $host"
+[ "$os $arch" = "$(uname -s) $(uname -m)" ] || die "$host runs $os $arch; this machine builds for $(uname -s) $(uname -m)"
+[ -n "$glibc" ] || die "$host has no glibc that getconf reports"
+prefix=${prefix:-$default}
+
+# The version names the commit, `.dirty` when tracked files changed since,
+# as packaging/pigeon-install --source does.
+commit=$(git -C "$root" rev-parse --short=12 HEAD)
+[ -z "$(git -C "$root" status --porcelain --untracked-files=no)" ] || commit="$commit.dirty"
+v=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$root/Cargo.toml" | head -n 1)
+version="v$v+g$commit"
+
+say "building pigeon $version"
+(cd "$root" && PIGEON_COMMIT=$commit cargo build --release --locked -p pigeond -p pigeon -p git-annex-p2p-iroh)
+target=${CARGO_TARGET_DIR:-$root/target}/release
+programs=("$target/pigeon" "$target/pigeond" "$target/git-annex-p2p-iroh")
+need=$(objdump -T "${programs[@]}" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -n 1)
+[ "$(printf '%s\n%s\n' "$need" "$glibc" | sort -V | tail -n 1)" = "$glibc" ] ||
+  die "these programs need glibc $need, and $host has $glibc: build on a machine with an older glibc"
+
+stage=$(mktemp -d)
+trap 'rm -rf "$stage"' EXIT
+mkdir -p "$stage/release/bin"
+cp "${programs[@]}" "$root/packaging/pigeon-install" "$root/packaging/install-git-annex" \
+  "$root/packaging/pigeon-service" "$stage/release/bin/"
+
+# The staging directory sits in the host's pigeon directory, so that the
+# installer moves it into place there; the installer removes it.
+remote=$(ssh "$host" "mkdir -p $(printf '%q' "$prefix") && mktemp -d $(printf '%q' "$prefix/.pigeon-install.XXXXXX")")
+say "copying it to $host:$remote"
+rsync -a --protect-args "$stage/release" "$host:$remote/"
+say "placing it on $host"
+quoted=$(printf '%q ' sh "$remote/release/bin/pigeon-install" --place "$remote" --version "$version" --main \
+  --prefix "$prefix" "$@")
+ssh "$host" "$quoted"
