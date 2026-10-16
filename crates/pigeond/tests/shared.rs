@@ -365,3 +365,81 @@ fn a_bulk_delete_is_refused_before_it_can_block_journal_recovery() {
     ));
     assert_eq!(snapshot(&peer).files.len(), 100);
 }
+
+#[test]
+fn pool_registration_deduplicates_before_acknowledging_without_background_rounds() {
+    use std::os::unix::fs::DirBuilderExt;
+    let temp = tempfile::Builder::new()
+        .prefix("pgnregister")
+        .tempdir_in("/tmp")
+        .unwrap();
+    let home = temp.path().join("home");
+    let files = temp.path().join("files");
+    std::fs::create_dir(&files).unwrap();
+    let body = b"already retained before registration\n";
+    std::fs::write(files.join("original.txt"), body).unwrap();
+    let peer = start(&home, &temp.path().join("peer.sock"), None);
+    assert!(matches!(
+        call(
+            &peer,
+            Request::Create {
+                name: "Register pool".into(),
+                folder: files.display().to_string(),
+                k: 1,
+                device_name: "Provider".into(),
+            }
+        ),
+        Response::Said { .. }
+    ));
+    assert!(matches!(
+        call(&peer, Request::Pause { duration: None }),
+        Response::Said { .. }
+    ));
+    let group = match bridge(&peer, Operation::Info) {
+        Reply::Info { group, .. } => group,
+        other => panic!("{other:?}"),
+    };
+    let before = snapshot(&peer);
+    let digest = &before.files[0].etag[..64];
+    let store = temp.path().join("pool");
+    let pool = store.join(&group).join(&digest[..2]).join(digest);
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(pool.parent().unwrap())
+        .unwrap();
+    std::fs::write(&pool, body).unwrap();
+    std::fs::set_permissions(&pool, std::fs::Permissions::from_mode(0o444)).unwrap();
+    let git = |args: &[&str]| {
+        let out = Command::new("git")
+            .current_dir(&files)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        String::from_utf8(out.stdout).unwrap().trim().to_owned()
+    };
+    let key = git(&["annex", "lookupkey", "original.txt"]);
+    let object = files.join(git(&["annex", "contentlocation", &key]));
+    assert_ne!(
+        object.metadata().unwrap().ino(),
+        pool.metadata().unwrap().ino()
+    );
+    assert!(matches!(
+        bridge(
+            &peer,
+            Operation::RegisterPool {
+                group,
+                store: store.display().to_string(),
+            }
+        ),
+        Reply::Learned
+    ));
+    assert_eq!(
+        object.metadata().unwrap().ino(),
+        pool.metadata().unwrap().ino()
+    );
+    assert_eq!(snapshot(&peer), before);
+    std::fs::write(files.join("original.txt"), b"a later in-place save\n").unwrap();
+    assert_eq!(std::fs::read(&pool).unwrap(), body);
+}

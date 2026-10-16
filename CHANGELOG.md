@@ -18,6 +18,8 @@ the second number, and every other pull request the third.
 
 ### Fixed
 
+- Connecting a bridge to existing storage finishes sharing retained objects
+  before registration succeeds, even when background transfers are stalled.
 - Nextcloud desktop clients can finish chunked uploads using their relative
   destination paths.
 - New clients can join after suggestions have been accepted or declined;

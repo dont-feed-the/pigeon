@@ -119,6 +119,9 @@ pub(crate) async fn register(d: &Daemon, group: &str, store: &Path) -> Result<Re
     }
     pool::register(&g.git_dir, store).map_err(|e| e.to_string())?;
     crate::settings::check(&g).await;
+    // Existing objects must converge before clients can populate this pool.
+    // A later round may wait on network transfers before reaching compaction.
+    provider_compact(&g).await?;
     d.wake.notify_one();
     Ok(Reply::Learned)
 }
