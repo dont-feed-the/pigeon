@@ -334,6 +334,39 @@ fn dav_paths_and_destinations_cannot_cross_users_or_reach_internal_paths() {
     ));
 }
 
+#[tokio::test]
+async fn desktop_move_destinations_accept_origin_relative_paths_with_the_same_boundaries() {
+    let (_tmp, app) = app().await;
+    for destination in [
+        "http://127.0.0.1:8787/remote.php/dav/files/alice/Photo%20album/a.jpg",
+        "/remote.php/dav/files/alice/Photo%20album/a.jpg",
+    ] {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("Destination", destination.parse().unwrap());
+        assert_eq!(
+            dav::destination(&app, "alice", &headers).unwrap(),
+            "Photo album/a.jpg"
+        );
+    }
+    for destination in [
+        "//attacker.example/remote.php/dav/files/alice/a",
+        "/\\attacker.example/remote.php/dav/files/alice/a",
+        "http://attacker.example/remote.php/dav/files/alice/a",
+        "/remote.php/dav/files/bob/a",
+        "/remote.php/dav/files/alice/.git/config",
+        "/remote.php/dav/files/alice/a?query=1",
+        "/remote.php/dav/files/alice/a#fragment",
+        "relative/file",
+    ] {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("Destination", destination.parse().unwrap());
+        assert!(
+            dav::destination(&app, "alice", &headers).is_err(),
+            "{destination}"
+        );
+    }
+}
+
 #[test]
 fn range_and_namespaced_properties_handle_edges_without_claiming_unknown_features() {
     assert_eq!(dav::range(Some("bytes=2-4"), 10).unwrap(), (2, 3, true));

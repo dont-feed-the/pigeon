@@ -255,7 +255,7 @@ def run():
             assert http("GET", upload + "/00001", credentials=a2)[0] == 404
             assert dav(a, "GET", "Docs/chunked.bin")[0] == 404
             assert http("MOVE", upload + "/.file", headers={"Destination": destination, "OC-Total-Length": "12"}, credentials=a)[0] == 400
-            assert http("MOVE", upload + "/.file", headers={"Destination": destination, "OC-Total-Length": "11",
+            assert http("MOVE", upload + "/.file", headers={"Destination": urllib.parse.urlparse(destination).path, "OC-Total-Length": "11",
                         "OC-Checksum": "SHA256:" + hashlib.sha256(b"hello world").hexdigest()}, credentials=a)[0] == 201
             assert dav(a, "GET", "Docs/chunked.bin")[2] == b"hello world"
             print("PASS: isolated chunk staging, length validation, and complete-file publication", flush=True)
