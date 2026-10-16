@@ -10,15 +10,22 @@ use std::path::Path;
 
 use crate::daemon::Daemon;
 use crate::group::Group;
-use crate::invite::{Invitation, dial, fetch_welcome, inviter_addresses, request};
-use crate::settings::ensure_remote;
+use crate::invite::Invitation;
 
 /// Whether `path` holds a repository of the group `inv` refounds.
 pub async fn applies(d: &Daemon, inv: &Invitation, path: &Path) -> bool {
     let Some(r) = &inv.refounded else {
         return false;
     };
-    if !path.join(".git").is_dir() {
+    let Some((role, _, _)) = crate::group::locate(path) else {
+        return false;
+    };
+    let expected = match inv.role.as_str() {
+        "laptop" => pigeon_core::filter::Role::Laptop,
+        "custodian" => pigeon_core::filter::Role::Custodian,
+        _ => return false,
+    };
+    if role != expected {
         return false;
     }
     let git = crate::git::Git::new(path, d.env.clone());
@@ -27,45 +34,86 @@ pub async fn applies(d: &Daemon, inv: &Invitation, path: &Path) -> bool {
 
 /// Joins the group of `inv` with the repository of the old group at
 /// `path`: answers the group's name.
-pub async fn laptop(d: &Daemon, inv: &Invitation, path: &Path) -> Result<String, String> {
+pub async fn join(d: &Daemon, inv: &Invitation, path: &Path) -> Result<String, String> {
     let r = inv.refounded.clone().ok_or("invite-unknown")?;
-    if let Some(old) = d.group(&r.from) {
-        crate::refound::forget(d, &old).await;
-    }
-    let g = Group::open(&inv.group, path, &d.env)
-        .await
-        .ok_or("not-a-repository")?;
-    let uuid = g.lock().annex_uuid.clone().ok_or("not-a-repository")?;
-    let name = crate::invite::device_name(d, inv);
-    let request = request(d, inv, &name, &uuid)?;
-    let (commit, inviter_uuid, peers) = dial(d, inv, &request).await?;
-    let fail = |e: crate::git::Error| e.to_string();
-    ensure_remote(&g.git, &inv.inviter, &inviter_uuid)
-        .await
-        .map_err(fail)?;
-    g.set_addresses(&inv.inviter, inviter_addresses(inv));
-    g.learn_peers(&peers);
-    let g = d.add_group(g, path).await;
-    let busy = g.busy.lock().await;
-    let theirs = fetch_welcome(&g, &inv.inviter, &inv.group, &commit, &d.device).await?;
-    let ours = g.git.rev("refs/heads/main").await.ok_or("no main")?;
-    let archive = crate::refound::archive_ref(&r.from);
-    if g.git.rev(&archive).await.is_none() {
-        g.git
-            .update_ref(&archive, &ours, None)
+    let old = d
+        .group(&r.from)
+        .filter(|g| g.worktree.as_deref().unwrap_or(&g.git_dir) == path);
+    let old_busy = match &old {
+        Some(old) => Some(old.busy.lock().await),
+        None => None,
+    };
+    let g = std::sync::Arc::new(
+        Group::open(&inv.group, path, &d.env)
             .await
-            .map_err(fail)?;
+            .ok_or("not-a-repository")?,
+    );
+    if crate::join_transition::pending(&g) {
+        return Err("join-incomplete".into());
     }
-    g.git
-        .update_ref("refs/heads/main", &theirs, Some(&ours))
-        .await
-        .map_err(fail)?;
-    d.tracer
-        .event(crate::trace::Act::Merge, &[("commit", &theirs)]);
-    g.reload_roster().await;
-    take_tree(&g, &theirs).await?;
+    if crate::evict::unsettled(&g) || crate::capture_file::pending(&g) {
+        return Err("repository-busy".into());
+    }
+    let busy = g.busy.lock().await;
+    let uuid = g.lock().annex_uuid.clone().ok_or("not-a-repository")?;
+    let ours = g.git.rev("refs/heads/main").await.ok_or("no main")?;
+    let verified = crate::join_stage::prepare(d, inv, &uuid).await?;
+    let (stage, main, archive_main, source) = crate::join_stage::persist(verified);
+    let plan = crate::join_transition::Plan {
+        format: 1,
+        old_group: r.from.clone(),
+        old_main: ours,
+        group: inv.group.clone(),
+        main: main.clone(),
+        archive_main,
+        stage: Some(stage.clone()),
+        source: Some(source),
+    };
+    let recorded = crate::join_transition::record(&g, &plan);
+    if recorded.is_err() && !crate::join_transition::pending(&g) {
+        let _ = std::fs::remove_dir_all(&stage);
+        return Err(recorded
+            .err()
+            .unwrap_or_else(|| "could not record join".into()));
+    }
+    // No old-group transport can expose imported new-group objects.
+    let position = old.as_ref().and_then(|old| {
+        d.groups()
+            .iter()
+            .position(|g| std::sync::Arc::ptr_eq(g, old))
+    });
+    if let Some(old) = &old {
+        old.stop_remotedaemon().await;
+        d.groups
+            .write()
+            .unwrap_or_else(|p| p.into_inner())
+            .retain(|live| !std::sync::Arc::ptr_eq(live, old));
+    }
+    if let Err(error) = recorded {
+        tracing::warn!(group = %g.id, error = %error, "join-in-place-needs-restart");
+        return Err("join-incomplete".into());
+    }
+    if let Err(error) = crate::join_transition::finish(&g, &d.dirs.config_file()).await {
+        tracing::warn!(group = %g.id, error = %error, "join-in-place-needs-restart");
+        return Err("join-incomplete".into());
+    }
     crate::refound::remember(&g).await;
+    d.serve_group(g.clone(), None).await;
+    if let Some(position) = position {
+        let mut groups = d.groups.write().unwrap_or_else(|p| p.into_inner());
+        if let Some(index) = groups
+            .iter()
+            .position(|live| std::sync::Arc::ptr_eq(live, &g))
+        {
+            let g = groups.remove(index);
+            let position = position.min(groups.len());
+            groups.insert(position, g);
+        }
+    }
+    d.tracer
+        .event(crate::trace::Act::Merge, &[("commit", &main)]);
     drop(busy);
+    drop(old_busy);
     tracing::info!(group = %g.id, old = %r.from, "joined-in-place");
     d.wake.notify_one();
     Ok(inv.name.clone())
@@ -74,8 +122,15 @@ pub async fn laptop(d: &Daemon, inv: &Invitation, path: &Path) -> Result<String,
 /// Takes `main`'s tree into the index, keeping the folder: pigeon's own
 /// files are written, an annexed file absent from the folder is hidden,
 /// and what was hidden stays hidden.
-async fn take_tree(g: &Group, main: &str) -> Result<(), String> {
-    let wt = g.worktree.clone().ok_or("not-in-group")?;
+pub(crate) async fn take_tree(g: &Group, main: &str) -> Result<(), String> {
+    let Some(wt) = g.worktree.clone() else {
+        return g
+            .git
+            .run(&["read-tree", main])
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string());
+    };
     let mut hidden = crate::evict::hidden_paths(g).await;
     let fail = |e: crate::git::Error| e.to_string();
     // `-m` keeps the stat data of the entries that do not change.

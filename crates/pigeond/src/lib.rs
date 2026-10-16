@@ -35,6 +35,8 @@ pub mod install;
 pub mod invite;
 pub mod join;
 pub mod join_in_place;
+mod join_stage;
+mod join_transition;
 pub mod journal_file;
 pub mod leave;
 pub mod locks;

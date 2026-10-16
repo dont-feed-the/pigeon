@@ -253,6 +253,22 @@ An older recovery exchange is refused. Recovery metadata transfers have a
 120-second deadline and a 64 MiB limit; file content arrives separately
 through the normal, checked annex transport.
 
+If every admin key and recovery sheet is lost, a surviving member can
+start a new group with `pigeon refound /path/to/repository --yes`. Review
+this choice carefully: that member becomes the new group's sole admin,
+and owned folders belong to them. Existing history and files remain
+available. The other members must accept a new invitation to join it.
+
+To reuse an existing folder, join the new invitation with that folder's
+path and confirm the refounding. A backup can reuse its bare repository
+with `pigeon join --backup-machine INVITATION /path/to/old.git --yes`.
+Pigeon verifies the new group before switching; existing annex objects
+and identity are retained. If it reports an interrupted join, restart
+the daemon so it can finish from its local journal. Do not delete the
+repository or reinitialize annex. File history includes the verified
+old group. An invitation belongs to its issuing group; issue fresh ones
+after refounding or upgrading from a build with unbound invitations.
+
 ## Gather diagnostics with another member
 
 Diagnostics can contain file names and member activity. `pigeon debug bundle`

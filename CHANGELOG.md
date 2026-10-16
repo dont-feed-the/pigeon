@@ -4,6 +4,19 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.6 — 2026-10-16
+
+### Fixed
+
+- Refounding keeps the folder rules valid when their former owners or stewards are absent from the new group.
+- A backup repository can join a refounded group in place, keeping its content and archived history.
+- Refounding and rejoining finish after a restart if interrupted after
+  their verified history is recorded. Existing files, backup objects and
+  annex identity are retained; a rejected welcome leaves the old group intact.
+- Invitations stay bound to their original group. The same computer can
+  retry after losing its welcome, while another computer cannot reuse the
+  invitation. Unused invitations from older builds must be issued again.
+
 ## 0.4.5 — 2026-10-16
 
 ### Added

@@ -25,14 +25,14 @@ pub async fn laptop(
     std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
     let path = std::fs::canonicalize(&path).map_err(|e| e.to_string())?;
     if crate::join_in_place::applies(d, inv, &path).await {
-        return crate::join_in_place::laptop(d, inv, &path).await;
+        return crate::join_in_place::join(d, inv, &path).await;
     }
     if std::fs::read_dir(&path)
         .map_err(|e| e.to_string())?
         .next()
         .is_some()
     {
-        return Err("the folder is not empty".into());
+        return Err("folder-not-empty".into());
     }
     let git = crate::git::Git::new(&path, d.env.clone());
     let fail = |e: crate::git::Error| e.to_string();

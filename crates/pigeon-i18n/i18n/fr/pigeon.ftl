@@ -450,3 +450,7 @@ web-recovery-print-help = Utilisez la commande Imprimer de votre navigateur pour
 recovery-refresh-recommendation = Les machines de sauvegarde ont changé depuis la préparation des fiches de récupération de { $name }. Préparez une nouvelle fiche avec les machines actuelles.
 
 problem-recovery-needs-backup = Ajoutez une machine de sauvegarde avant de préparer une fiche de récupération. Une sauvegarde doit recevoir l’autorisation de la fiche pour pouvoir vous aider à revenir.
+
+problem-join-incomplete = Le nouveau groupe a été vérifié, mais la récupération n’a pas pu se terminer. Redémarrez pigeon pour terminer l’opération enregistrée. Votre ancien historique est conservé.
+problem-repository-busy = Ce dépôt contient une mise à jour de fichier inachevée. Laissez pigeon la terminer, ou redémarrez pigeon avant de réessayer la récupération.
+problem-folder-not-empty = Ce dossier n’est pas vide et n’appartient pas au groupe à récupérer. Choisissez un dossier vide ou le dépôt existant du groupe refondé.

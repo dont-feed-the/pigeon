@@ -450,3 +450,7 @@ web-recovery-print-help = Use your browser’s Print command to print this page.
 recovery-refresh-recommendation = The backup machines have changed since { $name }’s recovery sheets were prepared. Prepare a replacement sheet with the current backup machines.
 
 problem-recovery-needs-backup = Add a backup machine before preparing a recovery sheet. A backup must receive the sheet’s permission before it can help you recover.
+
+problem-join-incomplete = The new group was verified, but recovery could not finish. Restart pigeon to finish the recorded operation. Your old history is kept.
+problem-repository-busy = This repository has an unfinished file update. Let pigeon finish it, or restart pigeon before trying recovery again.
+problem-folder-not-empty = This folder is not empty and does not belong to the group being recovered. Choose an empty folder or the existing repository of the refounded group.

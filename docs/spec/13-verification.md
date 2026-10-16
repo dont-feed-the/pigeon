@@ -427,3 +427,21 @@ peer tests cover default refusal, local confirmation, one-use disclosure,
 private output and other-group canaries; web tests reject missing consent
 and forged forms. Diagnostic collection is never evidence that a file is
 protected.
+
+## 13.15 Refounding and invitation continuity
+
+The `refound` algebra's four laws (`tests/refound.rs`, 1000 cases each)
+cover a valid sole-person roster, preserved folder boundaries and group
+settings, permitted surviving computers and idempotence. The `invitation`
+algebra's four laws (`tests/invitation.rs`, 1000 cases each) bind redemption
+to the issuing group and first authenticated identity; a retry resumes
+without granting a second first use. Adapter checks additionally enforce
+expiry, current role, annex UUID and removal.
+
+Local replay tests refuse malformed/future intents, preserve configuration
+and proposals, and leave later index changes intact after a completed
+transition. `pigeond/tests/refound_restart.rs` kills real lab daemons at
+each main/index/configuration seam for both refounding and a bare backup
+rejoining in place. Restart must finish without an inviter, with unchanged
+annex identity, object bytes and inodes. These supplement welcome history
+validation; a private replay journal does not authorize remote history.

@@ -102,6 +102,8 @@ struct Records {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Record {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    group: Option<String>,
     id: String,
     secret: String,
     secret_sha256: String,
@@ -122,7 +124,8 @@ fn load(g: &Group) -> Records {
 
 fn save(g: &Group, r: &Records) -> std::io::Result<()> {
     let text = serde_json::to_vec_pretty(r).map_err(std::io::Error::other)?;
-    crate::util::write_private(&g.files.invitations(), &text)
+    crate::util::write_private(&g.files.invitations(), &text)?;
+    pigeon_sys::fs::fsync_dir(&g.root()).map_err(std::io::Error::other)
 }
 
 /// `pigeon invite --list`: the invitations neither used nor expired.
@@ -131,7 +134,7 @@ pub fn pending(g: &Group) -> Vec<pigeon_proto::api::InvitationEntry> {
     load(g)
         .invitations
         .into_iter()
-        .filter(|r| r.used_by.is_none())
+        .filter(|r| r.group.as_deref() == Some(g.id.as_str()) && r.used_by.is_none())
         .filter(|r| pigeon_proto::time::parse_rfc3339(&r.expires).is_some_and(|e| e > t))
         .map(|r| {
             let field = |kind: &str, key: &str| {
@@ -258,6 +261,7 @@ pub fn invite(d: &Daemon, g: &Group, ask: Ask<'_>) -> Result<String, &'static st
     };
     let mut records = load(g);
     records.invitations.push(Record {
+        group: Some(g.id.clone()),
         id: format!("inv-{}", hex(secret.get(..2).unwrap_or_default())),
         secret: hex(&secret),
         secret_sha256: sha256_hex(&secret),
@@ -361,22 +365,61 @@ pub async fn welcome(d: &Daemon, device: &str, join: Join) -> JoinAnswer {
     for g in d.groups() {
         let _busy = g.busy.lock().await;
         let mut records = load(&g);
-        let Some(rec) = records
-            .invitations
-            .iter_mut()
-            .find(|r| equal(&r.secret_sha256, &join.invitation_hash))
-        else {
+        let Some(rec) = records.invitations.iter_mut().find(|r| {
+            r.group.as_deref() == Some(g.id.as_str())
+                && equal(&r.secret_sha256, &join.invitation_hash)
+        }) else {
             continue;
         };
         let secret = unhex(&rec.secret).unwrap_or_default();
         if !equal(&proof(&secret, device, &d.device), &join.proof) {
             return refused("invite-unknown");
         }
-        if rec.used_by.is_some() {
+        use pigeon_core::invitation::{Redemption, redeem};
+        let redemption = redeem(rec.group.as_ref(), &g.id, rec.used_by.as_deref(), device);
+        if redemption == Redemption::Refused {
             return refused("invite-used");
         }
         if crate::util::parse_rfc3339(&rec.expires).is_none_or(|t| t < now()) {
             return refused("invite-expired");
+        }
+        if redemption == Redemption::Resume {
+            let id = DeviceId(device.to_owned());
+            let Some(doc) = g.roster() else {
+                return refused("not-in-group");
+            };
+            if let Some(existing) = doc.roster.devices.get(&id) {
+                let role = match existing.role {
+                    DeviceRole::Laptop => "laptop",
+                    DeviceRole::Custodian => "custodian",
+                    DeviceRole::Recovery => "recovery",
+                };
+                if role != join.role
+                    || existing.annex_uuid.as_deref() != Some(join.annex_uuid.as_str())
+                {
+                    return refused("invite-not-allowed");
+                }
+                let Some(commit) = g.git.rev("refs/heads/main").await else {
+                    return refused("not-in-group");
+                };
+                g.set_addresses(
+                    device,
+                    join.addresses
+                        .iter()
+                        .filter_map(|a| a.parse().ok())
+                        .collect(),
+                );
+                let annex_uuid = g.lock().annex_uuid.clone().unwrap_or_default();
+                let peers = g.known_addresses(device);
+                return JoinAnswer::Welcome {
+                    commit,
+                    annex_uuid,
+                    peers,
+                };
+            }
+            if doc.roster.removed.contains_key(&id) {
+                return refused("invite-not-allowed");
+            }
         }
         let purpose = rec.purpose.clone();
         rec.used_by = Some(device.to_owned());
@@ -562,6 +605,16 @@ async fn join_backup(
     );
     std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
     let path = std::fs::canonicalize(&path).map_err(|e| e.to_string())?;
+    if crate::join_in_place::applies(d, inv, &path).await {
+        return crate::join_in_place::join(d, inv, &path).await;
+    }
+    if std::fs::read_dir(&path)
+        .map_err(|e| e.to_string())?
+        .next()
+        .is_some()
+    {
+        return Err("folder-not-empty".into());
+    }
     let git = crate::git::Git::new(&path, d.env.clone());
     let fail = |e: crate::git::Error| e.to_string();
     git.run(&["init", "-q", "--bare", "-b", "main"])
@@ -622,6 +675,7 @@ pub async fn fetch_welcome(
     me: &str,
 ) -> Result<String, String> {
     let spec = crate::settings::peer_refspec(inviter);
+    let archive = crate::refound::refspec(inviter);
     let args = [
         "fetch",
         "-q",
@@ -629,6 +683,7 @@ pub async fn fetch_welcome(
         "--no-write-fetch-head",
         inviter,
         spec.as_str(),
+        archive.as_str(),
     ];
     // The inviter may still be busy with the welcome's round: retry for
     // five minutes, as a P2P fetch can also hang (16 §16.4) and a loaded

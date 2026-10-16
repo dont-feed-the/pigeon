@@ -69,6 +69,16 @@ pub fn git_env<'a>(cmd: &'a mut Command, home: &Path) -> &'a mut Command {
 }
 
 pub fn start(root: &Path, sockets: &Path, name: &'static str) -> Daemon {
+    start_with_crash(root, sockets, name, None)
+}
+
+/// Starts a lab daemon whose named transition will be killed with SIGKILL.
+pub fn start_with_crash(
+    root: &Path,
+    sockets: &Path,
+    name: &'static str,
+    crash: Option<&str>,
+) -> Daemon {
     let home = root.join(name);
     std::fs::create_dir_all(home.join("config")).unwrap();
     let config = "[network]\nbind = \"127.0.0.1:0\"\nmdns = false\nrelays = \"off\"\n\n[loops]\ninterval_seconds = 1\n";
@@ -80,6 +90,9 @@ pub fn start(root: &Path, sockets: &Path, name: &'static str) -> Daemon {
     let socket = sockets.join(format!("{name}.sock"));
     let log = std::fs::File::create(home.join("pigeond.out")).unwrap();
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_pigeond"));
+    if let Some(point) = crash {
+        cmd.env("PIGEON_LAB_CRASH", format!("{point}:1"));
+    }
     cmd.arg("--home")
         .arg(&home)
         .env("PIGEON_SOCKET", &socket)
@@ -107,6 +120,25 @@ pub fn start(root: &Path, sockets: &Path, name: &'static str) -> Daemon {
         std::thread::sleep(Duration::from_millis(100));
     }
     d
+}
+
+/// Confirms the fault seam actually killed the daemon, rather than a
+/// command returning early or a different process failure passing a test.
+pub fn assert_crashed(d: &mut Daemon) {
+    use std::os::unix::process::ExitStatusExt;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if let Some(status) = d.child.try_wait().unwrap() {
+            assert_eq!(status.signal(), Some(9), "{status}\n{}", logs(&[d]));
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "daemon did not crash\n{}",
+            logs(&[d])
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
 }
 
 /// Each daemon's own log lines (not its libraries') and its output, for a

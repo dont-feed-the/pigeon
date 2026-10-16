@@ -174,6 +174,11 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             let Some(g) = d.default_group() else {
                 return vec![problem("not-in-group", &[], None)];
             };
+            let _busy = g.busy.lock().await;
+            if d.group(&g.id).is_none() {
+                return vec![problem("not-in-group", &[], None)];
+            }
+            crate::refound::remember(&g).await;
             let ask = crate::invite::Ask {
                 person: &person,
                 admin,
@@ -333,9 +338,13 @@ fn join_problem(code: &str, invitation: &str) -> Response {
         "invite-used" => with_hint(problem(code, &[], None), "hint-invite-used"),
         "inviter-offline" => with_hint(problem(code, &who, None), "hint-inviter-offline"),
         "invite-not-allowed" => problem(code, &who, None),
-        "join-history-unverified" | "invite-unknown" | "not-in-group" | "not-allowed" => {
-            problem(code, &[], None)
-        }
+        "join-history-unverified"
+        | "invite-unknown"
+        | "not-in-group"
+        | "not-allowed"
+        | "join-incomplete"
+        | "repository-busy"
+        | "folder-not-empty" => problem(code, &[], None),
         "not-in-this-build" => problem(code, &[("command", text("join"))], None),
         other => problem("internal-error", &[], Some(other.to_owned())),
     }
