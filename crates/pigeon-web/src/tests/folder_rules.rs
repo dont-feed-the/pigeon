@@ -52,6 +52,8 @@ impl Backend for Rules {
                 .map(|path| pigeon_proto::api::FileEntry {
                     path: path.into(),
                     state: pigeon_proto::api::State::Published,
+                    size: None,
+                    modified: None,
                 })
                 .collect(),
             }],
