@@ -5,6 +5,14 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- A computer that left its last group and then created or joined another
+  one, without restarting pigeon, no longer changes identity at the next
+  restart, which made the new group no longer recognise it.
+
 ## 0.5.12 — 2026-10-16
 
 ### Fixed

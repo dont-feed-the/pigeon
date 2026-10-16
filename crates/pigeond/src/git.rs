@@ -41,6 +41,11 @@ pub fn set_signer(secret: [u8; 32]) {
     let _ = SIGNER.set(secret);
 }
 
+/// The device key this daemon signs with, once set.
+pub(crate) fn signer() -> Option<[u8; 32]> {
+    SIGNER.get().copied()
+}
+
 /// The device whose key this daemon uses for local contributions.
 pub(crate) fn signer_device() -> Option<String> {
     SIGNER.get().map(|key| pigeon_core::sig::device_id(key).0)

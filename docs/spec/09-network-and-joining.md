@@ -206,7 +206,9 @@ serves it. A peer has it once its fetched `main` holds it or it refuses
 the device as `not-in-roster` (§9.3). Then the group leaves `config.toml`,
 pointer files of content not here are deleted, `.git` and `.pigeon` move
 to `<state>/left/<group>-<time>/`, so the folder keeps its files as plain
-files, and the device key goes once no group is left. A custodian's
+files, and the device key goes once no group is left; the running
+`pigeond` keeps it, and writes it back for the next group it serves, so
+the device ID that group's roster names survives a restart. A custodian's
 repository stays in place. Deleting the folder, and saying first how many
 files will have fewer safe copies, are not coded.
 
