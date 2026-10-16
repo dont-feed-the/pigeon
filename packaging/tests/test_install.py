@@ -38,6 +38,9 @@ class Installation(unittest.TestCase):
         self.commands.mkdir()
         self.executable(self.commands / "systemctl", "exit 0")
         self.executable(self.commands / "launchctl", '[ "$1" != print ] || exit 113')
+        # Source builds need Node for the web interface (ADR 0076).
+        self.executable(self.commands / "node", "exit 0")
+        self.executable(self.commands / "npm", "exit 0")
         self.env["PATH"] = f"{self.commands}:{os.environ['PATH']}"
         self.release("v0.3.2")
         self.release("v0.3.3")
@@ -204,6 +207,18 @@ class Installation(unittest.TestCase):
         del self.env["PIGEON_COMMIT"]
         refused = self.run_installer("--source", str(source), ok=False)
         self.assertIn("PIGEON_COMMIT", refused.stderr)
+
+    def test_a_source_build_without_node_says_what_to_install(self):
+        source = self.root / "checkout"
+        (source / "packaging").mkdir(parents=True)
+        (source / "Cargo.toml").write_text('[workspace.package]\nversion = "0.3.4"\n')
+        shutil.copy2(PACKAGING / "pigeon-install", source / "packaging" / "pigeon-install")
+        self.executable(self.commands / "git", "echo abcdef123456")
+        self.executable(self.commands / "cargo", "exit 0")
+        self.executable(self.commands / "node", "exit 1")
+        refused = self.run_installer("--source", str(source), ok=False)
+        self.assertIn("Node.js 22.12", refused.stderr)
+        self.assertFalse((self.prefix / "bin").exists())
 
     def test_conflicting_modes_leave_the_installation_untouched(self):
         self.run_installer("--version", "v0.3.2", "--no-service")
