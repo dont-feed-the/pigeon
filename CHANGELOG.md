@@ -177,6 +177,7 @@ the second number, and every other pull request the third.
 ## 0.4.1 — 2026-10-16
 
 ### Fixed
+- Backup release validation runs as the backup service account, preserving its private local socket. Retrying publication keeps the original tagged programs and source.
 - Local telemetry retains at most 256 KiB so diagnostics do not overwhelm
   the disk budget of a small shared folder.
 
