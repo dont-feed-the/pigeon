@@ -148,7 +148,8 @@ pub(crate) async fn report(d: &Daemon) -> Vec<Response> {
                     reserve: r.disk.reserve,
                     full: r.disk.full,
                 }),
-                checking: report.is_some_and(|r| r.checking),
+                checking: crate::membership::pending(&g, &id.0)
+                    || report.is_some_and(|r| r.checking),
                 repository_lost: report
                     .is_some_and(|r| r.custody.as_ref().is_some_and(|c| c.repository == "lost")),
                 queue: report.map(|r| wire::Queue {

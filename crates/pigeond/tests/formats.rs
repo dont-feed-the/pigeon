@@ -247,6 +247,7 @@ fn report(device: u8, custodian: bool) -> Status {
             keys_failed: 0,
         }),
         purge: vec![],
+        acknowledgements: Vec::new(),
         queue: Queue {
             bytes_to_send: if custodian { 0 } else { 3_500_000 },
             admits: "all".into(),
@@ -423,8 +424,16 @@ fn commit_cases_get_their_verdicts() {
             blobs: &blobs,
             new_roster: new_roster.as_ref(),
             decisions: &BTreeMap::new(),
+            purges: &BTreeMap::new(),
+            witnesses: &BTreeMap::new(),
         });
-        let want = case["verdict"].as_str().unwrap();
+        let want = if authority::RULES >= 2 {
+            case.get("verdict_rules_2")
+                .and_then(Item::as_str)
+                .unwrap_or_else(|| case["verdict"].as_str().unwrap())
+        } else {
+            case["verdict"].as_str().unwrap()
+        };
         assert_eq!(verdict(&v), want, "commits/{name}: {v:?}");
     }
     assert!(seen > 0, "no commit case");

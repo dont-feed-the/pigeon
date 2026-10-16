@@ -189,7 +189,93 @@ fn judge(
         blobs,
         new_roster: None,
         decisions: &BTreeMap::new(),
+        purges: &BTreeMap::new(),
+        witnesses: &BTreeMap::new(),
     })
+}
+
+#[hegel::test(test_cases = 1000)]
+fn purge_requires_admin_seen_scope_and_the_original_minimum_wait(tc: TestCase) {
+    let mut roster = group();
+    roster.rules = 2;
+    roster.retention_days = int(&tc, 1, 100_000) as u32;
+    let path = format!(".pigeon/decisions/purge-{}.toml", int(&tc, 0, 1_000_000));
+    let before = base();
+    let mut after = before.clone();
+    after.insert(path.clone(), entry("purge-document"));
+    let minimum = 5 + i64::from(roster.retention_days) * 86_400;
+    let check = authority::PurgeCheck {
+        end: minimum,
+        quorum_ready: true,
+        base_seen: true,
+        proposals_seen: true,
+        adoption_blobs: BTreeSet::new(),
+    };
+    let mut purges = [(path.clone(), Ok(check))].into();
+    let judge = |signer, before: &Tree, after: &Tree, purges: &BTreeMap<_, _>| {
+        authority::judge(&Step {
+            raw: &sig::sign(&raw(false), &key(signer)).unwrap(),
+            roster: &roster,
+            before,
+            after,
+            writers: &Writers::new(),
+            blobs: &BTreeMap::new(),
+            new_roster: None,
+            decisions: &BTreeMap::new(),
+            purges,
+            witnesses: &BTreeMap::new(),
+        })
+    };
+    assert!(matches!(
+        judge(1, &before, &after, &purges),
+        Verdict::Accepted(..)
+    ));
+    for signer in [2, 3, 5] {
+        assert_eq!(
+            judge(signer, &before, &after, &purges),
+            Verdict::Refused(Refusal::NotAllowed(path.clone()))
+        );
+    }
+    let (deciders, force) = authority::deciders(&roster, &Writers::new(), &[(path.as_str(), true)]);
+    assert_eq!(deciders, [pid(1)].into());
+    assert!(!force);
+    purges
+        .get_mut(&path)
+        .unwrap()
+        .as_mut()
+        .unwrap()
+        .quorum_ready = false;
+    assert_eq!(
+        judge(1, &before, &after, &purges),
+        Verdict::Unknown("purge-membership")
+    );
+    purges
+        .get_mut(&path)
+        .unwrap()
+        .as_mut()
+        .unwrap()
+        .quorum_ready = true;
+    purges.get_mut(&path).unwrap().as_mut().unwrap().end -= 1;
+    assert!(matches!(
+        judge(1, &before, &after, &purges),
+        Verdict::Refused(Refusal::Malformed(_, "purge-retention"))
+    ));
+    purges.get_mut(&path).unwrap().as_mut().unwrap().end += 1;
+    purges.get_mut(&path).unwrap().as_mut().unwrap().base_seen = false;
+    assert_eq!(
+        judge(1, &before, &after, &purges),
+        Verdict::Unknown("purge-history")
+    );
+    assert!(
+        matches!(judge(1, &after, &before, &purges), Verdict::Accepted(..)),
+        "admin cancellation"
+    );
+    let mut edited = after.clone();
+    edited.insert(path, entry("changed-deadline"));
+    assert!(matches!(
+        judge(1, &after, &edited, &purges),
+        Verdict::Refused(Refusal::Malformed(_, "purge-is-immutable"))
+    ));
 }
 
 #[hegel::test(test_cases = 1000)]
@@ -391,6 +477,8 @@ fn a_decision_is_accepted_iff_its_signer_may_make_it(tc: TestCase) {
         blobs: &BTreeMap::new(),
         new_roster: None,
         decisions: &decisions,
+        purges: &BTreeMap::new(),
+        witnesses: &BTreeMap::new(),
     });
     let person = pid(if signer == 5 { 1 } else { signer });
     let may = match verdict {
@@ -499,6 +587,8 @@ fn unsigned_and_forged_commits_are_refused() {
             blobs: &blobs,
             new_roster: None,
             decisions: &BTreeMap::new(),
+            purges: &BTreeMap::new(),
+            witnesses: &BTreeMap::new(),
         })
     };
     assert_eq!(
@@ -639,6 +729,8 @@ fn a_roster_change_is_accepted_iff_its_signer_may_make_it(tc: TestCase) {
         blobs: &BTreeMap::new(),
         new_roster: Some(&parsed),
         decisions: &BTreeMap::new(),
+        purges: &BTreeMap::new(),
+        witnesses: &BTreeMap::new(),
     });
     let Some(delta) = roster::diff(&r, &new) else {
         // A device added and removed in one change: edits cannot say it.
@@ -689,6 +781,8 @@ fn an_invalid_or_unreadable_roster_is_refused_and_an_unknown_one_waits() {
             blobs: &BTreeMap::new(),
             new_roster: Some(&parsed),
             decisions: &BTreeMap::new(),
+            purges: &BTreeMap::new(),
+            witnesses: &BTreeMap::new(),
         });
         let got = match v {
             Verdict::Refused(Refusal::RosterUnreadable(_)) => "unreadable",
@@ -761,4 +855,105 @@ fn telemetry_selection_round_trips_and_only_admins_authorize_it(tc: TestCase) {
         assert!(!roster::may_sign(&old, &dev(2), &edits));
         assert!(!roster::may_sign(&old, &dev(5), &edits));
     }
+}
+
+#[hegel::test(test_cases = 1000)]
+fn completion_witnesses_need_independent_proof_and_are_immutable(tc: TestCase) {
+    let path = format!(
+        ".pigeon/purge-epochs/{}/{}.toml",
+        int(&tc, 0, 1_000_000),
+        int(&tc, 0, 1_000_000)
+    );
+    let r = group();
+    let before = base();
+    let mut after = before.clone();
+    after.insert(path.clone(), entry("exact-proof-blob"));
+    let good: BTreeMap<_, _> = [(path.clone(), Ok(()))].into();
+    let unknown = [(path.clone(), Err(Unread::Unknown("future proof".into())))].into();
+    let invalid = [(path.clone(), Err(Unread::Malformed("signature".into())))].into();
+    let judge = |signer, before: &Tree, after: &Tree, witnesses: &BTreeMap<_, _>| {
+        authority::judge(&Step {
+            raw: &sig::sign(&raw(false), &key(signer)).unwrap(),
+            roster: &r,
+            before,
+            after,
+            writers: &Writers::new(),
+            blobs: &BTreeMap::new(),
+            new_roster: None,
+            decisions: &BTreeMap::new(),
+            purges: &BTreeMap::new(),
+            witnesses,
+        })
+    };
+    for signer in 1..=3 {
+        assert!(matches!(
+            judge(signer, &before, &after, &good),
+            Verdict::Accepted(..)
+        ));
+        assert!(matches!(
+            judge(signer, &before, &after, &BTreeMap::new()),
+            Verdict::Unknown(_)
+        ));
+        assert!(matches!(
+            judge(signer, &before, &after, &unknown),
+            Verdict::Unknown(_)
+        ));
+        assert!(matches!(
+            judge(signer, &before, &after, &invalid),
+            Verdict::Refused(_)
+        ));
+        assert!(matches!(
+            judge(signer, &after, &before, &good),
+            Verdict::Refused(_)
+        ));
+        let mut edited = after.clone();
+        edited.insert(path.clone(), entry("another-proof-blob"));
+        assert!(matches!(
+            judge(signer, &after, &edited, &good),
+            Verdict::Refused(_)
+        ));
+    }
+    assert!(matches!(
+        judge(5, &before, &after, &good),
+        Verdict::Refused(_)
+    ));
+}
+
+#[hegel::test(test_cases = 1000)]
+fn the_first_rules_two_transition_requires_independent_upgrade_evidence(tc: TestCase) {
+    let roster = group();
+    let mut upgraded = roster.clone();
+    upgraded.rules = 2;
+    let before = base();
+    let mut after = before.clone();
+    after.insert(
+        authority::ROSTER.into(),
+        entry(&format!("rules-two-{}", int(&tc, 0, 1_000_000))),
+    );
+    let judge = |signer, witnesses: &BTreeMap<_, _>| {
+        authority::judge(&Step {
+            raw: &sig::sign(&raw(false), &key(signer)).unwrap(),
+            roster: &roster,
+            before: &before,
+            after: &after,
+            writers: &Writers::new(),
+            blobs: &BTreeMap::new(),
+            new_roster: Some(&Ok(upgraded.clone())),
+            decisions: &BTreeMap::new(),
+            purges: &BTreeMap::new(),
+            witnesses,
+        })
+    };
+    assert_eq!(
+        judge(1, &BTreeMap::new()),
+        Verdict::Unknown("upgrade-proof")
+    );
+    let unrelated = [(".pigeon/purge-epochs/other.toml".into(), Ok(()))].into();
+    assert_eq!(judge(1, &unrelated), Verdict::Unknown("upgrade-proof"));
+    let proved = [(authority::ROSTER.into(), Ok(()))].into();
+    assert!(matches!(judge(1, &proved), Verdict::Accepted(..)));
+    assert!(matches!(
+        judge(2, &proved),
+        Verdict::Refused(Refusal::NotAllowed(_))
+    ));
 }

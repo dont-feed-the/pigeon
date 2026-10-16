@@ -133,6 +133,15 @@ async fn observe_at(
             .collect();
         (k.heard.clone(), k.lost.clone(), mains, checking)
     };
+    if let Some(doc) = &doc {
+        checking.extend(
+            doc.roster
+                .devices
+                .keys()
+                .filter(|id| crate::membership::pending(g, &id.0))
+                .map(|id| id.0.clone()),
+        );
+    }
     lost.extend(crate::report::lost(g));
     if g.role == pigeon_core::filter::Role::Custodian
         && crate::health::own_report(g, me)

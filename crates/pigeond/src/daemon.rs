@@ -50,6 +50,8 @@ pub struct Daemon {
     pub wake: Arc<tokio::sync::Notify>,
     /// One-use diagnostic permissions granted by this computer’s user.
     pub debug: crate::debug::Permissions,
+    /// Durable custody-admission fences outside any restored repository.
+    pub admissions: crate::admission_round::Store,
     /// Trace events.
     pub tracer: Tracer,
 }
@@ -122,6 +124,7 @@ impl Daemon {
     /// and records configuration only after its welcome is verified.
     pub(crate) async fn serve_group(&self, g: Arc<Group>, replacing: Option<&str>) {
         crate::settings::check(&g).await;
+        self.admissions.round(&g, &self.device).await;
         {
             let mut groups = self.groups.write().unwrap_or_else(|p| p.into_inner());
             let position = groups
@@ -155,6 +158,7 @@ impl Daemon {
     }
 
     async fn round_inner(&self, g: &Arc<Group>, round: &pigeon_telemetry::Span) {
+        crate::purge::prepare(g).await;
         let busy = g.busy.lock().await;
         if !self.current_group(g).await {
             return;
@@ -252,6 +256,8 @@ impl Daemon {
             return;
         }
         crate::report::receive(g, &self.device).await;
+        self.admissions.round(g, &self.device).await;
+        crate::purge::round(g, &self.device, settled || g.role == Role::Custodian).await;
         self.note_lost(g);
         {
             let mut step = round.child("place");
@@ -271,6 +277,15 @@ impl Daemon {
         {
             let _step = round.child("publish");
             crate::report::publish(g, &self.device).await;
+        }
+        if g.lock().admission_error.is_none()
+            && let Err(e) = crate::admission_publish::round(g).await
+        {
+            tracing::warn!(group = %g.id, error = %e, "custody-admission-publication-waits");
+        }
+        if let Err(e) = crate::purge_epoch::close(g).await {
+            g.git.purge_gate.suspend();
+            tracing::warn!(group = %g.id, error = %e, "purge-completion-waits");
         }
         crate::telemetry::flush_protection(g).await;
         crate::clock_file::save(g, self.tracer.clock());
@@ -317,6 +332,44 @@ impl Daemon {
 }
 
 impl Directory for Daemon {
+    fn content_policy(&self, group: &str) -> Arc<pigeon_core::filter::ContentPolicy> {
+        Daemon::group(self, group).map_or_else(
+            || {
+                Arc::new(pigeon_core::filter::ContentPolicy {
+                    waiting: true,
+                    released: Default::default(),
+                })
+            },
+            |g| {
+                if crate::membership::pending(&g, &self.device)
+                    || g.lock().admission_error.is_some()
+                {
+                    Arc::new(pigeon_core::filter::ContentPolicy {
+                        waiting: true,
+                        released: Default::default(),
+                    })
+                } else {
+                    g.git.purge_gate.policy()
+                }
+            },
+        )
+    }
+
+    fn peer_content_policy(
+        &self,
+        group: &str,
+        device: &str,
+    ) -> Arc<pigeon_core::filter::ContentPolicy> {
+        if Daemon::group(self, group).is_some_and(|g| crate::membership::pending(&g, device)) {
+            Arc::new(pigeon_core::filter::ContentPolicy {
+                waiting: true,
+                released: Default::default(),
+            })
+        } else {
+            self.content_policy(group)
+        }
+    }
+
     fn repository(&self, path: &Path) -> Option<Repository> {
         self.group_at(path).map(|g| g.repository())
     }
@@ -541,6 +594,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     }
     let interval = Duration::from_secs(config.loops.interval_seconds.max(1));
     let daemon = Arc::new(Daemon {
+        admissions: crate::admission_round::Store::open(dirs.state.join("admission-acks.toml")),
         dirs,
         config,
         device: device.clone(),
@@ -553,6 +607,11 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
         tracer,
         debug: crate::debug::Permissions::default(),
     });
+    // Recover external admission fences before any transport can serve a
+    // restored older repository. Metadata recovery still remains available.
+    for g in daemon.groups() {
+        daemon.admissions.round(&g, &device).await;
+    }
     // Each group's install journal is replayed while the socket already
     // answers: whatever needs the worktree waits on `busy`, held from here.
     let groups = daemon.groups();
@@ -574,6 +633,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     tokio::spawn(serve_socket(net.clone(), listener));
     tokio::spawn(accept_loop(net.clone()));
     tokio::spawn(crate::telemetry::collect(daemon.clone()));
+    tokio::spawn(crate::scrub::run(daemon.clone()));
     tracing::info!(device = %device, socket = %socket.display(), "started");
     for (g, busy) in groups.iter().zip(held) {
         crate::evict::recover(g, &daemon.tracer).await;

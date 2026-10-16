@@ -110,6 +110,9 @@ pub async fn build(g: &Group, me: &str) -> Status {
         Some(pigeon_core::capacity::Admits::Endangered) => "endangered",
         _ => "all",
     };
+    let purge = g.lock().purge_seals.clone();
+    let scrub = g.lock().scrub_report.clone();
+    let acknowledgements = g.lock().admission_acknowledgements.clone();
     Status {
         format: FORMAT,
         device: me.to_owned(),
@@ -120,7 +123,7 @@ pub async fn build(g: &Group, me: &str) -> Status {
             .into_iter()
             .map(|(_, c)| c)
             .collect(),
-        checking: false,
+        checking: crate::membership::pending(g, me) || g.lock().admission_error.is_some(),
         lab: pigeon_sys::lab::LAB,
         versions: versions(g).await,
         disk: Disk {
@@ -131,8 +134,9 @@ pub async fn build(g: &Group, me: &str) -> Status {
             full: space.is_some_and(|s| s.available < reserve),
         },
         custody,
-        scrub: None,
-        purge: Vec::new(),
+        scrub,
+        purge,
+        acknowledgements,
         queue: Queue {
             bytes_to_send: if g.role == Role::Laptop { queued } else { 0 },
             bytes_to_receive: if g.role == Role::Custodian { queued } else { 0 },
@@ -182,6 +186,19 @@ pub async fn publish(g: &Group, me: &str) -> bool {
 }
 
 async fn write(g: &Group, me: &str, status: &Status) -> Result<String, crate::git::Error> {
+    let fence = g.lock().admission_fence.clone();
+    if let Some(fence) = fence
+        && (status.main.as_ref().is_none()
+            || !g
+                .git
+                .contains(status.main.as_deref().unwrap_or_default(), &fence)
+                .await)
+    {
+        g.git.purge_gate.suspend();
+        return Err(crate::membership::invalid(
+            "report main is behind the durable admission fence",
+        ));
+    }
     let text = report_file::render(status).map_err(|e| crate::git::Error::Parse {
         argv: vec!["status.toml".into()],
         detail: e.to_string(),
@@ -193,6 +210,7 @@ async fn write(g: &Group, me: &str, status: &Status) -> Result<String, crate::gi
     let line = format!("100644 blob {}\t{FILE}\n", blob.trim());
     let tree = g.git.run_in(&["mktree"], line.as_bytes()).await?;
     let commit = g.git.commit_tree(tree.trim(), &[], "status").await?;
+    crate::admission_proofs::retain_ack(g, status, &commit).await?;
     let name = format!("refs/pigeon/status/{me}");
     g.git.run(&["update-ref", &name, &commit]).await?;
     Ok(commit)
@@ -258,6 +276,10 @@ pub async fn receive(g: &Group, me: &str) -> usize {
         let Some(status) = status else {
             continue;
         };
+        if let Err(error) = crate::admission_proofs::retain_ack(g, &status, oid).await {
+            tracing::warn!(group = %g.id, %error, "acknowledgement-retention-waits");
+            continue;
+        }
         {
             let mut k = g.lock();
             k.reports.offer(id.clone(), offer.seen.clone());

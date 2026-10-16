@@ -19,6 +19,10 @@ Purge_full	Purge	fast	pass
 Purge_seals	Purge	fast	violation:KeepWins
 Purge_none	Purge	fast	violation:KeepWins
 Purge_full3	Purge	full	pass
+PurgeMembership_fenced	PurgeMembership	fast	pass
+PurgeMembership_fenced2	PurgeMembership	full	pass
+PurgeMembership_no_ack	PurgeMembership	fast	violation:KeepWins
+PurgeMembership_naive	PurgeMembership	fast	violation:NoResurrection
 Roster_fold	Roster	fast	pass
 Roster_atomic	Roster	fast	violation:RemovalWins
 Roster_every	Roster	fast	violation:MergeAlwaysPossible

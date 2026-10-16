@@ -30,6 +30,7 @@ async fn export(g: &Group) -> Result<Bundle, String> {
             "--format=%(refname)",
             crate::refound::ARCHIVE,
             crate::proposal::PREFIX,
+            crate::purge_epoch::PROOFS,
         ])
         .await
         .map_err(|e| e.to_string())?;
@@ -62,6 +63,8 @@ async fn import(g: &Group, peer: &str, bundle: &Bundle) -> Result<String, String
                     format!("proposals/{tail}")
                 } else if let Some(tail) = name.strip_prefix(crate::refound::ARCHIVE) {
                     format!("archive/{tail}")
+                } else if let Some(tail) = name.strip_prefix(crate::purge_epoch::PROOFS) {
+                    format!("purge-proof/{tail}")
                 } else {
                     continue;
                 }

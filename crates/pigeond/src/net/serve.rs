@@ -194,6 +194,7 @@ pub async fn relay(
             n = recv.read(&mut client_buf), if client_open => match n {
                 Ok(Some(n)) if n > 0 => {
                     seen.up(&client_buf[..n]);
+                    filter.set_content_policy(net.directory.peer_content_policy(&repository.group, device));
                     filter.from_client(&client_buf[..n])
                 }
                 _ => {
@@ -205,12 +206,16 @@ pub async fn relay(
             n = from_server.read(&mut server_buf) => match n {
                 Ok(n) if n > 0 => {
                     seen.down(&server_buf[..n]);
+                    filter.set_content_policy(net.directory.peer_content_policy(&repository.group, device));
                     filter.from_server(&server_buf[..n])
                 }
                 _ => break 'session,
             },
             Some(done) = syncs.join_next(), if !syncs.is_empty() => match done {
-                Ok((ticket, Ok(matched))) => filter.synced(ticket, matched),
+                Ok((ticket, Ok(matched))) => {
+                    filter.set_content_policy(net.directory.peer_content_policy(&repository.group, device));
+                    filter.synced(ticket, matched)
+                },
                 Ok((_, Err(e))) => {
                     tracing::error!(peer = %device, error = %e, "sync-failed");
                     break 'session;

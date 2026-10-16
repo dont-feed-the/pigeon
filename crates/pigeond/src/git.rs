@@ -51,6 +51,8 @@ pub(crate) fn signer_device() -> Option<String> {
 pub struct Git {
     /// The driver.
     pub repo: Repo,
+    /// Invalidate content authorization around retained-ref mutations.
+    pub purge_gate: std::sync::Arc<crate::purge_gate::Gate>,
 }
 
 /// Whether `path` is pigeon's own, never captured: `.pigeon/` and
@@ -72,6 +74,7 @@ impl Git {
     pub fn new(dir: impl Into<std::path::PathBuf>, env: GitEnv) -> Git {
         Git {
             repo: Repo::new(dir, env),
+            purge_gate: Default::default(),
         }
     }
 
@@ -82,11 +85,13 @@ impl Git {
 
     /// Runs `git args…` within `timeout`.
     pub async fn run_for(&self, args: &[&str], timeout: Duration) -> Result<String, Error> {
+        let _mutation = self.purge_gate.mutation(args);
         Ok(self.repo.run(args, None, timeout).await?.text())
     }
 
     /// Runs `git args…` with `input` on its stdin.
     pub async fn run_in(&self, args: &[&str], input: &[u8]) -> Result<String, Error> {
+        let _mutation = self.purge_gate.mutation(args);
         let out = self
             .repo
             .run(args, Some(input), pigeon_git::DEFAULT_TIMEOUT)
@@ -96,6 +101,7 @@ impl Git {
 
     /// Whether `git args…` exits 0.
     pub async fn ok(&self, args: &[&str]) -> bool {
+        let _mutation = self.purge_gate.mutation(args);
         matches!(
             self.repo
                 .run_status(args, None, pigeon_git::DEFAULT_TIMEOUT)

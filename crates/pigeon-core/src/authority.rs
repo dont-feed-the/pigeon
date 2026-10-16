@@ -19,7 +19,7 @@ use crate::roster::{self, DeviceId, Invalid, PersonId, Role, Roster, Rule};
 use crate::sig::{self, SigError};
 
 /// The rule sets this release judges (ADR 0048).
-pub const RULES: u32 = 1;
+pub const RULES: u32 = 2;
 /// The roster's path.
 pub const ROSTER: &str = ".pigeon/roster.toml";
 /// The trailer of a Force (04 §4.6).
@@ -106,6 +106,26 @@ pub struct Step<'a> {
     pub new_roster: Option<&'a Result<Roster, Unread>>,
     /// Each decision [`delta`] adds, by path, parsed (04 §4.5).
     pub decisions: &'a BTreeMap<String, Result<Decision, Unread>>,
+    /// Parsed purge deadlines and independently checked historical scope.
+    pub purges: &'a BTreeMap<String, Result<PurgeCheck, Unread>>,
+    /// Immutable proof documents checked against accepted parent histories.
+    pub witnesses: &'a BTreeMap<String, Result<(), Unread>>,
+}
+
+/// What immutable-object admission established for one purge addition.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PurgeCheck {
+    /// Its declared UTC end, checked against R(p) and signed author time.
+    pub end: i64,
+    /// Rules-2 custody is nonempty and every pending admission has settled.
+    pub quorum_ready: bool,
+    /// The base is accepted history of this group or a verified archive.
+    pub base_seen: bool,
+    /// Every explicitly named proposal has a valid retained proof.
+    pub proposals_seen: bool,
+    /// Original proposal blob ids whose scope is exactly unchanged and
+    /// whose retention end this addition only extends on approval.
+    pub adoption_blobs: BTreeSet<String>,
 }
 
 /// What a decision of `.pigeon/decisions/` says of a proposal (04 §4.5).
@@ -326,6 +346,9 @@ pub fn allowed(
     added: bool,
 ) -> bool {
     let admin = roster.persons.get(u).is_some_and(|p| p.admin);
+    if path.starts_with(".pigeon/decisions/purge-") {
+        return admin;
+    }
     let mine = || sole_writer(writers, u, path);
     match rule_of(roster, path) {
         Some(Rule::Owned(owner)) => owner == u,
@@ -461,6 +484,27 @@ pub fn judge(step: &Step<'_>) -> Verdict {
                 Ok(n) => new_roster = Some(n),
                 Err(v) => return *v,
             }
+        } else if path.starts_with(".pigeon/purge-epochs/")
+            || path.starts_with(".pigeon/admissions/")
+        {
+            if recovery
+                || step.before.contains_key(path)
+                || !step.after.contains_key(path)
+                || (path.starts_with(".pigeon/admissions/requests/") && !admin)
+            {
+                return Verdict::Refused(Refusal::NotAllowed(path.clone()));
+            }
+            match step.witnesses.get(path) {
+                Some(Ok(())) => {}
+                Some(Err(Unread::Malformed(_))) => {
+                    return Verdict::Refused(Refusal::Malformed(path.clone(), "purge-epoch"));
+                }
+                _ => return Verdict::Unknown("purge-epoch"),
+            }
+        } else if path.starts_with(".pigeon/decisions/purge-") {
+            if let Err(v) = purge(step, path, admin) {
+                return *v;
+            }
         } else if path.starts_with(".pigeon/decisions/")
             && !path.starts_with(".pigeon/decisions/purge-")
         {
@@ -489,6 +533,47 @@ pub fn judge(step: &Step<'_>) -> Verdict {
         }
     }
     Verdict::Accepted(signer, new_roster)
+}
+
+/// Admins add or cancel a purge, never edit one in place. Ordinary members
+/// may propose a well-formed addition; only admins decide its adoption.
+fn purge(step: &Step<'_>, path: &str, admin: bool) -> Result<(), Box<Verdict>> {
+    if step.roster.rules < 2 {
+        return Err(Box::new(Verdict::Unknown("purge-protocol")));
+    }
+    let refused = |why| {
+        Err(Box::new(Verdict::Refused(Refusal::Malformed(
+            path.into(),
+            why,
+        ))))
+    };
+    if step.before.contains_key(path) && step.after.contains_key(path) {
+        return refused("purge-is-immutable");
+    }
+    if step.after.contains_key(path) {
+        let check = match step.purges.get(path) {
+            Some(Ok(check)) => check,
+            Some(Err(Unread::Malformed(_))) => return refused("purge-format"),
+            _ => return Err(Box::new(Verdict::Unknown("purge-format"))),
+        };
+        if admin && !check.quorum_ready {
+            return Err(Box::new(Verdict::Unknown("purge-membership")));
+        }
+        if !check.base_seen || !check.proposals_seen {
+            return Err(Box::new(Verdict::Unknown("purge-history")));
+        }
+        let Some((at, _)) = author_time(step.raw) else {
+            return refused("purge-time");
+        };
+        let seconds = u64::from(step.roster.retention_days) * 86_400;
+        if !crate::purge::valid_end(at, seconds, check.end) {
+            return refused("purge-retention");
+        }
+    }
+    if !admin {
+        return Err(Box::new(Verdict::Refused(Refusal::NotAllowed(path.into()))));
+    }
+    Ok(())
 }
 
 /// Whether person `u` may add the decision at `path` (04 §4.3's `.pigeon/`
@@ -541,6 +626,9 @@ fn roster_change(step: &Step<'_>, signer: &DeviceId) -> Result<Roster, Box<Verdi
     }
     if new.rules < step.roster.rules {
         return refused(Refusal::RosterNotAChange);
+    }
+    if new.rules == 2 && step.roster.rules < 2 && step.witnesses.get(ROSTER) != Some(&Ok(())) {
+        return Err(Box::new(Verdict::Unknown("upgrade-proof")));
     }
     if let Err(why) = new.validate() {
         return refused(Refusal::RosterInvalid(why));

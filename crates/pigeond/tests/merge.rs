@@ -531,3 +531,277 @@ async fn peer_metadata_cannot_be_admitted_as_an_ordinary_file_suggestion() {
     assert_eq!(pigeond::proposal::take(&w.g, "fixture").await, 0);
     assert!(pigeond::proposal::kept(&w.git).await.is_empty());
 }
+
+#[tokio::test]
+async fn a_purge_request_is_admin_only_and_late_approval_extends_only_its_wait() {
+    use pigeond::purge_file::{PurgeDoc, render};
+    let mut w = world().await;
+    let head = purge_upgrade::upgrade(&w.g).await;
+    w.base = w.git.tree(&head).await.unwrap();
+    let path = ".pigeon/decisions/purge-fixture.toml";
+    let doc = PurgeDoc {
+        format: 1,
+        kind: "purge".into(),
+        paths: vec!["Shared/".into()],
+        base: head.clone(),
+        keys: vec![],
+        proposals: vec![],
+        requested_by: "ben".into(),
+        retention_end: pigeond::report_file::datetime(T0 + 30 + 30 * 86_400),
+    };
+    let mut tree = w.base.clone();
+    tree.insert(
+        path.into(),
+        blob(&w.git, render(&doc).unwrap().as_bytes()).await,
+    );
+    let proposal = commit(&w.git, &tree, &[&head], 30, 2).await;
+    let incoming = format!(
+        "refs/pigeon/peers/fixture/proposals/{}/{proposal}",
+        dev(2).0
+    );
+    w.git.update_ref(&incoming, &proposal, None).await.unwrap();
+    assert_eq!(pigeond::proposal::take(&w.g, "fixture").await, 1);
+    let pending = pigeond::decide::pending(&w.g).await.unwrap();
+    assert_eq!(pending[0].deciders.0, [PersonId("ana".into())].into());
+    let mut approved = doc.clone();
+    approved.retention_end = pigeond::report_file::datetime(T0 + 1_000 + 30 * 86_400);
+    tree.insert(
+        path.into(),
+        blob(&w.git, render(&approved).unwrap().as_bytes()).await,
+    );
+    let accepted = commit(&w.git, &tree, &[&head, &proposal], 1_000, 1).await;
+    let result = verify::judge(&w.g, None, &accepted).await.unwrap();
+    assert_eq!(
+        result.accepted.as_deref(),
+        Some(accepted.as_str()),
+        "{result:?}"
+    );
+    // Extending the wait confers no right to extend the erased scope.
+    approved.paths.push("Unrequested/".into());
+    tree.insert(
+        path.into(),
+        blob(&w.git, render(&approved).unwrap().as_bytes()).await,
+    );
+    let broadened = commit(&w.git, &tree, &[&head, &proposal], 1_000, 1).await;
+    let result = verify::judge(&w.g, None, &broadened).await.unwrap();
+    assert_ne!(result.accepted.as_deref(), Some(broadened.as_str()));
+    // Original P4 still applies to a direct request and to an approval.
+    approved = doc;
+    approved.retention_end = pigeond::report_file::datetime(T0 + 1_000 + 30 * 86_400 - 1);
+    tree.insert(
+        path.into(),
+        blob(&w.git, render(&approved).unwrap().as_bytes()).await,
+    );
+    let shortened = commit(&w.git, &tree, &[&head, &proposal], 1_000, 1).await;
+    let result = verify::judge(&w.g, None, &shortened).await.unwrap();
+    assert_ne!(result.accepted.as_deref(), Some(shortened.as_str()));
+}
+
+#[tokio::test]
+async fn cancelling_and_readding_the_same_purge_creates_a_new_identity() {
+    use pigeond::purge_file::{PurgeDoc, render};
+    let mut w = world().await;
+    let head = purge_upgrade::upgrade(&w.g).await;
+    w.base = w.git.tree(&head).await.unwrap();
+    let path = ".pigeon/decisions/purge-identity.toml";
+    let doc = PurgeDoc {
+        format: 1,
+        kind: "purge".into(),
+        paths: vec!["Shared/".into()],
+        base: head.clone(),
+        keys: vec![],
+        proposals: vec![],
+        requested_by: "ana".into(),
+        retention_end: pigeond::report_file::datetime(T0 + 30 * 86_400 + 1_000),
+    };
+    let mut tree = w.base.clone();
+    tree.insert(
+        path.into(),
+        blob(&w.git, render(&doc).unwrap().as_bytes()).await,
+    );
+    let first = commit(&w.git, &tree, &[&head], 30, 1).await;
+    let active = pigeond::purge_state::active(&w.g, &first).await.unwrap();
+    let original_id = active.first_key_value().unwrap().0.clone();
+    assert_eq!(active[&original_id].introduced, first);
+    assert_eq!(active[&original_id].retention_seconds, 30 * 86_400);
+    let cancelled = commit(&w.git, &w.base, &[&first], 60, 1).await;
+    assert!(
+        pigeond::purge_state::active(&w.g, &cancelled)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let readded = commit(&w.git, &tree, &[&cancelled], 90, 1).await;
+    let active = pigeond::purge_state::active(&w.g, &readded).await.unwrap();
+    assert_ne!(active.first_key_value().unwrap().0, &original_id);
+    assert_eq!(active.first_key_value().unwrap().1.introduced, readded);
+}
+
+#[tokio::test]
+async fn a_signed_seal_survives_replaced_reports_and_contradictions_stop_release() {
+    use pigeond::purge_file::{PurgeDoc, render};
+    let mut w = world().await;
+    let head = purge_upgrade::upgrade(&w.g).await;
+    w.base = w.git.tree(&head).await.unwrap();
+    let path = ".pigeon/decisions/purge-seal.toml";
+    let doc = PurgeDoc {
+        format: 1,
+        kind: "purge".into(),
+        paths: vec!["Shared/".into()],
+        base: head.clone(),
+        keys: vec![],
+        proposals: vec![],
+        requested_by: "ana".into(),
+        retention_end: pigeond::report_file::datetime(T0 - 30 * 86_400 + 1_000),
+    };
+    let mut tree = w.base.clone();
+    tree.insert(
+        path.into(),
+        blob(&w.git, render(&doc).unwrap().as_bytes()).await,
+    );
+    // Historical signed timestamps exercise admission, not a real month
+    // of waiting; a skewed parent clock cannot shorten receiver uptime.
+    let first = commit(&w.git, &tree, &[&head], -60 * 86_400 + 30, 1).await;
+    let active = pigeond::purge_state::active(&w.g, &first).await.unwrap();
+    let id = active.first_key_value().unwrap().0.clone();
+    let mut report = pigeond::report::build(&w.g, &dev(3).0).await;
+    report.at = pigeond::report_file::datetime(doc.end().unwrap() + 40);
+    report.custody = Some(pigeond::report_file::Custody {
+        repository: "ok".into(),
+    });
+    report.purge.push(pigeond::report_file::Purge {
+        decision: id.clone(),
+        main: first,
+        held: vec![],
+    });
+    let mut report_tree = Tree::new();
+    report_tree.insert(
+        "status.toml".into(),
+        blob(
+            &w.git,
+            pigeond::report_file::render(&report).unwrap().as_bytes(),
+        )
+        .await,
+    );
+    let status_ref = format!("refs/pigeon/status/{}", dev(3).0);
+    let mut early = report.clone();
+    early.at = pigeond::report_file::datetime(doc.end().unwrap() - 1);
+    let early_tree = [(
+        "status.toml".into(),
+        blob(
+            &w.git,
+            pigeond::report_file::render(&early).unwrap().as_bytes(),
+        )
+        .await,
+    )]
+    .into();
+    let early = commit(&w.git, &early_tree, &[], 39, 3).await;
+    w.git.update_ref(&status_ref, &early, None).await.unwrap();
+    assert!(
+        pigeond::purge_proofs::collect(&w.g, &active)
+            .await
+            .unwrap()
+            .is_empty(),
+        "a provably early signed seal cannot count"
+    );
+    let witness = commit(&w.git, &report_tree, &[], 40, 3).await;
+    w.git
+        .update_ref(&status_ref, &witness, Some(&early))
+        .await
+        .unwrap();
+    let proofs = pigeond::purge_proofs::collect(&w.g, &active).await.unwrap();
+    assert_eq!(proofs.len(), 1);
+    let proof_ref = format!("refs/pigeon/purge-seals/{id}/{}", dev(3).0);
+    assert_eq!(
+        w.git.rev(&proof_ref).await.as_deref(),
+        Some(witness.as_str())
+    );
+    // A completion witness uses all ORIGINAL raw signed reports and an
+    // accepted head containing every sealer's history, never today's roster.
+    let epoch = pigeond::purge_epoch::Doc {
+        format: 1,
+        kind: "purge-epoch".into(),
+        decision: id.clone(),
+        main: report.purge[0].main.clone(),
+        reports: [(dev(3).0.clone(), witness.clone())].into(),
+    };
+    let verified = pigeond::purge_epoch::verify(&w.g, &epoch, std::slice::from_ref(&epoch.main))
+        .await
+        .unwrap();
+    assert_eq!(verified.epoch.custodians, [dev(3).0.clone()].into());
+    assert_eq!(verified.seals, proofs);
+    pigeond::purge_epoch::retain(&w.g, &verified).await.unwrap();
+    let rooted = format!("{}{}", pigeond::purge_epoch::PROOFS, witness);
+    assert_eq!(
+        w.g.git.rev(&rooted).await.as_deref(),
+        Some(witness.as_str())
+    );
+    assert!(
+        pigeond::purge_epoch::verify(&w.g, &epoch, std::slice::from_ref(&head))
+            .await
+            .is_err()
+    );
+    let mut forged = epoch.clone();
+    forged.reports.insert(dev(2).0, witness.clone());
+    assert!(
+        pigeond::purge_epoch::verify(&w.g, &forged, std::slice::from_ref(&epoch.main))
+            .await
+            .is_err()
+    );
+    forged = epoch.clone();
+    forged.reports.insert(dev(3).0, head.clone());
+    assert!(
+        pigeond::purge_epoch::verify(&w.g, &forged, std::slice::from_ref(&epoch.main))
+            .await
+            .is_err()
+    );
+    // A restarted device's empty latest report cannot revoke a signed ack.
+    let old = report.purge.clone();
+    report.purge.clear();
+    report_tree.insert(
+        "status.toml".into(),
+        blob(
+            &w.git,
+            pigeond::report_file::render(&report).unwrap().as_bytes(),
+        )
+        .await,
+    );
+    let empty = commit(&w.git, &report_tree, &[], 50, 3).await;
+    w.git
+        .update_ref(&status_ref, &empty, Some(&witness))
+        .await
+        .unwrap();
+    assert_eq!(
+        pigeond::purge_proofs::collect(&w.g, &active).await.unwrap(),
+        proofs
+    );
+    report.purge = old;
+    report.purge[0].held.push("a-different-held-key".into());
+    report_tree.insert(
+        "status.toml".into(),
+        blob(
+            &w.git,
+            pigeond::report_file::render(&report).unwrap().as_bytes(),
+        )
+        .await,
+    );
+    let contradictory = commit(&w.git, &report_tree, &[], 60, 3).await;
+    w.git
+        .update_ref(&status_ref, &contradictory, Some(&empty))
+        .await
+        .unwrap();
+    assert!(pigeond::purge_proofs::collect(&w.g, &active).await.is_err());
+    assert_eq!(
+        w.git.rev(&proof_ref).await.as_deref(),
+        Some(witness.as_str())
+    );
+}
+
+#[path = "purge/driver.rs"]
+mod purge_driver;
+
+#[path = "purge/admission.rs"]
+mod purge_admission;
+
+#[path = "purge/upgrade.rs"]
+mod purge_upgrade;

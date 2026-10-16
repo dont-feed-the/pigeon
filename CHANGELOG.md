@@ -4,6 +4,14 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.6.0 — 2026-10-16
+
+### Added
+
+- Backup machines check retained files every 30 days during the nightly
+  window, using idle I/O priority on Linux. Set `resources.scrub_window`
+  to choose another local-time window.
+
 ## Unreleased
 
 ### Changed

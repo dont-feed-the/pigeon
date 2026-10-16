@@ -1,5 +1,6 @@
 about = "Ben's laptop captures under a roster of rules 2."
 verdict = "unknown"
+verdict_rules_2 = "accepted"
 roster = "known/group-rules-2.toml"
 signer = 2
 message = "pigeon: capture"

@@ -553,3 +553,12 @@ mod storage;
 #[cfg(all(feature = "lab", feature = "tla-trace"))]
 #[path = "install/tracing.rs"]
 mod tracing;
+
+#[path = "purge/content.rs"]
+mod purge_content;
+
+#[path = "purge/scrub.rs"]
+mod scrub_content;
+
+#[path = "purge/upgrade.rs"]
+mod purge_upgrade;

@@ -676,6 +676,7 @@ pub async fn fetch_welcome(
 ) -> Result<String, String> {
     let spec = crate::settings::peer_refspec(inviter);
     let archive = crate::refound::refspec(inviter);
+    let proofs = crate::purge_epoch::refspec(inviter);
     let proposals = crate::proposal::refspec(inviter);
     let args = [
         "fetch",
@@ -685,6 +686,7 @@ pub async fn fetch_welcome(
         inviter,
         spec.as_str(),
         archive.as_str(),
+        proofs.as_str(),
         proposals.as_str(),
     ];
     // The inviter may still be busy with the welcome's round: retry for
