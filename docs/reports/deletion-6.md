@@ -94,3 +94,36 @@ skip the configured month or claim physical purge completion.
   vote; a safe recovery protocol needs separate modelling and evidence.
 - Release validation on both supported runners, followed by the tag and
   publication gates. This checkpoint supplies no longitudinal test claim.
+
+## Browser usability checkpoint
+
+Two independent source-blind agent participants, accepted by the user for
+usability evaluation, used normal builds of `32486cb`. Each started at Home,
+requested erasure of a file's two observed versions, explained shared bytes
+and the receiver waiting periods, cancelled the request, and explicitly
+restored version 1. Neither needed assistance. Their original reports are
+[English](m5-usability-english.md) and [French](m5-usability-french.md); each
+rated the overall workflow 5/7. These are agent evaluations, not measured
+human task times.
+
+An independent byte comparison after each session confirmed the exact
+original contents, including binary bytes and line endings. Each retained
+three historical versions and no accepted erasure request. Both browsers
+and all six fixture daemons were stopped and reaped afterward.
+
+The English participant encountered a stale review after preparation and
+a transient `receiving` failure restoring an already local version. Both
+participants found the terminal command in the browser receipt confusing,
+and inferred rather than immediately understood that restoring older bytes
+creates a new current version. The French participant could not verify
+contents through “Open a copy”, which actually initiates a browser download.
+
+Corrections keep the fresh-consent check and explain arriving preparation
+acknowledgements, show readiness explicitly, link successful receipts to
+Erasure requests, explain the new current version, and label downloads as
+downloads in both languages. Local deduplication now skips pool publication
+while content is fenced, without refusing an already local restore. Network
+hydration and export still obey the fence. The real three-peer lifecycle
+now requires the first restore attempt after cancellation to succeed;
+deduplication tests require that no fenced pool name is published. These
+corrections still need a focused browser retake.

@@ -10,6 +10,7 @@ fn readiness(r: &Renderer, state: &Readiness) -> Vec<String> {
         out.push(r.text(problem));
     }
     if state.ready {
+        out.push(r.id("erase-ready"));
         return out;
     }
     out.push(r.id(if state.preparation_needed {

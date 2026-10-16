@@ -238,7 +238,9 @@ async fn mounted_erase_keeps_review_forms_and_results_in_the_selected_peer() {
     let response = app.oneshot(post("/erase", "", form)).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let html = body(response).await;
-    assert!(html.contains(&format!("href=\"{prefix}/erase?path=%2FFamily%2Fold.txt\"")));
+    assert!(html.contains(&format!("href=\"{prefix}/erase\"")));
+    assert!(!html.contains("pigeon erase"));
+    assert!(!html.contains("/erase?path="));
     assert_eq!(
         backend.calls.lock().unwrap().as_slice(),
         &[pigeon_proto::Request::Erase {

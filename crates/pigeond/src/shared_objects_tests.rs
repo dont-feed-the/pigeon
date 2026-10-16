@@ -7,6 +7,43 @@ use sha2::Digest;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
 #[tokio::test]
+async fn local_adoption_waits_to_publish_without_blocking_existing_bytes() {
+    let temp = tempfile::tempdir().unwrap();
+    let env = pigeon_git::GitEnv::default();
+    let git = crate::git::Git::new(temp.path(), env.clone());
+    git.run(&["init", "--bare", "-q"]).await.unwrap();
+    let mut group = Group::open(&"a".repeat(40), temp.path(), &env)
+        .await
+        .unwrap();
+    let store = temp.path().join("separate-pool");
+    let key = format!("SHA256E-s3--{:064x}.txt", 1);
+    for shared in [false, true] {
+        group.shared = shared.then(|| crate::config::BridgeStorage {
+            store: store.clone(),
+            source_socket: temp.path().join("not-listening.sock"),
+        });
+        group.git.purge_gate.arm();
+        for waiting in [true, false] {
+            if !waiting {
+                assert!(group.git.purge_gate.publish(
+                    group.git.purge_gate.revision().unwrap(),
+                    pigeon_core::filter::ContentPolicy {
+                        waiting: false,
+                        released: [key.clone()].into(),
+                    },
+                ));
+            }
+            assert!(!content_allowed(&group, &key));
+            adopt(&group, &key).await.unwrap();
+            assert!(hydrate(&group, &key).await.is_err());
+            assert!(provider_hydrate(&group, &key).await.is_err());
+            assert!(!store.exists(), "fenced adoption published a pool name");
+        }
+        group.git.purge_gate.suspend();
+    }
+}
+
+#[tokio::test]
 async fn compaction_preserves_annex_locks_timestamps_and_temporary_files() {
     for seeded in [false, true] {
         let temp = tempfile::tempdir().unwrap();

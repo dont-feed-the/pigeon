@@ -653,7 +653,7 @@ async fn a_version_is_opened_as_a_read_only_download() {
         .await
         .unwrap();
     let page = body(page).await;
-    assert_eq!(page.matches("Open a copy").count(), 2, "{page}");
+    assert_eq!(page.matches("Download a copy").count(), 2, "{page}");
     assert_eq!(page.matches("Restore this version").count(), 1, "{page}");
     let form = form_of(&page);
     let forged = app

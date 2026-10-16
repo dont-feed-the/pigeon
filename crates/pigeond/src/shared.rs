@@ -234,12 +234,15 @@ pub(crate) async fn provider_compact(g: &Group) -> Result<(), String> {
 
 /// Canonicalize an object obtained through normal annex transport as well.
 pub(crate) async fn adopt(g: &Group, key: &str) -> Result<(), String> {
-    if !content_allowed(g, key) {
-        return Err("Content is released or awaiting verification".into());
-    }
     let Some(storage) = &g.shared else {
         return Ok(());
     };
+    // This only deduplicates bytes already in this annex. A fresh metadata
+    // scan must not prevent an explicit local restore. Skip publication
+    // into the pool while transfers are fenced; hydrate/export still wait.
+    if !content_allowed(g, key) {
+        return Ok(());
+    }
     let source = crate::custody::present(g, key)
         .await
         .ok_or("Content unavailable")?;

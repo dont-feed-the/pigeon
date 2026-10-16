@@ -146,14 +146,10 @@ fn preparation_confirmation_and_cancellation_preserve_current_and_retained_bytes
     );
     // No waiting month is simulated. The old content must still be here,
     // and restoring it explicitly makes a new ordinary reference.
-    eventually_within(
-        60,
-        || {
-            let result = pigeon(&alice, &["restore", path, "--version", "1"]);
-            said(&result, "restore-result", "path").is_some()
-        },
-        "retained version could not be restored after cancellation",
-        &all,
+    let restored = pigeon(&alice, &["restore", path, "--version", "1"]);
+    assert!(
+        said(&restored, "restore-result", "path").is_some(),
+        "an already local version must restore without retrying: {restored:?}"
     );
     assert_eq!(std::fs::read(&file).unwrap(), bytes);
 }

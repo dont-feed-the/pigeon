@@ -158,6 +158,18 @@ pub async fn submit(
         Some(Selection::Suggestion(id)) => format!("/erase?suggestion={}", enc(&id)),
         None => "/erase".into(),
     };
-    let lines = pages::lines(&web, &r, Request::Erase { operation }).await;
+    let answers = web.ask(Request::Erase { operation }).await;
+    let lines: Vec<_> = answers.iter().flat_map(|a| r.response(a).0).collect();
+    if answers.iter().any(|a| {
+        matches!(a, Reply::Erasure { answer }
+        if matches!(answer.as_ref(), Answer::Submitted { .. } | Answer::Cancelled { .. }))
+    }) {
+        let body = html! {
+            (list(&lines))
+            p { a href=(r.url("/erase")) { (r.id("web-erase-list")) } }
+            p { a href=(r.url("/files")) { (r.id("web-nav-files")) } }
+        };
+        return page(&r, "/files", &r.id("web-erase-title"), &body).into_response();
+    }
     pages::result(&r, &back, lines).into_response()
 }

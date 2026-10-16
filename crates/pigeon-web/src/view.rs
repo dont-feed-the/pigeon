@@ -1,4 +1,4 @@
-//! *Open a copy* (07 §7.6, 10 §10.3): `pigeon view PATH --version N`
+//! *Download a copy* (07 §7.6, 10 §10.3): `pigeon view PATH --version N`
 //! from the file's page. The daemon writes a read-only copy in
 //! `<cache>/view/`; the page hands it to the browser as a download, so the
 //! person opens it with the program of their choice and the folder is never
@@ -15,7 +15,7 @@ use pigeon_proto::{Arg, Request};
 
 use crate::{FormToken, Web, pages};
 
-/// The form of *Open a copy*.
+/// The form of *Download a copy*.
 #[derive(serde::Deserialize)]
 pub struct ViewForm {
     /// The session's form token.

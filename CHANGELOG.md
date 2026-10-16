@@ -16,6 +16,12 @@ the second number, and every other pull request the third.
   window, using idle I/O priority on Linux. Set `resources.scrub_window`
   to choose another local-time window.
 
+### Fixed
+
+- Restoring an already retained version continues while erasure metadata is
+  being checked. Browser erasure receipts link directly to waiting requests,
+  and restoration explains how older contents become a new current version.
+
 ## 0.5.5 — 2026-10-16
 
 ### Fixed

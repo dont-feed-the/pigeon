@@ -117,6 +117,7 @@ pub const MESSAGES: &[Entry] = &[
     e("erase-checking", &[]),
     e("erase-prepare-needed", &[]),
     e("erase-readiness-wait", &[]),
+    e("erase-ready", &[]),
     e("erase-waiting", &["names"]),
     e("erase-old-decisions", &[]),
     e("erase-preview-counts", &["files", "versions", "bytes"]),
