@@ -352,14 +352,14 @@ async fn split_initial_choices_survive_restart_and_recover_only_in_a_new_authori
     );
     // Explicit signed additions stand for the peers' new invitations;
     // old votes are not copied into this authority-domain tree.
+    let mut rejoined = original_roster;
+    // Refounding has a fresh permanent invitation. Rejoining changes only
+    // membership; copying the old invitation would be an invalid roster edit.
+    rejoined.roster.invitation = w.g.roster().unwrap().roster.invitation;
     let mut tree = w.base.clone();
     tree.insert(
         ROSTER.into(),
-        blob(
-            &w.git,
-            roster_file::render(&original_roster).unwrap().as_bytes(),
-        )
-        .await,
+        blob(&w.git, roster_file::render(&rejoined).unwrap().as_bytes()).await,
     );
     let joined = commit(&w.git, &tree, &[&new_root], 11, 1).await;
     move_main(&w, &joined, &new_root).await;
