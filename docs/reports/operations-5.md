@@ -81,4 +81,23 @@ The five independent normal-build usability sessions used a frozen matching
 Their exact bytes and safety results, and the UI/join failures they found,
 are recorded in the separate M4 usability report. They do not validate this
 final diagnostic exporter binary. Full all-target lab/trace clippy and
-repository checks pass. The final complete workspace run is pending.
+repository checks pass. All workspace targets and doctests pass across
+the full run and a targeted continuation. The initial run stopped in the
+slice when accumulated generated test fixtures pushed the host below its
+backup reserve. After removing stale generated roots, the slice and all
+remaining integration targets passed, as did the open-pending-save safety
+regression and workspace doctests. The affected failure is recorded rather
+than presented as a single uninterrupted green run.
+
+A local real-binary S11 reproduced the hosted 0.4.1 disk-budget failure:
+about 11 MiB of diagnostic files beside 16 MiB of kept content. The default
+local spool now rotates within 256 KiB, carried from 0.4.1 through the stack.
+This keeps diagnostics within the steady single-copy budget; a selected
+collector can retain longer history. Repaired real S11 passed in 74 seconds:
+16 checks, no failures, one platform skip with local directory isolation.
+Linux namespace and macOS image runs remain the hosted release gates.
+
+Chromium rendered the imported Grafana dashboard and both real lag charts
+with no browser errors. The reference stack was stopped and removed after
+the actual query and screenshot evidence was saved. No backend remains
+running as an undeclared side effect of this acceptance test.
