@@ -91,9 +91,9 @@ async fn home_shows_replicated_health_and_preserves_report_age_without_telemetry
     let app = web.router();
     let cookie = logged_in(&app, &web).await;
     let page = plain(&body(app.oneshot(get("/", HOST, Some(&cookie))).await.unwrap()).await);
-    assert!(page.contains("Current files") && page.contains("Older versions being kept"));
-    assert!(page.contains("Protected: 2") && page.contains("Only on this computer: 1"));
-    assert!(page.contains("Not checked recently: 4") && page.contains("Protected: 5"));
+    assert!(page.contains("Current files") && page.contains("Other versions being kept"));
+    assert!(page.contains("Safe: 2") && page.contains("Only on this computer: 1"));
+    assert!(page.contains("Not checked recently: 4") && page.contains("Safe: 5"));
     assert!(page.contains("Suggestions awaiting a decision: 6"));
     assert!(page.contains("New contact does not update these figures"));
     assert!(page.contains("Waiting to send: 1 B") && page.contains("To receive: 2 kB"));
@@ -125,7 +125,7 @@ fn unavailable_inventory_and_live_values_do_not_turn_into_zero_protected_files()
             .unwrap()
             .starts_with("Pas encore vérifié")
     );
-    assert!(plain(values["health-retained"].as_str().unwrap()).contains("Protégés : 5"));
+    assert!(plain(values["health-retained"].as_str().unwrap()).contains("En sécurité : 5"));
     let before = event["membership"].clone();
     h.group_id = "3".repeat(40);
     let next: serde_json::Value =

@@ -96,10 +96,12 @@ Homebrew installations use `brew services stop pigeon` and
 
 ## Open pigeon
 
-Home separates **Current files** from **Older versions being kept**.
+Home separates **Current files** from **Other versions being kept**.
 Editing or deleting a file does not release its older saved bytes. A
 recently saved change may be only on this computer while its previous
-version is already protected. The headline includes both inventories.
+version is already protected. Other versions also include suggestions
+awaiting approval, which can be newer than the group's accepted files.
+The headline includes both inventories and counts file versions.
 
 Open **Machines, storage and work** for capacity and queued transfers.
 Those figures carry the time of each machine's signed report: a new

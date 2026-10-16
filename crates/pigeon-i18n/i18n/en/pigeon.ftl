@@ -34,13 +34,13 @@ why-capturing = This change is waiting to be captured and copied to the backup m
 why-too-few-backups = { $have } of { $need } backup machines are set up. Add one with: pigeon invite --backup-machine
 headline-not-safe =
     { $files ->
-        [one] 1 file is not safe yet.
-       *[other] { $files } files are not safe yet.
+        [one] 1 file version is not safe yet.
+       *[other] { $files } file versions are not safe yet.
     }
 headline-working =
     { $files ->
-        [one] Sending 1 file to the backup machines…
-       *[other] Sending { $files } files to the backup machines…
+        [one] Sending 1 file version to the backup machines…
+       *[other] Sending { $files } file versions to the backup machines…
     }
 headline-not-checked = Last confirmed safe { $when }. pigeon can't reach the group right now; changes since then are only on this computer.
 headline-disk-full = Your disk is full. pigeon can't save new changes. Free up space or empty the trash.
@@ -461,10 +461,11 @@ problem-folder-not-empty = This folder is not empty and does not belong to the g
 # Group health from replicated state (ADR 0025).
 web-health = Group health
 web-health-current = Current files
-web-health-retained = Older versions being kept
+web-health-retained = Other versions being kept
 web-health-unavailable = Not checked yet; pigeon may be busy.
 web-health-no-report = No report yet.
-web-health-counts = Protected: { $protected } · Waiting for backups: { $published } · Only on this computer: { $local } · Not checked recently: { $uncertain } · Missing: { $missing } · Erased: { $erased }
+web-health-counts = Safe: { $protected } · Shared, not safe yet: { $published } · Only on this computer: { $local } · Not checked recently: { $uncertain } · Missing: { $missing } · Erased forever: { $erased }
+headline-empty = No files yet. Add files to your shared folder to get started.
 web-health-size = { $mb } MB
 web-health-kb = { $kb } kB
 web-health-bytes = { $bytes } B

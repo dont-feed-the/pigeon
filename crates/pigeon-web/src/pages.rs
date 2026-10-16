@@ -48,7 +48,10 @@ if(h.textContent!==e.data)h.textContent=e.data});\
 s.addEventListener('health',e=>{const p=JSON.parse(e.data),h=document.getElementById('health');\
 if(!h||h.dataset.membership!==p.membership){location.reload();return}\
 for(const [id,value] of Object.entries(p.values)){const n=document.getElementById(id);\
-if(n&&n.textContent!==value)n.textContent=value}})";
+if(n&&n.textContent!==value)n.textContent=value}\
+const l=document.getElementById('health-explanations');\
+if(l&&JSON.stringify([...l.children].map(n=>n.textContent))!==JSON.stringify(p.explanations)){\
+l.replaceChildren(...p.explanations.map(text=>{const n=document.createElement('li');n.textContent=text;return n}))}})";
 
 pub(crate) fn page(r: &Renderer, here: &str, headline: &str, body: &Markup) -> Html<String> {
     document(r, here, headline, body, here == "/")
@@ -165,7 +168,7 @@ pub async fn home(
     let body = html! {
         (held)
         @if let Some(health) = &health { (crate::health::section(&r, health)) }
-        (list(&rest))
+        ul id="health-explanations" { @for line in &rest { li { (line.trim()) } } }
         @if no_group {
             p { (r.id("web-setup-help")) }
             p { a href="/join" { (r.id("web-setup")) } }

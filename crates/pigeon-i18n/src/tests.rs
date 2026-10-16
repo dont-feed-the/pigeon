@@ -185,8 +185,8 @@ fn plurals_and_isolation() {
     let cat = Catalogue::new(&en, false);
     let one = Message::new("headline-not-safe").arg("files", 1i64);
     let three = Message::new("headline-not-safe").arg("files", 3i64);
-    assert_eq!(cat.format(&one), "1 file is not safe yet.");
-    assert_eq!(cat.format(&three), "3 files are not safe yet.");
+    assert_eq!(cat.format(&one), "1 file version is not safe yet.");
+    assert_eq!(cat.format(&three), "3 file versions are not safe yet.");
     let web = Catalogue::new(&en, true);
     let msg = Message::new("keep-result").arg("folder", "Photos");
     assert_eq!(

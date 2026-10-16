@@ -106,7 +106,7 @@ async fn observe_at(
     let saved = g.git.commit_time(main).await.unwrap_or(0);
     let now = crate::util::now();
     let s = settings(g);
-    let (heard, mut lost, reported, checking) = {
+    let (mut heard, mut lost, reported, mut checking) = {
         let k = g.lock();
         let mains: BTreeMap<String, String> = k
             .report_files
@@ -122,12 +122,30 @@ async fn observe_at(
         (k.heard.clone(), k.lost.clone(), mains, checking)
     };
     lost.extend(crate::report::lost(g));
+    if g.role == pigeon_core::filter::Role::Custodian
+        && crate::health::own_report(g, me)
+            .await
+            .is_some_and(|r| r.checking)
+    {
+        checking.insert(me.to_owned());
+    }
     let mut peer_keys: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
     let mut report_keys: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
     let mut custodians: Vec<(String, String)> = Vec::new();
     if let Some(doc) = &doc {
         for (id, d) in &doc.roster.devices {
-            if id.0 == me || d.role == DeviceRole::Recovery {
+            if id.0 == me {
+                if d.role == DeviceRole::Custodian
+                    && g.role == pigeon_core::filter::Role::Custodian
+                    && let Some(uuid) = &d.annex_uuid
+                    && g.git.config("annex.uuid").await.as_ref() == Some(uuid)
+                {
+                    custodians.push((id.0.clone(), uuid.clone()));
+                    heard.insert(id.0.clone(), now);
+                }
+                continue;
+            }
+            if d.role == DeviceRole::Recovery {
                 continue;
             }
             let fetched = g.git.rev(&format!("refs/pigeon/peers/{}/main", id.0)).await;
@@ -151,17 +169,19 @@ async fn observe_at(
         }
         let have: BTreeSet<String> = holders(&g.git, &key).await;
         let named = |id: &str| {
-            [&peer_keys, &report_keys]
-                .iter()
-                .any(|m| m.get(id).and_then(|k| k.get(&path)) == Some(&key))
+            id == me
+                || [&peer_keys, &report_keys]
+                    .iter()
+                    .any(|m| m.get(id).and_then(|k| k.get(&path)) == Some(&key))
         };
+        let local = present(g, &key).await.is_some();
         let version = Version {
             custodians: custodians
                 .iter()
                 .map(|(id, uuid)| Custodian {
                     device: id.clone(),
                     heard: heard.get(id).map(|t| Time(*t)),
-                    holds: have.contains(uuid),
+                    holds: if id == me { local } else { have.contains(uuid) },
                     has_commit: named(id),
                     checking: checking.contains(id),
                     repository_lost: lost.contains(id),
@@ -171,7 +191,7 @@ async fn observe_at(
                 .keys()
                 .chain(report_keys.keys())
                 .any(|id| named(id)),
-            this_device_holds: present(g, &key).await.is_some(),
+            this_device_holds: local,
             erased: false,
         };
         let st = state(&version, &s, Time(now));
@@ -413,6 +433,13 @@ pub(crate) async fn inventory_report(
             )],
         ),
         _ if too_few_backups && level != Level::NeedsYou => msg("headline-too-few-backups", &[]),
+        _ if level == Level::Safe
+            && observed.is_empty()
+            && retained.is_empty()
+            && pending.is_empty() =>
+        {
+            msg("headline-empty", &[])
+        }
         (level, None) => match level {
             Level::Safe => msg("headline-safe", &[("ago", Arg::Text(rfc3339(last)))]),
             Level::Working => msg("headline-working", &[("files", files)]),

@@ -64,8 +64,8 @@ pub async fn keys(g: &Group) -> Result<BTreeSet<String>, Error> {
 }
 
 /// States of retained keys outside the current tree, for the group
-/// headline. Count a custodian conservatively only after it has every
-/// retained head, so old bytes cannot count without their signed history.
+/// headline. A peer must have an accepted retaining head for that key.
+/// Laptops can prove publication; only custodians prove protection.
 pub async fn states(
     g: &Group,
     me: &str,
@@ -75,12 +75,18 @@ pub async fn states(
     use pigeon_core::roster::Role;
     use pigeon_core::state::{Custodian, Version, state};
     use pigeon_core::time::Time;
-    let mut keys = g.git.retained_keys(tips).await?;
+    let mut keys = BTreeSet::new();
+    let mut by_tip = Vec::new();
+    for tip in tips {
+        let retained = g.git.retained_keys(std::slice::from_ref(tip)).await?;
+        keys.extend(retained.iter().cloned());
+        by_tip.push((tip, retained));
+    }
     keys.retain(|k| !current.contains(k));
     if keys.is_empty() {
         return Ok(Vec::new());
     }
-    let (heard, mut lost, checking) = {
+    let (mut heard, mut lost, mut checking) = {
         let k = g.lock();
         let checking: BTreeSet<String> = k
             .report_files
@@ -91,48 +97,67 @@ pub async fn states(
         (k.heard.clone(), k.lost.clone(), checking)
     };
     lost.extend(crate::report::lost(g));
+    if g.role == pigeon_core::filter::Role::Custodian
+        && crate::health::own_report(g, me)
+            .await
+            .is_some_and(|r| r.checking)
+    {
+        checking.insert(me.to_owned());
+    }
     let mut peers = Vec::new();
     for (id, uuid, role) in crate::custody::peers(g, me) {
-        if role != Role::Custodian {
-            continue;
-        }
         let prefix = format!("refs/pigeon/peers/{id}/");
         let refs = g
             .git
             .run(&["for-each-ref", "--format=%(objectname)", &prefix])
             .await?;
-        let mut named = true;
-        for tip in tips {
-            let mut found = false;
+        let mut named = BTreeSet::new();
+        for (tip, retained) in &by_tip {
             for root in refs.lines() {
                 if g.git.contains(root, tip).await {
-                    found = true;
+                    named.extend(retained.iter().cloned());
                     break;
                 }
             }
-            named &= found;
         }
-        peers.push((id, uuid, named));
+        peers.push((id, uuid, role, named));
+    }
+    if g.role == pigeon_core::filter::Role::Custodian
+        && let Some(doc) = g.roster()
+        && let Some(device) = doc
+            .roster
+            .devices
+            .get(&pigeon_core::roster::DeviceId(me.to_owned()))
+        && device.role == Role::Custodian
+        && let Some(uuid) = &device.annex_uuid
+        && g.git.config("annex.uuid").await.as_ref() == Some(uuid)
+    {
+        peers.push((me.to_owned(), uuid.clone(), Role::Custodian, keys.clone()));
+        heard.insert(me.to_owned(), crate::util::now());
     }
     let now = Time(crate::util::now());
     let settings = crate::status::settings(g);
     let mut out = Vec::new();
     for key in keys {
         let held = crate::custody::holders(&g.git, &key).await;
+        let local = crate::custody::present(g, &key).await.is_some();
         let version = Version {
             custodians: peers
                 .iter()
-                .map(|(id, uuid, named)| Custodian {
+                .filter(|(_, _, role, _)| *role == Role::Custodian)
+                .map(|(id, uuid, _, named)| Custodian {
                     device: id.clone(),
                     heard: heard.get(id).copied().map(Time),
-                    holds: held.contains(uuid),
-                    has_commit: *named,
+                    holds: if id == me { local } else { held.contains(uuid) },
+                    has_commit: named.contains(&key),
                     checking: checking.contains(id),
                     repository_lost: lost.contains(id),
                 })
                 .collect(),
-            other_device_has_commit: peers.iter().any(|(_, _, named)| *named),
-            this_device_holds: crate::custody::present(g, &key).await.is_some(),
+            other_device_has_commit: peers
+                .iter()
+                .any(|(id, _, _, named)| id != me && named.contains(&key)),
+            this_device_holds: local,
             erased: false,
         };
         out.push(state(&version, &settings, now));

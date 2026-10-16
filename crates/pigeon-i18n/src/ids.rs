@@ -96,6 +96,7 @@ pub const MESSAGES: &[Entry] = &[
     e("level-safe", &[]),
     e("level-not-checked", &[]),
     e("headline-safe", &["ago"]),
+    e("headline-empty", &[]),
     e("headline-capturing", &["files"]),
     e("headline-checking", &[]),
     e("headline-inventory-unreadable", &[]),
