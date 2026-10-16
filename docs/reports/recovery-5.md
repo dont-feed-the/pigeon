@@ -81,7 +81,14 @@ retain complete recent records within section byte budgets and report
 omitted records explicitly. The real two-daemon regression populates over
 3 MiB of group telemetry, grants permission again, verifies a successful
 bounded part with its positive control, and verifies one-use enforcement.
-It passed in 5.15 seconds. A focused repaired normal-build retest follows.
+It passed in 5.15 seconds. The repaired normal build also passed an
+independent French browser retest: after 4,001,040 bytes of correctly scoped
+OTLP, a fresh Settings grant delivered a 540,320-byte peer part, with 176
+omitted telemetry batches reported. Its current-group positive marker
+arrived; unrelated filename and marker canaries did not. All 68 remote log
+records and 95 telemetry group attributes matched the shared group. Both
+bundles were 0600; the spent grant again refused without a third file. All
+owned browser and daemon processes were stopped.
 
 A separate real-terminal test answered no to `debug allow`: `Cancelled.`,
 exit 0, and no daemon connection. Non-terminal and `--no-input` uses kept
