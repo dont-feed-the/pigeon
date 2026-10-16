@@ -2950,7 +2950,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-bridge"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "argon2",
  "axum",

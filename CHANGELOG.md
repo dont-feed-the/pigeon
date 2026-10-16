@@ -18,6 +18,8 @@ the second number, and every other pull request the third.
 
 - Nextcloud desktop clients can finish chunked uploads using their relative
   destination paths.
+- New clients can join after suggestions have been accepted or declined;
+  joining fetches their signed proposal evidence before checking the history.
 - A decision received before its suggestion no longer prevents that peer
   from receiving later edits once the suggestion arrives.
 
