@@ -261,6 +261,24 @@ async fn shared_pages_and_actions_select_the_client_or_personal_control_peer() {
         home.contains(&format!("src=\"{prefix}{}\"", pigeon_web::script_path()))
             && home.contains(&format!("data-events=\"{prefix}/events\""))
     );
+    // The page's script is served under the mount, with the route's own
+    // parameters beside the asset's name.
+    let script = request(
+        app.clone(),
+        "GET",
+        &format!("{prefix}{}", pigeon_web::script_path()),
+        COOKIE,
+        "",
+    )
+    .await;
+    assert_eq!(script.status(), StatusCode::OK);
+    assert!(
+        script.headers()["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("text/javascript")
+    );
+    assert!(text(script).await.contains("EventSource"));
     let canonical = request(app, "GET", &prefix, COOKIE, "").await;
     assert_eq!(canonical.status(), StatusCode::SEE_OTHER);
     assert_eq!(canonical.headers()["location"], format!("{prefix}/"));
