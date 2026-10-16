@@ -117,6 +117,7 @@ fn listing(prefix: &str) -> Vec<FileEntry> {
             path: path.into(),
             state,
             size: Some(size),
+            freed: path.starts_with("Photos 2019/"),
             modified: (!path.starts_with("Photos 2019/")).then(|| ago(hours)),
         })
         .collect()
@@ -284,6 +285,7 @@ impl Backend for Demo {
                 ],
             }],
             pigeon_proto::Request::Machines => vec![Response::Machines {
+                copies: Some(1),
                 machines: [
                     ("martine-laptop", false, true),
                     ("paul-laptop", false, false),
@@ -304,8 +306,17 @@ impl Backend for Demo {
                 root: ROOT.into(),
                 folders: sync_folders(),
             }],
+            pigeon_proto::Request::FreePreview { .. } => {
+                vec![Response::FreePreview(pigeon_proto::api::FreePreview {
+                    files: 6,
+                    safe: 6,
+                    backups: vec!["paul-nas".into()],
+                    heard_at: Some(ago(0)),
+                    quiet: false,
+                })]
+            }
             pigeon_proto::Request::Keep { folder } => vec![said("keep-result", "folder", folder)],
-            pigeon_proto::Request::Evict { folder } => {
+            pigeon_proto::Request::Evict { folder, .. } => {
                 vec![said("removed-computer", "name", format!("free {folder}"))]
             }
             pigeon_proto::Request::ForgetChoice { folder } => {

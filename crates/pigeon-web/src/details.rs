@@ -85,16 +85,23 @@ pub(crate) fn version(
     r: &Renderer,
     path: &str,
     v: &VersionStatus,
-    newest: bool,
+    current: Option<&str>,
     form: &str,
 ) -> Markup {
+    let saved = pigeon_proto::time::parse_rfc3339(&v.saved_at)
+        .map_or_else(|| v.saved_at.clone(), |t| r.ago(crate::now() - t));
+    let which = r.catalogue().format(
+        &Message::new("web-version-label")
+            .arg("number", v.number.to_string())
+            .arg("saved", saved),
+    );
     html! {
         li {
             strong { (r.catalogue().format(&Message::new("web-version-number").arg("number", v.number.to_string()))) }
             " " (state(r, v.state))
             span class="when" {
                 (r.id("web-saved")) " " (when(r, &v.saved_at))
-                @if newest { " · " (r.id("web-current-version")) }
+                @if let Some(current) = current { " · " strong { (current) } }
             }
             @if let Some(reason) = &v.reason { span class="when" { (r.text(reason)) } }
             div class="inline-forms" {
@@ -102,14 +109,14 @@ pub(crate) fn version(
                     input type="hidden" name="form" value=(form);
                     input type="hidden" name="path" value=(path);
                     input type="hidden" name="version" value=(v.number);
-                    button type="submit" class="small" { (icon("download", "")) (r.id("web-view")) }
+                    button type="submit" class="small" { (icon("download", "")) (r.id("web-view")) (crate::pages::hidden(&which)) }
                 }
-                @if !newest {
+                @if current.is_none() {
                     form method="post" action=(r.url("/files/restore")) data-inline {
                         input type="hidden" name="form" value=(form);
                         input type="hidden" name="path" value=(path);
                         input type="hidden" name="version" value=(v.number);
-                        button type="submit" class="small" { (icon("restore", "")) (r.id("web-restore")) }
+                        button type="submit" class="small" { (icon("restore", "")) (r.id("web-restore")) (crate::pages::hidden(&which)) }
                     }
                 }
             }
@@ -140,6 +147,21 @@ pub(crate) async fn panel(
         versions(web, r, &row.abs).await
     };
     let newest = history.iter().map(|v| v.number).max();
+    let differs = if row.folder {
+        None
+    } else {
+        crate::conflicts::on_file(web, r, &row.abs, form).await
+    };
+    let suggested = if row.folder {
+        html! {}
+    } else {
+        crate::suggestions::on_file(web, r, &row.abs).await
+    };
+    let current = r.id(if differs.is_some() {
+        "web-version-group-current"
+    } else {
+        "web-version-current"
+    });
     let count = |n: u64| i64::try_from(n).unwrap_or(i64::MAX);
     let open = if row.folder {
         r.url(&format!("/folder?path={}", enc(&row.abs)))
@@ -159,7 +181,7 @@ pub(crate) async fn panel(
                 }
             }
             div {
-                @if row.folder { (folder_state(r, row.state, row.not_safe)) } @else { (state(r, row.state)) }
+                @if row.folder { (folder_state(r, row.state, row.not_safe)) } @else { (crate::format::file_state(r, row.state, row.freed)) }
             }
             dl {
                 @if row.folder {
@@ -192,11 +214,13 @@ pub(crate) async fn panel(
                 }
             }
             @if !row.folder {
+                @if let Some(differs) = differs { (differs) }
+                (suggested)
                 h3 { (r.id("web-versions")) }
                 @if !problems.is_empty() { (crate::pages::list(&problems)) }
                 ol class="timeline" {
                     @for v in history.iter().take(VERSIONS) {
-                        (version(r, &row.abs, v, Some(v.number) == newest, form))
+                        (version(r, &row.abs, v, (Some(v.number) == newest).then_some(current.as_str()), form))
                     }
                 }
                 @if history.len() > VERSIONS { p { a href=(open) { (r.id("web-all-versions")) } } }

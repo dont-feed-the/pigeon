@@ -1,4 +1,4 @@
-//! Immutable completion witnesses for purge (08 §8.6, proposed ADR 0078).
+//! Immutable completion witnesses for purge (08 §8.6, proposed ADR 0081).
 //! Raw signed reports, a fully accepted closing head and that head's whole
 //! custodian quorum are checked independently. A witness closes an epoch;
 //! coverage/current keys still decide release. Report hashes in TOML are

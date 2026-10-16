@@ -4,9 +4,10 @@
 //! application. `--group` is the group's version, the one `main` holds
 //! while the folder keeps the person's own; `--version N` any version of
 //! the history, numbered from 1, the oldest, as `history` numbers them;
-//! neither, the current one. Copies older than seven days are removed at
-//! each view. `ReadText` instead answers the start of the group's current
-//! version as text, for the web's README, from content already here.
+//! neither, the current one. The copy’s name says which, in the person’s
+//! language. Copies older than seven days are removed at each view.
+//! `ReadText` answers the start of the group’s current version as text,
+//! for the web’s README, from content already here.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -20,6 +21,21 @@ use crate::history::relative;
 
 /// How long a copy stays.
 pub const KEPT: Duration = Duration::from_secs(7 * 24 * 3600);
+
+/// What a copy's name says of its version, in the person's language (the
+/// `language` setting, read afresh, 11 §11.2): `view-name-group`,
+/// `view-name-version` or `view-name-suggested`.
+fn label(d: &Daemon, message: pigeon_i18n::Message) -> String {
+    let config = crate::config::load(&d.dirs.config_file()).unwrap_or_default();
+    label_in(&crate::web::language(config.language.as_deref()), &message)
+}
+
+/// `message` in `lang`, fit for a file name.
+fn label_in(lang: &pigeon_i18n::LanguageIdentifier, message: &pigeon_i18n::Message) -> String {
+    pigeon_i18n::Catalogue::new(lang, false)
+        .format(message)
+        .replace('/', "-")
+}
 
 /// The name of the copy: `tarte (version 3).docx`, `tarte (group's
 /// version).docx`.
@@ -74,7 +90,10 @@ pub async fn view(d: &Daemon, path: &Path, version: Option<u64>, group: bool) ->
             None => Default::default(),
         };
         match keys.get(&rel) {
-            Some(k) => (k.clone(), "group's version".to_owned()),
+            Some(k) => (
+                k.clone(),
+                label(d, pigeon_i18n::Message::new("view-name-group")),
+            ),
             None => {
                 let args = [("path", text(&rel)), ("version", text("main"))];
                 return vec![problem("no-such-version", &args, None)];
@@ -89,7 +108,14 @@ pub async fn view(d: &Daemon, path: &Path, version: Option<u64>, group: bool) ->
             .and_then(|i| i.checked_sub(1))
             .and_then(|i| versions.get(i));
         match wanted {
-            Some((_, k)) => (k.clone(), format!("version {n}")),
+            Some((_, k)) => (
+                k.clone(),
+                label(
+                    d,
+                    pigeon_i18n::Message::new("view-name-version")
+                        .arg("number", i64::try_from(n).unwrap_or(i64::MAX)),
+                ),
+            ),
             None => {
                 let args = [("path", text(&rel)), ("version", Arg::Number(n as i64))];
                 return vec![problem("no-such-version", &args, None)];
@@ -243,7 +269,10 @@ pub async fn suggestion(d: &Daemon, id: &str, path: &Path) -> Vec<Response> {
     match write_copy(
         &views,
         &object,
-        &copy_name(&rel, "suggested version"),
+        &copy_name(
+            &rel,
+            &label(d, pigeon_i18n::Message::new("view-name-suggested")),
+        ),
         g.shared.is_some(),
     ) {
         Ok(copy) => vec![crate::api::said(
@@ -292,6 +321,32 @@ mod tests {
             "Makefile (group's version)"
         );
         assert_eq!(copy_name(".bashrc", "version 1"), ".bashrc (version 1)");
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used, reason = "test fixtures")]
+    fn a_copy_name_is_in_the_person_s_language() {
+        let fr = "fr".parse().unwrap();
+        let en = "en".parse().unwrap();
+        let group = pigeon_i18n::Message::new("view-name-group");
+        let second = pigeon_i18n::Message::new("view-name-version").arg("number", 2i64);
+        let suggested = pigeon_i18n::Message::new("view-name-suggested");
+        assert_eq!(
+            copy_name("a/tarte.docx", &label_in(&fr, &group)),
+            "tarte (version du groupe).docx"
+        );
+        assert_eq!(
+            copy_name("a/tarte.docx", &label_in(&fr, &suggested)),
+            "tarte (version suggérée).docx"
+        );
+        assert_eq!(
+            copy_name("a/tarte.docx", &label_in(&en, &second)),
+            "tarte (version 2).docx"
+        );
+        assert_eq!(
+            copy_name("Makefile", &label_in(&en, &group)),
+            "Makefile (group's version)"
+        );
     }
 
     #[test]

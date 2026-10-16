@@ -69,6 +69,7 @@ pub(crate) fn document(r: &Renderer, here: &str, title: &str, body: &Markup, hea
                         @if head == Head::Title {
                             header class="page-head" { h1 id="title" { (title) } }
                         }
+                        (crate::pages::pause_banner(r, title, here == "/"))
                         (body)
                     }
                 }

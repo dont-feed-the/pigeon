@@ -135,7 +135,7 @@ fn a_sheet_recovers_an_admin_from_someone_elses_backup() {
         pigeon(&alice, &["suggestions"])
             .into_iter()
             .find_map(|r| match r {
-                Response::Proposals { proposals } => Some(proposals),
+                Response::Proposals { proposals, .. } => Some(proposals),
                 _ => None,
             })
             .unwrap_or_default()
@@ -279,13 +279,19 @@ fn a_sheet_recovers_an_admin_from_someone_elses_backup() {
     let name = machines
         .iter()
         .find_map(|r| match r {
-            Response::Machines { machines } => machines
+            Response::Machines { machines, .. } => machines
                 .iter()
                 .find(|m| m.device == sheet_device.0)
                 .map(|m| m.name.clone()),
             _ => None,
         })
         .unwrap();
+    // The paper names itself as the People page lists it.
+    assert_eq!(sheet.label, name);
+    assert!(
+        sheet_text.contains(&format!("This sheet: {name}")),
+        "{sheet_text}"
+    );
     let revoked = pigeon(&fresh, &["remove-computer", &name, "--yes"]);
     assert!(
         said(&revoked, "revoked-sheet", "name").is_some(),

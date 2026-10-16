@@ -58,6 +58,16 @@ pub struct Known {
     pub lost: BTreeSet<String>,
     /// What admission deferred in the last round, on a custodian (08 §8.9).
     pub shortfall: Option<crate::admission::Shortfall>,
+    /// The other computers refuse this one as no longer in the group
+    /// (09 §9.7): nothing counts as safe here any more.
+    pub removed: bool,
+    /// When status first saw each version not safe yet, by key: its grace
+    /// period counts from then (06 §6.7). Only versions still not safe are
+    /// kept; kept in memory only.
+    pub first_seen: BTreeMap<String, i64>,
+    /// How many captures in a row failed, and why in a word
+    /// (`status_why::failure`), until one succeeds (06 §6.4).
+    pub capture_failed: Option<(u32, &'static str)>,
     /// The first commit of each peer's `main` that accept refused, and its
     /// problem code (04 §4.4).
     pub refused: BTreeMap<String, (String, &'static str)>,

@@ -1,5 +1,5 @@
 //! Admission acknowledgements are checkpointed outside restored groups,
-//! before they enter signed status reports (proposed ADR 0078). One store
+//! before they enter signed status reports (proposed ADR 0081). One store
 //! per daemon serializes groups, avoiding lost updates to their markers.
 
 use std::collections::BTreeSet;

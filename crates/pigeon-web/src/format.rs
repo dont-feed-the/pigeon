@@ -12,26 +12,7 @@ use crate::icons::icon;
 
 /// `bytes` for people: `512 B`, `1.5 MB`, `16 GB` (decimal units).
 pub(crate) fn size(r: &Renderer, bytes: u64) -> String {
-    const UNITS: [&str; 5] = [
-        "web-size-b",
-        "web-size-kb",
-        "web-size-mb",
-        "web-size-gb",
-        "web-size-tb",
-    ];
-    let mut value = bytes as f64;
-    let mut unit = 0;
-    while value >= 1000.0 && unit + 1 < UNITS.len() {
-        value /= 1000.0;
-        unit += 1;
-    }
-    let number = if unit == 0 || value >= 10.0 {
-        format!("{value:.0}")
-    } else {
-        format!("{value:.1}").replace('.', &r.id("web-decimal-separator"))
-    };
-    r.catalogue()
-        .format(&Message::new(UNITS[unit]).arg("size", number))
+    r.size(bytes)
 }
 
 /// A past time: "4 minutes ago" under a day, else its date, which the
@@ -95,6 +76,17 @@ pub(crate) fn rank(s: State) -> u8 {
     }
 }
 
+/// A current file's badge also says when its space has been freed.
+pub(crate) fn file_state(r: &Renderer, state: State, freed: bool) -> Markup {
+    let label = if freed {
+        r.catalogue()
+            .format(&Message::new("state-not-here").arg("state", r.state(state)))
+    } else {
+        r.state(state)
+    };
+    badge(state, &label)
+}
+
 /// A folder's state from its files: "All safe" or "3 not safe yet".
 pub(crate) fn folder_state(r: &Renderer, worst: State, not_safe: u64) -> Markup {
     if not_safe == 0 && worst == State::Protected {
@@ -123,10 +115,10 @@ mod tests {
     #[test]
     fn sizes_use_decimal_units_and_the_languages_separator() {
         let en = renderer("en");
-        assert_eq!(super::size(&en, 0), "0 B");
-        assert_eq!(super::size(&en, 999), "999 B");
+        assert_eq!(super::size(&en, 0), "0 bytes");
+        assert_eq!(super::size(&en, 999), "999 bytes");
         assert_eq!(super::size(&en, 1500), "1.5 kB");
-        assert_eq!(super::size(&en, 16_200_000_000), "16 GB");
+        assert_eq!(super::size(&en, 16_200_000_000), "16.2 GB");
         let fr = renderer("fr");
         assert_eq!(super::size(&fr, 1_500_000), "1,5 Mo");
     }

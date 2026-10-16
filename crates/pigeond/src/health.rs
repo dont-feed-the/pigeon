@@ -88,11 +88,7 @@ pub(crate) async fn report(d: &Daemon) -> Vec<Response> {
         .try_into()
         .unwrap_or(u64::MAX);
     status.versions.truncate(200);
-    if let Some(pause) = crate::pause::now(d)
-        && status.level != pigeon_proto::api::Level::NeedsYou
-    {
-        status.headline = crate::pause::headline(pause);
-    }
+    crate::pause::tell(d, &mut status);
     // Reading a count must not race the mutable proposal judge. While
     // another operation holds busy, which the loops do most of the time,
     // the last count read stands; none read yet is explicit.

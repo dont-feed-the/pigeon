@@ -13,7 +13,9 @@
 //! not depend on arrival order and keeps queue order; every item is
 //! admitted or deferred, once, and a deferred one says the bytes it misses;
 //! `missing_bytes` more room admits everything, one byte less does not; the
-//! parts of the need sum to its total, K times each distinct key once.
+//! parts of the need sum to its total, K times each distinct key once; the
+//! capacity is one copy per custodian exactly when no limit is below one
+//! copy, and those below are the ones warned about.
 
 use std::collections::BTreeMap;
 
@@ -212,8 +214,22 @@ pub fn capacity(custodians: &[(Option<u64>, u64)]) -> u64 {
         .sum()
 }
 
-/// Whether admins and custodian owners are warned: capacity below 1.25 ×
-/// the need (08 §8.9).
-pub fn short(capacity: u64, need: &Need) -> bool {
-    u128::from(capacity) * 4 < u128::from(need.total()) * 5
+/// The custodians, by their index in `custodians` given as (maxsize, bytes
+/// of one copy of everything), whose storage limit is below one copy: the
+/// warning of 08 §8.9. Exactly these make [`capacity`] fall short of one
+/// copy per custodian.
+pub fn below_one_copy(custodians: &[(Option<u64>, u64)]) -> Vec<usize> {
+    custodians
+        .iter()
+        .enumerate()
+        .filter(|(_, (max, all))| max.is_some_and(|m| m < *all))
+        .map(|(i, _)| i)
+        .collect()
+}
+
+/// Whether no custodian is spare: as many custodians as K. Each counts for
+/// at most one copy, so losing any leaves versions unprotected until it is
+/// replaced, however much disk they have (08 §8.9, information only).
+pub fn no_spare(custodians: usize, k: u32) -> bool {
+    u32::try_from(custodians).is_ok_and(|n| n == k)
 }

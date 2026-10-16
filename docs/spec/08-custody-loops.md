@@ -115,6 +115,17 @@ a restart reruns it before capture.
 | 4. **drop** each hidden key, verified ([09 §9.4](09-network-and-joining.md)), only if every path whose index entry has it is hidden, absent and in a folder to free: git-annex makes any other file of the key a pointer (E24); a key's drop and its install, staging or capture run one at a time; a refused drop is retried once the key is protected again | `DropFree` |
 | 5. unprotected files stay visible (ux.md §8.5) until protected, then go through steps 3–4; F stays listed; undo is `pigeon keep F` | |
 
+Before step 1, the person is told what freeing does: which files leave this
+computer, the backup machines they stay on, and that *Keep on this
+computer* brings them back (`FreePreview`, 10 §10.3). While no backup
+machine has been heard from within `stale_after` (the hour of *Not checked
+recently*, [06 §6.7](06-status.md)), pigeon cannot confirm the copies now:
+`free` answers `backups-quiet`, saying when they were last in touch, and
+records the target only once the person confirms again (`Evict
+{confirmed}`, `pigeon free --yes`). Step 3 still hides only protected
+files, so such a folder is freed once the backup machines are heard from
+again. A hidden file is listed as *freed*: "Safe, not on this computer".
+
 | Keep F (`pigeon keep F`) | Model |
 |---|---|
 | 1. add F to `wanted`; get every current key of F; F stays hidden until all are present | `ChooseKeep`, `Get` |
@@ -150,7 +161,7 @@ commands resolve it from its nearest folder that exists.
 
 The M5 driver is being implemented; [its report](../reports/deletion-6.md)
 lists remaining release evidence. `Purge.tla` checks the fixed-roster protocol
-and E14 asserts it with git-annex. Proposed ADRs 0078 and 0080 describe the
+and E14 asserts it with git-annex. Proposed ADRs 0081 and 0080 describe the
 additional durable waits, completion witnesses and admission fences. A purge releases **references**, not keys. A reference of key
 *k* is a pair (*c*, *p*): an accepted or proposal commit *c* whose tree has
 *k* at *p* while none of its parents does. A key is dropped only once all
@@ -258,8 +269,15 @@ decision, 16 October 2026) **[no ADR]**.
   and its laws (`tests/capacity.rs`); `Admission.tla` checks the plan with
   sizes (`ReserveKept`, `EndangeredFirst`, `DeferredStays`), and
   `AdmitTrace` checks the code's plans against it.
-- Admins and custodian owners are warned when capacity < 1.25 × need
-  (`sizebalanced` is heuristic, E10). `pigeon status --capacity` and the web
+- Each custodian counts for at most one copy, so the capacity is
+  Σ min(maxsize, one copy) and no disk space adds headroom beyond one copy
+  per custodian. Admins and custodian owners are warned when a custodian's
+  storage limit is below one copy (`below_one_copy`): exactly what keeps
+  the capacity below one copy per custodian. With exactly K custodians
+  (`no_spare`) they are told, as information, that no custodian is spare:
+  losing one leaves versions unprotected until it is replaced, and another
+  custodian avoids it (`sizebalanced` is heuristic, E10; ADR 0003's
+  headroom is that spare). `pigeon status --capacity` and the web
   *Space* page show the parts of the need, each custodian's offered, used
   and free space, and declined suggestions by size and age, which `pigeon
   erase --suggestion ID` (§8.6) erases. Nothing expires by itself.

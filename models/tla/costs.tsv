@@ -4,6 +4,7 @@
 # scripts/run-tlc --balanced uses longest-first placement, then manifest order.
 # Columns: configuration, seconds. Refresh when the remaining shards diverge.
 Evict_flip	550.3
+Authority_part4	493.0
 Authority_decide4	460.2
 T_n42o4	380.2
 Evict_livekeep2	302.4

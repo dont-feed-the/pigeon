@@ -2,7 +2,9 @@
 //! (10 §10.1), and the civil-date arithmetic behind them, so that `pigeond`
 //! and the `pigeon` CLI read and write the same text.
 
-fn civil(days: i64) -> (i64, i64, i64) {
+/// The civil date (year, month from 1, day from 1) of a day counted from
+/// 1970-01-01, in the proleptic Gregorian calendar.
+pub fn civil(days: i64) -> (i64, i64, i64) {
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z.rem_euclid(146_097);

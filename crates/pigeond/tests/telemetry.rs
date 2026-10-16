@@ -142,7 +142,7 @@ fn real_acceptance_protection_paths_and_work_batches_reach_the_backend() {
     let own_id = pigeon(&alice, &["machines"])
         .into_iter()
         .find_map(|r| match r {
-            pigeon_proto::Response::Machines { machines } => machines
+            pigeon_proto::Response::Machines { machines, .. } => machines
                 .into_iter()
                 .find(|m| m.this_device)
                 .map(|m| m.device),
@@ -300,7 +300,7 @@ fn peer_diagnostics_require_the_signed_collector_choice() {
     let alice_id = pigeon(&alice, &["machines"])
         .into_iter()
         .find_map(|r| match r {
-            pigeon_proto::Response::Machines { machines } => machines
+            pigeon_proto::Response::Machines { machines, .. } => machines
                 .into_iter()
                 .find(|m| m.this_device)
                 .map(|m| m.device),

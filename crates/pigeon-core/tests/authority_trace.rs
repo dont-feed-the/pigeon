@@ -8,7 +8,10 @@
 //! deletes versions and may transfer `F`, add device 4 or remove a device;
 //! or rejects or withdraws a proposal the code keeps (a commit refused for
 //! folder rules alone); or adopts one whose base it holds, as
-//! `proposal::adoption` writes it or with a change dropped or one more.
+//! `proposal::adoption` writes it or with a change dropped or one more; or
+//! decides some of its files (ADR 0078): one commit that holds the change
+//! of the files it accepts, `proposal::partial`, now and then with one
+//! more, and rejects the proposal.
 //! Who wrote each path is kept as the catalogue keeps it (ADR 0070): an
 //! adoption writes as its proposal's author.
 //! Each line logs the commit as the model's `New` takes it and the code's
@@ -368,6 +371,86 @@ fn decide(
     }
 }
 
+/// A decision on some files of the proposal `x` on the accepted `parent`
+/// (ADR 0078): an ordinary commit that holds the change of the files it
+/// accepts, as `proposal::partial` writes it or with one change more, and
+/// rejects the proposal.
+#[allow(clippy::too_many_arguments, reason = "the history's parts")]
+fn part(
+    rng: &mut Rng,
+    n: u64,
+    parent: u64,
+    p: &Kept,
+    x: u64,
+    prop: &Proposal,
+    at: &Kept,
+    raw: &[u8],
+) -> Made {
+    let who = format!("person {}", prop.signer);
+    let when = Stamp {
+        utc: i64::try_from(x).unwrap(),
+        offset: 0,
+    };
+    let accepted: BTreeSet<String> = authority::delta(&at.code, &prop.code)
+        .into_iter()
+        .filter(|_| rng.one_in(2))
+        .collect();
+    let mut after = proposal::partial(&at.code, &prop.code, &p.code, &who, when, &accepted);
+    if rng.one_in(4) {
+        write(
+            &mut after,
+            PATHS[usize::try_from(rng.below(2)).unwrap()].0,
+            Some(n),
+        );
+    }
+    let id = format!("c{x}");
+    let path = authority::decision_path(&id);
+    after.insert(path.clone(), entry(format!("decision-{n}")));
+    let about = commit::about(
+        &p.roster,
+        &at.roster,
+        &dev(prop.signer),
+        &at.code,
+        &prop.code,
+        &p.code,
+        &p.writers,
+    );
+    let decisions = BTreeMap::from([(
+        path,
+        Ok(Decision {
+            proposal: id,
+            verdict: Decided::Rejected,
+            about,
+        }),
+    )]);
+    let verdict = commit::judge(&Commit {
+        raw,
+        rosters: std::slice::from_ref(&p.roster),
+        before: &p.code,
+        after: &after,
+        writers: &p.writers,
+        blobs: &blobs_of(&after),
+        new_roster: None,
+        decisions: &decisions,
+        purges: &BTreeMap::new(),
+        witnesses: &BTreeMap::new(),
+        adopted: &[],
+    });
+    Made {
+        parents: vec![parent],
+        after,
+        roster: p.roster.clone(),
+        edits: Vec::new(),
+        dec: vec![rec(vec![
+            ("p", int(x)),
+            ("v", Value::Str("rejected".into())),
+        ])],
+        verdict,
+        proposal: false,
+        adopts: None,
+    }
+}
+
 /// The adoption of the proposal `x` on the accepted `parent` (rule 7):
 /// `proposal::adoption`, or now and then one that drops a change of it or
 /// makes one more.
@@ -479,6 +562,20 @@ fn run(seed: u64) -> Vec<Event> {
                 let x = pick(&mut rng, &kept);
                 let prop = proposals[&x].clone();
                 decide(
+                    &mut rng,
+                    n,
+                    parent,
+                    &p,
+                    x,
+                    &prop,
+                    &accepted[&prop.base],
+                    &raw,
+                )
+            }
+            1 if !based.is_empty() && rng.one_in(3) => {
+                let x = pick(&mut rng, &based);
+                let prop = proposals[&x].clone();
+                part(
                     &mut rng,
                     n,
                     parent,

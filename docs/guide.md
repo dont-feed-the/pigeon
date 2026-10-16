@@ -23,16 +23,30 @@ the [first custodian and bridge quick start](nextcloud-quick-start.md).
 
 ## Review a suggestion before deciding
 
-On **Suggestions**, choose **Review suggested file** for each changed path.
-The browser downloads a read-only copy of the proposed bytes. It does not
-replace the shared file or accept the suggestion. A proposed deletion is
-explained instead of opening a copy. You can then accept or decline, with
-a note if useful. The command line equivalent is
+On **Suggestions**, each suggestion lists its files and what changes in
+each: a new file, a change with its size before and after (and, for a
+small text file, the lines added and removed), a deletion or a rename.
+Choose **Review** beside a file: the browser downloads a read-only copy
+of the proposed bytes. It does not replace the shared file or accept the
+suggestion. The command line equivalent is
 `pigeon view PATH --suggestion ID` (IDs come from `pigeon suggestions`).
+
+Every file is ticked. **Accept selected** accepts the ticked files and
+declines the others; **Decline selected** declines the ticked files and
+accepts the others. A note tells the person why. With several
+suggestions, **Accept all** and **Decline all** decide them at once. The
+person who suggested sees, on their own Suggestions page and on each
+file's page, which files were accepted, which declined, and your note.
+On the command line, name the files after the ID:
+`pigeon accept ID recipes.txt soup.txt` or
+`pigeon decline ID groceries.txt --note "why"`.
 
 Nested folder pages offer **Free up space** and **Keep on this computer**
 for that folder. Free keeps protected copies on backup machines; Keep
-requests local copies and can wait for a reachable source.
+requests local copies and can wait for a reachable source. Free says first
+which files will leave this computer and the backup machines they stay on,
+and asks a second time when no backup machine has been in touch for an hour;
+a freed file then reads "Safe, not on this computer".
 
 ## What "safe" means
 
@@ -230,6 +244,7 @@ person who created the group.
 ```sh
 pigeon suggestions          # list them
 pigeon accept ID            # or: pigeon decline ID --note "why"
+pigeon accept ID FILE…      # accept only these files, decline the others
 ```
 
 An admin can choose a different rule for a folder. In Files, open the

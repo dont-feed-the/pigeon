@@ -570,3 +570,5 @@ mod purge_upgrade;
 #[cfg(feature = "lab")]
 #[path = "purge/restart.rs"]
 mod erase_restart;
+#[path = "install/fetch_progress.rs"]
+mod fetch_progress;

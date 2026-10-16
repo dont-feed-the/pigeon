@@ -86,7 +86,9 @@ fn shared_keys_and_declined_suggestions_remain_visible_and_count_once() {
             let id = pigeon(&alice, &["suggestions"])
                 .into_iter()
                 .find_map(|r| match r {
-                    Response::Proposals { proposals } => proposals.first().map(|p| p.id.clone()),
+                    Response::Proposals { proposals, .. } => {
+                        proposals.first().map(|p| p.id.clone())
+                    }
                     _ => None,
                 });
             let found = id.is_some();
@@ -113,7 +115,7 @@ fn shared_keys_and_declined_suggestions_remain_visible_and_count_once() {
     assert_eq!(capacity.history, old.len() as u64);
     assert_eq!(capacity.suggestions, proposed.len() as u64);
     assert_eq!(capacity.overflow, Some(0));
-    assert!(capacity.short);
+    assert!(capacity.no_spare && capacity.limited.is_empty());
     assert!(capacity.proposals.iter().any(|p| p.id == id
         && p.state == "rejected"
         && p.additional_bytes == proposed.len() as u64));
@@ -123,8 +125,23 @@ fn shared_keys_and_declined_suggestions_remain_visible_and_count_once() {
         && m.report_fresh));
     let session = web::login(&alice);
     let page = web::page(&session, "/space");
-    assert!(page.contains("Backup storage") && page.contains("declined") && page.contains(&id));
-    assert!(page.contains("25%") && page.contains("Configured capacity"));
+    assert!(
+        page.contains("Backup storage")
+            && page.contains("A suggestion saved")
+            && page.contains("declined")
+    );
+    assert!(page.contains("no spare backup machine") && page.contains("Configured capacity"));
+    assert!(!page.contains("smaller than one copy"));
+    // Sizes are said in kB, MB or GB from 1,000 bytes on: never a raw count.
+    let raw = page.match_indices(" bytes").any(|(at, _)| {
+        let digits: String = page[..at]
+            .chars()
+            .rev()
+            .take_while(char::is_ascii_digit)
+            .collect();
+        digits.len() > 3
+    });
+    assert!(!raw, "{page}");
     let settings = web::page(&session, "/settings");
     assert!(settings.contains("href=\"/space\""));
     pigeon(&alice, &["settings", "language", "fr"]);
@@ -132,7 +149,7 @@ fn shared_keys_and_declined_suggestions_remain_visible_and_count_once() {
     assert!(
         french.contains("Espace de sauvegarde")
             && french.contains("refusée")
-            && french.contains("octets")
+            && french.contains("pas de machine de sauvegarde en réserve")
     );
     assert_eq!(std::fs::read(folder.join("Media/a.bin")).unwrap(), new);
     assert!(!folder.join("Media/b.bin").exists());

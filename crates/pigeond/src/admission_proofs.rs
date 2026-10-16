@@ -1,5 +1,5 @@
 //! Independently check signed custody admission evidence (proposed ADR
-//! 0078). No present-day clock or report freshness changes an immutable
+//! 0081). No present-day clock or report freshness changes an immutable
 //! certificate. Missing proof objects remain provisional during fetching.
 
 use std::collections::{BTreeMap, BTreeSet};

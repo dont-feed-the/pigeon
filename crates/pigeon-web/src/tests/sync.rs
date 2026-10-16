@@ -9,11 +9,22 @@ use super::demo::{Demo, ROOT};
 use super::*;
 
 #[derive(Default)]
-struct Recorded(Mutex<Vec<pigeon_proto::Request>>);
+struct Recorded(Mutex<Vec<pigeon_proto::Request>>, bool);
 
 impl Backend for Recorded {
     fn request(&self, request: pigeon_proto::Request) -> Answer {
         self.0.lock().unwrap().push(request.clone());
+        if self.1 && matches!(request, pigeon_proto::Request::FreePreview { .. }) {
+            return Box::pin(async {
+                vec![Response::FreePreview(pigeon_proto::api::FreePreview {
+                    files: 6,
+                    safe: 6,
+                    backups: vec!["quiet-nas".into()],
+                    heard_at: Some(pigeon_proto::time::rfc3339(crate::now() - 7200)),
+                    quiet: true,
+                })]
+            });
+        }
         Demo.request(request)
     }
 }
@@ -42,7 +53,11 @@ fn enc(s: &str) -> String {
 }
 
 async fn session() -> (axum::Router, String, String, Arc<Recorded>) {
-    let backend = Arc::new(Recorded::default());
+    session_with_quiet(false).await
+}
+
+async fn session_with_quiet(quiet: bool) -> (axum::Router, String, String, Arc<Recorded>) {
+    let backend = Arc::new(Recorded(Mutex::default(), quiet));
     let w = Web::new(backend.clone(), "en".parse().unwrap(), 4321);
     let app = w.router();
     let cookie = logged_in(&app, &w).await;
@@ -144,11 +159,22 @@ async fn the_tree_marks_partly_kept_folders_and_applies_the_fewest_requests() {
         .await
         .unwrap();
     assert_eq!(done.status(), StatusCode::OK);
+    let preview = body(done).await;
+    assert!(preview.contains("paul-nas"), "{preview}");
+    assert!(backend.changes().is_empty(), "the preview changes nothing");
+    fields.push("confirm=1".into());
+    let done = app
+        .clone()
+        .oneshot(post("/folders", &cookie, &fields.join("&")))
+        .await
+        .unwrap();
+    assert_eq!(done.status(), StatusCode::OK);
     assert_eq!(
         backend.changes(),
         [
             pigeon_proto::Request::Evict {
-                folder: format!("{ROOT}/Photos")
+                folder: format!("{ROOT}/Photos"),
+                confirmed: false
             },
             pigeon_proto::Request::Keep {
                 folder: format!("{ROOT}/Projets/robin")
@@ -208,5 +234,45 @@ async fn use_the_default_forgets_a_choice_only_with_the_form_token() {
     assert_eq!(
         backend.changes(),
         [pigeon_proto::Request::ForgetChoice { folder }]
+    );
+}
+
+#[tokio::test]
+async fn freeing_from_the_tree_previews_everything_and_confirms_quiet_backups_twice() {
+    let (app, cookie, form, backend) = session_with_quiet(true).await;
+    let fields = format!("form={form}&shown=Photos");
+    for confirmed in [0, 1] {
+        let page = body(
+            app.clone()
+                .oneshot(post(
+                    "/folders",
+                    &cookie,
+                    &format!("{fields}&confirm={confirmed}"),
+                ))
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert!(page.contains("quiet-nas"), "{page}");
+        assert!(
+            page.contains(&format!("name=\"confirm\" value=\"{}\"", confirmed + 1)),
+            "{page}"
+        );
+        assert!(
+            backend.changes().is_empty(),
+            "neither preview changes any choice"
+        );
+    }
+    let result = app
+        .oneshot(post("/folders", &cookie, &format!("{fields}&confirm=2")))
+        .await
+        .unwrap();
+    assert_eq!(result.status(), StatusCode::OK);
+    assert_eq!(
+        backend.changes(),
+        [pigeon_proto::Request::Evict {
+            folder: format!("{ROOT}/Photos"),
+            confirmed: true
+        }]
     );
 }

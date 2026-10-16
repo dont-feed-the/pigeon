@@ -32,7 +32,7 @@ fn text(folder: &Path, name: &str) -> String {
 
 fn suggestions(d: &Daemon) -> Vec<Suggestion> {
     match pigeon(d, &["suggestions"]).as_slice() {
-        [Response::Proposals { proposals }] => proposals.clone(),
+        [Response::Proposals { proposals, .. }] => proposals.clone(),
         other => panic!("suggestions: {other:?}"),
     }
 }

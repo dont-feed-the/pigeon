@@ -16,6 +16,9 @@ struct Sheet {
     group: String,
     name: String,
     person: String,
+    /// The sheet's name in the roster; absent from older sheets.
+    #[serde(default)]
+    label: String,
     custodians: Vec<Backup>,
 }
 
@@ -59,8 +62,11 @@ pub fn text(cat: &Catalogue, original: &str) -> String {
                 .arg("group", sheet.group),
         ),
         cat.format(&Message::new("recovery-person").arg("name", sheet.person)),
-        cat.format(&Message::new("recovery-backups")),
     ];
+    if !sheet.label.is_empty() {
+        lines.push(cat.format(&Message::new("recovery-sheet-name").arg("name", sheet.label)));
+    }
+    lines.push(cat.format(&Message::new("recovery-backups")));
     lines.extend(
         sheet
             .custodians
@@ -100,7 +106,7 @@ mod tests {
 
     fn sheet() -> String {
         let json = serde_json::json!({"name":"Famille <script>", "group":"genesis", "person":"alice",
-            "custodians":[{"name":"Backup", "device":"backup-id"}]});
+            "label":"2026-10-16-abc123", "custodians":[{"name":"Backup", "device":"backup-id"}]});
         format!(
             "old English instructions with pgr1-unrelated-word\npgr1-{}-checksum\n",
             BASE32_NOPAD
@@ -116,6 +122,10 @@ mod tests {
         let localized = text(&cat, &original);
         assert!(localized.contains("Fiche de récupération"));
         assert!(localized.contains("Groupe : Famille <script>"));
+        assert!(
+            localized.contains("Cette fiche : 2026-10-16-abc123"),
+            "{localized}"
+        );
         assert_eq!(code(&original), code(&localized));
         let qr = svg(code(&original).unwrap_or_default()).unwrap_or_default();
         assert!(qr.starts_with("<svg"));

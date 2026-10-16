@@ -17,7 +17,7 @@ use crate::browse::enc;
 use crate::format::when;
 use crate::icons::{file_icon, icon};
 use crate::pages::{bare, list};
-use crate::{FormToken, Web};
+use crate::{FormToken, Renderer, Web};
 
 /// The query of a file's page.
 #[derive(serde::Deserialize)]
@@ -33,6 +33,7 @@ pub async fn file_page(
     Query(at): Query<At>,
 ) -> Html<String> {
     let r = web.renderer();
+    let differs = crate::conflicts::on_file(&web, &r, &at.path, &form.0).await;
     let mut rows = Vec::new();
     let mut other = Vec::new();
     let mut root = String::new();
@@ -50,10 +51,19 @@ pub async fn file_page(
         match answer {
             Response::History { versions } => rows = versions,
             Response::Progress { .. } => {}
+            // The block below explains a differing copy and how to settle it.
+            Response::Said { message } if differs.is_some() && message.id == "why-differs" => {}
             a => other.extend(r.response(&a).0),
         }
     }
     let newest = rows.iter().map(|v| v.number).max();
+    let here = current_state(&web, &r, &at.path).await;
+    let suggested = crate::suggestions::on_file(&web, &r, &at.path).await;
+    let current = r.id(if differs.is_some() {
+        "web-version-group-current"
+    } else {
+        "web-version-current"
+    });
     let path = std::path::Path::new(&at.path);
     let name = path
         .file_name()
@@ -91,16 +101,36 @@ pub async fn file_page(
             }
         }
         (list(&other))
+        @if let Some(state) = &here { p { (state) } }
+        @if let Some(differs) = differs { (differs) }
+        (suggested)
         div class="card" {
             h2 { (icon("history", "")) " " (r.id("web-versions")) }
             ol class="timeline" {
-                @for v in &rows { (crate::details::version(&r, &at.path, v, Some(v.number) == newest, &form.0)) }
+                @for v in &rows { (crate::details::version(&r, &at.path, v, (Some(v.number) == newest).then_some(current.as_str()), &form.0)) }
             }
         }
         p { a class="btn" href=(r.url(&format!("/erase?path={}", enc(&at.path)))) { (r.id("web-erase-title")) } }
         p { a class="btn" href=(r.url("/files")) { (icon("back", "")) (r.id("web-back")) } }
     };
     bare(&r, "/files", &name, &body)
+}
+
+/// The state of the file at `path` now, and whether it is on this
+/// computer: "Safe, not on this computer" once its space is freed.
+async fn current_state(web: &Web, r: &Renderer, path: &str) -> Option<String> {
+    let answers = web
+        .ask(Request::Files {
+            folder: path.to_owned(),
+        })
+        .await;
+    answers.into_iter().find_map(|answer| match answer {
+        Response::Files { root, files } => files
+            .iter()
+            .find(|f| std::path::Path::new(&root).join(&f.path) == std::path::Path::new(path))
+            .map(|f| r.file_state(f)),
+        _ => None,
+    })
 }
 
 /// Deleted files: each with *Restore*, its last version.

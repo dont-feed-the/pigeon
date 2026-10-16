@@ -1,4 +1,4 @@
-# 0078. Completed purge epochs fence custodian membership
+# 0081. Completed purge epochs fence custodian membership
 
 - **Status:** Proposed, 16 October 2026, for M5.
 

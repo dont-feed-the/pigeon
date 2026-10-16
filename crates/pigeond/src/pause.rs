@@ -115,6 +115,29 @@ fn answer(p: Option<Paused>) -> Response {
     }
 }
 
+/// Says the pause in force in `report`: always as its `paused` line, and
+/// as its headline unless something needs the person (15 §15.6).
+pub fn tell(d: &Daemon, report: &mut pigeon_proto::api::StatusReport) {
+    let Some(p) = now(d) else {
+        return;
+    };
+    report.paused = Some(headline(p));
+    if report.level != pigeon_proto::api::Level::NeedsYou {
+        report.headline = headline(p);
+    }
+}
+
+/// `Paused`: the pause in force, for the banner of every web page; `Done`
+/// while sharing.
+pub fn state(d: &Daemon) -> Vec<Response> {
+    vec![match now(d) {
+        Some(p) => Response::Said {
+            message: headline(p),
+        },
+        None => Response::Done,
+    }]
+}
+
 /// The headline of a pause.
 pub fn headline(p: Paused) -> pigeon_proto::Message {
     match p {

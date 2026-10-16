@@ -75,6 +75,43 @@ async fn fetch(g: &Group, id: &str) -> Result<(), crate::git::Error> {
     }
 }
 
+/// How long [`any_reachable`] waits for one peer: someone is waiting.
+const PROBE_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// Whether at least one of `ids` answers a fetch now, tried at once and
+/// once each; one that does is heard. The remotes are configured under
+/// the repository lock, the fetches run without it.
+pub async fn any_reachable(g: &Group, me: &str, ids: &[String]) -> bool {
+    {
+        let _busy = g.busy.lock().await;
+        for (id, uuid, _) in peers(g, me).iter().filter(|(id, _, _)| ids.contains(id)) {
+            if let Err(e) = ensure_remote(&g.git, id, uuid).await {
+                tracing::warn!(group = %g.id, peer = %id, error = %e, "remote-failed");
+            }
+        }
+    }
+    let probes = ids.iter().map(|id| async move {
+        let spec = crate::settings::peer_refspec(id);
+        let args = [
+            "fetch",
+            "-q",
+            "--no-tags",
+            "--no-write-fetch-head",
+            id,
+            &spec,
+        ];
+        let ok = g.git.run_for(&args, PROBE_TIMEOUT).await.is_ok();
+        if ok {
+            g.lock().heard.insert(id.clone(), crate::util::now());
+        }
+        ok
+    });
+    crate::util::join_all(probes.collect())
+        .await
+        .into_iter()
+        .any(|ok| ok)
+}
+
 /// Configures fetch remotes under the repository lock, before network waits.
 pub async fn prepare_accept(g: &Group, me: &str) -> Vec<String> {
     let peers = peers(g, me);

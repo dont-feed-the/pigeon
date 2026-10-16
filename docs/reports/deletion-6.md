@@ -302,3 +302,25 @@ decision is now 0080; accepted ADRs 0075, 0076 and 0077 remain byte-identical
 to their source. On 16 October 2026, the user resolved the retention question:
 declined suggestions stay retained until explicit erasure, with no automatic
 expiry setting.
+
+
+## Usability follow-up and ready-install integration
+
+The branch includes rollup `0340319`, preserving main `0ac8465`'s per-file
+suggestion decisions, truthful status, free-space confirmations and pause
+banner alongside the file manager and system computer names. Erasure review
+links remain on the new Suggestions page. History keeps the verified archive
+and erasure-aware version listing while explaining a differing local copy.
+The early-install regression runs with the M5 daemon's real receipt store.
+
+All-target Clippy with lab and trace features passes. The combined checks
+pass 100 interface/protocol/language tests (one existing ignored test), all
+178 core tests, and 59 daemon integration tests covering signed history,
+physical purge, restore, restart, refounding and incoming installation.
+The catalogue oracle is included. These results do not complete the missing
+restoration alert, post-seal partition scenarios or Purge implementation
+trace conformance listed above.
+
+The proposed completion-epoch ADR is now 0081 because the rollup uses 0078
+for per-file suggestion decisions. Proposed ADRs 0079 and 0080 keep their
+numbers. Accepted ADRs 0075, 0076 and 0077 retain their exact source contents.

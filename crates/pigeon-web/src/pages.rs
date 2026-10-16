@@ -18,7 +18,7 @@ use futures_util::StreamExt;
 use futures_util::stream::{self, Stream};
 use maud::{Markup, html};
 use pigeon_i18n::Message;
-use pigeon_proto::api::{Level, Suggestion};
+use pigeon_proto::api::Level;
 use pigeon_proto::{Request, Response};
 
 use crate::{FormToken, Web};
@@ -31,6 +31,25 @@ pub(crate) fn page(r: &Renderer, here: &str, title: &str, body: &Markup) -> Html
 /// A page whose `body` has its own heading; `title` names it in the tab.
 pub(crate) fn bare(r: &Renderer, here: &str, title: &str, body: &Markup) -> Html<String> {
     Html(document(r, here, title, body, Head::Own))
+}
+
+/// The pause in force, on every page, with *Share again*, even when
+/// something else needs the person (15 §15.6). Home's headline may say it
+/// already; there the banner keeps only the button.
+pub(crate) fn pause_banner(r: &Renderer, headline: &str, live: bool) -> Markup {
+    let Some(banner) = &r.banner else {
+        return html! {};
+    };
+    let text = r.text(&banner.message);
+    html! {
+        div class="pause-banner" role="status" {
+            @if !live || text != headline { p { (text) } }
+            form method="post" action=(r.url("/resume")) {
+                input type="hidden" name="form" value=(&banner.form);
+                button type="submit" { (r.id("web-resume")) }
+            }
+        }
+    }
 }
 
 /// A page that says only why the request was refused.
@@ -118,6 +137,12 @@ fn level_icon(level: Option<Level>) -> &'static str {
     }
 }
 
+/// Text for screen readers only, after a button's short visible label:
+/// which row the button acts on (ux.md §6).
+pub(crate) fn hidden(context: &str) -> Markup {
+    html! { span class="visually-hidden" { " — " (context) } }
+}
+
 pub(crate) fn list(items: &[String]) -> Markup {
     html! { ul { @for i in items { li { (i.trim()) } } } }
 }
@@ -130,10 +155,13 @@ pub async fn home(
 ) -> Html<String> {
     let r = web.renderer();
     let s = status(&web, &r).await;
-    let held = if s.no_group {
-        html! {}
+    let (conflicts, held) = if s.no_group {
+        (html! {}, html! {})
     } else {
-        crate::held::section(&web, &r, &form.0).await
+        (
+            crate::conflicts::section(&web, &r).await,
+            crate::held::section(&web, &r, &form.0).await,
+        )
     };
     let class = s.level.map_or("headline-card".to_owned(), |l| {
         format!("headline-card lv-{}", level_name(l))
@@ -154,6 +182,7 @@ pub async fn home(
                 }
             }
         }
+        (conflicts)
         (held)
         @if let Some(health) = &s.health { (crate::health::section(&r, health)) }
         @if s.no_group && r.mount.is_none() {
@@ -164,100 +193,6 @@ pub async fn home(
         }
     };
     bare(&r, "/", &s.headline, &body)
-}
-
-/// Suggestions: those waiting for a decision, with *Accept* and *Decline*
-/// on those this person decides (ux.md §6.3).
-pub async fn suggestions(
-    State(web): State<Arc<Web>>,
-    Extension(form): Extension<FormToken>,
-) -> Html<String> {
-    let r = web.renderer();
-    let mut rows = Vec::new();
-    let mut other = Vec::new();
-    for answer in web.ask(Request::Proposals).await {
-        match answer {
-            Response::Proposals { proposals } => rows = proposals,
-            Response::Progress { .. } => {}
-            a => other.extend(r.response(&a).0),
-        }
-    }
-    let body = html! {
-        @if rows.is_empty() && other.is_empty() {
-            div class="empty" {
-                (icon("suggest", ""))
-                strong { (r.id("suggestions-none")) }
-                (r.id("web-suggestions-empty-help"))
-            }
-        }
-        (list(&other))
-        div class="stack" { @for s in &rows { (suggestion(&r, s, &form.0)) } }
-    };
-    page(&r, "/suggestions", &r.id("web-nav-suggestions"), &body)
-}
-
-/// The first letter of a name, for its avatar.
-pub(crate) fn initial(name: &str) -> String {
-    name.chars().next().map(String::from).unwrap_or_default()
-}
-
-/// One suggestion, and the forms that decide it.
-fn suggestion(r: &Renderer, s: &Suggestion, form: &str) -> Markup {
-    let saved = pigeon_proto::time::parse_rfc3339(&s.saved_at)
-        .map_or_else(|| s.saved_at.clone(), |t| r.ago(crate::now() - t));
-    let id = if s.mine {
-        "web-suggestion-yours"
-    } else if s.decide {
-        "web-suggestion-decide"
-    } else {
-        "web-suggestion-other"
-    };
-    let msg = Message::new(id)
-        .arg("author", s.author.clone())
-        .arg("paths", s.paths.join(", "))
-        .arg("saved", saved);
-    let decides = s.decide && (!s.mine || s.force);
-    html! {
-        article class="card" {
-            div class="person" {
-                span class="avatar" aria-hidden="true" { (initial(&s.author)) }
-                div class="grow" {
-                    p { (r.catalogue().format(&msg)) }
-                    p { a href=(r.url(&format!("/erase?suggestion={}", form_urlencoded::byte_serialize(s.id.as_bytes()).collect::<String>()))) { (r.id("web-erase-suggestion")) } }
-                    div class="suggestion-paths" {
-                        @for path in &s.paths {
-                            form method="post" action=(r.url("/suggestions/view")) {
-                                input type="hidden" name="form" value=(form);
-                                input type="hidden" name="proposal" value=(s.id);
-                                input type="hidden" name="path" value=(path);
-                                button type="submit" class="small" {
-                                    (crate::icons::file_icon(path)) (r.id("web-view-suggestion")) " — " (path)
-                                }
-                            }
-                        }
-                    }
-                    @if decides {
-                        div class="inline-forms" {
-                            form method="post" action=(r.url("/suggestions/accept")) class="inline-forms" {
-                                input type="hidden" name="form" value=(form);
-                                input type="hidden" name="id" value=(s.id);
-                                @if s.force {
-                                    label { (r.id("web-override-reason")) " " input name="reason" required; }
-                                }
-                                button type="submit" class="primary" { (icon("check", "")) (r.id("web-accept")) }
-                            }
-                            form method="post" action=(r.url("/suggestions/decline")) class="inline-forms" {
-                                input type="hidden" name="form" value=(form);
-                                input type="hidden" name="id" value=(s.id);
-                                label { (r.id("web-decline-note")) " " input type="text" name="note"; }
-                                button type="submit" { (r.id("web-decline")) }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 /// The result of an action: its first line as the title, the rest under
@@ -324,4 +259,9 @@ pub async fn events(
     })
     .flat_map(stream::iter);
     Sse::new(s).keep_alive(KeepAlive::default())
+}
+
+/// The first letter of a person’s name, for their avatar.
+pub(crate) fn initial(name: &str) -> String {
+    name.chars().next().map(String::from).unwrap_or_default()
 }

@@ -151,9 +151,13 @@ pub async fn history(d: &Daemon, path: &Path) -> Vec<Response> {
     let Some(rel) = relative(&g, path) else {
         return vec![problem("not-in-group", &[], None)];
     };
-    vec![Response::History {
-        versions: saved_versions(&g, &d.device, &rel).await,
-    }]
+    let versions = saved_versions(&g, &d.device, &rel).await;
+    let local = crate::status_why::Local::read(&g);
+    let changed = crate::capture::pending(&g, &rel)
+        .await
+        .is_ok_and(|p| p.contains(&rel));
+    let note = (changed || local.differs(&rel)).then(|| local.reason(&rel));
+    crate::status_why::noted(note, Response::History { versions })
 }
 
 /// Saved-version status shared by the public history command and recovery

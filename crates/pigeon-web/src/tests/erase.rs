@@ -78,11 +78,14 @@ async fn erase_get_only_previews_and_post_requires_both_form_and_history_tokens(
         assert!(html.contains("value=\"confirm\""));
         assert_eq!(
             backend.calls.lock().unwrap().as_slice(),
-            &[pigeon_proto::Request::Erase {
-                operation: Operation::Preview {
-                    selection: Selection::Path("/Family/old.txt".into())
+            &[
+                pigeon_proto::Request::Paused,
+                pigeon_proto::Request::Erase {
+                    operation: Operation::Preview {
+                        selection: Selection::Path("/Family/old.txt".into())
+                    }
                 }
-            }]
+            ]
         );
         let token = html
             .split("name=\"form\" value=\"")
@@ -224,9 +227,12 @@ async fn split_preparation_explains_explicit_recovery_without_retry_or_erasure_b
         );
         assert!(matches!(
             backend.calls.lock().unwrap().as_slice(),
-            [pigeon_proto::Request::Erase {
-                operation: Operation::Preview { .. }
-            }]
+            [
+                pigeon_proto::Request::Paused,
+                pigeon_proto::Request::Erase {
+                    operation: Operation::Preview { .. }
+                }
+            ]
         ));
     }
 }

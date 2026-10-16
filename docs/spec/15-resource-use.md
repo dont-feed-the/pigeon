@@ -119,8 +119,13 @@ stops all but capture until it ends or `pigeon resume`; `paused_until`
 survives a restart; the status says `paused(person)` (ADR 0027).
 *Coded so far:* `pause` and `resume` write `paused_until` (`"resume"` for
 a pause without end, DURATION as `45m`, `2h` or `3d`); a paused round only
-captures and the headline says until when, unless something needs the
-person. Peers may still fetch from this computer **[no ADR: serve while
+captures and the headline says until when ("until 14:38", in this
+computer's local time), unless something needs the person. The pause is
+said even then: `pigeon status` adds its line under that headline (the
+status report's `paused`), and every web page shows it as a banner with
+*Share again* (`Paused`, 10 §10.3); Settings offers only the action that
+applies, the pause choices while sharing, *Share again* while paused.
+Peers may still fetch from this computer **[no ADR: serve while
 paused]**.
 
 ## 15.7 Budgets

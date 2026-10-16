@@ -9,18 +9,6 @@ increments the second number, and every other release the third.
 
 ### Added
 
-- The operator dashboard (`telemetry/dashboards/pigeon-operations.json`)
-  shows computers and groups by name, such as "rtx", instead of their
-  64-digit IDs, one line per computer, with a Group selector: the
-  collector adds the names from its signed roster when it forwards.
-
-- In a per-person folder, a computer no longer keeps other people's
-  folders unless its person chooses to: Laurent's laptop gets `src/laurent`
-  but not `src/robin`, and the folder of someone who joins later arrives
-  nowhere unasked. `pigeon keep ~/Group/src/robin` brings one to this
-  computer, `pigeon free` sends it away again, and `pigeon sync` lists every
-  folder with whether it is on this computer and why;
-  `pigeon sync PATH --default` returns a folder to its default.
 - Review the exact versions covered by `pigeon erase PATH` or
   `pigeon erase --suggestion ID`, including content still needed elsewhere.
   The command and web pages show preparation, confirmation, waiting backup
@@ -28,17 +16,36 @@ increments the second number, and every other release the third.
 - Backup machines check retained files every 30 days during the nightly
   window, using idle I/O priority on Linux. Set `resources.scrub_window`
   to choose another local-time window.
-
-- pigeon updates itself. Every computer and backup machine installs the
-  latest release once a day, and within minutes when another computer of
-  the group runs a newer release. The update downloads the installer
-  afresh from GitHub, so a release that broke pigeon is replaced by the
-  next one. It shows nothing; `journalctl --user -u pigeon-update`
-  (macOS: `~/Library/Logs/pigeon/update.log`) tells what it did.
-  `pigeon update --auto off` turns it off and `--auto on` back on; to
-  install with it off, use `curl … | sh -s -- --auto off`. A build of main
-  is never replaced. Installations from before this release get it after
-  one `pigeon update`.
+- Files whose copy on this computer differs from the group's version are
+  listed on Home. Each one's page explains the difference and lets you take
+  the group's version, keep yours as a copy next to it, or suggest yours
+  again, saying where each version goes (as `pigeon conflicts` and
+  `pigeon resolve` do). A file's page also marks its current version.
+- Suggestions can be decided file by file. Each file of a suggestion says
+  what changes in it (new, changed with its size before and after and, for
+  small text files, the lines added and removed, deleted or renamed) and
+  has its own Review button. Untick files, then choose *Accept selected* or
+  *Decline selected*, with a note; with several suggestions, *Accept all*
+  and *Decline all* decide them at once. From the command line:
+  `pigeon accept ID FILE…` or `pigeon decline ID FILE… --note "why"`.
+- Whoever made a suggestion sees, on Suggestions, on each file's page and
+  in `pigeon suggestions`, which of their files were accepted or declined,
+  by whom, and the note.
+- *Free up space* first says which files will leave this computer, which
+  backup machines keep them, and that *Keep on this computer* brings them
+  back. If no backup machine has been in touch for an hour, it asks a
+  second time and says when they were last heard from. `pigeon free` asks
+  the same question, or takes `--yes`. Freed files read "Safe, not on this
+  computer".
+- While sharing is paused, every page says "Sharing is paused until 14:38"
+  with *Share again*, even when something else needs you, and
+  `pigeon status` adds the pause under any other headline.
+- `pigeon create --person NAME` and a "Your name" field on the Create form
+  set how the others in the group see you; without it pigeon uses your user
+  name, else the computer's name, never "Me".
+- A printed recovery sheet shows its own name, and People & machines lists
+  it as "paper recovery sheet printed on <date>".
+- Every page starts with a "Skip to content" link for keyboard users.
 - `pigeon open` looks and works like a file manager. A sidebar holds the
   sections and, on every page, whether your files are safe. **Files** shows
   the folder you are in as a table, folders first, each with an icon by
@@ -69,16 +76,33 @@ increments the second number, and every other release the third.
 
 ### Changed
 
-- `pigeon update` updates the installation it belongs to, wherever it is.
-  On a backup machine, `sudo /opt/pigeon/bin/pigeon update` now works too.
+- Files not shared yet say why: your copy differs from the group's version;
+  its name does not work on every computer; it is a deletion waiting for
+  your choice; or pigeon could not save it and will try again.
+- When the backup machines a file waits for have not been heard from for a
+  few minutes, `pigeon status` and Home say which one, instead of
+  "Sending…".
+- Removing a backup machine asks its own question and, if fewer backup
+  machines than the group needs would be left, says plainly that your files
+  will not be safe until you add one. Removing a computer says its files
+  stay on it but are no longer shared, and that you can invite it again.
+- Preparing a recovery sheet first checks that a backup machine answers; if
+  none does, it says which to turn on, and nothing is changed.
+- Times read as local times ("until 14:38", "expires tomorrow at 13:35")
+  and sizes as "29.3 GB" ("29,3 Go" in French). Held deletions and the Space
+  page name files and dates instead of internal ids.
+- Settings shows only the pause action that applies. Copies opened with
+  *Open a copy* are named in your language.
+- When the computer name you chose was taken, joining tells you the name it
+  got.
+- Screen readers hear which version, computer, suggestion or folder a
+  repeated button acts on. On phones, buttons, fields and menu links are
+  easier to tap. A folder's page is titled with its name, shows names from
+  that folder, and *Back* goes to the parent folder.
 - Building pigeon from source now also needs Node.js 22.12 or later with
   npm, which build the web interface's script; `pigeon update --main` and
   `scripts/install-local` say so before building if it is missing. The
   released programs need nothing new.
-- Release validation runs the same 50 random crash schedules in parallel
-  within each Linux shard, using different seeds. Longer filesystem trace
-  checks first try a faster witness search, retaining the full search and
-  all safety checks if it cannot explain the observations.
 
 ### Fixed
 
@@ -101,16 +125,75 @@ increments the second number, and every other release the third.
 - A save, deletion or executable-bit change made while restore checks history
   stays in place, even if pigeon has already saved that change. Members can
   retry a waiting restore without losing their intervening saved suggestions.
+- A Mac that runs `pigeon join` without `--name` is listed under its own
+  name, such as "Robin’s MacBook Air-49d313", instead of "backup-49d313",
+  which made a laptop look like a backup machine; `pigeon create` names it
+  "Robin’s MacBook Air" instead of "computer". On a Mac pigeon takes the
+  name of System Settings → General → Sharing, elsewhere the host name.
+- "Sending…" no longer outlasts its ten minutes because other files were
+  saved meanwhile: each file's wait counts from when it was saved.
+- A computer removed from the group no longer says "Everything is safe": it
+  says it was removed, that its files stay in its folder but are no longer
+  shared or backed up, and to join again with the group's invitation line.
+- The Space page no longer warns of "less than 25% spare" whenever the
+  group has exactly as many backup machines as it needs. It warns only when
+  a storage limit is below one copy, and otherwise says, as information,
+  that there is no spare backup machine.
+- A join that fails or cannot reach the inviter no longer leaves a
+  half-joined group: trying again in the same folder works.
+- A recovery sheet whose page was closed while waiting no longer stays in
+  the group unprinted: pages finish their work, or undo it, even when the
+  browser leaves.
 - The file manager's script, stylesheet and icon load when it is opened
   through a bridge client's own pages.
 - A slow or unavailable computer no longer delays accepting new versions
-  from the group’s reachable computers.
+  from the group’s reachable computers, or installing their contents when
+  those are already on this computer.
+
+## 0.5.14 — 2026-10-16
+
+### Added
+
+- The operator dashboard (`telemetry/dashboards/pigeon-operations.json`)
+  shows computers and groups by name, such as "rtx", instead of their
+  64-digit IDs, one line per computer, with a Group selector: the
+  collector adds the names from its signed roster when it forwards.
+
+- In a per-person folder, a computer no longer keeps other people's
+  folders unless its person chooses to: Laurent's laptop gets `src/laurent`
+  but not `src/robin`, and the folder of someone who joins later arrives
+  nowhere unasked. `pigeon keep ~/Group/src/robin` brings one to this
+  computer, `pigeon free` sends it away again, and `pigeon sync` lists every
+  folder with whether it is on this computer and why;
+  `pigeon sync PATH --default` returns a folder to its default.
+- pigeon updates itself. Every computer and backup machine installs the
+  latest release once a day, and within minutes when another computer of
+  the group runs a newer release. The update downloads the installer
+  afresh from GitHub, so a release that broke pigeon is replaced by the
+  next one. It shows nothing; `journalctl --user -u pigeon-update`
+  (macOS: `~/Library/Logs/pigeon/update.log`) tells what it did.
+  `pigeon update --auto off` turns it off and `--auto on` back on; to
+  install with it off, use `curl … | sh -s -- --auto off`. A build of main
+  is never replaced. Installations from before this release get it after
+  one `pigeon update`.
+
+### Changed
+
+- `pigeon update` updates the installation it belongs to, wherever it is.
+  On a backup machine, `sudo /opt/pigeon/bin/pigeon update` now works too.
 
 ### Removed
 
 - The Homebrew tap. On a Mac installed with Homebrew, run
   `brew services stop pigeon` and `brew uninstall pigeon`, then the
   install line of the README; your folders, groups and device key stay.
+
+### Changed
+
+- Release validation runs the same 50 random crash schedules in parallel
+  within each Linux shard, using different seeds. Longer filesystem trace
+  checks first try a faster witness search, retaining the full search and
+  all safety checks if it cannot explain the observations.
 
 ## 0.5.13 — 2026-10-16
 

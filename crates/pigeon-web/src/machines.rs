@@ -14,7 +14,7 @@ use axum::{Extension, Form};
 use maud::{Markup, html};
 use pigeon_i18n::Message;
 use pigeon_proto::Request;
-use pigeon_proto::api::Machine;
+use pigeon_proto::api::{Machine, Removal};
 
 use crate::icons::icon;
 use crate::pages::{list, page};
@@ -30,7 +30,7 @@ pub async fn machines(
     let mut other = Vec::new();
     for answer in web.ask(Request::Machines).await {
         match answer {
-            pigeon_proto::Response::Machines { machines } => rows = machines,
+            pigeon_proto::Response::Machines { machines, .. } => rows = machines,
             pigeon_proto::Response::Progress { .. } => {}
             a => other.extend(r.response(&a).0),
         }
@@ -102,7 +102,7 @@ fn machine(r: &Renderer, m: &Machine, form: &str) -> Markup {
                 form method="post" action=(r.url("/machines/remove")) {
                     input type="hidden" name="form" value=(form);
                     input type="hidden" name="name" value=(m.name);
-                    button type="submit" class="small danger" { (r.id(if m.recovery { "web-revoke-sheet" } else { "web-remove" })) }
+                    button type="submit" class="small danger" { (r.id(if m.recovery { "web-revoke-sheet" } else { "web-remove" })) (pages::hidden(&m.name)) }
                 }
             }
         }
@@ -151,19 +151,28 @@ pub async fn remove(
     }
     let r = web.renderer();
     if !f.yes {
-        let recovery = web.ask(Request::Machines).await.iter().any(|answer| {
-            matches!(answer, pigeon_proto::Response::Machines { machines }
-                if machines.iter().any(|m| m.name == f.name && m.recovery))
-        });
+        let removal = Removal::of(&web.ask(Request::Machines).await, &f.name);
+        let recovery = removal == Removal::Sheet;
         let question = r.catalogue().format(
-            &Message::new(if recovery {
-                "web-revoke-confirm"
-            } else {
-                "web-remove-confirm"
+            &Message::new(match removal {
+                Removal::Sheet => "web-revoke-confirm",
+                Removal::Backup { .. } => "web-remove-backup-confirm",
+                Removal::Computer => "web-remove-confirm",
             })
             .arg("name", f.name.as_str()),
         );
+        let warning = match removal {
+            Removal::Backup { left, needed } if left < needed => Some(
+                r.catalogue().format(
+                    &Message::new("remove-backup-unsafe")
+                        .arg("left", u64::from(left))
+                        .arg("needed", u64::from(needed)),
+                ),
+            ),
+            _ => None,
+        };
         let body = html! {
+            @if let Some(w) = &warning { p role="alert" { strong { (w) } } }
             div class="card inline-forms" {
                 form method="post" action=(r.url("/machines/remove")) {
                     input type="hidden" name="form" value=(f.form);

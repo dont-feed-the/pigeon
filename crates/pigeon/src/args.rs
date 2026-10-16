@@ -53,7 +53,7 @@ pub struct Line {
 /// The commands of `pigeon help`: their synopsis and message id.
 pub const COMMANDS: &[(&str, &str)] = &[
     (
-        "create NAME [FOLDER | --folder FOLDER] [--k N] [--name NAME]",
+        "create NAME [FOLDER | --folder FOLDER] [--k N] [--name NAME] [--person NAME]",
         "cmd-create",
     ),
     ("invite", "cmd-invite"),
@@ -86,8 +86,14 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ),
     ("sync [PATH] [--default]", "cmd-sync"),
     ("suggestions", "cmd-suggestions"),
-    ("accept ID [--override REASON]", "cmd-accept"),
-    ("decline ID [--note TEXT]", "cmd-decline"),
+    (
+        "accept ID [FILE… [--note TEXT]] [--override REASON]",
+        "cmd-accept",
+    ),
+    (
+        "decline ID [FILE… [--override REASON]] [--note TEXT]",
+        "cmd-decline",
+    ),
     ("conflicts", "cmd-conflicts"),
     (
         "resolve PATH --take-group | --keep-copy DEST | --suggest-again",
@@ -157,6 +163,8 @@ enum Command {
         k: u32,
         #[arg(long = "name")]
         device_name: Option<String>,
+        #[arg(long)]
+        person: Option<String>,
     },
     Invite,
     Join {
@@ -245,14 +253,22 @@ enum Command {
     Accept {
         #[arg(add = complete::suggestions())]
         id: String,
+        #[arg(value_name = "FILE", value_hint = ValueHint::AnyPath)]
+        files: Vec<String>,
         #[arg(long = "override", value_name = "REASON")]
         reason: Option<String>,
+        #[arg(long)]
+        note: Option<String>,
     },
     Decline {
         #[arg(add = complete::suggestions())]
         id: String,
+        #[arg(value_name = "FILE", value_hint = ValueHint::AnyPath)]
+        files: Vec<String>,
         #[arg(long)]
         note: Option<String>,
+        #[arg(long = "override", value_name = "REASON")]
+        reason: Option<String>,
     },
     Conflicts,
     #[command(group(ArgGroup::new("choice").args(["take_group", "keep_copy", "suggest_again"]).required(true)))]
@@ -375,13 +391,21 @@ pub fn absolute(path: &str) -> String {
         .into_owned()
 }
 
-fn hostname() -> String {
-    std::fs::read_to_string("/etc/hostname")
-        .ok()
-        .or_else(|| std::env::var("HOSTNAME").ok())
-        .map(|h| h.trim().to_owned())
-        .filter(|h| !h.is_empty())
-        .unwrap_or_else(|| "computer".to_owned())
+/// The files of a suggestion named on the command line (ADR 0078): a file
+/// here is made absolute; a name that is not here, such as a new file the
+/// suggestion adds, is a path in the group's folder as `pigeon
+/// suggestions` lists it.
+fn chosen(files: &[String]) -> Vec<String> {
+    files
+        .iter()
+        .map(|f| {
+            if Path::new(f).is_absolute() || Path::new(f).exists() {
+                absolute(f)
+            } else {
+                f.clone()
+            }
+        })
+        .collect()
 }
 
 /// The arguments before `--`, where options are.
@@ -439,11 +463,13 @@ fn action(c: Command) -> Action {
             folder,
             k,
             device_name,
+            person,
         } => send(Request::Create {
             name,
             folder: absolute(folder.or(at).as_deref().unwrap_or(".")),
             k,
-            device_name: device_name.unwrap_or_else(hostname),
+            device_name: device_name.unwrap_or_else(pigeon_sys::host::name),
+            person,
         }),
         Command::Invite => send(Request::Invite),
         Command::Join {
@@ -533,11 +559,35 @@ fn action(c: Command) -> Action {
             },
         }),
         Command::Suggestions => send(Request::Proposals),
-        Command::Accept { id, reason } => send(Request::Accept {
+        Command::Accept {
+            id,
+            files,
+            reason,
+            note,
+        } if !files.is_empty() => send(Request::DecideFiles {
+            proposal: id,
+            paths: chosen(&files),
+            accept: true,
+            note,
+            reason,
+        }),
+        Command::Accept { id, reason, .. } => send(Request::Accept {
             proposal: id,
             reason,
         }),
-        Command::Decline { id, note } => send(Request::Reject { proposal: id, note }),
+        Command::Decline {
+            id,
+            files,
+            note,
+            reason,
+        } if !files.is_empty() => send(Request::DecideFiles {
+            proposal: id,
+            paths: chosen(&files),
+            accept: false,
+            note,
+            reason,
+        }),
+        Command::Decline { id, note, .. } => send(Request::Reject { proposal: id, note }),
         Command::Conflicts => send(Request::Conflicts),
         Command::Resolve {
             path,
@@ -587,6 +637,7 @@ fn action(c: Command) -> Action {
         }),
         Command::Free { path, .. } => send(Request::Evict {
             folder: absolute(&path),
+            confirmed: false,
         }),
         Command::Keep { path } => send(Request::Keep {
             folder: absolute(&path),

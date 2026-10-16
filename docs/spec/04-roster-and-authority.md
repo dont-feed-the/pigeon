@@ -9,7 +9,10 @@
 
 `pigeon create NAME` writes the **genesis commit**: no parent, a tree with
 `.gitattributes` ([03 §3.3](03-repository-and-roles.md)) and a roster of one
-admin and one device, signed by it (ADR 0007). The **group ID** is its
+admin and one device, signed by it (ADR 0007). The admin is named as the
+creator asked (`--person`, the web's *Your name*), else by `$USER`, else by
+the computer's name; its ID is made from that name as a new person's is
+([09 §9.6](09-network-and-joining.md)) **[no ADR]**. The **group ID** is its
 commit ID; a device accepts only a history rooted at the genesis its
 invitation names (ADR 0075). Other founders join with the group's
 invitation.
@@ -187,6 +190,7 @@ adoption and concurrent decisions are ADR 0051, checked by `Authority.tla`
 | revisions | a decision names one commit: adopting it adopts its ancestors in the chain; rejecting it leaves later ones pending |
 | state (computed) | the first that holds: *accepted* (an accepted commit descends), *rejected* or *withdrawn* (a decision, [07 §7.6](07-capture-and-install.md)), *superseded*, *pending*; revoked commits alike |
 | accept | on a `main` holding all it builds on, merge (`main`, proposal) with its change; a path changed meanwhile keeps both, the proposal's under its conflict name ([05 §5.2–5.3](05-catalogue-and-names.md)) |
+| some files (ADR 0078) | one commit on `main`, not a merge, signed by a decider: its tree holds the adoption's change of the accepted paths only (`proposal::partial`), with Force as for the adoption, and adds the decision `rejected` for the rest; a `Pigeon-Accepted: "path"` trailer names each accepted path, believed only where the tree holds its change (`proposal::holds`). It closes the proposal; a rename is decided as one file |
 | concurrency | an adoption wins over a rejection; the proposal stays the author's **submission**, the adoption the decider's **authorised change**, so rights never widen |
 | content | replicates like any version: *protected* only once K custodians hold it (ADR 0034, [06 §6.2](06-status.md)) |
 
@@ -213,6 +217,22 @@ roster of its base (`withdrawn`), never a changed one, and lets the commit
 wait when this device does not keep the proposal
 (`a_decision_is_accepted_iff_its_signer_may_make_it`; `commit::about`).
 `pigeon resolve` writes a withdrawal (07 §7.6, `pigeond::resolve`).
+`pigeon accept ID FILE…` and `pigeon decline ID FILE… [--note TEXT]`
+(`DecideFiles`, ADR 0078) decide some files: the files named are accepted
+and the others declined, or the reverse, in one decision
+(`pigeond::decide_files`; laws in `tests/proposal.rs`: a partial decision
+is the adoption on the paths it accepts and `main` elsewhere; models
+`Authority_part`, `Authority_part4`: a decider's such decision is always
+accepted; `AuthorityTrace` checks the code's verdicts on them;
+`pigeond/tests/decide_files.rs` and `suggestion_files.rs`: a later joiner
+verifies them). An older release accepts the commit and reads a decline:
+its install ends the suggestion of each file `main` now holds as saved
+and makes the others conflicts (07 §7.6). `pigeon suggestions` lists what
+each file's change is (new, changed, deleted, renamed, sizes, and the lines
+added and removed of a small text file whose two versions are here), and,
+to its author, how each of their suggestions was decided in the last 30
+days: by whom, which files were accepted and which declined, and the note
+(`pigeond::decided`).
 
 A rejection or withdrawal is a commit of `.pigeon/decisions/<commit>.toml`:
 

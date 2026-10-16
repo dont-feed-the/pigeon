@@ -271,7 +271,7 @@ fn a_member_requests_absent_bytes_as_a_signed_suggestion_without_changing_main()
     assert!(
         suggestions
             .iter()
-            .any(|r| matches!(r, Response::Proposals {proposals}
+            .any(|r| matches!(r, Response::Proposals {proposals, ..}
         if proposals.iter().any(|p| p.mine && p.paths==["notes.txt"]))),
         "{suggestions:?}"
     );
@@ -281,7 +281,7 @@ fn a_member_requests_absent_bytes_as_a_signed_suggestion_without_changing_main()
     assert!(
         suggestions
             .iter()
-            .any(|r| matches!(r, Response::Proposals {proposals}
+            .any(|r| matches!(r, Response::Proposals {proposals, ..}
         if proposals.iter().any(|p| p.mine && p.paths==["notes.txt"]))),
         "{suggestions:?}"
     );
