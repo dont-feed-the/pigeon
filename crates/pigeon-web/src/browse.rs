@@ -1,8 +1,8 @@
 //! The Files browser (ux.md §6.2): the group's folder as a table of
 //! folders then files, each with an icon by kind, its state, size and last
 //! change, sortable by column and filtered by name; a breadcrumb trail; the
-//! selected row's details beside it (`details.rs`). Every view is a URL, so
-//! links and reloads work
+//! selected row's details beside it (`details.rs`); and the folder's README
+//! under it (`readme.rs`). Every view is a URL, so links and reloads work
 //! without the client, which only spares the page loads.
 
 use std::collections::BTreeMap;
@@ -321,6 +321,7 @@ async fn browse(web: &Web, r: &Renderer, form: &str, q: Browse) -> Html<String> 
         Some(row) => Some(crate::details::panel(web, r, &view, row, &root, form).await),
         None => None,
     };
+    let readme = crate::readme::section(web, r, &root, &rows).await;
     let title = if prefix.is_empty() {
         r.id("web-nav-files")
     } else {
@@ -376,6 +377,7 @@ async fn browse(web: &Web, r: &Renderer, form: &str, q: Browse) -> Html<String> 
                     div class="table-wrap" { (table(r, &view, &rows, q.selected.as_deref(), form, prefix.is_empty())) }
                     p class="empty" data-filter-empty hidden { (r.id("web-filter-none")) }
                 }
+                (readme)
             }
             @if let Some(d) = details { (d) }
         }

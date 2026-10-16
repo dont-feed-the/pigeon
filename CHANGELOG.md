@@ -21,6 +21,12 @@ increments the second number, and every other release the third.
   *Free up space*. Actions now run without leaving the page and say their
   result in a message at the bottom. Dates show in your own time zone, and
   the interface follows your system's light or dark mode.
+- A folder's README shows under its files, as on code-hosting sites:
+  `README.md` (or `README.markdown`) as formatted text, else `README` or
+  `README.txt` as plain text. Its links to files and folders of the group
+  open them in pigeon; pictures and links elsewhere are shown as links,
+  never loaded. A README whose folder is not on this computer, or longer
+  than 128 KB, says so, with a link to its page.
 - Per-person folders: `pigeon folder-rule ~/Group/src --per-person` (or
   *Each folder in it belongs to the person it is named after* in a folder's
   sharing rule in `pigeon open`) makes every `src/<name>` belong to the

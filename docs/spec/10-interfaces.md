@@ -144,7 +144,15 @@ of the folder's folders then files, each with an icon by kind, its state
 `Files`, sorted by a column's link and filtered by name; *Details* of a
 row beside it, its URL's `selected`, with the state, the sharing rule,
 the latest versions with *Open a copy* and *Restore this version*, and a
-folder's *Keep on this computer* or *Free up space*.
+folder's *Keep on this computer* or *Free up space*. A folder's README
+(`README.md` or `.markdown`, else `README` or `README.txt`, in any case)
+shows under its files from `ReadText`, at most 128 KiB, read only from
+content already on this computer: a README that is not here, or longer,
+says so with a link to its page. Its Markdown (CommonMark, tables, task
+lists, strikethrough) keeps no raw HTML and shows no image (an image is a
+link to it); a link outside the group is followed only for `http`,
+`https` and `mailto`, and a relative link only if it stays in the group's
+folder, to that file's or folder's page; headings start at level 3.
 
 - Served by `pigeond`, rendered on the server; pages work without
   JavaScript. The client (ADR 0076), TypeScript built by `build.rs` with

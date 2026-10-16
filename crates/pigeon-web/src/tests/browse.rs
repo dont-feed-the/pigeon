@@ -1,5 +1,5 @@
 //! The Files browser through the router: the table, sorting, the details
-//! panel, the client's assets and the headers that confine
+//! panel, the README, the client's assets and the headers that confine
 //! them (10 §10.3, ADR 0076); and the client's own tests, run by Node.
 
 use super::demo::{Demo, ROOT};
@@ -41,7 +41,7 @@ async fn the_group_folder_lists_folders_first_with_sizes_and_states() {
 }
 
 #[tokio::test]
-async fn a_folder_has_its_trail() {
+async fn a_folder_has_its_trail_and_its_own_readme() {
     let page = page_of(&format!("/folder?path={}", enc(&format!("{ROOT}/Photos")))).await;
     assert!(page.contains("aria-label=\"Location\""), "{page}");
     assert!(page.contains(&format!(
@@ -49,6 +49,65 @@ async fn a_folder_has_its_trail() {
         enc(&format!("{ROOT}/Photos"))
     )));
     assert!(page.contains("data-name=\"2026-10-12\"") && page.contains("data-name=\"Vacances\""));
+    assert!(
+        page.contains("Photos of the family, one folder per day"),
+        "plain README"
+    );
+    assert!(page.contains("aria-labelledby=\"readme-title\""));
+}
+
+#[tokio::test]
+async fn the_readme_is_rendered_safely_and_its_links_stay_in_the_browser() {
+    let page = page_of("/files").await;
+    let readme = &page[page.find("class=\"readme\"").unwrap()..];
+    assert!(readme.contains("<h3>Famille Geiger</h3>") && readme.contains("<table>"));
+    assert!(readme.contains(&format!(
+        "href=\"/folder?path={}\"",
+        enc(&format!("{ROOT}/Photos"))
+    )));
+    assert!(readme.contains(&format!(
+        "href=\"/file?path={}\"",
+        enc(&format!("{ROOT}/budget-2026.xlsx"))
+    )));
+    assert!(
+        !readme.contains("<script>alert") && !readme.contains("<img"),
+        "{readme}"
+    );
+    assert!(readme.contains(">a remote picture</a>"));
+}
+
+#[tokio::test]
+async fn a_readme_that_is_not_here_is_said_so() {
+    let page = page_of(&format!(
+        "/folder?path={}",
+        enc(&format!("{ROOT}/Recettes de Paul"))
+    ))
+    .await;
+    assert!(
+        !page.contains("class=\"readme\""),
+        "cookies.md is no README"
+    );
+    let w = Web::new(Arc::new(Demo), "en".parse().unwrap(), 4321);
+    let r = w.renderer();
+    let rows = vec![crate::browse::Row {
+        name: "README".into(),
+        abs: format!("{ROOT}/Photos 2019/README"),
+        folder: false,
+        state: State::Protected,
+        not_safe: 0,
+        files: 1,
+        size: None,
+        modified: None,
+        freed: true,
+        arriving: 0,
+    }];
+    let section = crate::readme::section(&w, &r, ROOT, &rows)
+        .await
+        .into_string();
+    assert!(
+        section.contains("README is not on this computer"),
+        "{section}"
+    );
 }
 
 #[tokio::test]

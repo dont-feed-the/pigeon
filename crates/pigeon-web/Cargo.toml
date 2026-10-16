@@ -14,6 +14,7 @@ form_urlencoded.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true
 maud.workspace = true
+pulldown-cmark = { workspace = true }
 pigeon-i18n.workspace = true
 pigeon-proto.workspace = true
 serde.workspace = true

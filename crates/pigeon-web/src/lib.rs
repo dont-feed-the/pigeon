@@ -41,6 +41,7 @@ mod join;
 mod leave;
 mod machines;
 mod pages;
+mod readme;
 mod recovery;
 mod render;
 mod settings;
