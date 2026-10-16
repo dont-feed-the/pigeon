@@ -1,8 +1,9 @@
 # Changelog
 
-All notable user-visible changes to pigeon are documented here. While the
-version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
-the second number, and every other pull request the third.
+All notable user-visible changes to pigeon are documented here. Changes
+not yet released are under *Unreleased*. While the version is 0.x, a
+release that completes a milestone of the [roadmap](docs/roadmap.md)
+increments the second number, and every other release the third.
 
 ## 0.5.12 — 2026-10-16
 
