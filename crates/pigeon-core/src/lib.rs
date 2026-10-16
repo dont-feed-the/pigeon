@@ -20,6 +20,7 @@ pub mod health;
 pub mod held;
 pub mod invitation;
 pub mod journal;
+pub mod keep_targets;
 pub mod latency;
 pub mod names;
 pub mod notify;

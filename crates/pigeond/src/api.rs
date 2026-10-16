@@ -491,7 +491,9 @@ async fn free(d: &Daemon, path: &Path) -> Vec<Response> {
     let Some(prefix) = relative(&g, path) else {
         return vec![problem("not-in-group", &[], None)];
     };
-    crate::evict::set_target(&g, &prefix, true);
+    if let Err(error) = crate::evict::set_target(&g, &prefix, true) {
+        return vec![problem("internal-error", &[], Some(error))];
+    }
     let observed = crate::status::observe(&g, &d.device, &prefix).await;
     let safe = observed
         .iter()
@@ -524,7 +526,9 @@ async fn keep(d: &Daemon, path: &Path) -> Vec<Response> {
     let Some(prefix) = relative(&g, path) else {
         return vec![problem("not-in-group", &[], None)];
     };
-    crate::evict::set_target(&g, &prefix, false);
+    if let Err(error) = crate::evict::set_target(&g, &prefix, false) {
+        return vec![problem("internal-error", &[], Some(error))];
+    }
     wake_soon(d);
     vec![said("keep-result", &[("folder", text(&prefix))])]
 }

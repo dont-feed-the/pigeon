@@ -5,7 +5,7 @@
 //! answer to `Files`: the files under one folder, with their states; and
 //! to `Deleted`: the files deleted from `main`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use pigeon_core::headline::Level;
 use pigeon_proto::Response;
@@ -18,9 +18,40 @@ fn top(path: &str) -> Option<&str> {
     path.split_once('/').map(|(t, _)| t)
 }
 
+/// Files pages include uncaptured local saves, even while a round is busy.
+/// Their display entries never claim an accepted key or publication.
+async fn listing(
+    g: &Group,
+    me: &str,
+    prefix: &str,
+) -> Result<(Vec<crate::status::Observed>, BTreeSet<String>), crate::git::Error> {
+    let mut observed: BTreeMap<_, _> = crate::status::observe_checked(g, me, prefix)
+        .await?
+        .into_iter()
+        .map(|o| (o.path.clone(), o))
+        .collect();
+    let pending = crate::capture::pending(g, prefix).await?;
+    for path in &pending {
+        observed.insert(
+            path.clone(),
+            crate::status::Observed {
+                path: path.clone(),
+                key: String::new(),
+                local: true,
+                state: pigeon_core::state::State::Local(pigeon_core::state::Reason::Sending),
+                level: Level::Working,
+            },
+        );
+    }
+    Ok((observed.into_values().collect(), pending))
+}
+
 /// The group's folders, as `me` sees them.
 pub async fn folders(g: &Group, me: &str) -> Response {
-    let observed = crate::status::observe(g, me, "").await;
+    let (observed, pending) = match listing(g, me, "").await {
+        Ok(listing) => listing,
+        Err(error) => return crate::api::problem("internal-error", &[], Some(error.to_string())),
+    };
     let targets = crate::evict::targets(g);
     let mut by: BTreeMap<&str, Vec<&crate::status::Observed>> = BTreeMap::new();
     for o in &observed {
@@ -32,14 +63,15 @@ pub async fn folders(g: &Group, me: &str) -> Response {
     let folders = by
         .into_iter()
         .map(|(path, files)| {
-            let freed = targets.iter().any(|t| crate::evict::under(path, t));
+            let freed = targets.is_freed(path) && files.iter().all(|o| targets.is_freed(&o.path));
             let arriving = if freed {
                 0
             } else {
                 files
                     .iter()
                     .filter(|o| {
-                        !targets.iter().any(|t| crate::evict::under(&o.path, t))
+                        !pending.contains(&o.path)
+                            && !targets.is_freed(&o.path)
                             && (!o.local
                                 || !g.worktree.as_ref().is_some_and(|wt| {
                                     std::fs::symlink_metadata(wt.join(&o.path))
@@ -66,8 +98,11 @@ pub async fn folders(g: &Group, me: &str) -> Response {
 
 /// The files under `prefix`, a folder of the group, as `me` sees them.
 pub async fn files(g: &Group, me: &str, prefix: &str) -> Response {
-    let files = crate::status::observe(g, me, prefix)
-        .await
+    let (observed, _) = match listing(g, me, prefix).await {
+        Ok(listing) => listing,
+        Err(error) => return crate::api::problem("internal-error", &[], Some(error.to_string())),
+    };
+    let files = observed
         .into_iter()
         .map(|o| FileEntry {
             state: crate::status::worst(std::iter::once(&o.state)),

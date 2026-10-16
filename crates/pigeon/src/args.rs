@@ -60,7 +60,10 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ),
     ("open", "cmd-open"),
     ("history PATH", "cmd-history"),
-    ("view PATH [--version N | --group]", "cmd-view"),
+    (
+        "view PATH [--version N | --suggestion ID | --group]",
+        "cmd-view",
+    ),
     ("restore PATH [--version N | --at TIME]", "cmd-restore"),
     ("free PATH", "cmd-free"),
     ("free --without-checking PATH", "cmd-free-without-checking"),

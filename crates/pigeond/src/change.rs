@@ -1,7 +1,7 @@
 //! Commits that `pigeond` writes itself: the genesis and roster changes
-//! (04 §4.2). Each file is written to the folder, if there is one, and to
-//! the index, then the index is committed on `main` with the expected old
-//! value; a custodian's index is loaded from `main` first.
+//! (04 §4.2). Genesis commits use the initial index. Later roster changes
+//! build only on the accepted tree, verify authority before a CAS, then
+//! stage only their metadata; private index and working files stay local.
 
 use std::path::Path;
 
@@ -54,17 +54,44 @@ pub async fn commit_roster(
 ) -> Result<String, String> {
     doc.roster.validate().map_err(|e| format!("{e:?}"))?;
     let text = roster_file::render(doc)?;
-    let parent = g.git.rev("refs/heads/main").await;
-    // A bare repository's index holds only what pigeond last staged there:
-    // load `main`'s tree first, or the commit would drop every other file.
-    if g.worktree.is_none()
-        && let Some(p) = &parent
-    {
-        g.git
-            .run(&["read-tree", p.as_str()])
-            .await
-            .map_err(|e| e.to_string())?;
+    let parent = g
+        .git
+        .rev("refs/heads/main")
+        .await
+        .ok_or("no accepted head")?;
+    let mut tree = g.git.tree(&parent).await.map_err(|e| e.to_string())?;
+    let blob = g
+        .git
+        .run_in(&["hash-object", "-w", "--stdin"], text.as_bytes())
+        .await
+        .map_err(|e| e.to_string())?;
+    tree.insert(
+        ".pigeon/roster.toml".into(),
+        pigeon_core::authority::Entry {
+            mode: "100644".into(),
+            kind: "blob".into(),
+            oid: blob.trim().into(),
+        },
+    );
+    let tree = crate::merge::write_tree(&g.git, &tree)
+        .await
+        .map_err(|e| e.to_string())?;
+    let commit = g
+        .git
+        .commit_tree(&tree, &[&parent], message)
+        .await
+        .map_err(|e| e.to_string())?;
+    tracer.event(Act::Commit, &[("commit", &commit)]);
+    let judged = crate::verify::judge(g, None, &commit)
+        .await
+        .map_err(|e| e.to_string())?;
+    if judged.accepted.as_deref() != Some(&commit) {
+        return Err("roster change did not pass authority verification".into());
     }
+    g.git
+        .update_ref("refs/heads/main", &commit, Some(&parent))
+        .await
+        .map_err(|e| e.to_string())?;
     stage_file(
         &g.git,
         g.worktree.as_deref(),
@@ -73,10 +100,6 @@ pub async fn commit_roster(
     )
     .await
     .map_err(|e| e.to_string())?;
-    let commit = commit_index(&g.git, parent.as_deref(), message)
-        .await
-        .map_err(|e| e.to_string())?;
-    tracer.event(Act::Commit, &[("commit", &commit)]);
     g.reload_roster().await;
     Ok(commit)
 }

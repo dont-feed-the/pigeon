@@ -198,5 +198,38 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
     );
     let inherited = report(&lap, &photos);
     assert!(!inherited.rules[0].direct && inherited.rules[0].owner.is_none());
+    // Collector changes and invitation welcomes use the same roster writer.
+    // Keep the editor open throughout, so capture cannot accept these bytes.
+    let selected = pigeon(&lap, &["settings", "telemetry-device", "alice-laptop"]);
+    assert!(
+        said(&selected, "setting-changed", "value").is_some(),
+        "{selected:?}"
+    );
+    let cara = start(&root, sockets.path(), "cara");
+    let invited = pigeon(&lap, &["invite", "Cara"]);
+    let code = said(&invited, "invitation", "code").unwrap();
+    let joined = pigeon(
+        &cara,
+        &[
+            "join",
+            &code,
+            root.join("Cara").to_str().unwrap(),
+            "--name",
+            "cara-laptop",
+        ],
+    );
+    assert!(said(&joined, "joined", "group").is_some(), "{joined:?}");
+    let main = runtime.block_on(git.tree("refs/heads/main")).unwrap();
+    assert!(!main.contains_key("private-draft.txt"));
+    let index = runtime.block_on(git.index()).unwrap();
+    assert_eq!(index["private-draft.txt"].oid, blob.trim());
+    assert_eq!(
+        std::fs::read(&draft).unwrap(),
+        b"editor bytes not accepted\0"
+    );
+    let peer_git = pigeond::git::Git::new(root.join("Cara"), pigeon_git::GitEnv::default());
+    let peer_main = runtime.block_on(peer_git.tree("refs/heads/main")).unwrap();
+    assert!(!peer_main.contains_key("private-draft.txt"));
+    assert!(!root.join("Cara/private-draft.txt").exists());
     drop(writer);
 }

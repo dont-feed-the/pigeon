@@ -389,7 +389,7 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
             done.deferred += 1;
             continue;
         }
-        if hidden.contains(path) || freed.iter().any(|f| crate::evict::under(path, f)) {
+        if hidden.contains(path) || freed.is_freed(path) {
             let ok = index_entry(g, path, w).await.is_ok();
             if ok && w.is_some() {
                 let _ = g

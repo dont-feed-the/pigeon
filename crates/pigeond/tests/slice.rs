@@ -156,6 +156,39 @@ fn local_published_protected_then_free_and_keep() {
     );
     assert_eq!(std::fs::read(sub.join("big.bin")).unwrap(), big);
 
+    // A later child Keep overrides its parent's Free, without bringing
+    // back a sibling; the persisted exception also covers future files.
+    let parent = folder.join("sub");
+    std::fs::create_dir_all(parent.join("2020")).unwrap();
+    std::fs::write(parent.join("2020/sibling.txt"), b"stay freed\n").unwrap();
+    eventually(
+        || {
+            pigeon(&lap, &["status", parent.join("2020/sibling.txt").to_str().unwrap()])
+            .iter().any(|r| matches!(r, Response::Status(report) if report.versions.iter().any(|v| v.path == "sub/2020/sibling.txt" && v.state == State::Protected)))
+        },
+        "sibling not safe",
+        &all,
+    );
+    pigeon(&lap, &["free", parent.to_str().unwrap()]);
+    eventually(
+        || !sub.join("big.bin").exists() && !parent.join("2020/sibling.txt").exists(),
+        "parent not freed",
+        &all,
+    );
+    pigeon(&lap, &["keep", sub.to_str().unwrap()]);
+    eventually(
+        || sub.join("big.bin").exists(),
+        "child Keep lost to parent Free",
+        &all,
+    );
+    assert_eq!(std::fs::read(sub.join("big.bin")).unwrap(), big);
+    assert!(!parent.join("2020/sibling.txt").exists());
+    let local = std::fs::read_to_string(folder.join(".git/pigeon/freed.json")).unwrap();
+    assert!(
+        local.contains("sub/2019") && local.contains("false"),
+        "{local}"
+    );
+
     let history = pigeon(&lap, &["history", folder.join("a.txt").to_str().unwrap()]);
     match history.as_slice() {
         [Response::History { versions }] => {

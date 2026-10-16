@@ -4,6 +4,15 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.16 — 2026-10-16
+
+### Fixed
+
+- Inviting a computer, printing a recovery sheet, changing the diagnostic collector and other People settings preserve private staged files and open editor work.
+- Keeping a nested folder brings it back even when its parent was freed; siblings and future files follow their own folder choices.
+- Files lists new and unfinished local saves, including new folders, as only on this computer.
+- `pigeon help` shows how to review a suggestion with `view --suggestion`.
+
 ## 0.4.15 — 2026-10-16
 
 ### Fixed

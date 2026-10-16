@@ -169,53 +169,7 @@ async fn commit(
     doc: &crate::roster_file::RosterDoc,
     tracer: &crate::trace::Tracer,
 ) -> Result<(), String> {
-    let parent = g
-        .git
-        .rev("refs/heads/main")
+    crate::change::commit_roster(g, doc, "pigeon: change folder sharing rule", tracer)
         .await
-        .ok_or("no accepted head")?;
-    let mut tree = g.git.tree(&parent).await.map_err(|e| e.to_string())?;
-    let text = crate::roster_file::render(doc)?;
-    let blob = g
-        .git
-        .run_in(&["hash-object", "-w", "--stdin"], text.as_bytes())
-        .await
-        .map_err(|e| e.to_string())?;
-    tree.insert(
-        ".pigeon/roster.toml".into(),
-        pigeon_core::authority::Entry {
-            mode: "100644".into(),
-            kind: "blob".into(),
-            oid: blob.trim().into(),
-        },
-    );
-    let tree = crate::merge::write_tree(&g.git, &tree)
-        .await
-        .map_err(|e| e.to_string())?;
-    let commit = g
-        .git
-        .commit_tree(&tree, &[&parent], "pigeon: change folder sharing rule")
-        .await
-        .map_err(|e| e.to_string())?;
-    tracer.event(crate::trace::Act::Commit, &[("commit", &commit)]);
-    let judged = crate::verify::judge(g, None, &commit)
-        .await
-        .map_err(|e| e.to_string())?;
-    if judged.accepted.as_deref() != Some(&commit) {
-        return Err("folder rule did not pass authority verification".into());
-    }
-    g.git
-        .update_ref("refs/heads/main", &commit, Some(&parent))
-        .await
-        .map_err(|e| e.to_string())?;
-    crate::change::stage_file(
-        &g.git,
-        g.worktree.as_deref(),
-        ".pigeon/roster.toml",
-        text.as_bytes(),
-    )
-    .await
-    .map_err(|e| e.to_string())?;
-    g.reload_roster().await;
-    Ok(())
+        .map(|_| ())
 }

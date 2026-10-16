@@ -128,6 +128,12 @@ handles them by key. A stale `index.lock` or `info/sparse-checkout.lock`
 left by a killed git of `pigeond`, the only writer, is removed at start
 (`Evict_lockfile`).
 
+Local targets are inherited by the nearest explicit folder choice: a Keep
+inside a freed parent overrides it for that subtree, including future files.
+A new choice for a parent replaces older choices below it. `freed.json`
+format 1 stores these choices; legacy lists are read as Free choices. The
+pure `keep_targets` algebra and its three 1000-case laws define this rule.
+
 ## 8.6 Purge: erase forever (ADR 0018)
 
 Not yet coded; `Purge.tla` checks the protocol and E14 asserts it with

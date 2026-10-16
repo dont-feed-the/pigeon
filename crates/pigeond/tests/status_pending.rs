@@ -7,7 +7,7 @@ mod common;
 
 use std::io::Write;
 
-use common::{SERIAL, dirs, pigeon, said, start};
+use common::{SERIAL, dirs, pigeon, said, start, web};
 use pigeon_proto::Response;
 use pigeon_proto::api::{Level, State};
 
@@ -60,5 +60,31 @@ fn an_open_uncaptured_file_is_local_instead_of_safe() {
             "{report:?}"
         );
     }
+    let session = web::login(&daemon);
+    let files = web::page(&session, "/files");
+    assert!(files.contains("fresh.txt"), "pending root file missing");
+    assert!(
+        files.contains("Only on this computer"),
+        "local state absent"
+    );
+    let nested = folder.join("Drafts/notes.txt");
+    std::fs::create_dir_all(nested.parent().unwrap()).unwrap();
+    let mut nested_writer = std::fs::File::create(&nested).unwrap();
+    nested_writer
+        .write_all(b"unfinished nested draft\0")
+        .unwrap();
+    nested_writer.flush().unwrap();
+    let files = web::page(&session, "/files");
+    assert!(files.contains("Drafts"), "pending folder missing");
+    let files = web::page(
+        &session,
+        &format!("/folder?path={}", folder.join("Drafts").display()),
+    );
+    assert!(files.contains("notes.txt"), "pending nested file missing");
+    assert!(
+        files.contains("Only on this computer"),
+        "local nested state absent"
+    );
+    drop(nested_writer);
     drop(writer);
 }

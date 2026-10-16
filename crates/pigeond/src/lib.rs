@@ -42,6 +42,7 @@ pub mod join_in_place;
 mod join_stage;
 mod join_transition;
 pub mod journal_file;
+mod keep_targets;
 pub mod leave;
 pub mod locks;
 pub mod logs;
