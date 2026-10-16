@@ -96,28 +96,33 @@ fn a_time_between_two_saves_restores_the_first() {
     );
     assert_eq!(deleted(&fa.join("sub")), ["sub/b.txt"]);
 
-    // Each round left a trace of spans in the telemetry directory (12 §12.2).
-    let lines = pigeon_telemetry::tail(&a1.home.join("state/telemetry"), 1000);
-    let mut spans = Vec::new();
-    for line in &lines {
-        let Ok(batch) = serde_json::from_str::<serde_json::Value>(line) else {
-            continue;
-        };
-        for resource in batch["resourceSpans"].as_array().into_iter().flatten() {
-            for scope in resource["scopeSpans"].as_array().into_iter().flatten() {
-                spans.extend(scope["spans"].as_array().into_iter().flatten().cloned());
+    // The SDK exports asynchronously. Observe a completed batch rather
+    // than assuming that reading the just-updated catalogue flushed spans.
+    eventually_within(
+        20,
+        || {
+            let lines = pigeon_telemetry::tail(&a1.home.join("state/telemetry"), 1000);
+            let mut spans = Vec::new();
+            for line in &lines {
+                let Ok(batch) = serde_json::from_str::<serde_json::Value>(line) else {
+                    continue;
+                };
+                for resource in batch["resourceSpans"].as_array().into_iter().flatten() {
+                    for scope in resource["scopeSpans"].as_array().into_iter().flatten() {
+                        spans.extend(scope["spans"].as_array().into_iter().flatten().cloned());
+                    }
+                }
             }
-        }
-    }
-    let in_a_round = |s: &serde_json::Value| {
-        spans.iter().any(|r| {
-            r["name"] == "round" && r["traceId"] == s["traceId"] && r["spanId"] == s["parentSpanId"]
-        })
-    };
-    assert!(
-        spans
-            .iter()
-            .any(|s| s["name"] == "capture" && in_a_round(s)),
-        "capture must be a child of a round in the exported SDK spans"
+            spans.iter().any(|s| {
+                s["name"] == "capture"
+                    && spans.iter().any(|r| {
+                        r["name"] == "round"
+                            && r["traceId"] == s["traceId"]
+                            && r["spanId"] == s["parentSpanId"]
+                    })
+            })
+        },
+        "capture must be a child of a completed round in the exported SDK spans",
+        &[&a1],
     );
 }

@@ -1,8 +1,8 @@
 # Report: release validation after an interrupted Keep
 
-16 October 2026. Version 0.5.2 is the next publication candidate for M4,
-on current main including the merged Nextcloud bridge and shorter CI. The
-v0.5.0 and v0.5.1 tags remain immutable and unpublished.
+16 October 2026. Version 0.5.2 was a publication candidate for M4, including the merged
+Nextcloud bridge and shorter CI. Its tag remains immutable and unpublished,
+alongside v0.5.0 and v0.5.1; see the [next correction](release-055.md).
 
 ## What stopped v0.5.1
 
@@ -46,3 +46,15 @@ problem on stderr, and the corrected capture finds that problem.
 
 Hosted PR checks and the new tag's platform/release gates are still needed;
 these local checks do not replace the real service-user proof.
+
+## Hosted result
+
+PR #49 passed all 20 checks and merged as `e21a82d`. The immutable v0.5.2
+run passed Linux workspace/daemon checks, lab and cross-runner reach, and
+built both release archives and both pinned-annex platforms. It did not
+pass all release gates. macOS found case-colliding test folders, an immediate
+read of asynchronous telemetry, and bridge fixture paths exceeding the
+portable socket limit. The following correction keeps those production
+safeguards intact. Superseded ci, slice, models-full and release runs were
+cancelled to preserve runner capacity. Partial model/crash results are not
+complete workflow passes. The real cross-UID service proof remains required.
