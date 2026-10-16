@@ -9,8 +9,9 @@
 
 - Each device has one **ed25519 key**, made when it creates or joins a
   group. Its public key in 64 lowercase hex digits is the **device ID**:
-  iroh node ID, commit signer, roster key. One `pigeond` serves all the
-  user's groups with it (ADR 0011), so two groups see the same device.
+  iroh node ID, commit signer, roster key. One `pigeond` serves the
+  user's group with it (ADR 0011); a computer is in one group only
+  (§9.6).
 - It is stored once as an OpenSSH private key, mode 0600, at
   `<config>/device-key` ([11](11-local-state.md)). git signs with it (SSH
   signatures) and iroh uses it as its secret key; pigeon verifies signatures
@@ -167,6 +168,12 @@ default; none for a backup machine) and the person's name (the account's,
   one. Every join is a signed, visible roster commit.
 - A device already in the group refuses to join it again
   (`already-in-group`).
+- A computer is in **one group only** **[no ADR]**: the web pages and the
+  commands without a path show one group. While it is in a group,
+  `create`, `join` and `recover` of another one are refused before anything
+  is written (`in-another-group`), naming the group and saying how to leave
+  it (§9.7). Joining in place the refounding of the group it is in
+  replaces that group, and goes on (§9.9).
 
 **Safety words** (ux.md §8.2) **[no ADR: safety words]**: both screens show
 three words from a fixed list of 2048, by the first 33 bits of

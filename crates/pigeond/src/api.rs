@@ -142,7 +142,10 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             folder,
             k,
             device_name,
-        } => vec![create(d, &name, Path::new(&folder), k, &device_name).await],
+        } => match in_another_group(d, &[]) {
+            Some(refused) => vec![refused],
+            None => vec![create(d, &name, Path::new(&folder), k, &device_name).await],
+        },
         Request::Status { path, not_shared } => {
             let (g, prefix) = match &path {
                 Some(p) => match group_of(d, Path::new(p)) {
@@ -198,6 +201,17 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
                 return vec![problem("folder-not-absolute", &[("folder", text(f))], None)];
             }
             let code = pigeon_proto::join::invitation(&invitation);
+            // A refounded group's invitation also names the old group,
+            // which joining it in place replaces (09 §9.9).
+            let asked: Vec<String> = pigeon_proto::join::decode(&code)
+                .map(|i| [Some(i.group), i.refounded.map(|r| r.from)])
+                .into_iter()
+                .flatten()
+                .flatten()
+                .collect();
+            if let Some(refused) = in_another_group(d, &asked) {
+                return vec![refused];
+            }
             let ask = crate::invite::Ask {
                 code: code.clone(),
                 folder,
@@ -284,7 +298,16 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             sheet,
             folder,
             from,
-        } => crate::recovery::recover(d, &sheet, folder, from).await,
+        } => {
+            let asked: Vec<String> = crate::recovery::decode(&sheet)
+                .map(|s| s.group)
+                .into_iter()
+                .collect();
+            if let Some(refused) = in_another_group(d, &asked) {
+                return vec![refused];
+            }
+            crate::recovery::recover(d, &sheet, folder, from).await
+        }
         Request::Proposals => crate::decide::list(d).await,
         Request::Conflicts => crate::resolve::list(d).await,
         Request::Resolve { path, choice } => {
@@ -300,6 +323,32 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         | Request::Address { .. }
         | Request::Connect { .. }
         | Request::Listen { .. } => not_in_this_build("helper"),
+    }
+}
+
+/// A computer is in one group only: the web pages and the commands without
+/// a path show one group (09 §9.6). Refuses creating, joining or
+/// recovering another group while this computer is in one, saying how to
+/// leave it. A request about a group this computer is in, `asked` (the
+/// group, or the one a refounded group replaces), goes on: it is
+/// `already-in-group`, or a join in place.
+fn in_another_group(d: &Daemon, asked: &[String]) -> Option<Response> {
+    let g = d.default_group()?;
+    if asked.iter().any(|id| d.group(id).is_some()) {
+        return None;
+    }
+    let name = g.roster().map(|doc| doc.roster.group).unwrap_or_default();
+    let hint = if crate::leave::leaving(&g).is_some() {
+        "leaving-wait"
+    } else {
+        "hint-in-another-group"
+    };
+    match problem("in-another-group", &[("group", text(&name))], None) {
+        Response::Problem(mut p) => {
+            p.hint = Some(msg(hint, &[]));
+            Some(Response::Problem(p))
+        }
+        other => Some(other),
     }
 }
 

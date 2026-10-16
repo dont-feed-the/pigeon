@@ -9,6 +9,12 @@ increments the second number, and every other release the third.
 
 ### Changed
 
+- A computer is now in one group only. `pigeon create`, `pigeon join` and
+  `pigeon recover` (and joining or creating in the web interface) refuse a
+  second group, before writing anything, and say how to leave the first:
+  `pigeon leave`, or *Leave the group* in Settings in `pigeon open`. Before,
+  a second group was created, but `pigeon open` and the commands that take
+  no folder only ever showed the first one.
 - `pigeon leave` on a computer that is the only machine of its group leaves
   it at once, even as the group's last admin computer; its files stay in
   the folder. It used to refuse, so a group created by mistake could not be

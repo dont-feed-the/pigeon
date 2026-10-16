@@ -1,9 +1,10 @@
-//! `pigeon leave` (09 §9.7): alone in the group, Ana's laptop leaves it at
-//! once and creates it again with the same key. Once a backup machine and
-//! her second laptop joined, the second laptop leaves. Its removal reaches
-//! the first laptop, which drops it from the machines; the leaver then
-//! forgets the group, keeps its files as plain files without `.git`, and,
-//! in no group any more, deletes its device key.
+//! `pigeon leave` (09 §9.7): Ana's laptop, in one group, may not create a
+//! second; alone in the group, it leaves it at once and creates it again
+//! with the same key. Once a backup machine and her second laptop joined,
+//! the second laptop leaves. Its removal reaches the first laptop, which
+//! drops it from the machines; the leaver then forgets the group, keeps its
+//! files as plain files without `.git`, and, in no group any more, deletes
+//! its device key.
 //!
 //! Needs what `tests/slice.rs` needs: git-annex, and `pigeon` and
 //! `git-annex-p2p-iroh` built next to `pigeond`.
@@ -54,6 +55,15 @@ fn a_laptop_leaves_once_a_peer_has_its_removal() {
     let f = fa.to_str().unwrap();
     let created = pigeon(&a1, &["create", "Family", f, "--k", "1", "--name", "ana-1"]);
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
+    let other = root.join("other");
+    let second = pigeon(&a1, &["create", "Other", other.to_str().unwrap()]);
+    assert_eq!(
+        problem(&second).as_deref(),
+        Some("in-another-group"),
+        "{second:?}"
+    );
+    assert!(!other.join(".git").exists(), "nothing was written");
+
     let key = a1.home.join("config/device-key");
     let before = std::fs::read_to_string(&key).unwrap();
     let alone = pigeon(&a1, &["leave", "--yes"]);
