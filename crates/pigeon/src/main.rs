@@ -252,6 +252,14 @@ fn run() -> ExitCode {
             emit(&[version], false);
             ExitCode::SUCCESS
         }
+        Action::Completions(shell) => match complete::register(*shell) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(_) => {
+                let p = local_problem("internal-error", &[]);
+                show(&out, line.json, &Response::Problem(p));
+                ExitCode::from(1)
+            }
+        },
         Action::Update(args) => {
             let code = match update(args).kind() {
                 std::io::ErrorKind::NotFound => "not-installed",

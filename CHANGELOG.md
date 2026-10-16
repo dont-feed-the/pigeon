@@ -8,6 +8,9 @@ the second number, and every other pull request the third.
 
 ### Fixed
 
+- Existing shell startup files using `pigeon completions zsh`, `bash` or
+  `fish` work again, without the "not in this build" warning. They load
+  the current Tab completion, even when the daemon is stopped.
 - Diagnostic bundles hide the group's permanent invitation secret in both
   this computer's information and parts shared by other computers. Sharing
   diagnostics keeps the roster readable without sharing permission to join.

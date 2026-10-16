@@ -102,6 +102,7 @@ cmd-recover = Recover the group on a new computer from its backup machines
 cmd-doctor = Check the installation and explain what is wrong
 cmd-debug-bundle = Gather diagnostics for someone helping you
 cmd-update = Install the latest release of pigeon, a given one, main built from source, or the one before
+cmd-completions = Print the shell script that enables Tab completion
 opt-json = Print the result as JSON, for scripts
 opt-backup-machine = For a backup machine rather than a person's computer
 opt-not-shared = List what is not shared, and why

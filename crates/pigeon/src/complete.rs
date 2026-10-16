@@ -8,7 +8,7 @@ use std::ffi::OsString;
 use std::time::Duration;
 
 use clap_complete::engine::{ArgValueCandidates, CompletionCandidate};
-use clap_complete::env::CompleteEnv;
+use clap_complete::env::{CompleteEnv, Shells};
 use pigeon_proto::{Request, Response};
 
 use crate::render::Renderer;
@@ -21,6 +21,32 @@ const PATIENCE: Duration = Duration::from_millis(500);
 /// otherwise returns.
 pub fn answer() {
     CompleteEnv::with_factory(described).complete();
+}
+
+/// Keep startup files written by older pigeon setup working. Generate the
+/// current live protocol, so Tab still asks this build for its candidates.
+pub fn register(shell: clap_complete::Shell) -> std::io::Result<()> {
+    let shells = Shells::builtins();
+    let generator = shells.completer(&shell.to_string()).ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "unsupported shell")
+    })?;
+    let executable = std::path::PathBuf::from(
+        std::env::args_os()
+            .next()
+            .unwrap_or_else(|| "pigeon".into()),
+    );
+    let executable = if executable.components().count() > 1 {
+        std::env::current_dir()?.join(executable)
+    } else {
+        executable
+    };
+    generator.write_registration(
+        "COMPLETE",
+        "pigeon",
+        "pigeon",
+        &executable.to_string_lossy(),
+        &mut std::io::stdout().lock(),
+    )
 }
 
 /// The command line's definition, each command's and option's help taken

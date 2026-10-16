@@ -191,6 +191,7 @@ pub const MESSAGES: &[Entry] = &[
     e("cmd-doctor", &[]),
     e("cmd-debug-bundle", &[]),
     e("cmd-update", &[]),
+    e("cmd-completions", &[]),
     e("opt-json", &[]),
     e("opt-backup-machine", &[]),
     e("opt-not-shared", &[]),

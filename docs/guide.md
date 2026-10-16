@@ -275,6 +275,9 @@ source <(COMPLETE=bash pigeon)    # ~/.bashrc
 COMPLETE=fish pigeon | source     # ~/.config/fish/config.fish
 ```
 
+Existing startup files that use `pigeon completions zsh` (or `bash`, `fish`,
+`elvish`, `powershell`) work too; they print the same current script.
+
 ## What comes next
 
 pigeon is built milestone by milestone ([roadmap](roadmap.md)):
