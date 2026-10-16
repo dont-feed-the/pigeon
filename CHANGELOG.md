@@ -8,6 +8,8 @@ the second number, and every other pull request the third.
 
 ### Added
 
+- Optional catalogue traces let bridge operators check complete listings and
+  revision-pinned refreshes against a TLA+ model.
 - Nextcloud desktop and mobile clients can connect through `pigeon-bridge`.
   Each authorization creates its own Pigeon peer. The bridge's web portal
   lets users review suggestions, resolve conflicts and revoke a client.

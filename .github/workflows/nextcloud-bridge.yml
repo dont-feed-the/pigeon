@@ -73,3 +73,27 @@ jobs:
       - name: portal, WebDAV and real Nextcloud synchronization
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: python3 scripts/check-nextcloud-bridge
+
+  catalogue-traces:
+    name: bridge catalogue observations checked by TLC
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: rust-ubuntu-24.04-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: rust-ubuntu-24.04-
+      - name: the pinned toolchain
+        run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
+      - name: real RPC pages, concurrent reads, bounded retries and corrupted observations
+        run: python3 scripts/check-bridge-catalogue-traces

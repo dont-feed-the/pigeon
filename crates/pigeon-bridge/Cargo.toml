@@ -8,6 +8,10 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[features]
+# Emit real catalogue observations for the offline TLC checker.
+tla-trace = []
+
 [dependencies]
 argon2.workspace = true
 axum = { workspace = true, features = ["json"] }

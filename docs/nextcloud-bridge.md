@@ -298,3 +298,6 @@ command client against another independently authorized peer. Its app password
 is supplied on stdin, not through command arguments. `PIGEON_BIN` selects the
 Pigeon binary directory; the default is `target/debug`. Keep git-annex on PATH
 when running these checks.
+
+Catalogue consistency can also be checked from real bridge observations; see
+[Checking bridge catalogue reads](bridge-catalogue-traces.md).

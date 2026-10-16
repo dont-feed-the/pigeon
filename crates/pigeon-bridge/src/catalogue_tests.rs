@@ -181,3 +181,27 @@ async fn invalid_continuations_and_mixed_or_unordered_pages_are_rejected() {
         task.await.unwrap();
     }
 }
+
+#[tokio::test]
+async fn concurrent_and_post_save_reads_keep_their_own_pages_and_revision() {
+    // Two independent sockets run concurrently. Trace collection adds no
+    // global request lock and must never splice the two RPC streams.
+    let run = |revision: &'static str| async move {
+        let first = page(revision, vec![file("a.txt".into())], true);
+        let final_page = page(revision, vec![file("b.txt".into())], false);
+        let required = Some(Cursor {
+            revision: revision.into(),
+            after: None,
+        });
+        let (_temp, socket, task) = serve(vec![
+            (required, Reply::Snapshot(first.clone())),
+            (first.next, Reply::Snapshot(final_page)),
+        ])
+        .await;
+        let result = read(&socket, Some(revision)).await.unwrap();
+        task.await.unwrap();
+        assert_eq!(result.revision, revision);
+        assert_eq!(result.files.len(), 2);
+    };
+    tokio::join!(run("alice-save"), run("bob-save"));
+}

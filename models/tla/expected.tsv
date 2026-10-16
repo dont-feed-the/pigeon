@@ -124,3 +124,6 @@ Retention_safe	Retention	fast	pass
 Retention_current	Retention	fast	violation:Complete
 StorageTrace_good	StorageTrace	fast	trace:accepted
 StorageTrace_bad	StorageTrace	fast	trace:rejected:1
+BridgeCatalogue_good	BridgeCatalogue	fast	pass
+BridgeCatalogue_bad	BridgeCatalogue	fast	violation:Consistent
+BridgeCatalogue_pinned	BridgeCatalogue	fast	pass

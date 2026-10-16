@@ -15,6 +15,7 @@ use tokio::sync::Mutex;
 
 mod auth;
 mod catalogue;
+mod catalogue_trace;
 pub mod config;
 mod dav;
 mod dav_xml;
