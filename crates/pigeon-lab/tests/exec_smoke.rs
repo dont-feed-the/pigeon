@@ -28,7 +28,7 @@ exec sleep 600
 const PIGEON: &str = r#"#!/bin/sh
 case "$1" in
 status) echo '{"type":"Status","headline":{"id":"headline-safe"},"state":"protected","versions":[{"path":"docs/a.txt","number":1,"state":"protected"}],"not_shared":[]}' ;;
-invite) echo '{"type":"Said","message":{"id":"invited","args":{"invitation":"pgn1-test"}}}' ;;
+invite) echo '{"type":"Said","message":{"id":"invitation","args":{"command":"curl x | sh -s -- --join pgn2-test"}}}' ;;
 machines) echo '{"type":"Machines","machines":[{"name":"laptop","device":"id-laptop","custodian":false}]}' ;;
 restore) echo '{"code":"disk-full","message":{"id":"problem-disk-full"}}' >&2; exit 1 ;;
 *) echo '{"type":"Done"}' ;;

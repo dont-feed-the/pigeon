@@ -72,9 +72,10 @@ def run(provider="custodian"):
             rpc(control, dict(type="Status"))
             bare = provider == "custodian"
             if bare:
-                invite = rpc(control, dict(type="Invite", person="", admin=False, custodian=True, name="Storage"))
+                invite = rpc(control, dict(type="Invite"))
                 repository = root / "source.git"
-                rpc(source, dict(type="Join", invitation=invite["message"]["args"]["code"], folder=str(repository), keep=False, name="Storage"))
+                rpc(source, dict(type="Join", invitation=invite["message"]["args"]["command"], folder=str(repository),
+                                 keep=False, name="Storage", custodian=True, existing=True))
             else:
                 repository = files
             source_object = until(lambda: objects(repository, original, bare=bare), "Provider did not retain the initial file")[0]

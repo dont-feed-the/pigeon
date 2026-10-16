@@ -61,7 +61,7 @@ async fn a_refused_join_shows_the_forms_again_with_what_was_typed() {
         app.oneshot(post(
             "/join",
             &cookie,
-            &format!("form={form}&invitation=pgn1-nope&folder=%2Fhome%2Fc%2FFamily&name=carol"),
+            &format!("form={form}&invitation=pgn2-nope&folder=%2Fhome%2Fc%2FFamily&name=carol"),
         ))
         .await
         .unwrap(),
@@ -69,7 +69,7 @@ async fn a_refused_join_shows_the_forms_again_with_what_was_typed() {
     .await;
     assert!(page.contains("not one the group knows"), "{page}");
     assert!(page.contains("action=\"/join\"") && page.contains("action=\"/create\""));
-    assert!(page.contains("value=\"pgn1-nope\"") && page.contains("value=\"/home/c/Family\""));
+    assert!(page.contains("value=\"pgn2-nope\"") && page.contains("value=\"/home/c/Family\""));
     assert!(page.contains("value=\"carol\""), "{page}");
 }
 
@@ -77,11 +77,7 @@ async fn a_refused_join_shows_the_forms_again_with_what_was_typed() {
 async fn a_home_folder_is_expanded_and_names_and_invitations_are_cleaned() {
     let (app, backend, cookie, form) = setup().await;
     let home = std::env::var("HOME").unwrap();
-    let json = br#"{"group":"g","name":"Family"}"#;
-    let code = format!(
-        "pgn1-{}",
-        data_encoding::BASE32_NOPAD.encode(json).to_lowercase()
-    );
+    let code = invitation(None);
     let (a, b) = code.split_at(12);
     let wrapped = format!("{a}%0A{b}");
     app.clone()

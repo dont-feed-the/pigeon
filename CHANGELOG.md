@@ -4,6 +4,31 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.5.10 — 2026-10-16
+
+### Changed
+
+- `pigeon create` now prints one line to share with everyone you want in the
+  group. Run on another computer, it installs or updates pigeon, then joins:
+  it asks which folder to use and your name in the group.
+  `pigeon invite` prints the same line again, on any computer of the group,
+  and People in the web interface shows it with a *Copy* button.
+- The line works for everyone and never expires. Whoever has it can join
+  under any name, with the rights of the person of that name, so share it
+  only with the group. Giving the name of someone already in the group adds
+  your computer to them, once you confirm (`--yes` confirms on the command
+  line). Add `--backup-machine` at the end of the line on a backup machine.
+- `pigeon join` asks for your name in the group (`--person NAME`) and, on a
+  terminal, for the folder.
+- A refounded group has its own line; the old one no longer works.
+
+### Removed
+
+- One-time invitations: `pigeon invite PERSON`, `--admin`,
+  `--backup-machine`, `--list` and `--cancel`, and the `pgn1-` codes. Groups
+  made by earlier releases cannot be read by this one: create the group
+  again.
+
 ## 0.5.9 — 2026-10-16
 
 ### Changed

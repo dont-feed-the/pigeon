@@ -17,7 +17,9 @@ mod common;
 
 use std::path::Path;
 
-use common::{Daemon, SERIAL, dirs, eventually_within, join, logs, pigeon, said, start, until};
+use common::{
+    Daemon, SERIAL, dirs, eventually_within, invitation, join, logs, pigeon, said, start, until,
+};
 use pigeon_proto::Response;
 use pigeon_proto::api::{Divergence, State, Suggestion};
 
@@ -103,11 +105,18 @@ fn a_divergence_is_resolved_three_ways() {
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
     join(&a1, &c1, &all);
     until(&a1, State::Protected, &all);
-    let answer = pigeon(&a1, &["invite", "Cid"]);
-    let code = said(&answer, "invitation", "code").unwrap_or_else(|| panic!("{answer:?}"));
+    let code = invitation(&a1);
     let joined = pigeon(
         &b1,
-        &["join", &code, fc.to_str().unwrap(), "--name", "cid-1"],
+        &[
+            "join",
+            &code,
+            "--person",
+            "Cid",
+            fc.to_str().unwrap(),
+            "--name",
+            "cid-1",
+        ],
     );
     assert!(
         said(&joined, "joined", "group").is_some(),

@@ -53,8 +53,8 @@ pub enum LaptopOp {
         /// The version number.
         version: u64,
     },
-    /// `pigeon invite --backup-machine`, then the custodian's `pigeon join
-    /// --backup-machine`.
+    /// `pigeon invite`, then the custodian's `pigeon join --backup-machine`
+    /// with that invitation.
     Invite {
         /// The spare custodian that joins.
         custodian: Custodian,
@@ -72,8 +72,8 @@ pub enum LaptopOp {
         /// The laptop whose recovery sheet is used.
         from: Laptop,
     },
-    /// `pigeon invite [--admin] PERSON` for the spare laptop's person, then
-    /// its `pigeon join INVITATION FOLDER --name NAME` (09 §9.6).
+    /// `pigeon invite`, then the spare laptop's `pigeon join INVITATION
+    /// FOLDER --name NAME --person PERSON` (09 §9.6).
     Join {
         /// The spare laptop that joins.
         laptop: Laptop,

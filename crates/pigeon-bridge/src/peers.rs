@@ -165,19 +165,10 @@ impl Peers {
             ),
         )
         .await;
-        let invitation = rpc::call(
-            &account.control_socket,
-            Request::Invite {
-                person,
-                admin: false,
-                custodian: false,
-                name: None,
-            },
-        )
-        .await?;
+        let invitation = rpc::call(&account.control_socket, Request::Invite).await?;
         let code = match invitation {
-            Response::Said { message } => message.args.get("code").and_then(|a| match a {
-                Arg::Text(s) => Some(s.clone()),
+            Response::Said { message } => message.args.get("command").and_then(|a| match a {
+                Arg::Text(s) => Some(pigeon_proto::join::invitation(s)),
                 _ => None,
             }),
             _ => None,
@@ -192,6 +183,9 @@ impl Peers {
                 folder: Some(self.home(&id).join("files").display().to_string()),
                 keep: true,
                 name: Some(name.clone()),
+                person: Some(person),
+                existing: true,
+                custodian: false,
             },
         )
         .await?;

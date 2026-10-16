@@ -37,12 +37,12 @@ impl Model {
                 .is_some_and(|v| !v.is_empty() && v.iter().all(|x| x.by == lm.person))
     }
 
-    /// `by` invites the spare laptop `l`, which joins: the inviter commits
-    /// the roster that adds it, and it runs.
+    /// The spare laptop `l` joins with the invitation `by` prints: `by`
+    /// commits the roster that adds it, and it runs.
     pub(crate) fn join(&mut self, by: Laptop, l: Laptop) -> Outcome {
         let lm = &mut self.laptops[l.0 as usize];
         if lm.present {
-            return Outcome::Refused("invite-used".into());
+            return Outcome::Refused("already-in-group".into());
         }
         lm.present = true;
         lm.daemon.running = true;

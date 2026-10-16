@@ -94,36 +94,59 @@ pub fn create(group: &str, folder: &Path, k: u32, device: &str) -> Vec<String> {
     ]
 }
 
-/// `pigeon invite --backup-machine NAME`.
-pub fn invite_custodian(name: &str) -> Vec<String> {
-    vec![s("invite"), s("--backup-machine"), s(name), s("--json")]
+/// `pigeon invite`: the line that joins the group.
+pub fn invite() -> Vec<String> {
+    vec![s("invite"), s("--json")]
 }
 
-/// `pigeon join INVITATION --backup-machine`.
-pub fn join_custodian(invitation: &str) -> Vec<String> {
-    vec![s("join"), s("--backup-machine"), s(invitation), s("--json")]
+/// The group's `pgn2-` invitation in an answer: inside the line that
+/// joins, in its JSON or on its standard output.
+pub fn invitation(json: Option<&Value>, stdout: &str) -> Option<String> {
+    json.and_then(|v| find_containing(v, "pgn2-"))
+        .or_else(|| stdout.contains("pgn2-").then(|| stdout.to_owned()))
+        .map(|line| pigeon_proto::join::invitation(&line))
 }
 
-/// `pigeon invite [--admin] PERSON`.
-pub fn invite_person(person: &str, admin: bool) -> Vec<String> {
-    let mut a = vec![s("invite")];
-    if admin {
-        a.push(s("--admin"));
+/// `pigeon join --backup-machine INVITATION --name NAME [--person PERSON]
+/// --yes`: a backup machine of `person`, else of the account's person.
+pub fn join_custodian(invitation: &str, name: &str, person: Option<&str>) -> Vec<String> {
+    let mut a = vec![
+        s("join"),
+        s("--backup-machine"),
+        s(invitation),
+        s("--name"),
+        s(name),
+    ];
+    if let Some(p) = person {
+        a.extend([s("--person"), s(p)]);
     }
-    a.extend([s(person), s("--json")]);
+    a.extend([s("--yes"), s("--json")]);
     a
 }
 
-/// `pigeon join INVITATION FOLDER --name NAME`.
-pub fn join_laptop(invitation: &str, folder: &Path, name: &str) -> Vec<String> {
-    vec![
+/// `pigeon join INVITATION FOLDER --name NAME --person PERSON`, with
+/// `--yes` to join a person the group `has`.
+pub fn join_laptop(
+    invitation: &str,
+    folder: &Path,
+    name: &str,
+    person: &str,
+    has: bool,
+) -> Vec<String> {
+    let mut a = vec![
         s("join"),
         s(invitation),
         p(folder),
         s("--name"),
         s(name),
-        s("--json"),
-    ]
+        s("--person"),
+        s(person),
+    ];
+    if has {
+        a.push(s("--yes"));
+    }
+    a.push(s("--json"));
+    a
 }
 
 /// `pigeon resolve PATH --take-group`.
@@ -183,12 +206,12 @@ pub fn plain(verb: &str) -> Vec<String> {
     vec![s(verb), s("--json")]
 }
 
-/// The first string in `v` that starts with `prefix`.
-pub fn find_string(v: &Value, prefix: &str) -> Option<String> {
+/// The first string in `v` that holds `part`.
+pub fn find_containing(v: &Value, part: &str) -> Option<String> {
     match v {
-        Value::String(t) if t.starts_with(prefix) => Some(t.clone()),
-        Value::Array(xs) => xs.iter().find_map(|x| find_string(x, prefix)),
-        Value::Object(m) => m.values().find_map(|x| find_string(x, prefix)),
+        Value::String(t) if t.contains(part) => Some(t.clone()),
+        Value::Array(xs) => xs.iter().find_map(|x| find_containing(x, part)),
+        Value::Object(m) => m.values().find_map(|x| find_containing(x, part)),
         _ => None,
     }
 }

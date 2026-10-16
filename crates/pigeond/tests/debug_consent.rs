@@ -43,13 +43,14 @@ fn a_peer_can_share_one_group_part_only_with_local_consent() {
         ],
     );
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
-    let invitation = pigeon(&a, &["invite", "Bob"]);
-    let ticket = said(&invitation, "invitation", "code").unwrap();
+    let ticket = invitation(&a);
     let joined = pigeon(
         &b,
         &[
             "join",
             &ticket,
+            "--person",
+            "Bob",
             root.join("files-b").to_str().unwrap(),
             "--name",
             "Bob",

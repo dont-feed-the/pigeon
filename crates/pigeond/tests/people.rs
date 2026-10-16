@@ -17,15 +17,17 @@ mod common;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use common::{Daemon, SERIAL, dirs, eventually_within, join, logs, pigeon, said, start, until};
+use common::{
+    Daemon, SERIAL, dirs, eventually_within, invitation, join, logs, pigeon, said, start, until,
+};
 use pigeon_proto::api::State;
 
-/// Invites `joiner` from `inviter` with `invite` (the CLI's words) and
-/// joins it in `folder`.
-fn join_laptop(inviter: &Daemon, invite: &[&str], joiner: &Daemon, folder: &Path, all: &[&Daemon]) {
-    let answer = pigeon(inviter, invite);
-    let code = said(&answer, "invitation", "code").unwrap_or_else(|| panic!("{answer:?}"));
-    let joined = pigeon(joiner, &["join", &code, folder.to_str().unwrap()]);
+/// Joins `joiner` to `inviter`'s group in `folder`, as `person`: a new
+/// one, or the group's person of that name.
+fn join_laptop(inviter: &Daemon, person: &str, joiner: &Daemon, folder: &Path, all: &[&Daemon]) {
+    let code = invitation(inviter);
+    let f = folder.to_str().unwrap();
+    let joined = pigeon(joiner, &["join", &code, f, "--person", person, "--yes"]);
     assert!(
         said(&joined, "joined", "group").is_some(),
         "{joined:?}\n{}",
@@ -85,9 +87,9 @@ fn two_people_and_three_laptops_keep_both_concurrent_versions() {
         join(&a1, &c2, &all);
         until(&a1, State::Protected, &all);
 
-        // A new person, an admin, and a second laptop of Ana's.
-        join_laptop(&a1, &["invite", "--admin", "Bea"], &b1, &fb, &all);
-        join_laptop(&a1, &["invite", "ana"], &a2, &fa2, &all);
+        // A new person, and a second laptop of Ana's.
+        join_laptop(&a1, "Bea", &b1, &fb, &all);
+        join_laptop(&a1, "ana", &a2, &fa2, &all);
         eventually_within(
             WAIT,
             || text(&fb, "a.txt") == "first\n" && text(&fa2, "a.txt") == "first\n",

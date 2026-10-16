@@ -5,9 +5,9 @@ spec 13 §13.6), read by `crates/pigeond/tests/formats.rs` on every CI run.
 
 | Directory | What it holds | What this release must say |
 |---|---|---|
-| `roster/known/` | rosters of format 1, as this release writes them | read, and read back the same once rendered |
-| `roster/unknown/` | rosters a newer release could write: `format = 2`, a key format 1 does not define, a role or folder rule this release does not know | *unknown*: never read, never refused |
-| `roster/malformed/` | files that are not rosters of format 1 | *malformed* |
+| `roster/known/` | rosters of format 2, as this release writes them | read, and read back the same once rendered |
+| `roster/unknown/` | rosters a newer release could write: `format = 3`, a key format 2 does not define, a role or folder rule this release does not know | *unknown*: never read, never refused |
+| `roster/malformed/` | files that are not rosters of format 2 | *malformed* |
 | `status/known/`, `status/unknown/`, `status/malformed/` | status reports (06 §6.3), the same way | as their directory says; an unknown report does not count |
 | `clock/known/`, `clock/unknown/`, `clock/missing/` | `.git/pigeon/clock.json` (11 §11.3) | as their directory says; an unknown file is kept as it is |
 | `commits/*.toml` | one commit each: its parent's roster (a file of `roster/`), the trees before and after, who signed it | the `verdict`: `accepted`, `refused:<problem code>` or `unknown` |

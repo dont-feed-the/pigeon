@@ -54,7 +54,10 @@ class Installation(unittest.TestCase):
         stage.mkdir()
         binaries = stage / "bin"
         binaries.mkdir()
-        self.executable(binaries / "pigeon", f"echo 'pigeon {tag[1:]}'")
+        self.executable(
+            binaries / "pigeon",
+            f"if [ \"$1\" = join ]; then printf '<%s>' \"$@\"; echo; else echo 'pigeon {tag[1:]}'; fi",
+        )
         for name in ("pigeond", "git-annex-p2p-iroh"):
             self.executable(binaries / name, "exit 0")
         for name in ("pigeon-install", "install-git-annex", "pigeon-service"):
@@ -104,6 +107,16 @@ class Installation(unittest.TestCase):
         self.assertFalse((self.prefix / "bin").exists())
         self.assertFalse((self.home / ".local/bin/pigeon").is_symlink())
         self.assertEqual(sentinel.read_text(), "keep this identity and group data")
+
+    def test_join_runs_after_installing_or_finding_the_release(self):
+        args = ("--join", "pgn2-abc", "My Folder", "--person", "L'Ami", "--backup-machine")
+        joined = "<join><pgn2-abc><My Folder><--person><L'Ami><--backup-machine>"
+        self.assertIn(joined, self.run_installer("--no-service", *args).stdout)
+        self.assertEqual(self.version(), "pigeon 0.3.3")
+        again = self.run_installer("--no-service", *args).stdout
+        self.assertIn("already installed", again)
+        self.assertIn(joined, again)
+        self.run_installer("--join", ok=False)
 
     def test_bad_checksum_leaves_current_installation_untouched(self):
         self.run_installer("--version", "v0.3.2", "--no-service")

@@ -49,12 +49,12 @@ asks for none. Grouped by file, so that a few ADRs could cover them.
 | 07, 11 | durable `kept` and `preserved` journal records; non-replacing recovery names and capture manifests retained for manual recovery (07 §7.5, 11 §11.3) |
 | [08](08-custody-loops.md) | fetching every 5 minutes besides change notices; repair in the protect class of the queue (§8.1, [15 §15.2](15-resource-use.md), issue #13) |
 | 08 | the deadline of a P2P fetch or push (§8.2); `free --without-checking` and its record (§8.7); a full scrub every 30 days (§8.8) |
-| [09](09-network-and-joining.md) | the invitation encoding `pgn1-` + base32; the inviter keeps each secret, which checking the proof needs (a correction) (§9.6) |
-| 09 | the join exchange carries a custodian's direct addresses, the welcome the inviter's git-annex UUID; default `maxsize` free space minus 10 %; the safety words (§9.6); `pigeon leave` (§9.7) |
-| [10](10-interfaces.md) | force as `accept --override`; the verbs `held`, `settings`, `leave`, `erase --cancel`, `invite --list \| --cancel` (§10.1); one notification per kind and day (§10.4) |
+| [09](09-network-and-joining.md) | the invitation encoding `pgn2-` + base32 of JSON; the admitters it lists, the device writing it first (§9.6) |
+| 09 | the join exchange carries a custodian's direct addresses, the welcome the admitter's git-annex UUID; default `maxsize` free space minus 10 %; device names made unique with `-2`, `-3`…; the safety words (§9.6); `pigeon leave` (§9.7) |
+| [10](10-interfaces.md) | force as `accept --override`; the verbs `held`, `settings`, `leave`, `erase --cancel` (§10.1); one notification per kind and day (§10.4) |
 | 10 | isolation marks around arguments, an unknown message id rendered as itself (§10.5); the clock-skew warning at 5 minutes (§10.7) |
 | 10 | problem codes as `P-` and capitals; the first build's `usage`, `unknown-computer`, `receiving`, `not-a-pigeon-repository`, `peer-unreachable`, `peer-refused`, `internal-error` (§10.6) |
-| [11](11-local-state.md) | `toml_edit` for writing `config.toml`, its `[network]` and `[loops]` tables (§11.2); invitation records kept 30 days (§11.3) |
+| [11](11-local-state.md) | `toml_edit` for writing `config.toml`, its `[network]` and `[loops]` tables (§11.2) |
 | [12](12-observability.md) | telemetry bounded to 50 MB; `debug bundle` asks each peer's person; the `PIGEON_TRACE` switch (§12.2, §12.3) |
 | [13](13-verification.md) | the E17 runner with a hard disk (§13.8); the first milestone's scope, deferrals and `not-in-this-build` (§13.12) |
 | 13 | the first build's port kept in `<state>/port`, direct addresses in a stream's header and a join's welcome, re-thinning by hard link on every file system, of a file unchanged for a minute and hashed before it is moved aside, `disk-full` when free space is below `annex.diskreserve`; a backup machine writes and signs a recovery's roster commit itself, where ADR 0047 has the sheet key sign (§13.12) |
@@ -114,8 +114,8 @@ into 0054; 0065 into 0053.
   ([09 §9.1](09-network-and-joining.md)), a key per group costs an endpoint
   per group; the device key could rest in the macOS keychain or the Secret
   Service.
-- **Later:** phones as viewers; installers (ux.md §11); short invitation
-  codes with a PAKE (ADR 0017); a placement planner (ADR 0003); per-file
+- **Later:** phones as viewers; installers (ux.md §11); a placement
+  planner (ADR 0003); per-file
   freeing (ADR 0031); native Windows (ADR 0005, E11); macOS backup machines
   and NAS packages (ADR 0032).
 - **Thresholds** of [06 §6.7](06-status.md), from the usability test, and

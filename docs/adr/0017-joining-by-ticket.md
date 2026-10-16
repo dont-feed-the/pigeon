@@ -1,7 +1,9 @@
 # 0017. Joining by a one-time ticket; people manage their own devices
 
-- **Status:** Accepted, 13 October 2026, by Guillaume (tooling interview,
-  Q11). Refines the authority rule of ADR 0009 for device entries.
+- **Status:** Superseded by 0075 (one invitation per group, shared as a
+  line that installs and joins). Accepted on 13 October 2026 by Guillaume
+  (tooling interview, Q11). Refines the authority rule of ADR 0009 for
+  device entries.
 
 ## Context
 

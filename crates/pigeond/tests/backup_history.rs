@@ -55,12 +55,7 @@ fn a_bare_backup_reads_old_versions_after_rejoining_in_place() {
     );
     let answer = pigeon(&lap, &["refound", folder.to_str().unwrap(), "--yes"]);
     assert!(said(&answer, "refounded", "group").is_some(), "{answer:?}");
-    let code = said(
-        &pigeon(&lap, &["invite", "--backup-machine", "vault"]),
-        "invitation",
-        "code",
-    )
-    .unwrap();
+    let code = invitation(&lap);
     let answer = pigeon(
         &vault,
         &[
@@ -68,6 +63,10 @@ fn a_bare_backup_reads_old_versions_after_rejoining_in_place() {
             "--backup-machine",
             &code,
             entry.path.to_str().unwrap(),
+            "--name",
+            "vault",
+            "--person",
+            "ana",
             "--yes",
         ],
     );

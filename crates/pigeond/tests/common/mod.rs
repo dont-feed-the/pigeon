@@ -1,7 +1,7 @@
 //! What the multi-daemon tests share (13 §13.12): `pigeond` processes on
 //! one host, each with its own home, driven through the `pigeon` CLI with
 //! `--json`, and their logs for a failure's message. Every daemon's person
-//! is `ana` (`$USER`, 13 §13.12) unless an invitation names another.
+//! is `ana` (`$USER`, 13 §13.12) unless its join names another.
 #![allow(dead_code, reason = "each test binary uses a part")]
 #![allow(
     clippy::unwrap_used,
@@ -235,10 +235,29 @@ pub fn until(lap: &Daemon, want: State, all: &[&Daemon]) -> StatusReport {
     }
 }
 
+/// The group's invitation, from the line `pigeon invite` prints on `d`.
+pub fn invitation(d: &Daemon) -> String {
+    let answer = pigeon(d, &["invite"]);
+    let line = said(&answer, "invitation", "command").unwrap_or_else(|| panic!("{answer:?}"));
+    pigeon_proto::join::invitation(&line)
+}
+
+/// Joins `c` to `lap`'s group as a backup machine of `ana`, named `c.name`.
 pub fn join(lap: &Daemon, c: &Daemon, all: &[&Daemon]) {
-    let answer = pigeon(lap, &["invite", "--backup-machine", c.name]);
-    let code = said(&answer, "invitation", "code").unwrap_or_else(|| panic!("{answer:?}"));
-    let joined = pigeon(c, &["join", "--backup-machine", &code]);
+    let code = invitation(lap);
+    let joined = pigeon(
+        c,
+        &[
+            "join",
+            "--backup-machine",
+            &code,
+            "--name",
+            c.name,
+            "--person",
+            "ana",
+            "--yes",
+        ],
+    );
     assert!(
         said(&joined, "joined", "group").is_some(),
         "{joined:?}\n{}",

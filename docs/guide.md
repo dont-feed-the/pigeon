@@ -90,12 +90,13 @@ brew services start pigeon
 
 Homebrew installations update with `brew upgrade pigeon`.
 
-On a Linux backup machine, download `pigeon-install` from the release,
-then install the system service as root:
+On a Linux backup machine, run the line `pigeon invite` prints (see
+[Use it with other people](#use-it-with-other-people)) as root, with
+`--system` before `--join` and `--backup-machine` at its end. It installs
+the system service, then joins:
 
 ```sh
-sudo sh pigeon-install --system
-sudo /opt/pigeon/bin/pigeon join --backup-machine pgn1-…
+curl -fsSL https://github.com/dont-feed-the/pigeon/releases/latest/download/pigeon-install | sudo sh -s -- --system --join pgn2-… --backup-machine
 ```
 
 The service uses its own `pigeon` account. Group repositories and its key
@@ -134,8 +135,9 @@ not running, this starts the copy installed beside the command line.
 The Home page says whether the files are safe. Files lists folders and
 files at the top of the shared folder; each file links to its versions.
 Settings lets you choose English or French. On a new computer, choose
-*Join or create a group*, paste the invitation and choose a local folder.
-The inviter must still be online when you join.
+*Join or create a group*, paste the invitation, give your name and choose
+a local folder. A computer of an admin of the group must be on when you
+join.
 
 For a source build, run the `pigeon` and `pigeond` from the same `target/debug`
 or `target/release` directory, with git-annex on `PATH`. When using the
@@ -174,26 +176,33 @@ machines must hold a copy before a version counts as protected:
 pigeon create Family ~/Family --k 1 --name mario-laptop
 ```
 
-**2. Add a backup machine.** Any computer that stays on will do: an old
-laptop, a mini PC, a server. Install pigeon there (on a Linux server,
-`loginctl enable-linger $USER` keeps `pigeond` running when nobody is logged
-in), then:
+It prints the line that adds someone to the group. `pigeon invite` prints
+it again, on any computer of the group. The line is the same for everyone
+and never changes:
 
 ```sh
-pigeon invite --backup-machine          # on your computer: prints a line to run
-pigeon join --backup-machine pgn1-…     # on the backup machine
+curl -fsSL https://github.com/dont-feed-the/pigeon/releases/latest/download/pigeon-install | sh -s -- --join pgn2-…
 ```
 
-**3. Invite people.** Each invitation works once, for 24 hours:
+**2. Invite people.** Send them the line. On their computer it installs
+pigeon (or updates it), then asks which folder to use (`~/Family` by
+default) and their name in the group (their account's by default). A
+computer of an admin of the group must be on to let them in.
 
-```sh
-pigeon invite Laurent                    # on your computer
-pigeon join pgn1-… ~/Family --name laurent-laptop   # on Laurent's computer
-```
+To add another computer of yours, run the line there and give your own
+name, as `pigeon people` lists it: pigeon asks whether this computer is
+yours, and adds it to you rather than to a new person.
 
-To add another computer for yourself, invite your existing name (as
-`pigeon people` lists it), then join from that computer. This adds a
-computer to the same person rather than creating another person.
+**3. Add a backup machine.** Any computer that stays on will do: an old
+laptop, a mini PC, a server. Run the line there with `--backup-machine` at
+its end, and give the name of the person it belongs to. On a Linux server,
+`loginctl enable-linger $USER` keeps `pigeond` running when nobody is
+logged in.
+
+Whoever has the line can join the group, under any name, with the rights
+of the person of that name: share it only with the group. It does not
+change when you remove someone from the group; only
+[refounding the group](#recover-after-losing-every-laptop) gives a new one.
 
 Files you put in `~/Family` now reach every computer of the group. The
 computers find each other on the local network, and anywhere else through
@@ -205,7 +214,7 @@ on Linux and `~/Library/Application Support/pigeon/` on macOS.
 
 Anyone in the group may add files. A change to a file someone else wrote,
 or its deletion, waits as a suggestion until an admin accepts it: the
-person who created the group, or anyone invited with `pigeon invite --admin`.
+person who created the group.
 
 ```sh
 pigeon suggestions          # list them
@@ -257,7 +266,7 @@ rule on another computer before relying on the change there.
 ### Tab completion
 
 pigeon completes its commands and options, paths, and what the daemon
-lists: suggestion IDs, held batches, invitations, the group's machines,
+lists: suggestion IDs, held batches, the group's machines,
 settings and their values. Add the line for your shell to its startup file:
 
 ```sh
@@ -330,17 +339,17 @@ If every admin key and recovery sheet is lost, a surviving member can
 start a new group with `pigeon refound /path/to/repository --yes`. Review
 this choice carefully: that member becomes the new group's sole admin,
 and owned folders belong to them. Existing history and files remain
-available. The other members must accept a new invitation to join it.
+available. The new group has its own line to share: the others join it with
+that line, and the old one no longer works.
 
-To reuse an existing folder, join the new invitation with that folder's
+To reuse an existing folder, join with the new line and that folder's
 path and confirm the refounding. A backup can reuse its bare repository
 with `pigeon join --backup-machine INVITATION /path/to/old.git --yes`.
 Pigeon verifies the new group before switching; existing annex objects
 and identity are retained. If it reports an interrupted join, restart
 the daemon so it can finish from its local journal. Do not delete the
 repository or reinitialize annex. File history includes the verified
-old group. An invitation belongs to its issuing group; issue fresh ones
-after refounding or upgrading from a build with unbound invitations.
+old group.
 
 ## Export files without running pigeon
 

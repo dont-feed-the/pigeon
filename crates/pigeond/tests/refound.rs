@@ -14,7 +14,7 @@
 
 mod common;
 
-use common::{SERIAL, dirs, eventually_within, join, logs, pigeon, said, start, until};
+use common::{SERIAL, dirs, eventually_within, invitation, join, logs, pigeon, said, start, until};
 use pigeon_proto::Response;
 use pigeon_proto::api::State;
 
@@ -71,11 +71,18 @@ fn a_member_refounds_the_group_in_place() {
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
     join(&a1, &c1, &all);
     until(&a1, State::Protected, &all);
-    let answer = pigeon(&a1, &["invite", "Bob"]);
-    let code = said(&answer, "invitation", "code").unwrap_or_else(|| panic!("{answer:?}"));
+    let code = invitation(&a1);
     let joined = pigeon(
         &b1,
-        &["join", &code, fb.to_str().unwrap(), "--name", "bob-1"],
+        &[
+            "join",
+            &code,
+            "--person",
+            "Bob",
+            fb.to_str().unwrap(),
+            "--name",
+            "bob-1",
+        ],
     );
     assert!(
         said(&joined, "joined", "group").is_some(),
@@ -207,9 +214,8 @@ fn a_member_refounds_the_group_in_place() {
     // Ana's folder joins the new group in place, once she accepts Bob.
     let ana_main = git(&fa, &["rev-parse", "main"]);
     let ana_uuid = git(&fa, &["config", "annex.uuid"]);
-    let answer = pigeon(&b1, &["invite", "Ana"]);
-    let code = said(&answer, "invitation", "code").unwrap_or_else(|| panic!("{answer:?}"));
-    let unasked = pigeon(&a1, &["join", &code, f]);
+    let code = invitation(&b1);
+    let unasked = pigeon(&a1, &["join", &code, "--person", "Ana", f]);
     assert_eq!(
         problem(&unasked).as_deref(),
         Some("needs-confirmation"),
@@ -250,9 +256,18 @@ fn a_member_refounds_the_group_in_place() {
     // second refounding to test both signed links and proposal ref relay.
     let cara = start(&root, s, "cara");
     let fc = root.join("cara-files");
-    let invitation = pigeon(&b1, &["invite", "Cara"]);
-    let code = said(&invitation, "invitation", "code").unwrap();
-    let joined = pigeon(&cara, &["join", &code, fc.to_str().unwrap(), "--yes"]);
+    let code = invitation(&b1);
+    let joined = pigeon(
+        &cara,
+        &[
+            "join",
+            &code,
+            "--person",
+            "Cara",
+            fc.to_str().unwrap(),
+            "--yes",
+        ],
+    );
     assert!(said(&joined, "joined", "group").is_some(), "{joined:?}");
     eventually_within(
         180,
@@ -283,9 +298,18 @@ fn a_member_refounds_the_group_in_place() {
     );
     let daria = start(&root, s, "daria");
     let fd = root.join("daria-files");
-    let invitation = pigeon(&cara, &["invite", "Daria"]);
-    let code = said(&invitation, "invitation", "code").unwrap();
-    let joined = pigeon(&daria, &["join", &code, fd.to_str().unwrap(), "--yes"]);
+    let code = invitation(&cara);
+    let joined = pigeon(
+        &daria,
+        &[
+            "join",
+            &code,
+            "--person",
+            "Daria",
+            fd.to_str().unwrap(),
+            "--yes",
+        ],
+    );
     assert!(said(&joined, "joined", "group").is_some(), "{joined:?}");
     eventually_within(
         180,

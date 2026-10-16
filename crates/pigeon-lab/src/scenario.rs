@@ -384,9 +384,9 @@ fn check_condition(w: &World, p: &Presence, c: &Condition) -> Result<(), String>
     }
 }
 
-/// Checks that `by` may invite the spare laptop `l`, which then joins: a
-/// new person's laptop is an admin's to invite, a known person's their own
-/// or an admin's (09 §9.6).
+/// Checks that `by` may admit the spare laptop `l`, which joins with the
+/// invitation `by` prints: a new person's laptop is an admin's to admit, a
+/// known person's their own or an admin's (09 §9.6).
 fn check_join(w: &World, p: &mut Presence, by: Laptop, l: Laptop) -> Result<(), String> {
     let j = l.0 as usize;
     match p.laptops.get(j) {
@@ -398,7 +398,7 @@ fn check_join(w: &World, p: &mut Presence, by: Laptop, l: Laptop) -> Result<(), 
     let known = (0..w.laptops.len()).any(|k| p.laptops[k] && w.laptops[k].person == person(l));
     if !w.is_admin(by) && !(known && person(by) == person(l)) {
         return Err(format!(
-            "{} may not invite {}",
+            "{} may not admit {}",
             w.name(by.into()),
             w.name(l.into())
         ));

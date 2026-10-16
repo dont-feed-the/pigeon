@@ -12,7 +12,7 @@
 
 mod common;
 
-use common::{SERIAL, dirs, eventually_within, join, logs, pigeon, said, start, until};
+use common::{SERIAL, dirs, eventually_within, invitation, join, logs, pigeon, said, start, until};
 use pigeon_proto::Response;
 use pigeon_proto::api::State;
 
@@ -63,11 +63,19 @@ fn a_laptop_leaves_once_a_peer_has_its_removal() {
 
     join(&a1, &c1, &all);
     until(&a1, State::Protected, &all);
-    let answer = pigeon(&a1, &["invite", "ana"]);
-    let code = said(&answer, "invitation", "code").unwrap_or_else(|| panic!("{answer:?}"));
+    let code = invitation(&a1);
     let joined = pigeon(
         &a2,
-        &["join", &code, fa2.to_str().unwrap(), "--name", "ana-2"],
+        &[
+            "join",
+            &code,
+            "--person",
+            "ana",
+            "--yes",
+            fa2.to_str().unwrap(),
+            "--name",
+            "ana-2",
+        ],
     );
     assert!(
         said(&joined, "joined", "group").is_some(),
@@ -162,13 +170,15 @@ fn a_peer_that_never_learned_the_join_cannot_acknowledge_the_leave() {
     // Its first NotInRoster after the leave is therefore no acknowledgement.
     let _ = pigeon(&c1, &["pause"]);
     drop(c1);
-    let answer = pigeon(&a1, &["invite", "ana"]);
-    let code = said(&answer, "invitation", "code").unwrap();
+    let code = invitation(&a1);
     let joined = pigeon(
         &a2,
         &[
             "join",
             &code,
+            "--person",
+            "ana",
+            "--yes",
             root.join("ana-2").to_str().unwrap(),
             "--name",
             "ana-2",

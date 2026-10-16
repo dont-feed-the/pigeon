@@ -23,7 +23,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use common::{
-    Daemon, SERIAL, dirs, eventually_within, git_env, join, logs, pigeon, said, start, until,
+    Daemon, SERIAL, dirs, eventually_within, git_env, invitation, join, logs, pigeon, said, start,
+    until,
 };
 use pigeon_proto::Response;
 use pigeon_proto::api::State;
@@ -101,9 +102,11 @@ fn a_change_its_person_may_not_make_becomes_a_relayed_suggestion() {
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
     join(&a1, &c1, &all);
     until(&a1, State::Protected, &all);
-    let answer = pigeon(&a1, &["invite", "Cid"]);
-    let code = said(&answer, "invitation", "code").unwrap_or_else(|| panic!("{answer:?}"));
-    let joined = pigeon(&b1, &["join", &code, fc.to_str().unwrap()]);
+    let code = invitation(&a1);
+    let joined = pigeon(
+        &b1,
+        &["join", &code, "--person", "Cid", fc.to_str().unwrap()],
+    );
     assert!(
         said(&joined, "joined", "group").is_some(),
         "{joined:?}\n{}",
@@ -335,10 +338,19 @@ fn a_change_its_person_may_not_make_becomes_a_relayed_suggestion() {
     // A fresh laptop must verify the separately retained declined proposal,
     // not reject the group's valid decision history as unverified.
     let a2 = start(&root, s, "a2");
-    let invited = pigeon(&a1, &["invite", "ana"]);
-    let code = said(&invited, "invitation", "code").unwrap();
+    let code = invitation(&a1);
     let second_folder = root.join("ana-2");
-    let joined = pigeon(&a2, &["join", &code, second_folder.to_str().unwrap()]);
+    let joined = pigeon(
+        &a2,
+        &[
+            "join",
+            &code,
+            "--person",
+            "ana",
+            "--yes",
+            second_folder.to_str().unwrap(),
+        ],
+    );
     assert!(said(&joined, "joined", "group").is_some(), "{joined:?}");
     eventually_within(
         WAIT,

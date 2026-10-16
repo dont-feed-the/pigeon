@@ -11,7 +11,8 @@
 `.gitattributes` ([03 §3.3](03-repository-and-roles.md)) and a roster of one
 admin and one device, signed by it (ADR 0007). The **group ID** is its
 commit ID; a device accepts only a history rooted at the genesis its
-invitation names (ADR 0017). Other founders join by invitation.
+invitation names (ADR 0075). Other founders join with the group's
+invitation.
 
 ## 4.2 The roster file
 
@@ -19,9 +20,10 @@ invitation names (ADR 0017). Other founders join by invitation.
 normative **[no ADR: field names]**:
 
 ```toml
-format = 1
+format = 2                           # 2 adds `invitation` (ADR 0075); format 1 is no longer read
 rules = 1                           # the rule set the group runs; never decreases (ADR 0048)
 group = "Famille Geiger"            # display name
+invitation = "…64 hex"              # the group's invitation, never changed (ADR 0075)
 k = 2                               # custody copies, on distinct custodians (ADRs 0002 and 0046)
 retention_days = 30                 # waiting period before a purge (ADR 0018)
 relay = "https://relay.example.org" # optional group relay (ADR 0016)
@@ -46,7 +48,8 @@ stewards = ["roy"]
 
 A roster is **valid** when it parses, `rules` is not lower than at the
 parents, and `pigeon-core::roster::Roster::validate` passes: an admin, known
-persons, unique names, `k ≥ 1`, an `annex_uuid` never reused (ADR 0046) on
+persons, unique names, `k ≥ 1`, an `invitation` of 64 lowercase hex
+digits, an `annex_uuid` never reused (ADR 0046) on
 each laptop and custodian and none on a recovery device, no removed device
 back (ADR 0051), and a `relay`, if any, an `https://` URL (`http://` for
 one on the local network). A commit that leaves an invalid roster is invalid.
@@ -69,11 +72,11 @@ slot in the base is *u*'s: an adoption counts as its proposal's author's,
 a conflict copy as its version's ([05 §5.2](05-catalogue-and-names.md);
 `catalogue::View::writers`, `Authority.tla` `Writers`).
 
-`.pigeon/` has its own table (ADRs 0009, 0017, 0018, 0047, 0051):
+`.pigeon/` has its own table (ADRs 0009, 0018, 0047, 0051, 0075):
 
 | Path under `.pigeon/` | Who may add or change it |
 |---|---|
-| device entries of person P in `roster.toml` | an admin, or a device of P (ADR 0017) |
+| device entries of person P in `roster.toml` | an admin, or a device of P (ADR 0075) |
 | anything, from a device with `role = "recovery"` | only device entries of its own person, even if an admin; never a Force (ADR 0047) |
 | `decisions/<commit>.toml`, `verdict = "rejected"` | a decider of that proposal (§4.5, ADR 0051) |
 | `decisions/<commit>.toml`, `verdict = "withdrawn"` | a device of the proposal's author |
@@ -219,7 +222,7 @@ admins force, as ux.md says, not any member as the proposal said **[no ADR]**.
 - Every roster change is a signed commit checked by §4.4 (ADR 0009); a hand
   edit of `roster.toml` is captured like any file, a proposal from a
   non-admin.
-- A device of P: added or removed by an admin or a device of P (ADR 0017;
+- A device of P: added or removed by an admin or a device of P (ADR 0075;
   `a_member_who_is_no_admin_signs_only_their_devices`). A person, or an
   admin's removal: an admin; the last admin stays. A custodian's `maxsize`:
   an admin or a device of its person.
