@@ -233,9 +233,34 @@ impl Daemon {
         // Fetch changes objects and peer refs only. Slow or offline peers must
         // not block conditional bridge writes, capture, or portal decisions.
         drop(busy);
+        let early_moved = std::sync::atomic::AtomicBool::new(false);
         let fetched = {
             let _step = round.child("fetch");
-            crate::custody::fetch_ready(g, &peers).await
+            let accept_round = &round;
+            let made_progress = &early_moved;
+            crate::custody::fetch_each(g, &peers, |peers| async move {
+                let _busy = g.busy.lock().await;
+                if !self.current_group(g).await
+                    || crate::pause::now(self).is_some()
+                    || crate::leave::leaving(g).is_some()
+                {
+                    return;
+                }
+                if settled
+                    && !crate::evict::unsettled(g)
+                    && let Err(e) = crate::bridge::recover(self, g).await
+                {
+                    tracing::warn!(group = %g.id, error = %e, "bridge-recovery-waits");
+                    return;
+                }
+                let mut step = accept_round.child("accept");
+                let moved = crate::custody::accept(g, peers, &self.tracer).await;
+                step.set("moved", moved);
+                if moved {
+                    made_progress.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+            })
+            .await
         };
         let _busy = g.busy.lock().await;
         // Refounding can replace this group while its network fetch runs.
@@ -253,7 +278,8 @@ impl Daemon {
         }
         {
             let mut step = round.child("accept");
-            let moved = crate::custody::accept(g, fetched, &self.tracer).await;
+            let moved = crate::custody::accept(g, fetched, &self.tracer).await
+                || early_moved.load(std::sync::atomic::Ordering::Relaxed);
             step.set("moved", moved);
         }
         if settled {

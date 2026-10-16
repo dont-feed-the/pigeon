@@ -72,6 +72,11 @@ increments the second number, and every other release the third.
   checks first try a faster witness search, retaining the full search and
   all safety checks if it cannot explain the observations.
 
+### Fixed
+
+- A slow or unavailable computer no longer delays accepting new versions
+  from the group’s reachable computers.
+
 ### Removed
 
 - The Homebrew tap. On a Mac installed with Homebrew, run
