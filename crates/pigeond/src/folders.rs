@@ -39,11 +39,12 @@ pub async fn folders(g: &Group, me: &str) -> Response {
                 files
                     .iter()
                     .filter(|o| {
-                        !o.local
-                            || !g.worktree.as_ref().is_some_and(|wt| {
-                                std::fs::symlink_metadata(wt.join(&o.path))
-                                    .is_ok_and(|m| m.is_file())
-                            })
+                        !targets.iter().any(|t| crate::evict::under(&o.path, t))
+                            && (!o.local
+                                || !g.worktree.as_ref().is_some_and(|wt| {
+                                    std::fs::symlink_metadata(wt.join(&o.path))
+                                        .is_ok_and(|m| m.is_file())
+                                }))
                     })
                     .count()
             };

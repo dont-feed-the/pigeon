@@ -193,3 +193,72 @@ async fn an_ordinary_member_sees_the_rule_without_a_write_form() {
     assert!(page.contains("Un administrateur peut modifier"));
     assert!(!page.contains("action=\"/folder-rule\""));
 }
+
+#[tokio::test]
+async fn nested_free_and_keep_submit_only_the_selected_folder_with_csrf() {
+    let backend = Arc::new(Rules {
+        calls: Mutex::new(Vec::new()),
+        editable: true,
+    });
+    let web = Web::new(backend.clone(), "fr".parse().unwrap(), 4321);
+    let app = web.router();
+    let cookie = logged_in(&app, &web).await;
+    let html = body(
+        app.clone()
+            .oneshot(get(
+                "/folder?path=%2FFamily%2FPhotos%2FEnfant",
+                HOST,
+                Some(&cookie),
+            ))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert!(html.contains("action=\"/files/free\"") && html.contains("action=\"/files/keep\""));
+    assert_eq!(
+        html.matches("name=\"folder\" value=\"/Family/Photos/Enfant\"")
+            .count(),
+        2
+    );
+    let token = html
+        .split("name=\"form\" value=\"")
+        .nth(1)
+        .unwrap()
+        .split('"')
+        .next()
+        .unwrap();
+    backend.calls.lock().unwrap().clear();
+    let forbidden = app
+        .clone()
+        .oneshot(post(
+            "/files/free",
+            &cookie,
+            "form=wrong&folder=%2FFamily%2FPhotos%2FEnfant",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(forbidden.status(), StatusCode::FORBIDDEN);
+    assert!(backend.calls.lock().unwrap().is_empty());
+    let form = format!("form={token}&folder=%2FFamily%2FPhotos%2FEnfant");
+    for action in ["/files/free", "/files/keep"] {
+        assert_eq!(
+            app.clone()
+                .oneshot(post(action, &cookie, &form))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+    }
+    assert_eq!(
+        backend.calls.lock().unwrap().as_slice(),
+        &[
+            pigeon_proto::Request::Evict {
+                folder: "/Family/Photos/Enfant".into()
+            },
+            pigeon_proto::Request::Keep {
+                folder: "/Family/Photos/Enfant".into()
+            },
+        ]
+    );
+}

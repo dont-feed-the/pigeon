@@ -269,6 +269,9 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         Request::Pause { duration } => crate::pause::pause(d, duration.as_deref()),
         Request::Resume => crate::pause::resume(d),
         Request::History { path } => crate::history::history(d, Path::new(&path)).await,
+        Request::ViewSuggestion { proposal, path } => {
+            crate::view::suggestion(d, &proposal, Path::new(&path)).await
+        }
         Request::View {
             path,
             version,

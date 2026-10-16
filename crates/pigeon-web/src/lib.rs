@@ -172,6 +172,7 @@ impl Web {
             .route("/held/rename", post(held::rename))
             .route("/leave", post(leave::leave))
             .route("/files/view", post(view::view))
+            .route("/suggestions/view", post(view::view))
             .route("/suggestions/accept", post(actions::accept))
             .route("/suggestions/decline", post(actions::decline))
             .route_layer(middleware::from_fn_with_state(self.clone(), session))

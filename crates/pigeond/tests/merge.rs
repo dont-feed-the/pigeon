@@ -422,3 +422,54 @@ async fn joining_checks_authority_before_adopting_any_history() {
         Err("invite-not-allowed".into())
     );
 }
+
+#[tokio::test]
+async fn a_decision_waits_for_its_signed_proposal_and_can_be_judged_again() {
+    use pigeon_core::authority::{Decided, Verdict, decision_path};
+    use pigeond::decision_file::{DecisionDoc, render};
+    let w = world().await;
+    let mut proposed = w.base.clone();
+    proposed.insert("Shared/a.txt".into(), pointer(&w.git, 2).await);
+    let proposal = commit(&w.git, &proposed, &[&w.genesis], 30, 2).await;
+    let mut tree = w.base.clone();
+    tree.insert(
+        decision_path(&proposal),
+        blob(
+            &w.git,
+            render(&DecisionDoc {
+                proposal: proposal.clone(),
+                verdict: Decided::Rejected,
+                note: None,
+            })
+            .as_bytes(),
+        )
+        .await,
+    );
+    let decision = commit_with(
+        &w.git,
+        &tree,
+        &[&w.genesis],
+        (60, 1),
+        "pigeon: decline a suggestion",
+    )
+    .await;
+    let first = verify::judge(&w.g, None, &decision).await.unwrap();
+    assert_eq!(first.accepted.as_deref(), Some(w.genesis.as_str()));
+    assert!(matches!(
+        first.stopped,
+        Some((_, Verdict::Unknown("decision")))
+    ));
+    assert!(w.g.lock().engine.outcome(&decision).is_none());
+    w.git
+        .update_ref(
+            &pigeond::proposal::name(&dev(2).0, &proposal),
+            &proposal,
+            None,
+        )
+        .await
+        .unwrap();
+    let second = verify::judge(&w.g, None, &decision).await.unwrap();
+    assert_eq!(second.accepted.as_deref(), Some(decision.as_str()));
+    assert!(second.stopped.is_none());
+    assert!(!w.g.lock().verdicts.contains_key(&decision));
+}

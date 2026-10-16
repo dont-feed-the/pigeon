@@ -246,3 +246,10 @@ child environment used by git-annex and matches the daemon release. A
 missing, failed, stale or timed-out helper gives
 `transport-helper-unavailable`, with a reinstall remedy. An installation
 or group problem suppresses the final everything-in-place reassurance.
+
+A pending suggestion can be reviewed with `ViewSuggestion {proposal, path}`
+(`pigeon view PATH --suggestion ID`). Only a changed path in one currently
+pending verified proposal is eligible. The daemon returns a read-only copy
+outside the shared folder, or explains that the proposal deletes that path.
+Review does not adopt the proposal or replace accepted bytes. The web uses
+a checked POST before downloading the copy.

@@ -83,12 +83,23 @@ async fn judge_commit(g: &Group, c: &str, parents: Vec<String>) -> Result<(), Er
     } else {
         judge_child(g, &raw, &after, &mut meta).await?
     };
+    // Missing proposal metadata can arrive in a later fetch. Unknown is
+    // provisional: admitting it as refused would make it permanent in
+    // the catalogue engine, poisoning otherwise valid descendants.
+    if matches!(verdict, Verdict::Unknown(_)) {
+        g.lock().verdicts.insert(c.to_owned(), verdict);
+        return Ok(());
+    }
     let judgement = match &verdict {
         Verdict::Accepted(..) => Judgement::Accepted,
         Verdict::Refused(r) => Judgement::Refused(authority::code(r).to_owned()),
         Verdict::Unknown(why) => Judgement::Refused(format!("unknown-{why}")),
     };
-    let outcome = g.lock().engine.admit(&meta, &after, judgement);
+    let outcome = {
+        let mut known = g.lock();
+        known.verdicts.remove(c);
+        known.engine.admit(&meta, &after, judgement)
+    };
     match (&verdict, &outcome) {
         (Verdict::Accepted(signer, _), Outcome::Clean | Outcome::Contribution) => match &genesis {
             Some(r) => crate::fold::genesis(g, c, r),

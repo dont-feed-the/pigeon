@@ -18,6 +18,19 @@ status everybody can read.
 > binaries or built from source ([roadmap](roadmap.md)). Try it, but
 > keep another copy of anything you care about.
 
+## Review a suggestion before deciding
+
+On **Suggestions**, choose **Review suggested file** for each changed path.
+The browser downloads a read-only copy of the proposed bytes. It does not
+replace the shared file or accept the suggestion. A proposed deletion is
+explained instead of opening a copy. You can then accept or decline, with
+a note if useful. The command line equivalent is
+`pigeon view PATH --suggestion ID` (IDs come from `pigeon suggestions`).
+
+Nested folder pages offer **Free up space** and **Keep on this computer**
+for that folder. Free keeps protected copies on backup machines; Keep
+requests local copies and can wait for a reachable source.
+
 ## What "safe" means
 
 A version of a file goes through three states, and pigeon always says which:

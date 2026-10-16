@@ -318,6 +318,8 @@ pub const MESSAGES: &[Entry] = &[
     e("file-row", &["path", "state"]),
     e("web-restore", &[]),
     e("web-view", &[]),
+    e("web-view-suggestion", &[]),
+    e("suggestion-deletes-file", &["path"]),
     e("web-versions", &[]),
     e("web-remove", &[]),
     e("web-remove-confirm", &["name"]),

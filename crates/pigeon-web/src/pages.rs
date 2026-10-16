@@ -220,6 +220,14 @@ fn suggestion(r: &Renderer, s: &Suggestion, form: &str) -> Markup {
     html! {
         article {
             p { (r.catalogue().format(&msg)) }
+            @for path in &s.paths {
+                form method="post" action="/suggestions/view" {
+                    input type="hidden" name="form" value=(form);
+                    input type="hidden" name="proposal" value=(s.id);
+                    input type="hidden" name="path" value=(path);
+                    button type="submit" { (r.id("web-view-suggestion")) " — " (path) }
+                }
+            }
             @if decides && !s.force {
                 form method="post" action="/suggestions/accept" {
                     input type="hidden" name="form" value=(form);

@@ -114,6 +114,13 @@ pub enum Request {
         #[serde(default)]
         group: bool,
     },
+    /// A read-only copy of one changed file in a pending suggestion.
+    ViewSuggestion {
+        /// The pending suggestion's ID (unambiguous prefix allowed).
+        proposal: String,
+        /// A changed path, relative to the group or absolute within it.
+        path: String,
+    },
     /// `pigeon history PATH`.
     History {
         /// A file.

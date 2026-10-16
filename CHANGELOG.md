@@ -4,6 +4,17 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.14 — 2026-10-16
+
+### Fixed
+- A new computer can verify a group's history after suggestions were declined.
+- Nested folder pages offer Free up space and Keep on this computer. Freed
+  subfolders no longer appear as files waiting to download in their parent.
+
+### Added
+- Suggestions lets you open a read-only copy of each proposed file before
+  accepting or declining it, without replacing the shared file.
+
 ## 0.4.13 — 2026-10-16
 
 ### Fixed

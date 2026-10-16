@@ -676,6 +676,7 @@ pub async fn fetch_welcome(
 ) -> Result<String, String> {
     let spec = crate::settings::peer_refspec(inviter);
     let archive = crate::refound::refspec(inviter);
+    let proposals = crate::proposal::refspec(inviter);
     let args = [
         "fetch",
         "-q",
@@ -684,6 +685,7 @@ pub async fn fetch_welcome(
         inviter,
         spec.as_str(),
         archive.as_str(),
+        proposals.as_str(),
     ];
     // The inviter may still be busy with the welcome's round: retry for
     // five minutes, as a P2P fetch can also hang (16 §16.4) and a loaded
@@ -708,6 +710,15 @@ pub async fn fetch_welcome(
         .rev(&format!("refs/pigeon/peers/{inviter}/main"))
         .await
         .ok_or("inviter-offline")?;
+    // Decisions on main refer to separately retained signed proposals.
+    // Keep only valid ones before judging their decisions. Dependencies
+    // between successive decisions can require another pass; every pass
+    // must add a ref, so this terminates when no more can be verified.
+    tokio::time::timeout(Duration::from_secs(120), async {
+        while crate::proposal::take(g, inviter).await > 0 {}
+    })
+    .await
+    .map_err(|_| "join-history-unverified".to_owned())?;
     crate::verify::bootstrap(g, group, &theirs, commit, me).await?;
     if let Some(ga) = g
         .git

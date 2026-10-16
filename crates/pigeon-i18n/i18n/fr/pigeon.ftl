@@ -512,3 +512,6 @@ web-folder-rule-add-only = Tout le monde peut ajouter ; les personnes choisies d
 web-folder-rule-inherit = Hériter de la règle du dossier parent
 web-folder-rule-stewards = Personnes qui décident des modifications
 web-folder-rule-default-admins = Ne cochez personne pour laisser les administrateurs décider.
+
+web-view-suggestion = Examiner le fichier suggéré
+suggestion-deletes-file = Cette suggestion supprime { $path }. Le fichier partagé reste inchangé tant que la suggestion n’est pas acceptée.

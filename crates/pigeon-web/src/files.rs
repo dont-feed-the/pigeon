@@ -112,7 +112,11 @@ pub struct At {
 }
 
 /// A folder's page: its files, each a link to its page.
-pub async fn folder_page(State(web): State<Arc<Web>>, Query(at): Query<At>) -> Html<String> {
+pub async fn folder_page(
+    State(web): State<Arc<Web>>,
+    Extension(form): Extension<FormToken>,
+    Query(at): Query<At>,
+) -> Html<String> {
     let r = web.renderer();
     let mut root = String::new();
     let mut rows = Vec::new();
@@ -177,6 +181,15 @@ pub async fn folder_page(State(web): State<Arc<Web>>, Query(at): Query<At>) -> H
         p { a href="/files" { (r.id("web-back")) } }
     };
     let body = html! {
+        @if !root.is_empty() && !rows.is_empty() {
+            @for (action, label) in [("/files/free", "web-free"), ("/files/keep", "web-keep")] {
+                form method="post" action=(action) {
+                    input type="hidden" name="form" value=(form.0);
+                    input type="hidden" name="folder" value=(at.path);
+                    button type="submit" { (r.id(label)) }
+                }
+            }
+        }
         p { a href=(format!("/folder-rule?path={}", enc(&at.path))) { (r.id("web-folder-rule")) } }
         (body)
     };

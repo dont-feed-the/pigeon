@@ -243,6 +243,8 @@ enum Command {
         version: Option<u64>,
         #[arg(long)]
         group: bool,
+        #[arg(long, value_name = "ID", conflicts_with_all = ["version", "group"])]
+        suggestion: Option<String>,
     },
     History {
         #[arg(value_hint = ValueHint::AnyPath)]
@@ -523,10 +525,17 @@ fn action(c: Command) -> Action {
             path,
             version,
             group,
-        } => send(Request::View {
-            path: absolute(&path),
-            version,
-            group,
+            suggestion,
+        } => send(match suggestion {
+            Some(proposal) => Request::ViewSuggestion {
+                proposal,
+                path: absolute(&path),
+            },
+            None => Request::View {
+                path: absolute(&path),
+                version,
+                group,
+            },
         }),
         Command::History { path } => send(Request::History {
             path: absolute(&path),

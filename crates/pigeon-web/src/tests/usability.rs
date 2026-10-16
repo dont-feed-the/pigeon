@@ -245,3 +245,59 @@ async fn diagnostic_disclosure_requires_a_checked_local_consent_and_valid_form()
         1
     );
 }
+
+#[tokio::test]
+async fn suggestion_review_uses_the_exact_proposal_path_and_checked_form() {
+    let (web, backend) = recording();
+    let app = web.router();
+    let cookie = logged_in(&app, &web).await;
+    let page = body(
+        app.clone()
+            .oneshot(get("/join", HOST, Some(&cookie)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    let token = form_token(&page);
+    backend.0.lock().unwrap().clear();
+    let params = "proposal=c0ffee&path=Photos%2F2019%2Fa.jpg";
+    let response = app
+        .clone()
+        .oneshot(post(
+            "/suggestions/view",
+            &cookie,
+            &format!("form=forged&{params}"),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert!(backend.0.lock().unwrap().is_empty());
+    let response = app
+        .clone()
+        .oneshot(post(
+            "/suggestions/view",
+            &cookie,
+            &format!("form={token}&{params}"),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        backend.0.lock().unwrap().as_slice(),
+        &[pigeon_proto::Request::ViewSuggestion {
+            proposal: "c0ffee".into(),
+            path: "Photos/2019/a.jpg".into(),
+        }]
+    );
+    backend.0.lock().unwrap().clear();
+    let response = app
+        .oneshot(post(
+            "/suggestions/view",
+            &cookie,
+            &format!("form={token}&{params}&version=1"),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(backend.0.lock().unwrap().is_empty());
+}

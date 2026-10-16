@@ -42,18 +42,21 @@ fn local_published_protected_then_free_and_keep() {
     let all = [&lap, &c1, &c2];
 
     let folder = root.join("folder");
-    std::fs::create_dir_all(folder.join("sub")).unwrap();
+    std::fs::create_dir_all(folder.join("sub/2019")).unwrap();
     let big: Vec<u8> = (0u32..300_000)
         .map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8)
         .collect();
-    std::fs::write(folder.join("sub/big.bin"), &big).unwrap();
+    std::fs::write(folder.join("sub/2019/big.bin"), &big).unwrap();
     std::fs::write(folder.join("a.txt"), b"hello\n").unwrap();
     let f = folder.to_str().unwrap();
     let created = pigeon(&lap, &["create", "Family", f, "--k", "2", "--name", "lap"]);
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
 
     let s = until(&lap, State::Local, &all);
-    assert!(s.versions.iter().any(|v| v.path == "sub/big.bin"), "{s:?}");
+    assert!(
+        s.versions.iter().any(|v| v.path == "sub/2019/big.bin"),
+        "{s:?}"
+    );
 
     join(&lap, &c1, &all);
     until(&lap, State::Published, &all);
@@ -90,7 +93,7 @@ fn local_published_protected_then_free_and_keep() {
         other => panic!("machines: {other:?}"),
     }
 
-    let sub = folder.join("sub");
+    let sub = folder.join("sub/2019");
     let freed = pigeon(&lap, &["free", sub.to_str().unwrap()]);
     assert_eq!(
         said(&freed, "free-result", "safe").as_deref(),
@@ -107,12 +110,16 @@ fn local_published_protected_then_free_and_keep() {
     let web = common::web::login(&lap);
     let files = common::web::page(&web, "/files");
     assert!(
-        files.contains("sub: Safe, 1 file; its space is freed") && files.contains("/files/keep"),
+        files.contains("sub: Safe, 1 file") && !files.contains("Waiting for 1 file"),
         "{files}"
     );
+    // The nested page offers actions for this scope; the parent does not
+    // promise that intentionally freed files will download themselves.
     // The folder's page lists its file; the file's page its version.
     let listed = common::web::page(&web, &format!("/folder?path={}", sub.display()));
-    assert!(listed.contains("sub/big.bin: Safe"), "{listed}");
+    assert!(listed.contains("sub/2019/big.bin: Safe"), "{listed}");
+    assert!(listed.contains("action=\"/files/free\"") && listed.contains("action=\"/files/keep\""));
+    assert!(listed.contains(&format!("name=\"folder\" value=\"{}\"", sub.display())));
     let file = common::web::page(
         &web,
         &format!("/file?path={}", sub.join("big.bin").display()),

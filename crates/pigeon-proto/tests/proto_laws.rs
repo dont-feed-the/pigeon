@@ -28,7 +28,11 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(44)) {
+    match tc.draw(gs::integers::<u8>().max_value(45)) {
+        45 => Request::ViewSuggestion {
+            proposal: text(tc),
+            path: text(tc),
+        },
         43 => Request::FolderRules {
             folder: maybe_text(tc),
         },
