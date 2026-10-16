@@ -27,6 +27,12 @@ on:
       - packaging/install-git-annex
       - packaging/check-install
   workflow_call:
+    inputs:
+      source_ref:
+        description: Immutable commit supplying the pinned git-annex and installer
+        required: false
+        default: ""
+        type: string
   workflow_dispatch:
 
 permissions:
@@ -53,7 +59,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(startsWith(github.ref, 'refs/tags/v') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
+        os: ${{ fromJSON((startsWith(github.ref, 'refs/tags/v') || inputs.source_ref != '') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
     # The build stays on macOS 15: on the macos-26 image, linking GHC's
     # programs failed on the SDK's .tbd files ("unknown architecture"), and
     # v0.3.4 had no release. What it builds runs on later macOS too.
@@ -61,6 +67,8 @@ jobs:
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
       - id: key
         run: echo "key=git-annex-pigeon-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/git-annex/VERSION', 'third_party/git-annex/build.sh', 'third_party/git-annex/patches/**') }}" >> "$GITHUB_OUTPUT"
       - id: dist
@@ -142,11 +150,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(startsWith(github.ref, 'refs/tags/v') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
+        os: ${{ fromJSON((startsWith(github.ref, 'refs/tags/v') || inputs.source_ref != '') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
       - name: the stock git-annex first, as slice.yml installs it (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -180,11 +190,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(startsWith(github.ref, 'refs/tags/v') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
+        os: ${{ fromJSON((startsWith(github.ref, 'refs/tags/v') || inputs.source_ref != '') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
       - name: the installer pins the versions this workflow builds and checks
         run: |
           . third_party/git-annex/VERSION
