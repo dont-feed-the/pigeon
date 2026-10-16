@@ -184,6 +184,27 @@ class Installation(unittest.TestCase):
         self.assertNotIn("already installed", again.stdout)
         self.assertTrue((self.prefix / "bin.previous/pigeon").is_file())
 
+    def test_a_copy_without_history_takes_its_commit_from_the_environment(self):
+        source = self.root / "copy"
+        (source / "packaging").mkdir(parents=True)
+        (source / "Cargo.toml").write_text('[workspace.package]\nversion = "0.3.4"\n')
+        for name in ("pigeon-install", "pigeon-service"):
+            shutil.copy2(PACKAGING / name, source / "packaging" / name)
+        self.executable(source / "packaging/install-git-annex", "exit 0")
+        target = self.root / "build/release"
+        target.mkdir(parents=True)
+        self.executable(target / "pigeon", "echo pigeon 0.3.4+gfeedface0000.dirty")
+        for name in ("pigeond", "git-annex-p2p-iroh"):
+            self.executable(target / name, "exit 0")
+        self.executable(self.commands / "git", "echo 'no repository here' >&2; exit 128")
+        self.executable(self.commands / "cargo", "exit 0")
+        self.env.update(CARGO_TARGET_DIR=str(self.root / "build"), PIGEON_COMMIT="feedface0000.dirty")
+        self.run_installer("--source", str(source))
+        self.assertEqual(self.version(), "pigeon 0.3.4+gfeedface0000.dirty")
+        del self.env["PIGEON_COMMIT"]
+        refused = self.run_installer("--source", str(source), ok=False)
+        self.assertIn("PIGEON_COMMIT", refused.stderr)
+
     def test_conflicting_modes_leave_the_installation_untouched(self):
         self.run_installer("--version", "v0.3.2", "--no-service")
         self.run_installer("--main", "--uninstall", ok=False)
