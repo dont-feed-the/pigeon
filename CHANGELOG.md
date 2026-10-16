@@ -4,7 +4,7 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
-## 0.3.5 — 2026-10-16
+## 0.4.2 — 2026-10-16
 
 ### Fixed
 
@@ -14,6 +14,71 @@ the second number, and every other pull request the third.
   keeps the person's change for capture instead of replacing it.
 - Restoring a deleted file can finish recovery after a crash without getting
   stuck on its missing index entry.
+
+## 0.4.1 — 2026-10-16
+
+### Changed
+
+- Checks of a pull request take about ten minutes instead of 35: pigeond's
+  daemon tests and the fast TLA+ models run in parallel shards, and the
+  lab experiments join them. A push to main also runs the safety slice
+  without its S9 crash schedules; release tags and a nightly run, skipped
+  when main has not moved, run the full models and the S9 schedules.
+- Only main saves build caches, so pull requests no longer evict the caches
+  main and the releases rely on.
+## 0.4.0 — 2026-10-16
+
+Milestone M3, reach and installation, with early M4 usability fixes
+([installation evidence](docs/reports/reach-4.md),
+[usability sessions](docs/reports/usability-5.md)).
+
+### Added
+
+- Backup machines can install with `pigeon-install --system`, which runs
+  pigeon as its own account under systemd.
+- `pigeon-install --uninstall` removes the programs and service while
+  keeping shared folders, repositories, settings and the device key.
+- Apple Silicon Macs can install through the Homebrew tap and run pigeon
+  with `brew services start pigeon`.
+- The web interface can create a group or join one by invitation, asking
+  again before joining a refounded history.
+
+### Fixed
+
+- Joining checks every commit’s signature and permissions before adopting
+  the invited history, including recovery and refounded joins.
+
+- Service configurations handle installation paths containing spaces and
+  special characters.
+- Status sees newly saved changes before capture finishes and does not
+  call them safe. With too few backup machines, it explains how to add one.
+- A recent conversation with a laptop no longer makes an older backup
+  safety check appear recent.
+- Files at the top of the shared folder are visible in the web interface,
+  with links to their versions.
+- `pigeon open` starts the personal daemon when it is stopped. Settings
+  confirmations use translated labels and explain when safety checks age.
+
+- Releases and checks can recover the exact tested git-annex dependency
+  archive when GitHub evicts its cache, after checking its source, producer,
+  digest, architecture and version.
+
+## 0.3.6 — 2026-10-16
+
+### Fixed
+
+- The release is published again: 0.3.5's release checks lost pigeon's
+  git-annex build when GitHub's cache evicted it, so 0.3.5 was never
+  published. They now take the build from the release itself. 0.3.6 holds
+  the same changes as 0.3.5.
+
+## 0.3.5 — 2026-10-16
+
+### Fixed
+
+- The macOS release is built again: 0.3.4's release failed to build
+  pigeon's git-annex for macOS, so 0.3.4 was never published. 0.3.5 holds
+  the same changes.
 
 ## 0.3.4 — 2026-10-16
 

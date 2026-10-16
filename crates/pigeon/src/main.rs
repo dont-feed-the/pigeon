@@ -12,6 +12,7 @@ mod complete;
 mod export;
 mod render;
 mod repo;
+mod startup;
 
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
@@ -59,6 +60,10 @@ impl Client {
     fn open(patience: Option<Duration>) -> Result<Client, &'static str> {
         let stream = UnixStream::connect(pigeon_sys::paths::client_socket())
             .map_err(|_| "daemon-not-running")?;
+        Self::greet(stream, patience)
+    }
+
+    fn greet(stream: UnixStream, patience: Option<Duration>) -> Result<Client, &'static str> {
         stream
             .set_read_timeout(patience)
             .map_err(|_| "daemon-not-running")?;
@@ -148,7 +153,15 @@ fn exchange(out: &Renderer, json: bool, request: &Request) -> ExitCode {
         show(out, json, &Response::Problem(p));
         ExitCode::from(1)
     };
-    let mut client = match Client::open(None) {
+    let mut client = match Client::open(None).or_else(|code| {
+        if code == "daemon-not-running" && matches!(request, Request::OpenWeb) {
+            crate::startup::connect()
+                .ok_or(code)
+                .and_then(|stream| Client::greet(stream, None))
+        } else {
+            Err(code)
+        }
+    }) {
         Ok(client) => client,
         Err(code) => return fail(local_problem(code, &[])),
     };

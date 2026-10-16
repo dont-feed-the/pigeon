@@ -214,7 +214,28 @@ pub async fn invite(
         name: None,
     };
     let r = web.renderer();
-    let lines = pages::lines(&web, &r, request).await;
+    let answers = web.ask(request).await;
+    let code = answers.iter().find_map(|a| match a {
+        pigeon_proto::Response::Said { message } if message.id == "invitation" => {
+            match message.args.get("code") {
+                Some(pigeon_proto::Arg::Text(code)) => Some(code),
+                _ => None,
+            }
+        }
+        _ => None,
+    });
+    if let Some(code) = code {
+        let lines: Vec<String> = answers.iter().flat_map(|a| r.response(a).0).collect();
+        let body = html! {
+            p { (r.id("web-invite-handoff")) }
+            p { label for="invitation-code" { (r.id("web-invitation-code")) } }
+            textarea id="invitation-code" rows="6" cols="60" readonly { (code) }
+            details { summary { (r.id("web-command-line")) } (list(&lines)) }
+            p { a href="/machines" { (r.id("web-back")) } }
+        };
+        return page(&r, "/machines", &r.id("web-invitation-ready"), &body).into_response();
+    }
+    let lines = answers.iter().flat_map(|a| r.response(a).0).collect();
     pages::result(&r, "/machines", lines).into_response()
 }
 

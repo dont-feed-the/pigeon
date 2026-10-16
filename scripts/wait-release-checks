@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+"""Keep a release unpublished until that tag's CI, lab, slice and reach pass.
+
+Checks from another commit or branch cannot satisfy a release gate. This runs
+inside release.yml after building the archives, before publishing any assets.
+"""
+
+import argparse
+import json
+import subprocess
+import time
+
+REQUIRED = {"ci", "lab", "slice", "reach"}
+
+
+def assess(runs, sha, tag):
+    """Return readiness and a compact status, refusing a failed tag check."""
+    latest = {}
+    for run in runs:
+        name = run.get("name")
+        if (name not in REQUIRED or run.get("head_sha") != sha
+                or run.get("head_branch") != tag or run.get("event") != "push"):
+            continue
+        if name not in latest or run["id"] > latest[name]["id"]:
+            latest[name] = run
+    states = {}
+    for name in sorted(REQUIRED):
+        run = latest.get(name)
+        if run is None:
+            states[name] = "waiting for run"
+        elif run["status"] != "completed":
+            states[name] = run["status"]
+        elif run["conclusion"] != "success":
+            raise RuntimeError(f"{name} did not pass: {run['conclusion']} ({run.get('html_url', run['id'])})")
+        else:
+            states[name] = "passed"
+    return all(s == "passed" for s in states.values()), ", ".join(f"{n}: {s}" for n, s in states.items())
+
+
+def main():
+    """Poll GitHub within a bounded deadline, logging only status changes."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repository", required=True)
+    parser.add_argument("--sha", required=True)
+    parser.add_argument("--tag", required=True)
+    parser.add_argument("--timeout", type=int, default=7200)
+    args = parser.parse_args()
+    deadline = time.monotonic() + args.timeout
+    previous = None
+    while True:
+        endpoint = f"repos/{args.repository}/actions/runs?head_sha={args.sha}&event=push&per_page=100"
+        pages = json.loads(subprocess.check_output(["gh", "api", "--paginate", "--slurp", endpoint], text=True))
+        runs = [run for page in pages for run in page["workflow_runs"]]
+        ready, status = assess(runs, args.sha, args.tag)
+        if status != previous:
+            print(status, flush=True)
+            previous = status
+        if ready:
+            return
+        if time.monotonic() >= deadline:
+            raise SystemExit("release checks did not finish before the deadline; no release was published")
+        time.sleep(20)
+
+
+if __name__ == "__main__":
+    main()

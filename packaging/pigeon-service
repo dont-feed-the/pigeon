@@ -1,0 +1,142 @@
+#!/bin/sh
+# Installs or removes pigeond's supervisor configuration (spec 14 §14.4).
+# A system installation creates the pigeon account and its state directories;
+# removing the service always keeps that account and all group data.
+# --print renders the unit or agent without changing the machine.
+set -eu
+
+die() { echo "pigeon-service: $*" >&2; exit 1; }
+os=$(uname -s)
+system= stop= print= start=1 prefix=
+while [ $# -gt 0 ]; do
+  case $1 in
+    --prefix) prefix=${2:?--prefix needs a directory}; shift 2 ;;
+    --system) system=1; shift ;;
+    --stop) stop=1; shift ;;
+    --print) print=1; shift ;;
+    --no-start) start=; shift ;;
+    *) die "unknown argument $1" ;;
+  esac
+done
+case $prefix in /*) ;; *) die "--prefix must name an absolute directory" ;; esac
+case $prefix in *'
+'*) die "the installation directory must fit on one line" ;; esac
+[ -z "$system" ] || [ "$os" = Linux ] || die "backup services require Linux"
+
+# Escape paths for the two supervisors; neither format treats a path as shell.
+unit_path() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/%/%%/g; s/\$/$$/g'; }
+xml() { printf '%s' "$1" | sed 's/\&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g'; }
+render() {
+  if [ "$os" = Darwin ]; then
+    cat <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>org.pigeon.pigeond</string>
+  <key>ProgramArguments</key><array><string>$(xml "$prefix/bin/pigeond")</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ProcessType</key><string>Background</string>
+</dict></plist>
+PLIST
+  elif [ -n "$system" ]; then
+    cat <<UNIT
+# Written by pigeon-service (spec 14 §14.4).
+[Unit]
+Description=pigeon backup machine
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pigeon
+Group=pigeon
+ExecStart="$(unit_path "$prefix/bin/pigeond")" --service
+Environment="PATH=$(unit_path "$prefix/bin"):/usr/local/bin:/usr/bin:/bin"
+Restart=on-failure
+RestartSec=5
+UMask=0007
+StateDirectory=pigeon
+StateDirectoryMode=0750
+LogsDirectory=pigeon
+CacheDirectory=pigeon
+RuntimeDirectory=pigeon
+RuntimeDirectoryMode=0750
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  elif [ "$os" = Linux ]; then
+    cat <<UNIT
+# Written by pigeon-service (spec 14 §14.4).
+[Unit]
+Description=pigeon, which keeps the files of a group on its computers
+
+[Service]
+ExecStart="$(unit_path "$prefix/bin/pigeond")"
+Environment="PATH=$(unit_path "$prefix/bin"):/usr/local/bin:/usr/bin:/bin"
+Restart=on-failure
+RestartSec=5
+Nice=10
+IOSchedulingClass=idle
+CPUWeight=20
+IOWeight=20
+MemoryHigh=512M
+
+[Install]
+WantedBy=default.target
+UNIT
+  else
+    die "pigeon runs on Linux and macOS"
+  fi
+}
+
+if [ -n "$print" ]; then render; exit 0; fi
+if [ "$os" = Darwin ]; then
+  plist="$HOME/Library/LaunchAgents/org.pigeon.pigeond.plist"
+  launchctl bootout "gui/$(id -u)/org.pigeon.pigeond" 2>/dev/null || true
+  if [ -n "$stop" ]; then rm -f "$plist"; exit 0; fi
+  mkdir -p "${plist%/*}"
+  render > "$plist"
+  [ -z "$start" ] || launchctl bootstrap "gui/$(id -u)" "$plist"
+elif [ -n "$system" ]; then
+  [ "$(id -u)" = 0 ] || die "run the system installation as root"
+  unit=/etc/systemd/system/pigeond.service
+  if [ -n "$stop" ]; then
+    systemctl disable --now pigeond.service
+    rm -f "$unit"
+    systemctl daemon-reload
+    exit 0
+  fi
+  if ! id pigeon >/dev/null 2>&1; then
+    useradd --system --user-group --home-dir /var/lib/pigeon --create-home \
+      --shell "$(command -v nologin)" pigeon
+  fi
+  [ "$(id -u pigeon)" != 0 ] || die "the pigeon account must not be root"
+  install -d -o pigeon -g pigeon -m 0750 /var/lib/pigeon /var/log/pigeon /var/cache/pigeon
+  render > "$unit"
+  systemctl daemon-reload
+  if [ -n "$start" ]; then
+    systemctl enable --quiet pigeond.service
+    systemctl restart pigeond.service
+  fi
+else
+  unit="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/pigeond.service"
+  if [ -n "$stop" ]; then
+    if systemctl --user show-environment >/dev/null 2>&1; then
+      systemctl --user disable --now pigeond.service
+    fi
+    rm -f "$unit"
+    exit 0
+  fi
+  mkdir -p "${unit%/*}"
+  render > "$unit"
+  if [ -n "$start" ]; then
+    if systemctl --user show-environment >/dev/null 2>&1; then
+      systemctl --user daemon-reload
+      systemctl --user enable --quiet pigeond.service
+      systemctl --user restart pigeond.service
+    else
+      echo "pigeon-service: no systemd user session; start $prefix/bin/pigeond yourself"
+    fi
+  fi
+fi
