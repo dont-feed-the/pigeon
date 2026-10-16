@@ -4,7 +4,7 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
-## Unreleased
+## 0.5.7 — 2026-10-16
 
 ### Changed
 
@@ -22,6 +22,8 @@ the second number, and every other pull request the third.
 
 ### Fixed
 
+- Bridge writes wait briefly when Git is updating its index in the
+  background, using the same bounded wait as other saved changes.
 - Files whose names have accents or other non-ASCII letters, such as
   `été.txt`, are shared and protected even when pigeon runs without a
   UTF-8 locale, as under launchd or `brew services`. Before, one such

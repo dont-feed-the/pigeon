@@ -193,9 +193,9 @@ async fn finish(d: &Daemon, g: &std::sync::Arc<Group>) {
         .unwrap_or_else(|p| p.into_inner())
         .retain(|x| x.id != g.id);
     if let Some(wt) = &g.worktree {
-        for rel in absent {
+        for (rel, key) in absent {
             let path = wt.join(rel);
-            if is_pointer(&path) {
+            if is_pointer(&path, &key) {
                 let _ = std::fs::remove_file(path);
             }
         }
@@ -217,15 +217,16 @@ async fn finish(d: &Daemon, g: &std::sync::Arc<Group>) {
 
 /// The files of `g`'s folder whose committed content is not here, which
 /// are pointer files unless changed since.
-async fn absent_files(g: &Group) -> Vec<String> {
+async fn absent_files(g: &Group) -> Vec<(String, String)> {
     let out = g
         .git
         .run(&["annex", "find", "--not", "--in=here"])
         .await
         .unwrap_or_default();
+    let keys = g.git.keys("refs/heads/main").await.unwrap_or_default();
     out.lines()
         .filter(|l| !l.is_empty())
-        .map(str::to_owned)
+        .filter_map(|path| keys.get(path).map(|key| (path.to_owned(), key.clone())))
         .collect()
 }
 
@@ -233,13 +234,16 @@ async fn absent_files(g: &Group) -> Vec<String> {
 /// symbolic link or a short file naming an annex object. A file the person
 /// changed, whose committed version is absent here, holds their bytes and
 /// stays, as leaving promises.
-fn is_pointer(path: &Path) -> bool {
+fn is_pointer(path: &Path, key: &str) -> bool {
     match std::fs::symlink_metadata(path) {
-        Ok(m) if m.file_type().is_symlink() => std::fs::read_link(path)
-            .is_ok_and(|target| target.to_string_lossy().contains("annex/objects/")),
-        Ok(m) if m.is_file() && m.len() < 1024 => {
-            std::fs::read(path).is_ok_and(|bytes| bytes.starts_with(b"/annex/objects/"))
-        }
+        Ok(m) if m.file_type().is_symlink() => std::fs::read_link(path).is_ok_and(|target| {
+            target.to_string_lossy().contains("annex/objects/")
+                && target.file_name().is_some_and(|name| name == key)
+        }),
+        Ok(m) if m.is_file() && m.len() < 1024 => std::fs::read(path).is_ok_and(|bytes| {
+            bytes.strip_suffix(b"\n").unwrap_or(&bytes)
+                == format!("/annex/objects/{key}").as_bytes()
+        }),
         _ => false,
     }
 }
@@ -261,15 +265,26 @@ mod tests {
     #[test]
     fn only_pointers_to_absent_content_are_removed_on_leaving() {
         let dir = tempfile::tempdir().unwrap();
+        let key = "SHA256E-s9--abc.txt";
         let pointer = dir.path().join("pointer.txt");
         std::fs::write(&pointer, "/annex/objects/SHA256E-s9--abc.txt\n").unwrap();
         let edited = dir.path().join("edited.txt");
         std::fs::write(&edited, "Bob's edit of recipes\n").unwrap();
         let link = dir.path().join("link.txt");
         std::os::unix::fs::symlink(".git/annex/objects/xx/yy/SHA256E-s9--abc.txt", &link).unwrap();
-        assert!(is_pointer(&pointer));
-        assert!(is_pointer(&link));
-        assert!(!is_pointer(&edited));
-        assert!(!is_pointer(&dir.path().join("gone.txt")));
+        assert!(is_pointer(&pointer, key));
+        assert!(is_pointer(&link, key));
+        assert!(!is_pointer(&edited, key));
+        assert!(!is_pointer(&dir.path().join("gone.txt"), key));
+        std::fs::write(&edited, "/annex/objects/a private note\nkeep these bytes\n").unwrap();
+        assert!(!is_pointer(&edited, key));
+        std::fs::write(
+            &edited,
+            format!("/annex/objects/{key}\nkeep this private suffix\n"),
+        )
+        .unwrap();
+        assert!(!is_pointer(&edited, key));
+        assert!(!is_pointer(&pointer, "SHA256E-s9--different.txt"));
+        assert!(!is_pointer(&link, "SHA256E-s9--different.txt"));
     }
 }
