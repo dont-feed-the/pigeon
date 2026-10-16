@@ -4,6 +4,15 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.5.6 — 2026-10-16
+
+### Changed
+
+- Releases wait for Linux validation while macOS tests run periodically in
+  the background. Linux and macOS binaries are still built and packaged.
+- The release publication report measures time since an installable release,
+  candidate lead time and the jobs delaying publication. Tags do not count.
+
 ## 0.5.5 — 2026-10-16
 
 ### Fixed

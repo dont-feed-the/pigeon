@@ -1,0 +1,49 @@
+# Read-only publication measurements. One short job follows each release
+# attempt and runs hourly, without Cargo, models or duplicated release CI.
+name: release-kpi
+
+on:
+  workflow_run:
+    workflows: [release]
+    types: [completed]
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: release-kpi
+  cancel-in-progress: true
+
+jobs:
+  publication:
+    name: publication gap and candidate bottlenecks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - name: measure publications and current candidate jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/release-kpi --repository "$GITHUB_REPOSITORY" \
+            --json-output release-kpi.json --markdown-output release-kpi.md
+          cat release-kpi.md >> "$GITHUB_STEP_SUMMARY"
+          python3 - <<'PY'
+          import json
+          report = json.load(open('release-kpi.json'))
+          if report['publication_gap_target_breached']:
+              print('::warning::Publication-gap target missed; see the release KPI summary and current candidate bottlenecks.')
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-kpi-${{ github.run_id }}
+          path: |
+            release-kpi.json
+            release-kpi.md
+          retention-days: 30

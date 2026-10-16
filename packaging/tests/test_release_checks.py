@@ -19,7 +19,31 @@ def run(name, **overrides):
 
 
 class Publication(unittest.TestCase):
-    """All four exact-tag checks are required, and failures stop the release."""
+    """Exact-tag Linux checks gate publication; macOS runs in the background."""
+
+    def test_old_tags_can_use_complete_linux_jobs_while_macos_is_queued_or_failed(self):
+        runs = [run(n, id=i, status="queued", conclusion=None) for i, n in enumerate(sorted(MODULE.REQUIRED), 1)]
+        jobs = {r["id"]: [{"name": n, "status": "completed", "conclusion": "success"}
+                          for n in MODULE.LINUX_JOBS[r["name"]]]
+                + [{"name": "Rust workspace (macos-latest)", "status": "completed", "conclusion": "failure"},
+                   {"name": "slice (macos-latest, rest)", "status": "queued", "conclusion": None}]
+                for r in runs}
+        self.assertTrue(MODULE.assess(runs, "abc", "v0.3.2", jobs)[0])
+        jobs[runs[0]["id"]].pop(0)
+        self.assertFalse(MODULE.assess(runs, "abc", "v0.3.2", jobs)[0])
+
+    def test_linux_failure_cancellation_or_skipped_required_job_never_passes(self):
+        for conclusion in ("failure", "cancelled", "skipped"):
+            jobs = [{"name": n, "status": "completed", "conclusion": "success"} for n in MODULE.LINUX_JOBS["ci"]]
+            jobs[0]["conclusion"] = conclusion
+            with self.assertRaisesRegex(RuntimeError, "Linux job failed"):
+                MODULE.linux_state("ci", jobs)
+
+    def test_running_jobs_do_not_hide_an_already_failed_linux_job(self):
+        jobs = [{"name": "Rust workspace (ubuntu-24.04)", "status": "queued", "conclusion": None},
+                {"name": "repository rules", "status": "completed", "conclusion": "failure"}]
+        with self.assertRaisesRegex(RuntimeError, "repository rules"):
+            MODULE.linux_state("ci", jobs)
 
     def test_only_the_same_commit_tag_and_event_count(self):
         runs = [run(n) for n in MODULE.REQUIRED]
