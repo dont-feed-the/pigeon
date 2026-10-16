@@ -276,7 +276,7 @@ impl Daemon {
             tracing::warn!(group = %g.id, error = %e, "shared-storage-waits");
             return;
         }
-        crate::report::receive(g, &self.device).await;
+        crate::report::receive(g, &self.device, &self.dirs.update_wanted()).await;
         self.admissions.round(g, &self.device).await;
         crate::purge::round(g, &self.device, settled || g.role == Role::Custodian).await;
         self.note_lost(g);

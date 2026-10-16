@@ -39,8 +39,7 @@ supports (ext4, xfs, btrfs, ZFS): its repository is bare.
   among them). The installer, `packaging/install-git-annex`, puts it in
   `git-annex/bin` of pigeon's directory, the one that holds pigeon's `bin/`
   (`~/.local/share/pigeon`, `/opt/pigeon` on a backup machine,
-  `~/Library/Application Support/pigeon` on macOS until the formula of
-  §14.5), after checking the archive's sha256 and the version it reports.
+  `~/Library/Application Support/pigeon` on macOS), after checking the archive's sha256 and the version it reports.
   `pigeond` finds it beside its own directory and puts it first in its
   children's `PATH`, after the directory of its links; `git-annex.yml`
   checks this on both runners with the stock build first in the `PATH`
@@ -91,13 +90,27 @@ computer `packaging/pigeon-install` writes the unit or the agent and
 its state directories, and runs `pigeond --service`. Its runtime directory
 is created by systemd; uninstall keeps its account and state.
 
+Beside `pigeond`, `packaging/pigeon-service` writes the automatic update
+of §14.5 (ADR 0076), unless pigeon's directory holds `auto-update-off`:
+
+| Machine | Update |
+|---|---|
+| a person's Linux computer | user units `pigeon-update.service` (oneshot, `Nice=10`, `IOSchedulingClass=idle`), `pigeon-update.timer` (`OnCalendar=daily`, `RandomizedDelaySec=1d`, `FixedRandomDelay=true`, `Persistent=true`) and `pigeon-update.path` (`PathChanged=%S/pigeon/update-wanted`) |
+| a backup machine | the same as system units, run as root, with `--system`, watching `%L/pigeon/update-wanted` |
+| macOS | a **launchd agent** `org.pigeon.update`: `StartCalendarInterval` at a minute of the day fixed by the machine's name and pigeon's directory, `WatchPaths` on `~/Library/Logs/pigeon/update-wanted`, output in `~/Library/Logs/pigeon/update.log` |
+
+Each runs `/bin/sh -c` on a script that downloads the latest release's
+`pigeon-install` to a temporary file, whole, and runs it with
+`--unattended --prefix <pigeon's directory>`. Rewriting them never
+restarts a run in progress, which may be the one installing them.
+
 ## 14.5 Packaging and installation
 
 | Platform | Package | Holds |
 |---|---|---|
 | Linux, people | a tarball and an install script | `pigeon`, `pigeond`, `git-annex-p2p-iroh`, the installers; the script installs pigeon's git-annex, or fetches git-annex's standalone build (§14.3), and enables the user unit; later the `.desktop` launcher and icon, man pages, shell completions |
 | Linux, backup machines | the tarball and a system unit (ADR 0032) | the same binaries, installed as root with `pigeon-install --system` into `/opt/pigeon`; a dedicated `pigeon` account runs the daemon |
-| macOS | a tarball and the install script, or the Homebrew formula in `Formula/pigeon.rb` **[no ADR]** | the binaries, the launchd agent, pigeon's git-annex (§14.3); the formula adds the small launcher app bundle (ADR 0029) |
+| macOS | a tarball and the install script; no Homebrew formula (ADR 0076) | the binaries, the launchd agent, pigeon's git-annex (§14.3), the small launcher app bundle (ADR 0029) |
 
 Release archives come with SHA-256 checksums, built by CI from a tag
 **[no ADR: signing]**: `release.yml` runs on a tag `v` + the workspace's
@@ -115,8 +128,10 @@ git-annex by `install-git-annex`, and the unit or agent of §14.4.
 found already installed, runs `pigeon join` with them on the terminal
 (`/dev/tty`, since the script came through a pipe): the line `pigeon
 invite` prints ([09 §9.6](09-network-and-joining.md), ADR 0075).
-`pigeon update [--version TAG | --main | --rollback]` runs the
-`pigeon-install` beside it; a release already installed is not fetched
+`pigeon update [--version TAG | --main | --rollback | --auto on|off]` runs
+the `pigeon-install` beside it, on the directory that holds it (as root,
+on the one a backup machine's system unit runs, with `--system`); a release
+already installed is not fetched
 again, and `--rollback` swaps `bin/` and `bin.previous/`. `--main` fetches
 main's latest commit into `src/`, a clone only `pigeon-install` touches,
 builds the programs there with `cargo build --release --locked`, and hands
@@ -127,6 +142,21 @@ git-annex that reports the commit's `PIGEON_VERSION`, else takes the latest
 release's archive when that reports it, else builds `third_party/git-annex`,
 else takes the stock build. Paul installs (ux.md §11). Uninstalling keeps the
 folder, the repository and the configuration unless the person asks.
+
+**The automatic update** (ADR 0076) is on by default. Once a day, and
+whenever `pigeond` writes `<state>/update-wanted` ([11 §11.2](11-local-state.md)),
+the supervisor runs the latest release's `pigeon-install` as §14.4 says.
+`pigeond` writes that file, a plain write that the watches see, with the
+release a peer's newly kept status report names
+([06 §6.3](06-status.md)) when it is newer than its own: both `X.Y.Z`,
+compared as numbers; a pre-release or a build of main asks for nothing.
+`--unattended` installs nothing where pigeon's `bin/` is absent, where
+`auto-update-off` exists, or where `pigeon --version` names a build of
+main; otherwise it installs the latest release as `pigeon update` does.
+`--auto off` writes `auto-update-off` and `--auto on` removes it; either
+then rewrites the update alone through `pigeon-service --update-only`, or,
+where no installation knows the choice, installs the latest release, which
+applies it. The update shows nothing and is retried the next day.
 
 ## 14.6 The Rust workspace
 

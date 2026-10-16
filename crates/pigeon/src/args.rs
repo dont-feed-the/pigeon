@@ -110,7 +110,10 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("doctor [--details]", "cmd-doctor"),
     ("debug bundle [--from NAME…]", "cmd-debug-bundle"),
     ("debug allow NAME", "cmd-debug-allow"),
-    ("update [--version TAG | --main | --rollback]", "cmd-update"),
+    (
+        "update [--version TAG | --main | --rollback | --auto on|off]",
+        "cmd-update",
+    ),
     ("completions SHELL", "cmd-completions"),
 ];
 
@@ -326,12 +329,14 @@ enum Command {
         repos: Vec<String>,
     },
     Update {
-        #[arg(long, value_name = "TAG", conflicts_with_all = ["main", "rollback"])]
+        #[arg(long, value_name = "TAG", conflicts_with_all = ["main", "rollback", "auto"])]
         version: Option<String>,
-        #[arg(long, conflicts_with = "rollback")]
+        #[arg(long, conflicts_with_all = ["rollback", "auto"])]
         main: bool,
-        #[arg(long)]
+        #[arg(long, conflicts_with = "auto")]
         rollback: bool,
+        #[arg(long, value_name = "on | off", value_parser = ["on", "off"])]
+        auto: Option<String>,
     },
     #[command(external_subcommand)]
     Other(Vec<String>),
@@ -615,11 +620,13 @@ fn action(c: Command) -> Action {
             version,
             main,
             rollback,
-        } => Action::Update(match version {
-            Some(tag) => vec!["--version".into(), tag],
-            None if main => vec!["--main".into()],
-            None if rollback => vec!["--rollback".into()],
-            None => Vec::new(),
+            auto,
+        } => Action::Update(match (version, auto) {
+            (Some(tag), _) => vec!["--version".into(), tag],
+            (None, Some(choice)) => vec!["--auto".into(), choice],
+            (None, None) if main => vec!["--main".into()],
+            (None, None) if rollback => vec!["--rollback".into()],
+            (None, None) => Vec::new(),
         }),
         Command::Erase {
             path,

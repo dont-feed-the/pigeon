@@ -86,7 +86,7 @@ Exit:
   - for people on Linux, a tarball, an install script and a systemd user
     unit;
   - for backup machines, a tarball and a system unit;
-  - on macOS, a Homebrew tap and a launchd agent.
+  - on macOS, a tarball, the install script and a launchd agent.
 - A release workflow builds from a tag, with SHA-256 checksums.
 
 Exit:

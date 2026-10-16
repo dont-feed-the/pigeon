@@ -22,6 +22,20 @@ fn answer(responses: Vec<Response>) -> Option<Answer> {
         .next_back()
 }
 
+fn rules(folder: &std::path::Path) -> u32 {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(folder)
+        .args(["show", "HEAD:.pigeon/roster.toml"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    pigeond::roster_file::parse(std::str::from_utf8(&output.stdout).unwrap())
+        .unwrap()
+        .roster
+        .rules
+}
+
 #[test]
 fn preparation_confirmation_and_cancellation_preserve_current_and_retained_bytes() {
     let _one = SERIAL
@@ -59,6 +73,24 @@ fn preparation_confirmation_and_cancellation_preserve_current_and_retained_bytes
     );
     assert!(said(&joined, "joined", "group").is_some(), "{joined:?}");
     until(&alice, State::Protected, &all);
+    // Per-person folders use rules 2, without preparing destructive work.
+    // The later signed upgrade must still collect every participant's vote.
+    let people = folder.join("People");
+    std::fs::create_dir_all(&people).unwrap();
+    let configured = pigeon(
+        &alice,
+        &[
+            "folder-rule",
+            people.to_str().unwrap(),
+            "--per-person",
+            "--yes",
+        ],
+    );
+    assert!(
+        said(&configured, "folder-rule-result", "folder").is_some(),
+        "{configured:?}"
+    );
+    assert_eq!(rules(&folder), 2);
     let path = file.to_str().unwrap();
     let preview = answer(pigeon(&alice, &["erase", path, "--preview", "--no-input"])).unwrap();
     assert!(
@@ -88,6 +120,7 @@ fn preparation_confirmation_and_cancellation_preserve_current_and_retained_bytes
         "all current peers did not finish erasure preparation",
         &all,
     );
+    assert_eq!(rules(&folder), pigeon_core::purge::RULES);
     assert_eq!(std::fs::read(&file).unwrap(), bytes);
     assert!(
         matches!(answer(pigeon(&alice, &["erase"])), Some(Answer::Decisions { decisions, .. }) if decisions.is_empty())

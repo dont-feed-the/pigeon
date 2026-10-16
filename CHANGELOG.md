@@ -17,6 +17,54 @@ increments the second number, and every other release the third.
   window, using idle I/O priority on Linux. Set `resources.scrub_window`
   to choose another local-time window.
 
+- pigeon updates itself. Every computer and backup machine installs the
+  latest release once a day, and within minutes when another computer of
+  the group runs a newer release. The update downloads the installer
+  afresh from GitHub, so a release that broke pigeon is replaced by the
+  next one. It shows nothing; `journalctl --user -u pigeon-update`
+  (macOS: `~/Library/Logs/pigeon/update.log`) tells what it did.
+  `pigeon update --auto off` turns it off and `--auto on` back on; to
+  install with it off, use `curl … | sh -s -- --auto off`. A build of main
+  is never replaced. Installations from before this release get it after
+  one `pigeon update`.
+
+### Changed
+
+- `pigeon update` updates the installation it belongs to, wherever it is.
+  On a backup machine, `sudo /opt/pigeon/bin/pigeon update` now works too.
+
+### Fixed
+
+- Restoring an already retained version continues while erasure metadata is
+  being checked. Browser erasure receipts link directly to waiting requests,
+  and restoration explains how older contents become a new current version.
+- Refounding keeps verified completed erasure in the signed archive. Pending
+  requests stay with the old group; the new group asks for fresh preparation
+  after its backup machines rejoin.
+- New versions keep arriving while erasure is prepared or old groups are
+  checked. Routine peer metadata fetches no longer interrupt those transfers.
+- If computers agree to conflicting erasure preparations, the preview
+  explains why it cannot proceed and how an admin can recover explicitly.
+- History labels versions released by a completed erasure as erased. Restore
+  receipts and pending requests explain that later saved or restored versions
+  are kept without cancelling the earlier request.
+- If restored contents are unavailable, the new saved version or suggestion
+  remains requested across restarts. The command explains the wait, keeps
+  existing local files, and can finish when a copy becomes available.
+- A save, deletion or executable-bit change made while restore checks history
+  stays in place, even if pigeon has already saved that change. Members can
+  retry a waiting restore without losing their intervening saved suggestions.
+
+### Removed
+
+- The Homebrew tap. On a Mac installed with Homebrew, run
+  `brew services stop pigeon` and `brew uninstall pigeon`, then the
+  install line of the README; your folders, groups and device key stay.
+
+## 0.5.13 — 2026-10-16
+
+### Added
+
 - Per-person folders: `pigeon folder-rule ~/Group/src --per-person` (or
   *Each folder in it belongs to the person it is named after* in a folder's
   sharing rule in `pigeon open`) makes every `src/<name>` belong to the
@@ -48,26 +96,6 @@ increments the second number, and every other release the third.
   a computer's name cannot redirect its roster removal.
 
 ### Fixed
-
-- Restoring an already retained version continues while erasure metadata is
-  being checked. Browser erasure receipts link directly to waiting requests,
-  and restoration explains how older contents become a new current version.
-- Refounding keeps verified completed erasure in the signed archive. Pending
-  requests stay with the old group; the new group asks for fresh preparation
-  after its backup machines rejoin.
-- New versions keep arriving while erasure is prepared or old groups are
-  checked. Routine peer metadata fetches no longer interrupt those transfers.
-- If computers agree to conflicting erasure preparations, the preview
-  explains why it cannot proceed and how an admin can recover explicitly.
-- History labels versions released by a completed erasure as erased. Restore
-  receipts and pending requests explain that later saved or restored versions
-  are kept without cancelling the earlier request.
-- If restored contents are unavailable, the new saved version or suggestion
-  remains requested across restarts. The command explains the wait, keeps
-  existing local files, and can finish when a copy becomes available.
-- A save, deletion or executable-bit change made while restore checks history
-  stays in place, even if pigeon has already saved that change. Members can
-  retry a waiting restore without losing their intervening saved suggestions.
 
 - Files no longer stay "receiving" when a peer was initially unavailable
   and git-annex disabled its remote. Pigeon re-enables peers still in the

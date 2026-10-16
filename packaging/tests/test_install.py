@@ -1,4 +1,5 @@
-"""Exercise release installation, updates, rollback and data-preserving removal.
+"""Exercise release installation, updates, rollback, the automatic update and
+data-preserving removal.
 
 Archives use tiny stand-in executables; real binaries and patched git-annex
 are installed separately by the release workflow before publication.
@@ -210,6 +211,92 @@ class Installation(unittest.TestCase):
         self.run_installer("--main", "--uninstall", ok=False)
         self.run_installer("--rollback", "--version", "v0.3.3", ok=False)
         self.assertEqual(self.version(), "pigeon 0.3.2")
+
+    def update_files(self):
+        """The automatic update's supervisor files this installation wrote."""
+        if os.uname().sysname == "Darwin":
+            return sorted(p.name for p in (self.home / "Library/LaunchAgents").glob("org.pigeon.update*"))
+        return sorted(p.name for p in (self.home / ".config/systemd/user").glob("pigeon-update.*"))
+
+    def test_the_automatic_update_follows_the_choice_and_leaves_a_build_of_main(self):
+        (self.releases / "latest").write_text("v0.3.2")
+        self.run_installer()
+        self.assertTrue(self.update_files())
+        (self.releases / "latest").write_text("v0.3.3")
+        self.assertIn("is off", self.run_installer("--auto", "off").stdout)
+        self.assertTrue((self.prefix / "auto-update-off").is_file())
+        self.assertFalse(self.update_files())
+        self.assertIn("is off", self.run_installer("--unattended").stdout)
+        self.assertEqual(self.version(), "pigeon 0.3.2")
+        self.run_installer("--auto", "on")
+        self.assertTrue(self.update_files())
+        self.run_installer("--unattended")
+        self.assertEqual(self.version(), "pigeon 0.3.3")
+        self.executable(self.prefix / "bin/pigeon", "echo 'pigeon 0.3.4+gabcdef123456'")
+        self.assertIn("stays", self.run_installer("--unattended").stdout)
+        self.assertEqual(self.version(), "pigeon 0.3.4+gabcdef123456")
+
+    def test_an_unattended_run_installs_nothing_where_nothing_is_installed(self):
+        self.assertIn("not installed", self.run_installer("--unattended").stdout)
+        self.assertFalse((self.prefix / "bin").exists())
+        self.run_installer("--auto", "off")
+        self.assertEqual(self.version(), "pigeon 0.3.3")
+        self.assertFalse(self.update_files())
+
+    def test_the_update_agent_runs_the_latest_installer_unattended(self):
+        self.run_installer("--version", "v0.3.2", "--no-service")
+        self.executable(self.commands / "uname", "echo Darwin")
+        agent = plistlib.loads(subprocess.check_output(
+            ["sh", str(PACKAGING / "pigeon-service"), "--prefix", str(self.prefix), "--print-update"],
+            env=self.env,
+        ))
+        self.assertEqual(agent["WatchPaths"], [f"{self.home}/Library/Logs/pigeon/update-wanted"])
+        (self.commands / "uname").unlink()
+        # The release's own installer, as curl would fetch it.
+        self.executable(self.commands / "curl", (
+            'while [ $# -gt 0 ]; do case $1 in -o) out=$2; shift ;; *) url=$1 ;; esac; shift; done\n'
+            f'case $url in */latest/download/pigeon-install) cp "{PACKAGING}/pigeon-install" "$out" ;; *) exit 22 ;; esac'
+        ))
+        scratch = self.root / "tmp"
+        scratch.mkdir()
+        result = subprocess.run(agent["ProgramArguments"] + ["--no-service"],
+                                env=dict(self.env, TMPDIR=str(scratch)),
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.version(), "pigeon 0.3.3")
+        self.assertFalse(list(scratch.iterdir()))
+
+    def verify_units(self, rendered, system):
+        """systemd's own check of the three rendered update units."""
+        units = self.root / ("system" if system else "user")
+        units.mkdir()
+        files = []
+        for part in rendered.split("# pigeon-update.")[1:]:
+            kind, text = part.split("\n", 1)
+            files.append(units / f"pigeon-update.{kind}")
+            files[-1].write_text(text)
+        result = subprocess.run(
+            ["systemd-analyze", "verify", "--man=no", *([] if system else ["--user"]), *map(str, files)],
+            capture_output=True, text=True, timeout=60,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_update_units_run_the_latest_installer_daily_and_on_request(self):
+        self.executable(self.commands / "uname", "echo Linux")
+        for system, watched, flag in (("", "%S/pigeon/update-wanted", ""),
+                                      ("--system", "%L/pigeon/update-wanted", " --system")):
+            with self.subTest(system=bool(system)):
+                units = subprocess.check_output(
+                    ["sh", str(PACKAGING / "pigeon-service"), *filter(None, [system]),
+                     "--prefix", "/a path/$x%", "--print-update"],
+                    env=self.env, text=True,
+                )
+                if shutil.which("systemd-analyze"):
+                    self.verify_units(units, system)
+                for line in ("OnCalendar=daily", "Persistent=true", f"PathChanged={watched}",
+                             "Unit=pigeon-update.service", "latest/download/pigeon-install",
+                             f'--unattended "$$@"', f'pigeon-update --prefix "/a path/$$x%%"{flag}\n'):
+                    self.assertIn(line, units)
 
     def test_supervisor_configuration_escapes_paths(self):
         for os_name in ("Linux", "Darwin"):
