@@ -47,6 +47,14 @@ Milestone M3, reach and installation, with early M4 usability fixes
 - `pigeon open` starts the personal daemon when it is stopped. Settings
   confirmations use translated labels and explain when safety checks age.
 
+## 0.3.4 — 2026-10-16
+
+### Changed
+
+- `pigeon update --main` takes pigeon's git-annex from the latest release
+  when main pins the same one, instead of building it for an hour on a
+  computer that has none yet.
+
 ## 0.3.3 — 2026-10-16
 
 ### Added

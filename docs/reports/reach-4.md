@@ -52,3 +52,9 @@ arm64 and Intel Mac archives and a fully static backup-machine archive
 remain packaging gaps against the complete v1.0 platform specification.
 No seven-night model streak,
 72-hour soak or two-week release-candidate dogfood is claimed here.
+
+The first real Homebrew installation in run 38826115651 installed and
+executed pigeon but found annex at the wrong depth: Homebrew strips the
+archive's single `bin/` directory. The formula now handles both extraction
+layouts and its own `brew test` executes patched git-annex. The corrected
+formula must pass the macOS job before release.

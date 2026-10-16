@@ -58,9 +58,10 @@ build of main adds its commit, as in `pigeon 0.3.2+g1a2b3c4d5e6f`.
 
 `--main` needs git and Rust ([rustup](https://rustup.rs)). It keeps a clone
 in pigeon's directory, under `src`, and builds there; the first build takes
-a few minutes, later ones less. When main changes pigeon's git-annex, it
-builds that too, which takes about an hour; if that build fails, it takes
-the official git-annex instead. A plain `pigeon update` goes back to the
+a few minutes, later ones less. It takes pigeon's git-annex from the
+latest release; only when main has changed it since does it build it,
+which takes about an hour, and if that build fails it takes the official
+git-annex instead. A plain `pigeon update` goes back to the
 latest release.
 
 On an Apple Silicon Mac, you can use Homebrew instead:

@@ -18,7 +18,11 @@ class Pigeon < Formula
 
   def install
     bin.install "bin/pigeon", "bin/pigeond", "bin/git-annex-p2p-iroh"
-    resource("git-annex-pigeon").stage { (prefix/"git-annex").install Dir["*"] }
+    resource("git-annex-pigeon").stage do
+      # Homebrew strips a single enclosing directory (the archive's bin/).
+      files = File.directory?("bin") ? Dir["bin/*"] : Dir["*"]
+      (prefix/"git-annex/bin").install files
+    end
     # Homebrew owns this installation, including its updates.
     (bin/"pigeon-install").write <<~SH
       #!/bin/sh
@@ -60,5 +64,6 @@ class Pigeon < Formula
 
   test do
     assert_equal "pigeon #{version}", shell_output("#{bin}/pigeon --version").strip
+    assert_match "10.20261006-pigeon", shell_output("#{prefix}/git-annex/bin/git-annex version --raw").strip
   end
 end
