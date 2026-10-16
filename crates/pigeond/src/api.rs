@@ -127,6 +127,8 @@ pub(crate) fn group_of(d: &Daemon, path: &Path) -> Option<Arc<Group>> {
 
 pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
     match request {
+        Request::FolderRules { folder } => crate::folder_rules::list(d, folder.as_deref()),
+        Request::SetFolderRule { folder, rule } => crate::folder_rules::set(d, &folder, rule).await,
         Request::Health => crate::health::report(d).await,
         Request::Create {
             name,

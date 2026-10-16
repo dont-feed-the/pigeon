@@ -149,6 +149,10 @@ pub async fn folder_page(State(web): State<Arc<Web>>, Query(at): Query<At>) -> H
         }
         p { a href="/files" { (r.id("web-back")) } }
     };
+    let body = html! {
+        p { a href=(format!("/folder-rule?path={}", enc(&at.path))) { (r.id("web-folder-rule")) } }
+        (body)
+    };
     page(&r, "/files", &at.path, &body)
 }
 

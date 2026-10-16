@@ -40,6 +40,7 @@ result, progress events then a result, or a `Problem` (§10.6).
 | `DebugBundle {peers}` | `pigeon debug bundle [--from NAME…]` | Settings → Advanced | [12](12-observability.md) |
 | `Folders` | `pigeon status` (by file) | Files | [08 §8.5](08-custody-loops.md) |
 | `Files {folder}` | `pigeon status FOLDER` | Files → a folder | [06 §6.2](06-status.md) |
+| `FolderRules {folder?}` · `SetFolderRule {folder, rule}` | `pigeon folder-rule [PATH [--owner PERSON \| --add-only [--steward PERSON…] \| --default]]` | Files → a folder → Sharing rule | [04 §4.3](04-roster-and-authority.md) |
 | `Deleted` | `pigeon restore PATH` | Files → Deleted files | [10 §10.3](10-interfaces.md) |
 | `Subscribe` | — | live updates (SSE) | §10.3 |
 
@@ -70,6 +71,17 @@ Deleted files offers whole-folder actions only for wholly deleted subtrees;
 individual Restore selects the latest saved version. Free and keep confirm
 scheduled work; Files reports requested local copies still arriving.
 Evidence: [folder-restore-5](../reports/folder-restore-5.md).
+
+Folder rules are readable by every current member. Only an admitted admin
+computer may change them; recovery keys cannot. The editor resolves current
+person names or IDs, refuses ambiguous names, and supports `me`. An empty
+add-only steward set follows the current admins. Reset removes one direct
+rule and inherits the closest ancestor, leaving deeper rules untouched.
+The daemon signs a roster-only change from the accepted tree, judges it
+before publishing, and preserves unrelated working and index contents.
+Rules version 1 retains its literal prefix matching; the editor refuses a
+case or Unicode alias of an existing scope. It does not reinterpret old
+signed history. Evidence: [folder-rules-5](../reports/folder-rules-5.md).
 
 ## 10.2 The command line (ADR 0024)
 

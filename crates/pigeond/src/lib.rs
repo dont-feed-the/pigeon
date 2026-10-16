@@ -24,6 +24,7 @@ pub mod decision_file;
 pub mod drop;
 pub mod evict;
 pub mod fold;
+mod folder_rules;
 pub mod folders;
 pub mod git;
 pub mod group;

@@ -13,6 +13,18 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Request {
+    /// View direct rules, or the effective rule of one local folder.
+    FolderRules {
+        /// Local folder, or all rules of the default group.
+        folder: Option<String>,
+    },
+    /// Admin configuration of a signed folder rule (04 §4.3).
+    SetFolderRule {
+        /// The local folder.
+        folder: String,
+        /// New rule or inheritance.
+        rule: crate::policy::Change,
+    },
     /// Group health from accepted state and signed reports (ADR 0025).
     Health,
     /// The first request of a connection: the client's protocol version.
@@ -277,6 +289,8 @@ pub enum Request {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Response {
+    /// Folder rules with human names and explicit edit authority.
+    FolderRules(Box<crate::policy::Report>),
     /// Local group health, without an optional telemetry collector.
     Health(Box<crate::health::HealthReport>),
     /// The answer to `Hello`.

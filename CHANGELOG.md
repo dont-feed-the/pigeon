@@ -4,6 +4,14 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.10 — 2026-10-16
+
+### Added
+
+- Admins can set a folder's owner, choose who decides suggested changes,
+  or restore its inherited rule with `pigeon folder-rule` and the
+  folder's sharing page. Members can see the rule that applies to them.
+
 ## 0.4.9 — 2026-10-16
 
 ### Added

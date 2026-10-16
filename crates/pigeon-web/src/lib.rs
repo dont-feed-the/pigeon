@@ -26,6 +26,7 @@ use pigeon_i18n::Catalogue;
 
 mod actions;
 mod files;
+mod folder_rules;
 mod health;
 mod held;
 mod join;
@@ -152,6 +153,10 @@ impl Web {
             .route("/events", get(pages::events))
             .route("/files", get(files::files))
             .route("/folder", get(files::folder_page))
+            .route(
+                "/folder-rule",
+                get(folder_rules::view).post(folder_rules::set),
+            )
             .route("/deleted", get(files::deleted_page))
             .route("/file", get(files::file_page))
             .route("/files/restore", post(actions::restore))

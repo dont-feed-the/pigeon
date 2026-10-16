@@ -14,6 +14,7 @@ pub mod commit;
 pub mod consent;
 pub mod export;
 pub mod filter;
+pub mod folder_rules;
 pub mod headline;
 pub mod health;
 pub mod held;

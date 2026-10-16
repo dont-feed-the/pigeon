@@ -223,6 +223,46 @@ impl Renderer {
     }
 
     /// A top-level folder's line (ux.md §6.2).
+    pub fn folder_rule(
+        &self,
+        rule: &pigeon_proto::policy::Rule,
+        people: &[pigeon_proto::policy::Person],
+    ) -> String {
+        let name = |id: &str| {
+            people
+                .iter()
+                .find(|p| p.id == id)
+                .map_or_else(|| id.to_owned(), |p| p.name.clone())
+        };
+        let path = if rule.path.is_empty() {
+            "."
+        } else {
+            &rule.path
+        };
+        let message = match &rule.owner {
+            Some(owner) => crate::Message::new("folder-rule-owned")
+                .arg("folder", path)
+                .arg("owner", name(owner)),
+            None => crate::Message::new("folder-rule-add-only")
+                .arg("folder", path)
+                .arg(
+                    "stewards",
+                    if rule.stewards.is_empty() {
+                        people
+                            .iter()
+                            .filter(|p| p.admin)
+                            .map(|p| p.name.clone())
+                            .collect::<Vec<_>>()
+                    } else {
+                        rule.stewards.iter().map(|id| name(id)).collect::<Vec<_>>()
+                    }
+                    .join(", "),
+                ),
+        };
+        self.cat.format(&message)
+    }
+
+    /// A top-level folder's line (ux.md §6.2).
     pub fn folder(&self, f: &pigeon_proto::api::Folder) -> String {
         let id = if f.freed {
             "folder-row-freed"
@@ -260,6 +300,14 @@ impl Renderer {
     /// The lines of a response, and whether they go to standard error.
     pub fn response(&self, r: &Response) -> (Vec<String>, bool) {
         match r {
+            Response::FolderRules(report) => (
+                report
+                    .rules
+                    .iter()
+                    .map(|rule| self.folder_rule(rule, &report.people))
+                    .collect(),
+                false,
+            ),
             Response::Said { message } if message.id == "recovery-sheet-text" => {
                 let sheet = match message.args.get("sheet") {
                     Some(Arg::Text(sheet)) => crate::recovery::terminal(&self.cat, sheet),

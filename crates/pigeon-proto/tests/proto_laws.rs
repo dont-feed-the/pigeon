@@ -28,7 +28,22 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(42)) {
+    match tc.draw(gs::integers::<u8>().max_value(44)) {
+        43 => Request::FolderRules {
+            folder: maybe_text(tc),
+        },
+        44 => Request::SetFolderRule {
+            folder: text(tc),
+            rule: match tc.draw(gs::integers::<u8>().max_value(2)) {
+                0 => pigeon_proto::policy::Change::Inherit,
+                1 => pigeon_proto::policy::Change::Owned { person: text(tc) },
+                _ => pigeon_proto::policy::Change::AddOnly {
+                    stewards: (0..tc.draw(gs::integers::<u8>().max_value(3)))
+                        .map(|_| text(tc))
+                        .collect(),
+                },
+            },
+        },
         42 => Request::Health,
         0 => Request::Hello {
             version: tc.draw(gs::integers::<u32>()),
@@ -191,7 +206,13 @@ fn version(tc: &TestCase) -> VersionStatus {
 }
 
 fn response(tc: &TestCase) -> Response {
-    match tc.draw(gs::integers::<u8>().max_value(19)) {
+    match tc.draw(gs::integers::<u8>().max_value(20)) {
+        20 => Response::FolderRules(Box::new(pigeon_proto::policy::Report {
+            root: text(tc),
+            rules: Vec::new(),
+            people: Vec::new(),
+            can_edit: flag(tc),
+        })),
         0 => Response::Hello {
             version: tc.draw(gs::integers::<u32>()),
         },

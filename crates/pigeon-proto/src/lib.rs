@@ -9,6 +9,7 @@
 pub mod api;
 pub mod health;
 pub mod join;
+pub mod policy;
 pub mod stream;
 pub mod time;
 pub mod wire;

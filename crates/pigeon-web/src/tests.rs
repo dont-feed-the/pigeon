@@ -11,6 +11,8 @@ use tower::ServiceExt;
 
 use crate::{Answer, Backend, Web};
 
+#[path = "tests/folder_rules.rs"]
+mod folder_rules;
 #[path = "tests/health.rs"]
 mod health;
 #[path = "tests/recovery.rs"]

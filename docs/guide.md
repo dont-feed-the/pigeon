@@ -196,6 +196,28 @@ pigeon suggestions          # list them
 pigeon accept ID            # or: pigeon decline ID --note "why"
 ```
 
+An admin can choose a different rule for a folder. In Files, open the
+folder and choose **Sharing rule**. Give it an owner, or choose add-only
+and the people who decide suggestions. Anyone may add a new file in an
+add-only folder; changes and deletions wait for those people. Leaving the
+steward selection empty means the current admins.
+
+The same controls are available from the command line:
+
+```sh
+pigeon folder-rule                         # list the group's rules
+pigeon folder-rule ~/Family/Photos         # show the effective rule
+pigeon folder-rule ~/Family/Photos --owner me
+pigeon folder-rule ~/Family/Lab --add-only --steward Laurent
+pigeon folder-rule ~/Family/Photos --default
+```
+
+Use a person's exact current name or their ID from `pigeon folder-rule --json`.
+`--default` removes only this folder's direct rule: the nearest parent
+rule applies again, or add-only with the admins if there is none. Deeper
+rules stay in place. Use the folder's saved spelling, including case;
+rules in this format match that spelling. Only admins can change rules.
+
 ### Everyday commands
 
 | Command | What it does |
