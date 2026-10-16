@@ -565,6 +565,7 @@ fn action(c: Command) -> Action {
         }),
         Command::Free { path, .. } => send(Request::Evict {
             folder: absolute(&path),
+            confirmed: false,
         }),
         Command::Keep { path } => send(Request::Keep {
             folder: absolute(&path),

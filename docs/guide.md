@@ -32,7 +32,10 @@ a note if useful. The command line equivalent is
 
 Nested folder pages offer **Free up space** and **Keep on this computer**
 for that folder. Free keeps protected copies on backup machines; Keep
-requests local copies and can wait for a reachable source.
+requests local copies and can wait for a reachable source. Free says first
+which files will leave this computer and the backup machines they stay on,
+and asks a second time when no backup machine has been in touch for an hour;
+a freed file then reads "Safe, not on this computer".
 
 ## What "safe" means
 

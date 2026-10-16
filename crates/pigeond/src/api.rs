@@ -166,13 +166,9 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
                 tracing::warn!(group = %g.id, error = %e, "capture-failed");
             }
             let mut report = crate::status::report(&g, &d.device, &prefix, not_shared).await;
-            // A pause the person chose says so, unless something needs them
-            // (15 §15.6, ADR 0027).
-            if let Some(p) = crate::pause::now(d)
-                && report.level != pigeon_proto::api::Level::NeedsYou
-            {
-                report.headline = crate::pause::headline(p);
-            }
+            // A pause the person chose says so, in the headline unless
+            // something needs them (15 §15.6, ADR 0027).
+            crate::pause::tell(d, &mut report);
             vec![Response::Status(report)]
         }
         Request::Invite {
@@ -228,7 +224,8 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
                 Err(code) => vec![join_problem(&code, &invitation)],
             }
         }
-        Request::Evict { folder } => free(d, Path::new(&folder)).await,
+        Request::Evict { folder, confirmed } => free(d, Path::new(&folder), confirmed).await,
+        Request::FreePreview { folder } => crate::free_check::preview(d, Path::new(&folder)).await,
         Request::Drop { path, confirmed } => {
             crate::drop::drop(d, Path::new(&path), confirmed).await
         }
@@ -284,6 +281,7 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         Request::SetSettings { key, value } => crate::prefs::set(d, &key, &value),
         Request::Pause { duration } => crate::pause::pause(d, duration.as_deref()),
         Request::Resume => crate::pause::resume(d),
+        Request::Paused => crate::pause::state(d),
         Request::History { path } => crate::history::history(d, Path::new(&path)).await,
         Request::ViewSuggestion { proposal, path } => {
             crate::view::suggestion(d, &proposal, Path::new(&path)).await
@@ -511,13 +509,18 @@ pub(crate) fn wake_soon(d: &Daemon) {
 
 /// `pigeon free`: records the target; the loops hide each protected file
 /// and drop its content, and the others once they are protected (08 §8.5).
-async fn free(d: &Daemon, path: &Path) -> Vec<Response> {
+/// While no backup machine has been heard from recently, only once
+/// `confirmed` (`free_check.rs`).
+async fn free(d: &Daemon, path: &Path, confirmed: bool) -> Vec<Response> {
     let Some(g) = group_of(d, path) else {
         return vec![problem("not-in-group", &[], None)];
     };
     let Some(prefix) = relative(&g, path) else {
         return vec![problem("not-in-group", &[], None)];
     };
+    if !confirmed && let Some(ask) = crate::free_check::ask_again(d, &g) {
+        return vec![ask];
+    }
     if let Err(error) = crate::evict::set_target(&g, &prefix, true) {
         return vec![problem("internal-error", &[], Some(error))];
     }

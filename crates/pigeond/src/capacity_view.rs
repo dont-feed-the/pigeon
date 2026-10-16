@@ -116,13 +116,21 @@ async fn build(d: &Daemon) -> Result<wire::Report, crate::git::Error> {
         .checked_mul(u64::from(doc.roster.k))
         .ok_or_else(|| error("capacity size overflow"))?;
     let need = capacity::need(doc.roster.k, versions);
-    let offered: Vec<_> = doc
+    let custodians: Vec<_> = doc
         .roster
         .devices
         .values()
         .filter(|device| device.role == pigeon_core::roster::Role::Custodian)
+        .collect();
+    let offered: Vec<_> = custodians
+        .iter()
         .map(|device| (device.maxsize, one_copy))
         .collect();
+    let limited = capacity::below_one_copy(&offered)
+        .into_iter()
+        .filter_map(|i| custodians.get(i).map(|device| device.name.clone()))
+        .collect();
+    let no_spare = capacity::no_spare(custodians.len(), doc.roster.k);
     offered
         .iter()
         .try_fold(0u64, |sum, (max, bytes)| {
@@ -195,7 +203,8 @@ async fn build(d: &Daemon) -> Result<wire::Report, crate::git::Error> {
         suggestions: *need.parts.get(&Part::Suggestions).unwrap_or(&0),
         overflow,
         configured: offered,
-        short: capacity::short(offered, &need),
+        limited,
+        no_spare,
         machines: health.machines,
         proposals,
     })

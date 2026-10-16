@@ -64,7 +64,7 @@ pub async fn files(
                     @let full = std::path::Path::new(&root).join(&f.path);
                     li {
                         a href=(r.url(&format!("/file?path={}", enc(&full.to_string_lossy())))) {
-                            (r.catalogue().format(&pigeon_i18n::Message::new("file-row").arg("path", f.path.clone()).arg("state", r.state(f.state))))
+                            (r.file(f))
                         }
                     }
                 }
@@ -137,12 +137,6 @@ pub async fn folder_page(
             a => other.extend(r.response(&a).0),
         }
     }
-    let line = |path: &str, state| {
-        let m = pigeon_i18n::Message::new("file-row")
-            .arg("path", path)
-            .arg("state", r.state(state));
-        r.catalogue().format(&m)
-    };
     let prefix = std::path::Path::new(&at.path)
         .strip_prefix(&root)
         .ok()
@@ -176,7 +170,7 @@ pub async fn folder_page(
         ul {
             @for f in &rows {
                 @let full = std::path::Path::new(&root).join(&f.path);
-                li { a href=(r.url(&format!("/file?path={}", enc(&full.to_string_lossy())))) { (line(&f.path, f.state)) } }
+                li { a href=(r.url(&format!("/file?path={}", enc(&full.to_string_lossy())))) { (r.file(f)) } }
             }
         }
         p { a href=(r.url("/files")) { (r.id("web-back")) } }
@@ -220,13 +214,32 @@ pub async fn file_page(
         }
     }
     let newest = rows.iter().map(|v| v.number).max();
+    let current = current_state(&web, &r, &at.path).await;
     let body = html! {
         (list(&other))
+        @if let Some(state) = &current { p { (state) } }
         h2 { (r.id("web-versions")) }
         @for v in &rows { (version(&r, &at.path, v, Some(v.number) != newest, &form.0)) }
         p { a href=(r.url("/files")) { (r.id("web-back")) } }
     };
     page(&r, "/files", &at.path, &body)
+}
+
+/// The state of the file at `path` now, and whether it is on this
+/// computer: "Safe, not on this computer" once its space is freed.
+async fn current_state(web: &Web, r: &Renderer, path: &str) -> Option<String> {
+    let answers = web
+        .ask(Request::Files {
+            folder: path.to_owned(),
+        })
+        .await;
+    answers.into_iter().find_map(|answer| match answer {
+        Response::Files { root, files } => files
+            .iter()
+            .find(|f| std::path::Path::new(&root).join(&f.path) == std::path::Path::new(path))
+            .map(|f| r.file_state(f)),
+        _ => None,
+    })
 }
 
 /// One version, the form that opens a copy of it, and the one that

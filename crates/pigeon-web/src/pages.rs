@@ -37,6 +37,7 @@ nav a{margin-right:1.2rem;display:inline-block}\
 nav a[aria-current]{font-weight:bold}h1{font-size:1.5rem}li{margin:.3rem 0}\
 article{border-top:1px solid #ccc;padding:.5rem 0}form{display:inline-block;margin-right:1rem}\
 .capacity-details{overflow-wrap:anywhere}\
+.pause-banner{border:2px solid #b8860b;border-radius:.3rem;padding:.25rem 1rem .75rem;margin:1rem 0}\
 textarea{max-width:100%;box-sizing:border-box}\
 .recovery-instructions{overflow-wrap:anywhere}.recovery-instructions p{margin:.25rem 0}\
 .recovery-code{overflow-wrap:anywhere;white-space:pre-wrap;font-size:.7rem}\
@@ -92,6 +93,7 @@ fn document(r: &Renderer, here: &str, headline: &str, body: &Markup, live: bool)
                         p class="no-print" { a href=(&mount.back) { (&mount.label) } }
                         @if !mount.storage_controls { p { (r.id("web-managed-client")) } }
                     }
+                    (pause_banner(r, headline, live))
                     nav aria-label=(r.id("web-title")) {
                         @for (path, id) in SECTIONS {
                             @if r.mount.is_none() || *path != "/join" {
@@ -118,6 +120,25 @@ fn document(r: &Renderer, here: &str, headline: &str, body: &Markup, live: bool)
         }
         .into_string(),
     )
+}
+
+/// The pause in force, on every page, with *Share again*, even when
+/// something else needs the person (15 §15.6). Home's headline may say it
+/// already; there the banner keeps only the button.
+fn pause_banner(r: &Renderer, headline: &str, live: bool) -> Markup {
+    let Some(banner) = &r.banner else {
+        return html! {};
+    };
+    let text = r.text(&banner.message);
+    html! {
+        div class="pause-banner" role="status" {
+            @if !live || text != headline { p { (text) } }
+            form method="post" action=(r.url("/resume")) {
+                input type="hidden" name="form" value=(&banner.form);
+                button type="submit" { (r.id("web-resume")) }
+            }
+        }
+    }
 }
 
 /// A page that says only why the request was refused.

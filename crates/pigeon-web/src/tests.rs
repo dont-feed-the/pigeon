@@ -15,10 +15,14 @@ use crate::{Answer, Backend, Web};
 mod doctor;
 #[path = "tests/folder_rules.rs"]
 mod folder_rules;
+#[path = "tests/free.rs"]
+mod free;
 #[path = "tests/health.rs"]
 mod health;
 #[path = "tests/mounted.rs"]
 mod mounted;
+#[path = "tests/pause.rs"]
+mod pause;
 #[path = "tests/recovery.rs"]
 mod recovery;
 #[path = "tests/setup.rs"]
@@ -41,6 +45,7 @@ impl Backend for Fixed {
                     state: State::Protected,
                     versions: Vec::new(),
                     not_shared: Vec::new(),
+                    paused: None,
                 })]
             }
             pigeon_proto::Request::Capacity => vec![Response::Capacity(Box::new(
@@ -53,7 +58,8 @@ impl Backend for Fixed {
                     suggestions: 18,
                     overflow: None,
                     configured: 58,
-                    short: true,
+                    limited: vec!["nas".into()],
+                    no_spare: true,
                     machines: Vec::new(),
                     proposals: vec![pigeon_proto::capacity::Proposal {
                         id: "a".repeat(40),
@@ -501,7 +507,10 @@ async fn a_pending_invitation_is_listed_and_cancelled() {
         .unwrap();
     let page = body(page).await;
     assert!(page.contains("Pending invitations"), "{page}");
-    assert!(page.contains("ab12: for Ana, until"), "{page}");
+    assert!(
+        page.contains("Invitation for Ana, expires on 22 October") && !page.contains("ab12:"),
+        "{page}"
+    );
     let form = form_of(&page);
     let forged = app
         .clone()

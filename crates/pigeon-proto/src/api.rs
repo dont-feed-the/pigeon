@@ -94,8 +94,20 @@ pub enum Request {
         /// A folder or file.
         folder: String,
     },
-    /// `pigeon free PATH`.
+    /// `pigeon free PATH` (08 §8.5). While no backup machine has been
+    /// heard from recently, it answers the problem `backups-quiet` unless
+    /// `confirmed`.
     Evict {
+        /// A folder or file.
+        folder: String,
+        /// The person was told that the backup machines have not been
+        /// heard from recently, and frees anyway.
+        #[serde(default)]
+        confirmed: bool,
+    },
+    /// What *Free up space* would do, for its confirmation (08 §8.5):
+    /// answered with `FreePreview`.
+    FreePreview {
         /// A folder or file.
         folder: String,
     },
@@ -194,6 +206,9 @@ pub enum Request {
     },
     /// `pigeon resume`.
     Resume,
+    /// The pause in force, for the banner of every web page (15 §15.6):
+    /// `Said` with its words, or `Done` while sharing.
+    Paused,
     /// `pigeon remove-computer NAME`.
     RemoveDevice {
         /// The computer's name in the roster.
@@ -378,6 +393,8 @@ pub enum Response {
         /// Its top-level folders, by path.
         folders: Vec<Folder>,
     },
+    /// The answer to `FreePreview`.
+    FreePreview(FreePreview),
     /// The answer to `Files`.
     Files {
         /// The group's folder on this computer.
@@ -514,6 +531,10 @@ pub struct StatusReport {
     /// Paths not shared, with why (07 §7.9).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub not_shared: Vec<NotShared>,
+    /// The pause in force, said even when the headline is about something
+    /// else (15 §15.6).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paused: Option<Message>,
 }
 
 /// A path that is not shared, and why.
@@ -604,6 +625,26 @@ pub struct FileEntry {
     pub path: String,
     /// The state of its current version.
     pub state: State,
+    /// Its space is freed: it is not on this computer (08 §8.5).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub freed: bool,
+}
+
+/// What freeing a folder's space would do (08 §8.5).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FreePreview {
+    /// The files under it.
+    pub files: u64,
+    /// Those safe on the backup machines, which leave this computer.
+    pub safe: u64,
+    /// The names of the group's backup machines.
+    pub backups: Vec<String>,
+    /// When a backup machine was last heard from, RFC 3339; none if never.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub heard_at: Option<String>,
+    /// Whether that is too long ago to confirm their copies now; freeing
+    /// then asks again (`Evict {confirmed}`).
+    pub quiet: bool,
 }
 
 /// A file deleted from the group, which `Restore` brings back.

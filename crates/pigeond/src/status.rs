@@ -536,6 +536,7 @@ pub(crate) async fn inventory_report(
             state: worst,
             versions,
             not_shared,
+            paused: None,
         },
         inventory,
     )

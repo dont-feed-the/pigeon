@@ -2,8 +2,9 @@
 //! each with its files, those not safe yet, its least safe state, and
 //! whether its space is freed on this computer (08 §8.5). Files at the top
 //! of the group's folder belong to no folder and are not listed. And the
-//! answer to `Files`: the files under one folder, with their states; and
-//! to `Deleted`: the files deleted from `main`.
+//! answer to `Files`: the files under one folder, with their states and
+//! whether each is freed, not on this computer; and to `Deleted`: the
+//! files deleted from `main`.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -102,10 +103,14 @@ pub async fn files(g: &Group, me: &str, prefix: &str) -> Response {
         Ok(listing) => listing,
         Err(error) => return crate::api::problem("internal-error", &[], Some(error.to_string())),
     };
+    // A file is not on this computer once freeing hid it (08 §8.5).
+    let targets = crate::evict::targets(g);
+    let hidden = crate::evict::hidden_paths(g).await;
     let files = observed
         .into_iter()
         .map(|o| FileEntry {
             state: crate::status::worst(std::iter::once(&o.state)),
+            freed: hidden.contains(&o.path) && targets.is_freed(&o.path),
             path: o.path,
         })
         .collect();

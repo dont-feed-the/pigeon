@@ -30,6 +30,7 @@ pub mod evict;
 pub mod fold;
 mod folder_rules;
 pub mod folders;
+mod free_check;
 pub mod git;
 pub mod group;
 mod health;

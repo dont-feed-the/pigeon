@@ -1,7 +1,8 @@
 //! Settings (ux.md §6.5): this computer's settings of `config.toml` (11
 //! §11.2), each a choice and a *Save* button that becomes `SetSettings`.
 //! A new language shows from the answer on. *Pause* and *Share again* are
-//! `pigeon pause` and `pigeon resume` (15 §15.6); *Leave the group* is
+//! `pigeon pause` and `pigeon resume` (15 §15.6), only the one that
+//! applies; *Leave the group* is
 //! `pigeon leave` (`leave.rs`).
 
 use std::sync::Arc;
@@ -121,8 +122,20 @@ fn setting(r: &Renderer, s: &Setting, form: &str) -> Markup {
     }
 }
 
-/// The pause: a duration and *Pause*, and *Share again*.
+/// The pause, with only the action that applies: while sharing, a
+/// duration and *Pause*; while paused, the pause and *Share again*.
 fn pausing(r: &Renderer, form: &str) -> Markup {
+    if let Some(banner) = &r.banner {
+        return html! {
+            article {
+                p { (r.text(&banner.message)) }
+                form method="post" action=(r.url("/resume")) {
+                    input type="hidden" name="form" value=(form);
+                    button type="submit" { (r.id("web-resume")) }
+                }
+            }
+        };
+    }
     html! {
         article {
             form method="post" action=(r.url("/pause")) {
@@ -135,10 +148,6 @@ fn pausing(r: &Renderer, form: &str) -> Markup {
                 }
                 " "
                 button type="submit" { (r.id("web-pause")) }
-            }
-            form method="post" action=(r.url("/resume")) {
-                input type="hidden" name="form" value=(form);
-                button type="submit" { (r.id("web-resume")) }
             }
         }
     }
@@ -189,8 +198,13 @@ async fn answer(web: &Arc<Web>, token: &FormToken, form: &str, request: Request)
         )
             .into_response();
     }
+    let pause = matches!(request, Request::Pause { .. } | Request::Resume);
     let answers = web.ask(request).await;
-    let r = web.renderer();
+    let mut r = web.renderer();
+    // The result of *Pause* or *Share again* shows the pause it leaves.
+    if pause {
+        r.banner = web.banner(form).await;
+    }
     let lines = answers.iter().flat_map(|a| r.response(a).0).collect();
     pages::result(&r, "/settings", lines).into_response()
 }

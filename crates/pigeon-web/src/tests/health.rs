@@ -24,6 +24,7 @@ fn report() -> HealthReport {
             state: State::Local,
             versions: Vec::new(),
             not_shared: Vec::new(),
+            paused: None,
         },
         current: Some(Counts {
             protected: 2,

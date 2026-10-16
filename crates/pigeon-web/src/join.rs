@@ -123,7 +123,13 @@ pub async fn join(
         let message = pigeon_i18n::Message::new("web-join-refounded")
             .arg("group", group)
             .arg("name", refounded.by)
-            .arg("date", refounded.at.get(..10).unwrap_or(&refounded.at));
+            .arg(
+                "date",
+                pigeon_proto::time::parse_rfc3339(&refounded.at).map_or_else(
+                    || refounded.at.get(..10).unwrap_or(&refounded.at).to_owned(),
+                    |at| r.date(at),
+                ),
+            );
         let body = html! {
             p { (r.catalogue().format(&message)) }
             form method="post" action=(r.url("/join")) {
