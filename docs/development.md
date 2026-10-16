@@ -66,5 +66,7 @@ scripts/check-adr-index                # docs/adr/README.md lists every ADR
 scripts/run-tlc                        # the fast set of TLA+ models (Java 11 or later)
 ```
 
-The integration tests of `pigeond` need git-annex on the `PATH`. pigeon 0.9,
+The integration tests of `pigeond` need git-annex on the `PATH`. Under
+cargo, git ignores your global and system configuration and ignore files
+([`.cargo/config.toml`](../.cargo/config.toml)), as it does under pigeond. pigeon 0.9,
 an earlier design, is kept under the tag `v0.9.0`.
