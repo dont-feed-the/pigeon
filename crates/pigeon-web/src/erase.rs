@@ -72,7 +72,7 @@ pub async fn view(
         @if let Some(answer) = answer {
             @match answer {
                 Answer::Preview(p) => {
-                    @if p.readiness.ready || (p.readiness.can_prepare && p.readiness.preparation_needed) {
+                    @if p.readiness.ready || (p.readiness.can_prepare && p.readiness.preparation_needed && p.readiness.problem.is_none()) {
                         form method="post" action=(r.url("/erase")) {
                             input type="hidden" name="form" value=(form.0);
                             input type="hidden" name="history" value=(p.token);

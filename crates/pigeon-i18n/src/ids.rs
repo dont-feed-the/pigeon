@@ -19,6 +19,8 @@ const fn e(id: &'static str, vars: &'static [&'static str]) -> Entry {
 /// The problem codes of the slice: stable, kebab-case, public (ADR 0023).
 /// Each has a message `problem-<code>`, and may have a hint `hint-<code>`.
 pub const PROBLEMS: &[&str] = &[
+    "erase-needs-backup",
+    "scrub-ledger",
     "erase-stale",
     "erase-pending",
     "erase-not-ready",
@@ -95,6 +97,15 @@ pub const PROBLEMS: &[&str] = &[
 
 /// Every message of the catalogue.
 pub const MESSAGES: &[Entry] = &[
+    e("erase-needs-backup", &[]),
+    e("problem-erase-needs-backup", &[]),
+    e("scrub-report-time", &["when"]),
+    e("scrub-no-pass", &[]),
+    e("scrub-last-pass", &["time", "failed"]),
+    e("scrub-progress", &["remaining", "failed"]),
+    e("scrub-unreadable", &[]),
+    e("scrub-machine", &["machine"]),
+    e("problem-scrub-ledger", &["machine"]),
     e("web-erase-title", &[]),
     e("web-erase-list", &[]),
     e("web-erase-confirm", &[]),

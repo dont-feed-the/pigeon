@@ -43,6 +43,7 @@ pub async fn handle(d: &Daemon, operation: Operation) -> Vec<Response> {
                         matches!(
                             s.as_str(),
                             "erase-stale"
+                                | "erase-needs-backup"
                                 | "erase-pending"
                                 | "erase-not-ready"
                                 | "erase-checking"
@@ -82,6 +83,19 @@ async fn perform(d: &Daemon, operation: Operation) -> Result<Answer, Error> {
         }),
         Operation::Prepare { .. } => {
             let _busy = g.busy.lock().await;
+            let main = head(&g).await?;
+            let state = crate::erase_state::readiness(&g, &main).await?;
+            if !state.can_prepare {
+                return Err(refuse("not-allowed", "ask an admin to prepare erasing"));
+            }
+            if crate::membership::configured(&crate::membership::roster(&g, &main).await?)
+                .is_empty()
+            {
+                return Err(refuse(
+                    "erase-needs-backup",
+                    "add a backup before preparing erasure",
+                ));
+            }
             crate::admission_publish::start(&g).await?;
             d.admissions.round(&g, &d.device).await;
             crate::report::publish(&g, &d.device).await;

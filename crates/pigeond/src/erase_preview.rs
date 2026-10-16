@@ -229,7 +229,10 @@ pub async fn plan(g: &Group, me: &str, selection: &Selection) -> Result<Plan, Er
     let token = crate::util::hex(&Sha256::digest(snapshot));
     let after = crate::retention::snapshot(g).await?;
     if after.named != reading.named {
-        return Err(invalid("history changed; review a fresh erasure preview"));
+        return Err(crate::erase_commit::refuse(
+            "erase-stale",
+            "history changed; review a fresh erasure preview",
+        ));
     }
     let preview = Preview {
         selection: selection.clone(),

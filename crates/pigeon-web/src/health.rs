@@ -158,6 +158,14 @@ fn values(r: &Renderer, h: &HealthReport) -> BTreeMap<String, String> {
         values.insert(format!("health-report-{id}"), reported(r, machine));
         values.insert(format!("health-disk-{id}"), disk(r, machine));
         values.insert(format!("health-work-{id}"), work(r, machine));
+        values.insert(
+            format!("health-scrub-{id}"),
+            if machine.machine.custodian {
+                r.scrub(machine.scrub.as_ref()).join(" ")
+            } else {
+                String::new()
+            },
+        );
     }
     for epoch in h.repair_epochs.iter().flatten() {
         values.insert(
@@ -218,6 +226,9 @@ pub(crate) fn section(r: &crate::Renderer, h: &HealthReport) -> Markup {
                         p id=(format!("health-report-{id}")) { (text(&format!("health-report-{id}"))) }
                         p id=(format!("health-disk-{id}")) { (text(&format!("health-disk-{id}"))) }
                         p id=(format!("health-work-{id}")) { (text(&format!("health-work-{id}"))) }
+                        @if machine.machine.custodian {
+                            p id=(format!("health-scrub-{id}")) { (text(&format!("health-scrub-{id}"))) }
+                        }
                     }
                 }
                 p { a href=(r.url("/machines")) { (r.id("web-nav-machines")) } }

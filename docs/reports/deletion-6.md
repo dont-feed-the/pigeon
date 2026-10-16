@@ -66,13 +66,29 @@ admission with one or two original custodians, including a partitioned
 decider. Its unfenced variants demonstrate safety failures. It does not
 yet prove initial upgrade agreement, arbitrary churn or daemon conformance.
 
+Home shows the signed integrity-pass completion time and findings for each
+backup, preserving the report’s age. The local backup also exposes the
+remaining durable inventory and current findings without starting work.
+Doctor shows local progress and signed remote pass results. An unreadable
+local inventory produces `scrub-ledger`, keeps the original record, and does
+not invent a pass time. The health framing law exercises every new optional
+field in 1000 cases; English/French catalogue and Home/live-value tests pass.
+
+The real three-peer CLI lifecycle passes with actual signed capability
+acknowledgements: two laptops and one backup prepare the protocol, show
+readiness without submitting an erasure, refuse unconfirmed noninteractive
+use, confirm the scoped deletion, name the waiting backup, cancel, and
+restore the exact retained binary bytes. A concurrent final preparation
+merge can invalidate a preview; this is reported as `erase-stale` and the
+test explicitly performs a fresh review/confirmation. The test does not
+skip the configured month or claim physical purge completion.
+
 ## Remaining before release
 
 - Erased history/restore states, complete cancellation and readiness recovery
   scenarios, and broader interface usability tests.
 - Real partition/restore/offline-return races and implementation traces.
 - Refounded archive and pending-erasure recovery semantics.
-- Scrub progress and errors in the interface and problem catalogue.
 - Initial upgrade contention: different concurrent requests may split
   immutable choices and remain blocked. No retry may silently change a
   vote; a safe recovery protocol needs separate modelling and evidence.

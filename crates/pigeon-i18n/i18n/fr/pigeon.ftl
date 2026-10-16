@@ -570,3 +570,14 @@ web-erase-prepare = Préparer l’effacement uniquement
 web-erase-cancel = Annuler cet effacement en attente
 web-erase-review-cancel = Examiner l’annulation de
 web-erase-suggestion = Examiner l’effacement de cette suggestion
+
+# Integrity pass evidence and local progress (08 §8.8).
+scrub-no-pass = Aucun contrôle d’intégrité complet n’a été signalé.
+scrub-last-pass = Dernier contrôle d’intégrité complet : { $time }. Anomalies trouvées pendant ce contrôle : { $failed }.
+scrub-progress = Contrôle d’intégrité local en cours : { $remaining } contenus restants. Anomalies trouvées : { $failed }.
+scrub-unreadable = La progression du contrôle d’intégrité est illisible. Les données existantes sont conservées ; consultez Diagnostic.
+scrub-machine = Contrôles d’intégrité sur { $machine } :
+problem-scrub-ledger = L’état du contrôle d’intégrité sur { $machine } est illisible. Conservez-le et rassemblez un rapport de diagnostic avant de réparer l’état local.
+scrub-report-time = Signalé { $when }. Un nouveau contact ne met pas cette observation à jour.
+erase-needs-backup = Ajoutez une machine de sauvegarde avant de préparer l’effacement.
+problem-erase-needs-backup = Ajoutez une machine de sauvegarde avant de préparer l’effacement.

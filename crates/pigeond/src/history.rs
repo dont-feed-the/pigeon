@@ -286,6 +286,59 @@ pub async fn doctor(d: &Daemon, _details: bool) -> Vec<Response> {
             let name = crate::status::this_name(&g, &d.device);
             out.push(problem("disk-full", &[("machine", text(&name))], None));
         }
+        if g.role == pigeon_core::filter::Role::Custodian {
+            match crate::scrub::status(&g) {
+                Ok(scrub) => {
+                    let name = crate::status::this_name(&g, &d.device);
+                    out.push(crate::api::said(
+                        "scrub-machine",
+                        &[("machine", text(&name))],
+                    ));
+                    if let Some(at) = scrub.last_pass_completed {
+                        out.push(crate::api::said(
+                            "scrub-last-pass",
+                            &[
+                                ("time", text(&at)),
+                                (
+                                    "failed",
+                                    Arg::Number(
+                                        i64::try_from(scrub.keys_failed).unwrap_or(i64::MAX),
+                                    ),
+                                ),
+                            ],
+                        ));
+                    } else {
+                        out.push(crate::api::said("scrub-no-pass", &[]));
+                    }
+                    if let Some(remaining) = scrub.remaining {
+                        out.push(crate::api::said(
+                            "scrub-progress",
+                            &[
+                                (
+                                    "remaining",
+                                    Arg::Number(i64::try_from(remaining).unwrap_or(i64::MAX)),
+                                ),
+                                (
+                                    "failed",
+                                    Arg::Number(
+                                        i64::try_from(scrub.current_failures.unwrap_or(0))
+                                            .unwrap_or(i64::MAX),
+                                    ),
+                                ),
+                            ],
+                        ));
+                    }
+                }
+                Err(detail) => {
+                    let name = crate::status::this_name(&g, &d.device);
+                    out.push(problem(
+                        "scrub-ledger",
+                        &[("machine", text(&name))],
+                        Some(detail),
+                    ));
+                }
+            }
+        }
         let shortfall = g.lock().shortfall.clone();
         if let Some(s) = shortfall {
             let name = crate::status::this_name(&g, &d.device);
@@ -302,6 +355,37 @@ pub async fn doctor(d: &Daemon, _details: bool) -> Vec<Response> {
                 .get(&DeviceId(peer.to_owned()))
                 .map_or(peer.to_owned(), |x| x.name.clone())
         };
+        for (peer, report) in crate::report::current(&g) {
+            if peer == d.device
+                || !names
+                    .get(&DeviceId(peer.clone()))
+                    .is_some_and(|d| d.role == DeviceRole::Custodian)
+            {
+                continue;
+            }
+            out.push(crate::api::said(
+                "scrub-machine",
+                &[("machine", text(&name(&peer)))],
+            ));
+            out.push(crate::api::said(
+                "scrub-report-time",
+                &[("when", text(&report.at.to_string()))],
+            ));
+            if let Some(scrub) = report.scrub {
+                out.push(crate::api::said(
+                    "scrub-last-pass",
+                    &[
+                        ("time", text(&scrub.last_pass_completed.to_string())),
+                        (
+                            "failed",
+                            Arg::Number(i64::try_from(scrub.keys_failed).unwrap_or(i64::MAX)),
+                        ),
+                    ],
+                ));
+            } else {
+                out.push(crate::api::said("scrub-no-pass", &[]));
+            }
+        }
         for (code, peer, files, missing) in crate::report::problems(&g) {
             let n = |x: u64| Arg::Number(i64::try_from(x).unwrap_or(i64::MAX));
             let mut args = vec![("machine", text(&name(&peer)))];

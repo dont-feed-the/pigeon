@@ -299,7 +299,7 @@ pub async fn receive(g: &Group, me: &str) -> usize {
 }
 
 /// The latest reports of the devices of the roster, by device ID.
-fn current(g: &Group) -> Vec<(String, Status)> {
+pub(crate) fn current(g: &Group) -> Vec<(String, Status)> {
     let devices = g.roster().map(|d| d.roster.devices).unwrap_or_default();
     g.lock()
         .report_files

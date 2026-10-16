@@ -66,11 +66,13 @@ pub async fn readiness(g: &Group, main: &str) -> Result<Readiness, Error> {
         let offered = crate::admission_publish::offers(g, main, request, &required).await?;
         missing.extend(required.into_iter().filter(|id| !offered.contains_key(id)));
     }
-    let problem = g
-        .lock()
-        .admission_error
-        .as_ref()
-        .map(|_| crate::status::msg("erase-checking", &[]));
+    let problem = if g.lock().admission_error.is_some() {
+        Some(crate::status::msg("erase-checking", &[]))
+    } else if crate::membership::configured(&roster).is_empty() {
+        Some(crate::status::msg("erase-needs-backup", &[]))
+    } else {
+        None
+    };
     let can_prepare = crate::git::signer_device()
         .and_then(|id| roster.devices.get(&pigeon_core::roster::DeviceId(id)))
         .filter(|d| d.role != pigeon_core::roster::Role::Recovery)

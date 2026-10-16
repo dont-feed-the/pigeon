@@ -93,6 +93,19 @@ pub(crate) fn restore(g: &Group) {
     }
 }
 
+/// Read only the durable inventory. Socket and health reads do not start a
+/// pass, advance it, replace an unknown ledger or invent a completion time.
+pub(crate) fn status(g: &Group) -> Result<pigeon_proto::health::Scrub, String> {
+    let file = FileT::read(&g.root().join("scrub.toml"))?;
+    Ok(pigeon_proto::health::Scrub {
+        last_pass_completed: file.last_pass_completed.map(crate::util::rfc3339),
+        keys_failed: file.keys_failed,
+        remaining: file.cycle.as_ref().map(|c| c.pending.len() as u64),
+        current_failures: file.cycle.as_ref().map(|c| c.bad.len() as u64),
+        problem: None,
+    })
+}
+
 fn children(path: &Path) -> Result<Vec<std::path::PathBuf>, String> {
     match std::fs::read_dir(path) {
         Ok(entries) => entries

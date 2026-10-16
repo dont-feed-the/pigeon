@@ -99,6 +99,39 @@ impl Renderer {
         out
     }
 
+    /// Integrity findings with their own completion time; pending local
+    /// progress cannot become a claim that a remote pass has finished.
+    pub fn scrub(&self, scrub: Option<&pigeon_proto::health::Scrub>) -> Vec<String> {
+        let Some(scrub) = scrub else {
+            return vec![self.id("scrub-no-pass")];
+        };
+        let mut out = Vec::new();
+        if let Some(problem) = &scrub.problem {
+            out.push(self.text(problem));
+        }
+        if let Some(at) = &scrub.last_pass_completed {
+            out.push(
+                self.cat.format(
+                    &crate::Message::new("scrub-last-pass")
+                        .arg("time", at.as_str())
+                        .arg("failed", scrub.keys_failed),
+                ),
+            );
+        } else if scrub.problem.is_none() {
+            out.push(self.id("scrub-no-pass"));
+        }
+        if let Some(remaining) = scrub.remaining {
+            out.push(
+                self.cat.format(
+                    &crate::Message::new("scrub-progress")
+                        .arg("remaining", remaining)
+                        .arg("failed", scrub.current_failures.unwrap_or(0)),
+                ),
+            );
+        }
+        out
+    }
+
     /// The lines of a status report: the headline, then each version waiting.
     pub fn status(&self, r: &StatusReport) -> Vec<String> {
         let mut out = vec![self.text(&r.headline)];

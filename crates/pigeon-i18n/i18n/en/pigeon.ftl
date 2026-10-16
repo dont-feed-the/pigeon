@@ -570,3 +570,14 @@ web-erase-prepare = Prepare erasing only
 web-erase-cancel = Cancel this pending erasure
 web-erase-review-cancel = Review cancellation of
 web-erase-suggestion = Review erasing this suggestion
+
+# Integrity pass evidence and local progress (08 §8.8).
+scrub-no-pass = No completed integrity pass has been reported.
+scrub-last-pass = Last completed integrity pass: { $time }. Findings in that pass: { $failed }.
+scrub-progress = Local integrity pass in progress: { $remaining } keys left. Findings so far: { $failed }.
+scrub-unreadable = Integrity progress could not be read. Existing records are kept; check Doctor.
+scrub-machine = Integrity checks on { $machine }:
+problem-scrub-ledger = The integrity-check record on { $machine } could not be read. Keep it and gather a debug bundle before repairing local state.
+scrub-report-time = Reported { $when }. This observation is not refreshed by new contact.
+erase-needs-backup = Add a backup machine before preparing erasing.
+problem-erase-needs-backup = Add a backup machine before preparing erasing.
