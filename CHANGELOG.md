@@ -31,6 +31,9 @@ the second number, and every other pull request the third.
 - History labels versions released by a completed erasure as erased. Restore
   receipts and pending requests explain that later saved or restored versions
   are kept without cancelling the earlier request.
+- If restored contents are unavailable, the new saved version or suggestion
+  remains requested across restarts. The command explains the wait, keeps
+  existing local files, and can finish when a copy becomes available.
 
 ## 0.5.8 — 2026-10-16
 

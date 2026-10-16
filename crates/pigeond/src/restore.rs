@@ -24,6 +24,7 @@ use crate::install::Put;
 
 mod folder;
 pub(crate) mod path;
+mod reference;
 
 fn text(s: &str) -> Arg {
     Arg::Text(s.to_owned())
@@ -75,12 +76,12 @@ pub async fn restore(
     let Some(rel) = self::path::relative(&g, path) else {
         return vec![problem("not-in-group", &[], None)];
     };
-    let _busy = g.busy.lock().await;
+    let busy = g.busy.lock().await;
     if let Err(e) = crate::capture::capture(&g, &d.device, &d.tracer).await {
         return vec![problem("internal-error", &[], Some(e.to_string()))];
     }
     if folder::is_folder(&g, &rel).await {
-        return folder::restore(d, &g, &rel, version, at).await;
+        return folder::restore(d, &g, &rel, version, at, busy).await;
     }
     let mut versions = crate::history::versions(&g, &rel).await;
     versions.reverse();
@@ -113,33 +114,105 @@ pub async fn restore(
         let me = crate::status::this_name(&g, &d.device);
         return vec![problem("disk-full", &[("machine", text(&me))], None)];
     }
+    let current = versions.last().map(|(_, k)| k.clone());
+    let entry = g
+        .git
+        .tree(&commit)
+        .await
+        .ok()
+        .and_then(|t| t.get(&rel).cloned());
+    let Some(entry) = entry else {
+        return vec![problem("internal-error", &[], None)];
+    };
+    if !self::path::parents_clear(&g, &rel) {
+        return vec![problem("restore-in-use", &[("path", text(&rel))], None)];
+    }
+    let absent = crate::custody::present(&g, &key).await.is_none();
+    let intent = {
+        let Some(worktree) = &g.worktree else {
+            return vec![problem("not-in-group", &[], None)];
+        };
+        let file = worktree.join(&rel);
+        let clear = match pigeon_sys::fs::lstat(&file) {
+            Ok(None) => true,
+            Ok(Some(stat)) => {
+                stat.is_regular()
+                    && pigeon_sys::writers::scan(stat.id).is_clear()
+                    && (crate::evict::is_old(&file, current.as_deref())
+                        || crate::evict::is_old(&file, Some(&key)))
+            }
+            Err(_) => false,
+        };
+        if !clear {
+            return vec![problem("restore-in-use", &[("path", text(&rel))], None)];
+        }
+        if crate::capture_file::pending(&g) || crate::evict::unsettled(&g) {
+            return vec![problem("receiving", &[], None)];
+        }
+        match reference::retain(&g, &d.device, [(rel.clone(), Some(entry.clone()))].into()).await {
+            Ok(intent) => intent,
+            Err(e) => return vec![problem("internal-error", &[], Some(e.to_string()))],
+        }
+    };
+    // Complete the new exact reference reading without blocking other
+    // worktree requests on a cold scan. Refounding may replace this group.
+    drop(busy);
+    crate::purge::prepare(&g).await;
+    let _busy = g.busy.lock().await;
+    if !d.current_group(&g).await {
+        return vec![problem("not-in-group", &[], None)];
+    }
+    crate::purge::round(&g, &d.device, false).await;
     match bring(&g, &key).await {
         Ok(()) => {}
         Err("disk-full") => {
             let me = crate::status::this_name(&g, &d.device);
             return vec![problem("disk-full", &[("machine", text(&me))], None)];
         }
+        Err("receiving") if absent => {
+            d.wake.notify_one();
+            return vec![problem("restore-waiting", &[("path", text(&rel))], None)];
+        }
         Err(code) => return vec![problem(code, &[], None)],
     }
-    let current = versions.last().map(|(_, k)| k.clone());
-    let mode = g
-        .git
-        .tree(&commit)
-        .await
-        .ok()
-        .and_then(|t| t.get(&rel).map(|e| e.mode.clone()));
-    let Some(mode) = mode else {
-        return vec![problem("internal-error", &[], None)];
-    };
     if !self::path::parents_clear(&g, &rel) {
         return vec![problem("restore-in-use", &[("path", text(&rel))], None)];
     }
-    match crate::install::put_restore(&g, &rel, &key, current.as_deref(), &mode, &d.tracer).await {
+    // A normal round may already have installed the retained intent while
+    // the cold scan ran. Use the current index baseline, never an older
+    // history guess, and let put's inode/content checks protect later saves.
+    let mut current = match g.git.index().await {
+        Ok(index) => match index.get(&rel) {
+            Some(entry) => g
+                .git
+                .object(&entry.oid)
+                .await
+                .ok()
+                .and_then(|b| crate::git::pointer_key(&b)),
+            None => None,
+        },
+        Err(e) => return vec![problem("internal-error", &[], Some(e.to_string()))],
+    };
+    if g.worktree
+        .as_ref()
+        .is_some_and(|w| crate::evict::is_old(&w.join(&rel), Some(&key)))
+    {
+        // An already visible suggestion can hold the requested bytes while
+        // its index stays on main. Put still checks that exact inode/hash
+        // after moving it aside; this does not exempt it from writer checks.
+        current = Some(key.clone());
+    }
+    match crate::install::put_restore(&g, &rel, &key, current.as_deref(), &entry.mode, &d.tracer)
+        .await
+    {
         Ok(Put::Done(_)) => {}
         Ok(Put::InUse | Put::Raced) => {
             return vec![problem("restore-in-use", &[("path", text(&rel))], None)];
         }
         Err(e) => return vec![problem("internal-error", &[], Some(e))],
+    }
+    if let Err(e) = intent.installed(&g, &d.device, &[rel.clone()].into()).await {
+        return vec![problem("internal-error", &[], Some(e.to_string()))];
     }
     if let Err(e) = crate::capture::capture(&g, &d.device, &d.tracer).await {
         tracing::warn!(group = %g.id, error = %e, "capture-failed");

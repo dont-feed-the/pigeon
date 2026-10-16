@@ -91,7 +91,7 @@ impl Daemon {
 
     /// A refounding changes main's genesis before replacing the served group.
     /// An old round must stop even while that replacement is still pending.
-    async fn current_group(&self, g: &Arc<Group>) -> bool {
+    pub(crate) async fn current_group(&self, g: &Arc<Group>) -> bool {
         if !self
             .group(&g.id)
             .is_some_and(|current| Arc::ptr_eq(&current, g))

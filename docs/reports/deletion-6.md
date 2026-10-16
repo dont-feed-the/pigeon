@@ -85,9 +85,10 @@ skip the configured month or claim physical purge completion.
 
 ## Remaining before release
 
-- Erased history/restore states, complete cancellation and readiness recovery
-  scenarios, and broader interface usability tests.
-- Real partition/restore/offline-return races and implementation traces.
+- The deciders' Needs you state for unavailable restored content, complete
+  cancellation/readiness recovery, and broader interface usability tests.
+- Post-seal partition/restore/drop races and implementation traces. The
+  waiting-period live offline-return check below is complete.
 - Wider refounded archive and initial-preparation recovery conformance.
 - Initial upgrade contention: different concurrent requests may split
   immutable choices and remain blocked. No retry may silently change a
@@ -244,8 +245,12 @@ confidence about eventual retention under the pending request only 3/7.
 The interface did not explain why restoring and leaving an erasure pending
 are compatible. English and French restore receipts and pending-request
 text now explain that earlier requests do not cover later saved or restored
-versions, and that restoring does not cancel a request. A focused retake
-is still required before reporting improved comprehension.
+versions, and that restoring does not cancel a request. A [focused retake](m5-usability-offline-return-retake.md) on a fresh normal
+`2291757` build completed both restores on the first attempt and retained
+the request. Scope comprehension was rated 7/7 and retention confidence
+6/7, up from 3/7; independent exact-byte and offline-return checks passed
+again. This is one returning participant’s subjective evaluation, not a
+new first-use population result.
 
 This is a live offline-return check during the waiting period, with real
 normal-build peers and signed suggestions. It does not exercise post-seal
@@ -254,3 +259,30 @@ History now labels a confirmed released key Erased instead of trusting old
 copy logs; signed-history and actual-annex regression checks also require
 that a pending request alone does not get this label and a fresh uncovered
 reference removes it.
+
+## Restoring absent contents
+
+An explicit file or folder restore now retains a new ordinary signed main
+version or authorized suggestion before fetching absent contents. Suggestions
+start at current accepted main so an older already-covered suggestion cannot
+silently supply the new reference birth. No transport bypass, released bit,
+new replicated format or exception to the reference algebra is introduced.
+Cold reference scanning runs outside the worktree lock; after reacquiring it,
+the request checks that refounding has not replaced its group. Installation
+uses the current index baseline and keeps the existing inode/content guards.
+
+If no copy arrives, `restore-waiting` explains that the request is retained
+and can be retried. Main/proposal refs themselves are the durable intent;
+the existing visible file and index are left unchanged. A suggestion is
+bound to actual installed bytes only after installation succeeds. A crash
+before that binding can leave an extra ordinary suggestion, rather than
+claiming private bytes match another version. Existing suggestions remain
+retained; a later erasure must explicitly review their scope.
+
+Real normal daemon/CLI regressions cover an admin's absent file, a folder
+snapshot, and an ordinary member's signed suggestion. They check new refs,
+main authority, exact visible and unrelated bytes, index preservation and
+restart. Supplying an exact copy later permits an explicit admin retry.
+Fixture-only forced removals create the unavailable-copy branch; this is
+not yet an end-to-end post-seal physical-drop race. That evidence and the
+deciders' missing-restoration alert remain required before M5 release.

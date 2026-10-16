@@ -136,6 +136,7 @@ restore-result = { $path } is restored on this computer. Restoring older content
 restore-folder-result = { $path }: { $files } files restored on this computer. Newer files and saved history are kept. Check Home and Suggestions for sharing and approval.
 problem-restore-folder-incomplete = { $path }: { $files } files restored; { $skipped } could not be restored and were left unchanged. The operation needs attention. Files to check: { $paths }. Close files in use and try again; use pigeon doctor for other problems. Check Home and Suggestions for sharing and approval.
 problem-restore-in-use = { $path } changed or is being used. Pigeon left it unchanged. Open an old version with “Open a copy”, or close the file and try again.
+problem-restore-waiting = Restoring { $path } has been requested, but its saved contents are not available on this computer. Local edits are kept. Check Home for available copies, and Suggestions if approval is needed. You can try restoring again when a copy becomes available.
 problem-restore-folder-version = To restore a folder, choose a date with --at or omit the version option to restore its latest saved snapshot.
 web-restore-folder = Restore this folder
 web-files-arriving = Waiting for { $files } files to be available on this computer. Leave pigeon running; it will receive them when a copy is reachable.
