@@ -47,8 +47,8 @@ pub async fn join(d: &Daemon, inv: &Invitation, path: &Path) -> Result<String, S
         None => None,
     };
     let mut g = Group::open(&inv.group, path, &d.env)
-            .await
-            .ok_or("not-a-repository")?;
+        .await
+        .ok_or("not-a-repository")?;
     crate::shared::configure(&mut g, d.config.bridge_storage.as_ref())?;
     let g = std::sync::Arc::new(g);
     if crate::join_transition::pending(&g) {

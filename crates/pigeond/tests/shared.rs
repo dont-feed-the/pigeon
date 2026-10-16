@@ -379,18 +379,16 @@ fn pool_registration_deduplicates_before_acknowledging_without_background_rounds
     let body = b"already retained before registration\n";
     std::fs::write(files.join("original.txt"), body).unwrap();
     let peer = start(&home, &temp.path().join("peer.sock"), None);
-    assert!(matches!(
-        call(
-            &peer,
-            Request::Create {
-                name: "Register pool".into(),
-                folder: files.display().to_string(),
-                k: 1,
-                device_name: "Provider".into(),
-            }
-        ),
-        Response::Said { .. }
-    ));
+    let created = call(
+        &peer,
+        Request::Create {
+            name: "Register pool".into(),
+            folder: files.display().to_string(),
+            k: 1,
+            device_name: "Provider".into(),
+        },
+    );
+    assert!(matches!(created, Response::Said { .. }), "{created:?}");
     assert!(matches!(
         call(&peer, Request::Pause { duration: None }),
         Response::Said { .. }

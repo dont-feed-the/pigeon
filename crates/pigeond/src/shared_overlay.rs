@@ -2,7 +2,7 @@
 //! makes removal of accepted files replayable before capture can mistake a
 //! crash for a deletion. Content is already pinned in the immutable pool.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
@@ -179,9 +179,9 @@ pub(crate) async fn compact(g: &Group) -> Result<(), String> {
 }
 
 /// Accepted remote files stay hidden even when no explicit free target exists.
-pub(crate) fn targets(g: &Group) -> BTreeSet<String> {
+pub(crate) fn targets(g: &Group) -> pigeon_core::keep_targets::Targets {
     if g.shared.is_some() {
-        BTreeSet::from([String::new()])
+        pigeon_core::keep_targets::Targets([(String::new(), true)].into())
     } else {
         crate::evict::targets(g)
     }

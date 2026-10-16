@@ -89,6 +89,7 @@ fn roster() -> Roster {
         k: 1,
         retention_days: 30,
         relay: None,
+        telemetry_device: None,
         persons,
         devices,
         removed: BTreeMap::new(),
@@ -133,7 +134,24 @@ async fn a_late_proposal_unblocks_its_decision_and_later_native_edits() {
             "Docs/review.txt".into(),
             pointer(&git, b"Bob's suggestion\n").await,
         );
-        let suggestion = commit(&git, &proposed, Some(&genesis), 2).await;
+        // The signed proposal is physically absent from the receiving repo
+        // until the separate fetch, rather than merely lacking a kept ref.
+        let author = tempfile::tempdir().unwrap();
+        let author_git = Git::new(author.path(), GitEnv::default());
+        author_git
+            .run(&["init", "-q", "--bare", "-b", "main"])
+            .await
+            .unwrap();
+        std::fs::write(
+            author.path().join("objects/info/alternates"),
+            format!("{}/objects\n", temp.path().display()),
+        )
+        .unwrap();
+        let suggestion = commit(&author_git, &proposed, Some(&genesis), 2).await;
+        author_git
+            .update_ref("refs/heads/proposal", &suggestion, None)
+            .await
+            .unwrap();
         let decision_path = pigeon_core::authority::decision_path(&suggestion);
         let decision = DecisionDoc {
             proposal: suggestion.clone(),
@@ -166,17 +184,24 @@ async fn a_late_proposal_unblocks_its_decision_and_later_native_edits() {
         // Main arrives before a proposal ref has been validated and retained.
         for tip in [&later, &forged] {
             let waiting = verify::judge(&group, Some(&genesis), tip).await.unwrap();
-            assert!(matches!(
-                waiting.stopped,
-                Some((_, Verdict::Unknown("decision")))
-            ));
+            assert!(
+                matches!(waiting.stopped, Some((_, Verdict::Unknown("decision")))),
+                "{verdict:?}: {waiting:?}"
+            );
         }
         assert!(!group.lock().engine.accepted(&decided));
         assert!(!group.lock().engine.accepted(&later));
 
         let device = sig::device_id(&[2; 32]).0;
         let remote = format!("refs/pigeon/peers/remote/proposals/{device}/{suggestion}");
-        git.update_ref(&remote, &suggestion, None).await.unwrap();
+        git.run(&[
+            "fetch",
+            "-q",
+            author.path().to_str().unwrap(),
+            &format!("+refs/heads/proposal:{remote}"),
+        ])
+        .await
+        .unwrap();
         assert_eq!(proposal::take(&group, "remote").await, 1);
 
         // No restart or cache reset: a normal subsequent accept must retry.
@@ -209,7 +234,6 @@ async fn a_late_proposal_unblocks_its_decision_and_later_native_edits() {
                 "-q",
                 temp.path().to_str().unwrap(),
                 "+refs/heads/main:refs/pigeon/peers/source/main",
-                &proposal::refspec("source"),
             ])
             .await
             .unwrap();
@@ -221,6 +245,15 @@ async fn a_late_proposal_unblocks_its_decision_and_later_native_edits() {
                 .await
                 .is_err()
         );
+        fresh_git
+            .run(&[
+                "fetch",
+                "-q",
+                temp.path().to_str().unwrap(),
+                &proposal::refspec("source"),
+            ])
+            .await
+            .unwrap();
         assert_eq!(proposal::take(&fresh, "source").await, 1);
         verify::bootstrap(&fresh, &genesis, &later, &genesis, &device)
             .await

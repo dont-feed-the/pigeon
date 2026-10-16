@@ -233,8 +233,8 @@ async fn switch(
 ) -> Result<(), String> {
     let path = old.worktree.clone().unwrap_or_else(|| old.git_dir.clone());
     let mut g = Group::open(new, &path, &d.env)
-            .await
-            .ok_or("refounded repository missing")?;
+        .await
+        .ok_or("refounded repository missing")?;
     crate::shared::configure(&mut g, d.config.bridge_storage.as_ref())?;
     let g = std::sync::Arc::new(g);
     let busy = g.busy.lock().await;

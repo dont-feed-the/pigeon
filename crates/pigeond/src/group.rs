@@ -210,6 +210,7 @@ impl Group {
     pub(crate) fn history_judge(&self, genesis: &str) -> Group {
         Group {
             id: genesis.to_owned(),
+            shared: None,
             role: self.role,
             git_dir: self.git_dir.clone(),
             worktree: self.worktree.clone(),
