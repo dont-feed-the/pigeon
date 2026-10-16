@@ -85,9 +85,26 @@ its proposal arrives, exact read-only proposed bytes with accepted bytes
 unchanged, nested Free/Keep with no false arrival promise, and a fresh real
 join after a decline. Router tests cover exact scope, CSRF and conflicting
 review selectors; request framing laws cover the new request. EN/FR bundle
-and browser-router checks pass. Two independent focused 0.4.14 retests are
-in progress; their results will be recorded without replacing the failures
-above. This report does not yet declare the M4 release complete.
+and browser-router checks pass.
+
+Both independent focused 0.4.14 retests passed without assistance. The
+first-use participant freed the nested folder in the browser (30.403 s,
+4,509,696 allocated bytes released), reviewed two successive exact proposed
+CRLF versions without changing accepted bytes (64.241 and 81.054 s), declined
+both, then joined a fresh laptop on its first attempt (33.803 s). Ease was
+7/7 for each task; 46/46 external checks passed. The French newcomer freed
+the exact nested scope in 7.8 s (object absence verified at 16.8 s), reviewed
+actual proposed 20h text while accepted 19h text and history stayed intact,
+and joined a fresh computer after decline: membership in 1.6 s, exact bytes
+and Safe in 18.2 s. The old failed fixtures were unchanged. Both retests
+closed and independently verified all their owned processes; neither found
+an incorrect safety belief. The French singular copy “1 fichiers” remains
+a minor wording issue.
+
+These focused retests validate the repairs and do not replace or convert
+the original failures into first-pass successes. Paper-key and archive
+recovery are also being checked for the same decision-metadata dependency.
+This report does not yet declare the M4 release complete.
 
 ## Evidence handling
 
