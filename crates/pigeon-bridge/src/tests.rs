@@ -69,7 +69,10 @@ pub(crate) fn client(id: &str, user: &str, password: &str) -> Client {
 }
 
 pub(crate) async fn app() -> (tempfile::TempDir, Arc<App>) {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = tempfile::Builder::new()
+        .prefix("pgnbridge-")
+        .tempdir_in("/tmp")
+        .unwrap();
     let app = App::new(config(temp.path())).await.unwrap();
     {
         let mut store = app.store.lock().await;
@@ -393,7 +396,10 @@ fn range_and_namespaced_properties_handle_edges_without_claiming_unknown_feature
 
 #[tokio::test]
 async fn corrupt_or_newer_persistent_state_is_never_replaced_with_new_identities() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = tempfile::Builder::new()
+        .prefix("pgnbridge-")
+        .tempdir_in("/tmp")
+        .unwrap();
     let config = config(temp.path());
     std::fs::create_dir_all(&config.state_dir).unwrap();
     std::fs::write(
