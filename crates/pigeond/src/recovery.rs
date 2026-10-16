@@ -339,6 +339,7 @@ async fn recover_inner(
     drop(pending);
     let request = Join {
         v: JOIN_VERSION,
+        traceparent: None,
         invitation_hash: String::new(),
         proof: String::new(),
         device_name: name,

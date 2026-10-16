@@ -30,9 +30,20 @@ pub struct Config {
     /// The loops.
     #[serde(default)]
     pub loops: Loops,
+    /// Optional backend on this device; no default endpoint (ADR 0025).
+    #[serde(default)]
+    pub telemetry: Telemetry,
     /// The groups of this device.
     #[serde(default)]
     pub groups: Vec<GroupEntry>,
+}
+
+/// `[telemetry]`: configured locally, never learned from another member.
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct Telemetry {
+    /// OTLP HTTP base URL, such as `http://127.0.0.1:4318`.
+    #[serde(default)]
+    pub endpoint: Option<String>,
 }
 
 /// `[network]`.

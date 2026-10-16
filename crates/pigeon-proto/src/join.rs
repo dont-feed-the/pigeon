@@ -17,6 +17,9 @@ pub const JOIN_VERSION: u32 = 1;
 pub struct Join {
     /// [`JOIN_VERSION`].
     pub v: u32,
+    /// W3C trace context of the joining action (ADR 0025).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub traceparent: Option<String>,
     /// SHA-256 of the invitation's secret, hex.
     pub invitation_hash: String,
     /// HMAC-SHA256(secret, "pigeon-join-1" ‖ new device ID ‖ inviter device ID), hex.

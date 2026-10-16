@@ -15,6 +15,9 @@ pub const MAX_LINE: usize = 1 << 20;
 pub struct Envelope<T> {
     /// Chosen by the client, unique on its connection.
     pub id: u64,
+    /// Optional W3C context (ADR 0025). Older clients omit it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub traceparent: Option<String>,
     /// The request or response itself.
     #[serde(flatten)]
     pub body: T,
@@ -34,7 +37,20 @@ pub enum WireError {
 /// One line of JSON, newline included. JSON escapes every newline inside a
 /// string, so the line holds exactly one.
 pub fn encode<T: Serialize>(id: u64, body: &T) -> Result<Vec<u8>, WireError> {
-    let mut line = serde_json::to_vec(&Envelope { id, body })?;
+    encode_with_context(id, body, None)
+}
+
+/// Encodes a request carrying optional W3C context, without changing older messages.
+pub fn encode_with_context<T: Serialize>(
+    id: u64,
+    body: &T,
+    traceparent: Option<String>,
+) -> Result<Vec<u8>, WireError> {
+    let mut line = serde_json::to_vec(&Envelope {
+        id,
+        body,
+        traceparent,
+    })?;
     line.push(b'\n');
     Ok(line)
 }

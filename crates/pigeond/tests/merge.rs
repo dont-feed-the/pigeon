@@ -51,6 +51,7 @@ fn roster(k: u32) -> Roster {
         group: "merge".into(),
         k,
         retention_days: 30,
+        telemetry_device: None,
         relay: None,
         persons: [
             (PersonId("ana".into()), person("Ana", true)),

@@ -241,6 +241,8 @@ pub const MESSAGES: &[Entry] = &[
     e("setting-changed", &["key", "value"]),
     e("setting-language", &[]),
     e("setting-notifications", &[]),
+    e("setting-telemetry-device", &[]),
+    e("setting-off", &[]),
     e("setting-auto", &[]),
     e("setting-true", &[]),
     e("setting-false", &[]),

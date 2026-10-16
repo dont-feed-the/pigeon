@@ -8,7 +8,12 @@
 //! stewards. The base's files were written by persons drawn at random: one
 //! who alone wrote an add-only file may change it (ADR 0070). A rename's
 //! trailer gives back its two paths (ADR 0072).
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "tests"
+)]
 mod common;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -58,6 +63,7 @@ fn group() -> Roster {
         group: "g".into(),
         k: 2,
         retention_days: 30,
+        telemetry_device: None,
         relay: None,
         persons: (1..=3)
             .map(|i| {
@@ -736,4 +742,23 @@ fn a_rename_trailer_names_its_paths(tc: TestCase) {
     );
     let bad = format!("tree x\n\nPigeon-Renamed: \"{old}\n");
     assert!(authority::renamed(bad.as_bytes()).is_empty() || old.contains('"'));
+}
+
+/// Selecting and clearing a collector follows the same atomic field and
+/// authority rules as other admin-only group settings (ADR 0025).
+#[hegel::test(test_cases = 1000)]
+fn telemetry_selection_round_trips_and_only_admins_authorize_it(tc: TestCase) {
+    let mut old = group();
+    old.telemetry_device = flag(&tc).then(|| dev(int(&tc, 1, 3) as usize));
+    let mut new = old.clone();
+    new.telemetry_device = flag(&tc).then(|| dev(int(&tc, 1, 3) as usize));
+    let edits = roster::diff(&old, &new).unwrap();
+    let applied = roster::apply(&old, &edits);
+    assert_eq!(applied.roster, new);
+    assert!(applied.skipped.is_none());
+    assert!(roster::may_sign(&old, &dev(1), &edits));
+    if !edits.is_empty() {
+        assert!(!roster::may_sign(&old, &dev(2), &edits));
+        assert!(!roster::may_sign(&old, &dev(5), &edits));
+    }
 }

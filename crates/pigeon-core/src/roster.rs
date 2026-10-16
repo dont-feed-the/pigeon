@@ -87,6 +87,8 @@ pub struct Roster {
     pub retention_days: u32,
     /// The group's own relay, which replaces n0's (ADR 0016, 09 §9.5).
     pub relay: Option<String>,
+    /// Optional group collector (ADR 0025); inactive if its device is absent.
+    pub telemetry_device: Option<DeviceId>,
     /// Persons by ID.
     pub persons: BTreeMap<PersonId, Person>,
     /// Devices by ID.
@@ -110,6 +112,8 @@ pub enum Field {
     Rules,
     /// The group relay.
     Relay,
+    /// The optional group telemetry collector.
+    TelemetryDevice,
     /// A person's name.
     PersonName(PersonId),
     /// A person's admin flag.
@@ -241,6 +245,10 @@ impl Roster {
             Field::RetentionDays => Value::Number(u64::from(self.retention_days)),
             Field::Rules => Value::Number(u64::from(self.rules)),
             Field::Relay => self.relay.clone().map_or(Value::Unset, Value::Text),
+            Field::TelemetryDevice => self
+                .telemetry_device
+                .as_ref()
+                .map_or(Value::Unset, |d| Value::Text(d.0.clone())),
             Field::PersonName(p) => Value::Text(self.persons.get(p)?.name.clone()),
             Field::PersonAdmin(p) => Value::Flag(self.persons.get(p)?.admin),
             Field::DeviceName(d) => Value::Text(self.devices.get(d)?.name.clone()),
@@ -273,6 +281,10 @@ impl Roster {
             },
             (Field::Relay, Value::Text(s)) => self.relay = Some(s.clone()),
             (Field::Relay, Value::Unset) => self.relay = None,
+            (Field::TelemetryDevice, Value::Text(s)) => {
+                self.telemetry_device = Some(DeviceId(s.clone()))
+            }
+            (Field::TelemetryDevice, Value::Unset) => self.telemetry_device = None,
             (Field::PersonName(p), Value::Text(s)) => match self.persons.get_mut(p) {
                 Some(x) => x.name = s.clone(),
                 None => return false,
@@ -579,6 +591,7 @@ pub fn diff(old: &Roster, new: &Roster) -> Option<Vec<Edit>> {
         Field::RetentionDays,
         Field::Rules,
         Field::Relay,
+        Field::TelemetryDevice,
     ] {
         set(f, &mut out)?;
     }

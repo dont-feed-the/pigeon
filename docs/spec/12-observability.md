@@ -19,15 +19,26 @@
 
 ## 12.2 Telemetry (ADR 0025)
 
-Coded so far (`pigeon-telemetry`, laws in its `tests.rs`): each round of
-the loops is one trace, `round` with `group`, `device` and `lamport`, and a
-child span per step (`capture`, `accept`, `install`, `place`, `repair`,
-`publish`), failed steps with status 2. Spans and gauges are OTLP-JSON
-lines in `<state>/telemetry/pigeond-<µs>.jsonl`, written by hand rather
-than by `opentelemetry-otlp` **[no ADR: hand-written local export]**; files
-rotate at 5 MB and the oldest go above 50 MB. `pigeon debug bundle` carries
-the last 500 lines. Not yet: the metrics below, trace context across
-processes and streams, `telemetry_device`, and the developer dashboards.
+`pigeon-telemetry` uses the OpenTelemetry 0.33 SDK and generated OTLP wire
+encoders, with a tracing-opentelemetry 0.34 bridge. Each round is one trace,
+with group, device and Lamport IDs inherited by its step spans. W3C context
+crosses CLI socket envelopes, git child environments, joins and annex stream
+headers; async scopes attach it only while their future is being polled.
+Files rotate at 5 MiB and retain 50 MiB, and debug bundles flush the SDK.
+
+An admin selects `telemetry_device` through `pigeon settings telemetry-device
+NAME` (`off` clears it). The receiver admits only that group's roster
+members when it is the chosen collector; OTLP bodies are bounded and records
+of another group are refused. Collection runs outside custody loops, with a
+1 MiB device queue and 256 KiB batches. A local `[telemetry] endpoint` opts
+that collector into OTLP HTTP forwarding. Environment variables, remote
+rosters and redirects cannot choose an external backend.
+
+The user dashboard is the web interface. The optional operator dashboard
+and setup instructions live in `telemetry/`. Instrumented: version-state
+counts, pending bytes, deferred keys, annex call latency/outcome and
+transport bytes. Not yet: sync/protection lag, CPU/memory budgets and all
+ready-queue depths. The transfer path remains `unknown` until measured.
 
 - Spans, events and metrics are exported as OTLP by `pigeon-telemetry`, the
   only crate depending on `opentelemetry*`, pinned to one minor version.

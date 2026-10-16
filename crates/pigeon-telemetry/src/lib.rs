@@ -1,273 +1,312 @@
-//! Telemetry (12 §12.2, ADR 0025): spans and metrics written as OTLP-JSON
-//! lines, one `ExportTraceServiceRequest` or `ExportMetricsServiceRequest`
-//! per line, as OpenTelemetry's file exporter writes them, into
-//! `<state>/telemetry/`. Files rotate at [`FILE_BYTES`]; the oldest go once
-//! the directory holds more than [`LIMIT_BYTES`]. Nothing leaves the device:
-//! `pigeon debug bundle` collects them, and any OTLP back end reads them.
-//!
-//! The lines are written by hand rather than by `opentelemetry-otlp`, which
-//! a collector of the group will need **[no ADR: hand-written local
-//! export]**. Without [`init`], spans and metrics cost nothing.
+//! One OpenTelemetry SDK pipeline for spans and metrics (ADR 0025,
+//! 12 §12.2). Export is bounded, local OTLP-JSON by default. No environment
+//! variable can silently enable an external exporter. The same SDK tracer
+//! records explicit loop spans and the `tracing` bridge.
 
-use std::io::Write;
-use std::path::{Path, PathBuf};
+mod export;
+mod file;
+mod metrics;
+mod route;
+
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
-use serde_json::{Value, json};
+use opentelemetry::context::{FutureExt, WithContext};
+use opentelemetry::metrics::{Gauge, MeterProvider};
+use opentelemetry::propagation::TextMapPropagator;
+use opentelemetry::trace::{Span as _, TraceContextExt, Tracer as _, TracerProvider};
+use opentelemetry::{Context, KeyValue};
+use opentelemetry_sdk::Resource;
+use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
+use opentelemetry_sdk::trace::{
+    BatchConfigBuilder, BatchSpanProcessor, SdkTracer, SdkTracerProvider,
+};
+use serde_json::Value;
+
+pub use file::{prune, tail};
+pub use metrics::{AnnexCall, counter, histogram};
 
 /// The most the directory holds (12 §12.2).
 pub const LIMIT_BYTES: u64 = 50 * 1024 * 1024;
 /// When a file is closed and the next begun.
 pub const FILE_BYTES: u64 = 5 * 1024 * 1024;
 
-struct Sink {
-    dir: PathBuf,
-    resource: Value,
-    file: Mutex<Option<(PathBuf, std::fs::File, u64)>>,
+struct Pipeline {
+    local: export::Local,
+    instruments: metrics::Instruments,
+    traces: SdkTracerProvider,
+    metrics: SdkMeterProvider,
+    gauges: Mutex<HashMap<String, Gauge<f64>>>,
 }
+static PIPELINE: OnceLock<Pipeline> = OnceLock::new();
 
-static SINK: OnceLock<Sink> = OnceLock::new();
-
-/// Starts writing into `dir`, as `service` on `device`; later calls change
-/// nothing.
+/// Starts bounded local export. Calling it again leaves the original
+/// device's pipeline alone; no SDK exporter reads an endpoint from the environment.
 pub fn init(dir: PathBuf, service: &str, device: &str) {
-    let resource = json!({"attributes": [
-        attr("service.name", &Value::from(service)),
-        attr("pigeon.device", &Value::from(device)),
-        attr("service.version", &Value::from(env!("CARGO_PKG_VERSION"))),
-    ]});
-    let _ = SINK.set(Sink {
-        dir,
-        resource,
-        file: Mutex::new(None),
+    let _ = PIPELINE.get_or_init(|| {
+        let resource = Resource::builder_empty()
+            .with_attributes([
+                KeyValue::new("service.name", service.to_owned()),
+                KeyValue::new("pigeon.device", device.to_owned()),
+                KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
+            ])
+            .build();
+        let exporter = export::Local::new(dir);
+        let processor = BatchSpanProcessor::builder(exporter.clone())
+            .with_batch_config(
+                BatchConfigBuilder::default()
+                    .with_max_queue_size(2048)
+                    .with_max_export_batch_size(64)
+                    .with_scheduled_delay(Duration::from_secs(1))
+                    .build(),
+            )
+            .build();
+        let traces = SdkTracerProvider::builder()
+            .with_resource(resource.clone())
+            .with_span_processor(processor)
+            .build();
+        let reader = PeriodicReader::builder(exporter.clone())
+            .with_interval(Duration::from_secs(30))
+            .build();
+        let metrics = SdkMeterProvider::builder()
+            .with_resource(resource)
+            .with_reader(reader)
+            .build();
+        Pipeline {
+            local: exporter,
+            instruments: metrics::Instruments::default(),
+            traces,
+            metrics,
+            gauges: Mutex::new(HashMap::new()),
+        }
     });
 }
 
-fn now_ns() -> u128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_nanos())
+fn tracer() -> SdkTracer {
+    static NOOP: OnceLock<SdkTracerProvider> = OnceLock::new();
+    PIPELINE.get().map_or_else(
+        || {
+            NOOP.get_or_init(|| SdkTracerProvider::builder().build())
+                .tracer("pigeon")
+        },
+        |p| p.traces.tracer("pigeon"),
+    )
 }
 
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+/// The bridge used with the daemon's log layer. OpenTelemetry dependencies
+/// stay inside this crate (ADR 0025).
+pub fn layer<S>() -> tracing_opentelemetry::OpenTelemetryLayer<S, SdkTracer>
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    tracing_opentelemetry::layer().with_tracer(tracer())
 }
 
-fn random<const N: usize>() -> [u8; N] {
-    let mut b = [0u8; N];
-    if getrandom::fill(&mut b).is_err() {
-        // Unique enough for telemetry when the system has no randomness.
-        let t = now_ns().to_le_bytes();
-        for (i, x) in b.iter_mut().enumerate() {
-            *x = t.get(i % t.len()).copied().unwrap_or(0) ^ (i as u8);
-        }
-    }
-    b
-}
-
-/// An OTLP attribute: `key` with a string, integer, float or boolean.
-fn attr(key: &str, value: &Value) -> Value {
-    let v = match value {
-        Value::Bool(b) => json!({"boolValue": b}),
-        Value::Number(n) if n.is_i64() || n.is_u64() => json!({"intValue": n.to_string()}),
-        Value::Number(n) => json!({"doubleValue": n.as_f64()}),
-        Value::String(s) => json!({"stringValue": s}),
-        other => json!({"stringValue": other.to_string()}),
-    };
-    json!({"key": key, "value": v})
-}
-
-fn attrs(list: &[(String, Value)]) -> Vec<Value> {
-    list.iter().map(|(k, v)| attr(k, v)).collect()
-}
-
-/// The files of `files` (name, bytes; names sort oldest first) to delete so
-/// that the rest hold at most `limit` bytes; the newest always stays.
-pub fn prune(files: &[(String, u64)], limit: u64) -> Vec<String> {
-    let mut sorted: Vec<&(String, u64)> = files.iter().collect();
-    sorted.sort();
-    let mut total: u64 = sorted.iter().map(|(_, n)| n).sum();
-    let mut out = Vec::new();
-    for (name, n) in sorted.iter().take(sorted.len().saturating_sub(1)) {
-        if total <= limit {
-            break;
-        }
-        total -= n;
-        out.push(name.clone());
-    }
-    out
-}
-
-fn listed(dir: &Path) -> Vec<(String, u64)> {
-    std::fs::read_dir(dir)
-        .map(|it| {
-            it.filter_map(Result::ok)
-                .filter(|e| e.file_name().to_string_lossy().ends_with(".jsonl"))
-                .map(|e| {
-                    let n = e.metadata().map_or(0, |m| m.len());
-                    (e.file_name().to_string_lossy().into_owned(), n)
-                })
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-impl Sink {
-    fn write(&self, line: &Value) {
-        let mut bytes = serde_json::to_vec(line).unwrap_or_default();
-        bytes.push(b'\n');
-        let mut file = self.file.lock().unwrap_or_else(|p| p.into_inner());
-        if file.as_ref().is_none_or(|(_, _, n)| *n >= FILE_BYTES) {
-            let _ = std::fs::create_dir_all(&self.dir);
-            let name = format!("pigeond-{:020}.jsonl", now_ns() / 1_000);
-            let path = self.dir.join(name);
-            *file = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&path)
-                .ok()
-                .map(|f| (path, f, 0));
-            for old in prune(&listed(&self.dir), LIMIT_BYTES - FILE_BYTES) {
-                let _ = std::fs::remove_file(self.dir.join(old));
-            }
-        }
-        if let Some((_, f, n)) = file.as_mut()
-            && f.write_all(&bytes).is_ok()
-        {
-            *n += bytes.len() as u64;
-        }
-    }
-
-    fn scope() -> Value {
-        json!({"name": "pigeon", "version": env!("CARGO_PKG_VERSION")})
-    }
-}
-
-/// A span, written when it is dropped.
+/// A span, exported by the SDK when dropped.
 pub struct Span {
-    trace: [u8; 16],
-    id: [u8; 8],
-    parent: Option<[u8; 8]>,
-    name: String,
-    start: u128,
-    attributes: Vec<(String, Value)>,
-    error: Option<String>,
+    inner: opentelemetry_sdk::trace::Span,
+    inherited: Vec<KeyValue>,
 }
 
-/// A new root span: a trace of its own.
+/// A root span, or a child of the context currently attached to the task.
 pub fn span(name: &str) -> Span {
-    Span {
-        trace: if SINK.get().is_some() {
-            random()
-        } else {
-            [0; 16]
-        },
-        id: if SINK.get().is_some() {
-            random()
-        } else {
-            [0; 8]
-        },
-        parent: None,
-        name: name.to_owned(),
-        start: now_ns(),
-        attributes: Vec::new(),
-        error: None,
+    let mut span = Span {
+        inner: tracer().start(name.to_owned()),
+        inherited: Vec::new(),
+    };
+    if let Some(group) = group() {
+        span.set("group", group);
     }
+    span
+}
+
+#[derive(Clone)]
+struct Group(String);
+/// Natural group ID of the currently polled operation, if known.
+pub fn group() -> Option<String> {
+    Context::current().get::<Group>().map(|g| g.0.clone())
+}
+
+/// A span continuing a validated W3C traceparent from another process.
+pub fn remote_span(name: &str, parent: Option<&str>) -> Span {
+    let carrier: HashMap<String, String> = parent
+        .map(|p| ("traceparent".into(), p.to_owned()))
+        .into_iter()
+        .collect();
+    let context = opentelemetry_sdk::propagation::TraceContextPropagator::new().extract(&carrier);
+    Span {
+        inner: tracer().start_with_context(name.to_owned(), &context),
+        inherited: Vec::new(),
+    }
+}
+
+/// The current W3C context. Invalid or absent context stays absent.
+pub fn traceparent() -> Option<String> {
+    parent_of(&Context::current())
+}
+
+fn parent_of(context: &Context) -> Option<String> {
+    let mut carrier = HashMap::new();
+    opentelemetry_sdk::propagation::TraceContextPropagator::new()
+        .inject_context(context, &mut carrier);
+    carrier.remove("traceparent")
+}
+
+fn attribute(key: &str, value: Value) -> KeyValue {
+    let value: opentelemetry::Value = match value {
+        Value::Bool(b) => b.into(),
+        Value::Number(n) if n.is_i64() => n.as_i64().unwrap_or_default().into(),
+        Value::Number(n) => n.as_f64().unwrap_or_default().into(),
+        Value::String(s) => s.into(),
+        other => other.to_string().into(),
+    };
+    KeyValue::new(key.to_owned(), value)
 }
 
 impl Span {
-    /// A span inside this one, in its trace.
-    pub fn child(&self, name: &str) -> Span {
-        let mut s = span(name);
-        s.parent = Some(self.id);
-        s.trace = self.trace;
-        s
+    /// W3C context for a request, stream header or child environment.
+    pub fn traceparent(&self) -> Option<String> {
+        parent_of(&self.context())
     }
 
-    /// Sets an attribute, such as `group` or `device` (natural IDs).
+    fn context(&self) -> Context {
+        let context = Context::new().with_remote_span_context(self.inner.span_context().clone());
+        match self.inherited.iter().find(|kv| kv.key.as_str() == "group") {
+            Some(kv) => context.with_value(Group(kv.value.as_str().into_owned())),
+            None => context,
+        }
+    }
+
+    /// Attaches only during polling, so concurrent Tokio tasks never share
+    /// a thread-local context guard across an await point.
+    pub fn in_scope<F>(&self, future: F) -> WithContext<F> {
+        future.with_context(self.context())
+    }
+
+    /// Attaches to synchronous CLI work; keep the guard on this thread.
+    pub fn enter(&self) -> opentelemetry::ContextGuard {
+        self.context().attach()
+    }
+
+    /// A span in this trace, inheriting its natural IDs.
+    pub fn child(&self, name: &str) -> Span {
+        let context = Context::new().with_remote_span_context(self.inner.span_context().clone());
+        let mut inner = tracer().start_with_context(name.to_owned(), &context);
+        inner.set_attributes(self.inherited.clone());
+        Span {
+            inner,
+            inherited: self.inherited.clone(),
+        }
+    }
+
+    /// Records a natural ID or other attribute.
     pub fn set(&mut self, key: &str, value: impl Into<Value>) -> &mut Self {
-        self.attributes.push((key.to_owned(), value.into()));
+        let kv = attribute(key, value.into());
+        self.inner.set_attribute(kv.clone());
+        self.inherited.retain(|old| old.key != kv.key);
+        self.inherited.push(kv);
         self
     }
 
     /// Marks the span failed, with why.
     pub fn fail(&mut self, why: &str) {
-        self.error = Some(why.to_owned());
-    }
-
-    /// The OTLP-JSON line of this span ended at `end`.
-    fn line(&self, resource: &Value, end: u128) -> Value {
-        let mut s = json!({
-            "traceId": hex(&self.trace),
-            "spanId": hex(&self.id),
-            "name": self.name,
-            "kind": 1,
-            "startTimeUnixNano": self.start.to_string(),
-            "endTimeUnixNano": end.to_string(),
-            "attributes": attrs(&self.attributes),
-            "status": match &self.error {
-                Some(m) => json!({"code": 2, "message": m}),
-                None => json!({"code": 1}),
-            },
-        });
-        if let (Some(p), Some(o)) = (self.parent, s.as_object_mut()) {
-            o.insert("parentSpanId".into(), hex(&p).into());
-        }
-        json!({"resourceSpans": [{
-            "resource": resource,
-            "scopeSpans": [{"scope": Sink::scope(), "spans": [s]}],
-        }]})
+        self.inner
+            .set_status(opentelemetry::trace::Status::error(why.to_owned()));
     }
 }
 
 impl Drop for Span {
     fn drop(&mut self) {
-        if let Some(sink) = SINK.get() {
-            sink.write(&self.line(&sink.resource, now_ns()));
-        }
+        self.inner.end();
     }
 }
 
-/// Writes a gauge's value now, such as `pigeon.versions` by `state`.
+/// Records a gauge through the SDK. Instrument names are fixed at call
+/// sites; labels carry group and other natural IDs.
 pub fn gauge(name: &str, value: f64, labels: &[(&str, &str)]) {
-    let Some(sink) = SINK.get() else {
+    let Some(p) = PIPELINE.get() else {
         return;
     };
-    let labels: Vec<Value> = labels
+    let mut gauges = p.gauges.lock().unwrap_or_else(|e| e.into_inner());
+    let gauge = gauges
+        .entry(name.to_owned())
+        .or_insert_with(|| p.metrics.meter("pigeon").f64_gauge(name.to_owned()).build());
+    let labels: Vec<_> = labels
         .iter()
-        .map(|(k, v)| attr(k, &Value::from(*v)))
+        .map(|(k, v)| KeyValue::new((*k).to_owned(), (*v).to_owned()))
         .collect();
-    let point = json!({
-        "timeUnixNano": now_ns().to_string(),
-        "asDouble": value,
-        "attributes": labels,
-    });
-    sink.write(&json!({"resourceMetrics": [{
-        "resource": sink.resource,
-        "scopeMetrics": [{"scope": Sink::scope(), "metrics": [
-            {"name": name, "gauge": {"dataPoints": [point]}}
-        ]}],
-    }]}));
+    gauge.record(value, &labels);
 }
 
-/// The last `n` lines written into `dir`, oldest first, for a debug bundle.
-pub fn tail(dir: &Path, n: usize) -> Vec<String> {
-    let mut files = listed(dir);
-    files.sort();
-    let mut out: Vec<String> = Vec::new();
-    for (name, _) in files.iter().rev() {
-        let text = std::fs::read_to_string(dir.join(name)).unwrap_or_default();
-        let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
-        lines.append(&mut out);
-        out = lines;
-        if out.len() >= n {
-            break;
-        }
+/// Flushes pending telemetry for a debug bundle or graceful shutdown.
+/// The SDK bounds both queues; export failure never changes file safety.
+pub fn flush() {
+    if let Some(p) = PIPELINE.get() {
+        let _ = p.traces.force_flush();
+        let _ = p.metrics.force_flush();
     }
-    let skip = out.len().saturating_sub(n);
-    out.split_off(skip)
 }
 
 #[cfg(test)]
 mod tests;
+
+/// A bounded batch for a group's collector; offline telemetry is expendable.
+/// Records of any other group remain queued separately.
+pub fn take_group(group: &str) -> Vec<Value> {
+    PIPELINE
+        .get()
+        .map_or_else(Vec::new, |p| p.local.take(group))
+}
+
+/// Validates and stores authenticated peer telemetry, without putting it
+/// in the outbound queue again. The caller checks roster membership and
+/// whether this device is the configured collector before calling.
+pub fn receive(group: &str, device: &str, mut records: Vec<Value>) -> Option<Vec<Value>> {
+    if records.is_empty() || records.iter().any(|r| !route::validate(r, group)) {
+        return None;
+    }
+    let pipeline = PIPELINE.get()?;
+    for record in &mut records {
+        route::identify(record, group, device);
+        pipeline.local.store(record);
+    }
+    Some(records)
+}
+
+/// Forwards OTLP-JSON to a backend explicitly configured on this device.
+/// The URL is never obtained from the roster or OTEL environment variables.
+/// Redirects are disabled so a local collector cannot redirect private data.
+pub async fn forward(endpoint: &str, records: &[Value]) -> bool {
+    let Ok(url) = reqwest::Url::parse(endpoint) else {
+        return false;
+    };
+    if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
+        return false;
+    }
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
+        .build()
+    else {
+        return false;
+    };
+    for record in records {
+        let kind = if record.get("resourceSpans").is_some() {
+            "traces"
+        } else if record.get("resourceMetrics").is_some() {
+            "metrics"
+        } else {
+            return false;
+        };
+        let mut target = url.clone();
+        target.set_path(&format!("{}/v1/{kind}", url.path().trim_end_matches('/')));
+        match client.post(target).json(record).send().await {
+            Ok(response) if response.status().is_success() => {}
+            _ => return false,
+        }
+    }
+    true
+}

@@ -177,6 +177,8 @@ async fn client(net: Arc<Net>, stream: UnixStream) -> Result<(), NetError> {
             decoder.push(&buf[..n]);
         };
         let id = request.id;
+        let mut span = pigeon_telemetry::remote_span("request", request.traceparent.as_deref());
+        span.set("device", net.node.device_id());
         match request.body {
             Request::Hello { .. } => {
                 let hello = Response::Hello {
@@ -193,9 +195,8 @@ async fn client(net: Arc<Net>, stream: UnixStream) -> Result<(), NetError> {
                     return reply(&mut wr, id, &problem("not-a-pigeon-repository", None)).await;
                 };
                 let addresses = net.directory.addresses(&device);
-                let opened = net
-                    .node
-                    .open_annex_stream(&device, &repo.group, addresses)
+                let opened = span
+                    .in_scope(net.node.open_annex_stream(&device, &repo.group, addresses))
                     .await;
                 let (mut send, mut recv) = match opened {
                     Ok(s) => s,
@@ -232,6 +233,30 @@ async fn client(net: Arc<Net>, stream: UnixStream) -> Result<(), NetError> {
                 let (a, b) = tokio::join!(up, down);
                 tracing::debug!(peer = %device, ms = started.elapsed().as_millis(),
                     up = ?a, down = ?b, "connect-ended");
+                if let Ok(n) = &a {
+                    pigeon_telemetry::counter(
+                        "pigeon.transfer.bytes",
+                        *n,
+                        &[
+                            ("direction", "sent"),
+                            ("peer", &device),
+                            ("path", "unknown"),
+                            ("group", &repo.group),
+                        ],
+                    );
+                }
+                if let Ok(n) = &b {
+                    pigeon_telemetry::counter(
+                        "pigeon.transfer.bytes",
+                        *n,
+                        &[
+                            ("direction", "received"),
+                            ("peer", &device),
+                            ("path", "unknown"),
+                            ("group", &repo.group),
+                        ],
+                    );
+                }
                 a?;
                 b?;
                 return Ok(());
@@ -261,7 +286,7 @@ async fn client(net: Arc<Net>, stream: UnixStream) -> Result<(), NetError> {
             }
             other => match &net.loops {
                 Some(loops) => {
-                    for response in loops.request(other).await {
+                    for response in span.in_scope(loops.request(other)).await {
                         reply(&mut wr, id, &response).await?;
                     }
                 }

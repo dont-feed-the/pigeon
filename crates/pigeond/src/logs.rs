@@ -1,15 +1,16 @@
 //! `pigeond`'s logs (12 §12.1, ADR 0022): one JSON object per line, in
 //! `<state>/logs/pigeond-YYYY-MM-DD.ndjson` (UTC), with the time, the level,
 //! the target, the event's name and its fields. A minimal `tracing`
-//! subscriber writes them; spans are not recorded (13 §13.12).
+//! layer writes them; a second layer records spans through the shared
+//! OpenTelemetry pipeline (ADR 0025).
 
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
 use tracing::field::{Field, Visit};
-use tracing::span::{Attributes, Id, Record};
 use tracing::{Event, Level, Metadata, Subscriber};
+use tracing_subscriber::{Layer, layer::Context, prelude::*};
 
 struct JsonLog {
     dir: PathBuf,
@@ -64,16 +65,11 @@ impl JsonLog {
     }
 }
 
-impl Subscriber for JsonLog {
-    fn enabled(&self, metadata: &Metadata<'_>) -> bool {
+impl<S: Subscriber> Layer<S> for JsonLog {
+    fn enabled(&self, metadata: &Metadata<'_>, _: Context<'_, S>) -> bool {
         *metadata.level() <= self.max
     }
-    fn new_span(&self, _: &Attributes<'_>) -> Id {
-        Id::from_u64(1)
-    }
-    fn record(&self, _: &Id, _: &Record<'_>) {}
-    fn record_follows_from(&self, _: &Id, _: &Id) {}
-    fn event(&self, event: &Event<'_>) {
+    fn on_event(&self, event: &Event<'_>, _: Context<'_, S>) {
         let mut fields = Fields(serde_json::Map::new());
         event.record(&mut fields);
         let mut map = serde_json::Map::new();
@@ -88,8 +84,6 @@ impl Subscriber for JsonLog {
         line.push(b'\n');
         self.write(&line);
     }
-    fn enter(&self, _: &Id) {}
-    fn exit(&self, _: &Id) {}
 }
 
 /// Sends `tracing` events to the daily files in `dir`; `PIGEON_LOG=debug`
@@ -105,5 +99,9 @@ pub fn init(dir: PathBuf) {
         max,
         file: Mutex::new(None),
     };
-    let _ = tracing::subscriber::set_global_default(log);
+    let _ = tracing::subscriber::set_global_default(
+        tracing_subscriber::registry()
+            .with(log)
+            .with(pigeon_telemetry::layer()),
+    );
 }

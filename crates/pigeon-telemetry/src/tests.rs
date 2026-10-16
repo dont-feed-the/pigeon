@@ -38,17 +38,125 @@ fn pruning_drops_the_oldest_down_to_the_limit(tc: TestCase) {
 }
 
 #[test]
-fn a_span_line_is_otlp_json_with_its_parent() {
-    let root = span("round");
+fn the_sdk_exports_correlated_spans_and_gauges_as_otlp_json() {
+    use opentelemetry::trace::{Span as _, TraceContextExt};
+    let dir = tempfile::tempdir().unwrap();
+    super::init(dir.path().to_path_buf(), "pigeond", "alice");
+    let mut root = span("round");
+    root.set("group", "g1");
     let mut child = root.child("capture");
-    child.set("group", "g1").set("files", 3);
+    child.set("files", 3);
     child.fail("disk-full");
-    let line = child.line(&serde_json::json!({"attributes": []}), child.start + 5);
-    let s = &line["resourceSpans"][0]["scopeSpans"][0]["spans"][0];
-    assert_eq!(s["name"], "capture");
-    assert_eq!(s["parentSpanId"], super::hex(&root.id));
-    assert_eq!(s["traceId"], super::hex(&root.trace));
-    assert_eq!(s["status"]["code"], 2);
-    assert_eq!(s["attributes"][1]["value"]["intValue"], "3");
-    assert_eq!(s["attributes"][0]["value"]["stringValue"], "g1");
+    let root_id = root.inner.span_context().span_id().to_string();
+    let trace_id = root.inner.span_context().trace_id().to_string();
+    drop(child);
+    drop(root);
+    super::gauge(
+        "pigeon.versions",
+        3.0,
+        &[("group", "g1"), ("state", "local")],
+    );
+    // The bridge uses the very same SDK tracer and exporter.
+    use tracing_subscriber::prelude::*;
+    let subscriber = tracing_subscriber::registry().with(super::layer());
+    tracing::subscriber::with_default(subscriber, || {
+        let span = tracing::info_span!("request", group = "g1");
+        let _entered = span.enter();
+        tracing::info!("accepted");
+    });
+    super::flush();
+    let lines: Vec<serde_json::Value> = super::tail(dir.path(), 100)
+        .iter()
+        .map(|s| serde_json::from_str(s).unwrap())
+        .collect();
+    let spans: Vec<&serde_json::Value> = lines
+        .iter()
+        .filter_map(|v| v["resourceSpans"].as_array())
+        .flatten()
+        .filter_map(|r| r["scopeSpans"].as_array())
+        .flatten()
+        .filter_map(|s| s["spans"].as_array())
+        .flatten()
+        .collect();
+    let child = spans.iter().find(|s| s["name"] == "capture").unwrap();
+    assert_eq!(child["parentSpanId"], root_id);
+    assert_eq!(child["traceId"], trace_id);
+    assert_eq!(child["status"]["code"], 2);
+    assert!(
+        child["attributes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a["key"] == "group" && a["value"]["stringValue"] == "g1")
+    );
+    assert!(spans.iter().any(|s| s["name"] == "request"));
+    assert!(lines.iter().any(|v| v["resourceMetrics"].is_array()));
+    // Noop before init is exercised by the pruning law's independent path.
+    let _ = opentelemetry::Context::current().span();
+}
+
+/// Law: a group export contains only that group's spans and metric points;
+/// unlabelled records stay local, and mixed incoming batches are refused.
+#[hegel::test(test_cases = 1000)]
+fn collection_never_crosses_a_group_boundary(tc: TestCase) {
+    use serde_json::json;
+    let n = tc.draw(gs::integers::<usize>().min_value(1).max_value(30));
+    let groups: Vec<_> = (0..n)
+        .map(|_| tc.draw(gs::integers::<u8>().max_value(3)))
+        .collect();
+    let attributes = |g: u8| {
+        if g == 3 {
+            json!([])
+        } else {
+            json!([{"key":"group","value":{"stringValue":format!("g{g}")}}])
+        }
+    };
+    let traces = json!({"resourceSpans":[{"resource":{"attributes":[]},"scopeSpans":[{"spans":
+        groups.iter().enumerate().map(|(i,g)| json!({"name":format!("s{i}"), "attributes":attributes(*g)})).collect::<Vec<_>>()
+    }]}]});
+    let metrics = json!({"resourceMetrics":[{"resource":{"attributes":[]},"scopeMetrics":[{"metrics":[{
+        "name":"pigeon.versions", "gauge":{"dataPoints":groups.iter().enumerate().map(|(i,g)| json!({"asDouble":i as f64,"attributes":attributes(*g)})).collect::<Vec<_>>()}
+    }]}]}]});
+    for line in [traces, metrics] {
+        let split = super::route::split(&line);
+        for (group, part) in &split {
+            assert!(super::route::validate(part, group));
+            for other in ["g0", "g1", "g2", "g3"] {
+                assert_eq!(super::route::validate(part, other), group == other);
+            }
+        }
+        let expected: std::collections::BTreeSet<_> = groups
+            .iter()
+            .filter(|g| **g < 3)
+            .map(|g| format!("g{g}"))
+            .collect();
+        assert_eq!(
+            split
+                .keys()
+                .cloned()
+                .collect::<std::collections::BTreeSet<_>>(),
+            expected
+        );
+        if groups.iter().any(|g| *g != groups[0]) || groups[0] == 3 {
+            for group in split.keys() {
+                assert!(!super::route::validate(&line, group));
+            }
+        }
+    }
+}
+
+#[test]
+fn a_remote_context_is_validated_and_not_shared_with_other_tasks() {
+    use opentelemetry::trace::Span as _;
+    let parent = "00-12345678901234567890123456789012-1234567890123456-01";
+    let remote = super::remote_span("request", Some(parent));
+    assert_eq!(
+        remote.inner.span_context().trace_id().to_string(),
+        "12345678901234567890123456789012"
+    );
+    let invalid = super::remote_span("request", Some("garbage"));
+    assert_ne!(
+        invalid.inner.span_context().trace_id(),
+        remote.inner.span_context().trace_id()
+    );
 }

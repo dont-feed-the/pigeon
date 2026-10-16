@@ -24,7 +24,24 @@ pub struct Api(pub Arc<Daemon>);
 impl Loops for Api {
     fn request(&self, request: Request) -> Answer<Vec<Response>> {
         let d = self.0.clone();
-        Box::pin(async move { handle(&d, request).await })
+        Box::pin(async move {
+            let mut span = pigeon_telemetry::span("api.request");
+            span.set("device", d.device.clone());
+            if let Some(g) = d.default_group() {
+                span.set("group", g.id.clone());
+            }
+            span.in_scope(handle(&d, request)).await
+        })
+    }
+
+    fn telemetry(
+        &self,
+        group: String,
+        device: String,
+        records: Vec<serde_json::Value>,
+    ) -> Answer<bool> {
+        let d = self.0.clone();
+        Box::pin(async move { crate::telemetry::receive(&d, &group, &device, records).await })
     }
 
     fn join(&self, device: String, join: Join) -> Answer<JoinAnswer> {
@@ -223,6 +240,9 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             }
         }
         Request::GetSettings { key } => crate::prefs::get(d, key.as_deref()),
+        Request::SetSettings { key, value } if key == "telemetry-device" => {
+            crate::telemetry::set_collector(d, value.trim()).await
+        }
         Request::SetSettings { key, value } => crate::prefs::set(d, &key, &value),
         Request::Pause { duration } => crate::pause::pause(d, duration.as_deref()),
         Request::Resume => crate::pause::resume(d),
@@ -368,6 +388,7 @@ async fn create_inner(
         group: name.to_owned(),
         k,
         retention_days: 30,
+        telemetry_device: None,
         relay: None,
         persons: BTreeMap::from([(
             PersonId(pid.clone()),

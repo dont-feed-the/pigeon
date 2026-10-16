@@ -112,13 +112,17 @@ impl Daemon {
 
     /// One round of the loops for `g`.
     pub async fn round(&self, g: &Arc<Group>) {
-        let _busy = g.busy.lock().await;
         // One trace per round, a span per step (12 §12.2).
         let mut round = pigeon_telemetry::span("round");
         round
             .set("group", g.id.as_str())
             .set("device", self.device.as_str())
             .set("lamport", self.tracer.clock());
+        round.in_scope(self.round_inner(g, &round)).await;
+    }
+
+    async fn round_inner(&self, g: &Arc<Group>, round: &pigeon_telemetry::Span) {
+        let _busy = g.busy.lock().await;
         crate::locks::clear(&g.git_dir);
         crate::settings::check(g).await;
         g.ensure_remotedaemon(&self.wake).await;
@@ -260,6 +264,16 @@ impl Directory for Daemon {
         }
     }
 
+    fn telemetry_device(&self, group: &str) -> Option<String> {
+        let doc = Daemon::group(self, group)?.roster()?;
+        let id = doc.roster.telemetry_device?;
+        doc.roster
+            .devices
+            .get(&id)
+            .filter(|d| d.role != DeviceRole::Recovery)
+            .map(|_| id.0)
+    }
+
     fn addresses(&self, device: &str) -> Vec<SocketAddr> {
         let mut out: Vec<SocketAddr> = Vec::new();
         for g in self.groups() {
@@ -390,7 +404,6 @@ async fn bind_node(
 
 /// Runs `pigeond` until it is told to stop.
 pub async fn run(dirs: Dirs) -> Result<(), String> {
-    crate::logs::init(dirs.logs());
     let config = config::load(&dirs.config_file()).map_err(|e| e.to_string())?;
     let secret = crate::util::device_key(&dirs.device_key()).map_err(|e| e.to_string())?;
     crate::git::set_signer(secret);
@@ -412,6 +425,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     };
     let device = node.device_id();
     pigeon_telemetry::init(dirs.state.join("telemetry"), "pigeond", &device);
+    crate::logs::init(dirs.logs());
     let tracer = Tracer::new(dirs.traces(), &device);
     let mut groups = Vec::new();
     for entry in &config.groups {
@@ -460,6 +474,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     crate::web::serve(&daemon).await;
     tokio::spawn(serve_socket(net.clone(), listener));
     tokio::spawn(accept_loop(net.clone()));
+    tokio::spawn(crate::telemetry::collect(daemon.clone()));
     tracing::info!(device = %device, socket = %socket.display(), "started");
     for (g, busy) in groups.iter().zip(held) {
         crate::evict::recover(g, &daemon.tracer).await;
@@ -484,6 +499,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
         g.stop_remotedaemon().await;
     }
     node.close().await;
+    pigeon_telemetry::flush();
     let _ = std::fs::remove_file(&socket);
     Ok(())
 }

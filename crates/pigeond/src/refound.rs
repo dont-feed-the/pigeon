@@ -272,6 +272,7 @@ mod tests {
             group: "Family".to_owned(),
             k: 2,
             retention_days: 30,
+            telemetry_device: None,
             relay: Some("https://relay.example".to_owned()),
             persons: BTreeMap::from([
                 (PersonId("ana".to_owned()), person("Ana", true)),

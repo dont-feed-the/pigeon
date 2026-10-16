@@ -249,6 +249,7 @@ fn line(program: &str, found: &str, minimum: &str) -> Response {
 
 /// `pigeon debug bundle`: this device's part, as one JSON file (12).
 pub async fn debug_bundle(d: &Daemon) -> Vec<Response> {
+    pigeon_telemetry::flush();
     let now = crate::util::now();
     let log = d
         .dirs

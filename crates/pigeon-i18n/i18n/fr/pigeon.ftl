@@ -403,3 +403,6 @@ drop-done = { $files } fichiers masqués, { $dropped } contenus retirés de cet 
 confirm-drop = Retirer quand même la copie de cet ordinateur ? Ce qu'aucune autre machine n'a est perdu. [o/N]
 cmd-view = Ouvrir une copie en lecture seule d'une version d'un fichier, hors du dossier
 view-ready = Une copie en lecture seule est dans { $path } ; elle est supprimée après sept jours.
+
+setting-telemetry-device = Partager les diagnostics avec
+setting-off = Garder les diagnostics sur chaque ordinateur

@@ -488,6 +488,7 @@ pub fn request(d: &Daemon, inv: &Invitation, name: &str, uuid: &str) -> Result<J
     let secret = unhex(&inv.secret).ok_or("invite-unknown")?;
     Ok(Join {
         v: JOIN_VERSION,
+        traceparent: None,
         invitation_hash: sha256_hex(&secret),
         proof: proof(&secret, &d.device, &inv.inviter),
         device_name: name.to_owned(),

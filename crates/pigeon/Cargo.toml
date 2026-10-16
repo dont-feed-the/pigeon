@@ -9,6 +9,7 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+pigeon-telemetry.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 pigeon-core.workspace = true

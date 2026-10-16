@@ -4,6 +4,19 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.1 — 2026-10-16
+
+### Added
+
+- Admins can choose a private diagnostic collector with `pigeon settings
+  telemetry-device NAME`, or stop collection with `off`. It receives only
+  that group's diagnostics from its current members.
+- A collector can forward to an OTLP HTTP backend explicitly configured on
+  its own computer. An optional operator dashboard shows file states,
+  annex latency and failures, queued work and transport throughput.
+- Diagnostic traces connect CLI requests, daemon work, git children and
+  peer streams. Debug bundles include buffered OpenTelemetry records.
+
 ## 0.4.0 — 2026-10-15
 
 Milestone M3, reach and installation, with early M4 usability fixes

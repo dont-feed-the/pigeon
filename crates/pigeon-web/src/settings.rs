@@ -48,6 +48,8 @@ pub async fn settings(
 fn label(r: &Renderer, key: &str, value: &str) -> String {
     match (key, value) {
         (_, "auto") => r.id("setting-auto"),
+        ("telemetry-device", "off") => r.id("setting-off"),
+        ("telemetry-device", name) => name.to_owned(),
         ("language", lang) => r.id(&format!("language-{lang}")),
         (_, v) => r.id(&format!("setting-{v}")),
     }

@@ -58,6 +58,7 @@ pub mod roster_file;
 pub mod settings;
 pub mod status;
 pub mod suggest;
+pub mod telemetry;
 pub mod thin;
 pub mod trace;
 pub mod util;

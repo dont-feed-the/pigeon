@@ -14,7 +14,9 @@ use std::time::Duration;
 use iroh::endpoint::{RecvStream, SendStream};
 use pigeon_core::filter::{Action, Config, Filter};
 use pigeon_proto::join::{Join, JoinAnswer};
-use pigeon_proto::stream::{ALPN_JOIN, HEADER_VERSION, Refusal, StreamAnswer, StreamHeader};
+use pigeon_proto::stream::{
+    ALPN_JOIN, ALPN_TELEMETRY, HEADER_VERSION, Refusal, StreamAnswer, StreamHeader,
+};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 use tokio::task::JoinSet;
@@ -38,6 +40,14 @@ pub async fn accept_loop(net: Arc<Net>) {
                 }
             };
             let device = device_id(&connection.remote_id());
+            if connection.alpn() == ALPN_TELEMETRY {
+                if let Ok(Ok((send, recv))) =
+                    tokio::time::timeout(HEADER_TIMEOUT, connection.accept_bi()).await
+                {
+                    super::telemetry::serve(&net, &device, send, recv).await;
+                }
+                return;
+            }
             if connection.alpn() == ALPN_JOIN {
                 if let Ok((send, recv)) = connection.accept_bi().await {
                     join(&net, device, send, recv).await;
@@ -63,7 +73,10 @@ async fn join(net: &Net, device: String, mut send: SendStream, mut recv: RecvStr
         code: code.to_owned(),
     };
     let answer = match (serde_json::from_slice::<Join>(&line), &net.loops) {
-        (Ok(j), Some(loops)) => loops.join(device.clone(), j).await,
+        (Ok(j), Some(loops)) => {
+            let span = pigeon_telemetry::remote_span("join.receive", j.traceparent.as_deref());
+            span.in_scope(loops.join(device.clone(), j)).await
+        }
         (Ok(_), None) => refused("not-in-this-build"),
         (Err(_), _) => refused("invite-unknown"),
     };
@@ -122,7 +135,18 @@ async fn stream(net: Arc<Net>, device: String, send: SendStream, mut recv: RecvS
         .filter_map(|a| a.parse().ok())
         .collect();
     net.directory.learn(&header.group, &device, addresses);
-    relay(&net, &device, &repository, &admitted, send, recv, server).await;
+    let mut span = pigeon_telemetry::remote_span("annex.receive", header.traceparent.as_deref());
+    span.set("group", header.group).set("peer", device.clone());
+    span.in_scope(relay(
+        &net,
+        &device,
+        &repository,
+        &admitted,
+        send,
+        recv,
+        server,
+    ))
+    .await;
 }
 
 /// Relays one session between a peer and remotedaemon through the filter.

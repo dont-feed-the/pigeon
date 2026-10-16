@@ -13,7 +13,7 @@ use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use pigeon_proto::{LineDecoder, PROTOCOL_VERSION, Request, Response, encode};
+use pigeon_proto::{LineDecoder, PROTOCOL_VERSION, Request, Response};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -44,7 +44,9 @@ fn connect() -> Result<UnixStream, String> {
 
 /// Sends one request and reads its response; returns what follows it.
 fn ask(stream: &mut UnixStream, request: &Request) -> Result<(Response, Vec<u8>), String> {
-    let line = encode(1, request).map_err(|_| "internal".to_owned())?;
+    let line =
+        pigeon_proto::wire::encode_with_context(1, request, std::env::var("TRACEPARENT").ok())
+            .map_err(|_| "internal".to_owned())?;
     stream
         .write_all(&line)
         .map_err(|_| "daemon-not-running".to_owned())?;

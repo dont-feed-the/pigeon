@@ -378,6 +378,7 @@ fn an_envelope_is_one_line(tc: TestCase) {
 fn requests_round_trip(tc: TestCase) {
     let sent: Vec<Envelope<Request>> = (0..tc.draw(gs::integers::<u8>().max_value(6)))
         .map(|i| Envelope {
+            traceparent: None,
             id: u64::from(i),
             body: request(&tc),
         })
@@ -442,7 +443,11 @@ fn responses_round_trip(tc: TestCase) {
     decoder.push(&encode(3, &r).unwrap());
     assert_eq!(
         decoder.next_line::<Response>().unwrap(),
-        Some(Envelope { id: 3, body: r })
+        Some(Envelope {
+            id: 3,
+            body: r,
+            traceparent: None
+        })
     );
 }
 

@@ -19,9 +19,7 @@ use std::os::unix::net::UnixStream;
 use std::process::ExitCode;
 use std::time::Duration;
 
-use pigeon_proto::{
-    Envelope, LineDecoder, Message, PROTOCOL_VERSION, Problem, Request, Response, encode,
-};
+use pigeon_proto::{Envelope, LineDecoder, Message, PROTOCOL_VERSION, Problem, Request, Response};
 
 use crate::args::Action;
 use crate::render::{Renderer, emit};
@@ -85,7 +83,8 @@ impl Client {
     }
 
     fn send(&mut self, id: u64, r: &Request) -> std::io::Result<()> {
-        let line = encode(id, r).map_err(|e| std::io::Error::other(e.to_string()))?;
+        let line = pigeon_proto::wire::encode_with_context(id, r, pigeon_telemetry::traceparent())
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
         self.stream.write_all(&line)
     }
 
@@ -181,8 +180,21 @@ fn exchange(out: &Renderer, json: bool, request: &Request) -> ExitCode {
 
 fn main() -> ExitCode {
     complete::answer();
+    let result = run();
+    pigeon_telemetry::flush();
+    result
+}
+
+fn run() -> ExitCode {
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let line = args::parse(&argv);
+    let _span = matches!(line.action, Action::Send(_)).then(|| {
+        if let Ok(dirs) = pigeon_sys::paths::Dirs::for_role(pigeon_sys::paths::Role::Person) {
+            pigeon_telemetry::init(dirs.state.join("telemetry"), "pigeon", "local-cli");
+        }
+        pigeon_telemetry::span("cli.request")
+    });
+    let _context = _span.as_ref().map(pigeon_telemetry::Span::enter);
     let out = render::for_person(now());
     match &line.action {
         Action::Help => {

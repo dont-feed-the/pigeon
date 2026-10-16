@@ -93,6 +93,7 @@ fn group() -> Roster {
         group: "fixture".into(),
         k: 2,
         retention_days: 30,
+        telemetry_device: None,
         relay: None,
         persons: [
             (pid("ana"), person("Ana", true)),

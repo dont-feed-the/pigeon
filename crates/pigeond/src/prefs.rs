@@ -24,6 +24,36 @@ fn yes_no() -> Vec<String> {
 
 /// `GetSettings`: all of them, or only `key`.
 pub fn get(d: &Daemon, key: Option<&str>) -> Vec<Response> {
+    // Operator setting: requested explicitly, since it changes group-wide
+    // diagnostic sharing rather than this computer's preferences.
+    if key == Some("telemetry-device") {
+        let Some(doc) = d.default_group().and_then(|g| g.roster()) else {
+            return vec![problem("not-in-group", &[], None)];
+        };
+        let value = doc
+            .roster
+            .telemetry_device
+            .as_ref()
+            .and_then(|id| doc.roster.devices.get(id))
+            .map_or_else(|| "off".to_owned(), |device| device.name.clone());
+        let choices = std::iter::once("off".to_owned())
+            .chain(
+                doc.roster
+                    .devices
+                    .values()
+                    .filter(|d| d.role != pigeon_core::roster::Role::Recovery)
+                    .map(|d| d.name.clone()),
+            )
+            .collect();
+        return vec![Response::Settings {
+            settings: vec![Setting {
+                key: "telemetry-device".into(),
+                value,
+                choices,
+            }],
+        }];
+    }
+
     let c = match config::load(&d.dirs.config_file()) {
         Ok(c) => c,
         Err(e) => return vec![problem("internal-error", &[], Some(e.to_string()))],

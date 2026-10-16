@@ -63,6 +63,7 @@ fn roster() -> Roster {
         group: "install".into(),
         k: 2,
         retention_days: 30,
+        telemetry_device: None,
         relay: None,
         persons: [
             (PersonId("ana".into()), person("Ana", true)),
