@@ -13,7 +13,7 @@ const FORM: &[(&str, &str)] = &[
     ("Content-Type", "application/x-www-form-urlencoded"),
 ];
 
-async fn signed_in(app: &App) {
+pub(crate) async fn signed_in(app: &App) {
     app.sessions.lock().await.insert(
         "browser".into(),
         auth::Session {
@@ -36,7 +36,7 @@ async fn text(response: axum::response::Response) -> String {
 
 /// A socket can only answer as the identity it was given. Every request is
 /// recorded, so isolation assertions also cover requests that render no text.
-async fn peer(app: &App, client: Option<Client>) -> Arc<Mutex<Vec<Rpc>>> {
+pub(crate) async fn peer(app: &App, client: Option<Client>) -> Arc<Mutex<Vec<Rpc>>> {
     let (socket, label) = client.as_ref().map_or_else(
         || {
             (

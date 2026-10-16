@@ -1,0 +1,67 @@
+# A complete local Git diff selects dependency groups for PRs only. No API
+# changed-file limit, third-party filter action or writable token is needed.
+# Missing history and non-PR events conservatively select every group.
+name: CI changes
+
+on:
+  workflow_call:
+    inputs:
+      force-full:
+        type: boolean
+        default: false
+    outputs:
+      proofs:
+        value: ${{ jobs.select.outputs.proofs }}
+      models:
+        value: ${{ jobs.select.outputs.models }}
+      catalogue:
+        value: ${{ jobs.select.outputs.catalogue }}
+      packaging:
+        value: ${{ jobs.select.outputs.packaging }}
+      rust:
+        value: ${{ jobs.select.outputs.rust }}
+      daemons:
+        value: ${{ jobs.select.outputs.daemons }}
+      code_traces:
+        value: ${{ jobs.select.outputs.code_traces }}
+      driver_traces:
+        value: ${{ jobs.select.outputs.driver_traces }}
+      lab:
+        value: ${{ jobs.select.outputs.lab }}
+      bridge:
+        value: ${{ jobs.select.outputs.bridge }}
+      bridge_traces:
+        value: ${{ jobs.select.outputs.bridge_traces }}
+
+permissions:
+  contents: read
+
+jobs:
+  select:
+    name: select relevant checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      proofs: ${{ steps.plan.outputs.proofs }}
+      models: ${{ steps.plan.outputs.models }}
+      catalogue: ${{ steps.plan.outputs.catalogue }}
+      packaging: ${{ steps.plan.outputs.packaging }}
+      rust: ${{ steps.plan.outputs.rust }}
+      daemons: ${{ steps.plan.outputs.daemons }}
+      code_traces: ${{ steps.plan.outputs.code_traces }}
+      driver_traces: ${{ steps.plan.outputs.driver_traces }}
+      lab: ${{ steps.plan.outputs.lab }}
+      bridge: ${{ steps.plan.outputs.bridge }}
+      bridge_traces: ${{ steps.plan.outputs.bridge_traces }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: complete diff, dependency groups and verified version-only changes
+        id: plan
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CI_FORCE_FULL: ${{ inputs.force-full }}
+        run: python3 scripts/select-ci

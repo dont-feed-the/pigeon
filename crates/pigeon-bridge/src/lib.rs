@@ -20,10 +20,12 @@ pub mod config;
 mod dav;
 mod dav_xml;
 mod index;
+mod lifecycle_trace;
 mod peer_ui;
 mod peers;
 mod rpc;
 mod store;
+mod sync_trace;
 mod ui;
 mod uploads;
 
@@ -32,6 +34,7 @@ pub struct App {
     config: config::Config,
     peers: peers::Peers,
     store: Mutex<store::Store>,
+    lifecycle_trace: Arc<lifecycle_trace::Trace>,
     sessions: Mutex<BTreeMap<String, auth::Session>>,
     flows: Mutex<BTreeMap<String, auth::Flow>>,
     client_locks: Mutex<BTreeMap<String, Arc<Mutex<()>>>>,
@@ -108,8 +111,10 @@ impl App {
         {
             return Err("content_dir and client peers must be on the same filesystem".into());
         }
+        let lifecycle_trace = Arc::new(lifecycle_trace::Trace::new(&config, &store));
         Ok(Arc::new(Self {
-            peers: peers::Peers::new(config.clone()),
+            peers: peers::Peers::new(config.clone(), lifecycle_trace.clone()),
+            lifecycle_trace,
             config,
             store: Mutex::new(store),
             sessions: Mutex::default(),
@@ -239,3 +244,9 @@ async fn origin(State(app): State<Arc<App>>, request: Request, next: Next) -> Re
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod sync_tests;
+
+#[cfg(test)]
+mod lifecycle_tests;

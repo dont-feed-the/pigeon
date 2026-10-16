@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+"""Select PR checks from a complete Git diff; every other event runs all checks.
+
+Unknown paths, missing history, malformed metadata and changes to CI itself
+select the full set. Version-only workspace bumps do not count as dependency
+changes. This selector never changes the checks required to publish a tag.
+"""
+
+import argparse
+import fnmatch
+import json
+import os
+import re
+import subprocess
+import tomllib
+
+GROUPS = {"proofs", "models", "catalogue", "packaging", "rust", "daemons",
+          "code_traces", "driver_traces", "lab", "bridge", "bridge_traces"}
+RUNTIME = {"rust", "daemons", "code_traces", "driver_traces", "bridge", "bridge_traces"}
+FORMAL = {"proofs", "models", "code_traces", "driver_traces", "bridge_traces"}
+RUNTIME_CRATES = {"pigeon", "pigeond", "pigeon-core", "pigeon-git", "pigeon-sys", "pigeon-proto",
+                  "pigeon-i18n", "pigeon-web", "pigeon-lab", "pigeon-telemetry", "git-annex-p2p-iroh"}
+JOBS = {"proofs": "proofs", "catalogue": "catalogue", "packaging": "packaging", "models": "models",
+        "rust": "rust", "daemons": "daemons", "code-traces": "code_traces", "driver-traces": "driver_traces"}
+SCOPES = {"ci": JOBS, "lab": {"lab": "lab"},
+          "bridge": {"bridge": "bridge", "catalogue-traces": "bridge_traces"}}
+
+
+def git(*args):
+    return subprocess.check_output(["git", *args], stderr=subprocess.PIPE).decode("utf-8")
+
+
+def show(commit, path):
+    return git("show", f"{commit}:{path}")
+
+
+def version_only(base, head, paths):
+    """Ignore metadata only when the entire parsed manifests/lock still agree."""
+    touched = set(paths) & {"Cargo.toml", "Cargo.lock"}
+    if not touched:
+        return set()
+    roots = [tomllib.loads(show(commit, "Cargo.toml")) for commit in (base, head)]
+    versions = [root["workspace"]["package"]["version"] for root in roots]
+    stable = [re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", v)
+              if isinstance(v, str) else None for v in versions]
+    # Invalid versions, prerelease transitions and decreases keep full Cargo
+    # validation. Only ordinary stable version bumps receive the exemption.
+    if not all(stable) or tuple(map(int, stable[1].groups())) < tuple(map(int, stable[0].groups())):
+        return set()
+    for root in roots:
+        if root["workspace"]["members"] != ["crates/*"]:
+            return set()
+        del root["workspace"]["package"]["version"]
+    if roots[0] != roots[1]:
+        return set()
+    names = []
+    for commit in (base, head):
+        members = git("ls-tree", "-r", "--name-only", "-z", commit, "crates").split("\0")
+        manifests = [p for p in members if fnmatch.fnmatchcase(p, "crates/*/Cargo.toml")]
+        packages = [tomllib.loads(show(commit, p))["package"] for p in manifests]
+        if not packages or any(p.get("version") != {"workspace": True} for p in packages):
+            return set()
+        names.append({p["name"] for p in packages})
+    if names[0] != names[1]:
+        return set()
+    locks = [tomllib.loads(show(commit, "Cargo.lock")) for commit in (base, head)]
+    for lock, version in zip(locks, versions):
+        found = set()
+        for package in lock["package"]:
+            if package["name"] in names[0] and "source" not in package:
+                if package["version"] != version or package["name"] in found:
+                    return set()
+                found.add(package["name"])
+                del package["version"]
+        if found != names[0]:
+            return set()
+    return touched if locks[0] == locks[1] else set()
+
+
+def classify(paths, ignored=()):
+    selected, reasons = set(), []
+    for path in sorted(set(paths) - set(ignored)):
+        if (path.startswith((".github/", ".cargo/"))
+                or path in {"Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "deny.toml",
+                            "AGENTS.md", "CLAUDE.md", "scripts/select-ci", "scripts/tests/test_select_ci.py"}
+                or path.endswith(("/Cargo.toml", "/build.rs"))):
+            return set(GROUPS), ["Build, dependency or CI policy changed"]
+        if path in {"README.md", "HANDOFF.md", "CHANGELOG.md"} or (
+                path.startswith("docs/") and path.endswith(".md")):
+            continue
+        if path.startswith(("packaging/", "Formula/")):
+            groups = {"packaging"}
+        elif path.startswith(("third_party/git-annex/", "lab/git-annex/")):
+            groups = RUNTIME | {"lab", "packaging"}
+        elif path.startswith("crates/pigeon-bridge/"):
+            groups = {"rust", "bridge", "bridge_traces"}
+        elif any(path.startswith(f"crates/{crate}/") for crate in RUNTIME_CRATES):
+            groups = RUNTIME
+        elif path.startswith("models/catalogue/"):
+            groups = {"catalogue", "code_traces", "bridge_traces"}
+        elif path.startswith("models/tla/Bridge"):
+            groups = FORMAL | {"bridge"}
+        elif path.startswith("models/") or path in {"scripts/check-proofs", "scripts/proof-inputs",
+                "scripts/run-tlc", "scripts/trace-to-tla", "scripts/check-authority-folds"} or path.startswith("scripts/formal/"):
+            groups = FORMAL
+        elif path in {"scripts/check-nextcloud-bridge", "scripts/check-nextcloud-shared-storage"}:
+            groups = {"bridge"}
+        elif path == "scripts/check-bridge-catalogue-traces":
+            groups = {"bridge_traces"}
+        elif path in {"scripts/check-bridge-lifecycle-traces", "scripts/check-bridge-sync-traces"}:
+            groups = {"bridge", "bridge_traces"}
+        elif path in {"scripts/check-code-traces", "scripts/check-driver-traces"}:
+            groups = FORMAL
+        elif path.startswith("scripts/tests/test_proof_"):
+            groups = {"proofs", "models"}
+        elif path in {"scripts/release-kpi", "scripts/release-latest", "scripts/wait-release-checks"} or (
+                path.startswith("scripts/tests/test_release_") and path.endswith(".py")):
+            groups = {"packaging"}
+        else:
+            return set(GROUPS), ["Unclassified path requires full validation"]
+        selected |= groups
+    if ignored:
+        reasons.append("Workspace version-only metadata verified separately")
+    reasons.append("Relevant dependency groups selected" if selected else "Documentation or version-only changes")
+    return selected, reasons
+
+
+def plan(event, base=None, head=None):
+    if event != "pull_request":
+        return {"groups": sorted(GROUPS), "reasons": ["Non-PR events always run full validation"], "paths": []}
+    try:
+        if not all(isinstance(sha, str) and re.fullmatch(r"[0-9a-f]{40,64}", sha) for sha in (base, head)):
+            raise ValueError("missing or invalid immutable PR commits")
+        ancestor = git("merge-base", base, head).strip()
+        if ancestor != base:
+            raise ValueError("PR must include the current base before reducing checks")
+        paths = git("diff", "--name-only", "--no-renames", "-z", ancestor, head).split("\0")
+        paths = [p for p in paths if p]
+        if not paths:
+            raise ValueError("empty diff")
+        ignored = version_only(ancestor, head, paths)
+        groups, reasons = classify(paths, ignored)
+        return {"groups": sorted(groups), "reasons": reasons, "paths": paths, "base": ancestor, "head": head}
+    except (subprocess.SubprocessError, UnicodeError, ValueError, KeyError, TypeError):
+        return {"groups": sorted(GROUPS), "reasons": ["Diff or version metadata unavailable; full validation required"], "paths": []}
+
+
+def verify_results(needs, scope="ci"):
+    """A selected job must run successfully; absence is never a passing check."""
+    jobs = SCOPES[scope]
+    required = {"repository", "changes"} if scope == "ci" else {"changes"}
+    if set(needs) != set(jobs) | required:
+        raise ValueError("unexpected or missing CI jobs")
+    for name in required:
+        if needs[name]["result"] != "success":
+            raise ValueError(f"{name} did not pass")
+    outputs = needs["changes"]["outputs"]
+    for job, group in jobs.items():
+        selected = outputs.get(group)
+        result = needs[job]["result"]
+        if selected not in {"true", "false"}:
+            raise ValueError(f"missing selection for {group}")
+        if result != "success" and (selected == "true" or result != "skipped"):
+            raise ValueError(f"{job} was selected={selected} but ended {result}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--event", default=os.environ.get("GITHUB_EVENT_NAME", ""))
+    parser.add_argument("--base", default=os.environ.get("PR_BASE_SHA"))
+    parser.add_argument("--head", default=os.environ.get("PR_HEAD_SHA"))
+    parser.add_argument("--verify", nargs="?", const="ci", choices=SCOPES)
+    args = parser.parse_args()
+    if args.verify:
+        verify_results(json.loads(os.environ["CI_NEEDS"]), args.verify)
+        print("Every selected CI job passed; intentional PR exclusions are recorded.")
+        return
+    event = "full" if os.environ.get("CI_FORCE_FULL") == "true" else args.event
+    result = plan(event, args.base, args.head)
+    if output := os.environ.get("GITHUB_OUTPUT"):
+        with open(output, "a", encoding="utf-8") as stream:
+            for group in sorted(GROUPS):
+                stream.write(f"{group}={str(group in result['groups']).lower()}\n")
+    if summary := os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(summary, "a", encoding="utf-8") as stream:
+            stream.write("## CI selection\n\nRepository rules always run. Release tags, main and periodic runs remain full.\n\n")
+            stream.write("| Job group | Selected |\n| --- | --- |\n")
+            for group in sorted(GROUPS):
+                stream.write(f"| {group} | {'yes' if group in result['groups'] else 'no'} |\n")
+            stream.write("\n" + "; ".join(result["reasons"]) + ".\n")
+    print(json.dumps(result, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

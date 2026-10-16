@@ -198,6 +198,16 @@ pub async fn history(d: &Daemon, path: &Path) -> Vec<Response> {
 
 /// `pigeon remove-computer NAME`.
 pub async fn remove_device(d: &Daemon, name: &str) -> Vec<Response> {
+    remove_selected_device(d, name, false).await
+}
+
+/// Bridge revocation names a signing key, never a mutable computer label.
+/// Resolving the key and committing removal share the roster's busy lock.
+pub async fn remove_device_id(d: &Daemon, device: &str) -> Vec<Response> {
+    remove_selected_device(d, device, true).await
+}
+
+async fn remove_selected_device(d: &Daemon, target: &str, by_id: bool) -> Vec<Response> {
     let Some(g) = d.default_group() else {
         return vec![problem("not-in-group", &[], None)];
     };
@@ -205,20 +215,22 @@ pub async fn remove_device(d: &Daemon, name: &str) -> Vec<Response> {
     let Some(mut doc) = g.roster() else {
         return vec![problem("not-in-group", &[], None)];
     };
-    let Some(id) = doc
-        .roster
-        .devices
-        .iter()
-        .find(|(_, x)| x.name == name)
-        .map(|(id, _)| id.clone())
-    else {
-        return vec![problem("unknown-computer", &[("name", text(name))], None)];
+    let selected = if by_id {
+        doc.roster
+            .devices
+            .get_key_value(&DeviceId(target.to_owned()))
+    } else {
+        doc.roster.devices.iter().find(|(_, x)| x.name == target)
     };
-    let recovery = doc
-        .roster
-        .devices
-        .get(&id)
-        .is_some_and(|d| d.role == DeviceRole::Recovery);
+    let Some((id, device)) = selected else {
+        return if by_id {
+            vec![Response::Done]
+        } else {
+            vec![problem("unknown-computer", &[("name", text(target))], None)]
+        };
+    };
+    let (id, name) = (id.clone(), device.name.clone());
+    let recovery = device.role == DeviceRole::Recovery;
     let change = [Edit::RemoveDevice(id.clone())];
     if id.0 == d.device || !may_sign(&doc.roster, &DeviceId(d.device.clone()), &change) {
         return vec![problem("not-allowed", &[], None)];
@@ -236,7 +248,7 @@ pub async fn remove_device(d: &Daemon, name: &str) -> Vec<Response> {
             } else {
                 "removed-computer"
             },
-            &[("name", text(name))],
+            &[("name", text(&name))],
         ),
     }]
 }

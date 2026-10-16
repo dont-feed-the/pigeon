@@ -139,6 +139,36 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
         "steward rule not shared",
         &[&lap, &bob],
     );
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .unwrap();
+    let git = pigeond::git::Git::new(&folder, pigeon_git::GitEnv::default());
+    let bob_device = match pigeon(&lap, &["machines"]).as_slice() {
+        [Response::Machines { machines }] => machines
+            .iter()
+            .find(|m| m.name == "bob-laptop")
+            .unwrap()
+            .device
+            .clone(),
+        answer => panic!("machines: {answer:?}"),
+    };
+    // The real CI failure retained this flag after a failed initial probe.
+    // Metadata still arrived, but annex refused to fetch the steward's bytes.
+    for option in ["annex-ignore", "annex-ignore-auto"] {
+        let key = format!("remote.{bob_device}.{option}");
+        eventually_within(
+            15,
+            || match runtime.block_on(git.run(&["config", &key, "true"])) {
+                Ok(_) => true,
+                Err(error) if error.to_string().contains("config.lock") => false,
+                Err(error) => panic!("fixture remote configuration: {error}"),
+            },
+            "fixture could not mark the peer ignored",
+            &[&lap, &bob],
+        );
+    }
     std::fs::write(other.join("Photos/second.txt"), b"Bob steward edit\n").unwrap();
     eventually_within(
         90,
@@ -146,6 +176,14 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
         "steward edit not accepted",
         &[&lap, &bob],
     );
+    for option in ["annex-ignore", "annex-ignore-auto"] {
+        assert_eq!(
+            runtime
+                .block_on(git.config(&format!("remote.{bob_device}.{option}")))
+                .as_deref(),
+            Some("false")
+        );
+    }
 
     // Put real unpublished working bytes and an unrelated raw entry in
     // the personal index. A rule update must commit only roster metadata.
@@ -155,12 +193,6 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
         .write(true)
         .open(&draft)
         .unwrap();
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(2)
-        .enable_all()
-        .build()
-        .unwrap();
-    let git = pigeond::git::Git::new(&folder, pigeon_git::GitEnv::default());
     let blob = runtime
         .block_on(git.run_in(&["hash-object", "-w", "--stdin"], b"private index entry"))
         .unwrap();

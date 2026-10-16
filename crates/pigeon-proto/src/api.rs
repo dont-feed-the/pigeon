@@ -201,6 +201,12 @@ pub enum Request {
         /// The computer's name in the roster.
         name: String,
     },
+    /// Removes exactly this signing key without resolving a computer label.
+    /// Already absent keys succeed, so bridge revocation can safely retry.
+    RemoveDeviceId {
+        /// The computer's device ID in the roster.
+        device: String,
+    },
     /// `pigeon held`: the held mass deletions and names (07 §7.4).
     Held,
     /// `pigeon held ID --share | --bring-back | --rename`.

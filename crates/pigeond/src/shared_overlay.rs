@@ -2,7 +2,7 @@
 //! makes removal of accepted files replayable before capture can mistake a
 //! crash for a deletion. Content is already pinned in the immutable pool.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
@@ -111,6 +111,7 @@ pub(crate) async fn compact(g: &Group) -> Result<(), String> {
     let wt = g.worktree.as_ref().ok_or("No client working tree")?;
     let mut table = crate::conflicts_file::read(g).ok_or("Cannot read client overlays")?;
     let old = table.clone();
+    repair_hidden_conflicts(g, &mut table).await?;
     for (path, divergence) in &mut table.paths {
         let Some(key) = &divergence.mine else {
             continue;
@@ -178,6 +179,70 @@ pub(crate) async fn compact(g: &Group) -> Result<(), String> {
     Ok(())
 }
 
+/// Accepted sparse files have no live local save to preserve as an overlay.
+/// Check the directory entry itself: a broken symlink is not an absent file.
+pub(crate) fn hidden_absent(g: &Group, path: &str, hidden: &BTreeSet<String>) -> bool {
+    g.shared.is_some()
+        && hidden.contains(path)
+        && g.worktree.as_ref().is_some_and(|wt| {
+            wt.join(path)
+                .symlink_metadata()
+                .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+        })
+}
+
+/// Older versions could record a concurrent overlay for an already hidden
+/// accepted file. Repair only when the complete indexed version survives at
+/// its accepted conflict name and its bytes remain pinned in the pool.
+async fn repair_hidden_conflicts(
+    g: &Group,
+    table: &mut crate::conflicts_file::Table,
+) -> Result<(), String> {
+    use crate::conflicts_file::Kind;
+    let Some(storage) = &g.shared else {
+        return Ok(());
+    };
+    if !table
+        .paths
+        .values()
+        .any(|d| d.kind == Kind::Concurrent && d.mine_stat.is_none())
+    {
+        return Ok(());
+    }
+    let Some(main) = g.git.rev("refs/heads/main").await else {
+        return Ok(());
+    };
+    let accepted = g.git.tree(&main).await.map_err(|e| e.to_string())?;
+    let index = g.git.index().await.map_err(|e| e.to_string())?;
+    let hidden = crate::evict::hidden_paths(g).await;
+    let mut repaired = Vec::new();
+    for (path, d) in &table.paths {
+        if d.kind != Kind::Concurrent || d.mine_stat.is_some() || !hidden_absent(g, path, &hidden) {
+            continue;
+        }
+        let (Some(key), Some(entry)) = (&d.mine, index.get(path)) else {
+            continue;
+        };
+        let blob = g.git.object(&entry.oid).await.map_err(|e| e.to_string())?;
+        if crate::git::pointer_key(&blob).as_ref() != Some(key)
+            || !accepted.iter().any(|(copy, e)| {
+                copy != path && pigeon_core::names::is_copy_of(copy, path) && e == entry
+            })
+        {
+            continue;
+        }
+        let object = pool::path(&storage.store, &g.id, key).map_err(|e| e.to_string())?;
+        pool::verify(&object, key).map_err(|e| e.to_string())?;
+        if hidden_absent(g, path, &hidden) {
+            repaired.push(path.clone());
+        }
+    }
+    for path in repaired {
+        table.paths.remove(&path);
+    }
+    Ok(())
+}
+
 /// Accepted remote files stay hidden even when no explicit free target exists.
 pub(crate) fn targets(g: &Group) -> pigeon_core::keep_targets::Targets {
     if g.shared.is_some() {
@@ -186,3 +251,7 @@ pub(crate) fn targets(g: &Group) -> pigeon_core::keep_targets::Targets {
         crate::evict::targets(g)
     }
 }
+
+#[cfg(test)]
+#[path = "shared_overlay_tests.rs"]
+mod tests;
