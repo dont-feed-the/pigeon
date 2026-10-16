@@ -18,6 +18,8 @@ the second number, and every other pull request the third.
 
 ### Fixed
 
+- Leaving waits for a peer that learned the device's membership; an older
+  roster cannot acknowledge a removal it has never seen.
 - Storage sharing leaves git-annex lock files and retention timestamps intact;
   only actual file content is deduplicated.
 - Connecting a bridge to existing storage finishes sharing retained objects
