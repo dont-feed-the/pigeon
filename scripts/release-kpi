@@ -71,6 +71,12 @@ def build_report(releases, runs, now, gap_target=7200, lead_target=3600, jobs=No
                    {a["name"] for a in r.get("assets", [])}]
     latest = installable[0] if installable else None
     age = seconds(now, latest["published_at"]) if latest else None
+    gaps = []
+    for current, previous in zip(installable, installable[1:]):
+        gap = seconds(instant(current["published_at"]), previous["published_at"])
+        gaps.append({"previous_tag": previous["tag_name"], "tag": current["tag_name"],
+                     "from": previous["published_at"], "to": current["published_at"],
+                     "seconds": gap, "target_breached": gap > gap_target})
     published_tags = {r["tag_name"] for r in installable}
     # Include an overlapping candidate whose run ended after publication.
     boundary = instant(latest["published_at"]) if latest else None
@@ -113,6 +119,8 @@ def build_report(releases, runs, now, gap_target=7200, lead_target=3600, jobs=No
                                       "url": latest["html_url"], "prerelease": latest.get("prerelease", False)} if latest else None,
         "publication_gap_seconds": age,
         "publication_gap_target_breached": age is None or age > gap_target,
+        "completed_publication_gaps": gaps,
+        "completed_publication_gap_sample_count": len(gaps),
         "published_release_count_in_api": len(published),
         "published_releases_missing_assets": [{"tag": r["tag_name"], "missing": sorted(required_assets(r["tag_name"]) -
                                                  {a["name"] for a in r.get("assets", [])})}
@@ -149,6 +157,11 @@ def markdown(report):
             f"| Last candidate → publication | {duration(report['last_publication_lead_time_seconds'])} | ≤ {duration(report['targets']['candidate_lead_time_seconds'])} |",
             f"| Candidate → publication median | {duration(report['median_publication_lead_time_seconds'])} ({report['lead_time_sample_count']} samples) | ≤ {duration(report['targets']['candidate_lead_time_seconds'])} |", "",
             "Publication-gap target: **" + ("missed" if report["publication_gap_target_breached"] else "met") + "**. Tags and successful builds do not reset this clock."]
+    gaps = report["completed_publication_gaps"]
+    rows += ["", f"Completed publication intervals: **{len(gaps)} samples**. A new publication does not erase an earlier missed target."]
+    for gap in gaps[:5]:
+        result = "missed" if gap["target_breached"] else "met"
+        rows.append(f"- {gap['previous_tag']} → {gap['tag']}: {duration(gap['seconds'])}; target {result}.")
     candidate_run = report["latest_candidate"]
     if candidate_run:
         rows += ["", f"Latest candidate: [{candidate_run['tag']}]({candidate_run['url']}), {candidate_run['state']}, elapsed {duration(candidate_run['age_seconds'])}."]

@@ -44,10 +44,13 @@ fn input(tc: &TestCase) -> (Roster, DeviceId) {
     (old, me)
 }
 
+/// The refounded group's invitation.
+const NEW: &str = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+
 #[hegel::test(test_cases = 1000)]
 fn sole_person_authority_is_valid(tc: TestCase) {
     let (old, me) = input(&tc);
-    let new = roster(&old, &me).unwrap();
+    let new = roster(&old, &me, NEW).unwrap();
     assert!(new.validate().is_ok());
     assert_eq!(new.devices.len(), 1);
     assert_eq!(new.devices[&me], old.devices[&me]);
@@ -59,7 +62,7 @@ fn sole_person_authority_is_valid(tc: TestCase) {
 #[hegel::test(test_cases = 1000)]
 fn folder_boundaries_and_group_settings_survive(tc: TestCase) {
     let (old, me) = input(&tc);
-    let new = roster(&old, &me).unwrap();
+    let new = roster(&old, &me, NEW).unwrap();
     assert_eq!(
         (
             &new.group,
@@ -97,16 +100,17 @@ fn folder_boundaries_and_group_settings_survive(tc: TestCase) {
 #[hegel::test(test_cases = 1000)]
 fn only_a_surviving_computer_can_refound(tc: TestCase) {
     let (mut old, me) = input(&tc);
-    assert!(roster(&old, &DeviceId("unknown".into())).is_none());
+    assert!(roster(&old, &DeviceId("unknown".into()), NEW).is_none());
     let device = old.devices.get_mut(&me).unwrap();
     device.role = Role::Recovery;
     device.annex_uuid = None;
-    assert!(roster(&old, &me).is_none());
+    assert!(roster(&old, &me, NEW).is_none());
 }
 
 #[hegel::test(test_cases = 1000)]
 fn refounding_is_idempotent(tc: TestCase) {
     let (old, me) = input(&tc);
-    let new = roster(&old, &me).unwrap();
-    assert_eq!(roster(&new, &me), Some(new));
+    let new = roster(&old, &me, NEW).unwrap();
+    assert_eq!(new.invitation, NEW);
+    assert_eq!(roster(&new, &me, NEW), Some(new));
 }

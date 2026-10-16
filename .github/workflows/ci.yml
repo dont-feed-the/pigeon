@@ -315,10 +315,10 @@ jobs:
             0) tests="held recovery_print" ;;
             1) tests="suggestions unsettled restore view drop status_pending capacity folder_rules restore_folder" ;;
             2) tests="people resolve health debug_consent bridge" ;;
-            3) tests="slice leave refound backup_history refound_restart recovery_sheet invitation_resume shared" ;;
+            3) tests="slice leave refound backup_history refound_restart recovery_sheet invitation shared" ;;
           esac
           all=$(grep -l '^#!\[cfg(feature = "lab")\]' crates/pigeond/tests/*.rs | xargs -n1 basename | sed 's/\.rs$//' | sort)
-          listed=$(echo held recovery_print suggestions unsettled restore view drop status_pending capacity folder_rules restore_folder people resolve health debug_consent bridge slice leave refound backup_history refound_restart recovery_sheet invitation_resume shared | tr ' ' '\n' | sort)
+          listed=$(echo held recovery_print suggestions unsettled restore view drop status_pending capacity folder_rules restore_folder people resolve health debug_consent bridge slice leave refound backup_history refound_restart recovery_sheet invitation shared | tr ' ' '\n' | sort)
           [ "$all" = "$listed" ] || { echo "::error::a lab test of pigeond is in no shard of ci.yml"; diff <(echo "$all") <(echo "$listed"); exit 1; }
           args=(); for t in $tests; do args+=(--test "$t"); done
           cargo test -p pigeond --features lab --locked --no-fail-fast "${args[@]}"
@@ -417,6 +417,8 @@ jobs:
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
       - name: observations and every semantic, schema and pipeline mutant
         run: python3 scripts/check-driver-traces
+      - name: isolated trace workers preserve every verdict and coverage failure
+        run: python3 -B -m unittest discover -s models/tests -p test_lab_trace_workers.py -v
       - name: save the Rust cache (main only)
         if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

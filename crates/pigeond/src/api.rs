@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use pigeon_core::roster::{Device, DeviceId, Person, PersonId, Role as DeviceRole, Roster};
+use pigeon_core::roster::{Device, DeviceId, Person, Role as DeviceRole, Roster};
 use pigeon_proto::api::{Arg, Machine, Message, Problem};
 use pigeon_proto::join::{Join, JoinAnswer};
 use pigeon_proto::{Request, Response};
@@ -84,7 +84,7 @@ fn text(s: &str) -> Arg {
     Arg::Text(s.to_owned())
 }
 
-/// The `who` of the `invitation` and `joined` messages: what joins.
+/// The `who` of the `joined` message: what joins.
 fn who(custodian: bool) -> &'static str {
     if custodian {
         "backup-machine"
@@ -175,57 +175,43 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             }
             vec![Response::Status(report)]
         }
-        Request::Invite {
-            person,
-            admin,
-            custodian,
-            name,
-        } => {
+        Request::Invite => {
             let Some(g) = d.default_group() else {
                 return vec![problem("not-in-group", &[], None)];
             };
-            let _busy = g.busy.lock().await;
-            if d.group(&g.id).is_none() {
-                return vec![problem("not-in-group", &[], None)];
-            }
             crate::refound::remember(&g).await;
-            let ask = crate::invite::Ask {
-                person: &person,
-                admin,
-                custodian,
-                name: name.as_deref().unwrap_or_default(),
-            };
-            match crate::invite::invite(d, &g, ask) {
-                Ok(code) => vec![said(
-                    "invitation",
-                    &[("code", text(&code)), ("who", text(who(custodian)))],
-                )],
-                Err("device-name-taken") => vec![problem(
-                    "device-name-taken",
-                    &[("name", text(name.as_deref().unwrap_or_default().trim()))],
-                    None,
-                )],
-                Err(code) => vec![problem(code, &[], None)],
+            match crate::invite::code(d, &g) {
+                Some(code) => vec![invitation(&g, &code)],
+                None => vec![problem("not-in-group", &[], None)],
             }
         }
         Request::Join {
             invitation,
             folder,
             name,
+            person,
+            existing,
+            custodian,
             ..
         } => {
             if let Some(f) = folder.as_deref().filter(|f| !Path::new(f).is_absolute()) {
                 return vec![problem("folder-not-absolute", &[("folder", text(f))], None)];
             }
-            let invitation = pigeon_proto::join::invitation(&invitation);
-            let custodian =
-                crate::invite::decode(&invitation).is_some_and(|i| i.role == "custodian");
-            match crate::invite::join(d, &invitation, folder, name).await {
+            let code = pigeon_proto::join::invitation(&invitation);
+            let ask = crate::invite::Ask {
+                code: code.clone(),
+                folder,
+                name,
+                person: person.clone(),
+                existing,
+                custodian,
+            };
+            match crate::invite::join(d, ask).await {
                 Ok(group) => vec![said(
                     "joined",
                     &[("group", text(&group)), ("who", text(who(custodian)))],
                 )],
-                Err(code) => vec![join_problem(&code, &invitation)],
+                Err(e) => vec![join_problem(&e, &code, person.as_deref())],
             }
         }
         Request::Evict { folder } => free(d, Path::new(&folder)).await,
@@ -235,19 +221,6 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         Request::Keep { folder } => keep(d, Path::new(&folder)).await,
         Request::Machines => machines(d),
         Request::People => people(d).await,
-        Request::Invitations => match d.default_group() {
-            Some(g) => vec![Response::Invitations {
-                invitations: crate::invite::pending(&g),
-            }],
-            None => vec![problem("not-in-group", &[], None)],
-        },
-        Request::CancelInvitation { invitation: id } => match d.default_group() {
-            Some(g) if crate::invite::cancel(&g, &id) => {
-                vec![said("invitation-cancelled", &[("id", text(&id))])]
-            }
-            Some(_) => vec![problem("invite-unknown", &[], None)],
-            None => vec![problem("not-in-group", &[], None)],
-        },
         Request::OpenWeb => match d.web.get() {
             Some(web) => vec![said("web-login", &[("url", text(&web.login_url()))])],
             None => not_in_this_build("open"),
@@ -331,38 +304,42 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
     }
 }
 
-/// The problem of a failed join, with the arguments its messages take.
-fn join_problem(code: &str, invitation: &str) -> Response {
-    let inv = crate::invite::decode(invitation);
-    let inviter = inv
-        .as_ref()
-        .map(|i| {
-            if i.from.is_empty() {
-                i.inviter.chars().take(8).collect()
-            } else {
-                i.from.clone()
-            }
-        })
+/// The `invitation` message: the line that joins `g` with `code`.
+fn invitation(g: &Group, code: &str) -> Response {
+    let name = g.roster().map(|d| d.roster.group).unwrap_or_default();
+    said(
+        "invitation",
+        &[
+            ("group", text(&name)),
+            ("command", text(&pigeon_proto::join::command(code))),
+        ],
+    )
+}
+
+/// The problem of a failed join, with the arguments its messages take:
+/// `inviter` is the person of the invitation's first admitter.
+fn join_problem(code: &str, invitation: &str, person: Option<&str>) -> Response {
+    let inviter = pigeon_proto::join::decode(invitation)
+        .and_then(|i| i.admitters.into_iter().next())
+        .map(|a| a.person)
         .unwrap_or_default();
     let who = [("inviter", text(&inviter))];
-    let with_hint = |p: Response, hint: &str| match p {
-        Response::Problem(mut p) => {
-            p.hint = Some(msg(hint, &who));
-            Response::Problem(p)
-        }
-        other => other,
-    };
     match code {
-        "invite-expired" => {
-            let until = inv.map_or_else(String::new, |i| crate::util::rfc3339(i.expires));
-            let p = problem(code, &[("until", text(&until))], None);
-            with_hint(p, "hint-invite-expired")
-        }
-        "invite-used" => with_hint(problem(code, &[], None), "hint-invite-used"),
-        "inviter-offline" => with_hint(problem(code, &who, None), "hint-inviter-offline"),
+        "inviter-offline" => match problem(code, &who, None) {
+            Response::Problem(mut p) => {
+                p.hint = Some(msg("hint-inviter-offline", &who));
+                Response::Problem(p)
+            }
+            other => other,
+        },
         "invite-not-allowed" => problem(code, &who, None),
+        "person-exists" => {
+            let person = person.map_or_else(crate::invite::account, |p| p.trim().to_owned());
+            problem(code, &[("person", text(&person))], None)
+        }
         "join-history-unverified"
         | "invite-unknown"
+        | "already-in-group"
         | "not-in-group"
         | "not-allowed"
         | "join-incomplete"
@@ -370,20 +347,6 @@ fn join_problem(code: &str, invitation: &str) -> Response {
         | "folder-not-empty" => problem(code, &[], None),
         "not-in-this-build" => problem(code, &[("command", text("join"))], None),
         other => problem("internal-error", &[], Some(other.to_owned())),
-    }
-}
-
-fn person_id() -> (String, String) {
-    let user = std::env::var("USER").unwrap_or_default();
-    let id: String = user
-        .chars()
-        .filter(char::is_ascii_alphanumeric)
-        .map(|c| c.to_ascii_lowercase())
-        .collect();
-    if id.is_empty() {
-        ("me".to_owned(), "Me".to_owned())
-    } else {
-        (id, user)
     }
 }
 
@@ -400,7 +363,16 @@ async fn create(d: &Daemon, name: &str, folder: &Path, k: u32, device_name: &str
         return problem("folder-not-absolute", &[("folder", text(&folder))], None);
     }
     match create_inner(d, name, folder, k, device_name).await {
-        Ok(()) => said("created", &[("group", text(name))]),
+        Ok(g) => {
+            let code = crate::invite::code(d, &g).unwrap_or_default();
+            said(
+                "created",
+                &[
+                    ("group", text(name)),
+                    ("command", text(&pigeon_proto::join::command(&code))),
+                ],
+            )
+        }
         Err(e) => problem("internal-error", &[], Some(e)),
     }
 }
@@ -411,7 +383,7 @@ async fn create_inner(
     folder: &Path,
     k: u32,
     device_name: &str,
-) -> Result<(), String> {
+) -> Result<Arc<Group>, String> {
     std::fs::create_dir_all(folder).map_err(|e| e.to_string())?;
     let folder = std::fs::canonicalize(folder).map_err(|e| e.to_string())?;
     if folder.join(".git").exists() {
@@ -442,34 +414,39 @@ async fn create_inner(
     git.run(&["annex", "mincopies", &k_text])
         .await
         .map_err(fail)?;
-    let (pid, pname) = person_id();
-    let roster = Roster {
+    let mut roster = Roster {
         rules: 1,
         group: name.to_owned(),
+        invitation: crate::invite::new_secret().map_err(|e| e.to_string())?,
         k,
         retention_days: 30,
         telemetry_device: None,
         relay: None,
-        persons: BTreeMap::from([(
-            PersonId(pid.clone()),
-            Person {
-                name: pname,
-                admin: true,
-            },
-        )]),
-        devices: BTreeMap::from([(
-            DeviceId(d.device.clone()),
-            Device {
-                person: PersonId(pid),
-                name: device_name.to_owned(),
-                role: DeviceRole::Laptop,
-                annex_uuid: Some(uuid),
-                maxsize: None,
-            },
-        )]),
+        persons: BTreeMap::new(),
+        devices: BTreeMap::new(),
         removed: BTreeMap::new(),
         folders: Vec::new(),
     };
+    // The creator is the account's person, the group's first admin.
+    let creator = crate::invite::account();
+    let person = roster.fresh_person_id(&creator);
+    roster.persons.insert(
+        person.clone(),
+        Person {
+            name: creator,
+            admin: true,
+        },
+    );
+    roster.devices.insert(
+        DeviceId(d.device.clone()),
+        Device {
+            person,
+            name: device_name.to_owned(),
+            role: DeviceRole::Laptop,
+            annex_uuid: Some(uuid),
+            maxsize: None,
+        },
+    );
     roster.validate().map_err(|e| format!("{e:?}"))?;
     let doc = RosterDoc { roster };
     let text = crate::roster_file::render(&doc)?;
@@ -496,8 +473,7 @@ async fn create_inner(
         .ok_or("no repository")?;
     g.set_token(&token);
     tracing::info!(group = %genesis, "created");
-    d.add_group(g, &folder).await?;
-    Ok(())
+    d.add_group(g, &folder).await
 }
 
 /// Starts a round shortly after the answer is on its way, so that a crash

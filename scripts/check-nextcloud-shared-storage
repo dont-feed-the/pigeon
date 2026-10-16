@@ -79,9 +79,10 @@ def run(provider="custodian", out=None):
             rpc(control, dict(type="Status"))
             bare = provider == "custodian"
             if bare:
-                invite = rpc(control, dict(type="Invite", person="", admin=False, custodian=True, name="Storage"))
+                invite = rpc(control, dict(type="Invite"))
                 repository = root / "source.git"
-                rpc(source, dict(type="Join", invitation=invite["message"]["args"]["code"], folder=str(repository), keep=False, name="Storage"))
+                rpc(source, dict(type="Join", invitation=invite["message"]["args"]["command"], folder=str(repository),
+                                 keep=False, name="Storage", custodian=True, existing=True))
             else:
                 repository = files
             source_object = until(lambda: objects(repository, original, bare=bare), "Provider did not retain the initial file")[0]
@@ -183,7 +184,22 @@ def run(provider="custodian", out=None):
                 # They use different native daemons, so both saves may commit
                 # before gossip. Check retention rather than invent a winner.
                 baseline = b"the common version before concurrent edits\n"
-                assert dav(clients[0], "PUT", "concurrent.txt", baseline)[0] == 201
+                def create(client, path, wanted):
+                    # A 412 may follow a committed save when native gossip
+                    # races its pinned refresh. Read back before retrying;
+                    # only an absent path permits a conditional create.
+                    def observed():
+                        status, _, body = dav(client, "GET", path)
+                        if status == 200:
+                            assert body == wanted, (path, body)
+                            return True
+                        assert status == 404, (path, status, body)
+                        status, _, body = dav(client, "PUT", path, wanted,
+                                              {"If-None-Match": "*"})
+                        assert status in {201, 412}, (path, status, body)
+                        return False
+                    until(observed, f"Setup save did not become visible: {path}")
+                create(clients[0], "concurrent.txt", baseline)
                 for client in clients:
                     until(lambda c=client: dav(c, "GET", "concurrent.txt")[2] == baseline,
                           "Clients did not observe the common version")
@@ -215,11 +231,11 @@ def run(provider="custodian", out=None):
                 # makes another save. Rejoining must deliver both histories.
                 other, other_process = daemon("other")
                 info = rpc(control, dict(type="Bridge", operation={"kind": "info"}))["result"]
-                invitation = rpc(control, dict(type="Invite", person=info["person"],
-                                                admin=False, custodian=False))
+                invitation = rpc(control, dict(type="Invite"))
                 other_files = root / "other-files"
-                rpc(other, dict(type="Join", invitation=invitation["message"]["args"]["code"],
-                                folder=str(other_files), keep=True, name="Other regular peer"))
+                rpc(other, dict(type="Join", invitation=invitation["message"]["args"]["command"],
+                                folder=str(other_files), keep=True, name="Other regular peer",
+                                person=info["person"], existing=True))
                 until(lambda: any(f["path"] == "same-bytes.bin" for f in rpc(other, dict(
                     type="Bridge", operation={"kind": "snapshot", "cursor": None, "limit": 1000}
                 ))["result"].get("files", [])), "The second regular peer did not finish joining")
@@ -227,7 +243,7 @@ def run(provider="custodian", out=None):
                 native_body = b"saved on a regular peer while offline\n"
                 (other_files / "native-offline.txt").write_bytes(native_body)
                 client_body = b"saved through the bridge while the regular peer was offline\n"
-                assert dav(clients[1], "PUT", "client-online.txt", client_body)[0] == 201
+                create(clients[1], "client-online.txt", client_body)
                 other, other_process = daemon("other")
                 # With discovery/relays disabled, a restarted peer's ephemeral
                 # loopback port needs an explicit fresh address hint. Restoring

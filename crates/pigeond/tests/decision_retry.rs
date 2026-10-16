@@ -86,6 +86,7 @@ fn roster() -> Roster {
     Roster {
         rules: 1,
         group: "retry".into(),
+        invitation: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".into(),
         k: 1,
         retention_days: 30,
         relay: None,

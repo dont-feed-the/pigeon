@@ -111,6 +111,10 @@ with `curl -fsSL …/releases/latest/download/pigeon-install | sh`.
 release's own copy of itself, which places it: the programs in `bin/`, the
 ones they replace in `bin.previous/`, a `pigeon` link in `~/.local/bin`,
 git-annex by `install-git-annex`, and the unit or agent of §14.4.
+`--join` takes the rest of its arguments, and once pigeon is installed, or
+found already installed, runs `pigeon join` with them on the terminal
+(`/dev/tty`, since the script came through a pipe): the line `pigeon
+invite` prints ([09 §9.6](09-network-and-joining.md), ADR 0075).
 `pigeon update [--version TAG | --main | --rollback]` runs the
 `pigeon-install` beside it; a release already installed is not fetched
 again, and `--rollback` swaps `bin/` and `bin.previous/`. `--main` fetches
@@ -156,7 +160,7 @@ ADRs 0021–0025, 0028 and 0029. Others:
 | async runtime | `tokio` | 0011 |
 | transport | `iroh` (default features off, `tls-ring`; relays and global discovery with ADR 0016's work), `iroh-mdns-address-lookup`; `iroh-relay` for self-hosting | 0006, 0016 |
 | keys and signatures | `ssh-key` (SSHSIG), `ed25519-dalek` | 0007 |
-| join proof | `hmac` (the first build computes HMAC-SHA256 over `sha2`, checked against RFC 4231), `sha2`, `getrandom`, `data-encoding` (base32), `qrcode` | 0017 **[no ADR: crates]** |
+| join proof | `hmac` (the first build computes HMAC-SHA256 over `sha2`, checked against RFC 4231), `sha2`, `getrandom`, `data-encoding` (base32), `qrcode` | 0075 **[no ADR: crates]** |
 | change hints | `notify` | 0013 |
 | local state | `dirs`, `tempfile`, `toml`, `toml_edit`, `serde`, `serde_json` | 0036 |
 | platform | `rustix` (`unsafe` only in the macOS writer scan), `libc` on macOS (`libproc`), `zbus` (UPower, NetworkManager) | 0037 **[no ADR: crates]** |

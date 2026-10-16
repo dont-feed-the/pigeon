@@ -241,7 +241,7 @@ def pipeline_mutations(out, java):
                 bad = []
             path.write_text("".join(json.dumps(e) + "\n" for e in bad))
             got = subprocess.run([sys.executable, str(ROOT / "scripts/check-lab-traces"), str(root),
-                                  "--java", java, "--require", "CaptureInstall"],
+                                  "--java", java, "--require", "CaptureInstall", "--jobs", "2"],
                                  capture_output=True, text=True, cwd=ROOT)
             if got.returncode == 0 or "FAIL" not in got.stdout:
                 sys.exit(f"FAIL {name}: another checked log masked the error\n{got.stdout}{got.stderr}")

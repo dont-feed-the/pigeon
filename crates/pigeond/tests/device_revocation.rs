@@ -44,6 +44,7 @@ async fn exact_key_revocation_does_not_interpret_a_key_as_a_computer_name() {
     let roster = Roster {
         rules: 1,
         group: "exact device revocation".into(),
+        invitation: "a".repeat(64),
         k: 1,
         retention_days: 30,
         relay: None,

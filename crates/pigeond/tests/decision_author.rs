@@ -48,6 +48,7 @@ fn roster() -> Roster {
     Roster {
         rules: 1,
         group: "historical-author".into(),
+        invitation: "a".repeat(64),
         k: 1,
         retention_days: 30,
         relay: None,

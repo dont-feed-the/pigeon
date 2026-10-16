@@ -37,6 +37,14 @@ daemons and asynchronous history exchange, both requests can capture a save.
 The test checks retention of every acknowledged body and rejection of a stale
 conditional retry, without prescribing a merge winner.
 
+Fixture setup also reconciles an uncertain create: native gossip can race the
+pinned refresh **after** Apply has committed, producing HTTP 412. The setup
+reads back and requires the exact intended bytes; it retries a conditional
+`If-None-Match: *` create only while the path is absent, within the existing
+120-second bound. An unexpected body or other response fails immediately.
+The concurrent writes themselves are never retried, and their retention and
+stale-validator assertions are unchanged.
+
 The second regular peer then saves while offline, while a client saves another
 path through the bridge. Reconnection must deliver both changes to both
 clients and the regular peer. Existing checks also verify shared inodes,

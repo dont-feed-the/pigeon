@@ -10,23 +10,23 @@ use std::path::Path;
 
 use crate::daemon::Daemon;
 use crate::group::Group;
-use crate::invite::Invitation;
+use crate::invite::Joining;
 
 #[cfg(test)]
 mod tests;
 
-/// Whether `path` holds a repository of the group `inv` refounds.
-pub async fn applies(d: &Daemon, inv: &Invitation, path: &Path) -> bool {
-    let Some(r) = &inv.refounded else {
+/// Whether `path` holds a repository of the group `j` refounds.
+pub async fn applies(d: &Daemon, j: &Joining, path: &Path) -> bool {
+    let Some(r) = &j.inv.refounded else {
         return false;
     };
     let Some((role, _, _)) = crate::group::locate(path) else {
         return false;
     };
-    let expected = match inv.role.as_str() {
-        "laptop" => pigeon_core::filter::Role::Laptop,
-        "custodian" => pigeon_core::filter::Role::Custodian,
-        _ => return false,
+    let expected = match j.role {
+        pigeon_core::roster::Role::Laptop => pigeon_core::filter::Role::Laptop,
+        pigeon_core::roster::Role::Custodian => pigeon_core::filter::Role::Custodian,
+        pigeon_core::roster::Role::Recovery => return false,
     };
     if role != expected {
         return false;
@@ -35,9 +35,10 @@ pub async fn applies(d: &Daemon, inv: &Invitation, path: &Path) -> bool {
     git.root("refs/heads/main").await.as_deref() == Some(r.from.as_str())
 }
 
-/// Joins the group of `inv` with the repository of the old group at
+/// Joins the group of `j` with the repository of the old group at
 /// `path`: answers the group's name.
-pub async fn join(d: &Daemon, inv: &Invitation, path: &Path) -> Result<String, String> {
+pub async fn join(d: &Daemon, j: &Joining, path: &Path) -> Result<String, String> {
+    let inv = &j.inv;
     let r = inv.refounded.clone().ok_or("invite-unknown")?;
     let old = d
         .group(&r.from)
@@ -60,7 +61,7 @@ pub async fn join(d: &Daemon, inv: &Invitation, path: &Path) -> Result<String, S
     let busy = g.busy.lock().await;
     let uuid = g.lock().annex_uuid.clone().ok_or("not-a-repository")?;
     let ours = g.git.rev("refs/heads/main").await.ok_or("no main")?;
-    let verified = crate::join_stage::prepare(d, inv, &uuid).await?;
+    let verified = crate::join_stage::prepare(d, j, &uuid).await?;
     let (stage, main, archive_main, source) = crate::join_stage::persist(verified);
     let plan = crate::join_transition::Plan {
         format: 1,

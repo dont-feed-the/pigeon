@@ -1,6 +1,7 @@
-format = 2
+format = 3
 rules = 1
 group = "fixture"
+invitation = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 k = 2
 retention_days = 30
 

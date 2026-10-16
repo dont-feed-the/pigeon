@@ -4,7 +4,7 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
-## 0.5.12 — 2026-10-16
+## 0.5.13 — 2026-10-16
 
 ### Changed
 
@@ -12,8 +12,8 @@ the second number, and every other pull request the third.
   installer and formal-model changes avoid unrelated expensive jobs, while
   shared dependencies, unknown paths and CI changes retain broader checks.
   Releases and periodic validation still run the full set.
-
-## 0.5.11 — 2026-10-16
+- Client revocation addresses the saved signing key directly, so a change to
+  a computer's name cannot redirect its roster removal.
 
 ### Fixed
 
@@ -27,10 +27,41 @@ the second number, and every other pull request the third.
   that stops later synchronization. Existing affected peers recover when the
   saved version is safely retained under its conflict filename.
 
+## 0.5.12 — 2026-10-16
+
+### Fixed
+
+- Existing shell startup files using `pigeon completions zsh`, `bash` or
+  `fish` work again, without the "not in this build" warning. They load
+  the current Tab completion, even when the daemon is stopped.
+- Diagnostic bundles hide the group's permanent invitation secret in both
+  this computer's information and parts shared by other computers. Sharing
+  diagnostics keeps the roster readable without sharing permission to join.
+
+## 0.5.11 — 2026-10-16
+
 ### Changed
 
-- Client revocation addresses the saved signing key directly, so a change to
-  a computer's name cannot redirect its roster removal.
+- `pigeon create` now prints one line to share with everyone you want in the
+  group. Run on another computer, it installs or updates pigeon, then joins:
+  it asks which folder to use and your name in the group.
+  `pigeon invite` prints the same line again, on any computer of the group,
+  and People in the web interface shows it with a *Copy* button.
+- The line works for everyone and never expires. Whoever has it can join
+  under any name, with the rights of the person of that name, so share it
+  only with the group. Giving the name of someone already in the group adds
+  your computer to them, once you confirm (`--yes` confirms on the command
+  line). Add `--backup-machine` at the end of the line on a backup machine.
+- `pigeon join` asks for your name in the group (`--person NAME`) and, on a
+  terminal, for the folder.
+- A refounded group has its own line; the old one no longer works.
+
+### Removed
+
+- One-time invitations: `pigeon invite PERSON`, `--admin`,
+  `--backup-machine`, `--list` and `--cancel`, and the `pgn1-` codes. Groups
+  made by earlier releases cannot be read by this one: create the group
+  again.
 
 ## 0.5.10 — 2026-10-16
 

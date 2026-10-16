@@ -31,7 +31,7 @@ headline-checking = Le dossier local n'a pas pu être vérifié. Lancez : pigeon
 headline-inventory-unreadable = Pigeon ne peut pas vérifier toutes les versions enregistrées pour le moment.
 headline-too-few-backups = Pas encore en sécurité : ajoutez un ordinateur de sauvegarde.
 why-capturing = Cette modification attend d'être enregistrée et copiée sur les ordinateurs de sauvegarde.
-why-too-few-backups = { $have } ordinateurs de sauvegarde sur { $need } sont configurés. Pour en ajouter un : pigeon invite --backup-machine
+why-too-few-backups = { $have } ordinateurs de sauvegarde sur { $need } sont configurés. Pour en ajouter un, lancez dessus la ligne qu'affiche pigeon invite, avec --backup-machine à la fin.
 headline-not-safe =
     { $files ->
         [one] { $files } version de fichier n'est pas encore en sécurité.
@@ -82,9 +82,8 @@ time-never = jamais
 ## Commandes de la tranche de sécurité (13 §13.12)
 
 cmd-create = Créer un groupe dont cet ordinateur est le premier membre
-cmd-invite-person = Afficher une invitation à usage unique pour l'ordinateur d'une personne, valable 24 heures
-cmd-invite = Afficher une invitation à usage unique, valable 24 heures
-cmd-join = Rejoindre un groupe avec une invitation
+cmd-invite = Afficher la ligne qui ajoute une personne, un ordinateur ou une machine de sauvegarde au groupe
+cmd-join = Rejoindre un groupe avec son invitation
 cmd-status = Dire si vos fichiers sont en sécurité, et pourquoi sinon
 cmd-machines = Lister les ordinateurs et les machines de sauvegarde du groupe
 cmd-open = Ouvrir pigeon dans votre navigateur
@@ -103,6 +102,7 @@ cmd-recover = Récupérer le groupe sur un nouvel ordinateur depuis ses machines
 cmd-doctor = Vérifier l'installation et expliquer ce qui ne va pas
 cmd-debug-bundle = Rassembler un diagnostic pour la personne qui vous aide
 cmd-update = Installer la dernière version de pigeon, une version donnée, main compilé depuis les sources, ou la précédente
+cmd-completions = Afficher le script qui active la complétion avec Tab dans le shell
 opt-json = Afficher le résultat en JSON, pour les scripts
 opt-backup-machine = Pour une machine de sauvegarde plutôt que l'ordinateur d'une personne
 opt-not-shared = Lister ce qui n'est pas partagé, et pourquoi
@@ -149,12 +149,12 @@ doctor-ok = Tout ce dont pigeon a besoin est en place.
 web-doctor = Vérifier l’installation
 problem-transport-helper-unavailable = Le programme de transport de pigeon manque, ne fonctionne pas ou appartient à une autre version.
 hint-transport-helper-unavailable = Réinstallez cette version de pigeon avec tous ses programmes, puis redémarrez pigeon et relancez pigeon doctor.
-created = Le groupe « { $group } » est créé. Ajoutez une machine de sauvegarde avec : pigeon invite --backup-machine
+created =
+    Le groupe « { $group } » est créé. Pour ajouter quelqu'un, un autre ordinateur ou une machine de sauvegarde, partagez cette ligne ; elle installe pigeon et rejoint le groupe (sur une machine de sauvegarde, ajoutez --backup-machine à la fin). Quiconque l'a peut rejoindre, avec les droits de la personne qu'il dit être :
+    { $command }
 invitation =
-    { $who ->
-        [backup-machine] Sur la machine de sauvegarde, dans les 24 heures, lancez : pigeon join --backup-machine { $code }
-       *[computer] Sur le nouvel ordinateur, dans les 24 heures, lancez : pigeon join { $code } DOSSIER
-    }
+    Pour ajouter quelqu'un à « { $group } », un autre ordinateur ou une machine de sauvegarde, partagez cette ligne ; elle installe pigeon et rejoint le groupe (sur une machine de sauvegarde, ajoutez --backup-machine à la fin). Quiconque l'a peut rejoindre, avec les droits de la personne qu'il dit être :
+    { $command }
 joined =
     { $who ->
         [backup-machine] Cette machine de sauvegarde garde maintenant des copies pour « { $group } ».
@@ -168,10 +168,6 @@ machine-kind-computer = ordinateur
 person-row = { $name } ({ $role }) : { $machines }
 person-admin = admin
 person-member = membre
-invitations-none = Aucune invitation n'attend.
-invitation-row = { $id } : pour { $who }, jusqu'au { $expires }
-invitation-row-backup = { $id } : une machine de sauvegarde de { $who }, jusqu'au { $expires }
-invitation-cancelled = L'invitation { $id } ne peut plus servir.
 cmd-people = Les membres du groupe et leurs ordinateurs
 cmd-deleted = Les fichiers supprimés du groupe, que restore fait revenir
 machine-this = { $name } : cet ordinateur
@@ -192,12 +188,8 @@ problem-not-in-this-build = « { $command } » n'est pas encore dans cette versi
 hint-not-in-this-build = Cette première version n'a que les commandes qui mettent les fichiers en sécurité ; les autres viendront.
 problem-file-system-not-in-this-build = Ce dossier est sur { $fs }, que cette version de pigeon ne prend pas encore en charge.
 hint-file-system-not-in-this-build = Choisissez un dossier sur ext4 (Linux) ou APFS (macOS).
-problem-invite-expired = Cette invitation a expiré (elle était valable jusqu'à { $until }).
-hint-invite-expired = Demandez-en une nouvelle à { $inviter }.
-problem-invite-used = Cette invitation a déjà servi.
-hint-invite-used = Demandez-en une nouvelle à { $inviter }.
 problem-invite-unknown = Le groupe ne connaît pas cette invitation.
-problem-invite-not-allowed = { $inviter } ne peut plus inviter dans ce groupe.
+problem-invite-not-allowed = { $inviter } ne peut pas ajouter cet ordinateur au groupe.
 problem-inviter-offline = L'ordinateur de { $inviter } est injoignable pour le moment.
 hint-inviter-offline = Réessayez quand l'ordinateur de { $inviter } est allumé.
 problem-not-in-group = Cet ordinateur n'est pas membre du groupe.
@@ -277,9 +269,7 @@ web-setup-help = Demandez une invitation à un membre du groupe, ou créez un gr
 web-join = Rejoindre le groupe
 web-create = Créer un groupe
 web-invitation = Invitation
-web-invitation-ready = Invitation prête
-web-invite-handoff = Envoyez cette invitation à la personne qui rejoint le groupe. Sur l'autre ordinateur, installez et ouvrez pigeon, choisissez Rejoindre ou créer un groupe, puis collez le code dans les 24 heures. Gardez cet ordinateur connecté jusqu'à la fin de l'adhésion.
-web-invitation-code = Code d'invitation
+web-invitation-code = La ligne à partager
 web-command-line = Instructions en ligne de commande
 web-local-folder = Dossier sur cet ordinateur
 web-computer-name = Nom de cet ordinateur
@@ -360,11 +350,6 @@ hint-held-rename-taken = Renommez-le vous-même ; pigeon le capture dès que son
 web-remove = Retirer
 web-remove-confirm = Retirer { $name } du groupe ? Ses copies ne compteront plus.
 web-invite = Inviter
-web-invite-person = Le nom de la personne
-web-invite-admin = comme admin
-web-invite-backup = Inviter une machine de sauvegarde
-web-invitations = Invitations en attente
-web-cancel-invitation = Annuler
 files-none = Ce dossier n'a encore aucun fichier.
 file-row = { $path } : { $state }
 web-restore = Restaurer cette version
@@ -421,7 +406,7 @@ view-ready = Une copie en lecture seule est dans { $path } ; elle est supprimée
 
 setting-telemetry-device = Partager les diagnostics avec
 setting-off = Garder les diagnostics sur chaque ordinateur
-problem-join-history-unverified = Pigeon n’a pas pu vérifier l’historique de ce groupe. Demandez à la personne qui vous a invité de mettre pigeon à jour et de vous envoyer une nouvelle invitation.
+problem-join-history-unverified = Pigeon n’a pas pu vérifier l’historique de ce groupe. Demandez à la personne qui vous a invité de mettre pigeon à jour, puis réessayez.
 problem-export-history-unverified = Pigeon n’a pas pu vérifier l’historique archivé. Conservez ce dépôt et demandez une copie complète à un autre membre avant d’exporter les fichiers supprimés.
 
 problem-recovery-not-allowed = Cette fiche de récupération ne peut plus ajouter d’ordinateurs. Utilisez une fiche actuelle ou demandez une invitation à un administrateur.
@@ -545,8 +530,17 @@ web-health-suggestions-unavailable = Suggestions en attente d’une décision : 
 web-health-separator = {" : "}
 web-not-found = Il n’y a pas de page ici.
 web-noscript = Cette page ne se met à jour d’elle-même qu’avec JavaScript. Rechargez-la pour voir l’état le plus récent.
-problem-invite-admin-only = Seul un administrateur du groupe peut inviter une nouvelle personne ou un autre administrateur. Vous pouvez inviter un autre de vos ordinateurs, ou une machine de sauvegarde.
-problem-device-name-taken = Un ordinateur du groupe s’appelle déjà { $name }. Choisissez un autre nom.
 problem-folder-not-absolute = « { $folder } » n’est pas un chemin de dossier complet. Indiquez-en un qui commence par /, par exemple /home/vous/Famille.
 problem-name-empty = Donnez un nom au groupe et à cet ordinateur.
 problem-copies-zero = Un groupe a besoin d’au moins une copie de sauvegarde.
+
+ask-join-folder = Dossier pour « { $group } » [{ $folder }] :
+ask-join-person = Votre nom dans le groupe [{ $person }] :
+confirm-join-existing = { $person } fait déjà partie de « { $group } ». Ajouter cet ordinateur à { $person }, avec les mêmes droits ? [o/N]
+problem-person-exists = { $person } fait déjà partie du groupe.
+problem-already-in-group = Cet ordinateur fait déjà partie de ce groupe.
+web-your-name = Votre nom dans le groupe
+web-join-existing = { $person } fait déjà partie de « { $group } ». Cliquez sur Rejoindre pour ajouter cet ordinateur à { $person }, avec les mêmes droits, ou revenez en arrière pour donner un autre nom.
+web-copy = Copier
+web-invite-help = Pour ajouter quelqu'un à « { $group } », un autre ordinateur ou une machine de sauvegarde, partagez cette ligne ; elle installe pigeon et rejoint le groupe. Sur une machine de sauvegarde, ajoutez --backup-machine à la fin. Quiconque l'a peut rejoindre, avec les droits de la personne qu'il dit être.
+progress-join = Adhésion : en attente de la réponse de l'ordinateur d'un administrateur du groupe…

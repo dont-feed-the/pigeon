@@ -21,7 +21,9 @@ mod common;
 
 use std::time::{Duration, Instant};
 
-use common::{SERIAL, dirs, eventually, join, logs, pigeon, said, start, status, until};
+use common::{
+    SERIAL, dirs, eventually, invitation, join, logs, pigeon, said, start, status, until,
+};
 use pigeon_proto::Response;
 use pigeon_proto::api::State;
 
@@ -225,27 +227,14 @@ fn local_published_protected_then_free_and_keep() {
         [Response::Deleted { .. }] => {}
         other => panic!("deleted: {other:?}"),
     }
-    let code = pigeon(&lap, &["invite", "Zoe"]);
-    assert!(said(&code, "invitation", "code").is_some(), "{code:?}");
-    let zoe = match pigeon(&lap, &["invite", "--list"]).as_slice() {
-        [Response::Invitations { invitations }] => invitations
-            .iter()
-            .find(|i| i.who == "Zoe")
-            .map(|i| i.id.clone())
-            .unwrap_or_else(|| panic!("no invitation for Zoe: {invitations:?}")),
-        other => panic!("invite --list: {other:?}"),
-    };
-    let cancelled = pigeon(&lap, &["invite", "--cancel", &zoe]);
-    assert!(
-        said(&cancelled, "invitation-cancelled", "id").is_some(),
-        "{cancelled:?}"
+    let line = pigeon(&lap, &["invite"]);
+    let command = said(&line, "invitation", "command").unwrap_or_else(|| panic!("{line:?}"));
+    assert!(command.contains("--join pgn2-"), "{command}");
+    assert_eq!(
+        invitation(&lap),
+        invitation(&lap),
+        "the invitation never changes"
     );
-    match pigeon(&lap, &["invite", "--list"]).as_slice() {
-        [Response::Invitations { invitations }] => {
-            assert!(invitations.iter().all(|i| i.id != zoe), "{invitations:?}");
-        }
-        other => panic!("invite --list: {other:?}"),
-    }
     let paused = pigeon(&lap, &["pause", "2h"]);
     assert!(
         said(&paused, "paused-until", "until").is_some(),
@@ -318,5 +307,8 @@ fn a_backup_machine_back_from_a_stop_gets_the_new_version() {
         assert!(Instant::now() < deadline, "never freed\n{}", logs(&all));
         std::thread::sleep(Duration::from_millis(250));
     }
-    assert_eq!(status(&lap).state, State::Protected);
+    // As in lab S2, the rename precedes the journal/index transition.
+    // Require the protected outcome once that in-flight deletion settles.
+    until(&lap, State::Protected, &all);
+    assert!(!later.join("b.txt").exists(), "freed file reappeared");
 }

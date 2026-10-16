@@ -59,24 +59,12 @@ pub enum Request {
         /// This computer's name in the roster.
         device_name: String,
     },
-    /// `pigeon invite [--admin] [--backup-machine] PERSON`.
-    Invite {
-        /// Who is invited.
-        person: String,
-        /// As an admin.
-        #[serde(default)]
-        admin: bool,
-        /// As a backup machine (custodian).
-        #[serde(default)]
-        custodian: bool,
-        /// The new backup machine's name in the roster, with `custodian`;
-        /// its person is then the inviter's (09 §9.6).
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        name: Option<String>,
-    },
-    /// `pigeon join INVITATION [FOLDER] [--name NAME]`.
+    /// `pigeon invite`: the line to share, which joins the group (09 §9.6).
+    Invite,
+    /// `pigeon join INVITATION [FOLDER] [--person NAME] [--name NAME]
+    /// [--backup-machine]`.
     Join {
-        /// The `pgn1-` invitation.
+        /// The `pgn2-` invitation.
         invitation: String,
         /// Where the folder goes; none on a backup machine.
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -84,10 +72,19 @@ pub enum Request {
         /// Keep the files on this computer.
         #[serde(default)]
         keep: bool,
-        /// This computer's name in the roster: over the invitation's, else
-        /// `<host name>-<6 hex digits of its device ID>`.
+        /// This computer's name in the roster, else `<host name>-<6 hex
+        /// digits of its device ID>`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         name: Option<String>,
+        /// The name its person gives, else the account's.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        person: Option<String>,
+        /// Whether it may join the person of the group with that name.
+        #[serde(default)]
+        existing: bool,
+        /// As a backup machine (custodian).
+        #[serde(default)]
+        custodian: bool,
     },
     /// `pigeon keep PATH`.
     Keep {
@@ -148,13 +145,6 @@ pub enum Request {
     Machines,
     /// `pigeon people`: the group's members, with their computers (04 §4.2).
     People,
-    /// `pigeon invite --list`: this computer's invitations not yet used.
-    Invitations,
-    /// `pigeon invite --cancel ID`: an invitation no one can use any more.
-    CancelInvitation {
-        /// Its ID, from `Invitations`.
-        invitation: String,
-    },
     /// `pigeon open`: a link to the web interface holding a single-use
     /// token (10 §10.3).
     OpenWeb,
@@ -357,11 +347,6 @@ pub enum Response {
         /// Oldest first.
         held: Vec<HeldEntry>,
     },
-    /// The answer to `Invitations`.
-    Invitations {
-        /// Oldest first.
-        invitations: Vec<InvitationEntry>,
-    },
     /// The answer to `People`.
     People {
         /// The roster's persons.
@@ -422,7 +407,7 @@ pub enum Response {
 /// Text for people: a message id of the Fluent bundles, and its arguments.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Message {
-    /// The id, such as `problem-invite-expired`.
+    /// The id, such as `problem-person-exists`.
     pub id: String,
     /// Named arguments.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -529,20 +514,6 @@ pub struct NotShared {
     pub path: String,
     /// Why, such as a symbolic link.
     pub reason: Message,
-}
-
-/// An invitation not yet used.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct InvitationEntry {
-    /// Its ID, for `CancelInvitation`.
-    pub id: String,
-    /// Whom it is for: a new person's name, or the person of a new
-    /// computer or backup machine.
-    pub who: String,
-    /// Whether it is for a backup machine.
-    pub custodian: bool,
-    /// When it expires, RFC 3339.
-    pub expires: String,
 }
 
 /// A person of the roster.

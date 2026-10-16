@@ -386,7 +386,9 @@ pub async fn snapshot(d: &Daemon) -> serde_json::Value {
         .collect();
     let mut groups = Vec::new();
     for g in d.groups() {
-        let roster = g.roster().and_then(|r| crate::roster_file::render(&r).ok());
+        let roster = g
+            .roster()
+            .and_then(|r| crate::roster_file::diagnostic(&r).ok());
         let heard = g.lock().heard.clone();
         groups.push(serde_json::json!({
             "id": g.id,

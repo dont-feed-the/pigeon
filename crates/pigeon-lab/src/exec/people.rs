@@ -4,8 +4,8 @@
 //! and the roster's machines.
 //!
 //! A laptop is in the group once its folder is a repository: the creator's
-//! from `create`, a spare's from its join or recovery. An invitation for a
-//! person none of whose laptops is in the group adds the person.
+//! from `create`, a spare's from its join or recovery. A join as a person
+//! none of whose laptops is in the group adds the person.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -27,8 +27,9 @@ impl Exec {
         self.devs[l.0 as usize].tree.join(".git").exists()
     }
 
-    /// `by` invites `l`'s person, as an admin if the world makes them one
-    /// and they are new, and `l` joins in its folder under its own name.
+    /// `by` prints the group's invitation, and `l` joins with it in its
+    /// folder under its own name, as its person: the group's, once it has
+    /// one of `l`'s laptops.
     pub(super) fn join_laptop(
         &mut self,
         by: Laptop,
@@ -39,22 +40,17 @@ impl Exec {
         let theirs = w.laptops[l.0 as usize].person;
         let known = (0..w.laptops.len())
             .any(|j| w.laptops[j].person == theirs && self.in_group(Laptop(j as u8)));
-        let ask = cli::invite_person(&person.name, person.admin && !known);
-        let invite = self.pigeon(Device::Laptop(by), &ask)?;
+        let invite = self.pigeon(Device::Laptop(by), &cli::invite())?;
         if !invite.ok {
             return Ok(invite.outcome());
         }
-        let code = invite
-            .json
-            .as_ref()
-            .and_then(|v| cli::find_string(v, "pgn1-"))
+        let code = cli::invitation(invite.json.as_ref(), &invite.stdout)
             .ok_or_else(|| format!("no invitation in {:?}", invite.stdout))?;
         let d = Device::Laptop(l);
         self.start(d)?;
         let tree = self.devs[l.0 as usize].tree.clone();
-        Ok(self
-            .pigeon(d, &cli::join_laptop(&code, &tree, w.name(d)))?
-            .outcome())
+        let ask = cli::join_laptop(&code, &tree, w.name(d), &person.name, known);
+        Ok(self.pigeon(d, &ask)?.outcome())
     }
 
     /// The suggestions `on` lists: their IDs and paths, oldest first.
