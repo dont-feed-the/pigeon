@@ -27,6 +27,26 @@ def run(tag, number=1, **changes):
 
 
 class PublicationKPI(unittest.TestCase):
+    def test_completed_gap_miss_survives_the_new_publication_resetting_the_clock(self):
+        published = [release("v0.5.9", "2026-10-16T10:00:00Z"),
+                     release("v0.5.12", "2026-10-16T13:00:00Z"),
+                     release("v0.5.10", "2026-10-16T11:00:00Z", draft=True),
+                     release("v0.5.11", "2026-10-16T12:00:00Z", assets=[])]
+        report = MODULE.build_report(published, [run("v0.5.13")], NOW)
+        self.assertEqual(report["publication_gap_seconds"], 0)
+        self.assertFalse(report["publication_gap_target_breached"])
+        self.assertEqual(report["completed_publication_gap_sample_count"], 1)
+        self.assertEqual(report["completed_publication_gaps"], [{
+            "previous_tag": "v0.5.9", "tag": "v0.5.12", "from": "2026-10-16T10:00:00Z",
+            "to": "2026-10-16T13:00:00Z", "seconds": 10800, "target_breached": True}])
+        self.assertIn("v0.5.9 → v0.5.12: 3h 0m; target missed", MODULE.markdown(report))
+
+    def test_one_publication_has_no_completed_interval_to_invent(self):
+        report = MODULE.build_report([release()], [], NOW)
+        self.assertEqual(report["completed_publication_gaps"], [])
+        self.assertEqual(report["completed_publication_gap_sample_count"], 0)
+        self.assertIn("0 samples", MODULE.markdown(report))
+
     def test_tags_drafts_and_incomplete_assets_cannot_reset_publication_gap(self):
         releases = [release(), release("v0.5.0", "2026-10-16T12:00:00Z", draft=True),
                     release("v0.5.1", "2026-10-16T12:00:00Z", assets=[])]

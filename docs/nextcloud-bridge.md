@@ -286,6 +286,10 @@ files into their ancestors without scanning the entire tree per directory.
 
 ## Verification
 
+The [bridge system verification guide](bridge-system-verification.md) describes
+the TLA models, per-client identity and DAV transaction traces, concurrent
+native/client scenarios, and the boundaries of that evidence.
+
 ```sh
 cargo test -p pigeon-bridge --lib
 cargo test -p pigeon-git --test backpressure

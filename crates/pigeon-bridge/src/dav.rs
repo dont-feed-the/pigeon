@@ -164,12 +164,23 @@ pub async fn handle(State(app): State<Arc<App>>, request: Request) -> Result<Res
         );
         return Ok(response);
     }
-    match target {
-        Resource::Upload { id, part } => {
-            crate::uploads::handle(&app, &c, &id, part.as_deref(), request).await
+    let method = request.method().to_string();
+    let (kind, path) = match &target {
+        Resource::Files(path) => ("files", path.clone()),
+        Resource::Upload { part, .. } if method == "MOVE" && part.as_deref() == Some(".file") => {
+            ("final", ".file".to_owned())
         }
-        Resource::Files(path) => files(&app, &c, &path, request).await,
-    }
+        Resource::Upload { .. } => ("upload", String::new()),
+    };
+    crate::sync_trace::request(&app.config.state_dir, &c, &method, kind, &path, async {
+        match target {
+            Resource::Upload { id, part } => {
+                crate::uploads::handle(&app, &c, &id, part.as_deref(), request).await
+            }
+            Resource::Files(path) => files(&app, &c, &path, request).await,
+        }
+    })
+    .await
 }
 
 async fn files(app: &App, c: &Client, path: &str, request: Request) -> Result<Response> {
@@ -336,18 +347,36 @@ pub async fn apply(
         None
     };
     let socket = app.peers.checked(client).await.map_err(unavailable)?;
-    match index::reply(
-        rpc::bridge(
-            &socket,
-            Operation::Apply {
-                revision: index.revision.clone(),
-                expected,
-                changes,
-            },
-        )
-        .await
-        .map_err(unavailable)?,
-    )? {
+    crate::sync_trace::emit("Submit", || {
+        serde_json::json!({
+            "revision": index.revision, "expected": expected,
+            "changes": changes.iter().map(|c| match c {
+                Change::Put { path, .. } => serde_json::json!({"path": path, "kind": "put"}),
+                Change::Remove { path } => serde_json::json!({"path": path, "kind": "remove"}),
+            }).collect::<Vec<_>>()
+        })
+    });
+    let result = rpc::bridge(
+        &socket,
+        Operation::Apply {
+            revision: index.revision.clone(),
+            expected,
+            changes,
+        },
+    )
+    .await;
+    crate::sync_trace::emit("ApplyReply", || match &result {
+        Ok(Reply::Applied {
+            revision,
+            suggested,
+        }) => serde_json::json!({
+            "kind": "applied", "revision": revision, "suggested": suggested}),
+        Ok(Reply::Failure { status, .. }) => {
+            serde_json::json!({"kind": "failure", "status": status})
+        }
+        _ => serde_json::json!({"kind": "unknown"}),
+    });
+    match index::reply(result.map_err(unavailable)?)? {
         Reply::Applied {
             revision,
             suggested,
@@ -357,6 +386,10 @@ pub async fn apply(
 }
 
 pub fn written(status: StatusCode, node: &Node, suggested: usize, mtime: bool) -> Response {
+    crate::sync_trace::emit("Written", || {
+        serde_json::json!({"path": node.path,
+        "etag": node.etag, "suggested": suggested})
+    });
     let mut response = status.into_response();
     set(
         response.headers_mut(),

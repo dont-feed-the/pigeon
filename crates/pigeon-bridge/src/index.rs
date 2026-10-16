@@ -62,9 +62,20 @@ pub async fn load(app: &App, client: &Client) -> Result<Index> {
 }
 
 pub async fn load_at(app: &App, client: &Client, revision: Option<&str>) -> Result<Index> {
-    let socket = app.peers.checked(client).await.map_err(unavailable)?;
-    let snapshot = catalogue::read(&socket, revision).await?;
-    build(app, client, snapshot).await
+    let result = async {
+        let socket = app.peers.checked(client).await.map_err(unavailable)?;
+        let snapshot = catalogue::read(&socket, revision).await?;
+        build(app, client, snapshot).await
+    }
+    .await;
+    crate::sync_trace::emit("View", || match &result {
+        Ok(index) => serde_json::json!({"required": revision, "status": 0,
+            "revision": index.revision, "files": index.nodes.values()
+                .map(|n| serde_json::json!({"path": n.path, "etag": n.etag,
+                    "diverging": n.diverging, "directory": n.directory})).collect::<Vec<_>>()}),
+        Err(error) => serde_json::json!({"required": revision, "status": error.0.as_u16()}),
+    });
+    result
 }
 
 pub async fn build(app: &App, client: &Client, snapshot: Catalogue) -> Result<Index> {

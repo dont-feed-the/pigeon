@@ -177,6 +177,17 @@ fn known_rosters() -> Vec<(&'static str, Roster)> {
     relay.relay = Some("https://relay.example.org".into());
     let mut rules2 = g.clone();
     rules2.rules = 2;
+    let mut rules3 = g.clone();
+    rules3.rules = 3;
+    // Work/<person ID>/… is that person's (rules 2).
+    let mut per_person = rules2.clone();
+    per_person.folders.push(Folder {
+        path: "Work".into(),
+        rule: Rule::PerPerson,
+    });
+    // The same rule in a roster of rules 1, which makes it invalid.
+    let mut per_person_rules1 = per_person.clone();
+    per_person_rules1.rules = 1;
     let mut minimal = g.clone();
     minimal.persons.retain(|p, _| p.0 == "ana");
     minimal.devices.retain(|d, _| *d == dev(1));
@@ -189,6 +200,9 @@ fn known_rosters() -> Vec<(&'static str, Roster)> {
         ("group-k3.toml", k3),
         ("group-relay.toml", relay),
         ("group-rules-2.toml", rules2),
+        ("group-rules-3.toml", rules3),
+        ("group-per-person.toml", per_person),
+        ("group-per-person-rules-1.toml", per_person_rules1),
         ("minimal.toml", minimal),
     ]
 }

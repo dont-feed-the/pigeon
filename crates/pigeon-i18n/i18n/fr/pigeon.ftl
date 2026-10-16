@@ -489,12 +489,16 @@ web-health-epochs = Après le retrait d’ordinateurs
 web-health-no-epochs = Aucun ordinateur conservant des fichiers n’a été retiré.
 web-health-epoch = { $name } a été retiré : { $when }.
 
-cmd-folder-rule = Voir les règles de partage, ou laisser un administrateur choisir le propriétaire d’un dossier ou qui décide des suggestions. --owner me désigne votre dossier.
+cmd-folder-rule = Voir les règles de partage, ou laisser un administrateur choisir le propriétaire d’un dossier ou qui décide des suggestions. --owner me désigne votre dossier, et --per-person un dossier où chacun possède le dossier à son nom.
 folder-rule-owned = { $folder } : seul { $owner } peut modifier ce dossier.
 folder-rule-add-only = { $folder } : tout le monde peut ajouter ; les autres modifications sont décidées par { $stewards }.
+folder-rule-per-person = { $folder } : chaque dossier qu’il contient appartient à la personne dont il porte le nom ({ $folders }) ; le reste suit la règle au-dessus.
 folder-rule-result = La règle de partage de { $folder } est enregistrée sur cet ordinateur. Les autres l’appliqueront après leur prochaine vérification du partage. Consultez la règle du dossier sur un autre ordinateur pour vérifier son arrivée.
 problem-folder-rule-path = Choisissez un sous-dossier au nom portable, avec son orthographe d’origine. La racine du groupe et les fichiers propres à pigeon ne peuvent pas recevoir de règle.
 problem-folder-rule-person = Aucun membre actuel unique ne correspond à « { $name } ». Choisissez son nom dans Personnes et machines, ou utilisez me pour vous-même.
+problem-rules-raise = Cette règle de partage demande les règles { $rules } du groupe. Un ordinateur dont le pigeon ne les connaît pas attend les modifications du groupe jusqu’à sa mise à jour. Les autres ont signalé en dernier : { $computers }.
+hint-rules-raise = Mettez d’abord ces ordinateurs à jour si possible, puis confirmez, ou relancez avec --yes.
+confirm-rules-raise = Passer le groupe à ces règles et enregistrer cette règle de partage ? [o/N]
 web-folder-rule = Règle de partage du dossier
 web-subfolders = Sous-dossiers
 web-folder-rule-help = Choisissez qui peut modifier ce dossier. Les autres peuvent suggérer des modifications. Les sous-dossiers héritent de cette règle sauf s’ils ont la leur.
@@ -502,6 +506,8 @@ web-folder-rule-admin = Un administrateur peut modifier cette règle de partage.
 web-folder-rule-owner = Une seule personne peut le modifier
 web-folder-rule-add-only = Tout le monde peut ajouter ; les personnes choisies décident des autres modifications
 web-folder-rule-inherit = Hériter de la règle du dossier parent
+web-folder-rule-per-person = Chaque dossier qu’il contient appartient à la personne dont il porte le nom
+web-folder-rule-confirm-rules = Si cela demande des règles plus récentes, passer le groupe à ces règles : un ordinateur dont le pigeon ne les connaît pas attend les modifications jusqu’à sa mise à jour
 web-folder-rule-stewards = Personnes qui décident des modifications
 web-folder-rule-default-admins = Ne cochez personne pour laisser les administrateurs décider.
 

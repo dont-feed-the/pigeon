@@ -1,0 +1,12 @@
+about = "Ben's laptop adds a file to Work/zoe, named after no person: the default rule lets any member add."
+verdict = "accepted"
+roster = "known/group-per-person.toml"
+signer = 2
+message = "pigeon: capture"
+
+[before]
+"Shared/a.jpg" = "/annex/objects/SHA256E-s7--b236e74d49a5152abeec27d7e176a2e7976aec064f3389ef0b4a69ed1cfc5378.jpg\n"
+"Ana/notes.txt" = "/annex/objects/SHA256E-s5--ab5aa97074c454a0632057e704220d9a6678fbf773a0a5806fc09b8173b07309.txt\n"
+
+[after]
+"Work/zoe/notes.txt" = "/annex/objects/SHA256E-s9--d8e28cbebed386d2ddb6366a85819bb6ed657f4b8e3541a5630b669b5fa1fbfa.txt\n"

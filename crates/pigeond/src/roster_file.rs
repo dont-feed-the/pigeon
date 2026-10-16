@@ -199,7 +199,10 @@ pub fn parse(text: &str) -> Result<RosterDoc, Unread> {
         let rule = match (x.rule.as_str(), x.owner) {
             ("owned", Some(o)) => Rule::Owned(PersonId(o)),
             ("add-only", None) => Rule::AddOnly(x.stewards.into_iter().map(PersonId).collect()),
-            ("owned" | "add-only", _) => return malformed(format!("folder {} owner", x.path)),
+            ("per-person", None) if x.stewards.is_empty() => Rule::PerPerson,
+            ("owned" | "add-only" | "per-person", _) => {
+                return malformed(format!("folder {} owner", x.path));
+            }
             (r, _) => return Err(Unread::Unknown(format!("folder rule {r}"))),
         };
         folders.push(Folder { path: x.path, rule });
@@ -297,6 +300,12 @@ pub fn render(doc: &RosterDoc) -> Result<String, String> {
                     rule: "add-only".to_owned(),
                     owner: None,
                     stewards: s.iter().map(|p| p.0.clone()).collect(),
+                },
+                Rule::PerPerson => FolderT {
+                    path: x.path.clone(),
+                    rule: "per-person".to_owned(),
+                    owner: None,
+                    stewards: Vec::new(),
                 },
             })
             .collect(),

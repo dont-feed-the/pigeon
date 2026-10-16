@@ -15,6 +15,13 @@ packaging/install-git-annex --stock    # the official git-annex, where pigeon lo
 
 Then copy the three programs to `bin/` of the directory above
 (`~/.local/share/pigeon/bin`), put it on your `PATH`, and run `pigeond`.
+Or let `scripts/install-local` do it all: it builds the checkout as it is,
+uncommitted changes included, and installs it as `pigeon update --main`
+does, the previous programs kept for `pigeon update --rollback`.
+`scripts/install-remote HOST` installs it the same way on another machine
+over ssh: built here for a Linux machine that can run it, or, for a Mac or
+with `--build-there`, built on the host with the Rust installed there
+(`rustup`); it then checks that the host runs pigeon's patched git-annex.
 A release is made by pushing a tag `v` + the workspace's version
 (`.github/workflows/release.yml`). Pull requests leave the version alone
 and add their entries under `## Unreleased` in
@@ -23,6 +30,8 @@ dates those entries, as [AGENTS.md](../AGENTS.md) says.
 
 Linux CI, lab and slice checks gate publication. macOS tests run periodically
 through `macos-background`; both platforms' release archives still build.
+Pull requests [select relevant checks from their changed files](ci-selection.md).
+Main, release-tag and periodic runs retain full validation.
 Track actual publication, candidate lead time and blocking jobs with
 `python3 scripts/release-kpi`; its [KPI definition and targets](release-kpi.md)
 explain the hourly reports. An immutable candidate can be retried using the

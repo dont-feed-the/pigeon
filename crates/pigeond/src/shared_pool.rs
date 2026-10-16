@@ -124,6 +124,19 @@ pub(crate) fn retain(
     source: &Path,
     immutable: bool,
 ) -> io::Result<PathBuf> {
+    retain_with_sync(store, group, key, source, immutable, |directory| {
+        pigeon_sys::fs::fsync_dir(directory).map_err(io::Error::other)
+    })
+}
+
+fn retain_with_sync(
+    store: &Path,
+    group: &str,
+    key: &str,
+    source: &Path,
+    immutable: bool,
+    sync_directory: impl Fn(&Path) -> io::Result<()>,
+) -> io::Result<PathBuf> {
     private_dir(store)?;
     let target = path(store, group, key)?;
     let parent = target
@@ -146,6 +159,9 @@ pub(crate) fn retain(
         if target.metadata()?.permissions().mode() & 0o222 != 0 {
             return Err(io::Error::other("A shared object became writable"));
         }
+        // A previous attempt can fail after rename but before directory sync.
+        // Reuse must finish that publication before promising a durable pin.
+        sync_directory(parent)?;
         return Ok(target);
     }
     let stage = Pending(temporary(&target)?);
@@ -159,7 +175,7 @@ pub(crate) fn retain(
     verify(&stage.0, key)?;
     sync_object(&stage.0)?;
     std::fs::rename(&stage.0, &target)?;
-    pigeon_sys::fs::fsync_dir(parent).map_err(io::Error::other)?;
+    sync_directory(parent)?;
     Ok(target)
 }
 
@@ -198,3 +214,7 @@ pub(crate) fn relink(source: &Path, target: &Path) -> io::Result<()> {
 #[cfg(test)]
 #[path = "shared_pool_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "shared_pool_recovery_tests.rs"]
+mod recovery_tests;

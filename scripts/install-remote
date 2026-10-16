@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Installs pigeon from this checkout's working tree, uncommitted changes
+# included, on another machine reached by ssh, and has that machine's copy
+# of packaging/pigeon-install place it as `pigeon update --main` does (the
+# old programs in bin.previous, then pigeond restarted).
+#
+# On a host of the same system and architecture, it builds here, checks
+# that the host's glibc is as new as the programs need, and copies them; the
+# host needs nothing more. On another (a Mac, from Linux), or with
+# --build-there, it copies the source and the host builds it with its own
+# Rust, keeping its build in its cache directory from one install to the
+# next. It then checks that the host runs pigeon's patched git-annex.
+# Other arguments go to the installer, such as --no-service or --prefix DIR.
+#
+#   scripts/install-remote HOST [--build-there] [--no-service] [--prefix DIR]
+set -euo pipefail
+
+die() { echo "install-remote: $*" >&2; exit 1; }
+say() { echo "install-remote: $*"; }
+
+[ $# -gt 0 ] && [ "${1#-}" = "$1" ] ||
+  die "usage: scripts/install-remote HOST [--build-there] [--no-service] [--prefix DIR]"
+host=$1
+shift
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+
+there= prefix= args=()
+while [ $# -gt 0 ]; do
+  case $1 in
+    --build-there) there=1; shift ;;
+    --prefix) prefix=${2:?--prefix needs a directory}; args+=("$1" "$2"); shift 2 ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+
+# A command line for the host's shell, with Homebrew's and rustup's
+# programs found even where a non-interactive shell does not set them.
+remote() {
+  ssh "$host" "PATH=\$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:\$PATH; $1"
+}
+quote() { printf '%q ' "$@"; }
+
+# The host's system, architecture, glibc (none on macOS), pigeon directory
+# and cache directory, as the installer chooses them.
+mapfile -t info < <(remote '
+  case "$(uname -s)" in
+    Darwin) d="$HOME/Library/Application Support/pigeon" c="$HOME/Library/Caches/pigeon-remote" ;;
+    *) d="${XDG_DATA_HOME:-$HOME/.local/share}/pigeon" c="${XDG_CACHE_HOME:-$HOME/.cache}/pigeon-remote" ;;
+  esac
+  g=$(getconf GNU_LIBC_VERSION 2>/dev/null | cut -d" " -f2)
+  printf "%s\n" "$(uname -s)" "$(uname -m)" "${g:--}" "$d" "$c"')
+[ ${#info[@]} -eq 5 ] || die "could not reach $host"
+os=${info[0]} arch=${info[1]} glibc=${info[2]} default=${info[3]} cache=${info[4]}
+prefix=${prefix:-$default}
+[ "$os $arch" = "$(uname -s) $(uname -m)" ] || there=1
+
+# The version names the commit, `.dirty` when tracked files changed since,
+# as packaging/pigeon-install --source does.
+commit=$(git -C "$root" rev-parse --short=12 HEAD)
+[ -z "$(git -C "$root" status --porcelain --untracked-files=no)" ] || commit="$commit.dirty"
+v=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$root/Cargo.toml" | head -n 1)
+version="v$v+g$commit"
+
+# Builds on the host: the files git knows here, as they are now, replace
+# the last copy; the build directory beside it stays.
+build_there() {
+  remote 'command -v cargo >/dev/null' ||
+    die "$host has no Rust: install it there with rustup (https://rustup.rs), then run this again"
+  say "copying the source of pigeon $version to $host:$cache/src"
+  remote "rm -rf $(quote "$cache/src") && mkdir -p $(quote "$cache/src")"
+  (cd "$root" && git ls-files -z --cached --others --exclude-standard |
+    while IFS= read -r -d '' f; do [ -e "$f" ] && printf '%s\0' "$f"; done |
+    tar --null -T - -czf -) |
+    remote "tar -xzf - -C $(quote "$cache/src")"
+  say "building and placing it on $host"
+  remote "CARGO_TARGET_DIR=$(quote "$cache/target") PIGEON_COMMIT=$(quote "$commit") $(quote sh "$cache/src/packaging/pigeon-install" --source "$cache/src" --prefix "$prefix" "${args[@]}")"
+}
+
+# Builds here, once the host can run what this machine builds, and copies
+# the programs into a staging directory in the host's pigeon directory, so
+# that the host's installer moves them into place there (and removes it).
+build_here() {
+  [ "$os" = Linux ] || die "programs for $os are built there: add --build-there"
+  say "building pigeon $version"
+  (cd "$root" && PIGEON_COMMIT=$commit cargo build --release --locked -p pigeond -p pigeon -p git-annex-p2p-iroh)
+  local target=${CARGO_TARGET_DIR:-$root/target}/release need staging
+  need=$(objdump -T "$target/pigeon" "$target/pigeond" "$target/git-annex-p2p-iroh" |
+    grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -n 1)
+  [ "$glibc" != - ] && [ "$(printf '%s\n%s\n' "$need" "$glibc" | sort -V | tail -n 1)" = "$glibc" ] ||
+    die "these programs need glibc $need, and $host has ${glibc/#-/none}: add --build-there"
+  staging=$(remote "mkdir -p $(quote "$prefix") && mktemp -d $(quote "$prefix/.pigeon-install.XXXXXX")")
+  say "copying it to $host:$staging"
+  tar -czf - -C "$target" pigeon pigeond git-annex-p2p-iroh \
+    -C "$root/packaging" pigeon-install install-git-annex pigeon-service |
+    remote "mkdir -p $(quote "$staging/release/bin") && tar -xzf - -C $(quote "$staging/release/bin")"
+  say "placing it on $host"
+  remote "$(quote sh "$staging/release/bin/pigeon-install" --place "$staging" --version "$version" --main --prefix "$prefix" "${args[@]}")"
+}
+
+if [ -n "$there" ]; then build_there; else build_here; fi
+
+# pigeond must run pigeon's patched git-annex (ADR 0069), which the installer
+# takes from the latest release, but replaces with a build from source or,
+# failing that, the stock one with only a warning: say so loudly.
+want=$(sed -n 's/^PIGEON_VERSION=//p' "$root/third_party/git-annex/VERSION")
+got=$(remote "$(quote "$prefix/git-annex/bin/git-annex") version --raw 2>/dev/null" || true)
+[ "$got" = "$want" ] ||
+  die "pigeon is installed on $host, but runs ${got:-the stock} git-annex, not pigeon's $want (ADR 0069)"
+say "pigeon $version runs on $host with pigeon's git-annex $got"
