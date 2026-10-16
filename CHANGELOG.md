@@ -17,6 +17,13 @@ increments the second number, and every other release the third.
   folder with whether it is on this computer and why;
   `pigeon sync PATH --default` returns a folder to its default.
 
+### Changed
+
+- Release validation runs the same 50 random crash schedules in parallel
+  within each Linux shard, using different seeds. Longer filesystem trace
+  checks first try a faster witness search, retaining the full search and
+  all safety checks if it cannot explain the observations.
+
 ## 0.5.13 — 2026-10-16
 
 ### Added
