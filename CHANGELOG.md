@@ -130,6 +130,10 @@ the second number, and every other pull request the third.
 
 ## 0.4.1 — 2026-10-16
 
+### Fixed
+- Local telemetry retains at most 256 KiB so diagnostics do not overwhelm
+  the disk budget of a small shared folder.
+
 ### Added
 
 - Admins can choose a private diagnostic collector with `pigeon settings
