@@ -31,12 +31,15 @@ class Inputs(HTMLParser):
     def __init__(self, body):
         super().__init__()
         self.values = {}
+        self.scripts = []
         self.feed(body.decode())
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
         if tag == "input" and "name" in attrs:
             self.values[attrs["name"]] = attrs.get("value", "")
+        if tag == "script" and attrs.get("src"):
+            self.scripts.append(attrs["src"])
 
 
 def rpc(path, request):
@@ -220,8 +223,15 @@ def run():
             status, headers, body = http("GET", f"{peer_ui}/", cookie=cookie_a)
             assert status == 200 and f'data-events="{peer_ui}/events"'.encode() in body
             assert "script-src 'self'" in headers["content-security-policy"]
-            status, headers, body = http("GET", f"{peer_ui}/live.js", cookie=cookie_a)
-            assert status == 200 and "text/javascript" in headers["content-type"] and b"EventSource" in body
+            scripts = Inputs(body).scripts
+            assert len(scripts) == 1 and scripts[0].startswith(f"{peer_ui}/assets/")
+            assert http("GET", scripts[0])[0] == 403
+            assert http("GET", scripts[0], cookie=cookie_b)[0] == 403
+            status, headers, body = http("GET", scripts[0], cookie=cookie_a)
+            assert status == 200 and "text/javascript" in headers.get("content-type", "") and b"EventSource" in body, (
+                f"Advertised client bundle: HTTP {status}, type {headers.get('content-type')}, "
+                f"{len(body)} bytes, live updates: {b'EventSource' in body}"
+            )
             for section in ["files", "space", "suggestions", "machines", "settings"]:
                 status, _, body = http("GET", f"{peer_ui}/{section}", cookie=cookie_a)
                 assert status == 200 and f'href="{peer_ui}/files"'.encode() in body, section

@@ -20,13 +20,20 @@ pub(crate) struct Asset {
 
 include!(concat!(env!("OUT_DIR"), "/assets.rs"));
 
+/// Read the named asset while ignoring an enclosing router's parameters,
+/// such as the bridge client identity. A scalar Path rejects those extras.
+#[derive(serde::Deserialize)]
+pub(crate) struct AssetPath {
+    name: String,
+}
+
 /// The policy of every page served by `pigeond` itself; the bridge sets
 /// its own, as strict, around the pages it mounts.
 pub(crate) const CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self'; \
 img-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
 
 /// `GET /assets/NAME`: an embedded file, immutable under its name.
-pub(crate) async fn serve(Path(name): Path<String>) -> Response {
+pub(crate) async fn serve(Path(AssetPath { name }): Path<AssetPath>) -> Response {
     let (asset, kind) = match name.as_str() {
         n if n == SCRIPT.name => (&SCRIPT, "text/javascript; charset=utf-8"),
         n if n == STYLE.name => (&STYLE, "text/css; charset=utf-8"),
@@ -60,4 +67,52 @@ pub(crate) async fn headers(request: Request, next: Next) -> Response {
         HeaderValue::from_static("same-origin"),
     );
     response
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, reason = "test fixtures")]
+mod tests {
+    use super::*;
+    use axum::{Router, body::Body, routing::get};
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn assets_keep_working_under_a_client_prefix() {
+        let app = Router::new().nest(
+            "/clients/{client}/peer",
+            Router::new().route("/assets/{name}", get(serve)),
+        );
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/clients/selected/peer/assets/{}", SCRIPT.name))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers()[header::CONTENT_TYPE],
+            "text/javascript; charset=utf-8"
+        );
+        assert_eq!(
+            axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .as_ref(),
+            SCRIPT.bytes
+        );
+        let missing = app
+            .oneshot(
+                Request::builder()
+                    .uri("/clients/selected/peer/assets/missing.js")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+    }
 }
