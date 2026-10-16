@@ -102,6 +102,7 @@ cmd-recover = Récupérer le groupe sur un nouvel ordinateur depuis ses machines
 cmd-doctor = Vérifier l'installation et expliquer ce qui ne va pas
 cmd-debug-bundle = Rassembler un diagnostic pour la personne qui vous aide
 cmd-update = Installer la dernière version de pigeon, une version donnée, main compilé depuis les sources, ou la précédente
+cmd-completions = Afficher le script qui active la complétion avec Tab dans le shell
 opt-json = Afficher le résultat en JSON, pour les scripts
 opt-backup-machine = Pour une machine de sauvegarde plutôt que l'ordinateur d'une personne
 opt-not-shared = Lister ce qui n'est pas partagé, et pourquoi

@@ -20,6 +20,8 @@ pub enum Action {
     Help,
     /// Print this program's version.
     Version,
+    /// Print a shell's live completion registration, without a daemon.
+    Completions(clap_complete::Shell),
     /// Run the installer beside this program with these arguments (14 §14.5).
     Update(Vec<String>),
     /// Write the files without `pigeond` (09 §9.9).
@@ -100,6 +102,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("debug bundle [--from NAME…]", "cmd-debug-bundle"),
     ("debug allow NAME", "cmd-debug-allow"),
     ("update [--version TAG | --main | --rollback]", "cmd-update"),
+    ("completions SHELL", "cmd-completions"),
 ];
 
 /// The command line as `clap` reads it. `--help` and `--version` are
@@ -127,6 +130,10 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Command {
     Help,
+    Completions {
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
     Create {
         name: String,
         #[arg(value_name = "FOLDER", value_hint = ValueHint::DirPath, conflicts_with = "folder")]
@@ -389,6 +396,7 @@ fn action(c: Command) -> Action {
     let send = Action::Send;
     match c {
         Command::Help => Action::Help,
+        Command::Completions { shell } => Action::Completions(shell),
         Command::Create {
             name,
             at,

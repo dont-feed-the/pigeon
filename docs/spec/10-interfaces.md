@@ -89,7 +89,9 @@ signed history. Evidence: [folder-rules-5](../reports/folder-rules-5.md).
   definitions. Result on stdout; messages and progress on stderr, headline
   then detail (ux.md §7); colour and bars only on a terminal, never alone.
 - **Completion.** `COMPLETE=SHELL pigeon` prints the script a shell's
-  startup file sources (zsh, bash, fish, elvish, PowerShell); the shell then
+  startup file sources (zsh, bash, fish, elvish, PowerShell).
+  `pigeon completions SHELL` prints the same script so startup files from
+  earlier versions continue to work; the shell then
   runs `pigeon` with `COMPLETE` set, and it answers from the same
   definitions, with the values `pigeond` lists: suggestions, held batches,
   the group's other machines, settings and their choices. A

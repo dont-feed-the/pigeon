@@ -44,6 +44,8 @@ fn a_peer_can_share_one_group_part_only_with_local_consent() {
     );
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
     let ticket = invitation(&a);
+    let secret = pigeon_proto::join::decode(&ticket).unwrap().secret;
+    assert!(!secret.is_empty());
     let joined = pigeon(
         &b,
         &[
@@ -87,6 +89,24 @@ fn a_peer_can_share_one_group_part_only_with_local_consent() {
     assert!(!text.contains("never-send-this-canary"));
     let value: serde_json::Value = serde_json::from_str(&text).unwrap();
     assert_eq!(value["peer_parts"].as_array().unwrap().len(), 1);
+    for roster in [
+        &value["groups"][0]["roster"],
+        &value["peer_parts"][0]["roster"],
+    ] {
+        let roster = roster.as_str().unwrap();
+        assert!(
+            !roster.contains(&secret),
+            "diagnostics disclosed the permanent group invitation secret"
+        );
+        assert!(roster.contains("[redacted]") && roster.contains("Family"));
+    }
+    for daemon in [&a, &b] {
+        let code = invitation(daemon);
+        assert!(
+            pigeon_proto::join::decode(&code).unwrap().secret == secret,
+            "diagnostics changed the live group invitation"
+        );
+    }
     assert_eq!(
         std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
         0o600
@@ -125,6 +145,7 @@ fn a_peer_can_share_one_group_part_only_with_local_consent() {
     assert!(part["omitted"]["telemetry"].as_u64().unwrap() > 0);
     assert!(part.to_string().contains("scoped-positive-control"));
     assert!(!text.contains("never-send-this-canary"));
+    assert!(!text.contains(&secret));
     assert_eq!(
         problem(&pigeon(&a, &["debug", "bundle", "--from", "Bob", "--yes"])),
         Some("debug-not-allowed")

@@ -303,3 +303,11 @@ pub fn render(doc: &RosterDoc) -> Result<String, String> {
     };
     toml_edit::ser::to_string_pretty(&f).map_err(|e| e.to_string())
 }
+
+/// Human-readable diagnostics must not disclose the permanent join secret.
+/// This copy is never persisted as a roster or used to judge signed history.
+pub(crate) fn diagnostic(doc: &RosterDoc) -> Result<String, String> {
+    let mut public = doc.clone();
+    public.roster.invitation = "[redacted]".into();
+    render(&public)
+}

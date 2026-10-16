@@ -4,6 +4,17 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.5.12 — 2026-10-16
+
+### Fixed
+
+- Existing shell startup files using `pigeon completions zsh`, `bash` or
+  `fish` work again, without the "not in this build" warning. They load
+  the current Tab completion, even when the daemon is stopped.
+- Diagnostic bundles hide the group's permanent invitation secret in both
+  this computer's information and parts shared by other computers. Sharing
+  diagnostics keeps the roster readable without sharing permission to join.
+
 ## 0.5.11 — 2026-10-16
 
 ### Changed
