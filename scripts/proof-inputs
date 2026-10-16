@@ -12,11 +12,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 FIXED = (
     ".github/workflows/proofs.yml",
+    ".github/workflows/models-full.yml",
     "models/tla/expected.tsv",
+    "models/tla/costs.tsv",
     "scripts/check-proofs",
     "scripts/proof-inputs",
     "scripts/run-tlc",
     "scripts/tests/test_proof_inputs.py",
+    "scripts/tests/test_proof_coverage.py",
 )
 
 

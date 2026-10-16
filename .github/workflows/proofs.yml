@@ -15,8 +15,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: cache identity and provenance cannot hide changed formal inputs
-        run: python3 -B -m unittest discover -s scripts/tests -p test_proof_inputs.py
+      - name: configuration coverage, audit selection and proof-cache provenance
+        run: python3 -B -m unittest discover -s scripts/tests -p 'test_proof_*.py'
       - name: fingerprint source paths, contents, configurations and tool pins
         id: inputs
         run: echo "hash=$(python3 scripts/proof-inputs)" >> "$GITHUB_OUTPUT"

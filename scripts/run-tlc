@@ -7,6 +7,8 @@ its hash differs. Usage: scripts/run-tlc [--full] [config ...]; with no
 configuration named, the fast set runs, or the fast/full rows with --full.
 --audit includes the proof-covered finite cross-checks as well. --shard I N
 runs the zero-based shard I of N, partitioning the selected rows in order.
+--audit-only selects just the proof-covered cross-checks.
+--balanced uses recorded costs to balance a shard without changing coverage.
 """
 
 import argparse
@@ -49,6 +51,36 @@ def expectations():
     for line in (MODELS / "expected.tsv").read_text().splitlines():
         if line.strip() and not line.startswith("#"):
             yield tuple(line.split("\t"))
+
+
+def select_rows(rows, configs=(), full=False, audit=False, audit_only=False):
+    """Select before sharding; explicitly named configurations remain runnable."""
+    if configs:
+        return [row for row in rows if row[0] in configs]
+    if audit_only:
+        return [row for row in rows if row[2] == "audit"]
+    return [row for row in rows
+            if audit or row[2] == "fast" or full and row[2] == "full"]
+
+
+def model_costs():
+    """Scheduling hints only; new or unmeasured rows still run."""
+    return {name: float(seconds)
+            for line in (MODELS / "costs.tsv").read_text().splitlines()
+            if line.strip() and not line.startswith("#")
+            for name, seconds in [line.split("\t")]}
+
+
+def shard_rows(rows, index, count, costs=None):
+    if costs is None:
+        return rows[index::count]
+    loads, assigned = [0.0] * count, {}
+    # Longest first; stable ties make every shard compute the same partition.
+    for row in sorted(rows, key=lambda row: (-costs.get(row[0], 2.0), row[0])):
+        target = min(range(count), key=lambda part: (loads[part], part))
+        assigned[row[0]] = target
+        loads[target] += costs.get(row[0], 2.0)
+    return [row for row in rows if assigned[row[0]] == index]
 
 
 def verdict(output, trace=False):
@@ -109,27 +141,31 @@ def run(jar, config, module, java, workers, heap, models=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--full", action="store_true", help="include the slow rows")
-    parser.add_argument("--audit", action="store_true", help="include all rows, including proof-covered audits")
+    audits = parser.add_mutually_exclusive_group()
+    audits.add_argument("--audit", action="store_true", help="include all rows, including proof-covered audits")
+    audits.add_argument("--audit-only", action="store_true", help="only proof-covered finite cross-checks")
     parser.add_argument("configs", nargs="*", help="only these configurations")
     parser.add_argument("--java", default=os.environ.get("JAVA", "java"))
     parser.add_argument("--workers", default="auto")
     parser.add_argument("--heap", help="maximum Java heap, such as 3g; TLC spills to disk beyond it")
     parser.add_argument("--shard", nargs=2, type=int, metavar=("INDEX", "COUNT"),
                         help="zero-based shard of the selected configurations")
+    parser.add_argument("--balanced", action="store_true", help="balance shards with recorded model costs")
     arguments = parser.parse_args()
     if arguments.shard and not 0 <= arguments.shard[0] < arguments.shard[1]:
         parser.error("--shard requires 0 <= INDEX < COUNT")
+    if arguments.balanced and not arguments.shard:
+        parser.error("--balanced requires --shard")
     jar = tlc_jar()
     failures = 0
-    rows = [row for row in expectations()
-            if (row[0] in arguments.configs if arguments.configs
-                else arguments.audit or row[2] == "fast" or arguments.full and row[2] == "full")]
+    rows = select_rows(expectations(), arguments.configs, arguments.full,
+                       arguments.audit, arguments.audit_only)
     unknown = set(arguments.configs) - {row[0] for row in rows}
     if unknown:
         parser.error("unknown configurations: " + ", ".join(sorted(unknown)))
     if arguments.shard:
         index, count = arguments.shard
-        rows = rows[index::count]
+        rows = shard_rows(rows, index, count, model_costs() if arguments.balanced else None)
     for config, module, _, expected in rows:
         start = time.monotonic()
         got, output = run(jar, config, module, arguments.java, arguments.workers, arguments.heap)

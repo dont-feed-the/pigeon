@@ -52,8 +52,10 @@ as detected proof mutations.
 
 ## Independent checks and timing
 
-`Purge_full3` is a proof-covered audit: TLC runs it on Monday's nightly
-run, every release tag, manual full checks, and when explicitly named.
+`Purge_full3` is a proof-covered audit: TLC runs it in Monday's separate
+audit job, manual full checks, and when explicitly named. Release tags
+check fresh proofs instead of repeating this graph. The weekly audit runs
+even if main has not moved.
 `Purge_full` and the negative protocol configurations remain in the fast
 set. E14, implementation traces and crash tests retain their checks.
 

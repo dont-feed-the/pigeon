@@ -1,0 +1,27 @@
+# Scheduling estimates in seconds, not timeouts or verification bounds.
+# Measured on ubuntu-24.04, models-full run 38900739734, 16 October 2026.
+# Only cases taking >=20 seconds are listed; every other/new case costs 2s.
+# scripts/run-tlc --balanced uses longest-first placement, then manifest order.
+# Columns: configuration, seconds. Refresh when the remaining shards diverge.
+Evict_flip	550.3
+Authority_decide4	460.2
+T_n42o4	380.2
+Evict_livekeep2	302.4
+Roster_fold3	286.7
+Roster_clock	195.3
+Authority_revoke2	190.6
+Authority_faulty2	176.1
+Authority_mixed	170.2
+Evict_live2	147.2
+Purge_full3	145.4
+Repair_design3	142.4
+T_n32o5	116.7
+CaptureInstall_other3	113.8
+T_n31o5	95.0
+AnnexDrop_design4	85.3
+CaptureInstall_otherlive	72.1
+Repair_live2	43.6
+AnnexDrop_ranked4	27.5
+AnnexDrop_gets2	26.4
+Repair_design4	24.1
+Authority_faulty	22.3

@@ -3,8 +3,9 @@
 # of the slice against the lab build, in twenty shards of four processes,
 # nightly and by hand; a release tag checks 50 runs and 200 schedules, in four
 # shards, and only the blocked slice scenarios (13 §13.12). This is the
-# release-and-nightly tier: the nightly run (from main, the default branch)
-# is skipped when main has no commit from the last 25 hours.
+# release-and-nightly tier: routine nightly checks are skipped when main has
+# no commit from the last 25 hours. Proof-covered finite graphs are separate
+# weekly/manual audits; Monday's audit runs even when main has not moved.
 name: models-full
 
 on:
@@ -24,11 +25,12 @@ concurrency:
 
 jobs:
   fresh:
-    name: main moved in the last 25 hours
+    name: select changed-main checks and weekly audits
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       run: ${{ steps.fresh.outputs.run }}
+      audit: ${{ steps.fresh.outputs.audit }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: fresh
@@ -41,10 +43,13 @@ jobs:
           else
             echo "main has not moved since the last nightly run." >> "$GITHUB_STEP_SUMMARY"
           fi
+          if [ "$EVENT" = workflow_dispatch ] || { [ "$EVENT" = schedule ] && [ "$(date -u +%u)" = 1 ]; }; then
+            echo audit=true >> "$GITHUB_OUTPUT"
+          fi
 
   proofs:
     needs: fresh
-    if: needs.fresh.outputs.run == 'true'
+    if: needs.fresh.outputs.run == 'true' || needs.fresh.outputs.audit == 'true'
     uses: ./.github/workflows/proofs.yml
 
   models:
@@ -68,17 +73,29 @@ jobs:
           path: ~/.cache/pigeon
           key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
       - name: every configuration gives its expected verdict
-        # Partition expected.tsv without reducing TLC's workers per model.
+        # Balance measured costs without reducing TLC's workers per model.
         env:
-          EVENT: ${{ github.event_name }}
           SHARD: ${{ matrix.shard }}
-        run: |
-          args=()
-          # Independent proof-covered audits: Monday, every release, or by hand.
-          if [ "$EVENT" != schedule ] || [ "$(date -u +%u)" = 1 ]; then
-            args+=(--audit)
-          fi
-          scripts/run-tlc --full "${args[@]}" --shard "$SHARD" 4
+        run: scripts/run-tlc --full --balanced --shard "$SHARD" 4
+
+  audits:
+    name: independent TLC audits of proved configurations
+    needs: [fresh, proofs]
+    if: needs.fresh.outputs.audit == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pigeon
+          key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
+      - name: exhaustive cross-checks using a separate model checker
+        run: scripts/run-tlc --audit-only
 
   code-traces:
     name: ${{ github.event_name == 'push' && 50 || 200 }} runs of pigeon-core checked by TLC
