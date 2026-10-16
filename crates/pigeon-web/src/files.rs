@@ -138,9 +138,36 @@ pub async fn folder_page(State(web): State<Arc<Web>>, Query(at): Query<At>) -> H
             .arg("state", r.state(state));
         r.catalogue().format(&m)
     };
+    let prefix = std::path::Path::new(&at.path)
+        .strip_prefix(&root)
+        .ok()
+        .and_then(|p| p.to_str())
+        .unwrap_or_default()
+        .trim_end_matches('/');
+    let children: std::collections::BTreeSet<_> = rows
+        .iter()
+        .filter_map(|file| {
+            let relative = if prefix.is_empty() {
+                file.path.as_str()
+            } else {
+                file.path.strip_prefix(prefix)?.strip_prefix('/')?
+            };
+            let (name, _) = relative.split_once('/')?;
+            Some(name)
+        })
+        .collect();
     let body = html! {
         (list(&other))
         @if rows.is_empty() && other.is_empty() { p { (r.id("files-none")) } }
+        @if !children.is_empty() {
+            h2 { (r.id("web-subfolders")) }
+            ul {
+                @for name in &children {
+                    @let child = std::path::Path::new(&at.path).join(name);
+                    li { a href=(format!("/folder?path={}", enc(&child.to_string_lossy()))) { (name) } }
+                }
+            }
+        }
         ul {
             @for f in &rows {
                 @let full = std::path::Path::new(&root).join(&f.path);

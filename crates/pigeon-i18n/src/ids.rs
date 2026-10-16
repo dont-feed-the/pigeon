@@ -144,6 +144,7 @@ pub const MESSAGES: &[Entry] = &[
     e("problem-folder-rule-path", &[]),
     e("problem-folder-rule-person", &["name"]),
     e("web-folder-rule", &[]),
+    e("web-subfolders", &[]),
     e("web-folder-rule-help", &[]),
     e("web-folder-rule-admin", &[]),
     e("web-folder-rule-owner", &[]),

@@ -691,6 +691,7 @@ async fn the_pages_are_written_for_axe() {
         ("settings", "/settings"),
     ];
     for lang in ["en", "fr"] {
+        folder_rules::write_pages(&dir, lang).await;
         let w = Web::new(Arc::new(Fixed), lang.parse().unwrap(), 4321);
         let app = w.router();
         let cookie = logged_in(&app, &w).await;
