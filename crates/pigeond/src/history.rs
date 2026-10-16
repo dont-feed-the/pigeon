@@ -24,29 +24,87 @@ fn text(s: &str) -> Arg {
     Arg::Text(s.to_owned())
 }
 
-/// The versions of `rel` in `main`'s history, newest first, each with the
-/// commit that saved it, among the last 100 that touch it.
-pub async fn versions(g: &Group, rel: &str) -> Vec<(String, String)> {
-    let out = g
-        .git
-        .run(&["rev-list", "--max-count=100", "refs/heads/main", "--", rel])
-        .await
-        .unwrap_or_default();
-    let mut keys: Vec<(String, String)> = Vec::new();
-    for c in out.lines() {
-        let Some(blob) = g.git.blob(&format!("{c}:{rel}")).await else {
-            continue;
-        };
-        let Some(key) = pointer_key(&blob) else {
-            continue;
-        };
-        if let Some(last) = keys.last_mut()
-            && last.1 == key
-        {
-            c.clone_into(&mut last.0);
-            continue;
+/// Current history followed by the verified archived histories named by
+/// signed refounding trailers. Each archive gets its own in-memory judge.
+/// Successful immutable tips are cached without changing the live fold.
+pub async fn tips(g: &Group) -> Vec<String> {
+    let Some(mut tip) = g.git.rev("refs/heads/main").await else {
+        return Vec::new();
+    };
+    let mut seen = std::collections::BTreeSet::new();
+    let mut tips = Vec::new();
+    for _ in 0..32 {
+        if !seen.insert(tip.clone()) {
+            break;
         }
-        keys.push((c.to_owned(), key));
+        tips.push(tip.clone());
+        let Some(root) = g.git.root(&tip).await else {
+            break;
+        };
+        let Ok(raw) = g.git.object(&root).await else {
+            break;
+        };
+        if pigeon_core::sig::verify(&raw).is_err() {
+            break;
+        }
+        let Some((old, old_main)) = crate::refound::refounded(&raw) else {
+            break;
+        };
+        if g.git
+            .rev(&crate::refound::archive_ref(&old))
+            .await
+            .as_deref()
+            != Some(&old_main)
+            || g.git.root(&old_main).await.as_deref() != Some(&old)
+        {
+            break;
+        }
+        if !g.lock().verified_archives.contains(&old_main) {
+            let judge = g.history_judge(&old);
+            if !crate::verify::judge(&judge, None, &old_main)
+                .await
+                .is_ok_and(|j| j.accepted.as_deref() == Some(&old_main))
+            {
+                break;
+            }
+            g.lock().verified_archives.insert(old_main.clone());
+        }
+        tip = old_main;
+    }
+    tips
+}
+
+/// The versions of `rel`, newest first, across main and its verified
+/// archive chain, among the last 100 commits touching the path.
+pub async fn versions(g: &Group, rel: &str) -> Vec<(String, String)> {
+    let mut remaining = 100;
+    let mut keys: Vec<(String, String)> = Vec::new();
+    for tip in tips(g).await {
+        if remaining == 0 {
+            break;
+        }
+        let limit = format!("--max-count={remaining}");
+        let out = g
+            .git
+            .run(&["rev-list", &limit, &tip, "--", rel])
+            .await
+            .unwrap_or_default();
+        for c in out.lines() {
+            remaining -= 1;
+            let Some(blob) = g.git.blob(&format!("{c}:{rel}")).await else {
+                continue;
+            };
+            let Some(key) = pointer_key(&blob) else {
+                continue;
+            };
+            if let Some(last) = keys.last_mut()
+                && last.1 == key
+            {
+                c.clone_into(&mut last.0);
+            } else {
+                keys.push((c.to_owned(), key));
+            }
+        }
     }
     keys
 }
@@ -122,6 +180,11 @@ pub async fn remove_device(d: &Daemon, name: &str) -> Vec<Response> {
     else {
         return vec![problem("unknown-computer", &[("name", text(name))], None)];
     };
+    let recovery = doc
+        .roster
+        .devices
+        .get(&id)
+        .is_some_and(|d| d.role == DeviceRole::Recovery);
     let change = [Edit::RemoveDevice(id.clone())];
     if id.0 == d.device || !may_sign(&doc.roster, &DeviceId(d.device.clone()), &change) {
         return vec![problem("not-allowed", &[], None)];
@@ -133,7 +196,14 @@ pub async fn remove_device(d: &Daemon, name: &str) -> Vec<Response> {
     }
     d.wake.notify_one();
     vec![Response::Said {
-        message: msg("removed-computer", &[("name", text(name))]),
+        message: msg(
+            if recovery {
+                "revoked-sheet"
+            } else {
+                "removed-computer"
+            },
+            &[("name", text(name))],
+        ),
     }]
 }
 

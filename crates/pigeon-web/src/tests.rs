@@ -74,6 +74,7 @@ impl Backend for Fixed {
                         name: name.into(),
                         device: "d".into(),
                         custodian: false,
+                        recovery: false,
                         heard_at: None,
                         this_device: name == "mine",
                     })

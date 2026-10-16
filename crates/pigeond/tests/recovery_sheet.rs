@@ -203,7 +203,7 @@ fn a_sheet_recovers_an_admin_from_someone_elses_backup() {
         .unwrap();
     let revoked = pigeon(&fresh, &["remove-computer", &name, "--yes"]);
     assert!(
-        said(&revoked, "removed-computer", "name").is_some(),
+        said(&revoked, "revoked-sheet", "name").is_some(),
         "{revoked:?}"
     );
     until(&fresh, State::Protected, &[&vault, &fresh]);

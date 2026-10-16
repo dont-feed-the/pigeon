@@ -22,7 +22,7 @@ pub fn text(roster: &Roster, me: &str, dir: &Path) -> String {
         .filter(|(id, d)| d.role == pigeon_core::roster::Role::Custodian && id.0 != me)
         .map(|(_, d)| d.name.as_str())
         .collect();
-    let dir = dir.display();
+    let dir = format!("'{}'", dir.to_string_lossy().replace('\'', "'\\''"));
     let mut t = format!(
         "pigeon backup of the group \"{}\"\n\
          \n\
@@ -41,8 +41,10 @@ pub fn text(roster: &Roster, me: &str, dir: &Path) -> String {
     t.push_str(&format!(
         "To read the files with git and git-annex alone:\n\
          \n\
-         \x20   git clone {dir} files\n\
+         \x20   git clone -- {dir} files\n\
          \x20   cd files\n\
+         \x20   git config --local user.name 'Recovered pigeon files'\n\
+         \x20   git config --local user.email recovery@localhost\n\
          \x20   git annex init\n\
          \n\
          For each other backup machine's repository (a disk, or ssh):\n\
@@ -143,9 +145,9 @@ mod tests {
         let t = text(&roster, "d2", Path::new("/srv/Family.git"));
         assert!(t.contains("group \"Family\""), "{t}");
         assert!(t.contains("The other backup machines: c2."), "{t}");
-        assert!(t.contains("git clone /srv/Family.git files"), "{t}");
+        assert!(t.contains("git clone -- '/srv/Family.git' files"), "{t}");
         assert!(
-            t.contains("pigeon export --to FOLDER /srv/Family.git"),
+            t.contains("pigeon export --to FOLDER '/srv/Family.git'"),
             "{t}"
         );
         let alone = text(&roster, "d3", Path::new("/b"));

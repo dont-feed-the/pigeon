@@ -69,6 +69,8 @@ pub struct Known {
     pub engine: pigeon_core::catalogue::Engine<pigeon_core::authority::Entry>,
     /// The roster changes of the accepted commits, for the fold (`fold`).
     pub history: Option<pigeon_core::roster::History<String>>,
+    /// Immutable archive tips checked in isolated history judges.
+    pub verified_archives: BTreeSet<String>,
     /// The verdict on each judged commit that was not accepted (04 §4.4).
     pub verdicts: BTreeMap<String, pigeon_core::authority::Verdict>,
     /// The paths install lately wrote over another version: when, in
@@ -185,6 +187,24 @@ impl Group {
         }
         g.reload_roster().await;
         Some(g)
+    }
+
+    /// An isolated in-memory judge for archived history. Judging another
+    /// genesis must not replace the live group's roster fold or catalogue.
+    pub(crate) fn history_judge(&self, genesis: &str) -> Group {
+        Group {
+            id: genesis.to_owned(),
+            role: self.role,
+            git_dir: self.git_dir.clone(),
+            worktree: self.worktree.clone(),
+            git: self.git.clone(),
+            files: self.files.clone(),
+            known: Mutex::new(Known::default()),
+            busy: tokio::sync::Mutex::new(()),
+            daemon: tokio::sync::Mutex::new(None),
+            syncing: Arc::new(Mutex::new(BTreeMap::new())),
+            daemon_peers: Mutex::new(BTreeSet::new()),
+        }
     }
 
     /// The lock of what the loops know.

@@ -62,14 +62,24 @@ pub async fn files(g: &Group, me: &str, prefix: &str) -> Response {
 }
 
 /// The files deleted from `main` under `prefix` (all with ""), newest
-/// deletion first: those its last 1000 commits delete and it does not hold
+/// deletion first: those the current and verified archive histories delete
+/// among their last 1000 commits, and the current tree does not hold
 /// again.
 pub async fn deleted(g: &Group, prefix: &str) -> Response {
-    let commits = g
-        .git
-        .run(&["rev-list", "--max-count=1000", "refs/heads/main"])
-        .await
-        .unwrap_or_default();
+    let mut commits = Vec::new();
+    for tip in crate::history::tips(g).await {
+        let limit = format!("--max-count={}", 1000 - commits.len());
+        let list = g
+            .git
+            .run(&["rev-list", &limit, &tip])
+            .await
+            .unwrap_or_default();
+        commits.extend(list.lines().map(str::to_owned));
+        if commits.len() >= 1000 {
+            break;
+        }
+    }
+    let commits = format!("{}\n", commits.join("\n"));
     let out = g
         .git
         .run_in(

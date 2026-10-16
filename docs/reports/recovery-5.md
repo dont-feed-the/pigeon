@@ -43,7 +43,23 @@ driver and a refusal that closed before delivery. Those defects were
 corrected before the passing run. The driver permits only bundle creation
 and head listing; importing uses the existing checked fetch into peer refs.
 
-An independent participant is retesting the walkthrough with normal
-binaries. Earlier disaster and refounding usability results are in
-[usability-5.md](usability-5.md); those older results do not validate this
-new exchange. No timed soak or sustained nightly evidence is claimed.
+## Independent normal-binary disaster drill
+
+An independent participant followed the guide with normal 0.4.2 binaries.
+Only Bob's non-admin-owned backup survived. Recovery completed in 0.810 s;
+exact current, older and deleted file bytes matched. The used sheet was
+revoked, its replacement was printed, and the old sheet was rejected in
+0.267 s. Every fixture daemon was stopped and secret files remained private.
+
+Restore and removal operations waited about 20 s without intermediate text.
+The following 0.4.3 interface patch now prints the ongoing action, displays
+paper keys without last-heard status, and uses revocation wording. It also
+includes verified archived versions and deleted files in ordinary history,
+restore and view after refounding, without changing the live roster fold.
+Tests cover nested refounding, archive substitution, an unauthorized archive
+tip and a file deleted before refounding. Independent focused retests of
+these changes are in progress.
+
+Earlier disaster and refounding usability results are in
+[usability-5.md](usability-5.md). No timed soak or sustained nightly evidence
+is claimed.

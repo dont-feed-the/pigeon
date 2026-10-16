@@ -515,6 +515,9 @@ pub struct Machine {
     pub device: String,
     /// Whether it is a custodian (backup machine).
     pub custodian: bool,
+    /// A paper recovery key; it never holds content or appears offline.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub recovery: bool,
     /// When it was last heard of, RFC 3339.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub heard_at: Option<String>,

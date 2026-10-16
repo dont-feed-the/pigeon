@@ -408,4 +408,17 @@ setting-telemetry-device = Share diagnostics with
 setting-off = Keep diagnostics on each computer
 problem-join-history-unverified = Pigeon could not verify this group's history. Ask the person who invited you to update pigeon and send a new invitation.
 
-problem-recovery-not-allowed = This recovery sheet is no longer authorized by the backup machine. Use a current sheet and update pigeon on both computers.
+problem-recovery-not-allowed = This recovery sheet can no longer add computers. Use a current sheet, or ask an admin for an invitation.
+
+machine-recovery = { $name }: paper recovery key
+web-revoke-sheet = Revoke recovery sheet
+
+revoked-sheet = { $name } is revoked; this recovery sheet can no longer add computers.
+web-revoke-confirm = Revoke { $name }? This recovery sheet can no longer add computers.
+
+progress-restore = Restoring { $path }; waiting for this group’s checks and available copies.
+progress-remove = Removing { $name }; waiting for this group’s checks.
+progress-recovery-sheet = Preparing a recovery sheet and waiting for a backup machine to receive it.
+progress-recover = Recovering this computer; checking the backup’s history and the new computer’s authority.
+
+confirm-revoke-sheet = Revoke { $name }? This paper key will no longer add computers. [y/N]

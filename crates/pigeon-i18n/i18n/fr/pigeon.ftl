@@ -408,4 +408,17 @@ setting-telemetry-device = Partager les diagnostics avec
 setting-off = Garder les diagnostics sur chaque ordinateur
 problem-join-history-unverified = Pigeon n’a pas pu vérifier l’historique de ce groupe. Demandez à la personne qui vous a invité de mettre pigeon à jour et de vous envoyer une nouvelle invitation.
 
-problem-recovery-not-allowed = Cette fiche de récupération n’est plus autorisée par la machine de sauvegarde. Utilisez une fiche actuelle et mettez pigeon à jour sur les deux ordinateurs.
+problem-recovery-not-allowed = Cette fiche de récupération ne peut plus ajouter d’ordinateurs. Utilisez une fiche actuelle ou demandez une invitation à un administrateur.
+
+machine-recovery = { $name } : clé de récupération sur papier
+web-revoke-sheet = Révoquer la fiche de récupération
+
+revoked-sheet = { $name } est révoquée ; cette fiche de récupération ne peut plus ajouter d’ordinateurs.
+web-revoke-confirm = Révoquer { $name } ? Cette fiche de récupération ne pourra plus ajouter d’ordinateurs.
+
+progress-restore = Restauration de { $path } ; attente des vérifications du groupe et des copies disponibles.
+progress-remove = Retrait de { $name } ; attente des vérifications du groupe.
+progress-recovery-sheet = Préparation d’une fiche de récupération et attente de sa réception par une machine de sauvegarde.
+progress-recover = Récupération de cet ordinateur ; vérification de l’historique de la sauvegarde et de l’autorisation du nouvel ordinateur.
+
+confirm-revoke-sheet = Révoquer { $name } ? Cette clé sur papier ne pourra plus ajouter d’ordinateurs. [o/N]

@@ -167,6 +167,31 @@ fn exchange(out: &Renderer, json: bool, request: &Request) -> ExitCode {
     if client.send(2, request).is_err() {
         return fail(local_problem("daemon-not-running", &[]));
     }
+    let waiting = match request {
+        Request::Restore { path, .. } => Some(("progress-restore", vec![("path", path.as_str())])),
+        Request::RemoveDevice { name } => Some(("progress-remove", vec![("name", name.as_str())])),
+        Request::RecoverySheet => Some(("progress-recovery-sheet", Vec::new())),
+        Request::Recover { .. } => Some(("progress-recover", Vec::new())),
+        _ => None,
+    };
+    if let Some((id, args)) = waiting {
+        let message = Message {
+            id: id.to_owned(),
+            args: args
+                .into_iter()
+                .map(|(k, v)| (k.to_owned(), pigeon_proto::Arg::Text(v.to_owned())))
+                .collect(),
+        };
+        show(
+            out,
+            json,
+            &Response::Progress {
+                message,
+                done: None,
+                total: None,
+            },
+        );
+    }
     loop {
         let Ok(env) = client.next() else {
             return fail(local_problem("daemon-not-running", &[]));
@@ -243,8 +268,8 @@ fn run() -> ExitCode {
         }
         Action::Send(Request::Drop { path, .. }) => drop(&out, &line, path),
         Action::Send(request) => {
-            if let Some(question) = question(request)
-                && !line.yes
+            if !line.yes
+                && let Some(question) = question(request)
                 && !confirm(&out, &line, &question)
             {
                 let p = local_problem("needs-confirmation", &[]);
@@ -305,7 +330,14 @@ fn question(request: &Request) -> Option<Message> {
             .collect(),
     };
     match request {
-        Request::RemoveDevice { name } => Some(ask("confirm-remove-computer", &[("name", name)])),
+        Request::RemoveDevice { name } => {
+            let kind = if recovery_key(name) {
+                "confirm-revoke-sheet"
+            } else {
+                "confirm-remove-computer"
+            };
+            Some(ask(kind, &[("name", name)]))
+        }
         Request::Leave => Some(ask("confirm-leave", &[])),
         Request::Join { invitation, .. } => {
             let (group, r) = pigeon_proto::join::refounded(invitation)?;
@@ -322,6 +354,27 @@ fn question(request: &Request) -> Option<Message> {
         } => Some(ask("confirm-held-share", &[("batch", batch)])),
         _ => None,
     }
+}
+
+/// Reads the paper-key role before wording a removal confirmation. A
+/// failed lookup retains the ordinary computer-removal confirmation.
+fn recovery_key(name: &str) -> bool {
+    let Ok(mut client) = Client::open(None) else {
+        return false;
+    };
+    if client.send(2, &Request::Machines).is_err() {
+        return false;
+    }
+    while let Ok(answer) = client.next() {
+        match answer.body {
+            Response::Machines { machines } => {
+                return machines.iter().any(|m| m.name == name && m.recovery);
+            }
+            Response::Progress { .. } => {}
+            _ => return false,
+        }
+    }
+    false
 }
 
 /// Asks `question`, on a terminal only (10 §10.2).

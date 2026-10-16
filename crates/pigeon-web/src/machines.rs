@@ -90,7 +90,7 @@ fn machine(r: &Renderer, m: &Machine, form: &str) -> Markup {
                 form method="post" action="/machines/remove" {
                     input type="hidden" name="form" value=(form);
                     input type="hidden" name="name" value=(m.name);
-                    button type="submit" { (r.id("web-remove")) }
+                    button type="submit" { (r.id(if m.recovery { "web-revoke-sheet" } else { "web-remove" })) }
                 }
             }
         }
@@ -160,15 +160,24 @@ pub async fn remove(
     }
     let r = web.renderer();
     if !f.yes {
-        let question = r
-            .catalogue()
-            .format(&Message::new("web-remove-confirm").arg("name", f.name.as_str()));
+        let recovery = web.ask(Request::Machines).await.iter().any(|answer| {
+            matches!(answer, pigeon_proto::Response::Machines { machines }
+                if machines.iter().any(|m| m.name == f.name && m.recovery))
+        });
+        let question = r.catalogue().format(
+            &Message::new(if recovery {
+                "web-revoke-confirm"
+            } else {
+                "web-remove-confirm"
+            })
+            .arg("name", f.name.as_str()),
+        );
         let body = html! {
             form method="post" action="/machines/remove" {
                 input type="hidden" name="form" value=(f.form);
                 input type="hidden" name="name" value=(f.name);
                 input type="hidden" name="yes" value="true";
-                button type="submit" { (r.id("web-remove")) }
+                button type="submit" { (r.id(if recovery { "web-revoke-sheet" } else { "web-remove" })) }
             }
             p { a href="/machines" { (r.id("web-back")) } }
         };

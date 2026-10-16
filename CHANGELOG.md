@@ -4,6 +4,19 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.3 — 2026-10-16
+
+### Fixed
+
+- File history, restore and read-only views include verified versions from
+  the archived group after refounding.
+- Restore, recovery, sheet generation and removal show their ongoing action
+  while they wait for group checks or a backup.
+- Recovery sheets are shown as paper keys, with a revoke action, without
+  an offline-computer warning.
+- `RECOVERY.txt` quotes repository paths and sets a local git identity so
+  its plain git-annex commands work on a fresh computer.
+
 ## 0.4.2 — 2026-10-16
 
 ### Fixed

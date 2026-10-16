@@ -233,3 +233,25 @@ fn docs_problems_lists_every_code() {
     got.sort_unstable();
     assert_eq!(got, want, "docs/problems.md lists exactly ids::PROBLEMS");
 }
+
+#[test]
+fn paper_recovery_keys_never_render_as_offline_computers() {
+    let machine = pigeon_proto::api::Machine {
+        name: "paper".into(),
+        device: "sheet".into(),
+        custodian: false,
+        recovery: true,
+        heard_at: None,
+        this_device: false,
+    };
+    for (language, expected, forbidden) in [
+        ("en", "paper recovery key", "last heard"),
+        ("fr", "clé de récupération sur papier", "entendu"),
+    ] {
+        let cat = Catalogue::new(&language.parse().unwrap(), false);
+        let r = render::Renderer::new(cat, 1_792_108_800);
+        let line = r.machine(&machine);
+        assert!(line.contains(expected), "{line}");
+        assert!(!line.contains(forbidden), "{line}");
+    }
+}

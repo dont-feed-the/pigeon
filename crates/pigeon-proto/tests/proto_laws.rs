@@ -233,6 +233,7 @@ fn response(tc: &TestCase) -> Response {
                     name: text(tc),
                     device: text(tc),
                     custodian: flag(tc),
+                    recovery: flag(tc),
                     heard_at: maybe_text(tc),
                     this_device: flag(tc),
                 })

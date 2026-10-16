@@ -524,7 +524,10 @@ fn machines(d: &Daemon) -> Vec<Response> {
             name: x.name.clone(),
             device: id.0.clone(),
             custodian: x.role == DeviceRole::Custodian,
-            heard_at: heard.get(&id.0).map(|t| crate::util::rfc3339(*t)),
+            recovery: x.role == DeviceRole::Recovery,
+            heard_at: (x.role != DeviceRole::Recovery)
+                .then(|| heard.get(&id.0).map(|t| crate::util::rfc3339(*t)))
+                .flatten(),
             this_device: id.0 == d.device,
         })
         .collect();

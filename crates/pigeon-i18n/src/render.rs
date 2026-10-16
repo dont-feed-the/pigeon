@@ -159,6 +159,11 @@ impl Renderer {
 
     /// A machine of the roster.
     pub fn machine(&self, m: &Machine) -> String {
+        if m.recovery {
+            return self
+                .cat
+                .format(&crate::Message::new("machine-recovery").arg("name", m.name.as_str()));
+        }
         if m.this_device {
             let msg = crate::Message::new("machine-this").arg("name", m.name.as_str());
             return self.cat.format(&msg);
