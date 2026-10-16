@@ -132,7 +132,7 @@ pub async fn share(d: &Daemon, group: &str, device: &str) -> Option<Value> {
         bounded(pigeon_telemetry::only_group(&records, group), 512 * 1024);
     let roster = g
         .roster()
-        .and_then(|doc| crate::roster_file::render(&doc).ok());
+        .and_then(|doc| crate::roster_file::diagnostic(&doc).ok());
     let roster_omitted = roster.as_ref().is_some_and(|r| r.len() > 512 * 1024);
     let roster = roster.filter(|r| r.len() <= 512 * 1024);
     let value = serde_json::json!({
