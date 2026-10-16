@@ -30,7 +30,18 @@ headline-capturing =
 headline-checking = The local folder could not be checked. Run: pigeon doctor
 headline-inventory-unreadable = Pigeon cannot check every saved version right now.
 headline-too-few-backups = Not safe yet: add a backup machine.
-why-capturing = This change is waiting to be captured and copied to the backup machines.
+why-capturing = This change is waiting to be saved and copied to the backup machines.
+why-differs = Your copy differs from the group's version. Choose which to keep.
+why-name = Its name does not work on every computer. Rename it.
+why-held-deletion = It was deleted along with many other files. pigeon waits for you to choose: delete them for everyone, or bring them back.
+why-capture-failed =
+    pigeon could not save this change: { $why ->
+        [disk-full] the disk is full
+        [no-access] it is not allowed to read the file
+        [busy] another program was using the folder
+       *[other] something went wrong
+    }. It will try again.
+why-removed = This computer is no longer in the group, so this file is not backed up.
 why-too-few-backups = { $have } of { $need } backup machines are set up. Add one with: pigeon invite --backup-machine
 headline-not-safe =
     { $files ->
@@ -53,6 +64,7 @@ headline-machine-missing =
 headline-machine-full = { $machine } is full; it waits until space is freed on it.
 headline-machine-no-capacity = { $machine } has no room for { $files } files: it needs { $missing_mb } MB more free space. Free up space on it, or add another backup machine.
 headline-machine-lost = { $machine } no longer finds its backup folder; it counts for nothing until it is set up again.
+headline-removed = This computer was removed from the group. Its files stay in its folder, but they are no longer shared or backed up. To share them again, ask someone in the group for a new invitation.
 why-machine-offline = { $machine } has been offline since { $since }.
 why-machine-not-heard = { $machine } has not been heard from yet on this computer.
 why-safe-copies = { $have } of { $need } safe copies
@@ -161,6 +173,7 @@ joined =
        *[computer] This computer is now in “{ $group }”. The group's files arrive in its folder.
     }
 removed-computer = { $name } is removed from the group; its copies no longer count.
+removed-from-group = This computer is no longer in the group: this is the group as it last knew it. To share files again, ask someone in the group for a new invitation.
 bundle-written = The diagnostics are in { $path }. Nothing was sent.
 machine-row = { $name }: { $kind }, last heard { $heard }
 machine-kind-custodian = backup machine

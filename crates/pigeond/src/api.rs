@@ -583,7 +583,8 @@ fn machines(d: &Daemon) -> Vec<Response> {
             this_device: id.0 == d.device,
         })
         .collect();
-    vec![Response::Machines { machines }]
+    // A removed computer's list is the group as it last knew it (09 §9.7).
+    crate::removed::noted(&g, Response::Machines { machines })
 }
 
 /// `pigeon people`: each person of the roster, with their machines.
@@ -625,7 +626,7 @@ async fn people(d: &Daemon) -> Vec<Response> {
                 .collect(),
         })
         .collect();
-    vec![Response::People { people }]
+    crate::removed::noted(&g, Response::People { people })
 }
 
 /// The message of a text, for the modules that answer with one.
