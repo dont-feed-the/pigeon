@@ -10,6 +10,8 @@
 //! and a `Host`, and an `Origin` if it has one, naming this server: so
 //! neither another site (CSRF) nor a name that resolves to 127.0.0.1 (DNS
 //! rebinding) reaches the pages.
+//! A bridge can instead mount the shared pages with [`Web::embedded`],
+//! checking its own session, origin and peer access before every request.
 
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
@@ -34,9 +36,27 @@ mod leave;
 mod machines;
 mod pages;
 mod recovery;
+mod render;
 mod settings;
 mod space;
 mod view;
+
+use render::Renderer;
+
+/// A peer UI mounted by a server that authenticates its users itself.
+/// Paths are trusted, same-origin absolute paths without a trailing slash.
+#[derive(Clone, Debug)]
+pub struct Mount {
+    /// URL prefix for all peer pages, forms and live updates.
+    pub path: String,
+    /// Name of the selected peer, shown on every page.
+    pub label: String,
+    /// Return link to the hosting application's client management page.
+    pub back: String,
+    /// Whether this peer has a local working tree to keep or free. Sparse
+    /// bridge clients let the Nextcloud app manage its own offline copies.
+    pub storage_controls: bool,
+}
 
 /// What a backend answers a request with: progress, then one result.
 pub type Answer = Pin<Box<dyn Future<Output = Vec<pigeon_proto::Response>> + Send>>;
@@ -55,6 +75,7 @@ pub struct Web {
     tokens: Mutex<HashSet<String>>,
     /// Each session, with its form token.
     sessions: Mutex<HashMap<String, String>>,
+    mount: Option<Mount>,
 }
 
 /// Shows the port and language only: tokens and sessions are secrets.
@@ -101,6 +122,24 @@ impl Web {
             port,
             tokens: Mutex::default(),
             sessions: Mutex::default(),
+            mount: None,
+        })
+    }
+
+    /// Reuses the peer pages in an authenticated hosting application. Setup
+    /// and leaving are managed by that application, so their routes are absent.
+    pub fn embedded(
+        backend: Arc<dyn Backend>,
+        lang: pigeon_i18n::LanguageIdentifier,
+        mount: Mount,
+    ) -> Arc<Web> {
+        Arc::new(Web {
+            backend,
+            lang: Mutex::new(lang),
+            port: 0,
+            tokens: Mutex::default(),
+            sessions: Mutex::default(),
+            mount: Some(mount),
         })
     }
 
@@ -130,9 +169,9 @@ impl Web {
         *self.lang.lock().unwrap_or_else(|p| p.into_inner()) = lang;
     }
 
-    fn renderer(&self) -> pigeon_i18n::render::Renderer {
+    fn renderer(&self) -> Renderer {
         let lang = self.lang.lock().unwrap_or_else(|p| p.into_inner()).clone();
-        pigeon_i18n::render::Renderer::new(Catalogue::new(&lang, false), now())
+        Renderer::new(Catalogue::new(&lang, false), now(), self.mount.clone())
     }
 
     async fn ask(&self, request: pigeon_proto::Request) -> Vec<pigeon_proto::Response> {
@@ -141,10 +180,27 @@ impl Web {
 
     /// The routes, behind the checks of the module's header.
     pub fn router(self: &Arc<Web>) -> Router {
-        Router::new()
+        self.pages()
+            .route_layer(middleware::from_fn_with_state(self.clone(), session))
+            .route("/login", get(login))
+            .layer(middleware::from_fn_with_state(self.clone(), same_origin))
+            .with_state(self.clone())
+    }
+
+    /// The shared pages with the host's session CSRF token. The caller MUST
+    /// authenticate every request, check peer ownership and revocation, and
+    /// enforce Host/Origin before dispatch. No local login endpoint is exposed.
+    /// Pass paths relative to `Mount::path`; generated URLs include that prefix.
+    pub fn embedded_router(self: &Arc<Web>, form_token: String) -> Router {
+        self.pages()
+            .layer(axum::Extension(FormToken(form_token)))
+            .with_state(self.clone())
+    }
+
+    fn pages(&self) -> Router<Arc<Web>> {
+        let routes = Router::new()
             .route("/", get(pages::home))
-            .route("/join", get(join::setup).post(join::join))
-            .route("/create", post(join::create))
+            .route("/live.js", get(pages::script))
             .route("/machines", get(machines::machines))
             .route("/machines/remove", post(machines::remove))
             .route("/machines/recovery-sheet", post(recovery::sheet))
@@ -162,8 +218,6 @@ impl Web {
             .route("/deleted", get(files::deleted_page))
             .route("/file", get(files::file_page))
             .route("/files/restore", post(actions::restore))
-            .route("/files/keep", post(actions::keep))
-            .route("/files/free", post(actions::free))
             .route("/settings", get(settings::settings).post(settings::save))
             .route("/doctor", get(settings::doctor))
             .route("/settings/diagnostics", post(settings::diagnostics))
@@ -172,15 +226,25 @@ impl Web {
             .route("/held/share", post(held::share))
             .route("/held/bring-back", post(held::bring_back))
             .route("/held/rename", post(held::rename))
-            .route("/leave", post(leave::leave))
             .route("/files/view", post(view::view))
             .route("/suggestions/view", post(view::view))
             .route("/suggestions/accept", post(actions::accept))
-            .route("/suggestions/decline", post(actions::decline))
-            .route_layer(middleware::from_fn_with_state(self.clone(), session))
-            .route("/login", get(login))
-            .layer(middleware::from_fn_with_state(self.clone(), same_origin))
-            .with_state(self.clone())
+            .route("/suggestions/decline", post(actions::decline));
+        let routes = if self.mount.as_ref().is_none_or(|m| m.storage_controls) {
+            routes
+                .route("/files/keep", post(actions::keep))
+                .route("/files/free", post(actions::free))
+        } else {
+            routes
+        };
+        if self.mount.is_some() {
+            routes
+        } else {
+            routes
+                .route("/join", get(join::setup).post(join::join))
+                .route("/create", post(join::create))
+                .route("/leave", post(leave::leave))
+        }
     }
 
     fn hosts(&self) -> [String; 2] {

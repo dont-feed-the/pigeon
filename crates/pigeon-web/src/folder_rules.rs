@@ -48,7 +48,7 @@ pub async fn view(
         @for rule in &report.rules {
             p { (r.folder_rule(rule, &report.people)) }
             @if report.can_edit && !rule.path.is_empty() {
-                form method="post" action="/folder-rule" {
+                form method="post" action=(r.url("/folder-rule")) {
                     input type="hidden" name="form" value=(&token.0);
                     input type="hidden" name="path" value=(std::path::Path::new(&report.root).join(&rule.path).to_string_lossy());
                     p { label { input type="radio" name="kind" value="owned" checked[rule.direct && rule.owner.is_some()]; (r.id("web-folder-rule-owner")) } }
@@ -72,7 +72,7 @@ pub async fn view(
                 }
             } @else { p { (r.id("web-folder-rule-admin")) } }
         }
-        p { a href="/files" { (r.id("web-back")) } }
+        p { a href=(r.url("/files")) { (r.id("web-back")) } }
     };
     page(&r, "/files", &r.id("web-folder-rule"), &body)
 }

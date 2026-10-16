@@ -26,6 +26,7 @@ pigeon-i18n.workspace = true
 pigeon-core.workspace = true
 pigeon-proto.workspace = true
 pigeon-sys.workspace = true
+pigeon-web.workspace = true
 quick-xml.workspace = true
 rustix.workspace = true
 serde.workspace = true
@@ -34,11 +35,11 @@ sha2.workspace = true
 subtle.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "net", "fs", "signal"] }
 toml_edit.workspace = true
+tower.workspace = true
 url.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-tower.workspace = true
 
 [lints]
 workspace = true

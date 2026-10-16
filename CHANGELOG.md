@@ -4,6 +4,15 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.5.4 — 2026-10-16
+
+### Changed
+
+- Nextcloud clients open the regular Pigeon web interface through the bridge,
+  with Files, version history, protection status, suggestions and settings
+  for the selected client. Client management and conflict resolution remain
+  available from every peer page.
+
 ## 0.5.3 — 2026-10-16
 
 ### Changed

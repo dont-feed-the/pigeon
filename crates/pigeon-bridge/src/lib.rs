@@ -20,6 +20,7 @@ pub mod config;
 mod dav;
 mod dav_xml;
 mod index;
+mod peer_ui;
 mod peers;
 mod rpc;
 mod store;
@@ -158,7 +159,13 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/logout", post(auth::logout))
         .route("/suggestions", get(ui::suggestions))
         .route("/decide", post(ui::decide))
+        .route("/peer", any(peer_ui::account))
+        .route("/peer/", any(peer_ui::account))
+        .route("/peer/{*path}", any(peer_ui::account))
         .route("/clients/{id}", get(ui::client))
+        .route("/clients/{id}/peer", any(peer_ui::client))
+        .route("/clients/{id}/peer/", any(peer_ui::client))
+        .route("/clients/{id}/peer/{*path}", any(peer_ui::client))
         .route("/clients/{id}/file", get(ui::file))
         .route("/clients/{id}/resolve", post(ui::resolve))
         .route("/clients/{id}/revoke", post(ui::revoke))
@@ -221,7 +228,7 @@ async fn origin(State(app): State<Arc<App>>, request: Request, next: Next) -> Re
         header::CACHE_CONTROL,
         axum::http::HeaderValue::from_static("no-store"),
     );
-    headers.insert(header::CONTENT_SECURITY_POLICY, axum::http::HeaderValue::from_static("default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"));
+    headers.insert(header::CONTENT_SECURITY_POLICY, axum::http::HeaderValue::from_static("default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"));
     response
 }
 

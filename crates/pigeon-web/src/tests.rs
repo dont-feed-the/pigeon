@@ -17,6 +17,8 @@ mod doctor;
 mod folder_rules;
 #[path = "tests/health.rs"]
 mod health;
+#[path = "tests/mounted.rs"]
+mod mounted;
 #[path = "tests/recovery.rs"]
 mod recovery;
 #[path = "tests/usability.rs"]
@@ -413,7 +415,10 @@ async fn a_setting_is_shown_and_saved_with_the_sessions_form_token() {
         .unwrap();
     assert_eq!(ok.status(), StatusCode::OK);
     let text = body(ok).await;
-    assert!(text.contains("Language: Français."), "{text}");
+    assert!(
+        text.contains("lang=\"fr\"") && text.contains("Langue : Français."),
+        "{text}"
+    );
 }
 
 /// The form token of a page.
@@ -719,6 +724,17 @@ async fn the_pages_are_written_for_axe() {
         let w = Web::new(Arc::new(Fixed), lang.parse().unwrap(), 4321);
         let app = w.router();
         let cookie = logged_in(&app, &w).await;
+        let mounted = Web::embedded(
+            Arc::new(Fixed),
+            lang.parse().unwrap(),
+            crate::Mount {
+                path: "/clients/selected/peer".into(),
+                label: "Phone".into(),
+                back: "/clients/selected".into(),
+                storage_controls: false,
+            },
+        )
+        .embedded_router("bridge-csrf".into());
         for (name, path) in pages {
             let r = app
                 .clone()
@@ -727,6 +743,17 @@ async fn the_pages_are_written_for_axe() {
                 .unwrap();
             assert_eq!(r.status(), StatusCode::OK, "{path}");
             std::fs::write(dir.join(format!("{lang}-{name}.html")), body(r).await).unwrap();
+            let r = mounted
+                .clone()
+                .oneshot(get(path, "bridge.example", None))
+                .await
+                .unwrap();
+            assert_eq!(r.status(), StatusCode::OK, "mounted {path}");
+            std::fs::write(
+                dir.join(format!("{lang}-bridge-{name}.html")),
+                body(r).await,
+            )
+            .unwrap();
         }
     }
 }

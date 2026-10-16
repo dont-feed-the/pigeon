@@ -47,11 +47,8 @@ sudo apt-get install -y build-essential pkg-config libssl-dev git curl ca-certif
 Install [Rust with rustup](https://rustup.rs) if needed, then open a shell where
 `cargo` works. Cargo selects the Rust version pinned by Pigeon.
 
-Until [PR #20](https://github.com/dont-feed-the/pigeon/pull/20) is merged, use
-its branch to get the bridge. After it is merged, omit the `--branch` option:
-
 ```sh
-git clone --branch codex/nextcloud-peer-bridge https://github.com/dont-feed-the/pigeon.git "$HOME/pigeon"
+git clone https://github.com/dont-feed-the/pigeon.git "$HOME/pigeon"
 cd "$HOME/pigeon"
 cargo build --release --locked -p pigeon -p pigeond -p pigeon-bridge -p git-annex-p2p-iroh
 ```
@@ -334,15 +331,24 @@ by the integration checks; desktop and mobile releases need their own
 Open the same bridge HTTPS address in a browser. Nextcloud apps do not show
 Pigeon's approval workflow.
 
-- **Clients** lists your separately authorized devices. Open one to see its
-  files, protection status, and versions waiting for review or resolution.
+- **Clients** lists your separately authorized devices. Open a device's name
+  to use the same Pigeon interface as a regular peer: **Home** shows protection
+  status, **Files** offers downloads, history and restore, **Space** explains
+  storage, and **Settings** changes that client's preferences.
 - **Suggestions** lists proposed changes. People allowed to decide see
   **Accept** and **Decline**; other people see that the change is awaiting review.
 - **Take the group's version** replaces a client's differing version.
   **Keep mine as a copy** saves it under another name. **Suggest again**
-  submits it for another review.
+  submits it for another review. Find these under **Manage client and conflicts**,
+  linked from every client peer page.
 - **Revoke this client** disables that installation's access. Other clients keep
   their identities and access. Authorizing it again creates a new peer.
+
+Each peer page names the selected device. Actions there use that device's
+Pigeon identity; the portal's top-level **Suggestions** link uses your personal
+control peer. Choose files to keep offline inside the Nextcloud app. The bridge
+manages the peer's group and its sparse server storage, so those local setup and
+pinning controls are omitted from its Pigeon pages.
 
 For example, an edit to someone else's file can wait as a suggestion. The app
 that uploaded it sees its own saved version while other clients see the accepted
