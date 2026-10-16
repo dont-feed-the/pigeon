@@ -32,6 +32,7 @@ runs under a subreaper.
 A second real build without `tokio_unstable` starts normally with the
 switch both absent and present, and opens no console listener in either
 case. The required default-feature full-workspace Clippy and repository
-checks also pass. Sync/protection lag and connection/queue dashboard
+checks also pass. The CI Clippy step includes the optional feature so its
+API is compiled on the supported runners. Sync/protection lag and connection/queue dashboard
 instrumentation remain their own M4 follow-up. This report is not a release
 or long-duration gate claim.

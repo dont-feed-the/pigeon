@@ -148,7 +148,7 @@ jobs:
       - name: formatted with rustfmt
         run: cargo fmt --all --check
       - name: clippy without warnings
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: cargo clippy --workspace --all-targets --features pigeond/tokio-console --locked -- -D warnings
       - name: tests, laws and the git-annex contract tests (13 §13.6)
         run: cargo test --workspace --locked --no-fail-fast
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
