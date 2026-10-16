@@ -1,4 +1,4 @@
-//! The words of suggestions decided file by file (ADR 0076, 04 §4.5), for
+//! The words of suggestions decided file by file (ADR 0077, 04 §4.5), for
 //! the command line and the web pages: what each file of a suggestion
 //! changes, with sizes as people read them (`Renderer::size`); and, for its
 //! author, how a suggestion was decided, with the decider's note.

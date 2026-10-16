@@ -1,4 +1,4 @@
-//! What a suggestion changes, file by file (ADR 0076, 04 §4.5), for the
+//! What a suggestion changes, file by file (ADR 0077, 04 §4.5), for the
 //! Suggestions page and `pigeon suggestions`: each path of the proposal's
 //! change on its base is a new file, a changed one or a deletion, with its
 //! size before and after, read from its git-annex key; a deleted path and a

@@ -28,7 +28,7 @@ pub const FORCE: &str = "Pigeon-Force:";
 pub const RESOLVED: &str = "Pigeon-Resolved:";
 /// The trailer of a rename, old path and new (ADR 0072, 05 §5.2).
 pub const RENAMED: &str = "Pigeon-Renamed:";
-/// The trailer naming a file a decision on some files accepts (ADR 0076).
+/// The trailer naming a file a decision on some files accepts (ADR 0077).
 pub const ACCEPTED: &str = "Pigeon-Accepted:";
 
 /// One entry of a tree, as `ls-tree -r` lists it.
@@ -259,7 +259,7 @@ pub fn renamed_trailer(old: &str, new: &str) -> String {
 }
 
 /// The trailer line that names `path` as accepted by a decision on some
-/// files of a proposal (ADR 0076), quoted as [`renamed_trailer`] does.
+/// files of a proposal (ADR 0077), quoted as [`renamed_trailer`] does.
 pub fn accepted_trailer(path: &str) -> String {
     format!("{ACCEPTED} {}", quote(path))
 }

@@ -357,7 +357,7 @@ pub fn absolute(path: &str) -> String {
         .into_owned()
 }
 
-/// The files of a suggestion named on the command line (ADR 0076): a file
+/// The files of a suggestion named on the command line (ADR 0077): a file
 /// here is made absolute; a name that is not here, such as a new file the
 /// suggestion adds, is a path in the group's folder as `pigeon
 /// suggestions` lists it.

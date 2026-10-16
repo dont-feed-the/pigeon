@@ -271,7 +271,7 @@ pub enum Request {
     },
     /// `pigeon accept ID PATH…` · `pigeon decline ID PATH… [--note TEXT]`:
     /// one decision on every file of a proposal, the files named accepted
-    /// and the others declined, or the reverse (ADR 0076). A new request,
+    /// and the others declined, or the reverse (ADR 0077). A new request,
     /// so that an older `pigeond` refuses it rather than deciding the
     /// whole proposal.
     DecideFiles {
@@ -411,7 +411,7 @@ pub enum Response {
         /// Oldest first.
         proposals: Vec<Suggestion>,
         /// This person's suggestions decided lately, newest first (ADR
-        /// 0076).
+        /// 0077).
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         decided: Vec<Outcome>,
         /// The group's folder on this computer, which the paths are in.
@@ -756,12 +756,12 @@ pub struct Suggestion {
     /// Whether it is this person's.
     #[serde(default)]
     pub mine: bool,
-    /// What it changes, file by file: a rename is one file (ADR 0076).
+    /// What it changes, file by file: a rename is one file (ADR 0077).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub files: Vec<SuggestedFile>,
 }
 
-/// What a suggestion changes in one file (ADR 0076).
+/// What a suggestion changes in one file (ADR 0077).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SuggestedFile {
     /// Its path in the group's folder; for a rename, the new one.
@@ -797,7 +797,7 @@ pub enum FileChange {
     Renamed,
 }
 
-/// A suggestion of this person that was decided (ADR 0076): which of its
+/// A suggestion of this person that was decided (ADR 0077): which of its
 /// files were accepted and which declined, by whom, and why.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Outcome {

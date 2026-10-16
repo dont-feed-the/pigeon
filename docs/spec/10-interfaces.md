@@ -25,7 +25,7 @@ result, progress events then a result, or a `Problem` (§10.6).
 | `View {path, version \| group}` | `pigeon view PATH [--version N \| --group]` | *Open a copy*, *Open Paul's version* | [07 §7.6](07-capture-and-install.md) |
 | `Restore {path, version \| at}` | `pigeon restore PATH [--version N \| --at TIME]` | *Restore this version*, Deleted files | [05 §5.1](05-catalogue-and-names.md) |
 | `Deleted {path?}` | `pigeon deleted [PATH]` | Files → Deleted files | [05 §5.1](05-catalogue-and-names.md) |
-| `Proposals` · `Accept {proposal, override?}` · `Reject {proposal, note?}` · `DecideFiles {proposal, paths, accept, note?, override?}` | `pigeon suggestions` · `pigeon accept ID [FILE…] [--override REASON]` · `pigeon decline ID [FILE…] [--note TEXT]` | Suggestions | [04 §4.5, §4.6](04-roster-and-authority.md), ADR 0076 |
+| `Proposals` · `Accept {proposal, override?}` · `Reject {proposal, note?}` · `DecideFiles {proposal, paths, accept, note?, override?}` | `pigeon suggestions` · `pigeon accept ID [FILE…] [--override REASON]` · `pigeon decline ID [FILE…] [--note TEXT]` | Suggestions | [04 §4.5, §4.6](04-roster-and-authority.md), ADR 0077 |
 | `Conflicts` · `Resolve {path, choice}` | `pigeon conflicts` · `pigeon resolve PATH --take-group \| --keep-copy DEST \| --suggest-again` | Suggestions → Yours, Home | [07 §7.6](07-capture-and-install.md) |
 | `People` · `Machines` | `pigeon people` · `pigeon machines` | People & machines | [04 §4.2](04-roster-and-authority.md) |
 | `RemoveDevice {name}` · `Leave` | `pigeon remove-computer NAME` · `pigeon leave` | *I lost a computer* · Settings | [09 §9.7](09-network-and-joining.md) |
@@ -284,7 +284,7 @@ outside the shared folder, or explains that the proposal deletes that path.
 Review does not adopt the proposal or replace accepted bytes. The web uses
 a checked POST before downloading the copy.
 
-The Suggestions page (ADR 0076) groups the suggestions this person
+The Suggestions page (ADR 0077) groups the suggestions this person
 decides, their own, and the others'. Each lists its files with what
 changes in each, in words and sizes, and *Review* for each file still
 there afterwards. On one this person decides every file has a checkbox,

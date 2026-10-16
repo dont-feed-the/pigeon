@@ -1,6 +1,6 @@
 ------------------------------ MODULE Authority ------------------------------
 (* Acceptance of commits, proposals and decisions, and the removal of a device
-   (spec 04 §4.3-4.5, 09 §9.7; ADRs 0009, 0051 and 0076). With "part" in
+   (spec 04 §4.3-4.5, 09 §9.7; ADRs 0009, 0051 and 0077). With "part" in
    Ops, a later save may add another file to a proposal, and a decider may
    decide some of its files: accept them and reject the rest in one commit.
    Persons 1 = a (the admin), 2 = b (owner of folder F), 3 = c (a member).
@@ -254,7 +254,7 @@ Decide(d, p, v) ==
   /\ v \in Ops /\ Room /\ Pending(d, p)
   /\ IF v = "rejected" THEN d \in Deciders(p, x) ELSE d = Author(p)
   /\ Write(d, New({x}, d, v, cm[x].tree, {[p |-> p, v |-> v]}, {}, FALSE, x))
-(* A decision on some files Q of p (ADR 0076): one commit on main, not a
+(* A decision on some files Q of p (ADR 0077): one commit on main, not a
    merge, that holds the change of Q as the adoption makes it, keeps main's
    version elsewhere, and rejects p; Force as for the adoption. *)
 PartTree(x, p, Q) == [q \in CPaths |-> IF q \in Q THEN AdoptTree(x, p)[q] ELSE cm[x].tree[q]]
@@ -397,7 +397,7 @@ RemovalRevokesAdded ==
    history, and an honest merge is accepted. *)
 TreeIsCatalogue == (cm[L].acc /\ cm[L].signer \in Honest) => cm[L].tree = TreeOf({L})
 HonestMergesAccepted == (cm[L].kind = "merge") => cm[L].acc
-(* A decider's decision on some files is always accepted (ADR 0076), so
+(* A decider's decision on some files is always accepted (ADR 0077), so
    the files it accepts reach main by an authorised change. *)
 PartsAccepted == (cm[L].kind = "part") => cm[L].acc
 

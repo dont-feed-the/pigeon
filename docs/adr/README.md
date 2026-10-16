@@ -146,4 +146,4 @@ passes; 16 §16.3 lists where each rule now lives.
 | [0073](0073-parameterized-proofs-complement-model-checking.md) | Parameterized safety proofs complement model checking | Proposed |
 | [0074](0074-mount-the-peer-ui-behind-bridge-authorization.md) | Mount the peer UI behind bridge authorization | Proposed |
 | [0075](0075-one-invitation-per-group-shared-as-a-line.md) | One invitation per group, shared as a line that installs and joins | Accepted |
-| [0076](0076-a-suggestion-is-decided-file-by-file-in-one-decision.md) | A suggestion is decided file by file, in one decision | Proposed |
+| [0077](0077-a-suggestion-is-decided-file-by-file-in-one-decision.md) | A suggestion is decided file by file, in one decision | Proposed |

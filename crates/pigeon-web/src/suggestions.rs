@@ -1,4 +1,4 @@
-//! Suggestions (ux.md §6.3, 10 §10.3, ADR 0076): those for this person to
+//! Suggestions (ux.md §6.3, 10 §10.3, ADR 0077): those for this person to
 //! decide, theirs, and the others, each listing its files with what
 //! changes in each and a *Review* button that downloads the suggested
 //! copy (`view.rs`). On one this person decides, every file has a

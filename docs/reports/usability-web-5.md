@@ -62,5 +62,5 @@ the changelog lists under the release after 0.5.8:
 | An admin named "Me" | P2, P3, P5 | "Your name" on Create and `pigeon create --person`; never "Me" |
 | A failed join left a half-joined group | P2 | the join is added only once welcomed, and a failed one is cleaned up |
 | English download names | P3 | named in the person's language |
-| Suggestions decided only whole, with no difference shown | P1 | per-file decisions with bulk actions, each file described, and the outcome shown to the suggester (ADR 0076) |
+| Suggestions decided only whole, with no difference shown | P1 | per-file decisions with bulk actions, each file described, and the outcome shown to the suggester (ADR 0077) |
 | No skip link; repeated button names | P4 | a skip link, and each repeated button names what it acts on |

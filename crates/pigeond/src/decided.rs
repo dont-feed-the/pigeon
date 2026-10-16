@@ -1,4 +1,4 @@
-//! How a person's suggestions were decided (ADR 0076, 04 §4.5), shown to
+//! How a person's suggestions were decided (ADR 0077, 04 §4.5), shown to
 //! their author on the Suggestions page and by `pigeon suggestions`, for
 //! the decisions of the last [`RECENT`] seconds on `main`:
 //!
@@ -6,7 +6,7 @@
 //!   every file accepted;
 //! - a decision `rejected`, `.pigeon/decisions/<commit>.toml`, added by a
 //!   commit whose `Pigeon-Accepted:` trailers name the files it accepted
-//!   (ADR 0076), the others declined, with the decision's note. A trailer
+//!   (ADR 0077), the others declined, with the decision's note. A trailer
 //!   counts only if the commit's tree holds that file's change
 //!   (`proposal::holds`): a decider's claim alone is never shown as an
 //!   acceptance. A decision without trailers declines every file, as an
