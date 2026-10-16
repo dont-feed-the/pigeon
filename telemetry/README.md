@@ -44,7 +44,7 @@ a body; every record must name that stream's group. It stamps the source
 identity from QUIC, then writes local files and forwards to the configured
 backend. Unknown devices and mixed-group batches are refused.
 
-Local files rotate at 5 MiB and retain at most 50 MiB. The SDK queues at most
+Local files rotate and retain at most 256 KiB. The SDK queues at most
 2,048 spans; the outbound group queue holds at most 1 MiB and batches are at
 most 256 KiB. Offline telemetry can be discarded. Collection runs outside
 capture and custody; an unavailable collector or dashboard does not change
@@ -81,3 +81,8 @@ retention is 60 seconds. The normal JSON log level does not filter away
 console events, and runtime instrumentation is excluded from the OTLP
 bridge. This is independent of the group collector and changes no file
 protection decisions.
+
+The small local spool keeps diagnostics within the steady disk budget even
+for a small shared folder. Older diagnostic records are expendable; file
+history and safety evidence are unaffected. A chosen collector can retain
+longer diagnostic history through its explicitly configured backend.

@@ -24,7 +24,7 @@ encoders, with a tracing-opentelemetry 0.34 bridge. Each round is one trace,
 with group, device and Lamport IDs inherited by its step spans. W3C context
 crosses CLI socket envelopes, git child environments, joins and annex stream
 headers; async scopes attach it only while their future is being polled.
-Files rotate at 5 MiB and retain 50 MiB, and debug bundles flush the SDK.
+Files rotate and retain at most 256 KiB, and debug bundles flush the SDK.
 
 An admin selects `telemetry_device` through `pigeon settings telemetry-device
 NAME` (`off` clears it). The receiver admits only that group's roster
@@ -60,7 +60,7 @@ ready-queue depths. The transfer path remains `unknown` until measured.
   proposal, decision) and the Lamport clock (§12.3). W3C trace context
   crosses CLI requests (`traceparent`), child processes (`TRACEPARENT`), the
   join and each stream header ([09 §9.8](09-network-and-joining.md)).
-- By default only to `<state>/telemetry/` as OTLP-JSON, at most 50 MB,
+- By default only to `<state>/telemetry/` as OTLP-JSON, at most 256 KiB,
   oldest dropped first **[no ADR: bound]**. `pigeon debug bundle [--from NAME…]` collects logs, telemetry
   and trace events from this device and chosen peers (`pigeon/debug/1`),
   after asking each peer's person **[no ADR: consent on the peer]**.
@@ -123,3 +123,8 @@ A run of the real system is checked against the TLA+ specifications
   `GroupChange` from accept and `Observe` from status reports.
 - In production the feature is off; `PIGEON_TRACE=1`, with a build that has
   it, attaches a trace to a bug report **[no ADR: switch name]**.
+
+The small local spool keeps diagnostics within the steady disk budget even
+for a small shared folder. Older diagnostic records are expendable; file
+history and safety evidence are unaffected. A chosen collector can retain
+longer diagnostic history through its explicitly configured backend.
