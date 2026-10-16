@@ -145,6 +145,12 @@ jobs:
           curl -fsSL -o "$t" https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
           echo "$GIT_ANNEX_SHA256  $t" | sha256sum -c -
           tar -C ~ -xzf "$t" && echo ~/git-annex.linux >> "$GITHUB_PATH"
+      - name: Node, which builds the web interface's script (ADR 0076)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: crates/pigeon-web/client/.nvmrc
+          cache: npm
+          cache-dependency-path: crates/pigeon-web/client/package-lock.json
       - name: the pinned toolchain (rust-toolchain.toml)
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
       - name: the lab build
@@ -194,6 +200,12 @@ jobs:
             target
           key: slice-${{ matrix.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: slice-${{ matrix.os }}-
+      - name: Node, which builds the web interface's script (ADR 0076)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: crates/pigeon-web/client/.nvmrc
+          cache: npm
+          cache-dependency-path: crates/pigeon-web/client/package-lock.json
       - name: the pinned toolchain (rust-toolchain.toml)
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
       - name: select blocked scenarios before installing the lab dependencies
