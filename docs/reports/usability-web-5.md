@@ -44,20 +44,23 @@ was ever called safe that was not on the backup machine.
 | French: "1 fichiers sur 1", "1 copies", "0 éléments", "État du groupe:", a hint naming a "Voir" button that does not exist | P3 | plural selectors, a localized separator, the hint names "Ouvrir une copie" |
 | Leaving deleted a changed file whose committed version was absent here, against "Its files stay in the folder" | P5 (once, not reproduced in a clean group) | only pointer files are removed |
 
-## Still open
+## Fixed in the follow-up
 
-| Finding | Seen by | Where to look |
+Every finding left open above was fixed after this report, in the work
+the changelog lists under the release after 0.5.8:
+
+| Finding | Seen by | Fix |
 |---|---|---|
-| *Free up space* acts at once, empties the folder on disk, and the file still reads "Safe" with no "not on this computer" mark | P1, P5 | `pigeon-web/src/files.rs` |
-| Removing the only backup machine gets the same confirmation as a laptop, with no "files stop being safe" warning; the removed computer is not told and keeps saying "Everything is safe" | P5 | `machines.rs`, `web-remove-confirm`; roster handling on the removed device |
-| *Sending…* lasted over ten minutes with the backup down: the grace counts from `main`'s commit time, which other commits reset | P5 | `pigeond/src/status.rs` |
-| A file that differs from the group's version shows "Only on this computer — waiting to be captured" forever, and its page says "Safe"; the web has no conflicts view | P5 | `status.rs` (why-capturing), no route in `pigeon-web` |
-| The pause shows only in Home's headline, not when something needs you, and not on other pages; *Share again* is always offered | P3, P5 | `pigeond/src/health.rs`, `api.rs`, `settings.rs` |
-| Times are raw UTC (`2026-10-16T12:38:36Z`) for pauses, invitations and the Space page; sizes are raw bytes there | P2, P3, P5 | `pigeon-i18n/src/render.rs`, `capacity.rs` |
-| The Space page warns of "less than 25% spare" whenever backups = K, suggesting a limit that is not set | P1, P5 | `pigeond/src/capacity_view.rs` |
-| A recovery sheet whose request is abandoned stays in the roster unprinted | P5 | `pigeond/src/recovery.rs` |
-| A group created where `$USER` is empty names its admin "Me", which others then see | P2, P3, P5 | `pigeond/src/api.rs` `person_id` |
-| A join that hangs can leave a half-joined group; a retry is told the invitation was used | P2 (once) | `pigeond/src/join.rs`, `invite.rs` |
-| Download names say "(version 2)" and "(suggested version)" in English | P3 | `pigeond/src/view.rs` |
-| A suggestion of several files can only be accepted or declined whole, with no difference shown | P1 | `decide.rs`, Suggestions page |
-| No skip link; repeated button names ("Restore this version" ×3) without context | P4 | `pages.rs`, `files.rs` |
+| *Free up space* acted at once, and freed files still read "Safe" | P1, P5 | a confirmation naming the files and the backup machines that keep them; a second one when no backup machine has been in touch for an hour; "Safe, not on this computer" |
+| Removing the only backup machine had no warning; a removed computer kept saying "Everything is safe" | P5 | its own question, with "your files will not be safe until you add one"; the removed computer says it was removed |
+| *Sending…* outlasted ten minutes because the grace counted from `main`'s commit | P5 | each version's wait counts from when this computer first saw it; silent backup machines are named |
+| A differing file read "waiting to be captured" forever, with no conflicts view | P5 | its own reason, and a conflicts section on Home and the file page with the three choices of `pigeon resolve` |
+| The pause showed only in Home's headline | P3, P5 | a banner on every page, kept when something needs you; Settings offers only what applies |
+| Raw UTC times and byte counts | P2, P3, P5 | local times ("until 14:38") and sizes ("29.3 GB"), in English and French |
+| "Less than 25% spare" whenever backups = K | P1, P5 | a warning only for a limit below one copy, and a "no spare backup machine" note |
+| An abandoned recovery sheet stayed in the roster | P5 | a backup machine is checked first, and the work finishes or is undone even when the browser leaves |
+| An admin named "Me" | P2, P3, P5 | "Your name" on Create and `pigeon create --person`; never "Me" |
+| A failed join left a half-joined group | P2 | the join is added only once welcomed, and a failed one is cleaned up |
+| English download names | P3 | named in the person's language |
+| Suggestions decided only whole, with no difference shown | P1 | per-file decisions with bulk actions, each file described, and the outcome shown to the suggester (ADR 0075) |
+| No skip link; repeated button names | P4 | a skip link, and each repeated button names what it acts on |
