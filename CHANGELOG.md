@@ -28,6 +28,9 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Files no longer stay "receiving" when a peer was initially unavailable
+  and git-annex disabled its remote. Pigeon re-enables peers still in the
+  group when checking their settings, so transfers can resume.
 - On Linux with a umask of 002, the default on Ubuntu and Fedora desktops,
   pigeon thought every file might be in use: it delayed writing the group's
   versions into your folder, `pigeon free` and *Free up space* deleted
