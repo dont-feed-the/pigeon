@@ -8,10 +8,53 @@ struct Rules {
     calls: Mutex<Vec<pigeon_proto::Request>>,
     editable: bool,
 }
+
+pub(super) async fn write_pages(dir: &std::path::Path, lang: &str) {
+    for editable in [true, false] {
+        let web = Web::new(
+            Arc::new(Rules {
+                calls: Mutex::new(Vec::new()),
+                editable,
+            }),
+            lang.parse().unwrap(),
+            4321,
+        );
+        let app = web.router();
+        let cookie = logged_in(&app, &web).await;
+        let page = app
+            .oneshot(get(
+                "/folder-rule?path=%2FFamily%2FPhotos",
+                HOST,
+                Some(&cookie),
+            ))
+            .await
+            .unwrap();
+        std::fs::write(
+            dir.join(format!("{lang}-folder-rule-{editable}.html")),
+            body(page).await,
+        )
+        .unwrap();
+    }
+}
 impl Backend for Rules {
     fn request(&self, request: pigeon_proto::Request) -> Answer {
         self.calls.lock().unwrap().push(request.clone());
         let answer = match request {
+            pigeon_proto::Request::Files { .. } => vec![Response::Files {
+                root: "/Family".into(),
+                files: [
+                    "Photos/Enfant/graine.txt",
+                    "Photos/Enfant/deep/note.txt",
+                    "Photos/a.txt",
+                    "Photos-old/no.txt",
+                ]
+                .into_iter()
+                .map(|path| pigeon_proto::api::FileEntry {
+                    path: path.into(),
+                    state: pigeon_proto::api::State::Published,
+                })
+                .collect(),
+            }],
             pigeon_proto::Request::FolderRules { .. } => {
                 vec![Response::FolderRules(Box::new(policy::Report {
                     root: "/Family".into(),
@@ -34,6 +77,35 @@ impl Backend for Rules {
         };
         Box::pin(async move { answer })
     }
+}
+
+#[tokio::test]
+async fn nested_folders_have_discoverable_links_to_their_own_controls() {
+    let web = Web::new(
+        Arc::new(Rules {
+            calls: Mutex::new(Vec::new()),
+            editable: true,
+        }),
+        "fr".parse().unwrap(),
+        4321,
+    );
+    let app = web.router();
+    let cookie = logged_in(&app, &web).await;
+    let page = body(
+        app.oneshot(get("/folder?path=%2FFamily%2FPhotos", HOST, Some(&cookie)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert!(page.contains("Sous-dossiers"));
+    assert_eq!(
+        page.matches("href=\"/folder?path=%2FFamily%2FPhotos%2FEnfant\"")
+            .count(),
+        1
+    );
+    assert!(!page.contains("href=\"/folder?path=%2FFamily%2FPhotos%2FEnfant%2Fdeep\""));
+    assert!(!page.contains("href=\"/folder?path=%2FFamily%2FPhotos-old"));
+    assert!(page.contains("href=\"/folder-rule?path=%2FFamily%2FPhotos\""));
 }
 
 #[tokio::test]
