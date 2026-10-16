@@ -4,12 +4,17 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
-## 0.5.2 — 2026-10-16
+## 0.5.3 — 2026-10-16
 
 ### Changed
 
 - Nightly verification uses the parameterized purge safety proof; its large
   finite cross-check runs weekly, on releases and on request.
+
+## 0.5.2 — 2026-10-16
+
+### Changed
+
 - Pull requests and main pushes use Ubuntu runners. Version tags also run
   macOS validation, including installation, rollback and uninstall checks.
 
