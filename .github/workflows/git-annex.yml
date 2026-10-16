@@ -52,7 +52,10 @@ jobs:
       fail-fast: false
       matrix:
         os: ${{ fromJSON(startsWith(github.ref, 'refs/tags/v') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
-    runs-on: ${{ matrix.os }}
+    # The build stays on macOS 15: on the macos-26 image, linking GHC's
+    # programs failed on the SDK's .tbd files ("unknown architecture"), and
+    # v0.3.4 had no release. What it builds runs on later macOS too.
+    runs-on: ${{ matrix.os == 'macos-latest' && 'macos-15' || matrix.os }}
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
