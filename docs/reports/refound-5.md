@@ -45,10 +45,42 @@ in the transition journal.
   first-use persistence, lost-welcome retry, changed role/UUID, another
   key's reuse, revoked membership, unbound legacy records and old-group
   tickets.
-- The existing ordinary-member/laptop in-place integration passed after
-  the journal implementation. Full workspace checks and normal-build
-  independent usability sessions are being run before marking the pull
-  request ready. Their final results belong here before release.
+- The complete workspace checks passed after updating the lab registry
+  to distinguish ordinary loop faults from recovery-workload faults.
+  Following the dirty-index repair, the ordinary-member integration passed
+  in 7.12 seconds, all eight real SIGKILL cases passed again in 30.83
+  seconds, and the dirty binary/untracked-file regression passed. The web
+  tests cover keeping an action result separate from Home's live updates.
+- An independent participant completed 45 normal-build tasks, including
+  refounding twice as an ordinary member, current origin metadata, a fresh
+  dirty-folder rejoin, exact binary/CRLF edits and drafts, object reuse,
+  nested history, read-only views and restores. The initial join stranded
+  dirty files because `read-tree -m` refused the changed pointer; index-only
+  `read-tree --reset` fixed both startup replay and a fresh join. User files
+  are not checked out or replaced by that operation.
+- Another participant tested admin-owned and member-owned backups. Both
+  retained UUID, token, all three object byte sequences/inodes, an extra
+  accepted local old tip, the exact signed canonical archive and protection.
+  Unrelated populated targets were refused unchanged and terminal declines
+  cancelled safely.
+- The French browser participant verified confirmation and CSRF checks,
+  old-ticket refusal, and a G1/G2/G3 signed-link mismatch. Full old repository,
+  refs, annex and configuration fingerprints were unchanged on refusal.
+  The final normal build also retained dirty tracked and untracked bytes.
+  Its six-second retest confirmed specific errors stay visible: Home's
+  EventSource had previously overwritten action titles.
+
+## Follow-up access and wording work
+
+The backup participant found two access gaps: `history` rejects paths in a
+bare backup, and default offline `export --deleted` omits archived deleted
+files. Explicit export at the canonical old archive recovered the exact
+deleted bytes in both cases, so the content remains intact. The follow-up
+archive-export change addresses those paths before M4 can be complete.
+The browser confirmation still includes a terminal `[y/N]` suffix, and
+restore's result should distinguish a local version from an accepted group
+change. The CLI exposes no owned-folder setup flow; those rules were
+covered by the algebra tests, rather than claimed as a participant task.
 
 The usability participants use isolated processes on one Linux host. The
 user explicitly accepted agent participants as usability evidence and
