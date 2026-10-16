@@ -113,8 +113,25 @@ pub(crate) fn write_sparse(g: &Group, hidden: &BTreeSet<String>) {
     let _ = pigeon_sys::fs::write_atomic(&file, text.as_bytes());
 }
 
+/// This computer's folder choices as the loops apply them: its own, and
+/// other people's folders of a per-person folder freed by default (08 §8.5).
 pub(crate) fn targets(g: &Group) -> pigeon_core::keep_targets::Targets {
-    crate::keep_targets::read(g)
+    let chosen = crate::keep_targets::read(g);
+    let Some(doc) = g.roster() else {
+        return chosen;
+    };
+    let me = crate::git::signer_device().and_then(|device| {
+        doc.roster
+            .devices
+            .get(&pigeon_core::roster::DeviceId(device))
+            .map(|d| d.person.clone())
+    });
+    match me {
+        Some(me) => {
+            chosen.with_defaults(pigeon_core::keep_targets::others_folders(&doc.roster, &me))
+        }
+        None => chosen,
+    }
 }
 
 /// Orders the requests that change a target against the loop's check
@@ -129,8 +146,17 @@ fn targets_lock() -> std::sync::MutexGuard<'static, ()> {
 /// kept (`pigeon keep`); the loops do the rest, and never record one.
 pub fn set_target(g: &Group, prefix: &str, freed: bool) -> Result<(), String> {
     let _order = targets_lock();
-    let mut t = targets(g);
+    let mut t = crate::keep_targets::read(g);
     t.set(prefix, freed);
+    crate::keep_targets::write(g, t)
+}
+
+/// Forgets this computer's choices of the folder `prefix` and inside it, so
+/// that it follows the folder holding it, or its default, again.
+pub fn forget_target(g: &Group, prefix: &str) -> Result<(), String> {
+    let _order = targets_lock();
+    let mut t = crate::keep_targets::read(g);
+    t.0.retain(|path, _| !under(path, prefix));
     crate::keep_targets::write(g, t)
 }
 
