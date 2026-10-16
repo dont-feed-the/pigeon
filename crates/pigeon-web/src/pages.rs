@@ -45,6 +45,10 @@ const SCRIPT: &str = "new EventSource('/events').addEventListener('headline',\
 e=>{document.getElementById('headline').textContent=e.data})";
 
 pub(crate) fn page(r: &Renderer, here: &str, headline: &str, body: &Markup) -> Html<String> {
+    document(r, here, headline, body, here == "/")
+}
+
+fn document(r: &Renderer, here: &str, headline: &str, body: &Markup, live: bool) -> Html<String> {
     let lang = r.catalogue().lang().to_string();
     Html(
         html! {
@@ -67,10 +71,10 @@ pub(crate) fn page(r: &Renderer, here: &str, headline: &str, body: &Markup) -> H
                         }
                     }
                     main {
-                        h1 id=(if here == "/" { "headline" } else { "title" }) { (headline) }
+                        h1 id=(if live { "headline" } else { "title" }) { (headline) }
                         (body)
                     }
-                    @if here == "/" { script { (maud::PreEscaped(SCRIPT)) } }
+                    @if live { script { (maud::PreEscaped(SCRIPT)) } }
                 }
             }
         }
@@ -231,7 +235,9 @@ pub fn result(r: &Renderer, here: &str, mut lines: Vec<String>) -> Html<String> 
         (list(&rest))
         p { a href=(here) { (r.id("web-back")) } }
     };
-    page(r, here, &title, &body)
+    // An action result must keep its own title. Home's live status would
+    // replace a join refusal with "not in a group" after five seconds.
+    document(r, here, &title, &body, false)
 }
 
 /// The headline every 5 seconds, as `headline` events.

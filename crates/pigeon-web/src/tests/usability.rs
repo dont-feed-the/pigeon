@@ -56,6 +56,17 @@ fn form_token(page: &str) -> &str {
         .unwrap()
 }
 
+#[test]
+fn an_action_result_keeps_its_explanation_without_live_home_updates() {
+    let (web, _) = recording();
+    let renderer = web.renderer();
+    let title = renderer.id("problem-join-history-unverified");
+    let result = crate::pages::result(&renderer, "/", vec![title.clone()]).0;
+    assert!(result.contains(&title));
+    assert!(!result.contains("EventSource"));
+    assert!(!result.contains("id=\"headline\""));
+}
+
 #[tokio::test]
 async fn root_files_link_to_versions_instead_of_an_empty_folder_message() {
     let (w, _) = recording();

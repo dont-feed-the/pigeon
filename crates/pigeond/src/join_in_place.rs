@@ -12,6 +12,9 @@ use crate::daemon::Daemon;
 use crate::group::Group;
 use crate::invite::Invitation;
 
+#[cfg(test)]
+mod tests;
+
 /// Whether `path` holds a repository of the group `inv` refounds.
 pub async fn applies(d: &Daemon, inv: &Invitation, path: &Path) -> bool {
     let Some(r) = &inv.refounded else {
@@ -133,8 +136,13 @@ pub(crate) async fn take_tree(g: &Group, main: &str) -> Result<(), String> {
     };
     let mut hidden = crate::evict::hidden_paths(g).await;
     let fail = |e: crate::git::Error| e.to_string();
-    // `-m` keeps the stat data of the entries that do not change.
-    g.git.run(&["read-tree", "-m", main]).await.map_err(fail)?;
+    // Adopt only the verified index. `-m` refuses dirty working files
+    // whose incoming pointer changed, stranding replay at every restart.
+    // Without `-u`, --reset leaves those user files for normal capture.
+    g.git
+        .run(&["read-tree", "--reset", main])
+        .await
+        .map_err(fail)?;
     let files = g.git.tree_files(main).await.map_err(fail)?;
     let paths: BTreeSet<String> = files.iter().map(|f| f.path.clone()).collect();
     hidden.retain(|p| paths.contains(p));

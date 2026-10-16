@@ -16,6 +16,8 @@ the second number, and every other pull request the third.
 - Invitations stay bound to their original group. The same computer can
   retry after losing its welcome, while another computer cannot reuse the
   invitation. Unused invitations from older builds must be issued again.
+- A rejected web join keeps its specific explanation on screen instead
+  of replacing it with the Home page's status after a few seconds.
 
 ## 0.4.5 — 2026-10-16
 
