@@ -9,28 +9,6 @@ increments the second number, and every other release the third.
 
 ### Added
 
-- The operator dashboard (`telemetry/dashboards/pigeon-operations.json`)
-  shows computers and groups by name, such as "rtx", instead of their
-  64-digit IDs, one line per computer, with a Group selector: the
-  collector adds the names from its signed roster when it forwards.
-
-- In a per-person folder, a computer no longer keeps other people's
-  folders unless its person chooses to: Laurent's laptop gets `src/laurent`
-  but not `src/robin`, and the folder of someone who joins later arrives
-  nowhere unasked. `pigeon keep ~/Group/src/robin` brings one to this
-  computer, `pigeon free` sends it away again, and `pigeon sync` lists every
-  folder with whether it is on this computer and why;
-  `pigeon sync PATH --default` returns a folder to its default.
-- pigeon updates itself. Every computer and backup machine installs the
-  latest release once a day, and within minutes when another computer of
-  the group runs a newer release. The update downloads the installer
-  afresh from GitHub, so a release that broke pigeon is replaced by the
-  next one. It shows nothing; `journalctl --user -u pigeon-update`
-  (macOS: `~/Library/Logs/pigeon/update.log`) tells what it did.
-  `pigeon update --auto off` turns it off and `--auto on` back on; to
-  install with it off, use `curl … | sh -s -- --auto off`. A build of main
-  is never replaced. Installations from before this release get it after
-  one `pigeon update`.
 - `pigeon open` looks and works like a file manager. A sidebar holds the
   sections and, on every page, whether your files are safe. **Files** shows
   the folder you are in as a table, folders first, each with an icon by
@@ -61,16 +39,10 @@ increments the second number, and every other release the third.
 
 ### Changed
 
-- `pigeon update` updates the installation it belongs to, wherever it is.
-  On a backup machine, `sudo /opt/pigeon/bin/pigeon update` now works too.
 - Building pigeon from source now also needs Node.js 22.12 or later with
   npm, which build the web interface's script; `pigeon update --main` and
   `scripts/install-local` say so before building if it is missing. The
   released programs need nothing new.
-- Release validation runs the same 50 random crash schedules in parallel
-  within each Linux shard, using different seeds. Longer filesystem trace
-  checks first try a faster witness search, retaining the full search and
-  all safety checks if it cannot explain the observations.
 
 ### Fixed
 
@@ -79,11 +51,50 @@ increments the second number, and every other release the third.
 - A slow or unavailable computer no longer delays accepting new versions
   from the group’s reachable computers.
 
+## 0.5.14 — 2026-10-16
+
+### Added
+
+- The operator dashboard (`telemetry/dashboards/pigeon-operations.json`)
+  shows computers and groups by name, such as "rtx", instead of their
+  64-digit IDs, one line per computer, with a Group selector: the
+  collector adds the names from its signed roster when it forwards.
+
+- In a per-person folder, a computer no longer keeps other people's
+  folders unless its person chooses to: Laurent's laptop gets `src/laurent`
+  but not `src/robin`, and the folder of someone who joins later arrives
+  nowhere unasked. `pigeon keep ~/Group/src/robin` brings one to this
+  computer, `pigeon free` sends it away again, and `pigeon sync` lists every
+  folder with whether it is on this computer and why;
+  `pigeon sync PATH --default` returns a folder to its default.
+- pigeon updates itself. Every computer and backup machine installs the
+  latest release once a day, and within minutes when another computer of
+  the group runs a newer release. The update downloads the installer
+  afresh from GitHub, so a release that broke pigeon is replaced by the
+  next one. It shows nothing; `journalctl --user -u pigeon-update`
+  (macOS: `~/Library/Logs/pigeon/update.log`) tells what it did.
+  `pigeon update --auto off` turns it off and `--auto on` back on; to
+  install with it off, use `curl … | sh -s -- --auto off`. A build of main
+  is never replaced. Installations from before this release get it after
+  one `pigeon update`.
+
+### Changed
+
+- `pigeon update` updates the installation it belongs to, wherever it is.
+  On a backup machine, `sudo /opt/pigeon/bin/pigeon update` now works too.
+
 ### Removed
 
 - The Homebrew tap. On a Mac installed with Homebrew, run
   `brew services stop pigeon` and `brew uninstall pigeon`, then the
   install line of the README; your folders, groups and device key stay.
+
+### Changed
+
+- Release validation runs the same 50 random crash schedules in parallel
+  within each Linux shard, using different seeds. Longer filesystem trace
+  checks first try a faster witness search, retaining the full search and
+  all safety checks if it cannot explain the observations.
 
 ## 0.5.13 — 2026-10-16
 
