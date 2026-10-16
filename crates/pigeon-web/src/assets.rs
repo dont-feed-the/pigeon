@@ -1,4 +1,4 @@
-//! The web client's files (ADR 0076): built by `build.rs` from `client/`
+//! The web client's files (ADR 0077): built by `build.rs` from `client/`
 //! and embedded in the binary, served under content-hashed names that may
 //! be cached for a year, as nothing is ever fetched from elsewhere. And the
 //! headers of every page: a Content-Security-Policy that allows only this

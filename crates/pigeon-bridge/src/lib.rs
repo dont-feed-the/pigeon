@@ -237,7 +237,7 @@ async fn origin(State(app): State<Arc<App>>, request: Request, next: Next) -> Re
         );
     }
     // The bridge's own pages keep an inline stylesheet; the peer pages use
-    // their embedded one and icon (ADR 0076).
+    // their embedded one and icon (ADR 0077).
     headers.insert(header::CONTENT_SECURITY_POLICY, axum::http::HeaderValue::from_static("default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"));
     response
 }

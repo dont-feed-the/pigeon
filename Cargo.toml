@@ -91,6 +91,15 @@ print_stderr = "deny"
 [profile.release]
 panic = "abort"
 
+# Development builds keep file and line numbers for backtraces, without the
+# full debug info that made each test binary about 400 MB; dependencies
+# carry none.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 # Keep development signature laws practical without reducing their cases.
 # The same crypto is optimized in release builds; local code stays debug.
 [profile.dev.package.curve25519-dalek]

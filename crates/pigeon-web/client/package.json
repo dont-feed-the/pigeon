@@ -1,7 +1,7 @@
 {
   "name": "pigeon-web-client",
   "private": true,
-  "description": "The script and stylesheet of pigeon's local web interface, which build.rs bundles into pigeon-web (ADR 0076)",
+  "description": "The script and stylesheet of pigeon's local web interface, which build.rs bundles into pigeon-web (ADR 0077)",
   "license": "MIT OR Apache-2.0",
   "type": "module",
   "engines": {

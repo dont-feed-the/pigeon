@@ -1,6 +1,6 @@
 //! The Files browser through the router: the table, sorting, the details
 //! panel, the README, the client's assets and the headers that confine
-//! them (10 §10.3, ADR 0076); and the client's own tests, run by Node.
+//! them (10 §10.3, ADR 0077); and the client's own tests, run by Node.
 
 use super::demo::{Demo, ROOT};
 use super::*;

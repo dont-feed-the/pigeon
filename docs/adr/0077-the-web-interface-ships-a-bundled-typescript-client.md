@@ -1,4 +1,4 @@
-# 0076. The web interface ships a bundled TypeScript client, built with Node
+# 0077. The web interface ships a bundled TypeScript client, built with Node
 
 - **Status:** Accepted, 16 October 2026, by Guillaume (chat). Supersedes
   0021.

@@ -6,7 +6,7 @@
 
 With [rustup](https://rustup.rs), which fetches the pinned toolchain, and
 [Node.js](https://nodejs.org) 22.12 or later with npm, which build the web
-interface's script (ADR 0076; `crates/pigeon-web/client/.nvmrc` names the
+interface's script (ADR 0077; `crates/pigeon-web/client/.nvmrc` names the
 version CI uses):
 
 ```sh

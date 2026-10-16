@@ -5,7 +5,7 @@
 # Linux archive with packaging/pigeon-install from the assets as they will
 # be published, then publishes them as the latest release with SHA256SUMS.
 # People install it with the release's pigeon-install, and `pigeon update`
-# fetches the next one the same way.
+# and the automatic update fetch the next one the same way.
 name: release
 run-name: release ${{ inputs.tag || github.ref_name }}
 
@@ -76,7 +76,7 @@ jobs:
           [ "$TAG" = "v$v" ] || { echo "::error::tag $TAG, but Cargo.toml holds version $v"; exit 1; }
       # Like cargo here, npm starts without a cache: the build fetches the
       # client's tools from the registry, checked against package-lock.json.
-      - name: Node, which builds the web interface's script (ADR 0076)
+      - name: Node, which builds the web interface's script (ADR 0077)
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: crates/pigeon-web/client/.nvmrc
@@ -127,8 +127,6 @@ jobs:
           cp "$a/git-annex-pigeon-macos-latest/git-annex-pigeon-macos-latest.tar.gz" "$d/git-annex-pigeon-macos-arm64.tar.gz"
           (cd "$d" && sha256sum -- *.tar.gz > SHA256SUMS)
           cp packaging/pigeon-install "$d/"
-          packaging/homebrew-formula --tag "$TAG" --checksums "$d/SHA256SUMS" \
-            --repository "$GITHUB_REPOSITORY" > "$d/pigeon.rb"
           ls -l "$d" && cat "$d/SHA256SUMS" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: pigeon-install installs them, and installs nothing twice
         run: |
@@ -165,8 +163,15 @@ jobs:
             exit 1
           }
           test "$(sudo stat -c %U /var/lib/pigeon/device-key)" = pigeon
+          u=/etc/systemd/system/pigeon-update
+          sudo systemd-analyze verify --man=no "$u.service" "$u.timer" "$u.path"
+          systemctl is-active --quiet pigeon-update.timer pigeon-update.path
+          sudo "$p/bin/pigeon" update --auto off
+          test ! -e "$u.timer"
+          sudo "$p/bin/pigeon" update --auto on
+          systemctl is-active --quiet pigeon-update.timer pigeon-update.path
           sudo sh "$p/bin/pigeon-install" --system --prefix "$p" --uninstall
-          test ! -d "$p/bin"
+          test ! -d "$p/bin" && test ! -e "$u.timer"
           sudo test -s /var/lib/pigeon/device-key
       - name: the tag's Linux CI, lab and slice must pass before publication
         run: |
@@ -175,7 +180,6 @@ jobs:
           python3 "$RUNNER_TEMP/wait-release-checks" --repository "$GITHUB_REPOSITORY" \
             --sha "${{ needs.target.outputs.sha }}" --tag "$TAG"
       - name: the release
-        id: published
         run: |
           d=$RUNNER_TEMP/releases/download/$TAG
           git show "$GITHUB_SHA:scripts/release-latest" > "$RUNNER_TEMP/release-latest"
@@ -184,21 +188,4 @@ jobs:
             *-*) set -- --prerelease --latest=false ;;
             *) if [ "$latest" = true ]; then set -- --latest; else set -- --latest=false; fi ;;
           esac
-          echo "latest=$latest" >> "$GITHUB_OUTPUT"
           gh release create "$TAG" --title "pigeon $TAG" --generate-notes "$@" "$d"/*
-      - name: update the Homebrew tap after publication
-        if: steps.published.outputs.latest == 'true'
-        run: |
-          # Only the formula changes. Preserve concurrent changes on main.
-          cp "$RUNNER_TEMP/releases/download/$TAG/pigeon.rb" "$RUNNER_TEMP/pigeon.rb"
-          git fetch origin main
-          git checkout -B homebrew-release origin/main
-          mkdir -p Formula
-          cp "$RUNNER_TEMP/pigeon.rb" Formula/pigeon.rb
-          if ! git diff --quiet -- Formula/pigeon.rb; then
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add Formula/pigeon.rb
-            git commit -m "Homebrew: publish $TAG"
-            git push origin HEAD:main
-          fi

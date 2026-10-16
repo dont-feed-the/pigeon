@@ -1,4 +1,4 @@
-//! Builds the web client (ADR 0076) with Node: copies `client/` to
+//! Builds the web client (ADR 0077) with Node: copies `client/` to
 //! `OUT_DIR`, installs its pinned tools from the lockfile with `npm ci`
 //! (again only when the lockfile changes), and runs `client/build.mjs`,
 //! which type-checks and bundles it. `src/assets.rs` embeds the result.

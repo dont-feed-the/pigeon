@@ -1,4 +1,4 @@
-// The web client of pigeon's local interface (ADR 0076): progressive
+// The web client of pigeon's local interface (ADR 0077): progressive
 // enhancement of the pages pigeond renders. Every page works without it;
 // with it, the status is live, the Files browser opens details and runs
 // actions without page loads, names can be filtered, and times are local.

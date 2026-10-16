@@ -19,7 +19,7 @@ GROUPS = {"proofs", "models", "catalogue", "packaging", "rust", "daemons",
 RUNTIME = {"rust", "daemons", "code_traces", "driver_traces", "bridge", "bridge_traces"}
 FORMAL = {"proofs", "models", "code_traces", "driver_traces", "bridge_traces"}
 # The web client's toolchain is a build input like Cargo.lock and build.rs:
-# Node's version and the npm lockfile change every build of pigeon-web (ADR 0076).
+# Node's version and the npm lockfile change every build of pigeon-web (ADR 0077).
 WEB_CLIENT_BUILD = {f"crates/pigeon-web/client/{name}" for name in
                     ("package.json", "package-lock.json", ".nvmrc", "build.mjs")}
 RUNTIME_CRATES = {"pigeon", "pigeond", "pigeon-core", "pigeon-git", "pigeon-sys", "pigeon-proto",

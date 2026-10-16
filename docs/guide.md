@@ -61,7 +61,28 @@ This fetches the latest release and checks it against the release's
 `pigeon` into `~/.local/bin`, and starts the daemon, `pigeond`, as a systemd
 user service (macOS: a launchd agent), so it runs again after a reboot.
 
-To update, or to go back to the release you had before:
+pigeon updates itself. Once a day, at a time that differs from one computer
+to the next, it installs the latest release; and when a computer of the
+group runs a newer release than this one, this one updates within minutes.
+The update does not go through the installed pigeon: it downloads the
+latest `pigeon-install` from GitHub, as the line above does, so a release
+that broke pigeon is replaced by the next. It shows nothing; a failed
+update is tried again the next day. Its log is in
+`journalctl --user -u pigeon-update` (macOS:
+`~/Library/Logs/pigeon/update.log`; a backup machine:
+`journalctl -u pigeon-update`). To turn it off, or back on:
+
+```sh
+pigeon update --auto off
+pigeon update --auto on
+```
+
+The choice is kept across updates. To install with it off, run the line
+above as `curl … | sh -s -- --auto off`. A build of main is never replaced
+by the automatic update. Otherwise, a release installed with `--version`
+or `--rollback` lasts until the next automatic update.
+
+To update now, or to go back to the release you had before:
 
 ```sh
 pigeon update               # the latest release; or: pigeon update --version vX.Y.Z
@@ -80,16 +101,6 @@ which takes about an hour, and if that build fails it takes the official
 git-annex instead. A plain `pigeon update` goes back to the
 latest release.
 
-On an Apple Silicon Mac, you can use Homebrew instead:
-
-```sh
-brew tap dont-feed-the/pigeon https://github.com/dont-feed-the/pigeon
-brew install pigeon
-brew services start pigeon
-```
-
-Homebrew installations update with `brew upgrade pigeon`.
-
 On a Linux backup machine, run the line `pigeon invite` prints (see
 [Use it with other people](#use-it-with-other-people)) as root, with
 `--system` before `--join` and `--backup-machine` at its end. It installs
@@ -100,7 +111,9 @@ curl -fsSL https://github.com/dont-feed-the/pigeon/releases/latest/download/pige
 ```
 
 The service uses its own `pigeon` account. Group repositories and its key
-live in `/var/lib/pigeon`; logs are in `/var/log/pigeon`.
+live in `/var/lib/pigeon`; logs are in `/var/log/pigeon`. It updates itself
+as a person's computer does, as root; `sudo /opt/pigeon/bin/pigeon update
+--auto off` turns that off.
 
 To uninstall a personal installation, run its `bin/pigeon-install
 --uninstall` (Linux: `~/.local/share/pigeon/bin/pigeon-install --uninstall`;
@@ -108,8 +121,6 @@ macOS: `"$HOME/Library/Application Support/pigeon/bin/pigeon-install"
 --uninstall`). On a backup machine use `sudo /opt/pigeon/bin/pigeon-install
 --system --uninstall`. This stops the service and removes the programs;
 shared folders, repositories, configuration and the device key stay.
-Homebrew installations use `brew services stop pigeon` and
-`brew uninstall pigeon`.
 
 ## Open pigeon
 
@@ -259,7 +270,7 @@ rule on another computer before relying on the change there.
 | `pigeon free FOLDER` / `pigeon keep FOLDER` | frees a folder's space here, or keeps it here |
 | `pigeon recovery-sheet` | prints the sheet that recovers the group on a new computer |
 | `pigeon doctor` | checks the installation and explains what is wrong |
-| `pigeon update` | installs the latest release (`--main`: main built here; `--rollback`: the one before) |
+| `pigeon update` | installs the latest release (`--main`: main built here; `--rollback`: the one before; `--auto on\|off`: the automatic update) |
 
 `pigeon --help` lists them all, and `--json` prints any answer as JSON.
 
@@ -283,7 +294,7 @@ Existing startup files that use `pigeon completions zsh` (or `bash`, `fish`,
 pigeon is built milestone by milestone ([roadmap](roadmap.md)):
 
 - **v0.4:** installation and relays checked between two networks; the
-  system service and Homebrew tap are implemented in the current source;
+  system service is implemented in the current source;
 - **v0.5:** the web interface, French translation and usability work;
   the first two are available in the current source;
 - **v0.6:** deleting for good (purge) and a monthly check of every copy

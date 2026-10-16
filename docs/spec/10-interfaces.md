@@ -4,7 +4,7 @@
 > the local web interface, notifications, messages and problems. Words are
 > ux.md's; operations are the other files'.
 
-## 10.1 One request API (ADRs 0021, 0076)
+## 10.1 One request API (ADRs 0021, 0077)
 
 Every operation is one **request type**, defined once in `pigeon-proto` and
 carried over the local socket ([09 §9.3](09-network-and-joining.md);
@@ -113,7 +113,7 @@ signed history. Evidence: [folder-rules-5](../reports/folder-rules-5.md).
   Only `pigeon export` reads repositories itself, read-only, with the same
   core code (ADR 0047).
 
-## 10.3 The web interface (ADR 0076, ux.md §6)
+## 10.3 The web interface (ADR 0077, ux.md §6)
 
 Coded so far (`crates/pigeon-web`, `pigeond/src/web.rs`): the binding, the
 login token and cookie, the `Host`/`Origin` check, Home, Suggestions and
@@ -164,7 +164,7 @@ whose box differs from what covers it so far, as a choice covers the
 folders in it (08 §8.5).
 
 - Served by `pigeond`, rendered on the server; pages work without
-  JavaScript. The client (ADR 0076), TypeScript built by `build.rs` with
+  JavaScript. The client (ADR 0077), TypeScript built by `build.rs` with
   the pinned esbuild and embedded, enhances them: server-sent events
   refresh the headline while the page is shown, details open and actions
   marked inline post without a page load and say their result, names

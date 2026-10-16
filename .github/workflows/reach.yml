@@ -79,7 +79,7 @@ jobs:
             target
           key: reach-ubuntu-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: reach-ubuntu-
-      - name: Node, which builds the web interface's script (ADR 0076)
+      - name: Node, which builds the web interface's script (ADR 0077)
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: crates/pigeon-web/client/.nvmrc
@@ -142,7 +142,7 @@ jobs:
             target
           key: reach-macos-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
           restore-keys: reach-macos-
-      - name: Node, which builds the web interface's script (ADR 0076)
+      - name: Node, which builds the web interface's script (ADR 0077)
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: crates/pigeon-web/client/.nvmrc

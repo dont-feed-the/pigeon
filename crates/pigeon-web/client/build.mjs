@@ -1,4 +1,4 @@
-// Builds the web client into OUT (ADR 0076): type-checks the TypeScript,
+// Builds the web client into OUT (ADR 0077): type-checks the TypeScript,
 // bundles src/main.ts and src/style.css with content-hashed names, copies
 // the icon likewise, bundles test/*.test.ts for `node --test`, and writes
 // OUT/manifest.json naming the three assets. Deterministic: the same

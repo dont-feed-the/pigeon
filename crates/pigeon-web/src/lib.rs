@@ -1,4 +1,4 @@
-//! pigeon's local web interface (ADRs 0021, 0076, 10 §10.3): pages rendered
+//! pigeon's local web interface (ADRs 0021, 0077, 10 §10.3): pages rendered
 //! on the server from the requests of 10 §10.1, in the person's language
 //! (ADR 0028), that work without JavaScript, enhanced by an embedded client
 //! script that follows server-sent events. It writes nothing itself: every

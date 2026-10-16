@@ -1,6 +1,6 @@
 # 0021. Interfaces: a CLI and a local web interface served by `pigeond`
 
-- **Status:** Superseded by 0076 (the web interface ships a bundled
+- **Status:** Superseded by 0077 (the web interface ships a bundled
   TypeScript client, built with Node). Accepted on 13 October 2026 by
   Guillaume (tooling interview, Q14).
 
