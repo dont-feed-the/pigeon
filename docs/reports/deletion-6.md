@@ -286,3 +286,19 @@ restart. Supplying an exact copy later permits an explicit admin retry.
 Fixture-only forced removals create the unavailable-copy branch; this is
 not yet an end-to-end post-seal physical-drop race. That evidence and the
 deciders' missing-restoration alert remain required before M5 release.
+
+## Current-main integration checkpoint
+
+The M5 branch includes the automatic updater, per-person folder defaults,
+file manager and incremental peer-history acceptance. The combined M5
+signed-history, install and metadata-fetch checks pass all 47 tests; the
+interface, protocol and language checks pass all 79 selected tests. The
+file manager retains erasure review links for files, folders, deleted files
+and suggestions, the request list, and the existing confirmation controls.
+These local checks do not complete the remaining purge conformance work.
+
+The file manager's accepted ADR uses 0077. The still-Proposed receiver-wait
+decision is now 0080; accepted ADRs 0075, 0076 and 0077 remain byte-identical
+to their source. On 16 October 2026, the user resolved the retention question:
+declined suggestions stay retained until explicit erasure, with no automatic
+expiry setting.
