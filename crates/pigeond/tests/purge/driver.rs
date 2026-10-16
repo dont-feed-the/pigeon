@@ -77,6 +77,9 @@ async fn complete(w: &World, content: &str) {
 async fn an_exact_scan_and_signed_seal_are_required_and_a_restore_keeps_its_key() {
     let (w, content, _) = pending().await;
     complete(&w, &content).await;
+    let history = pigeond::history::saved_versions(&w.g, &dev(3).0, "Shared/a.txt").await;
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].state, pigeon_proto::api::State::Erased);
     let before = w.g.git.rev("refs/heads/main").await.unwrap();
     let mut tree = w.g.git.tree(&before).await.unwrap();
     tree.insert("Shared/restored.txt".into(), w.base["Shared/a.txt"].clone());
@@ -96,6 +99,13 @@ async fn an_exact_scan_and_signed_seal_are_required_and_a_restore_keeps_its_key(
     pigeond::purge::round(&w.g, &dev(3).0, false).await;
     assert!(!w.g.git.purge_gate.policy().waiting);
     assert!(!w.g.git.purge_gate.policy().released.contains(&content));
+    assert!(
+        pigeond::history::saved_versions(&w.g, &dev(3).0, "Shared/a.txt")
+            .await
+            .iter()
+            .all(|v| v.state != pigeon_proto::api::State::Erased),
+        "a fresh uncovered reference makes the historical key retained again"
+    );
     assert!(
         pigeond::retention::keys(&w.g)
             .await

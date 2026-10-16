@@ -217,5 +217,40 @@ accepted by TLC. File absence can precede completion of the asynchronous
 journal/index transition. S2 now waits, with the existing 120-second bound,
 for its same final Protected condition. It still requires the unprotected
 file to remain visible, then disappear without a pointer after protection.
-The immutable v0.5.8 tag is unchanged; its one failed job is being rerun and
-the first failure is retained as evidence.
+The immutable v0.5.8 tag is unchanged. Its targeted rerun passed and
+[v0.5.8 was published](https://github.com/dont-feed-the/pigeon/releases/tag/v0.5.8)
+at 14:30:46 UTC with both platform archives. The first failure is retained
+as evidence; the bounded completion check is included in the rebased v0.5.9 PR.
+
+
+## Restore while erasure remains pending
+
+A returning source-blind participant used the normal `70e68bc` build in
+a fresh three-peer fixture. After all participants prepared erasure, Bob
+went offline and saved a private binary edit. Alice requested erasure; the
+request stayed pending under the actual month-long policy. The participant
+restored the deleted file and then version 1 through the browser, both on
+the first attempt, without cancelling or changing the request.
+
+Independent byte comparisons verified the exact original binary contents
+before and after Bob restarted. Bob retained his exact private edit and
+the ordinary Suggestions command exposed his own change for the same path.
+The participant independently saw that suggestion, safe restored versions
+and the unchanged pending request. No suggestion was accepted or declined.
+The browser and all owned fixture daemons were closed and reaped.
+
+The [participant report](m5-usability-offline-return.md) rates ease 6/7 but
+confidence about eventual retention under the pending request only 3/7.
+The interface did not explain why restoring and leaving an erasure pending
+are compatible. English and French restore receipts and pending-request
+text now explain that earlier requests do not cover later saved or restored
+versions, and that restoring does not cancel a request. A focused retake
+is still required before reporting improved comprehension.
+
+This is a live offline-return check during the waiting period, with real
+normal-build peers and signed suggestions. It does not exercise post-seal
+physical-drop races, a month of elapsed waiting or arbitrary partitions.
+History now labels a confirmed released key Erased instead of trusting old
+copy logs; signed-history and actual-annex regression checks also require
+that a pending request alone does not get this label and a fresh uncovered
+reference removes it.

@@ -151,7 +151,15 @@ pub async fn history(d: &Daemon, path: &Path) -> Vec<Response> {
     let Some(rel) = relative(&g, path) else {
         return vec![problem("not-in-group", &[], None)];
     };
-    let k = crate::status::settings(&g).k;
+    vec![Response::History {
+        versions: saved_versions(&g, &d.device, &rel).await,
+    }]
+}
+
+/// Saved-version status shared by the public history command and recovery
+/// checks. Confirmed release takes precedence over stale annex copy logs.
+pub async fn saved_versions(g: &Group, me: &str, rel: &str) -> Vec<VersionStatus> {
+    let k = crate::status::settings(g).k;
     let doc = g.roster();
     let custodians: Vec<String> = doc
         .map(|d| {
@@ -163,15 +171,17 @@ pub async fn history(d: &Daemon, path: &Path) -> Vec<Response> {
                 .collect()
         })
         .unwrap_or_default();
-    let current = crate::status::observe(&g, &d.device, &rel).await;
-    let keys = versions(&g, &rel).await;
+    let current = crate::status::observe(g, me, rel).await;
+    let keys = versions(g, rel).await;
     let n = keys.len();
     let mut versions = Vec::new();
     for (i, (commit, key)) in keys.iter().enumerate() {
         let saved = g.git.commit_time(commit).await.unwrap_or(0);
         let held = crate::custody::holders(&g.git, key).await;
         let copies = custodians.iter().filter(|u| held.contains(*u)).count();
+        let policy = g.git.purge_gate.policy();
         let state = match current.iter().find(|o| o.key == *key) {
+            _ if !policy.waiting && policy.released.contains(key) => api::State::Erased,
             Some(o) => match o.state {
                 pigeon_core::state::State::Protected(_)
                 | pigeon_core::state::State::Uncertain(_) => api::State::Protected,
@@ -181,11 +191,11 @@ pub async fn history(d: &Daemon, path: &Path) -> Vec<Response> {
             },
             None if copies >= k => api::State::Protected,
             None if copies > 0 => api::State::Published,
-            None if crate::custody::present(&g, key).await.is_some() => api::State::Local,
+            None if crate::custody::present(g, key).await.is_some() => api::State::Local,
             None => api::State::Missing,
         };
         versions.push(VersionStatus {
-            path: rel.clone(),
+            path: rel.to_owned(),
             number: u64::try_from(n - i).unwrap_or(0),
             saved_at: rfc3339(saved),
             state,
@@ -193,7 +203,7 @@ pub async fn history(d: &Daemon, path: &Path) -> Vec<Response> {
             reason: None,
         });
     }
-    vec![Response::History { versions }]
+    versions
 }
 
 /// `pigeon remove-computer NAME`.

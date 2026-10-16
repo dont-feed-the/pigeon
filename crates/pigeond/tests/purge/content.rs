@@ -118,6 +118,13 @@ async fn only_fully_released_historical_objects_drop_and_private_bytes_stay() {
         old_object.exists(),
         "missing seal must retain the real bytes"
     );
+    assert!(
+        pigeond::history::saved_versions(&l.g, &dev(1).0, "Shared/erased.txt")
+            .await
+            .iter()
+            .all(|v| v.state != pigeon_proto::api::State::Erased),
+        "a pending erasure is not an erased version"
+    );
     let active = pigeond::purge_state::active(&l.g, &decision).await.unwrap();
     let id = active.keys().next().unwrap().clone();
     let mut report = pigeond::report::build(&l.g, &dev(3).0).await;
@@ -150,6 +157,9 @@ async fn only_fully_released_historical_objects_drop_and_private_bytes_stay() {
         "fully qualified purge must physically drop its object"
     );
     assert!(pigeond::custody::present(&l.g, &old_key).await.is_none());
+    let history = pigeond::history::saved_versions(&l.g, &dev(1).0, "Shared/erased.txt").await;
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].state, pigeon_proto::api::State::Erased);
     assert!(
         !old_pool.exists(),
         "qualified erasure must release the pool name too"

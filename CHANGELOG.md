@@ -28,6 +28,9 @@ the second number, and every other pull request the third.
   checked. Routine peer metadata fetches no longer interrupt those transfers.
 - If computers agree to conflicting erasure preparations, the preview
   explains why it cannot proceed and how an admin can recover explicitly.
+- History labels versions released by a completed erasure as erased. Restore
+  receipts and pending requests explain that later saved or restored versions
+  are kept without cancelling the earlier request.
 
 ## 0.5.8 — 2026-10-16
 
