@@ -4,6 +4,15 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.5.11 — 2026-10-16
+
+### Changed
+
+- Pull requests run the checks relevant to their changed files. Documentation,
+  installer and formal-model changes avoid unrelated expensive jobs, while
+  shared dependencies, unknown paths and CI changes retain broader checks.
+  Releases and periodic validation still run the full set.
+
 ## 0.5.10 — 2026-10-16
 
 ### Fixed

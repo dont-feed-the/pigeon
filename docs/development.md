@@ -22,6 +22,8 @@ and adds its entry to [CHANGELOG.md](../CHANGELOG.md), as
 
 Linux CI, lab and slice checks gate publication. macOS tests run periodically
 through `macos-background`; both platforms' release archives still build.
+Pull requests [select relevant checks from their changed files](ci-selection.md).
+Main, release-tag and periodic runs retain full validation.
 Track actual publication, candidate lead time and blocking jobs with
 `python3 scripts/release-kpi`; its [KPI definition and targets](release-kpi.md)
 explain the hourly reports. An immutable candidate can be retried using the
