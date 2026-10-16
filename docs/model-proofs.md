@@ -152,3 +152,25 @@ assumptions. They do not establish universal implementation refinement,
 filesystem atomicity, annex durability, hardware behavior, custody/repair
 guarantees absent from the model, or liveness. Reducing those tests would
 require evidence about those particular links and properties.
+
+## Reusing unchanged proof results
+
+The CI proof job may reuse a successful verification from main only when
+all formal inputs have identical paths and contents. `scripts/proof-inputs`
+hashes every model/configuration (including nested libraries), the expected
+verdict manifest, both proof/TLC runners and their embedded tool pins, the
+cache helper and its tests, and the entire reusable proof workflow. Renaming,
+adding or deleting an input changes the key. Generated TLAPS fingerprints
+are excluded; fresh checks still use `--nofp`.
+
+Only a successful fresh main push saves a verification cache. PRs restore
+an exact key, never a prefix or older result, validate the recorded input
+hash/repository/main provenance and cite its original run. A mismatch
+fails the job. A missing or evicted cache causes full fresh verification.
+Scheduled, manual and release runs always check fresh. The tests exercise
+changed contents, renamed imports, new configurations and invalid provenance.
+
+This reuses an established theorem about unchanged model actions; changes
+to Rust still run their implementation, trace, model and fault checks.
+TLC frequencies are unchanged. The first main run for new inputs pays the
+full proof/mutation cost; subsequent code-only PRs avoid repeating it.

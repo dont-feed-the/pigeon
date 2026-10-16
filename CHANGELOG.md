@@ -12,6 +12,12 @@ the second number, and every other pull request the third.
   custodian counts and waiting periods, including restores, cancellations,
   restarts and delayed messages. The erase command is still not implemented.
 
+### Changed
+
+- Pull requests reuse checked model proofs when every formal input is
+  unchanged, reducing repeated verification while changed models and the
+  scheduled checks still receive fresh proofs.
+
 ## 0.4.2 — 2026-10-16
 
 ### Added

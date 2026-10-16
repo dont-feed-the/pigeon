@@ -14,10 +14,10 @@ and the real storage boundaries is still necessary.
 
 ## Decision
 
-- Check `CaptureTransactionProof` and `AnnexDropProof` with pinned TLAPS
+- Check `CaptureTransactionProof`, `AnnexDropProof` and `PurgeProof` with TLAPS
   1.5.0 on each pull request and main push. Import the existing model
   actions; do not maintain a separate proof implementation of the protocol.
-- Check all proof obligations from scratch, reject omitted proofs, and
+- Fresh checks prove all obligations from scratch, reject omitted proofs, and
   require the `Safety` theorem. Check mutations that remove safety guards.
 - Evaluate the proof's own `ProofParameters` expression with TLC and the
   original configuration. Prove that the configured invariants follow from
@@ -33,6 +33,12 @@ and the real storage boundaries is still necessary.
   cross-check. Its bounded checks alone cannot replace exhaustive TLC;
   on the tested capture model it was slower than TLC and weaker than the
   parameterized TLAPS proof. Do not add it to routine CI for this workload.
+
+- Reuse successful main verification only for an exact hash of formal input
+  paths and bytes, including configurations, runners, tool pins and workflow.
+  PRs cannot save it; a miss checks fresh, and scheduled/manual/release runs
+  always check fresh. Validate and cite the source main run. The standalone
+  proof runner continues checking every obligation without fingerprints.
 
 ## Consequences
 

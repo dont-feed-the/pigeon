@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""Fingerprint formal inputs and record or validate successful CI provenance."""
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+FIXED = (
+    ".github/workflows/proofs.yml",
+    "models/tla/expected.tsv",
+    "scripts/check-proofs",
+    "scripts/proof-inputs",
+    "scripts/run-tlc",
+    "scripts/tests/test_proof_inputs.py",
+)
+
+
+def input_hash(root):
+    names = set(FIXED)
+    for path in (root / "models/tla").rglob("*"):
+        if path.suffix in (".tla", ".cfg") and ".tlacache" not in path.parts:
+            names.add(path.relative_to(root).as_posix())
+    digest = hashlib.sha256()
+    for name in sorted(names):
+        label = name.encode()
+        data = (root / name).read_bytes()
+        # Paths matter: renaming an imported module changes proof resolution
+        # even when the ordered sequence of file-content hashes is unchanged.
+        digest.update(len(label).to_bytes(8, "big") + label)
+        digest.update(len(data).to_bytes(8, "big") + data)
+    return digest.hexdigest()
+
+
+def verified_run(record, digest, repository):
+    if (record.get("schema") != 1 or record.get("input_hash") != digest
+            or record.get("repository") != repository
+            or record.get("ref") != "refs/heads/main"
+            or not re.fullmatch(r"[0-9]+", str(record.get("run_id", "")))
+            or not re.fullmatch(r"[0-9a-f]{40}", str(record.get("commit", "")))):
+        raise ValueError("cached verification does not match these inputs and a main run")
+    return f"https://github.com/{repository}/actions/runs/{record['run_id']}"
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--record", action="store_true")
+    mode.add_argument("--verify", action="store_true")
+    args = parser.parse_args()
+    digest = input_hash(ROOT)
+    proof_dir = ROOT / "target/formal-proofs"
+    path = proof_dir / "verified.json"
+    if args.record:
+        # The workflow invokes this only after check-proofs exits successfully.
+        # Require the report as well, so an absent run cannot be recorded.
+        json.loads((proof_dir / "timings.json").read_text())
+        path.write_text(json.dumps({
+            "schema": 1, "input_hash": digest,
+            "repository": os.environ["GITHUB_REPOSITORY"],
+            "ref": os.environ["GITHUB_REF"],
+            "run_id": os.environ["GITHUB_RUN_ID"],
+            "commit": os.environ["GITHUB_SHA"],
+        }, indent=2) + "\n")
+    elif args.verify:
+        url = verified_run(json.loads(path.read_text()), digest, os.environ["GITHUB_REPOSITORY"])
+        message = f"Identical formal inputs were verified from scratch in {url}\n"
+        print(message, end="")
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+            summary.write(message)
+    else:
+        print(digest)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, KeyError) as error:
+        print(f"FAIL: {error}", file=sys.stderr)
+        sys.exit(1)

@@ -61,7 +61,22 @@ proof or an assumed speedup.
 Run `scripts/check-proofs --benchmark-purge` for the roots, property
 bridges, configuration checks and all mutants, plus the large finite purge
 graph with one TLC worker. Logs and per-command timings go to
-`target/formal-proofs`. The draft PR runs this comparison in CI because
-the development container cannot reliably start solver processes.
-Measurements will determine whether moving only the large instance to
-the existing weekly/release/manual audit set is justified.
+`target/formal-proofs`. The development container cannot reliably start solver processes, so the
+draft used a clean GitHub Actions runner.
+
+On CI run 38871798059, the purge root proof took 12.363 s, its configured
+property bridge 0.227 s, and its parameter coverage 0.944 s: 13.534 s total.
+All three guard mutations left unproved obligations and produced actual
+TLC safety counterexamples; they took 64.510 s together. The four unsupported
+configuration checks also passed, at about 0.45 s apiece. The subsequent
+one-worker, 1 GiB finite benchmark did not complete before the ten-minute
+job deadline; this is not a completed baseline or a passing workflow.
+
+The existing full-model run measured this finite configuration at 142 s
+with TLC's automatic workers/heap. These are different workloads, not a
+paired speedup measurement. Adding about 80 s to every pull request merely
+to save a nightly traversal would be a poor trade when several PRs run
+each day. Both finite purge checks therefore retain their frequency.
+Instead, [CI reuses identical successful main verification](model-proofs.md#reusing-unchanged-proof-results);
+the root and all mutations run fresh whenever their formal inputs change.
+The benchmark stays opt-in.
