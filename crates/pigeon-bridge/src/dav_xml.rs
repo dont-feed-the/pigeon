@@ -58,11 +58,9 @@ pub fn properties(body: &[u8]) -> Result<Vec<(String, String)>> {
         match event {
             Event::Start(ref e) | Event::Empty(ref e) => {
                 let local = e.local_name();
-                let local = std::str::from_utf8(local.as_ref()).map_err(bad)?.to_owned();
+                let local = <str>::to_owned(local.as_ref());
                 let ns = match ns {
-                    ResolveResult::Bound(ns) => {
-                        std::str::from_utf8(ns.as_ref()).map_err(bad)?.to_owned()
-                    }
+                    ResolveResult::Bound(ns) => <str>::to_owned(ns.as_ref()),
                     _ => String::new(),
                 };
                 if ns == DAV && local == "allprop" {
