@@ -94,6 +94,7 @@ impl Model {
         }
         self.suggestions
             .retain(|s| !(s.by == on && s.file == *file));
+        self.log("Resolve", "Resolve", Device::Laptop(on));
         Outcome::Done
     }
 

@@ -1,7 +1,7 @@
 //! The executor's crash points are pigeond's (13 §13.12): every
-//! `crash_point("…")` in pigeond's sources names a [`CrashPoint`], and every
-//! [`CrashPoint`] is one of them, so a renamed point fails here and not in
-//! a scenario that waits for a crash that never comes.
+//! `crash_point("…")` in pigeond's sources names a [`CrashPoint`] or an
+//! install-driver trace regression. A renamed point fails here instead of
+//! leaving a scenario waiting for a crash that never comes.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::collections::BTreeSet;
@@ -30,9 +30,24 @@ fn the_crash_points_are_pigeonds() {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../pigeond/src");
     let mut theirs = BTreeSet::new();
     literals(&src, &mut theirs);
-    let ours: BTreeSet<String> = CrashPoint::ALL
+    let mut ours: BTreeSet<String> = CrashPoint::ALL
         .iter()
         .map(|c| c.name().to_owned())
         .collect();
+    // Incoming-install seams are exercised by check-driver-traces rather
+    // than the free/keep commands of the S9 EDSL scenarios.
+    let driver = std::fs::read_to_string(src.join("../tests/install/tracing.rs")).unwrap();
+    for point in [
+        "install.after-begin",
+        "install.after-aside",
+        "install.after-proof",
+        "install.after-rename",
+        "install.before-index-observation",
+        "install.after-done",
+        "install.before-done-observation",
+    ] {
+        assert!(driver.contains(&format!("\"{point}\"")));
+        ours.insert(point.to_owned());
+    }
     assert_eq!(ours, theirs);
 }

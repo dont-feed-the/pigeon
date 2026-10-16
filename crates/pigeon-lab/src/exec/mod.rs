@@ -28,7 +28,7 @@ use std::time::{Duration, Instant};
 use host::{Isolation, Space};
 
 use crate::run::{Interpreter, Measure, Verdict};
-use crate::scenario::{Label, Need, Scenario};
+use crate::scenario::{Item, Label, Need, Scenario};
 use crate::step::{Condition, CustodianOp, DeviceOp, LaptopOp, Outcome, Step};
 use crate::world::{Content, Device, File, Laptop, World};
 
@@ -926,28 +926,41 @@ impl Interpreter for Exec {
         out
     }
 
-    fn trace(&mut self) -> Option<Vec<Label>> {
-        let admin = (0..self.laptops).find(|i| self.devs[*i].daemon.is_some())?;
-        let machines = self
-            .pigeon(Device::Laptop(Laptop(admin as u8)), &cli::plain("machines"))
-            .ok()?;
+    fn trace(&mut self, wanted: &[Item]) -> Option<Vec<Label>> {
+        let mut lines = Vec::new();
         let mut ids = BTreeMap::new();
-        for (name, id) in machines
-            .json
-            .as_ref()
-            .map(cli::machines)
-            .unwrap_or_default()
-        {
-            if let Some(i) = self.devs.iter().position(|d| d.name == name) {
-                ids.insert(id, self.device_of(i));
+        for _ in 0..100 {
+            // A scheduled crash can happen after the last scenario check.
+            // Keep the normal supervisor running until collection settles,
+            // so a dead daemon can emit its real recovery checkpoint.
+            self.supervise();
+            if ids.is_empty()
+                && let Some(admin) = (0..self.laptops).find(|i| self.devs[*i].daemon.is_some())
+                && let Ok(machines) =
+                    self.pigeon(Device::Laptop(Laptop(admin as u8)), &cli::plain("machines"))
+            {
+                for (name, id) in machines
+                    .json
+                    .as_ref()
+                    .map(cli::machines)
+                    .unwrap_or_default()
+                {
+                    if let Some(i) = self.devs.iter().position(|d| d.name == name) {
+                        ids.insert(id, self.device_of(i));
+                    }
+                }
             }
+            let files: Vec<PathBuf> = self
+                .devs
+                .iter()
+                .flat_map(|d| trace::files(&d.space.root))
+                .collect();
+            lines = trace::merged(&files);
+            if trace::complete(&lines, &ids, wanted) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
         }
-        let files: Vec<PathBuf> = self
-            .devs
-            .iter()
-            .flat_map(|d| trace::files(&d.space.root))
-            .collect();
-        let lines = trace::merged(&files);
         let _ = trace::write(&lines, &self.out_dir().join("trace.ndjson"));
         if lines.is_empty() {
             return None;

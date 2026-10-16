@@ -56,6 +56,12 @@ result, progress events then a result, or a `Problem` (§10.6).
 - One subcommand per request; completions and man pages from the same
   definitions. Result on stdout; messages and progress on stderr, headline
   then detail (ux.md §7); colour and bars only on a terminal, never alone.
+- **Completion.** `COMPLETE=SHELL pigeon` prints the script a shell's
+  startup file sources (zsh, bash, fish, elvish, PowerShell); the shell then
+  runs `pigeon` with `COMPLETE` set, and it answers from the same
+  definitions, with the values `pigeond` lists: suggestions, held batches,
+  invitations, the group's other machines, settings and their choices. A
+  daemon that does not answer within half a second gives no values.
 - **`--json`** on every command: the response on stdout, problems on stderr.
   Scripts rely on `--json` and problem codes, never on wording.
 - **Questions.** `erase`, `accept --override`, `refound`, `recover`, `free

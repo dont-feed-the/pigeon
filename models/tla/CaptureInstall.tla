@@ -76,8 +76,9 @@ Init == /\ fc = [i \in Inodes |-> IF i = 1 THEN 1 ELSE 0]
 
 ----------------------------------------------------------------------------
 (* The person and their applications. *)
-Write(i) ==   \* in place at p, or through a handle opened earlier
-  LET c == n.cont + 1 IN
+(* The trace adapter can also supply bytes seen earlier (a restore or an
+   identical save). The bounded design model keeps its fresh-value cases. *)
+WriteValue(i, c) ==   \* in place at p, or through a handle opened earlier
   /\ n.act < MaxAct
   /\ fc' = [fc EXCEPT ![i] = c]
   /\ fm' = [fm EXCEPT ![i] = IF i \in fresh THEN @ ELSE @ + 1]
@@ -89,10 +90,11 @@ Write(i) ==   \* in place at p, or through a handle opened earlier
   /\ pdel' = (pdel /\ i # at.p) /\ UNCHANGED gap
   /\ n' = [n EXCEPT !.act = @ + 1, !.cont = @ + 1]
   /\ UNCHANGED <<at, kept, orph, hnd, hid, punl, idx, cur, store, div, pc, jr, deferred, disp>>
+Write(i) == WriteValue(i, n.cont + 1)
 WriteAtP == at.p # 0 /\ Write(at.p)
 WriteHandle == \E i \in hnd \cup hid : Write(i)
-Replace ==    \* write a new file and rename it over p, or create p
-  LET i == n.ino + 1  c == n.cont + 1 IN
+ReplaceValue(c) ==    \* write a new file and rename it over p, or create p
+  LET i == n.ino + 1 IN
   /\ n.act < MaxAct /\ n.ino < MaxIno
   /\ fc' = [fc EXCEPT ![i] = c] /\ fresh' = fresh \cup {i}
   /\ at' = [at EXCEPT !.p = i]
@@ -102,6 +104,7 @@ Replace ==    \* write a new file and rename it over p, or create p
   /\ gap' = IF (at.p = 0 /\ who = "pigeon" /\ pc # "idle") \/ at.p \in gap THEN gap \cup {i} ELSE gap
   /\ n' = [n EXCEPT !.act = @ + 1, !.ino = @ + 1, !.cont = @ + 1]
   /\ UNCHANGED <<fm, kept, orph, hnd, hid, punl, idx, cur, store, div, pc, jr, deferred, disp>>
+Replace == ReplaceValue(n.cont + 1)
 Delete ==
   /\ n.act < MaxAct /\ at.p # 0
   /\ at' = [at EXCEPT !.p = 0] /\ dropped' = dropped \cup {fc[at.p]}
@@ -123,12 +126,14 @@ Tick ==
 
 (* The group: another version of p (or its deletion) is accepted elsewhere;
    a waiting suggestion of p then becomes a conflict. *)
-NewVersion == \E v \in {n.cont + 1, Absent} :
+VersionValueWith(v, notify) ==
   /\ n.grp < MaxGroup /\ v # cur
   /\ cur' = v /\ store' = store \cup ({v} \ {Absent})
-  /\ div' = IF div.k = "waiting" THEN [div EXCEPT !.k = "conflict"] ELSE div
+  /\ div' = IF notify /\ div.k = "waiting" THEN [div EXCEPT !.k = "conflict"] ELSE div
   /\ n' = [n EXCEPT !.grp = @ + 1, !.cont = @ + 1]
   /\ UNCHANGED <<fc, fm, fresh, at, kept, orph, hnd, hid, punl, idx, saved, dropped, pc, jr, deferred, who, pdel, gap, disp>>
+VersionValue(v) == VersionValueWith(v, TRUE)
+NewVersion == \E v \in {n.cont + 1, Absent} : VersionValue(v)
 (* The deciders accept or reject the person's suggestion; on acceptance only
    the index changes. *)
 Decide ==
@@ -147,7 +152,7 @@ ResolveMine ==
 ----------------------------------------------------------------------------
 (* pigeond. Capture takes a quiet path (unchanged for a tick, 07 §7.2) whose
    file differs from the index; capture and install never run at once. *)
-Capture ==
+CaptureWith(allowed) ==
   LET i == at.p  c == IF i = 0 THEN Absent ELSE fc[i]  st == Stat(i) IN
   /\ pc = "idle" /\ (i = 0 \/ i \notin fresh \/ "quiet" \in Off)
   \* a diverging path is compared with the person's side, others with the index
@@ -157,26 +162,34 @@ Capture ==
      THEN div' = (IF c = idx.key THEN None ELSE [div EXCEPT !.key = c, !.st = st]) /\ UNCHANGED <<cur, idx>>
      ELSE IF idx.key # cur     \* based on a version main has left: concurrent
      THEN div' = [k |-> "conflict", key |-> c, st |-> st] /\ UNCHANGED <<cur, idx>>
-     ELSE IF Allowed THEN cur' = c /\ idx' = Record(c) /\ UNCHANGED div
+     ELSE IF allowed THEN cur' = c /\ idx' = Record(c) /\ UNCHANGED div
      ELSE div' = [k |-> "waiting", key |-> c, st |-> st] /\ UNCHANGED <<cur, idx>>
   /\ UNCHANGED <<fc, fm, fresh, at, kept, orph, hnd, hid, punl, saved, dropped, pc, jr, deferred, who, disp, n>>
+Capture == CaptureWith(Allowed)
 Refresh ==
   /\ pc = "idle" /\ at.p # 0 /\ fc[at.p] = idx.key /\ idx # Record(idx.key)
   /\ idx' = Record(idx.key)
   /\ UNCHANGED <<fc, fm, fresh, at, kept, orph, hnd, hid, punl, cur, store, saved, dropped, div, pc, jr, deferred, who, pdel, gap, disp, n>>
 
 (* Install, 07 §7.5: steps 1-3 (content, new file, journal) in one action. *)
-Stage(new, exp, st, res, use) ==
-  LET t == IF new = Absent THEN 0 ELSE n.ino + 1 IN
-  /\ new = Absent \/ n.ino < MaxIno
+StageAt(new, exp, st, res, use, discardDeletion, t) ==
+  /\ IF new = Absent THEN t = 0
+     ELSE t \in Inodes \ (Linked \cup hnd \cup hid)
   /\ fc' = IF t = 0 THEN fc ELSE [fc EXCEPT ![t] = new]
+  /\ fm' = IF t = 0 \/ t > n.ino THEN fm ELSE [fm EXCEPT ![t] = @ + 1]
+  /\ punl' = punl \ {t}
   /\ fresh' = fresh \cup ({t} \ {0})
   /\ at' = [at EXCEPT !.stage = t]
   /\ jr' = [open |-> "journal" \notin Off, new |-> new, exp |-> exp, st |-> st, tmp |-> t,
             res |-> res, proved |-> FALSE]
-  /\ pc' = "begun"
-  /\ n' = [n EXCEPT !.ino = IF t = 0 THEN @ ELSE @ + 1, !.res = IF use THEN @ + 1 ELSE @]
-  /\ UNCHANGED <<fm, kept, orph, hnd, hid, punl, idx, cur, store, saved, dropped, div, deferred, who, pdel, gap, disp>>
+  /\ pc' = "begun" /\ pdel' = IF discardDeletion THEN FALSE ELSE pdel
+  /\ n' = [n EXCEPT !.ino = IF t > @ THEN t ELSE @, !.res = IF use THEN @ + 1 ELSE @]
+  /\ UNCHANGED <<kept, orph, hnd, hid, idx, cur, store, saved, dropped, div, deferred, who, gap, disp>>
+(* The design configurations keep their monotone fresh-inode allocator.
+   The trace driver can also observe a recycled physical inode number. *)
+StageWith(new, exp, st, res, use, discardDeletion) ==
+  StageAt(new, exp, st, res, use, discardDeletion, IF new = Absent THEN 0 ELSE n.ino + 1)
+Stage(new, exp, st, res, use) == StageWith(new, exp, st, res, use, FALSE)
 Start == pc = "idle" /\ ~deferred /\ div.k = "none" /\ idx.key # cur /\ Clean
          /\ Stage(cur, idx.key, idx.st, FALSE, FALSE)
 (* Take the group's version: the proof compares with the person's version in
@@ -213,14 +226,15 @@ Scan ==
   /\ IF at.aside \in hnd /\ "scan" \notin Off THEN Fail(TRUE)
      ELSE pc' = "scanned" /\ UNCHANGED <<at, kept, who, jr, deferred>>
   /\ UNCHANGED <<fc, fm, fresh, orph, hnd, hid, punl, idx, cur, store, saved, dropped, div, pdel, gap, disp, n>>
-Check ==
+CheckWith(hash) ==
   /\ pc = "scanned"     \* step 6: the journalled stat
-  /\ IF Stat(at.aside) = jr.st \/ "check" \in Off
+  /\ IF (Stat(at.aside) = jr.st /\ (~hash \/ fc[at.aside] = jr.exp)) \/ "check" \in Off
      THEN /\ pc' = "checked" /\ disp' = disp \cup {[i |-> at.aside, e |-> jr.exp, c |-> fc[at.aside]]}
           /\ jr' = [jr EXCEPT !.proved = TRUE]      \* journalled: `proved` (spec 07 §7.5)
           /\ UNCHANGED <<at, kept, who, deferred>>
      ELSE Fail(FALSE) /\ UNCHANGED disp
   /\ UNCHANGED <<fc, fm, fresh, orph, hnd, hid, punl, idx, cur, store, saved, dropped, div, pdel, gap, n>>
+Check == CheckWith(FALSE)
 RenameIn ==
   /\ pc = "checked"  \* step 7, RENAME_NOREPLACE
   /\ IF jr.new = Absent

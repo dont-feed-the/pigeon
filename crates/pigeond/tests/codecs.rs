@@ -56,7 +56,7 @@ fn maybe(tc: &TestCase) -> Option<String> {
 
 fn record(tc: &TestCase) -> Record {
     let seq = tc.draw(gs::integers::<u64>().max_value(1 << 40));
-    match tc.draw(gs::integers::<u8>().max_value(5)) {
+    match tc.draw(gs::integers::<u8>().max_value(7)) {
         0 => Record::Begin(Begin {
             seq,
             path: word(tc),
@@ -90,6 +90,16 @@ fn record(tc: &TestCase) -> Record {
         }
         3 => Record::Kept(seq, tc.draw(gs::integers::<i64>())),
         4 => Record::Preserved(seq, word(tc)),
+        5 => Record::InstallIndex(
+            seq,
+            tc.draw(gs::booleans())
+                .then(|| pigeon_core::authority::Entry {
+                    mode: "100644".to_owned(),
+                    kind: "blob".to_owned(),
+                    oid: word(tc),
+                }),
+        ),
+        6 => Record::Operation(seq, word(tc)),
         _ => Record::Released(seq),
     }
 }

@@ -50,9 +50,19 @@ To update, or to go back to the release you had before:
 ```sh
 pigeon update               # the latest release; or: pigeon update --version vX.Y.Z
 pigeon update --rollback    # back to the previous release
+pigeon update --main        # main's latest commit, built on this computer
 ```
 
-Both restart `pigeond`. `pigeon --version` tells which release runs.
+They restart `pigeond`. `pigeon --version` tells which release runs; a
+build of main adds its commit, as in `pigeon 0.3.2+g1a2b3c4d5e6f`.
+
+`--main` needs git and Rust ([rustup](https://rustup.rs)). It keeps a clone
+in pigeon's directory, under `src`, and builds there; the first build takes
+a few minutes, later ones less. It takes pigeon's git-annex from the
+latest release; only when main has changed it since does it build it,
+which takes about an hour, and if that build fails it takes the official
+git-annex instead. A plain `pigeon update` goes back to the
+latest release.
 
 pigeon has its own build of git-annex, with fixes for two bugs in
 git-annex's P2P protocol ([ADR 0069](adr/0069-pigeon-runs-a-pinned-patched-git-annex.md)),
@@ -118,9 +128,21 @@ pigeon accept ID            # or: pigeon decline ID --note "why"
 | `pigeon free FOLDER` / `pigeon keep FOLDER` | frees a folder's space here, or keeps it here |
 | `pigeon recovery-sheet` | prints the sheet that recovers the group on a new computer |
 | `pigeon doctor` | checks the installation and explains what is wrong |
-| `pigeon update` | installs the latest release (`--rollback`: the one before) |
+| `pigeon update` | installs the latest release (`--main`: main built here; `--rollback`: the one before) |
 
 `pigeon --help` lists them all, and `--json` prints any answer as JSON.
+
+### Tab completion
+
+pigeon completes its commands and options, paths, and what the daemon
+lists: suggestion IDs, held batches, invitations, the group's machines,
+settings and their values. Add the line for your shell to its startup file:
+
+```sh
+source <(COMPLETE=zsh pigeon)     # ~/.zshrc
+source <(COMPLETE=bash pigeon)    # ~/.bashrc
+COMPLETE=fish pigeon | source     # ~/.config/fish/config.fish
+```
 
 ## What comes next
 

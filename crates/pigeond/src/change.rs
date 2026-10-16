@@ -8,7 +8,7 @@ use std::path::Path;
 use crate::git::{Error, Git};
 use crate::group::Group;
 use crate::roster_file::{self, RosterDoc};
-use crate::trace::{Act, Tracer};
+use crate::trace::Tracer;
 
 /// Writes `bytes` at `path` in the index, and in `worktree` if there is one.
 pub async fn stage_file(
@@ -76,7 +76,7 @@ pub async fn commit_roster(
     let commit = commit_index(&g.git, parent.as_deref(), message)
         .await
         .map_err(|e| e.to_string())?;
-    tracer.event(Act::Commit, &[("commit", &commit)]);
     g.reload_roster().await;
+    crate::trace_roster::moved(tracer, g, "Commit", parent.as_deref()).await;
     Ok(commit)
 }

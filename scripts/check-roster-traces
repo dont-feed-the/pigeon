@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""Check real daemon roster ref moves with Roster's membership fold.
+
+Read signed-tree observations and the fold inputs recorded by the daemon;
+only rename identities and project the model's fields. TLC computes every
+membership result. Raw TOML and full edits remain in the NDJSON log.
+"""
+
+import argparse
+import json
+import sys
+import tempfile
+import shutil
+import tomllib
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+import importlib.machinery
+import importlib.util
+ROOT = Path(__file__).resolve().parent.parent
+
+
+class Refused(Exception):
+    pass
+
+
+def load(name):
+    loader = importlib.machinery.SourceFileLoader(name.replace("-", "_"), str(ROOT / "scripts" / name))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def raw(text):
+    return tomllib.loads(bytes.fromhex(text).decode())
+
+
+def normalize(events):
+    if not events:
+        raise Refused("no daemon roster events")
+    people, devices, decoded = set(), set(), []
+    previous_clock = {}
+    for event in events:
+        if event["action"] not in {"Commit", "Merge"} or "error" in event["vars"]:
+            raise Refused("unknown action or failed roster observation")
+        if event["clock"] <= previous_clock.get(event["device"], -1):
+            raise Refused("roster clock did not increase")
+        previous_clock[event["device"]] = event["clock"]
+        v = event["vars"]
+        views = [raw(c["roster"]) for c in v["commits"]] + [raw(v["loaded"])]
+        for r in views:
+            people.update(p.encode().hex() for p in r["persons"])
+            devices.update(r["devices"])
+            devices.update(r.get("removed", {}))
+        for c in v["commits"]:
+            devices.add(c["signer"])
+            for e in c["edits"]:
+                if e["kind"] in {"add_person", "remp"} or e["kind"] == "set" and e["field"] in {"admin", "person_name"}:
+                    people.add(e["id"])
+                if e["kind"] in {"add", "rem"} or e["kind"] == "set" and e["field"] in {"device_name", "maxsize"}:
+                    devices.add(e["id"])
+                if e["kind"] == "add":
+                    people.add(e["person"])
+        devices.add(event["device"])
+        decoded.append((event, views))
+    persons = {p: i + 1 for i, p in enumerate(sorted(people))}
+    ids = {d: i + 1 for i, d in enumerate(sorted(devices))}
+
+    def state(r):
+        return {"mem": sorted(persons[p.encode().hex()] for p in r["persons"]),
+                "adm": sorted(persons[p.encode().hex()] for p, v in r["persons"].items() if v.get("admin", False)),
+                "dev": [persons[r["devices"][d]["person"].encode().hex()] if d in r["devices"] else 0 for d in ids],
+                "gone": sorted(ids[d] for d in r.get("removed", {}))}
+
+    def edits(change):
+        projected, auth = [], []
+        for e in change:
+            k = e["kind"]
+            if k == "set" and e["field"] == "admin":
+                if e["from"]["kind"] != "flag" or e["to"]["kind"] != "flag" or type(e["to"]["value"]) is not bool:
+                    raise Refused("invalid admin edit")
+                p = {"k": "admin", "p": persons[e["id"]], "new": e["to"]["value"]}
+            elif k == "add_person":
+                p = {"k": "addp", "p": persons[e["id"]], "new": e["admin"]}
+            elif k == "add":
+                p = {"k": "add", "d": ids[e["id"]], "p": persons[e["person"]]}
+            elif k == "rem":
+                p = {"k": "rem", "d": ids[e["id"]]}
+            elif k == "remp":
+                p = {"k": "remp", "p": persons[e["id"]]}
+            elif k in {"set", "add_folder", "rem_folder"}:
+                auth.append({"k": "capacity", "d": ids[e["id"]]} if k == "set" and e["field"] == "maxsize" else {"k": "metadata"})
+                continue
+            else:
+                raise Refused(f"unknown roster edit {k}")
+            projected.append(p)
+            auth.append(p)
+        return projected, auth
+
+    output, previous = [], {}
+    for event, views in decoded:
+        v = event["vars"]
+        rows = {c["id"]: (c, r) for c, r in zip(v["commits"], views)}
+        if len(rows) != len(v["commits"]) or v["genesis"] not in rows:
+            raise Refused("duplicate commit or missing genesis")
+        order = [v["genesis"], *sorted(set(rows) - {v["genesis"]})]
+        commit_ids = {c: i + 1 for i, c in enumerate(order)}
+        visited, active = set(), set()
+
+        def visit(c):
+            if c in active or c not in rows:
+                raise Refused("cyclic or incomplete accepted history")
+            if c in visited:
+                return
+            active.add(c)
+            row = rows[c][0]
+            if (not row["parents"]) != (c == v["genesis"]):
+                raise Refused("accepted history has another root")
+            for p in row["parents"]:
+                visit(p)
+            active.remove(c)
+            visited.add(c)
+
+        for c in rows:
+            visit(c)
+        identity = (event["device"], v["group"])
+        # Content captures can move main between roster events. A missing
+        # roster change cannot hide among those unchanged-roster commits.
+        if identity in previous and v["before"] != previous[identity]:
+            def ancestors(c):
+                todo, found = [c], set()
+                while todo:
+                    c = todo.pop()
+                    if c in found:
+                        continue
+                    found.add(c)
+                    todo.extend(rows[c][0]["parents"])
+                return found
+            gap = ancestors(v["before"]) - ancestors(previous[identity])
+            if any(rows[c][0]["edits"] for c in gap):
+                raise Refused("unobserved roster ref move between events")
+        previous[identity] = v["head"]
+        commits = []
+        for c in order:
+            row, r = rows[c]
+            change, auth = edits(row["edits"])
+            parent_views = [rows[p][1] for p in row["parents"]]
+            commits.append({"parents": [commit_ids[p] for p in row["parents"]],
+                            "time": row["time"], "signer": ids[row["signer"]],
+                            "edits": change, "auth": auth, "ros": state(r),
+                            "fork": any(p != parent_views[0] for p in parent_views),
+                            "recovery": sorted(ids[d] for d, x in r["devices"].items() if x["role"] == "recovery")})
+        output.append(dict(event, vars={"commits": commits, "loaded": state(views[-1]),
+                                       "head": commit_ids[v["head"]], "before": commit_ids[v["before"]] if v["before"] else 0,
+                                       "device": ids[event["device"]]}))
+    return output, len(persons), len(devices)
+
+
+def check(events, java="java", diagnostics=True):
+    events, people, devices = normalize(events)
+    tla, tlc = load("trace-to-tla"), load("run-tlc")
+    with tempfile.TemporaryDirectory(prefix="pigeon-roster-tlc-") as tmp:
+        work = Path(tmp)
+        for name in ("Roster", "RosterDaemonTrace"):
+            shutil.copy(ROOT / "models/tla" / (name + ".tla"), work)
+        (work / "RosterDaemonCodeLog.tla").write_text(tla.convert([json.dumps(e) for e in events], "RosterDaemonCodeLog", "CodeLog"))
+        (work / "RosterDaemonTrace_good.cfg").write_text(f"""CONSTANTS TraceLog <- CodeLog
+NP = {people}
+ND = {devices}
+NR = 1
+MaxCommits = 1000000
+Times = {{0}}
+Mode = "fold"
+SignerRule = "some"
+Removals = "always"
+Allowed = {{}}
+SPECIFICATION TraceSpec
+INVARIANT TraceNotConsumed
+CHECK_DEADLOCK FALSE
+""")
+        got, output = tlc.run(tlc.tlc_jar(), "RosterDaemonTrace_good", "RosterDaemonTrace", java, "1", "2g", models=work)
+        if got != "trace:accepted" and diagnostics:
+            print(tlc.excerpt(output), file=sys.stderr)
+        return got
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("log", type=Path)
+    parser.add_argument("--java", default="java")
+    args = parser.parse_args()
+    try:
+        events = [e for line in args.log.read_text().splitlines() if line.strip() and (e := json.loads(line))["spec"] == "Roster"]
+        verdict = check(events, args.java)
+    except (Refused, KeyError, ValueError, TypeError) as e:
+        sys.exit(f"FAIL {e}")
+    print(verdict)
+    return verdict != "trace:accepted"
+
+
+if __name__ == "__main__":
+    sys.exit(main())

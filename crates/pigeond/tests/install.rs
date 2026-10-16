@@ -429,6 +429,9 @@ async fn a_save_soon_after_an_install_is_kept_beside_it() {
     );
     // An application that held a.txt's old content saves it at once: the
     // save goes beside Ben's version, which keeps the name.
+    // Keep that input inside the window even when tracing the preceding
+    // b.txt install/capture took more than ten seconds on a busy runner.
+    l.g.lock().installed.get_mut("a.txt").unwrap().0 = pigeond::util::now_ns();
     write(&l, "a.txt", b"one\n");
     let m = capture::capture(&l.g, &dev(1).0, &l.t)
         .await
@@ -529,3 +532,7 @@ async fn a_renamed_file_is_captured_with_its_trailer() {
 
 #[path = "install/storage.rs"]
 mod storage;
+
+#[cfg(all(feature = "lab", feature = "tla-trace"))]
+#[path = "install/tracing.rs"]
+mod tracing;
