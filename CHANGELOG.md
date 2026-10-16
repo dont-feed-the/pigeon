@@ -4,6 +4,14 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.5.1 — 2026-10-16
+
+### Fixed
+
+- Rejoining a backup in place replaces its configured group correctly
+  through directory aliases, including macOS's `/var` path. Other
+  repositories and settings remain in their original order.
+
 ## 0.5.0 — 2026-10-16
 
 Milestone M4, the interface and recovery, with the installation repairs

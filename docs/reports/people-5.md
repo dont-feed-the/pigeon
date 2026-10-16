@@ -182,3 +182,12 @@ The corrected alias check passed under umask 022, followed by all 40 daemon
 unit tests and both complete refound crash/restart tests under that umask.
 Final all-target Clippy and repository rules passed again. The hosted run
 must validate this correction before publication.
+
+## Publication correction after the macOS tag check
+
+PR #45 merged with all 22 checks passing, then v0.5.0's macOS unit target
+found asymmetric canonical-path comparison in configuration replacement.
+That tag remains unchanged and unpublished. The remaining superseded runs
+were cancelled. The [0.5.1 correction](release-051.md) reproduces the same
+failure through a real directory alias on every runner, normalizes both
+paths, and records the new publication candidate's validation.

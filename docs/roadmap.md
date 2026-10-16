@@ -108,8 +108,9 @@ thresholds of [06 §6.7](spec/06-status.md).
 
 Implementation and local exit evidence: [M4 report](reports/people-5.md).
 Five independent agent usability sessions are accepted by the user for
-this gate, with initial failures and focused retakes recorded. The 0.5.0
-candidate still requires combined hosted checks and publication.
+this gate, with initial failures and focused retakes recorded. The M4 rollup merged, but the v0.5.0 tag stopped at a macOS path-alias
+regression before publication. Its [0.5.1 correction](reports/release-051.md)
+is the current publication candidate; the old tag is unchanged.
 
 ## M5. Deletion and scrub: v0.6
 

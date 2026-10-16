@@ -250,6 +250,8 @@ pub fn add_group(path: &Path, entry: &GroupEntry) -> Result<(), ConfigError> {
 /// and other settings. Repeating it removes duplicate old/new entries.
 pub fn replace_group(path: &Path, old: &str, entry: &GroupEntry) -> Result<(), ConfigError> {
     let mut doc = read_doc(path)?;
+    let replacement_path =
+        std::fs::canonicalize(&entry.path).unwrap_or_else(|_| entry.path.clone());
     let mut replacement = toml_edit::Table::new();
     replacement.insert("id", toml_edit::value(entry.id.clone()));
     replacement.insert(
@@ -268,7 +270,8 @@ pub fn replace_group(path: &Path, old: &str, entry: &GroupEntry) -> Result<(), C
                 .get("path")
                 .and_then(toml_edit::Item::as_str)
                 .is_some_and(|p| {
-                    std::fs::canonicalize(p).unwrap_or_else(|_| PathBuf::from(p)) == entry.path
+                    std::fs::canonicalize(p).unwrap_or_else(|_| PathBuf::from(p))
+                        == replacement_path
                 });
             if (id == Some(old) && same_path) || id == Some(entry.id.as_str()) {
                 if !inserted {
@@ -352,7 +355,13 @@ mod tests {
         let t = tempfile::tempdir().unwrap();
         let path = t.path().join("config.toml");
         std::fs::write(&path, "# mine\nlanguage = \"fr\"\nfuture_option = 7\n").unwrap();
-        let old_path = t.path().join("old");
+        // macOS's /var -> /private/var alias exposed this naturally.
+        // Exercise an equivalent real directory alias on every runner.
+        let target = t.path().join("repositories");
+        std::fs::create_dir(&target).unwrap();
+        let alias = t.path().join("alias");
+        std::os::unix::fs::symlink(&target, &alias).unwrap();
+        let old_path = alias.join("old");
         std::fs::create_dir(&old_path).unwrap();
         let entries = [
             GroupEntry {
