@@ -128,12 +128,7 @@ pub async fn leave(d: &Daemon) -> Vec<Response> {
 /// would reach anyone, so it forgets the group at once, keeping its files.
 /// A later one asks for an update first.
 async fn unreadable(d: &Daemon, g: &std::sync::Arc<Group>) -> Vec<Response> {
-    let declared = g
-        .git
-        .blob("refs/heads/main:.pigeon/roster.toml")
-        .await
-        .map(|b| crate::roster_file::declared(&String::from_utf8_lossy(&b)))
-        .unwrap_or_default();
+    let declared = g.lock().declared.clone();
     match declared.format {
         Some(f) if f < i64::from(crate::roster_file::FORMAT) => {}
         Some(_) => return vec![problem("update-needed", &[], None)],

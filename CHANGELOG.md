@@ -15,6 +15,9 @@ increments the second number, and every other release the third.
   retry after updating.
 - `pigeon leave` can forget groups whose roster predates the supported
   format, keeping their files so the computer can join or create a group.
+- A computer still in a group whose roster predates the supported format
+  is told which group when it tries to join, create or recover another:
+  *This computer is already in the group “48h”* instead of an empty “”.
 
 ## 0.5.15 — 2026-10-17
 

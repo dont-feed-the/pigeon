@@ -392,7 +392,7 @@ fn in_another_group(d: &Daemon, asked: &[String]) -> Option<Response> {
     if asked.iter().any(|id| d.group(id).is_some()) {
         return None;
     }
-    let name = g.roster().map(|doc| doc.roster.group).unwrap_or_default();
+    let name = g.name();
     let hint = if crate::leave::leaving(&g).is_some() {
         "leaving-wait"
     } else {
@@ -409,11 +409,10 @@ fn in_another_group(d: &Daemon, asked: &[String]) -> Option<Response> {
 
 /// The `invitation` message: the line that joins `g` with `code`.
 fn invitation(g: &Group, code: &str) -> Response {
-    let name = g.roster().map(|d| d.roster.group).unwrap_or_default();
     said(
         "invitation",
         &[
-            ("group", text(&name)),
+            ("group", text(&g.name())),
             ("command", text(&pigeon_proto::join::command(code))),
         ],
     )
