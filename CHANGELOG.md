@@ -22,6 +22,11 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- On Linux with a umask of 002, the default on Ubuntu and Fedora desktops,
+  pigeon thought every file might be in use: it delayed writing the group's
+  versions into your folder, `pigeon free` and *Free up space* deleted
+  nothing, and `pigeon restore` said the file was in use. Files are now
+  only held back when another user's program could really be writing them.
 - A computer that left its last group and then created or joined another
   one, without restarting pigeon, no longer changes identity at the next
   restart, which made the new group no longer recognise it.

@@ -2,9 +2,10 @@
 //! writing, or map it shared and writable. On Linux it reads `/proc/*/fd`,
 //! `fdinfo` and `maps`; on macOS it asks `libproc` for each process's vnode
 //! descriptors and memory regions. A process the scan may not inspect is
-//! counted, so the caller can treat the answer as incomplete.
+//! counted, with its credentials where the system tells them, so the caller
+//! can judge whether it could write the file.
 
-use crate::fs::FileId;
+use crate::fs::{FileId, Stat};
 
 /// What a scan found.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -13,12 +14,71 @@ pub struct Scan {
     pub writers: Vec<u32>,
     /// Processes whose descriptors could not be read (another user's).
     pub unreadable: u32,
+    /// Their credentials, from `/proc/<pid>/status` on Linux; `None` for a
+    /// process whose credentials could not be read either, and on macOS.
+    pub hidden: Vec<Option<Creds>>,
+}
+
+/// The credentials the kernel checks a write against: the file-system user
+/// ID, and the file-system group ID with the supplementary groups.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Creds {
+    /// The file-system user ID.
+    pub uid: u32,
+    /// The file-system group ID and the supplementary groups.
+    pub gids: Vec<u32>,
+}
+
+impl Creds {
+    /// Whether a process of another user could open `st` for writing (07
+    /// §7.5 step 5). Root and the owner's own processes are not another
+    /// user's; a process in the file's group gets the group bits, any other
+    /// the other bits, as the kernel decides.
+    pub fn another_may_write(&self, st: &Stat) -> bool {
+        if self.uid == 0 || self.uid == st.uid {
+            return false;
+        }
+        if self.gids.contains(&st.gid) {
+            st.mode & 0o020 != 0
+        } else {
+            st.mode & 0o002 != 0
+        }
+    }
+}
+
+/// The credentials in the text of `/proc/<pid>/status`: the fourth (file
+/// system) value of `Uid:` and `Gid:`, and `Groups:`.
+pub fn status_creds(text: &str) -> Option<Creds> {
+    let ids = |key: &str| {
+        text.lines().find_map(|l| l.strip_prefix(key)).map(|rest| {
+            rest.split_whitespace()
+                .filter_map(|v| v.parse::<u32>().ok())
+                .collect::<Vec<_>>()
+        })
+    };
+    let uid = *ids("Uid:")?.get(3)?;
+    let gid = *ids("Gid:")?.get(3)?;
+    let mut gids = ids("Groups:").unwrap_or_default();
+    gids.push(gid);
+    Some(Creds { uid, gids })
 }
 
 impl Scan {
     /// Whether no process can write the file, as far as the scan could see.
     pub fn is_clear(&self) -> bool {
         self.writers.is_empty()
+    }
+
+    /// Whether nothing may write `st` (07 §7.5 step 5): no writer seen, and
+    /// no process left uninspected that belongs to another user who could
+    /// write it. One whose credentials are unknown counts when the file is
+    /// group- or other-writable.
+    pub fn clear_for(&self, st: &Stat) -> bool {
+        self.is_clear()
+            && self.hidden.iter().all(|c| match c {
+                Some(c) => !c.another_may_write(st),
+                None => st.mode & 0o022 == 0,
+            })
     }
 }
 
@@ -58,12 +118,13 @@ pub fn maps_line_writes(line: &str, major: u32, minor: u32, ino: u64) -> bool {
 mod imp {
     use std::os::unix::fs::MetadataExt;
 
-    use super::{FileId, Scan, flags_write, maps_line_writes};
+    use super::{FileId, Scan, flags_write, maps_line_writes, status_creds};
 
     pub(super) fn scan(id: FileId) -> Scan {
         let mut out = Scan::default();
         let Ok(procs) = std::fs::read_dir("/proc") else {
             out.unreadable += 1;
+            out.hidden.push(None);
             return out;
         };
         let (major, minor) = (rustix::fs::major(id.dev), rustix::fs::minor(id.dev));
@@ -79,6 +140,9 @@ mod imp {
             let Ok(fds) = std::fs::read_dir(base.join("fd")) else {
                 if base.exists() {
                     out.unreadable += 1;
+                    let status = std::fs::read_to_string(base.join("status"));
+                    out.hidden
+                        .push(status.ok().as_deref().and_then(status_creds));
                 }
                 continue;
             };
@@ -296,6 +360,7 @@ mod imp {
             }
             let Some(fds) = fds(pid) else {
                 out.unreadable += 1;
+                out.hidden.push(None);
                 continue;
             };
             let writes = fds
@@ -335,6 +400,79 @@ mod tests {
             1,
             1234
         ));
+    }
+
+    fn file(mode: u32, uid: u32, gid: u32) -> Stat {
+        Stat {
+            id: FileId { dev: 1, ino: 2 },
+            size: 0,
+            mtime_ns: 0,
+            nlink: 1,
+            mode: 0o100000 | mode,
+            uid,
+            gid,
+        }
+    }
+
+    #[test]
+    fn reads_the_file_system_credentials_of_a_status() {
+        let text =
+            "Name:\tcat\nUid:\t1000\t1000\t1000\t1001\nGid:\t100\t100\t100\t101\nGroups:\t4 27 \n";
+        let c = status_creds(text).unwrap();
+        assert_eq!(c.uid, 1001);
+        assert_eq!(c.gids, vec![4, 27, 101]);
+        assert_eq!(status_creds("Name:\tcat\n"), None);
+        let none = status_creds("Uid:\t7\t7\t7\t7\nGid:\t7\t7\t7\t7\n").unwrap();
+        assert_eq!(none.gids, vec![7]);
+    }
+
+    #[test]
+    fn only_another_user_who_could_write_makes_a_hidden_process_count() {
+        let other = |gids: Vec<u32>| Creds { uid: 2000, gids };
+        // umask 002 with a private group: 664, group 1000 only Ana's.
+        let mine = file(0o664, 1000, 1000);
+        assert!(!other(vec![2000]).another_may_write(&mine));
+        assert!(
+            other(vec![2000, 1000]).another_may_write(&mine),
+            "in its group"
+        );
+        assert!(
+            !Creds {
+                uid: 0,
+                gids: vec![0]
+            }
+            .another_may_write(&mine),
+            "root, as before"
+        );
+        assert!(
+            !Creds {
+                uid: 1000,
+                gids: vec![1000]
+            }
+            .another_may_write(&mine),
+            "Ana's own"
+        );
+        assert!(other(vec![2000]).another_may_write(&file(0o666, 1000, 1000)));
+        // In the file's group, the group bits decide, not the other bits.
+        assert!(!other(vec![1000]).another_may_write(&file(0o646, 1000, 1000)));
+
+        let scan = |hidden| Scan {
+            writers: Vec::new(),
+            unreadable: 1,
+            hidden,
+        };
+        assert!(scan(vec![Some(other(vec![2000]))]).clear_for(&mine));
+        assert!(
+            !scan(vec![None]).clear_for(&mine),
+            "unknown credentials on a 664 file"
+        );
+        assert!(scan(vec![None]).clear_for(&file(0o644, 1000, 1000)));
+        let written = Scan {
+            writers: vec![1],
+            unreadable: 0,
+            hidden: Vec::new(),
+        };
+        assert!(!written.clear_for(&file(0o644, 1000, 1000)));
     }
 
     #[test]
