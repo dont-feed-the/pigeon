@@ -62,6 +62,7 @@ fn request(tc: &TestCase) -> Request {
             folder: text(tc),
             k: tc.draw(gs::integers::<u32>()),
             device_name: text(tc),
+            person: maybe_text(tc),
         },
         3 => Request::Invite {
             person: text(tc),
@@ -266,6 +267,7 @@ fn response(tc: &TestCase) -> Response {
                     this_device: flag(tc),
                 })
                 .collect(),
+            copies: flag(tc).then(|| tc.draw(gs::integers::<u32>())),
         },
         18 => Response::Invitations {
             invitations: (0..tc.draw(gs::integers::<u8>().max_value(3)))

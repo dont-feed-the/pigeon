@@ -34,12 +34,13 @@ fn commands_map_to_requests() {
         })
     );
     assert_eq!(
-        line("create Family /tmp/f --k 1 --name lap").action,
+        line("create Family /tmp/f --k 1 --name lap --person Inès").action,
         Action::Send(Request::Create {
             name: "Family".into(),
             folder: "/tmp/f".into(),
             k: 1,
             device_name: "lap".into(),
+            person: Some("Inès".into()),
         })
     );
     assert_eq!(
@@ -299,6 +300,7 @@ fn responses_render_without_placeholders() {
                     this_device: true,
                 },
             ],
+            copies: Some(1),
         },
         Response::History {
             versions: vec![version(State::Protected)],

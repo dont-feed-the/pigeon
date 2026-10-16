@@ -603,19 +603,21 @@ async fn join_backup(
         || d.dirs.config.join(format!("{}.git", inv.group)),
         PathBuf::from,
     );
-    std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
-    let path = std::fs::canonicalize(&path).map_err(|e| e.to_string())?;
-    if crate::join_in_place::applies(d, inv, &path).await {
-        return crate::join_in_place::join(d, inv, &path).await;
+    let attempt = crate::join_attempt::Attempt::begin(&path, true)?;
+    if crate::join_in_place::applies(d, inv, &attempt.path).await {
+        return crate::join_in_place::join(d, inv, &attempt.path).await;
     }
-    if std::fs::read_dir(&path)
-        .map_err(|e| e.to_string())?
-        .next()
-        .is_some()
-    {
+    if !attempt.empty()? {
         return Err("folder-not-empty".into());
     }
-    let git = crate::git::Git::new(&path, d.env.clone());
+    attempt.run(d, backup_in(d, inv, &attempt.path)).await?;
+    Ok(inv.name.clone())
+}
+
+/// A backup machine's join itself, in the empty directory `path`.
+async fn backup_in(d: &Daemon, inv: &Invitation, path: &std::path::Path) -> Result<(), String> {
+    use crate::join_attempt::{remember_uuid, reuse_uuid, serve_verified};
+    let git = crate::git::Git::new(path, d.env.clone());
     let fail = |e: crate::git::Error| e.to_string();
     git.run(&["init", "-q", "--bare", "-b", "main"])
         .await
@@ -628,29 +630,35 @@ async fn join_backup(
     git.run(&["config", "user.email", &email])
         .await
         .map_err(fail)?;
-    let pending = Group::open("pending", &path, &d.env)
+    let pending = Group::open("pending", path, &d.env)
         .await
         .ok_or("not-a-repository")?;
     crate::settings::check(&pending).await;
+    reuse_uuid(d, &inv.group, &git).await?;
     let (uuid, token) = init_annex(&git, pigeon_core::filter::Role::Custodian, &name, inv.k)
         .await
         .map_err(fail)?;
+    remember_uuid(d, &inv.group, &uuid);
     let request = request(d, inv, &name, &uuid)?;
     let (commit, inviter_uuid, peers) = dial(d, inv, &request).await?;
     ensure_remote(&git, &inv.inviter, &inviter_uuid)
         .await
         .map_err(fail)?;
-    let g = Group::open(&inv.group, &path, &d.env)
+    let g = Group::open(&inv.group, path, &d.env)
         .await
         .ok_or("not-a-repository")?;
     g.set_token(&token);
     g.set_addresses(&inv.inviter, inviter_addresses(inv));
     g.learn_peers(&peers);
-    let g = d.add_group(g, &path).await?;
-    first_fetch(&g, inv, &commit, &d.device).await?;
-    g.reload_roster().await;
+    let welcome = &commit;
+    serve_verified(d, g, path, |g| async move {
+        first_fetch(&g, inv, welcome, &d.device).await?;
+        g.reload_roster().await;
+        Ok(())
+    })
+    .await?;
     d.wake.notify_one();
-    Ok(inv.name.clone())
+    Ok(())
 }
 
 /// Fetches `main` from the inviter, checks that its root is the group's

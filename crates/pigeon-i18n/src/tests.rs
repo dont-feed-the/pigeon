@@ -247,14 +247,30 @@ fn paper_recovery_keys_never_render_as_offline_computers() {
         heard_at: None,
         this_device: false,
     };
-    for (language, expected, forbidden) in [
-        ("en", "paper recovery key", "last heard"),
-        ("fr", "clé de récupération sur papier", "entendu"),
+    let dated = pigeon_proto::api::Machine {
+        name: "2026-10-16-abc123".into(),
+        ..machine.clone()
+    };
+    for (language, expected, printed, forbidden) in [
+        (
+            "en",
+            "paper: paper recovery sheet",
+            "printed on 2026-10-16",
+            "last heard",
+        ),
+        (
+            "fr",
+            "paper : fiche de récupération sur papier",
+            "imprimée le 2026-10-16",
+            "entendu",
+        ),
     ] {
         let cat = Catalogue::new(&language.parse().unwrap(), false);
         let r = render::Renderer::new(cat, 1_792_108_800);
         let line = r.machine(&machine);
         assert!(line.contains(expected), "{line}");
         assert!(!line.contains(forbidden), "{line}");
+        let line = r.machine(&dated);
+        assert!(line.contains(printed), "{line}");
     }
 }

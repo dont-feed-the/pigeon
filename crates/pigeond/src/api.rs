@@ -130,7 +130,7 @@ pub(crate) fn group_of(d: &Daemon, path: &Path) -> Option<Arc<Group>> {
     d.group_at(path).or_else(|| d.group_at(path.parent()?))
 }
 
-pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
+pub(crate) async fn handle(d: &Arc<Daemon>, request: Request) -> Vec<Response> {
     match request {
         Request::FolderRules { folder } => crate::folder_rules::list(d, folder.as_deref()),
         Request::SetFolderRule { folder, rule } => crate::folder_rules::set(d, &folder, rule).await,
@@ -142,7 +142,16 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             folder,
             k,
             device_name,
-        } => vec![create(d, &name, Path::new(&folder), k, &device_name).await],
+            person,
+        } => {
+            let new = New {
+                name: &name,
+                k,
+                device_name: &device_name,
+                person: person.as_deref(),
+            };
+            vec![create(d, &new, Path::new(&folder)).await]
+        }
         Request::Status { path, not_shared } => {
             let (g, prefix) = match &path {
                 Some(p) => match group_of(d, Path::new(p)) {
@@ -218,13 +227,19 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
                 return vec![problem("folder-not-absolute", &[("folder", text(f))], None)];
             }
             let invitation = pigeon_proto::join::invitation(&invitation);
-            let custodian =
-                crate::invite::decode(&invitation).is_some_and(|i| i.role == "custodian");
-            match crate::invite::join(d, &invitation, folder, name).await {
-                Ok(group) => vec![said(
-                    "joined",
-                    &[("group", text(&group)), ("who", text(who(custodian)))],
-                )],
+            let decoded = crate::invite::decode(&invitation);
+            let custodian = decoded.as_ref().is_some_and(|i| i.role == "custodian");
+            match crate::invite::join(d, &invitation, folder, name.clone()).await {
+                Ok(group) => {
+                    let mut args = vec![("group", text(&group)), ("who", text(who(custodian)))];
+                    match decoded.and_then(|i| renamed(d, i, name)) {
+                        Some((given, asked)) => {
+                            args.extend([("name", text(&given)), ("asked", text(&asked))]);
+                            vec![said("joined-renamed", &args)]
+                        }
+                        None => vec![said("joined", &args)],
+                    }
+                }
                 Err(code) => vec![join_problem(&code, &invitation)],
             }
         }
@@ -330,6 +345,28 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
     }
 }
 
+/// After a join, this computer's name in the roster and the one it asked
+/// for, when the inviter gave it another because a computer had it (09
+/// §9.6 step 3).
+fn renamed(
+    d: &Daemon,
+    mut inv: crate::invite::Invitation,
+    name: Option<String>,
+) -> Option<(String, String)> {
+    if let Some(name) = name.map(|n| n.trim().to_owned()).filter(|n| !n.is_empty()) {
+        inv.device = name;
+    }
+    let asked = crate::invite::device_name(d, &inv);
+    let doc = d.group(&inv.group)?.roster()?;
+    let given = doc
+        .roster
+        .devices
+        .get(&DeviceId(d.device.clone()))?
+        .name
+        .clone();
+    (given != asked).then_some((given, asked))
+}
+
 /// The problem of a failed join, with the arguments its messages take.
 fn join_problem(code: &str, invitation: &str) -> Response {
     let inv = crate::invite::decode(invitation);
@@ -372,45 +409,60 @@ fn join_problem(code: &str, invitation: &str) -> Response {
     }
 }
 
-fn person_id() -> (String, String) {
-    let user = std::env::var("USER").unwrap_or_default();
-    let id: String = user
+/// What `pigeon create` asks for.
+struct New<'a> {
+    /// The group's name.
+    name: &'a str,
+    /// Copies on distinct backup machines before a version is safe.
+    k: u32,
+    /// This computer's name in the roster.
+    device_name: &'a str,
+    /// The creator's name, if they gave one.
+    person: Option<&'a str>,
+}
+
+/// The creator's person: the name they gave, else `$USER`, else the
+/// computer's name, never a placeholder the others would see. Its ID is
+/// made as a new person's is (09 §9.6).
+fn person_of(given: Option<&str>, user: Option<&str>, device_name: &str) -> (String, String) {
+    let name = [given, user, Some(device_name)]
+        .into_iter()
+        .flatten()
+        .map(str::trim)
+        .find(|n| !n.is_empty())
+        .unwrap_or("person")
+        .to_owned();
+    let mut id: String = name
         .chars()
         .filter(char::is_ascii_alphanumeric)
         .map(|c| c.to_ascii_lowercase())
         .collect();
     if id.is_empty() {
-        ("me".to_owned(), "Me".to_owned())
-    } else {
-        (id, user)
+        "person".clone_into(&mut id);
     }
+    (id, name)
 }
 
-async fn create(d: &Daemon, name: &str, folder: &Path, k: u32, device_name: &str) -> Response {
+async fn create(d: &Daemon, new: &New<'_>, folder: &Path) -> Response {
     // Refused before anything is written, so a corrected try starts clean.
-    if name.trim().is_empty() || device_name.trim().is_empty() {
+    if new.name.trim().is_empty() || new.device_name.trim().is_empty() {
         return problem("name-empty", &[], None);
     }
-    if k == 0 {
+    if new.k == 0 {
         return problem("copies-zero", &[], None);
     }
     if !folder.is_absolute() {
         let folder = folder.to_string_lossy();
         return problem("folder-not-absolute", &[("folder", text(&folder))], None);
     }
-    match create_inner(d, name, folder, k, device_name).await {
-        Ok(()) => said("created", &[("group", text(name))]),
+    match create_inner(d, new, folder).await {
+        Ok(()) => said("created", &[("group", text(new.name))]),
         Err(e) => problem("internal-error", &[], Some(e)),
     }
 }
 
-async fn create_inner(
-    d: &Daemon,
-    name: &str,
-    folder: &Path,
-    k: u32,
-    device_name: &str,
-) -> Result<(), String> {
+async fn create_inner(d: &Daemon, new: &New<'_>, folder: &Path) -> Result<(), String> {
+    let (name, k, device_name) = (new.name, new.k, new.device_name);
     std::fs::create_dir_all(folder).map_err(|e| e.to_string())?;
     let folder = std::fs::canonicalize(folder).map_err(|e| e.to_string())?;
     if folder.join(".git").exists() {
@@ -441,7 +493,8 @@ async fn create_inner(
     git.run(&["annex", "mincopies", &k_text])
         .await
         .map_err(fail)?;
-    let (pid, pname) = person_id();
+    let user = std::env::var("USER").ok();
+    let (pid, pname) = person_of(new.person, user.as_deref(), device_name);
     let roster = Roster {
         rules: 1,
         group: name.to_owned(),
@@ -583,7 +636,10 @@ fn machines(d: &Daemon) -> Vec<Response> {
             this_device: id.0 == d.device,
         })
         .collect();
-    vec![Response::Machines { machines }]
+    vec![Response::Machines {
+        machines,
+        copies: Some(doc.roster.k),
+    }]
 }
 
 /// `pigeon people`: each person of the roster, with their machines.
@@ -636,4 +692,23 @@ pub fn message(id: &str, args: &[(&str, Arg)]) -> Message {
 /// Where a debug bundle is written.
 pub fn bundle_dir(d: &Daemon) -> PathBuf {
     d.dirs.state.join("bundles")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::person_of;
+
+    #[test]
+    fn a_creator_is_named_by_choice_then_user_then_computer_never_me() {
+        let given = person_of(Some(" Inès "), Some("ana"), "laptop");
+        assert_eq!(given, ("ins".to_owned(), "Inès".to_owned()));
+        assert_eq!(person_of(None, Some("ana"), "laptop").1, "ana");
+        let unnamed = person_of(Some(" "), Some(""), "carol-laptop");
+        assert_eq!(
+            unnamed,
+            ("carollaptop".to_owned(), "carol-laptop".to_owned())
+        );
+        let other = person_of(None, None, "李");
+        assert_eq!(other, ("person".to_owned(), "李".to_owned()));
+    }
 }

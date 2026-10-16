@@ -9,7 +9,10 @@
 
 `pigeon create NAME` writes the **genesis commit**: no parent, a tree with
 `.gitattributes` ([03 §3.3](03-repository-and-roles.md)) and a roster of one
-admin and one device, signed by it (ADR 0007). The **group ID** is its
+admin and one device, signed by it (ADR 0007). The admin is named as the
+creator asked (`--person`, the web's *Your name*), else by `$USER`, else by
+the computer's name; its ID is made from that name as a new person's is
+([09 §9.6](09-network-and-joining.md)) **[no ADR]**. The **group ID** is its
 commit ID; a device accepts only a history rooted at the genesis its
 invitation names (ADR 0017). Other founders join by invitation.
 

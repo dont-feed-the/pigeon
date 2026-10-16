@@ -175,6 +175,11 @@ joined =
         [backup-machine] This backup machine now keeps copies for “{ $group }”.
        *[computer] This computer is now in “{ $group }”. The group's files arrive in its folder.
     }
+joined-renamed =
+    { $who ->
+        [backup-machine] This backup machine now keeps copies for “{ $group }”.
+       *[computer] This computer is now in “{ $group }”. The group's files arrive in its folder.
+    } Another computer in the group was already called { $asked }, so this one is called { $name }.
 removed-computer = { $name } is removed from the group; its copies no longer count.
 bundle-written = The diagnostics are in { $path }. Nothing was sent.
 machine-row = { $name }: { $kind }, last heard { $heard }
@@ -192,7 +197,13 @@ cmd-deleted = The files deleted from the group, which restore brings back
 machine-this = { $name }: this computer
 version-row = { $number }. { $saved }: { $state }
 waiting-row = { $path }: { $state }
-confirm-remove-computer = Remove { $name } from the group? Its copies will stop counting. [y/N]
+confirm-remove-computer = Remove { $name } from the group? Its files stay on it but are no longer shared with the group, and its copies stop counting. You can invite it again later. [y/N]
+confirm-remove-backup = Remove the backup machine { $name } from the group? The copies it keeps stop counting; the other backup machines take over. You can invite it again later. [y/N]
+confirm-remove-backup-unsafe = Remove the backup machine { $name } from the group? { $left ->
+        [0] After this, the group will have no backup machine. None of your files will be safe until you add one.
+        [one] After this, the group will have only one backup machine, but it needs { $needed } for your files to be safe. Your files will not be safe until you add another one.
+       *[other] After this, the group will have only { $left } backup machines, but it needs { $needed } for your files to be safe. Your files will not be safe until you add another one.
+    } You can invite it again later. [y/N]
 confirm-yes = yes
 confirm-leave = Remove this computer from the group? Its files stay in the folder, but it stops sharing them. [y/N]
 confirm-refound = Refound the group with you as its only admin? It becomes a new group: every other member joins it again by an invitation from you, and the old history stays readable. [y/N]
@@ -214,7 +225,7 @@ hint-invite-used = Ask { $inviter } for a new one.
 problem-invite-unknown = This invitation is not one the group knows.
 problem-invite-not-allowed = { $inviter } may no longer invite to this group.
 problem-inviter-offline = { $inviter }'s computer can't be reached right now.
-hint-inviter-offline = Try again when { $inviter }'s computer is on.
+hint-inviter-offline = Try again when { $inviter }'s computer is on. Nothing was kept on this computer, so you can use the same folder.
 problem-not-in-group = This computer is not a member of the group.
 problem-not-allowed = You are not allowed to do this in this group.
 problem-suggestion-unknown = No waiting suggestion is called { $id }.
@@ -299,6 +310,7 @@ web-invitation-code = Invitation code
 web-command-line = Command-line instructions
 web-local-folder = Folder on this computer
 web-computer-name = This computer's name
+web-your-name = Your name, as the others in the group see it
 web-group-name = Group name
 web-backup-copies = Number of backup machines needed for safety
 status-freshness = A safety check is recent for one hour. If no backup machine has been heard from for an hour, pigeon says it has not checked recently; that does not mean files have been lost. A machine silent for 24 hours stops counting toward safe copies. A new change may show Sending for up to ten minutes; it is safe only once enough backup machines hold it.
@@ -374,7 +386,14 @@ hint-held-choice = See its choices with: pigeon held
 problem-held-rename-taken = { $to } already exists.
 hint-held-rename-taken = Rename it yourself; pigeon captures it once its name works everywhere.
 web-remove = Remove
-web-remove-confirm = Remove { $name } from the group? Its copies will stop counting.
+web-remove-confirm = Remove { $name } from the group? Its files stay on it but are no longer shared with the group, and its copies stop counting. You can invite it again later.
+web-remove-backup-confirm = Remove the backup machine { $name } from the group? The copies it keeps stop counting. You can invite it again later.
+remove-backup-unsafe =
+    { $left ->
+        [0] After this, the group will have no backup machine. None of your files will be safe until you add one.
+        [one] After this, the group will have only one backup machine, but it needs { $needed } for your files to be safe. Your files will not be safe until you add another one.
+       *[other] After this, the group will have only { $left } backup machines, but it needs { $needed } for your files to be safe. Your files will not be safe until you add another one.
+    }
 web-invite = Invite
 web-invite-person = The person's name
 web-invite-admin = as an admin
@@ -445,7 +464,8 @@ problem-export-history-unverified = Pigeon could not verify the archived history
 
 problem-recovery-not-allowed = This recovery sheet can no longer add computers. Use a current sheet, or ask an admin for an invitation.
 
-machine-recovery = { $name }: paper recovery key
+machine-recovery = { $name }: paper recovery sheet printed on { $date }
+machine-recovery-undated = { $name }: paper recovery sheet
 web-revoke-sheet = Revoke recovery sheet
 
 revoked-sheet = { $name } is revoked; this recovery sheet can no longer add computers.
@@ -456,7 +476,7 @@ progress-remove = Removing { $name }; waiting for this group’s checks.
 progress-recovery-sheet = Preparing a recovery sheet and waiting for a backup machine to receive it.
 progress-recover = Recovering this computer; checking the backup’s history and the new computer’s authority.
 
-confirm-revoke-sheet = Revoke { $name }? This paper key will no longer add computers. [y/N]
+confirm-revoke-sheet = Revoke { $name }? This paper recovery sheet will no longer add computers. [y/N]
 
 cmd-debug-allow = Allow one diagnostic bundle to a chosen computer for ten minutes
 debug-allowed = { $name } may collect diagnostics for this group once, including file names. This permission expires in ten minutes. Restarting pigeon cancels this permission.
@@ -474,6 +494,7 @@ action-cancelled = Cancelled.
 recovery-title = pigeon recovery sheet
 recovery-group = Group: { $name } ({ $group })
 recovery-person = Person: { $name }
+recovery-sheet-name = This sheet: { $name }, as listed on the People & machines page
 recovery-backups = Backup machines:
 recovery-secret = Keep this sheet like a passport: whoever holds it can add computers for you. Print it and store it somewhere safe; do not send it to anyone.
 recovery-instructions = On a new computer, save the code as a text file and run: pigeon recover THIS-FILE FOLDER
@@ -485,6 +506,8 @@ web-recovery-print-help = Use your browser’s Print command to print this page.
 recovery-refresh-recommendation = The backup machines have changed since { $name }’s recovery sheets were prepared. Prepare a replacement sheet with the current backup machines.
 
 problem-recovery-needs-backup = Add a backup machine before preparing a recovery sheet. A backup must receive the sheet’s permission before it can help you recover.
+problem-recovery-backup-offline = No backup machine answered ({ $machines }). A backup machine must receive the sheet before it is printed. Turn one on and connect it, then prepare the sheet again. Nothing was changed.
+problem-recovery-not-received = No backup machine received the sheet in time, so it was cancelled; there is nothing to print. Check that a backup machine is on, then prepare the sheet again.
 
 problem-join-incomplete = The new group was verified, but recovery could not finish. Restart pigeon to finish the recorded operation. Your old history is kept.
 problem-repository-busy = This repository has an unfinished file update. Let pigeon finish it, or restart pigeon before trying recovery again.

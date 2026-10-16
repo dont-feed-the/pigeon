@@ -35,7 +35,7 @@ pub async fn settings(
     }
     let mut peers = Vec::new();
     for answer in web.ask(Request::Machines).await {
-        if let pigeon_proto::Response::Machines { machines } = answer {
+        if let pigeon_proto::Response::Machines { machines, .. } = answer {
             peers = machines
                 .into_iter()
                 .filter(|m| !m.this_device && !m.recovery)

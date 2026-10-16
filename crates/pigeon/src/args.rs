@@ -46,7 +46,7 @@ pub struct Line {
 /// The commands of `pigeon help`: their synopsis and message id.
 pub const COMMANDS: &[(&str, &str)] = &[
     (
-        "create NAME [FOLDER | --folder FOLDER] [--k N] [--name NAME]",
+        "create NAME [FOLDER | --folder FOLDER] [--k N] [--name NAME] [--person NAME]",
         "cmd-create",
     ),
     ("invite [--admin] PERSON", "cmd-invite-person"),
@@ -135,6 +135,8 @@ enum Command {
         k: u32,
         #[arg(long = "name")]
         device_name: Option<String>,
+        #[arg(long)]
+        person: Option<String>,
     },
     Invite {
         #[arg(
@@ -408,11 +410,13 @@ fn action(c: Command) -> Action {
             folder,
             k,
             device_name,
+            person,
         } => send(Request::Create {
             name,
             folder: absolute(folder.or(at).as_deref().unwrap_or(".")),
             k,
             device_name: device_name.unwrap_or_else(hostname),
+            person,
         }),
         Command::Invite { list: true, .. } => send(Request::Invitations),
         Command::Invite {

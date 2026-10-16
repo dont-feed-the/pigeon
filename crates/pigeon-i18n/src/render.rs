@@ -10,6 +10,19 @@ use pigeon_proto::{Arg, Message, Problem, Response};
 /// The arguments that hold a past time, shown relative to now.
 const PAST: &[&str] = &["ago", "when", "since", "heard", "saved"];
 
+/// The day a recovery sheet named `YYYY-MM-DD-xxxxxx` was printed.
+fn sheet_date(name: &str) -> Option<&str> {
+    let date = name.get(..10)?;
+    let shape = date.bytes().enumerate().all(|(i, b)| {
+        if i == 4 || i == 7 {
+            b == b'-'
+        } else {
+            b.is_ascii_digit()
+        }
+    });
+    shape.then_some(date)
+}
+
 /// Renders responses as lines of text, for the CLI and the web pages.
 pub struct Renderer {
     cat: Catalogue,
@@ -181,9 +194,17 @@ impl Renderer {
     /// A machine of the roster.
     pub fn machine(&self, m: &Machine) -> String {
         if m.recovery {
-            return self
-                .cat
-                .format(&crate::Message::new("machine-recovery").arg("name", m.name.as_str()));
+            // A sheet is named `YYYY-MM-DD-xxxxxx` after the day it was
+            // printed (09 §9.9).
+            let msg = match sheet_date(&m.name) {
+                Some(date) => crate::Message::new("machine-recovery")
+                    .arg("name", m.name.as_str())
+                    .arg("date", date),
+                None => {
+                    crate::Message::new("machine-recovery-undated").arg("name", m.name.as_str())
+                }
+            };
+            return self.cat.format(&msg);
         }
         if m.this_device {
             let msg = crate::Message::new("machine-this").arg("name", m.name.as_str());
@@ -326,7 +347,7 @@ impl Renderer {
             Response::Status(s) => (self.status(s), false),
             Response::Capacity(report) => (crate::capacity::lines(self, report), false),
             Response::Health(h) => (self.status(&h.status), false),
-            Response::Machines { machines } => {
+            Response::Machines { machines, .. } => {
                 (machines.iter().map(|m| self.machine(m)).collect(), false)
             }
             Response::Invitations { invitations } if invitations.is_empty() => {

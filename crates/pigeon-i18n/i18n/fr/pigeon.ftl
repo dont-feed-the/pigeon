@@ -175,6 +175,11 @@ joined =
         [backup-machine] Cette machine de sauvegarde garde maintenant des copies pour « { $group } ».
        *[computer] Cet ordinateur fait maintenant partie de « { $group } ». Les fichiers du groupe arrivent dans son dossier.
     }
+joined-renamed =
+    { $who ->
+        [backup-machine] Cette machine de sauvegarde garde maintenant des copies pour « { $group } ».
+       *[computer] Cet ordinateur fait maintenant partie de « { $group } ». Les fichiers du groupe arrivent dans son dossier.
+    } Un autre ordinateur du groupe s’appelait déjà { $asked } : celui-ci s’appelle donc { $name }.
 removed-computer = { $name } est retiré du groupe ; ses copies ne comptent plus.
 bundle-written = Le diagnostic est dans { $path }. Rien n'a été envoyé.
 machine-row = { $name } : { $kind }, dernier contact { $heard }
@@ -192,7 +197,13 @@ cmd-deleted = Les fichiers supprimés du groupe, que restore fait revenir
 machine-this = { $name } : cet ordinateur
 version-row = { $number }. { $saved } : { $state }
 waiting-row = { $path } : { $state }
-confirm-remove-computer = Retirer { $name } du groupe ? Ses copies ne compteront plus. [o/N]
+confirm-remove-computer = Retirer { $name } du groupe ? Ses fichiers y restent, mais ne sont plus partagés avec le groupe, et ses copies ne comptent plus. Vous pourrez l’inviter à nouveau plus tard. [o/N]
+confirm-remove-backup = Retirer la machine de sauvegarde { $name } du groupe ? Les copies qu’elle garde ne comptent plus ; les autres machines de sauvegarde prennent le relais. Vous pourrez l’inviter à nouveau plus tard. [o/N]
+confirm-remove-backup-unsafe = Retirer la machine de sauvegarde { $name } du groupe ? { $left ->
+        [0] Après cela, le groupe n’aura plus aucune machine de sauvegarde. Aucun de vos fichiers ne sera en sécurité tant que vous n’en aurez pas ajouté une.
+        [one] Après cela, le groupe n’aura plus qu’une machine de sauvegarde, alors qu’il lui en faut { $needed } pour que vos fichiers soient en sécurité. Ils ne le seront pas tant que vous n’en aurez pas ajouté une autre.
+       *[other] Après cela, le groupe n’aura plus que { $left } machines de sauvegarde, alors qu’il lui en faut { $needed } pour que vos fichiers soient en sécurité. Ils ne le seront pas tant que vous n’en aurez pas ajouté une autre.
+    } Vous pourrez l’inviter à nouveau plus tard. [o/N]
 confirm-yes = oui
 confirm-leave = Retirer cet ordinateur du groupe ? Ses fichiers restent dans le dossier, mais il cesse de les partager. [o/N]
 confirm-refound = Refonder le groupe avec vous pour seul administrateur ? Il devient un nouveau groupe : chaque autre membre le rejoint à nouveau par une invitation de votre part, et l'ancien historique reste lisible. [o/N]
@@ -214,7 +225,7 @@ hint-invite-used = Demandez-en une nouvelle à { $inviter }.
 problem-invite-unknown = Le groupe ne connaît pas cette invitation.
 problem-invite-not-allowed = { $inviter } ne peut plus inviter dans ce groupe.
 problem-inviter-offline = L'ordinateur de { $inviter } est injoignable pour le moment.
-hint-inviter-offline = Réessayez quand l'ordinateur de { $inviter } est allumé.
+hint-inviter-offline = Réessayez quand l'ordinateur de { $inviter } est allumé. Rien n’a été gardé sur cet ordinateur : vous pouvez reprendre le même dossier.
 problem-not-in-group = Cet ordinateur n'est pas membre du groupe.
 problem-not-allowed = Vous n'avez pas le droit de faire cela dans ce groupe.
 problem-suggestion-unknown = Aucune suggestion en attente ne s'appelle { $id }.
@@ -299,6 +310,7 @@ web-invitation-code = Code d'invitation
 web-command-line = Instructions en ligne de commande
 web-local-folder = Dossier sur cet ordinateur
 web-computer-name = Nom de cet ordinateur
+web-your-name = Votre nom, tel que les autres membres du groupe le verront
 web-group-name = Nom du groupe
 web-backup-copies = Nombre d'ordinateurs de sauvegarde nécessaires à la sécurité
 status-freshness = Une vérification de sécurité est récente pendant une heure. Si aucun ordinateur de sauvegarde n'a donné de nouvelles depuis une heure, pigeon indique que la vérification n'est plus récente. Cela ne signifie pas que les fichiers sont perdus. Un ordinateur silencieux pendant 24 heures ne compte plus parmi les copies de sauvegarde. Une nouvelle modification peut afficher Envoi pendant dix minutes ; elle n'est en sécurité que lorsque suffisamment d'ordinateurs de sauvegarde la conservent.
@@ -374,7 +386,14 @@ hint-held-choice = Voyez ses choix avec : pigeon held
 problem-held-rename-taken = { $to } existe déjà.
 hint-held-rename-taken = Renommez-le vous-même ; pigeon le capture dès que son nom marche partout.
 web-remove = Retirer
-web-remove-confirm = Retirer { $name } du groupe ? Ses copies ne compteront plus.
+web-remove-confirm = Retirer { $name } du groupe ? Ses fichiers y restent, mais ne sont plus partagés avec le groupe, et ses copies ne comptent plus. Vous pourrez l’inviter à nouveau plus tard.
+web-remove-backup-confirm = Retirer la machine de sauvegarde { $name } du groupe ? Les copies qu’elle garde ne comptent plus. Vous pourrez l’inviter à nouveau plus tard.
+remove-backup-unsafe =
+    { $left ->
+        [0] Après cela, le groupe n’aura plus aucune machine de sauvegarde. Aucun de vos fichiers ne sera en sécurité tant que vous n’en aurez pas ajouté une.
+        [one] Après cela, le groupe n’aura plus qu’une machine de sauvegarde, alors qu’il lui en faut { $needed } pour que vos fichiers soient en sécurité. Ils ne le seront pas tant que vous n’en aurez pas ajouté une autre.
+       *[other] Après cela, le groupe n’aura plus que { $left } machines de sauvegarde, alors qu’il lui en faut { $needed } pour que vos fichiers soient en sécurité. Ils ne le seront pas tant que vous n’en aurez pas ajouté une autre.
+    }
 web-invite = Inviter
 web-invite-person = Le nom de la personne
 web-invite-admin = comme admin
@@ -445,7 +464,8 @@ problem-export-history-unverified = Pigeon n’a pas pu vérifier l’historique
 
 problem-recovery-not-allowed = Cette fiche de récupération ne peut plus ajouter d’ordinateurs. Utilisez une fiche actuelle ou demandez une invitation à un administrateur.
 
-machine-recovery = { $name } : clé de récupération sur papier
+machine-recovery = { $name } : fiche de récupération sur papier imprimée le { $date }
+machine-recovery-undated = { $name } : fiche de récupération sur papier
 web-revoke-sheet = Révoquer la fiche de récupération
 
 revoked-sheet = { $name } est révoquée ; cette fiche de récupération ne peut plus ajouter d’ordinateurs.
@@ -456,7 +476,7 @@ progress-remove = Retrait de { $name } ; attente des vérifications du groupe.
 progress-recovery-sheet = Préparation d’une fiche de récupération et attente de sa réception par une machine de sauvegarde.
 progress-recover = Récupération de cet ordinateur ; vérification de l’historique de la sauvegarde et de l’autorisation du nouvel ordinateur.
 
-confirm-revoke-sheet = Révoquer { $name } ? Cette clé sur papier ne pourra plus ajouter d’ordinateurs. [o/N]
+confirm-revoke-sheet = Révoquer { $name } ? Cette fiche de récupération sur papier ne pourra plus ajouter d’ordinateurs. [o/N]
 
 cmd-debug-allow = Autoriser un diagnostic pour un ordinateur choisi pendant dix minutes
 debug-allowed = { $name } peut recueillir les diagnostics de ce groupe une seule fois, noms de fichiers inclus. Cette autorisation expire dans dix minutes. Redémarrer pigeon annule cette autorisation.
@@ -474,6 +494,7 @@ action-cancelled = Annulé.
 recovery-title = Fiche de récupération pigeon
 recovery-group = Groupe : { $name } ({ $group })
 recovery-person = Personne : { $name }
+recovery-sheet-name = Cette fiche : { $name }, comme sur la page Membres et machines
 recovery-backups = Machines de sauvegarde :
 recovery-secret = Gardez cette fiche comme un passeport : quiconque la détient peut ajouter des ordinateurs en votre nom. Imprimez-la et rangez-la en lieu sûr ; ne l’envoyez à personne.
 recovery-instructions = Sur un nouvel ordinateur, enregistrez le code dans un fichier texte et lancez : pigeon recover CE-FICHIER DOSSIER
@@ -485,6 +506,8 @@ web-recovery-print-help = Utilisez la commande Imprimer de votre navigateur pour
 recovery-refresh-recommendation = Les machines de sauvegarde ont changé depuis la préparation des fiches de récupération de { $name }. Préparez une nouvelle fiche avec les machines actuelles.
 
 problem-recovery-needs-backup = Ajoutez une machine de sauvegarde avant de préparer une fiche de récupération. Une sauvegarde doit recevoir l’autorisation de la fiche pour pouvoir vous aider à revenir.
+problem-recovery-backup-offline = Aucune machine de sauvegarde n’a répondu ({ $machines }). Une machine de sauvegarde doit recevoir la fiche avant son impression. Allumez-en une et connectez-la, puis préparez à nouveau la fiche. Rien n’a été modifié.
+problem-recovery-not-received = Aucune machine de sauvegarde n’a reçu la fiche à temps : elle a donc été annulée et il n’y a rien à imprimer. Vérifiez qu’une machine de sauvegarde est allumée, puis préparez à nouveau la fiche.
 
 problem-join-incomplete = Le nouveau groupe a été vérifié, mais la récupération n’a pas pu se terminer. Redémarrez pigeon pour terminer l’opération enregistrée. Votre ancien historique est conservé.
 problem-repository-busy = Ce dépôt contient une mise à jour de fichier inachevée. Laissez pigeon la terminer, ou redémarrez pigeon avant de réessayer la récupération.

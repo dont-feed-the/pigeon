@@ -19,6 +19,7 @@ use std::os::unix::net::UnixStream;
 use std::process::ExitCode;
 use std::time::Duration;
 
+use pigeon_proto::api::Removal;
 use pigeon_proto::{Envelope, LineDecoder, Message, PROTOCOL_VERSION, Problem, Request, Response};
 
 use crate::args::Action;
@@ -329,14 +330,19 @@ fn question(request: &Request) -> Option<Message> {
     match request {
         Request::DebugBundle { .. } => Some(ask("confirm-debug-bundle", &[])),
         Request::AllowDebug { peer } => Some(ask("confirm-debug-allow", &[("name", peer)])),
-        Request::RemoveDevice { name } => {
-            let kind = if recovery_key(name) {
-                "confirm-revoke-sheet"
-            } else {
-                "confirm-remove-computer"
-            };
-            Some(ask(kind, &[("name", name)]))
-        }
+        Request::RemoveDevice { name } => Some(match removal(name) {
+            Removal::Sheet => ask("confirm-revoke-sheet", &[("name", name)]),
+            Removal::Computer => ask("confirm-remove-computer", &[("name", name)]),
+            Removal::Backup { left, needed } if left < needed => {
+                let mut question = ask("confirm-remove-backup-unsafe", &[("name", name)]);
+                for (k, n) in [("left", left), ("needed", needed)] {
+                    let n = pigeon_proto::Arg::Number(i64::from(n));
+                    question.args.insert(k.to_owned(), n);
+                }
+                question
+            }
+            Removal::Backup { .. } => ask("confirm-remove-backup", &[("name", name)]),
+        }),
         Request::Leave => Some(ask("confirm-leave", &[])),
         Request::Join { invitation, .. } => {
             let (group, r) = pigeon_proto::join::refounded(invitation)?;
@@ -355,25 +361,23 @@ fn question(request: &Request) -> Option<Message> {
     }
 }
 
-/// Reads the paper-key role before wording a removal confirmation. A
-/// failed lookup retains the ordinary computer-removal confirmation.
-fn recovery_key(name: &str) -> bool {
+/// Reads the device's role, and the backup machines that would be left,
+/// before wording a removal confirmation (09 §9.7). A failed lookup
+/// retains the ordinary computer-removal confirmation.
+fn removal(name: &str) -> Removal {
     let Ok(mut client) = Client::open(None) else {
-        return false;
+        return Removal::Computer;
     };
     if client.send(2, &Request::Machines).is_err() {
-        return false;
+        return Removal::Computer;
     }
     while let Ok(answer) = client.next() {
         match answer.body {
-            Response::Machines { machines } => {
-                return machines.iter().any(|m| m.name == name && m.recovery);
-            }
             Response::Progress { .. } => {}
-            _ => return false,
+            other => return Removal::of(&[other], name),
         }
     }
-    false
+    Removal::Computer
 }
 
 /// Asks `question`, on a terminal only (10 §10.2).

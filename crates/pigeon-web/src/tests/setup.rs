@@ -108,8 +108,34 @@ async fn a_home_folder_is_expanded_and_names_and_invitations_are_cleaned() {
     );
     assert!(
         sent.iter().any(|r| matches!(r,
-        pigeon_proto::Request::Create { name, folder, k: 0, device_name }
+        pigeon_proto::Request::Create { name, folder, k: 0, device_name, person: None }
             if name == "Family" && *folder == home && device_name == "laptop")),
+        "{sent:?}"
+    );
+}
+
+#[tokio::test]
+async fn the_creator_names_themselves_and_a_refusal_keeps_the_name() {
+    let (app, backend, cookie, form) = setup().await;
+    let page = body(
+        app.oneshot(post(
+            "/create",
+            &cookie,
+            &format!("form={form}&group=Family&folder=%2Ff&name=laptop&k=1&person=In%C3%A8s"),
+        ))
+        .await
+        .unwrap(),
+    )
+    .await;
+    assert!(
+        page.contains("Your name, as the others in the group see it"),
+        "{page}"
+    );
+    assert!(page.contains("value=\"Inès\""), "{page}");
+    let sent = backend.0.lock().unwrap();
+    assert!(
+        sent.iter().any(|r| matches!(r,
+            pigeon_proto::Request::Create { person: Some(p), .. } if p == "Inès")),
         "{sent:?}"
     );
 }

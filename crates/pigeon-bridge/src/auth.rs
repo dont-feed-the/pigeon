@@ -402,7 +402,7 @@ pub async fn revoke(app: &App, client: &Client) -> Result<()> {
         .await
         .map_err(unavailable)?
     {
-        pigeon_proto::Response::Machines { machines } => machines
+        pigeon_proto::Response::Machines { machines, .. } => machines
             .into_iter()
             .find(|m| m.device == client.device)
             .map(|m| m.name),

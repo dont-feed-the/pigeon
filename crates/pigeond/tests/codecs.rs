@@ -408,6 +408,7 @@ fn recovery_sheets_round_trip(tc: TestCase) {
         name: word(&tc),
         k: tc.draw(gs::integers::<u32>().min_value(1).max_value(9)),
         person: word(&tc),
+        label: word(&tc),
         key: hex(&tc.draw(gs::binary().min_size(32).max_size(32))),
         custodians: (0..n)
             .map(|_| SheetCustodian {
