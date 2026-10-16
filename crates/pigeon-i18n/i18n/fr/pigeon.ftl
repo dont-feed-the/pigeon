@@ -424,7 +424,7 @@ progress-recover = Récupération de cet ordinateur ; vérification de l’histo
 confirm-revoke-sheet = Révoquer { $name } ? Cette clé sur papier ne pourra plus ajouter d’ordinateurs. [o/N]
 
 cmd-debug-allow = Autoriser un diagnostic pour un ordinateur choisi pendant dix minutes
-debug-allowed = { $name } peut recueillir une partie des diagnostics de ce groupe pendant les dix prochaines minutes, noms de fichiers inclus. Redémarrer pigeon annule cette autorisation.
+debug-allowed = { $name } peut recueillir les diagnostics de ce groupe une seule fois, noms de fichiers inclus. Cette autorisation expire dans dix minutes. Redémarrer pigeon annule cette autorisation.
 problem-debug-not-allowed = { $name } n’a pas autorisé de diagnostic. Demandez à sa personne d’ouvrir les réglages et d’autoriser un diagnostic pour cet ordinateur, puis réessayez.
 confirm-debug-bundle = Enregistrer les diagnostics, noms de fichiers inclus, dans un fichier local privé ? Les autres ordinateurs ne partagent qu’avec leur propre autorisation. [o/N]
 confirm-debug-allow = Autoriser { $name } à recueillir une partie des diagnostics de ce groupe, noms de fichiers inclus, pendant les dix prochaines minutes ? [o/N]

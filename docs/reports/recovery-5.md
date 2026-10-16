@@ -63,3 +63,28 @@ these changes are in progress.
 Earlier disaster and refounding usability results are in
 [usability-5.md](usability-5.md). No timed soak or sustained nightly evidence
 is claimed.
+
+## Diagnostic consent retest
+
+The normal 0.4.4 build passed an independent French browser session with
+Alice and Bob as actual daemons. Unchecked consent was refused in the
+browser; a bypassed checkbox returned 400 and a forged form returned 403.
+Neither granted permission. A deliberate local grant allowed one remote
+part in a private (0600) local bundle; a second request was refused. All 51
+exported remote log records belonged to the shared group; an unrelated
+group's filename canary was absent. No bundle file appeared on the peer.
+
+The session also found a real size failure: after a few minutes, the last
+500 OTLP batches exceeded the 2 MiB transport cap. Fresh consent was then
+consumed before the server refused the oversized snapshot. Peer parts now
+retain complete recent records within section byte budgets and report
+omitted records explicitly. The real two-daemon regression populates over
+3 MiB of group telemetry, grants permission again, verifies a successful
+bounded part with its positive control, and verifies one-use enforcement.
+It passed in 5.15 seconds. A focused repaired normal-build retest follows.
+
+A separate real-terminal test answered no to `debug allow`: `Cancelled.`,
+exit 0, and no daemon connection. Non-terminal and `--no-input` uses kept
+the confirmation error and also made no connection. The French permission
+result now explicitly says “une seule fois” and that it expires in ten
+minutes.

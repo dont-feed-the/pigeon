@@ -92,6 +92,42 @@ fn a_peer_can_share_one_group_part_only_with_local_consent() {
     );
     let again = pigeon(&a, &["debug", "bundle", "--from", "Bob", "--yes"]);
     assert_eq!(problem(&again), Some("debug-not-allowed"), "{again:?}");
+    // A long-running peer's telemetry must not consume a fresh grant and
+    // then refuse solely because its last 500 batches exceed the wire cap.
+    let group = value["peer_parts"][0]["group"].as_str().unwrap();
+    let telemetry = b.home.join("state/telemetry");
+    let big = serde_json::json!({"resourceSpans":[{"scopeSpans":[{"spans":[{
+        "name":"scoped-positive-control", "attributes":[
+            {"key":"group","value":{"stringValue":group}},
+            {"key":"payload","value":{"stringValue":"x".repeat(160_000)}}]
+    }]}]}]});
+    let line = serde_json::to_string(&big).unwrap();
+    std::fs::write(
+        telemetry.join("pigeond-99999999999999999999.jsonl"),
+        format!("{}\n", line).repeat(20),
+    )
+    .unwrap();
+    assert!(
+        said(
+            &pigeon(&b, &["debug", "allow", "Alice", "--yes"]),
+            "debug-allowed",
+            "name"
+        )
+        .is_some()
+    );
+    let received = pigeon(&a, &["debug", "bundle", "--from", "Bob", "--yes"]);
+    let path = said(&received, "bundle-written", "path").unwrap_or_else(|| panic!("{received:?}"));
+    let text = std::fs::read_to_string(path).unwrap();
+    let second: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let part = &second["peer_parts"][0];
+    assert!(serde_json::to_vec(part).unwrap().len() < 2 * 1024 * 1024);
+    assert!(part["omitted"]["telemetry"].as_u64().unwrap() > 0);
+    assert!(part.to_string().contains("scoped-positive-control"));
+    assert!(!text.contains("never-send-this-canary"));
+    assert_eq!(
+        problem(&pigeon(&a, &["debug", "bundle", "--from", "Bob", "--yes"])),
+        Some("debug-not-allowed")
+    );
     assert_eq!(
         std::fs::read_dir(b.home.join("state/bundles"))
             .map(|i| i.count())

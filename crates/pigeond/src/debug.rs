@@ -111,7 +111,7 @@ pub async fn share(d: &Daemon, group: &str, device: &str) -> Option<Value> {
         .dirs
         .logs()
         .join(format!("pigeond-{}.ndjson", crate::util::date(now)));
-    let logs: Vec<Value> = std::fs::read_to_string(log)
+    let mut logs: Vec<Value> = std::fs::read_to_string(log)
         .unwrap_or_default()
         .lines()
         .rev()
@@ -123,15 +123,25 @@ pub async fn share(d: &Daemon, group: &str, device: &str) -> Option<Value> {
         .iter()
         .filter_map(|line| serde_json::from_str(line).ok())
         .collect();
+    // An active daemon can fill 500 OTLP batches in minutes. Bound each
+    // section by encoded bytes so legitimate fresh consent never fails the
+    // wire's 2 MiB cap merely because this computer has been running longer.
+    logs.reverse();
+    let (logs, logs_omitted) = bounded(logs, 256 * 1024);
+    let (telemetry, telemetry_omitted) =
+        bounded(pigeon_telemetry::only_group(&records, group), 512 * 1024);
     let roster = g
         .roster()
         .and_then(|doc| crate::roster_file::render(&doc).ok());
+    let roster_omitted = roster.as_ref().is_some_and(|r| r.len() > 512 * 1024);
+    let roster = roster.filter(|r| r.len() <= 512 * 1024);
     let value = serde_json::json!({
         "format": 1, "group": group, "device": d.device,
         "time": crate::util::rfc3339(now),
         "main": g.git.rev("refs/heads/main").await,
         "roster": roster, "log_tail": logs,
-        "telemetry_tail": pigeon_telemetry::only_group(&records, group),
+        "telemetry_tail": telemetry,
+        "omitted": {"logs": logs_omitted, "telemetry": telemetry_omitted, "roster": roster_omitted},
     });
     (member(&g, &d.device) && member(&g, device)).then_some(value)
 }
@@ -173,4 +183,42 @@ pub async fn collect(d: &Daemon, names: &[String]) -> Vec<Response> {
     let mut local = crate::history::snapshot(d).await;
     local["peer_parts"] = Value::Array(parts);
     crate::history::write_bundle(d, &local)
+}
+
+/// Retain newest complete records that fit, counting all omitted records.
+fn bounded(records: Vec<Value>, budget: usize) -> (Vec<Value>, usize) {
+    let total = records.len();
+    let mut left = budget;
+    let mut kept = Vec::new();
+    for record in records.into_iter().rev() {
+        if let Ok(bytes) = serde_json::to_vec(&record) {
+            let size = bytes.len().saturating_add(1);
+            if size <= left {
+                left -= size;
+                kept.push(record);
+            }
+        }
+    }
+    kept.reverse();
+    let omitted = total - kept.len();
+    (kept, omitted)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn bounded_tail_keeps_newest_complete_records_and_reports_omissions() {
+        let records = vec![
+            serde_json::json!({"old":"x".repeat(4096)}),
+            serde_json::json!({"new":1}),
+            serde_json::json!({"new":2}),
+        ];
+        let (kept, omitted) = super::bounded(records, 64);
+        assert_eq!(
+            kept,
+            vec![serde_json::json!({"new":1}), serde_json::json!({"new":2})]
+        );
+        assert_eq!(omitted, 1);
+        assert!(serde_json::to_vec(&kept).is_ok_and(|b| b.len() <= 64));
+    }
 }
