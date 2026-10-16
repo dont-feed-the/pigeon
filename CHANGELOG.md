@@ -152,6 +152,15 @@ Milestone M3, reach and installation, with early M4 usability fixes
   archive when GitHub evicts its cache, after checking its source, producer,
   digest, architecture and version.
 
+## 0.3.6 — 2026-10-16
+
+### Fixed
+
+- The release is published again: 0.3.5's release checks lost pigeon's
+  git-annex build when GitHub's cache evicted it, so 0.3.5 was never
+  published. They now take the build from the release itself. 0.3.6 holds
+  the same changes as 0.3.5.
+
 ## 0.3.5 — 2026-10-16
 
 ### Fixed
