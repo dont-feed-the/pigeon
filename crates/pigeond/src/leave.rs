@@ -194,7 +194,10 @@ async fn finish(d: &Daemon, g: &std::sync::Arc<Group>) {
         .retain(|x| x.id != g.id);
     if let Some(wt) = &g.worktree {
         for rel in absent {
-            let _ = std::fs::remove_file(wt.join(rel));
+            let path = wt.join(rel);
+            if is_pointer(&path) {
+                let _ = std::fs::remove_file(path);
+            }
         }
         let to = d
             .dirs
@@ -212,7 +215,8 @@ async fn finish(d: &Daemon, g: &std::sync::Arc<Group>) {
     }
 }
 
-/// The files of `g`'s folder whose content is not here: pointer files.
+/// The files of `g`'s folder whose committed content is not here, which
+/// are pointer files unless changed since.
 async fn absent_files(g: &Group) -> Vec<String> {
     let out = g
         .git
@@ -225,6 +229,21 @@ async fn absent_files(g: &Group) -> Vec<String> {
         .collect()
 }
 
+/// Whether `path` holds only git-annex's pointer to absent content: a
+/// symbolic link or a short file naming an annex object. A file the person
+/// changed, whose committed version is absent here, holds their bytes and
+/// stays, as leaving promises.
+fn is_pointer(path: &Path) -> bool {
+    match std::fs::symlink_metadata(path) {
+        Ok(m) if m.file_type().is_symlink() => std::fs::read_link(path)
+            .is_ok_and(|target| target.to_string_lossy().contains("annex/objects/")),
+        Ok(m) if m.is_file() && m.len() < 1024 => {
+            std::fs::read(path).is_ok_and(|bytes| bytes.starts_with(b"/annex/objects/"))
+        }
+        _ => false,
+    }
+}
+
 /// Moves `.git` and `.pigeon` of the folder `wt` into `to`.
 fn move_out(wt: &Path, to: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(to)?;
@@ -233,4 +252,24 @@ fn move_out(wt: &Path, to: &Path) -> std::io::Result<()> {
         std::fs::rename(wt.join(".pigeon"), to.join("pigeon"))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_pointers_to_absent_content_are_removed_on_leaving() {
+        let dir = tempfile::tempdir().unwrap();
+        let pointer = dir.path().join("pointer.txt");
+        std::fs::write(&pointer, "/annex/objects/SHA256E-s9--abc.txt\n").unwrap();
+        let edited = dir.path().join("edited.txt");
+        std::fs::write(&edited, "Bob's edit of recipes\n").unwrap();
+        let link = dir.path().join("link.txt");
+        std::os::unix::fs::symlink(".git/annex/objects/xx/yy/SHA256E-s9--abc.txt", &link).unwrap();
+        assert!(is_pointer(&pointer));
+        assert!(is_pointer(&link));
+        assert!(!is_pointer(&edited));
+        assert!(!is_pointer(&dir.path().join("gone.txt")));
+    }
 }
