@@ -9,6 +9,11 @@ increments the second number, and every other release the third.
 
 ### Added
 
+- The operator dashboard (`telemetry/dashboards/pigeon-operations.json`)
+  shows computers and groups by name, such as "rtx", instead of their
+  64-digit IDs, one line per computer, with a Group selector: the
+  collector adds the names from its signed roster when it forwards.
+
 - In a per-person folder, a computer no longer keeps other people's
   folders unless its person chooses to: Laurent's laptop gets `src/laurent`
   but not `src/robin`, and the folder of someone who joins later arrives
