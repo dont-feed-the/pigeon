@@ -56,7 +56,7 @@ pub async fn sheet(
             @if let Some(qr) = qr {
                 div class="recovery-qr" role="img" aria-label=(r.id("recovery-title")) { (PreEscaped(qr)) }
             } @else { p { (r.id("recovery-qr-too-large")) } }
-            p class="no-print" { a href="/machines" { (r.id("web-back")) } }
+            p class="no-print" { a href=(r.url("/machines")) { (r.id("web-back")) } }
         };
         pages::page(&r, "/machines", &r.id("recovery-title"), &body)
     } else {

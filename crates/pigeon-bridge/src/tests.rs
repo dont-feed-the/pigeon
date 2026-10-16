@@ -21,6 +21,9 @@ use crate::{
     store::{self, Client},
 };
 
+#[path = "tests/peer_ui.rs"]
+mod peer_ui;
+
 fn config(root: &std::path::Path) -> Config {
     let salt = SaltString::encode_b64(b"a-test-salt-only").unwrap();
     let password_hash = Argon2::default()

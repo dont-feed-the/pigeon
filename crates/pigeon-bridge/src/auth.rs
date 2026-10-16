@@ -381,6 +381,8 @@ pub async fn existing_password(
 }
 
 pub async fn revoke(app: &App, client: &Client) -> Result<()> {
+    let lock = app.client_lock(&client.id).await;
+    let guard = lock.lock().await;
     {
         let mut store = app.store.lock().await;
         let c = store.clients.get_mut(&client.id).ok_or_else(forbidden)?;
@@ -388,6 +390,7 @@ pub async fn revoke(app: &App, client: &Client) -> Result<()> {
         store.save(&app.config.state_dir).map_err(unavailable)?;
     }
     app.peers.stop(&client.id).await;
+    drop(guard);
     // Access is already revoked even if the control peer is temporarily offline.
     let socket = &app
         .config

@@ -5,12 +5,12 @@
 
 use std::sync::Arc;
 
+use crate::Renderer;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Form};
 use maud::{Markup, html};
 use pigeon_i18n::Message;
-use pigeon_i18n::render::Renderer;
 use pigeon_proto::Request;
 use pigeon_proto::api::{HeldChoice, HeldEntry};
 
@@ -40,7 +40,7 @@ fn batch(r: &Renderer, h: &HeldEntry, form: &str) -> Markup {
             article {
                 p { (r.held(h)) }
                 @if let Some(s) = &h.suggested {
-                    form method="post" action="/held/rename" {
+                    form method="post" action=(r.url("/held/rename")) {
                         input type="hidden" name="form" value=(form);
                         input type="hidden" name="batch" value=(h.id);
                         button type="submit" {
@@ -54,12 +54,12 @@ fn batch(r: &Renderer, h: &HeldEntry, form: &str) -> Markup {
     html! {
         article {
             p { (r.held(h)) }
-            form method="post" action="/held/share" {
+            form method="post" action=(r.url("/held/share")) {
                 input type="hidden" name="form" value=(form);
                 input type="hidden" name="batch" value=(h.id);
                 button type="submit" { (r.id("web-held-share")) }
             }
-            form method="post" action="/held/bring-back" {
+            form method="post" action=(r.url("/held/bring-back")) {
                 input type="hidden" name="form" value=(form);
                 input type="hidden" name="batch" value=(h.id);
                 button type="submit" { (r.id("web-held-bring-back")) }
@@ -95,13 +95,13 @@ pub async fn share(
             .catalogue()
             .format(&Message::new("web-held-share-confirm").arg("batch", f.batch.as_str()));
         let body = html! {
-            form method="post" action="/held/share" {
+            form method="post" action=(r.url("/held/share")) {
                 input type="hidden" name="form" value=(f.form);
                 input type="hidden" name="batch" value=(f.batch);
                 input type="hidden" name="yes" value="true";
                 button type="submit" { (r.id("web-held-share")) }
             }
-            p { a href="/" { (r.id("web-back")) } }
+            p { a href=(r.url("/")) { (r.id("web-back")) } }
         };
         return page(&r, "/", &question, &body).into_response();
     }

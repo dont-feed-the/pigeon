@@ -212,6 +212,33 @@ def run():
             assert dav(a, "GET", "Docs/renamed.txt")[2] == b"first version\n"
             print("PASS: signed replication, conditional writes, ranged reads, and renames", flush=True)
 
+            # The same pages as a native peer, routed through this client identity.
+            aid = ids["Alice desktop"]
+            peer_ui = f"/clients/{aid}/peer"
+            assert http("GET", f"{peer_ui}/files")[0] == 403
+            assert http("GET", f"{peer_ui}/files", cookie=cookie_b)[0] == 403
+            status, headers, body = http("GET", f"{peer_ui}/", cookie=cookie_a)
+            assert status == 200 and f'data-events="{peer_ui}/events"'.encode() in body
+            assert "script-src 'self'" in headers["content-security-policy"]
+            status, headers, body = http("GET", f"{peer_ui}/live.js", cookie=cookie_a)
+            assert status == 200 and "text/javascript" in headers["content-type"] and b"EventSource" in body
+            for section in ["files", "space", "suggestions", "machines", "settings"]:
+                status, _, body = http("GET", f"{peer_ui}/{section}", cookie=cookie_a)
+                assert status == 200 and f'href="{peer_ui}/files"'.encode() in body, section
+            path = str(peer_roots["Alice desktop"] / "Docs/renamed.txt")
+            status, _, body = http("GET", f"{peer_ui}/file?" + urllib.parse.urlencode(dict(path=path)), cookie=cookie_a)
+            assert status == 200 and f'action="{peer_ui}/files/view"'.encode() in body
+            status, _, body = http("POST", f"{peer_ui}/files/view", urllib.parse.urlencode(dict(form=csrf_a, path=path)),
+                                 {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin}, cookie=cookie_a)
+            assert status == 200 and body == b"first version\n", "Shared UI could not download sparse content"
+            assert http("POST", f"{peer_ui}/settings", urllib.parse.urlencode(dict(form=csrf_a, key="language", value="fr")),
+                        {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin}, cookie=cookie_a)[0] == 200
+            assert b'lang="fr"' in http("GET", f"{peer_ui}/files", cookie=cookie_a)[2]
+            assert b'lang="en"' in http("GET", f"/clients/{ids['Alice second client']}/peer/files", cookie=cookie_a)[2]
+            assert http("POST", f"{peer_ui}/settings", urllib.parse.urlencode(dict(form=csrf_a, key="language", value="en")),
+                        {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin}, cookie=cookie_a)[0] == 200
+            print("PASS: regular peer pages, sparse downloads, and settings stay scoped to each client", flush=True)
+
             until(lambda: dav(b, "GET", "Docs/review.txt")[2] == b"Alice's original\n", "Bob did not receive the original")
             status, headers, _ = dav(b, "PUT", "Docs/review.txt", b"Bob's suggestion\n")
             assert status == 204 and headers["x-pigeon-suggested"] == "1"
@@ -220,9 +247,11 @@ def run():
             assert os.path.samefile(peer_roots["Bob phone"] / "Docs/review.txt", pooled(b"Bob's suggestion\n"))
             assert not (peer_roots["Alice desktop"] / "Docs/review.txt").exists()
             proposals = until(lambda: rpc(alice, dict(type="Proposals"))["proposals"], "The control peer did not receive a suggestion")
-            status, _, body = http("GET", "/suggestions", cookie=cookie_a)
+            status, _, body = http("GET", "/peer/suggestions", cookie=cookie_a)
             assert status == 200 and b"Docs/review.txt" in body
-            status, _, _ = http("POST", "/decide", urllib.parse.urlencode(dict(csrf=csrf_a, proposal=proposals[0]["id"], decision="accept")),
+            until(lambda: b"Docs/review.txt" in http("GET", f"/clients/{ids['Alice desktop']}/peer/suggestions", cookie=cookie_a)[2],
+                  "The client peer did not receive the suggestion")
+            status, _, _ = http("POST", f"/clients/{ids['Alice desktop']}/peer/suggestions/accept", urllib.parse.urlencode(dict(form=csrf_a, id=proposals[0]["id"])),
                                 {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin}, cookie=cookie_a)
             assert status == 200
             until(lambda: dav(a, "GET", "Docs/review.txt")[2] == b"Bob's suggestion\n", "Accepted suggestion did not reach Alice's client")
@@ -234,7 +263,7 @@ def run():
             until(lambda: dav(b, "GET", "Docs/decline.txt")[2] == b"keep this\n", "New review file did not reach Bob")
             assert dav(b, "PUT", "Docs/decline.txt", b"please change\n")[1]["x-pigeon-suggested"] == "1"
             proposals = until(lambda: [p for p in rpc(alice, dict(type="Proposals"))["proposals"] if "Docs/decline.txt" in p["paths"]], "No suggestion to decline")
-            assert http("POST", "/decide", urllib.parse.urlencode(dict(csrf=csrf_a, proposal=proposals[0]["id"], decision="decline", note="Keep the original")),
+            assert http("POST", "/peer/suggestions/decline", urllib.parse.urlencode(dict(form=csrf_a, id=proposals[0]["id"], note="Keep the original")),
                         {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin}, cookie=cookie_a)[0] == 200
             bob_id = ids["Bob phone"]
             until(lambda: b"conflict" in http("GET", f"/clients/{bob_id}", cookie=cookie_b)[2], "Decline did not appear in Bob's portal")
@@ -327,6 +356,8 @@ def run():
             assert http("POST", f"/clients/{aid}/revoke", urllib.parse.urlencode(dict(token=csrf_a)),
                         {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin}, cookie=cookie_a)[0] == 303
             assert dav(a, "GET", "Docs/renamed.txt")[0] == 401
+            assert http("GET", f"/clients/{aid}/peer/files", cookie=cookie_a)[0] == 403
+            assert http("GET", f"/clients/{ids['Alice second client']}/peer/files", cookie=cookie_a)[0] == 200
             assert dav(a2, "GET", "Docs/renamed.txt")[0] == 200
             print("PASS: deep-change discovery, persistent identities/metadata, and individual revocation", flush=True)
         except Exception:

@@ -145,6 +145,13 @@ needs a layout engine. Not yet: the other settings, the other actions.
 - **Five sections**, each page opening with its one-line answer: Home, Files
   (with *Deleted files*), Suggestions (*For you to decide*, *Yours*), People
   & machines, Settings (*Advanced*: diagnostics, logs, ADR 0025's dashboard).
+- **Bridge reuse:** `pigeon-bridge` mounts these same pages and handlers at
+  `/clients/ID/peer/`, behind its browser session, origin, ownership, revocation
+  and form-token checks. Each RPC uses the selected client's identity-checked
+  daemon; live polls repeat session and revocation checks. The account's
+  `/peer/` mount instead uses its personal control peer. Managed client setup,
+  revocation and conflicts stay in bridge management, and offline pinning stays
+  in the Nextcloud app. See [the bridge guide](../nextcloud-bridge.md).
 - **Accessibility:** WCAG 2.2 AA (ux.md §3); axe-core in CI checks the
   mockups and the real pages.
 

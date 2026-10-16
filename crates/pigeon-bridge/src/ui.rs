@@ -24,7 +24,7 @@ pub fn page(title: &str, body: Markup) -> Html<String> {
                 title { (title) " · Pigeon Bridge" }
                 style { "body{font:16px/1.55 system-ui,sans-serif;max-width:64rem;margin:2rem auto;padding:0 1rem;color:#172e30;background:#f7faf9}nav{display:flex;gap:1.5rem;border-bottom:1px solid #cedbd7;padding-bottom:1rem}a{color:#176254}h1{font-size:2rem}article{background:white;border:1px solid #d5e0dc;border-radius:.6rem;padding:1rem;margin:1rem 0}label{display:block;margin:.6rem 0}input{padding:.5rem;max-width:95%}button{padding:.5rem 1rem;background:#176254;color:white;border:0;border-radius:.3rem;cursor:pointer}form{margin:.7rem 0}code{overflow-wrap:anywhere}small{color:#47605d}.error{color:#963b2f}table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:.5rem;border-bottom:1px solid #d5e0dc}" }
             }
-            body { nav { strong { "Pigeon Bridge" } a href="/" { "Clients" } a href="/suggestions" { "Suggestions" } }
+            body { nav { strong { "Pigeon Bridge" } a href="/" { "Clients" } a href="/peer/suggestions" { "Suggestions" } }
                 main { h1 { (title) } (body) }
             }
         }
@@ -72,8 +72,9 @@ pub async fn home(State(app): State<Arc<App>>, headers: HeaderMap) -> Result<Res
         @if clients.is_empty() { p { "No clients connected yet." } }
         @for c in &clients {
             article {
-                h2 { a href=(format!("/clients/{}", c.id)) { (&c.name) } }
+                h2 { a href=(if c.revoked { format!("/clients/{}", c.id) } else { format!("/clients/{}/peer/", c.id) }) { (&c.name) } }
                 p { @if c.revoked { "Access revoked" } @else { "Connected · separate Pigeon peer" } }
+                @if !c.revoked { p { a href=(format!("/clients/{}", c.id)) { "Manage client and conflicts" } } }
                 small { "Peer " code { (&c.device) } }
             }
         }
@@ -132,49 +133,9 @@ fn renderer() -> pigeon_i18n::render::Renderer {
     )
 }
 
-pub async fn suggestions(State(app): State<Arc<App>>, headers: HeaderMap) -> Result<Response> {
-    let Some(session) = auth::session(&app, &headers).await else {
-        return Ok(Redirect::to("/login").into_response());
-    };
-    let socket = &app
-        .config
-        .users
-        .get(&session.user)
-        .ok_or_else(forbidden)?
-        .control_socket;
-    let answer = rpc::call(socket, Request::Proposals)
-        .await
-        .map_err(unavailable)?;
-    let proposals = match answer {
-        Answer::Proposals { proposals } => proposals,
-        other => return Ok(result(other, "/suggestions")),
-    };
-    Ok(page("Suggestions", html! {
-        p { "These suggestions come from the group. Pigeon checks which ones your person may decide." }
-        @if proposals.is_empty() { p { "No suggestions waiting." } }
-        @for s in proposals {
-            article {
-                h2 { (&s.author) " · " (&s.device) }
-                p { "Saved " (&s.saved_at) }
-                ul { @for path in &s.paths { li { (path) } } }
-                @if s.mine { p { "Submitted by one of your peers." } }
-                @if s.decide {
-                    form method="post" action="/decide" {
-                        input type="hidden" name="csrf" value=(&session.csrf);
-                        input type="hidden" name="proposal" value=(&s.id);
-                        @if s.force { label { "Override reason " input name="reason" required; } }
-                        button name="decision" value="accept" { @if s.force { "Accept with admin override" } @else { "Accept" } }
-                    }
-                    form method="post" action="/decide" {
-                        input type="hidden" name="csrf" value=(&session.csrf);
-                        input type="hidden" name="proposal" value=(&s.id);
-                        label { "Note (optional) " input name="note"; }
-                        button name="decision" value="decline" { "Decline" }
-                    }
-                } @else { p { "Waiting for the folder’s owner or stewards." } }
-            }
-        }
-    }).into_response())
+/// Older portal bookmarks now open the shared peer review page.
+pub async fn suggestions() -> Redirect {
+    Redirect::to("/peer/suggestions")
 }
 
 #[derive(Deserialize)]
@@ -263,6 +224,7 @@ pub async fn client(
     };
     let index = index::load(&app, &c).await?;
     Ok(page(&c.name, html! {
+        p { a href=(format!("/clients/{id}/peer/")) { "Open Pigeon — Home, Files, Suggestions, People & machines, Settings" } }
         p { "Pigeon peer " code { (&c.device) } }
         @for line in lines { p { (line) } }
         @for conflict in conflicts {
