@@ -618,6 +618,7 @@ pub async fn fetch_welcome(
     me: &str,
 ) -> Result<String, String> {
     let spec = crate::settings::peer_refspec(inviter);
+    let proposals = crate::proposal::refspec(inviter);
     let args = [
         "fetch",
         "-q",
@@ -625,6 +626,7 @@ pub async fn fetch_welcome(
         "--no-write-fetch-head",
         inviter,
         spec.as_str(),
+        proposals.as_str(),
     ];
     // The inviter may still be busy with the welcome's round: retry for
     // five minutes, as a P2P fetch can also hang (16 §16.4) and a loaded
@@ -649,6 +651,11 @@ pub async fn fetch_welcome(
         .rev(&format!("refs/pigeon/peers/{inviter}/main"))
         .await
         .ok_or("inviter-offline")?;
+    // Decisions in main name separately relayed proposal refs. Validate and
+    // retain those before judging the complete history of a fresh peer.
+    // A proposal may itself depend on an earlier decision, so keep making
+    // progress until no more evidence can be validated.
+    while crate::proposal::take(g, inviter).await > 0 {}
     crate::verify::bootstrap(g, group, &theirs, commit, me).await?;
     if let Some(ga) = g
         .git

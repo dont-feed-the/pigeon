@@ -153,9 +153,9 @@ def run():
                 status, _, body = http("GET", path, cookie=cookie)
                 assert status == 200
                 csrf = Inputs(body).values["csrf"]
-                status, _, _ = http("POST", path, urllib.parse.urlencode(dict(csrf=csrf, name=name)),
+                status, _, body = http("POST", path, urllib.parse.urlencode(dict(csrf=csrf, name=name)),
                                     {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin}, cookie=cookie)
-                assert status == 200, "Client provisioning failed"
+                assert status == 200, f"Client provisioning failed ({status}): {body.decode(errors='replace')}"
                 status, _, body = http("POST", "/login/v2/poll", urllib.parse.urlencode(dict(token=flow["poll"]["token"])),
                                        {"Content-Type": "application/x-www-form-urlencoded"})
                 assert status == 200

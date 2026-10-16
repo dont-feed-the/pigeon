@@ -192,6 +192,40 @@ async fn a_late_proposal_unblocks_its_decision_and_later_native_edits() {
         assert!(!group.lock().verdicts.contains_key(&decided));
         assert!(!group.lock().verdicts.contains_key(&later));
 
+        // A new peer must fetch the separate proposal refs before verifying
+        // a history that already contains decisions, including withdrawals.
+        git.update_ref("refs/heads/main", &later, Some(&genesis))
+            .await
+            .unwrap();
+        let joined = tempfile::tempdir().unwrap();
+        let fresh_git = Git::new(joined.path(), GitEnv::default());
+        fresh_git
+            .run(&["init", "-q", "--bare", "-b", "main"])
+            .await
+            .unwrap();
+        fresh_git
+            .run(&[
+                "fetch",
+                "-q",
+                temp.path().to_str().unwrap(),
+                "+refs/heads/main:refs/pigeon/peers/source/main",
+                &proposal::refspec("source"),
+            ])
+            .await
+            .unwrap();
+        let fresh = Group::open(&genesis, joined.path(), &GitEnv::default())
+            .await
+            .unwrap();
+        assert!(
+            verify::bootstrap(&fresh, &genesis, &later, &genesis, &device)
+                .await
+                .is_err()
+        );
+        assert_eq!(proposal::take(&fresh, "source").await, 1);
+        verify::bootstrap(&fresh, &genesis, &later, &genesis, &device)
+            .await
+            .unwrap();
+
         // Knowing a proposal still cannot authorize an unrelated rejection.
         let judged = verify::judge(&group, Some(&genesis), &forged)
             .await
