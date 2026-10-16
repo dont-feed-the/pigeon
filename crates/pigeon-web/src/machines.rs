@@ -7,13 +7,13 @@
 
 use std::sync::Arc;
 
+use crate::Renderer;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Response};
 use axum::{Extension, Form};
 use maud::{Markup, html};
 use pigeon_i18n::Message;
-use pigeon_i18n::render::Renderer;
 use pigeon_proto::Request;
 use pigeon_proto::api::{InvitationEntry, Machine};
 
@@ -58,14 +58,14 @@ pub async fn machines(
         (list(&other))
         (list(&people))
         @if can_print {
-            form method="post" action="/machines/recovery-sheet" {
+            form method="post" action=(r.url("/machines/recovery-sheet")) {
                 input type="hidden" name="form" value=(f);
                 button type="submit" { (r.id("web-print-recovery")) }
             }
         }
         @for m in &rows { (machine(&r, m, f)) }
         h2 { (r.id("web-invite")) }
-        form method="post" action="/machines/invite" {
+        form method="post" action=(r.url("/machines/invite")) {
             input type="hidden" name="form" value=(f);
             label for="person" { (r.id("web-invite-person")) " " }
             input id="person" name="person" required;
@@ -74,7 +74,7 @@ pub async fn machines(
             " "
             button type="submit" { (r.id("web-invite")) }
         }
-        form method="post" action="/machines/invite" {
+        form method="post" action=(r.url("/machines/invite")) {
             input type="hidden" name="form" value=(f);
             input type="hidden" name="backup" value="true";
             button type="submit" { (r.id("web-invite-backup")) }
@@ -93,7 +93,7 @@ fn machine(r: &Renderer, m: &Machine, form: &str) -> Markup {
         article {
             p { (r.machine(m)) }
             @if !m.this_device {
-                form method="post" action="/machines/remove" {
+                form method="post" action=(r.url("/machines/remove")) {
                     input type="hidden" name="form" value=(form);
                     input type="hidden" name="name" value=(m.name);
                     button type="submit" { (r.id(if m.recovery { "web-revoke-sheet" } else { "web-remove" })) }
@@ -108,7 +108,7 @@ fn invitation(r: &Renderer, i: &InvitationEntry, form: &str) -> Markup {
     html! {
         article {
             p { (r.invitation(i)) }
-            form method="post" action="/machines/cancel-invitation" {
+            form method="post" action=(r.url("/machines/cancel-invitation")) {
                 input type="hidden" name="form" value=(form);
                 input type="hidden" name="invitation" value=(i.id);
                 button type="submit" { (r.id("web-cancel-invitation")) }
@@ -179,13 +179,13 @@ pub async fn remove(
             .arg("name", f.name.as_str()),
         );
         let body = html! {
-            form method="post" action="/machines/remove" {
+            form method="post" action=(r.url("/machines/remove")) {
                 input type="hidden" name="form" value=(f.form);
                 input type="hidden" name="name" value=(f.name);
                 input type="hidden" name="yes" value="true";
                 button type="submit" { (r.id(if recovery { "web-revoke-sheet" } else { "web-remove" })) }
             }
-            p { a href="/machines" { (r.id("web-back")) } }
+            p { a href=(r.url("/machines")) { (r.id("web-back")) } }
         };
         return page(&r, "/machines", &question, &body).into_response();
     }
@@ -246,7 +246,7 @@ pub async fn invite(
             p { label for="invitation-code" { (r.id("web-invitation-code")) } }
             textarea id="invitation-code" rows="6" cols="60" readonly { (code) }
             details { summary { (r.id("web-command-line")) } (list(&lines)) }
-            p { a href="/machines" { (r.id("web-back")) } }
+            p { a href=(r.url("/machines")) { (r.id("web-back")) } }
         };
         return page(&r, "/machines", &r.id("web-invitation-ready"), &body).into_response();
     }

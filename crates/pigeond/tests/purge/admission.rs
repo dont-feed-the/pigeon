@@ -1,5 +1,5 @@
 //! Real signed acknowledgements, external receipts, restored repository
-//! rollback and missing-receipt recovery (proposed ADR 0075).
+//! rollback and missing-receipt recovery (proposed ADR 0076).
 
 use super::*;
 use pigeond::admission_file::Request;

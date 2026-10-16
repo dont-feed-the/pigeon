@@ -1,4 +1,4 @@
-//! Durable admission acknowledgements (proposed ADR 0075). Each group has
+//! Durable admission acknowledgements (proposed ADR 0076). Each group has
 //! one immutable initial-upgrade choice. Pending-custodian requests can be
 //! acknowledged together. Only successful atomic, fsynced checkpoints are
 //! exposed to signed reports; unknown or torn ledgers are preserved.

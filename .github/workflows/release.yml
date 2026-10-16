@@ -144,7 +144,7 @@ jobs:
             if sudo test -S /run/pigeon/pigeond.sock; then break; fi
             sleep 1
           done
-          if sudo env PIGEON_SOCKET=/run/pigeon/pigeond.sock "$p/bin/pigeon" --json doctor > "$RUNNER_TEMP/root-client.json"; then
+          if sudo env PIGEON_SOCKET=/run/pigeon/pigeond.sock "$p/bin/pigeon" --json doctor > "$RUNNER_TEMP/root-client.json" 2>&1; then
             echo '::error::the service socket admitted another account'
             exit 1
           fi

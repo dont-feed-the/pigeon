@@ -249,7 +249,7 @@ def pipeline_mutations(out, java):
 
 
 def recorded_regressions(java):
-    for name in ("write-during-keep-index", "recycled-stage-inode"):
+    for name in ("write-during-keep-index", "recycled-stage-inode", "keep-restart-visible"):
         path = ROOT / "models/tla/daemon-fixtures" / (name + ".ndjson")
         events = [json.loads(line) for line in path.read_text().splitlines()]
         got = checker.check(events, java, 4, diagnostics=False)
@@ -262,6 +262,27 @@ def recorded_regressions(java):
             if not got.startswith("trace:rejected:"):
                 sys.exit(f"FAIL recycled inode without release: {got}")
             print("ok   recycled inode without release: rejected by TLC", flush=True)
+        if path.stem == "keep-restart-visible":
+            # Restart may clear a raw bit only after the file is visible.
+            # It cannot invent a rename, a journal end or a proof.
+            absent = copy.deepcopy(events)
+            for j, before in enumerate(absent):
+                if before["action"] == "RenameIn" and before["vars"]["edge"] == "before":
+                    following = next((event for event in absent[j + 1:]
+                                      if event["vars"]["edge"] == "before"
+                                      and event["vars"]["run"] != before["vars"]["run"]), None)
+                    if following is None:
+                        continue
+                    state = following["vars"]["state"]
+                    state["p"] = copy.deepcopy(before["vars"]["state"]["p"])
+                    state["stage"] = copy.deepcopy(before["vars"]["state"]["stage"])
+                    break
+            else:
+                sys.exit("FAIL recorded restart lost its interrupted rename")
+            reject(absent, java, "restart clears skip-worktree without a visible file", model=True)
+            open_journal = copy.deepcopy(events)
+            open_journal[-1]["vars"]["state"]["open"] = True
+            reject(open_journal, java, "restart omits durable journal completion", model=True)
 
 
 def run(out, java, generate=True):

@@ -144,5 +144,6 @@ passes; 16 §16.3 lists where each rule now lives.
 | [0071](0071-a-save-soon-after-an-install-goes-beside-it.md) | A save within ten seconds of an install goes beside it | Accepted |
 | [0072](0072-capture-records-renames-and-the-merge-follows-them.md) | Capture records renames, and the merge follows them | Accepted |
 | [0073](0073-parameterized-proofs-complement-model-checking.md) | Parameterized safety proofs complement model checking | Proposed |
-| [0074](0074-purge-waits-survive-restarts-and-delayed-approval.md) | Purge waits survive restarts and delayed approval | Proposed |
-| [0075](0075-completed-purge-epochs-fence-custodian-membership.md) | Completed purge epochs fence custodian membership | Proposed |
+| [0074](0074-mount-the-peer-ui-behind-bridge-authorization.md) | Mount the peer UI behind bridge authorization | Proposed |
+| [0075](0075-purge-waits-survive-restarts-and-delayed-approval.md) | Purge waits survive restarts and delayed approval | Proposed |
+| [0076](0076-completed-purge-epochs-fence-custodian-membership.md) | Completed purge epochs fence custodian membership | Proposed |

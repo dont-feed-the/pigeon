@@ -23,7 +23,7 @@ pub async fn setup(
     let body = html! {
         p { (r.id("web-setup-help")) }
         h2 { (r.id("web-join")) }
-        form method="post" action="/join" {
+        form method="post" action=(r.url("/join")) {
             input type="hidden" name="form" value=(&token.0);
             p { label for="invitation" { (r.id("web-invitation")) } " " input id="invitation" name="invitation" required autocomplete="off"; }
             p { label for="join-folder" { (r.id("web-local-folder")) } " " input id="join-folder" name="folder"; }
@@ -31,7 +31,7 @@ pub async fn setup(
             button type="submit" { (r.id("web-join")) }
         }
         h2 { (r.id("web-create")) }
-        form method="post" action="/create" {
+        form method="post" action=(r.url("/create")) {
             input type="hidden" name="form" value=(&token.0);
             p { label for="group-name" { (r.id("web-group-name")) } " " input id="group-name" name="group" required; }
             p { label for="create-folder" { (r.id("web-local-folder")) } " " input id="create-folder" name="folder" required; }
@@ -76,7 +76,7 @@ pub async fn join(
             .arg("date", refounded.at.get(..10).unwrap_or(&refounded.at));
         let body = html! {
             p { (r.catalogue().format(&message)) }
-            form method="post" action="/join" {
+            form method="post" action=(r.url("/join")) {
                 input type="hidden" name="form" value=(&f.form);
                 input type="hidden" name="invitation" value=(invitation);
                 input type="hidden" name="folder" value=(&f.folder);
@@ -84,7 +84,7 @@ pub async fn join(
                 input type="hidden" name="yes" value="true";
                 button type="submit" { (r.id("web-join")) }
             }
-            p { a href="/join" { (r.id("web-back")) } }
+            p { a href=(r.url("/join")) { (r.id("web-back")) } }
         };
         return page(&r, "/join", &r.id("web-join"), &body).into_response();
     }

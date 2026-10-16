@@ -56,7 +56,11 @@ pub async fn recover(g: &Group, me: &str, tracer: &Tracer) -> Result<(), Error> 
         }
         let before = g.git.tree(&install.before).await?;
         let after = g.git.tree(&install.after).await?;
-        let paths = pigeon_core::authority::delta(&before, &after);
+        let mut paths = pigeon_core::authority::delta(&before, &after);
+        let index = g.git.index().await?;
+        // A staged change is private even when its working bytes match
+        // that private entry. Dirty-worktree checks alone cannot see it.
+        paths.retain(|path| index.get(path) == before.get(path));
         crate::install::incoming_erasure(g, me, tracer, &install.after, &paths).await?;
     }
     std::fs::remove_file(&path).map_err(|e| invalid(&e.to_string()))?;

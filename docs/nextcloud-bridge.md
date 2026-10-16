@@ -46,15 +46,16 @@ The control peer must belong to the actual person's roster identity. A bridge
 login name is just an account name; it does not grant Pigeon authority.
 
 The bridge uses that control peer to invite each new client as another device
-of the same person, and to accept or decline group suggestions. The control
-peer must be reachable during authorization and review. Already authorized
-clients continue to use their own daemons independently.
+of the same person, and for the portal's account-level suggestion review.
+The control peer must be reachable during authorization and that review.
+Already authorized clients use their own daemons and peer UI independently.
 
 By default that control peer is also the content provider. To reuse an existing
 custodian, set `storage_socket` in the user's table to its private local socket.
 It must serve the same group, run the matching Pigeon version, and be accessible
-to the same operating-system user. Invitation and review still use the personal
-control peer. The source may have other groups: requests name the exact group.
+to the same operating-system user. Invitation and account-level review still
+use the personal control peer. The source may have other groups: requests name
+the exact group.
 
 Copy [bridge.example.toml](../packaging/bridge.example.toml) into a private
 configuration directory. Generate a portal password hash by piping a password
@@ -155,12 +156,40 @@ provider registration or reverting to an older implementation.
    database stores only its hash.
 4. Repeat for each desktop or phone, including several clients of one person.
 
-The portal at `/` lists the person's clients and their public peer IDs. A
-client page shows Pigeon protection status, downloadable files, and that
-client's divergences. `/suggestions` lists group suggestions; owners or stewards
-can accept or decline, and admins can supply a reason when an override is
-required. Pigeon checks the authority of every decision. A client page offers
-*Take the group's version*, *Keep mine as a copy*, and *Suggest again*.
+The portal at `/` lists the person's clients and their public peer IDs. Opening
+a connected client's name opens the **regular Pigeon web interface** at
+`/clients/ID/peer/`: Home and its live protection status, Files and version
+history, deleted-file recovery, Space, Suggestions, People & machines, and
+Settings. These are the same pages and action handlers served by a native peer,
+using the selected client's daemon and signing identity. An action in one
+client's UI never uses another client's peer or the content provider.
+
+Every peer page names the selected client and links to **Manage client and
+conflicts**. That bridge page offers *Take the group's version*, *Keep mine as a
+copy*, *Suggest again*, downloads of the client's visible files, and revocation.
+Offline file choices belong in the Nextcloud app: the managed peer stays sparse,
+so its web UI omits *Keep on this computer* and *Free up space*. Joining, creating
+or leaving groups remains part of bridge provisioning and revocation, rather
+than offering server folder selection to a browser user.
+
+The portal's **Suggestions** link opens the same peer UI through the signed-in
+person's control peer, at `/peer/suggestions`. Owners or stewards can accept or
+decline, and admins can supply a reason when an override is required. The old
+`/suggestions` bookmark redirects there. Review is also available inside each
+client's peer UI; these decisions use that client's own key. Pigeon checks the
+authority of every decision. The control peer must be online for account-level
+review; client-level review uses the selected client's daemon.
+
+Opening a version pins the managed peer's immutable content in its private
+view cache, so browser downloads do not create another stored file body.
+Expiring that cache removes its links without changing shared permissions.
+
+Mounted pages use the bridge browser session, Host/Origin checks and session
+form tokens; Nextcloud app passwords and native daemon web cookies cannot log
+in to them. Every client RPC checks the saved device and annex identities, and
+rechecks ownership and revocation. Live streams stop on their next poll after
+session expiry or revocation. Download and action routes have the same guards.
+The UI never redirects browsers to a daemon's loopback web port.
 
 The bridge follows Pigeon's personal-folder semantics. A change that requires
 approval is captured as a signed suggestion. That client's DAV view overlays
@@ -229,6 +258,9 @@ files into their ancestors without scanning the entire tree per directory.
 - Each client still has its own daemon and complete Git catalogue. File bodies
   are shared, but process and metadata costs grow with the number of clients.
   Clients are limited per portal account in configuration.
+- Peer UI lists use the native socket API and its 1 MiB reply limit. Very
+  large Files or Suggestions lists can exceed it; the bridge's client-management
+  file list and DAV catalogues still use the paginated bridge protocol.
 - The content pool retains versions conservatively. Revocation and ordinary
   annex drops do not automatically reclaim pool content. Coordinated garbage
   collection across peer histories and pending changes is not implemented.
@@ -242,7 +274,8 @@ files into their ancestors without scanning the entire tree per directory.
 - A batch deleting more than 100 existing files, or deleting paths Pigeon is
   holding for review, is refused with HTTP 409 before changing the working
   tree. Split large deletions into smaller requests and review held deletions
-  in the affected peer. The bridge portal does not yet offer that review.
+  on the affected client's Pigeon Home page, which offers the regular held
+  deletion confirmation and bring-back actions.
 - Local filesystem access can bypass an HTTP precondition. Treat managed peer
   working trees as private implementation state and use the clients or portal.
   Retained conflicting saves are surfaced by Pigeon rather than discarded.

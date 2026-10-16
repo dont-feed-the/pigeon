@@ -1,5 +1,5 @@
 //! Admission metadata laws: closed current schema, canonical request ids,
-//! and byte-bound immutable witnesses (proposed ADR 0075).
+//! and byte-bound immutable witnesses (proposed ADR 0076).
 #![allow(clippy::unwrap_used, reason = "admission format fixtures")]
 
 use hegel::{TestCase, generators as gs};

@@ -1,5 +1,5 @@
 //! Make admission requests and publish independently verifiable causal
-//! certificates (proposed ADR 0075). Every commit uses a private tree and
+//! certificates (proposed ADR 0076). Every commit uses a private tree and
 //! a main CAS. No private working or staged file enters these commits.
 
 use std::collections::{BTreeMap, BTreeSet};

@@ -7,6 +7,7 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::Renderer;
 use axum::Extension;
 use axum::extract::State;
 use axum::response::Html;
@@ -15,7 +16,6 @@ use futures_util::StreamExt;
 use futures_util::stream::{self, Stream};
 use maud::{DOCTYPE, Markup, html};
 use pigeon_i18n::Message;
-use pigeon_i18n::render::Renderer;
 use pigeon_proto::api::Suggestion;
 use pigeon_proto::{Request, Response};
 
@@ -43,7 +43,7 @@ textarea{max-width:100%;box-sizing:border-box}\
 @media print{nav,.no-print{display:none}body{margin:0;max-width:none}.recovery-qr svg{max-width:12cm}}";
 
 /// Puts each `headline` event's text in the page's headline.
-const SCRIPT: &str = "const s=new EventSource('/events');\
+const SCRIPT: &str = "const s=new EventSource(document.getElementById('live').dataset.events);\
 s.addEventListener('headline',e=>{const h=document.getElementById('headline');\
 if(h.textContent!==e.data)h.textContent=e.data});\
 s.addEventListener('health',e=>{const p=JSON.parse(e.data),h=document.getElementById('health');\
@@ -53,6 +53,17 @@ if(n&&n.textContent!==value)n.textContent=value}\
 const l=document.getElementById('health-explanations');\
 if(l&&JSON.stringify([...l.children].map(n=>n.textContent))!==JSON.stringify(p.explanations)){\
 l.replaceChildren(...p.explanations.map(text=>{const n=document.createElement('li');n.textContent=text;return n}))}})";
+
+/// An external same-origin script also works under the bridge's strict CSP.
+pub async fn script() -> impl axum::response::IntoResponse {
+    (
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/javascript; charset=utf-8",
+        )],
+        SCRIPT,
+    )
+}
 
 pub(crate) fn page(r: &Renderer, here: &str, headline: &str, body: &Markup) -> Html<String> {
     document(r, here, headline, body, here == "/")
@@ -71,12 +82,18 @@ fn document(r: &Renderer, here: &str, headline: &str, body: &Markup, live: bool)
                     style { (STYLE) }
                 }
                 body {
+                    @if let Some(mount) = &r.mount {
+                        p class="no-print" { a href=(&mount.back) { (&mount.label) } }
+                        @if !mount.storage_controls { p { (r.id("web-managed-client")) } }
+                    }
                     nav aria-label=(r.id("web-title")) {
                         @for (path, id) in SECTIONS {
-                            @if *path == here {
-                                a href=(path) aria-current="page" { (r.id(id)) }
-                            } @else {
-                                a href=(path) { (r.id(id)) }
+                            @if r.mount.is_none() || *path != "/join" {
+                                @if *path == here {
+                                    a href=(r.url(path)) aria-current="page" { (r.id(id)) }
+                                } @else {
+                                    a href=(r.url(path)) { (r.id(id)) }
+                                }
                             }
                         }
                     }
@@ -84,7 +101,7 @@ fn document(r: &Renderer, here: &str, headline: &str, body: &Markup, live: bool)
                         h1 id=(if live { "headline" } else { "title" }) { (headline) }
                         (body)
                     }
-                    @if live { script { (maud::PreEscaped(SCRIPT)) } }
+                    @if live { script id="live" src=(r.url("/live.js")) data-events=(r.url("/events")) {} }
                 }
             }
         }
@@ -127,6 +144,7 @@ async fn status(
     Vec<String>,
     bool,
     Option<Box<pigeon_proto::health::HealthReport>>,
+    bool,
 ) {
     let answers = web.ask(Request::Health).await;
     let health = answers.iter().find_map(|answer| match answer {
@@ -136,6 +154,9 @@ async fn status(
     let no_group = answers
         .iter()
         .any(|a| matches!(a, Response::Problem(p) if p.code == "not-in-group"));
+    let denied = answers
+        .iter()
+        .any(|a| matches!(a, Response::Problem(p) if p.code == "web-forbidden"));
     let mut all: Vec<String> = answers
         .iter()
         .filter(|a| !matches!(a, Response::Progress { .. }))
@@ -146,7 +167,13 @@ async fn status(
     } else {
         all.split_off(1)
     };
-    (all.pop().unwrap_or_default(), rest, no_group, health)
+    (
+        all.pop().unwrap_or_default(),
+        rest,
+        no_group,
+        health,
+        denied,
+    )
 }
 
 pub(crate) fn list(items: &[String]) -> Markup {
@@ -160,7 +187,7 @@ pub async fn home(
     Extension(form): Extension<FormToken>,
 ) -> Html<String> {
     let r = web.renderer();
-    let (headline, rest, no_group, health) = status(&web, &r).await;
+    let (headline, rest, no_group, health, _) = status(&web, &r).await;
     let held = if no_group {
         html! {}
     } else {
@@ -170,9 +197,9 @@ pub async fn home(
         (held)
         @if let Some(health) = &health { (crate::health::section(&r, health)) }
         ul id="health-explanations" { @for line in &rest { li { (line.trim()) } } }
-        @if no_group {
+        @if no_group && r.mount.is_none() {
             p { (r.id("web-setup-help")) }
-            p { a href="/join" { (r.id("web-setup")) } }
+            p { a href=(r.url("/join")) { (r.id("web-setup")) } }
         }
     };
     page(&r, "/", &headline, &body)
@@ -217,28 +244,31 @@ fn suggestion(r: &Renderer, s: &Suggestion, form: &str) -> Markup {
         .arg("author", s.author.clone())
         .arg("paths", s.paths.join(", "))
         .arg("saved", saved);
-    let decides = s.decide && !s.mine;
+    let decides = s.decide && (!s.mine || s.force);
     html! {
         article {
             p { (r.catalogue().format(&msg)) }
-            p { a href=(format!("/erase?suggestion={}", form_urlencoded::byte_serialize(s.id.as_bytes()).collect::<String>())) { (r.id("web-erase-suggestion")) } }
+            p { a href=(r.url(&format!("/erase?suggestion={}", form_urlencoded::byte_serialize(s.id.as_bytes()).collect::<String>()))) { (r.id("web-erase-suggestion")) } }
             @for path in &s.paths {
-                form method="post" action="/suggestions/view" {
+                form method="post" action=(r.url("/suggestions/view")) {
                     input type="hidden" name="form" value=(form);
                     input type="hidden" name="proposal" value=(s.id);
                     input type="hidden" name="path" value=(path);
                     button type="submit" { (r.id("web-view-suggestion")) " — " (path) }
                 }
             }
-            @if decides && !s.force {
-                form method="post" action="/suggestions/accept" {
+            @if decides {
+                form method="post" action=(r.url("/suggestions/accept")) {
                     input type="hidden" name="form" value=(form);
                     input type="hidden" name="id" value=(s.id);
+                    @if s.force {
+                        label { (r.id("web-override-reason")) " " input name="reason" required; }
+                    }
                     button type="submit" { (r.id("web-accept")) }
                 }
             }
             @if decides {
-                form method="post" action="/suggestions/decline" {
+                form method="post" action=(r.url("/suggestions/decline")) {
                     input type="hidden" name="form" value=(form);
                     input type="hidden" name="id" value=(s.id);
                     label { (r.id("web-decline-note")) " " input type="text" name="note"; }
@@ -261,7 +291,7 @@ pub fn result(r: &Renderer, here: &str, mut lines: Vec<String>) -> Html<String> 
     let title = lines.pop().unwrap_or_default();
     let body = html! {
         (list(&rest))
-        p { a href=(here) { (r.id("web-back")) } }
+        p { a href=(r.url(here)) { (r.id("web-back")) } }
     };
     // An action result must keep its own title. Home's live status would
     // replace a join refusal with "not in a group" after five seconds.
@@ -277,7 +307,10 @@ pub async fn events(
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
         let r = web.renderer();
-        let (headline, _, _, health) = status(&web, &r).await;
+        let (headline, _, _, health, denied) = status(&web, &r).await;
+        if denied {
+            return None;
+        }
         let mut events: Vec<Result<Event, Infallible>> =
             vec![Ok(Event::default().event("headline").data(headline))];
         if let Some(health) = health {

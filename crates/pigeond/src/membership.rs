@@ -1,5 +1,5 @@
 //! Derive purge-capable custody from accepted admission witnesses (ADR
-//! 0075, proposed). Configured roles remain immutable. A rules-2 backup
+//! 0076, proposed). Configured roles remain immutable. A rules-2 backup
 //! without activation is pending, regardless of what its report claims.
 
 use std::collections::{BTreeMap, BTreeSet};

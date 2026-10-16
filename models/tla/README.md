@@ -12,8 +12,8 @@ are normative. `scripts/run-tlc` runs the configurations: the fast set in
 `ci`, the fast/full sets nightly and on release tags in `models-full` (ADR 0026). Both workflows first
 run `scripts/check-proofs`: parameterized TLAPS safety proofs, checks that
 their assumptions cover the actual configurations, and mutations that must
-fail. The proof-covered `AnnexDrop_design4` row is an `audit`: TLC still
-runs it on Monday's nightly run, release tags and by hand (`scripts/run-tlc --audit`), or when explicitly
+fail. The proof-covered `AnnexDrop_design4` and `Purge_full3` rows are `audit` checks: TLC still
+runs them on Monday's nightly run, release tags and by hand (`scripts/run-tlc --audit`), or when explicitly
 named, but no longer on every nightly run. See
 [the proof scope and tool measurements](../../docs/model-proofs.md).
 State counts are those of
@@ -82,7 +82,7 @@ scenario deadlines stay the same.
 | `Evict_journal` | `Evict` | `violation:NoDeletion` | capture that does not skip a path whose file is aside: the hide's window is captured as a deletion |
 | `Evict_lockfile` | `Evict` | `violation:temporal` | a stale `info/sparse-checkout.lock` kept after a crash: the hide never completes, and FreeLive fails (E15b) |
 | `Purge_full` | `Purge` | `pass` (fast set) | [08 §8.6](../../docs/spec/08-custody-loops.md): a restore or cancel that reaches any custodian before its seal keeps the content (KeepWins); nothing is dropped before the waiting period (WaitingPeriod); a dropped copy returns only for an uncovered reference (NoResurrection); 2 custodians (one holds the key), 2 laptops (one offline with a copy), restarts, any message order |
-| `Purge_full3` | `Purge` | `pass` (full set) | 3 custodians, 2 of them holding the key, and the deciding laptop with a copy: 12.4 million states, 2 minutes. `PurgeProof` also proves all three safety properties for arbitrary device counts and waiting periods under its assumptions; [the proof evaluation](../../docs/purge-proof.md) keeps this finite cross-check |
+| `Purge_full3` | `Purge` | `pass` (audit) | 3 custodians, 2 of them holding the key, and the deciding laptop with a copy: 12.4 million states, 2 minutes. `PurgeProof` proves all three safety properties for arbitrary device counts and waiting periods under its assumptions; [the proof evaluation](../../docs/purge-proof.md) schedules this finite cross-check weekly, on releases and on request |
 | `Purge_seals` | `Purge` | `violation:KeepWins` | accepting every seal without merging the sealers' `main` loses a cancel |
 | `Purge_none` | `Purge` | `violation:KeepWins` | dropping when one's own waiting period ends (ADR 0018's first mechanism) loses a restore that reached another custodian |
 | `PurgeMembership_fenced` | `PurgeMembership` | `pass` (fast set) | Prototype membership handshake: one original custodian, a joining backup and an offline deciding laptop; pending acknowledgement fences old-roster seals, activation merges acknowledgement histories, completed epochs survive admission. Checks KeepWins, NoResurrection and no fresh backup refetch after a drop. This is a protocol design model, not yet daemon conformance. |

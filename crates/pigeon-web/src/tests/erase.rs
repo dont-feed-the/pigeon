@@ -188,3 +188,64 @@ async fn unready_erase_offers_preparation_without_any_confirmation_form() {
     );
     assert!(backend.calls.lock().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn mounted_erase_keeps_review_forms_and_results_in_the_selected_peer() {
+    let prefix = "/clients/selected/peer";
+    let backend = Arc::new(Erase {
+        calls: Mutex::new(Vec::new()),
+        ready: true,
+    });
+    let web = Web::embedded(
+        backend.clone(),
+        "fr".parse().unwrap(),
+        crate::Mount {
+            path: prefix.into(),
+            label: "Client <script>".into(),
+            back: "/clients/selected".into(),
+            storage_controls: false,
+        },
+    );
+    let app = web.embedded_router("bridge-csrf".into());
+    let html = body(
+        app.clone()
+            .oneshot(get(
+                "/erase?path=%2FFamily%2Fold.txt",
+                "bridge.example",
+                None,
+            ))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert!(html.contains("Client &lt;script&gt;"));
+    assert!(html.contains(&format!("action=\"{prefix}/erase\"")));
+    for attribute in ["href=\"", "action=\""] {
+        for value in html
+            .split(attribute)
+            .skip(1)
+            .map(|rest| rest.split('"').next().unwrap())
+        {
+            assert!(
+                value.starts_with(prefix) || value == "/clients/selected",
+                "{attribute}{value}"
+            );
+        }
+    }
+    backend.calls.lock().unwrap().clear();
+    let form =
+        "form=bridge-csrf&history=exact-history-token&path=%2FFamily%2Fold.txt&action=confirm";
+    let response = app.oneshot(post("/erase", "", form)).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let html = body(response).await;
+    assert!(html.contains(&format!("href=\"{prefix}/erase?path=%2FFamily%2Fold.txt\"")));
+    assert_eq!(
+        backend.calls.lock().unwrap().as_slice(),
+        &[pigeon_proto::Request::Erase {
+            operation: Operation::Confirm {
+                selection: Selection::Path("/Family/old.txt".into()),
+                token: "exact-history-token".into()
+            }
+        }]
+    );
+}

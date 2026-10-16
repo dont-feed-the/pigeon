@@ -1,4 +1,4 @@
-//! Completion-witness format law (proposed ADR 0075): closed schema,
+//! Completion-witness format law (proposed ADR 0076): closed schema,
 //! byte-bound names, deterministic maps and exact raw-report identities.
 #![allow(clippy::unwrap_used, reason = "completion format fixtures")]
 

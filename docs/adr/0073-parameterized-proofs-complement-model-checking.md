@@ -24,9 +24,10 @@ and the real storage boundaries is still necessary.
   `Safety`, checking the root proof before this generated theorem because
   TLAPS trusts imported theorems. Unsupported assumptions or claims fail
   before a finite check can be moved out of routine CI.
-- Move only `AnnexDrop_design4`, covered by the parameterized no-expiry
-  proof, to an audit set: Monday's nightly run, release tags, manual TLC and
-  explicit local runs.
+- Move `AnnexDrop_design4`, covered by the parameterized no-expiry proof,
+  and `Purge_full3`, covered by `PurgeProof`, to an audit set: Monday's
+  nightly run, release tags, manual TLC and explicit local runs.
+  The smaller positive purge case remains in the fast set.
   Other safety, negative, liveness, trace, law, contract and fault-injection
   checks keep their frequency. Proofs are prerequisites of the model jobs.
 - Keep Apalache 0.62.4 as an opt-in, reproducible benchmark and induction
@@ -42,7 +43,7 @@ and the real storage boundaries is still necessary.
 
 ## Consequences
 
-- The two stated model safety claims hold without a fixed domain size or
+- The three stated model safety claims hold without a fixed small domain size or
   execution length. They do not prove Rust refinement, storage durability,
   crash/power-loss behavior absent from the model, or liveness.
 - The drop proof does not cover lock expiry or ranked P2P checks. The

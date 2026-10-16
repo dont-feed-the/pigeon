@@ -16,7 +16,23 @@ the second number, and every other pull request the third.
   window, using idle I/O priority on Linux. Set `resources.scrub_window`
   to choose another local-time window.
 
-## Unreleased
+## 0.5.4 — 2026-10-16
+
+### Changed
+
+- Nextcloud clients open the regular Pigeon web interface through the bridge,
+  with Files, version history, protection status, suggestions and settings
+  for the selected client. Client management and conflict resolution remain
+  available from every peer page.
+
+## 0.5.3 — 2026-10-16
+
+### Changed
+
+- Nightly verification uses the parameterized purge safety proof; its large
+  finite cross-check runs weekly, on releases and on request.
+
+## 0.5.2 — 2026-10-16
 
 ### Changed
 
@@ -35,6 +51,11 @@ the second number, and every other pull request the third.
 
 ### Fixed
 
+- The Linux system-install check captures the expected refusal from another
+  account on the CLI's error channel before checking the service user.
+- macOS release validation now accounts for Git refreshing a visible file
+  after Keep is interrupted, while still checking journal recovery and
+  rejecting unsafe transitions.
 - Leaving waits for a peer that learned the device's membership; an older
   roster cannot acknowledge a removal it has never seen.
 - Storage sharing leaves git-annex lock files and retention timestamps intact;

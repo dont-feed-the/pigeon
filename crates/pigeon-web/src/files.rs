@@ -7,11 +7,11 @@
 
 use std::sync::Arc;
 
+use crate::Renderer;
 use axum::Extension;
 use axum::extract::{Query, State};
 use axum::response::Html;
 use maud::{Markup, html};
-use pigeon_i18n::render::Renderer;
 use pigeon_proto::api::{Folder, VersionStatus};
 use pigeon_proto::{Request, Response};
 
@@ -63,7 +63,7 @@ pub async fn files(
                 @for f in &root_files {
                     @let full = std::path::Path::new(&root).join(&f.path);
                     li {
-                        a href=(format!("/file?path={}", enc(&full.to_string_lossy()))) {
+                        a href=(r.url(&format!("/file?path={}", enc(&full.to_string_lossy())))) {
                             (r.catalogue().format(&pigeon_i18n::Message::new("file-row").arg("path", f.path.clone()).arg("state", r.state(f.state))))
                         }
                     }
@@ -71,9 +71,9 @@ pub async fn files(
             }
         }
         @for f in &rows { (folder(&r, &root, f, &form.0)) }
-        p { a href="/erase" { (r.id("web-erase-list")) } }
-        p { a href="/space" { (r.id("space-title")) } }
-        p { a href="/deleted" { (r.id("web-deleted")) } }
+        p { a href=(r.url("/erase")) { (r.id("web-erase-list")) } }
+        p { a href=(r.url("/space")) { (r.id("space-title")) } }
+        p { a href=(r.url("/deleted")) { (r.id("web-deleted")) } }
     };
     page(&r, "/files", &r.id("web-nav-files"), &body)
 }
@@ -88,15 +88,15 @@ fn folder(r: &Renderer, root: &str, f: &Folder, form: &str) -> Markup {
     let path = std::path::Path::new(root).join(&f.path);
     html! {
         article {
-            p { a href=(format!("/folder?path={}", enc(&path.to_string_lossy()))) { (r.folder(f)) } }
-            @if f.arriving > 0 {
+            p { a href=(r.url(&format!("/folder?path={}", enc(&path.to_string_lossy())))) { (r.folder(f)) } }
+            @if r.storage_controls() && f.arriving > 0 {
                 p { (r.catalogue().format(&pigeon_i18n::Message::new("web-files-arriving").arg("files", i64::try_from(f.arriving).unwrap_or(i64::MAX)))) }
             }
-            form method="post" action=(action) {
+            @if r.storage_controls() { form method="post" action=(r.url(action)) {
                 input type="hidden" name="form" value=(form);
                 input type="hidden" name="folder" value=(path.to_string_lossy());
                 button type="submit" { (r.id(label)) }
-            }
+            } }
         }
     }
 }
@@ -170,30 +170,30 @@ pub async fn folder_page(
             ul {
                 @for name in &children {
                     @let child = std::path::Path::new(&at.path).join(name);
-                    li { a href=(format!("/folder?path={}", enc(&child.to_string_lossy()))) { (name) } }
+                    li { a href=(r.url(&format!("/folder?path={}", enc(&child.to_string_lossy())))) { (name) } }
                 }
             }
         }
         ul {
             @for f in &rows {
                 @let full = std::path::Path::new(&root).join(&f.path);
-                li { a href=(format!("/file?path={}", enc(&full.to_string_lossy()))) { (line(&f.path, f.state)) } }
+                li { a href=(r.url(&format!("/file?path={}", enc(&full.to_string_lossy())))) { (line(&f.path, f.state)) } }
             }
         }
-        p { a href="/files" { (r.id("web-back")) } }
+        p { a href=(r.url("/files")) { (r.id("web-back")) } }
     };
     let body = html! {
-        @if !root.is_empty() && !rows.is_empty() {
+        @if r.storage_controls() && !root.is_empty() && !rows.is_empty() {
             @for (action, label) in [("/files/free", "web-free"), ("/files/keep", "web-keep")] {
-                form method="post" action=(action) {
+                form method="post" action=(r.url(action)) {
                     input type="hidden" name="form" value=(form.0);
                     input type="hidden" name="folder" value=(at.path);
                     button type="submit" { (r.id(label)) }
                 }
             }
         }
-        p { a href=(format!("/erase?path={}", enc(&at.path))) { (r.id("web-erase-title")) } }
-        p { a href=(format!("/folder-rule?path={}", enc(&at.path))) { (r.id("web-folder-rule")) } }
+        p { a href=(r.url(&format!("/erase?path={}", enc(&at.path)))) { (r.id("web-erase-title")) } }
+        p { a href=(r.url(&format!("/folder-rule?path={}", enc(&at.path)))) { (r.id("web-folder-rule")) } }
         (body)
     };
     page(&r, "/files", &at.path, &body)
@@ -226,8 +226,8 @@ pub async fn file_page(
         (list(&other))
         h2 { (r.id("web-versions")) }
         @for v in &rows { (version(&r, &at.path, v, Some(v.number) != newest, &form.0)) }
-        p { a href=(format!("/erase?path={}", enc(&at.path))) { (r.id("web-erase-title")) } }
-        p { a href="/files" { (r.id("web-back")) } }
+        p { a href=(r.url(&format!("/erase?path={}", enc(&at.path)))) { (r.id("web-erase-title")) } }
+        p { a href=(r.url("/files")) { (r.id("web-back")) } }
     };
     page(&r, "/files", &at.path, &body)
 }
@@ -239,14 +239,14 @@ fn version(r: &Renderer, path: &str, v: &VersionStatus, restore: bool, form: &st
         article {
             p { (r.version(v)) }
             @if restore {
-                form method="post" action="/files/restore" {
+                form method="post" action=(r.url("/files/restore")) {
                     input type="hidden" name="form" value=(form);
                     input type="hidden" name="path" value=(path);
                     input type="hidden" name="version" value=(v.number);
                     button type="submit" { (r.id("web-restore")) }
                 }
             }
-            form method="post" action="/files/view" {
+            form method="post" action=(r.url("/files/view")) {
                 input type="hidden" name="form" value=(form);
                 input type="hidden" name="path" value=(path);
                 input type="hidden" name="version" value=(v.number);
@@ -301,7 +301,7 @@ pub async fn deleted_page(
             @for folder in &folders {
                 article {
                     p { (folder) }
-                    form method="post" action="/files/restore" {
+                    form method="post" action=(r.url("/files/restore")) {
                         input type="hidden" name="form" value=(form.0);
                         input type="hidden" name="path" value=(std::path::Path::new(&root).join(folder).to_string_lossy());
                         button type="submit" { (r.id("web-restore-folder")) }
@@ -312,15 +312,15 @@ pub async fn deleted_page(
         @for f in &rows {
             article {
                 p { (r.deleted(f)) }
-                p { a href=(format!("/erase?path={}", enc(&std::path::Path::new(&root).join(&f.path).to_string_lossy()))) { (r.id("web-erase-title")) } }
-                form method="post" action="/files/restore" {
+                p { a href=(r.url(&format!("/erase?path={}", enc(&std::path::Path::new(&root).join(&f.path).to_string_lossy())))) { (r.id("web-erase-title")) } }
+                form method="post" action=(r.url("/files/restore")) {
                     input type="hidden" name="form" value=(form.0);
                     input type="hidden" name="path" value=(std::path::Path::new(&root).join(&f.path).to_string_lossy());
                     button type="submit" { (r.id("web-restore-deleted")) }
                 }
             }
         }
-        p { a href="/files" { (r.id("web-back")) } }
+        p { a href=(r.url("/files")) { (r.id("web-back")) } }
     };
     page(&r, "/files", &r.id("web-deleted"), &body)
 }

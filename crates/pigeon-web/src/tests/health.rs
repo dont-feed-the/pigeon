@@ -90,7 +90,15 @@ async fn home_shows_replicated_health_and_preserves_report_age_without_telemetry
     let web = Web::new(Arc::new(HealthBackend), "en".parse().unwrap(), 4321);
     let app = web.router();
     let cookie = logged_in(&app, &web).await;
-    let page = plain(&body(app.oneshot(get("/", HOST, Some(&cookie))).await.unwrap()).await);
+    let page = plain(
+        &body(
+            app.clone()
+                .oneshot(get("/", HOST, Some(&cookie)))
+                .await
+                .unwrap(),
+        )
+        .await,
+    );
     assert!(page.contains("Current files") && page.contains("Other versions being kept"));
     assert!(page.contains("Safe: 2") && page.contains("Only on this computer: 1"));
     assert!(page.contains("Not checked recently: 4") && page.contains("Safe: 5"));
@@ -99,7 +107,14 @@ async fn home_shows_replicated_health_and_preserves_report_age_without_telemetry
     assert!(page.contains("Waiting to send: 1 B") && page.contains("To receive: 2 kB"));
     assert!(page.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
     assert!(!page.contains("<script>alert("));
-    assert!(page.contains("textContent") && !page.contains("innerHTML"));
+    assert!(page.contains("src=\"/live.js\"") && page.contains("data-events=\"/events\""));
+    let script = body(
+        app.oneshot(get("/live.js", HOST, Some(&cookie)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert!(script.contains("textContent") && !script.contains("innerHTML"));
     assert!(page.contains("7 further file explanations"));
 }
 

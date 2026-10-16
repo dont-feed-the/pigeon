@@ -1,4 +1,4 @@
-//! Purge-capable membership admission (proposed ADR 0075). A pending backup
+//! Purge-capable membership admission (proposed ADR 0076). A pending backup
 //! is configured but not yet eligible for custody. Signed acknowledgements
 //! bind its introduction; activation first merges their histories. The
 //! initial protocol upgrade requires every non-recovery participant and a

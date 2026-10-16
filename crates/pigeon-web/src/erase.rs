@@ -73,7 +73,7 @@ pub async fn view(
             @match answer {
                 Answer::Preview(p) => {
                     @if p.readiness.ready || (p.readiness.can_prepare && p.readiness.preparation_needed) {
-                        form method="post" action="/erase" {
+                        form method="post" action=(r.url("/erase")) {
                             input type="hidden" name="form" value=(form.0);
                             input type="hidden" name="history" value=(p.token);
                             @match &p.selection {
@@ -89,7 +89,7 @@ pub async fn view(
                     }
                 },
                 Answer::CancelPreview { decision, token } => {
-                    form method="post" action="/erase" {
+                    form method="post" action=(r.url("/erase")) {
                         input type="hidden" name="form" value=(form.0);
                         input type="hidden" name="history" value=(token);
                         input type="hidden" name="cancel" value=(decision.id);
@@ -98,14 +98,14 @@ pub async fn view(
                 },
                 Answer::Decisions { decisions, can_cancel: true } => {
                     @for decision in decisions.iter().filter(|d| !d.completed) {
-                        p { a href=(format!("/erase?cancel={}", enc(&decision.id))) { (r.id("web-erase-review-cancel")) " " (decision.id) } }
+                        p { a href=(r.url(&format!("/erase?cancel={}", enc(&decision.id)))) { (r.id("web-erase-review-cancel")) " " (decision.id) } }
                     }
                 },
                 _ => {},
             }
         }
-        p { a href="/erase" { (r.id("web-erase-list")) } }
-        p { a href="/files" { (r.id("web-back")) } }
+        p { a href=(r.url("/erase")) { (r.id("web-erase-list")) } }
+        p { a href=(r.url("/files")) { (r.id("web-back")) } }
     };
     page(&r, "/files", &r.id("web-erase-title"), &body).into_response()
 }

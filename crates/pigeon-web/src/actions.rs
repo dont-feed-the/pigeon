@@ -23,6 +23,9 @@ pub struct Decision {
     /// Why it is declined, for its author.
     #[serde(default)]
     note: String,
+    /// Required by the daemon when an administrator overrides a folder rule.
+    #[serde(default)]
+    reason: String,
 }
 
 /// *Accept*: `pigeon accept ID`.
@@ -33,7 +36,7 @@ pub async fn accept(
 ) -> Response {
     let request = Request::Accept {
         proposal: d.id.clone(),
-        reason: None,
+        reason: (!d.reason.trim().is_empty()).then(|| d.reason.trim().to_owned()),
     };
     act(&web, &token, &d.form, request, "/suggestions").await
 }

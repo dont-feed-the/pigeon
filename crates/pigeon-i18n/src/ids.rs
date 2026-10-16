@@ -337,6 +337,8 @@ pub const MESSAGES: &[Entry] = &[
     e("web-suggestion-other", &["author", "paths", "saved"]),
     e("web-suggestion-yours", &["paths", "saved"]),
     e("web-accept", &[]),
+    e("web-override-reason", &[]),
+    e("web-managed-client", &[]),
     e("web-decline", &[]),
     e("web-decline-note", &[]),
     e("web-back", &[]),

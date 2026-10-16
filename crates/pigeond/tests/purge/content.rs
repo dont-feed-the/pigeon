@@ -215,7 +215,8 @@ async fn confirmed_erasure_deletes_clean_current_files_and_preserves_private_sav
     let dirty = version(&l, "dirty.txt", dirty_bytes, true).await;
     let mut tree = l.g.git.tree(&upgraded).await.unwrap();
     tree.insert("Shared/clean.txt".into(), clean);
-    tree.insert("Shared/dirty.txt".into(), dirty);
+    tree.insert("Shared/dirty.txt".into(), dirty.clone());
+    tree.insert("Shared/staged.txt".into(), dirty);
     let original = signed(&l, &tree, &[&upgraded], T0 + 100, 1).await;
     merge::judge_history(&l.g, std::slice::from_ref(&original))
         .await
@@ -241,11 +242,20 @@ async fn confirmed_erasure_deletes_clean_current_files_and_preserves_private_sav
     .await
     .unwrap();
     let staged = l.git.index().await.unwrap()["staged-private.txt"].clone();
+    pigeond::change::stage_file(
+        &l.git,
+        Some(&l.wt),
+        "Shared/staged.txt",
+        b"selected private staged data\n",
+    )
+    .await
+    .unwrap();
+    let selected_staged = l.git.index().await.unwrap()["Shared/staged.txt"].clone();
     let selection = Selection::Path(l.wt.join("Shared").to_string_lossy().into());
     let plan = pigeond::erase_preview::plan(&l.g, &dev(1).0, &selection)
         .await
         .unwrap();
-    assert_eq!(plan.preview.current_files, 2);
+    assert_eq!(plan.preview.current_files, 3);
     let answer = pigeond::erase_commit::submit(&l.g, &dev(1).0, plan, &l.t)
         .await
         .unwrap();
@@ -262,6 +272,14 @@ async fn confirmed_erasure_deletes_clean_current_files_and_preserves_private_sav
         private
     );
     assert_eq!(l.git.index().await.unwrap()["staged-private.txt"], staged);
+    assert_eq!(
+        l.git.index().await.unwrap()["Shared/staged.txt"],
+        selected_staged
+    );
+    assert_eq!(
+        std::fs::read(l.wt.join("Shared/staged.txt")).unwrap(),
+        b"selected private staged data\n"
+    );
     let head = l.g.git.rev("refs/heads/main").await.unwrap();
     let accepted = l.g.git.tree(&head).await.unwrap();
     assert!(!accepted.contains_key("Shared/clean.txt"));

@@ -2,8 +2,8 @@
 
 TLAPS is useful here: parameterized proofs remove domain-size and execution
 length bounds from specific model safety claims. The additional
-[purge proof](purge-proof.md) covers the planned purge protocol; its finite
-cross-checks retain their frequency during evaluation. Apalache also checks the
+[purge proof](purge-proof.md) covers the planned purge protocol; its large
+finite cross-check runs as a periodic audit. Apalache also checks the
 capture invariant by induction, but was slower than TLC for this workload
 and provides less coverage than the parameterized proof. It remains an
 optional tool. Neither tool proves that the Rust implementation refines the
@@ -52,13 +52,21 @@ theorems fail the runner.
 
 ## Effect on CI
 
-The proof job runs before the fast and full model jobs. Only
+The proof job runs before the fast and full model jobs.
 `AnnexDrop_design4` moves from the routine full set to `audit`: the proof
 covers that instance and all larger finite custodian sets, every feasible K
 and every natural get bound. The same finite instance still runs with TLC
 on Monday's nightly run, release tags, by hand, and when explicitly named. This retains an independent
 finite cross-check while removing a redundant graph traversal from each
 routine nightly run.
+
+`Purge_full3` also runs as an audit. `PurgeProof.Safety` establishes every
+invariant in its configuration: `KeepWins`, `WaitingPeriod` and
+`NoResurrection`. The coverage check verifies its full-mode constants;
+there are no temporal properties, overrides or deadlock checks to leave
+unproved. The smaller `Purge_full` positive case and both negative purge
+configurations stay in the fast set. See the fresh validation and timing
+in [purge-proof.md](purge-proof.md#independent-checks-and-timing).
 
 All other model frequencies remain. In particular, `AnnexDrop_design` and
 `AnnexDrop_gets2` have expiry enabled; the ranked and deliberately unsafe
@@ -78,6 +86,7 @@ scripts/check-proofs --benchmark --include-slow
 # Ordinary finite checks, and the independent proof-covered audit:
 scripts/run-tlc --full
 scripts/run-tlc AnnexDrop_design4
+scripts/run-tlc Purge_full3
 scripts/run-tlc --audit
 ```
 
@@ -113,6 +122,35 @@ tools already installed. A fresh download and TLAPS installation took about
 restoration/download and first installation add overhead; the approximately
 30-fold improvement above compares the drop proof and coverage check with
 its finite traversal, not total workflow time or daemon testing time.
+
+## Further reductions
+
+Authority is the next substantial proof project. Before moving
+`Authority_decide4`, `Authority_faulty2` or `Authority_revoke2` to audits,
+the proof must establish every invariant of each actual configuration.
+An adoption-permission lemma alone would leave authorization, revocation,
+catalogue agreement and quiet-state convergence unchecked. The first
+shared lemma is history-prefix stability: appending a commit cannot change
+the ancestry, verdict, folded roster or catalogue of a fixed set of older
+commits.
+Revocation and adoption then need induction over the original actions.
+The current model fixes the persons, devices and paths; a proof over
+arbitrary history bounds must not claim arbitrary membership sizes.
+
+After authority, `Roster_clock`/`Roster_fold3` need proofs of canonical-fold
+agreement and the roster safeguards. `Evict_flip` needs all five safety
+properties across saves, group changes, losses, crashes and Free/Keep
+switches. Its `VIEW` directive also needs an explicit coverage argument;
+the current coverage checker deliberately refuses it. Eviction liveness
+configurations keep running until their temporal properties have separate
+proofs. Bridge catalogue checking remains useful and cheap; it is a lower
+priority for reducing CI cost.
+
+Each reduction requires a checked root theorem over the original actions,
+matching configuration assumptions and properties, rejected guard-removal
+mutations, a completed finite baseline, and measured checking costs. Keep
+small positive and negative examples and periodic large audits. Real
+implementation traces and crash tests continue independently.
 
 ## Why not replace more with Apalache
 

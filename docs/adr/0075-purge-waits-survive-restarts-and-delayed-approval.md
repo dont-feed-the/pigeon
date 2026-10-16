@@ -1,4 +1,4 @@
-# 0074. Purge waits survive restarts and delayed approval
+# 0075. Purge waits survive restarts and delayed approval
 
 - **Status:** Proposed, 16 October 2026, for the M5 implementation.
 

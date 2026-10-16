@@ -200,6 +200,35 @@ fn existing_peer_migrates_and_hiding_recovers_before_capture() {
     );
     assert!(!files.join("one.txt").exists());
     assert!(!files.join("two").exists());
+    let nested = files.join("two/file.txt").display().to_string();
+    assert!(
+        matches!(call(&peer, Request::History { path: nested.clone() }), Response::History { versions } if versions.len() == 1)
+    );
+    assert!(
+        matches!(call(&peer, Request::Files { folder: files.join("two").display().to_string() }), Response::Files { files, .. } if files.len() == 1 && files[0].path == "two/file.txt")
+    );
+    let Response::Said { message } = call(
+        &peer,
+        Request::View {
+            path: nested,
+            version: Some(1),
+            group: false,
+        },
+    ) else {
+        panic!("Sparse nested View failed")
+    };
+    let Some(pigeon_proto::Arg::Text(copy)) = message.args.get("path") else {
+        panic!("No view path")
+    };
+    assert_eq!(std::fs::read(copy).unwrap(), b"original bytes\n");
+    assert!(
+        std::fs::metadata(copy).unwrap().nlink() >= 3,
+        "View must pin shared content instead of copying it"
+    );
+    assert!(
+        !files.join("two").exists(),
+        "browsing history must not materialize accepted files"
+    );
     assert!(!files.join(".git/pigeon/shared-hide.json").exists());
     match bridge(&peer, Operation::Info) {
         Reply::Info {

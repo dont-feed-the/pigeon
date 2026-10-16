@@ -2965,6 +2965,7 @@ dependencies = [
  "pigeon-i18n",
  "pigeon-proto",
  "pigeon-sys",
+ "pigeon-web",
  "quick-xml",
  "rustix",
  "serde",

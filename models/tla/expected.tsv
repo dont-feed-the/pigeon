@@ -18,7 +18,7 @@ T_n42o4	CustodyTokens	full	pass
 Purge_full	Purge	fast	pass
 Purge_seals	Purge	fast	violation:KeepWins
 Purge_none	Purge	fast	violation:KeepWins
-Purge_full3	Purge	full	pass
+Purge_full3	Purge	audit	pass
 PurgeMembership_fenced	PurgeMembership	fast	pass
 PurgeMembership_fenced2	PurgeMembership	full	pass
 PurgeMembership_no_ack	PurgeMembership	fast	violation:KeepWins
