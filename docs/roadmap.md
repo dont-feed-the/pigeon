@@ -116,10 +116,11 @@ thresholds of [06 §6.7](spec/06-status.md).
 
 Implementation and local exit evidence: [M4 report](reports/people-5.md).
 Five independent agent usability sessions are accepted by the user for
-this gate, with initial failures and focused retakes recorded. The M4 rollup merged, but the v0.5.0 tag stopped at a macOS path-alias
-regression before publication. Its [0.5.1 correction](reports/release-051.md)
-stopped at release validation too. The [0.5.2 correction](reports/release-052.md)
-is the current candidate; all earlier tags remain unchanged.
+this gate, with initial failures and focused retakes recorded. The M4 rollup merged. Its v0.5.0 and early correction tags stopped before
+publication; those tags remain unchanged. M4 is available in published
+[v0.5.13](https://github.com/dont-feed-the/pigeon/releases/tag/v0.5.13),
+released on 16 October at 21:09 UTC with Linux and macOS archives.
+The [publication KPI](release-kpi.md) records the actual releases and gaps.
 
 ## M5. Deletion and scrub: v0.6
 
@@ -169,9 +170,9 @@ These come in v1.1:
 - a placement planner (ADR 0003);
 - per-file freeing (ADR 0031).
 
-## Decisions people owe
+## Product decisions
 
-These questions of [16 §16.4](spec/16-open-questions.md) block a milestone:
-
-- the status thresholds block M4;
-- expiring declined suggestions blocks M5.
+The M4 usability report records the status thresholds. On 16 October 2026,
+the user resolved the M5 retention question: declined suggestions stay until
+someone explicitly erases them; groups do not expire them automatically.
+The remaining design questions are in [16 §16.4](spec/16-open-questions.md).

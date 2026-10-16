@@ -79,3 +79,32 @@ trace and eight copies of the golden storage trace. Three alternating runs
 per mode checked all 16 logs each time: the median was 18.488 seconds with
 one worker and 11.226 seconds with two. These are local replay measurements;
 the release comparison still needs the next candidate's CI evidence.
+
+
+## v0.5.13 observation
+
+[v0.5.13](https://github.com/dont-feed-the/pigeon/releases/tag/v0.5.13)
+was published on 16 October at 21:09:26 UTC. Its candidate took **30 minutes
+1 second** to publish, meeting the 60-minute target; v0.5.12 took 35 minutes
+42 seconds. The completed publication gap was **2 hours 44 minutes 18 seconds**,
+missing the two-hour target. That miss remains in the interval history.
+
+The complete Linux slice runs are
+[v0.5.12](https://github.com/dont-feed-the/pigeon/actions/runs/38942631283)
+and [v0.5.13](https://github.com/dont-feed-the/pigeon/actions/runs/38963802150).
+Their trace-checking steps took:
+
+| Partition | v0.5.12, one worker | v0.5.13, two workers |
+| --- | --- | --- |
+| Remaining slice scenarios | 3m 15s | 1m 18s |
+| S9 random shard 0 | 19m 21s | 16m 24s |
+| S9 random shard 1 | 17m 49s | 1m 19s |
+| S5 | 5s | 5s |
+
+Both shard-1 logs retain 52 accepted filesystem checks and 26 accepted
+roster checks. Each random shard still runs 25 schedules and its retained
+regression. These are observations from two releases, with different event
+histories, other code changes and runner conditions; they do not isolate
+the workers' contribution. The controlled replay above supplies the separate
+local comparison. There are now six candidate lead-time samples and five
+completed publication intervals, too few for a reliable percentile claim.
