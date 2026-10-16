@@ -38,7 +38,8 @@ APALACHE_SHA = "b781b53bba32fac14ac2e02b0332e1dc2edc64cb7b850c0608d8142cc7aa2ef4
 APALACHE_URL = ("https://github.com/apalache-mc/apalache/releases/download/"
                 "v0.62.4/apalache-0.62.4.tgz")
 PROOFS = {"CaptureTransactionProof": "CaptureTransaction_safe",
-          "AnnexDropProof": "AnnexDrop_design4"}
+          "AnnexDropProof": "AnnexDrop_design4",
+          "PurgeProof": "Purge_full3"}
 
 
 def load_tlc():
@@ -146,6 +147,11 @@ class Checks:
         if reject:
             # Syntax errors, missing tools and timeouts do not count as a mutant
             # detected. TLAPS must report an actual unproved obligation.
+            if re.search(r"Resource temporarily unavailable|pthread_create|"
+                         r"unable to create native thread|cannot fork|failed to spawn|"
+                         r"No such file or directory|command not found|OutOfMemoryError",
+                         output, re.I):
+                raise RuntimeError(f"{name}: infrastructure failure is not mutation evidence")
             if code != 3 or not re.search(r"\[ERROR\]: \d+/\d+ obligations failed", output):
                 raise RuntimeError(f"{name}: expected an unproved obligation; inspect its log")
         else:
@@ -224,6 +230,12 @@ class Checks:
              "Cardinality(proof[d]) >= K", "TRUE"),
             ("drop-no-shared-guard", "AnnexDrop", "AnnexDropProof",
              "shared[d] = {}", "TRUE"),
+            ("purge-no-history-merge", "Purge", "PurgeProof",
+             "/\\ \\A x \\in Custodians : (seal[x].r1 => knowsR1[d])\n"
+             "                                                     /\\ (seal[x].cancel => knowsCancel[d])",
+             "/\\ TRUE"),
+            ("purge-no-wait", "Purge", "PurgeProof", "now >= seen[c] + R", "TRUE"),
+            ("purge-unwanted-fetch", "Purge", "PurgeProof", "/\\ Wants(d)", "/\\ TRUE"),
         ]
         for name, target, proof, old, new in cases:
             with tempfile.TemporaryDirectory() as temp:
@@ -235,6 +247,10 @@ class Checks:
                     raise RuntimeError(f"{name}: mutation site changed")
                 path.write_text(text.replace(old, new))
                 self.proof(work, proof, name, reject=True)
+                if target == "Purge":
+                    # An unproved auxiliary invariant alone need not imply a
+                    # broken protocol: require a counterexample to actual safety.
+                    self.purge_tlc(work, name + "-counterexample", reject=True)
         with tempfile.TemporaryDirectory() as temp:
             work = Path(temp)
             copy_models(work)
@@ -261,6 +277,46 @@ class Checks:
                 cfg.write_text(text)
                 self.coverage(work, "AnnexDropProof", "AnnexDrop_design4",
                               f"uncovered-{constant}", reject=True)
+
+        for name, changes in [
+            ("purge-seals-only", [("Mode", '"full"', '"seals"')]),
+            ("purge-no-seals", [("Mode", '"full"', '"none"')]),
+            ("purge-no-custodians", [("Custodians", "{c1, c2, c3}", "{}"),
+                                    ("Share", "{c1, c2}", "{}")]),
+            ("purge-no-copies", [("Share", "{c1, c2}", "{}"),
+                                ("LaptopCopies", "{l1}", "{}")]),
+        ]:
+            with tempfile.TemporaryDirectory() as temp:
+                work = Path(temp)
+                copy_models(work)
+                cfg = work / "Purge_full3.cfg"
+                text = cfg.read_text()
+                for constant, old, new in changes:
+                    text, count = re.subn(rf"\b{constant} = {re.escape(old)}",
+                                          f"{constant} = {new}", text)
+                    if count != 1:
+                        raise RuntimeError(f"{name}: coverage mutation site changed")
+                cfg.write_text(text)
+                self.coverage(work, "PurgeProof", "Purge_full3", name, reject=True)
+
+    def purge_tlc(self, work, name, reject=False, large=False):
+        config = "Purge_full3" if large else "Purge_full"
+        cmd = [self.java, "-Xmx1g", "-Xss16m", "-XX:+UseParallelGC", f"-Djava.io.tmpdir={work}",
+               "-cp", str(self.jar), "tlc2.TLC", "-workers", "1",
+               "-metadir", str(work / name), "-config", config + ".cfg", "Purge"]
+        code, output = self.run(name, cmd, work, timeout=1800 if large else 120)
+        if reject:
+            if code != 12 or not re.search(
+                    r"Error: Invariant (KeepWins|WaitingPeriod|NoResurrection) is violated", output):
+                raise RuntimeError(f"{name}: expected a purge safety counterexample")
+        elif code or "Model checking completed. No error has been found." not in output:
+            raise RuntimeError(f"{name}: independent finite purge check failed")
+
+    def benchmark_purge(self):
+        with tempfile.TemporaryDirectory() as temp:
+            work = Path(temp)
+            copy_models(work)
+            self.purge_tlc(work, "tlc-Purge_full3", large=True)
 
     def benchmark(self, apalache, include_slow):
         with tempfile.TemporaryDirectory() as temp:
@@ -307,6 +363,7 @@ def main():
     parser.add_argument("--no-mutants", action="store_true", help="local proof-only timing")
     parser.add_argument("--benchmark", action="store_true", help="also compare TLC and Apalache")
     parser.add_argument("--include-slow", action="store_true", help="benchmark the large TLC drop graph")
+    parser.add_argument("--benchmark-purge", action="store_true", help="also time the large finite purge graph")
     parser.add_argument("--apalache")
     args = parser.parse_args()
     args.out = args.out.resolve()
@@ -319,6 +376,8 @@ def main():
         checks.positives()
         if not args.no_mutants:
             checks.mutants()
+        if args.benchmark_purge:
+            checks.benchmark_purge()
         if args.benchmark:
             apalache = apalache_binary(args.apalache)
             version(apalache, "version", APALACHE_VERSION)

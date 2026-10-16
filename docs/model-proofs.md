@@ -1,7 +1,9 @@
 # Model safety proofs and symbolic checking
 
-TLAPS is useful here: two checked proofs now remove domain-size and execution
-length bounds from specific model safety claims. Apalache also checks the
+TLAPS is useful here: parameterized proofs remove domain-size and execution
+length bounds from specific model safety claims. The additional
+[purge proof](purge-proof.md) covers the planned purge protocol; its finite
+cross-checks retain their frequency during evaluation. Apalache also checks the
 capture invariant by induction, but was slower than TLC for this workload
 and provides less coverage than the parameterized proof. It remains an
 optional tool. Neither tool proves that the Rust implementation refines the
@@ -17,6 +19,7 @@ there is no separately maintained transition relation.
 |---|---|---|
 | `CaptureTransactionProof.Safety` | `Spec => []CapturedBeforeDisplacement`: every displaced value was committed | Any `Values` containing the initial value `1`, including infinite sets; `Off = {}`. Any execution length, saves, staging, commit failures, rollback, receives and installs described by `CaptureTransaction`. It does not model annex object durability or daemon crashes at finer I/O boundaries. |
 | `AnnexDropProof.Safety` | `Spec => [](TypeOK /\ LockedStays /\ INV_K)`: a locked copy stays present and at least K copies remain | Any finite `Cust`, natural `K <= Cardinality(Cust)`, and natural `MaxGets`; safe checks, named remotes, no trusted repositories, no log-only proof, **no lock expiry**. Any execution length, partitions, stale logs, aborts, dead markings, and gets admitted by `AnnexDrop`. It does not cover force drops, disk faults, corruption, ranked P2P checks or expiry. |
+| `PurgeProof.Safety` | `Spec => [](KeepWins /\ WaitingPeriod /\ NoResurrection)` | Full-mode purge; any nonempty custodian set disjoint from laptops, valid decider and initial holders, at least one initial copy, natural waiting period and time bound. Covers all original actions and message orders. Purge is not yet implemented; see [scope and proof structure](purge-proof.md). |
 
 The capture proof keeps the staged value and prior committed index across a
 failure. Only an idle install may displace the index, and that index is
@@ -149,3 +152,25 @@ assumptions. They do not establish universal implementation refinement,
 filesystem atomicity, annex durability, hardware behavior, custody/repair
 guarantees absent from the model, or liveness. Reducing those tests would
 require evidence about those particular links and properties.
+
+## Reusing unchanged proof results
+
+The CI proof job may reuse a successful verification from main only when
+all formal inputs have identical paths and contents. `scripts/proof-inputs`
+hashes every model/configuration (including nested libraries), the expected
+verdict manifest, both proof/TLC runners and their embedded tool pins, the
+cache helper and its tests, and the entire reusable proof workflow. Renaming,
+adding or deleting an input changes the key. Generated TLAPS fingerprints
+are excluded; fresh checks still use `--nofp`.
+
+Only a successful fresh main push saves a verification cache. PRs restore
+an exact key, never a prefix or older result, validate the recorded input
+hash/repository/main provenance and cite its original run. A mismatch
+fails the job. A missing or evicted cache causes full fresh verification.
+Scheduled, manual and release runs always check fresh. The tests exercise
+changed contents, renamed imports, new configurations and invalid provenance.
+
+This reuses an established theorem about unchanged model actions; changes
+to Rust still run their implementation, trace, model and fault checks.
+TLC frequencies are unchanged. The first main run for new inputs pays the
+full proof/mutation cost; subsequent code-only PRs avoid repeating it.
