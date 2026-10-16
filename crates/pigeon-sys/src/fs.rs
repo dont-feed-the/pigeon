@@ -34,6 +34,10 @@ pub struct Stat {
     pub nlink: u64,
     /// The file type and permission bits (`st_mode`).
     pub mode: u32,
+    /// The owner's user ID.
+    pub uid: u32,
+    /// The file's group ID.
+    pub gid: u32,
 }
 
 impl Stat {
@@ -70,6 +74,8 @@ impl Stat {
                 .saturating_add(meta.mtime_nsec()),
             nlink: meta.nlink(),
             mode: meta.mode(),
+            uid: meta.uid(),
+            gid: meta.gid(),
         }
     }
 }

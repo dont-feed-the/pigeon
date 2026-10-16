@@ -1,0 +1,27 @@
+# cargo-nextest, the test runner (docs/development.md), at a pinned version:
+# the release archive for this runner, checked against its SHA-256, unpacked
+# into ~/.cargo/bin. Moving the pin means updating the version and both sums.
+name: cargo-nextest
+description: Installs cargo-nextest at the pinned version and checksum.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        VERSION: "0.9.148"
+      run: |
+        case "$RUNNER_OS" in
+          Linux) asset=x86_64-unknown-linux-gnu
+                 sum=223ba936714cc861a9cdedad5a8eb664dfdd69d6fbdf6cea6aa8184f523290dc ;;
+          macOS) asset=universal-apple-darwin
+                 sum=6c23b7fb4ca82c571fc8dfedbab45bfa773d45918f933170c85d21cd7f4b852b ;;
+          *) echo "::error::no pinned cargo-nextest for $RUNNER_OS"; exit 1 ;;
+        esac
+        t="$RUNNER_TEMP/cargo-nextest.tar.gz"
+        curl -fsSL -o "$t" \
+          "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-$VERSION/cargo-nextest-$VERSION-$asset.tar.gz"
+        echo "$sum  $t" | shasum -a 256 -c - || {
+          echo "::error::cargo-nextest $VERSION does not match its pinned checksum"; exit 1; }
+        mkdir -p ~/.cargo/bin
+        tar -C ~/.cargo/bin -xzf "$t"
+        cargo nextest --version

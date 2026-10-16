@@ -30,11 +30,12 @@ scripts select their own groups; unrecognized tooling conservatively runs
 everything. This table describes the current groups in `scripts/select-ci`;
 new crates and paths remain full until their dependencies are classified.
 
-## Required version bumps
+## Version metadata
 
-Every PR updates the workspace version and lockfile. Treating those paths as
-unconditional dependency changes would defeat selection. The selector ignores
-them only when it can compare both complete TOML documents and prove that:
+Pull requests leave the version unchanged; a release commit updates it on main.
+Older stacked branches may still contain a version-only change. The selector
+ignores such metadata only when it compares both complete TOML documents and
+proves that:
 
 - The root workspace configuration is identical apart from a stable version
   bump. Invalid versions, prerelease transitions and decreases keep full checks.

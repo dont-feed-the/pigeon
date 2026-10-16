@@ -216,8 +216,9 @@ An error that reaches a person is a **Problem**:
   operation, the object, a failed call's command, status and stderr tail.
 - Only the request layer of `pigeond` turns crate errors into Problems.
 
-Codes used: `invite-unknown`, `already-in-group`, `person-exists`,
-`invite-not-allowed`, `inviter-offline`, `not-in-group`, `not-allowed`,
+Codes used: `invite-unknown`, `already-in-group`, `in-another-group`,
+`person-exists`, `invite-not-allowed`, `inviter-offline`, `not-in-group`,
+`not-allowed`,
 `needs-confirmation`, `backup-machine-needs-linux` (§10.7), `disk-full`
 and `no-capacity` ([08 §8.9](08-custody-loops.md)), `commit-unsigned`,
 `commit-forged`, `commit-unknown-signer`, `commit-not-allowed`,

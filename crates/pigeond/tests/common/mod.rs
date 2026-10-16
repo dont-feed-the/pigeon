@@ -141,8 +141,16 @@ pub fn assert_crashed(d: &mut Daemon) {
     }
 }
 
-/// Each daemon's own log lines (not its libraries') and its output, for a
-/// failure's message.
+/// Per-connection lines, which fill the tail of a failure's logs and hide
+/// what the loops did; the kept directory has them all.
+const CHATTER: [&str; 3] = [
+    "\"message\":\"relay-ended\"",
+    "\"message\":\"connect-ended\"",
+    "\"message\":\"stream-admitted\"",
+];
+
+/// Each daemon's own log lines (not its libraries' nor per-connection ones)
+/// and its output, for a failure's message.
 pub fn logs(all: &[&Daemon]) -> String {
     let mut out = String::new();
     for d in all {
@@ -153,6 +161,7 @@ pub fn logs(all: &[&Daemon]) -> String {
             let lines: Vec<&str> = text
                 .lines()
                 .filter(|l| l.contains("\"target\":\"pigeond") || l.contains("\"WARN\""))
+                .filter(|l| !CHATTER.iter().any(|m| l.contains(m)))
                 .collect();
             for l in lines.iter().rev().take(80).rev() {
                 out.push_str(l);
@@ -292,10 +301,19 @@ pub static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
 /// A generated annex fixture: git-annex makes object directories read-only.
 /// Restore owner traversal/write permission before TempDir removes our tree;
 /// otherwise successful suites leak enough fixtures to hit the disk reserve.
+/// A failed test keeps it, with each daemon's full logs, and says where.
 pub struct FixtureDir(tempfile::TempDir);
 impl Drop for FixtureDir {
     fn drop(&mut self) {
         use std::os::unix::fs::PermissionsExt;
+        if std::thread::panicking() {
+            self.0.disable_cleanup(true);
+            eprintln!(
+                "kept the failed test's directory: {} (each daemon's logs in <name>/state/logs)",
+                self.0.path().display()
+            );
+            return;
+        }
         let mut dirs = vec![self.0.path().to_path_buf()];
         while let Some(dir) = dirs.pop() {
             let Ok(meta) = std::fs::symlink_metadata(&dir) else {

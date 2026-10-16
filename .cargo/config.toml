@@ -1,0 +1,10 @@
+# Tests and `cargo run` call git as pigeond's children do (spec 03 §3.7):
+# without the system or global configuration, nor any global ignore file,
+# so a rule such as `/.*` in ~/.gitignore cannot hide `.pigeon/`.
+# pigeon-git strips these GIT_* variables from pigeond's own children.
+[env]
+GIT_CONFIG_NOSYSTEM = "1"
+GIT_CONFIG_GLOBAL = "/dev/null"
+GIT_CONFIG_COUNT = "1"
+GIT_CONFIG_KEY_0 = "core.excludesFile"
+GIT_CONFIG_VALUE_0 = "/dev/null"

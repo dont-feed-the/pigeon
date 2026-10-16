@@ -1,13 +1,24 @@
 # Changelog
 
-All notable user-visible changes to pigeon are documented here. While the
-version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
-the second number, and every other pull request the third.
+All notable user-visible changes to pigeon are documented here. Changes
+not yet released are under *Unreleased*. While the version is 0.x, a
+release that completes a milestone of the [roadmap](docs/roadmap.md)
+increments the second number, and every other release the third.
 
-## 0.5.13 — 2026-10-16
+## Unreleased
 
 ### Changed
 
+- A computer is now in one group only. `pigeon create`, `pigeon join` and
+  `pigeon recover` (and joining or creating in the web interface) refuse a
+  second group, before writing anything, and say how to leave the first:
+  `pigeon leave`, or *Leave the group* in Settings in `pigeon open`. Before,
+  a second group was created, but `pigeon open` and the commands that take
+  no folder only ever showed the first one.
+- `pigeon leave` on a computer that is the only machine of its group leaves
+  it at once, even as the group's last admin computer; its files stay in
+  the folder. It used to refuse, so a group created by mistake could not be
+  left.
 - Pull requests run the checks relevant to their changed files. Documentation,
   installer and formal-model changes avoid unrelated expensive jobs, while
   shared dependencies, unknown paths and CI changes retain broader checks.
@@ -17,6 +28,14 @@ the second number, and every other pull request the third.
 
 ### Fixed
 
+- On Linux with a umask of 002, the default on Ubuntu and Fedora desktops,
+  pigeon thought every file might be in use: it delayed writing the group's
+  versions into your folder, `pigeon free` and *Free up space* deleted
+  nothing, and `pigeon restore` said the file was in use. Files are now
+  only held back when another user's program could really be writing them.
+- A computer that left its last group and then created or joined another
+  one, without restarting pigeon, no longer changes identity at the next
+  restart, which made the new group no longer recognise it.
 - A client-management page, download or conflict action queued behind client
   revocation now checks the updated access state before contacting that peer.
 - Reusing a shared content object after an interrupted publication completes
