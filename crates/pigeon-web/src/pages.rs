@@ -15,8 +15,6 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use futures_util::StreamExt;
 use futures_util::stream::{self, Stream};
 use maud::{DOCTYPE, Markup, html};
-use pigeon_i18n::Message;
-use pigeon_proto::api::Suggestion;
 use pigeon_proto::{Request, Response};
 
 use crate::{FormToken, Web};
@@ -214,80 +212,6 @@ pub async fn home(
         }
     };
     page(&r, "/", &headline, &body)
-}
-
-/// Suggestions: those waiting for a decision, with *Accept* and *Decline*
-/// on those this person decides (ux.md §6.3).
-pub async fn suggestions(
-    State(web): State<Arc<Web>>,
-    Extension(form): Extension<FormToken>,
-) -> Html<String> {
-    let r = web.renderer();
-    let mut rows = Vec::new();
-    let mut other = Vec::new();
-    for answer in web.ask(Request::Proposals).await {
-        match answer {
-            Response::Proposals { proposals } => rows = proposals,
-            Response::Progress { .. } => {}
-            a => other.extend(r.response(&a).0),
-        }
-    }
-    let body = html! {
-        @if rows.is_empty() && other.is_empty() { p { (r.id("suggestions-none")) } }
-        (list(&other))
-        @for s in &rows { (suggestion(&r, s, &form.0)) }
-    };
-    page(&r, "/suggestions", &r.id("web-nav-suggestions"), &body)
-}
-
-/// One suggestion, and the forms that decide it.
-fn suggestion(r: &Renderer, s: &Suggestion, form: &str) -> Markup {
-    let saved = pigeon_proto::time::parse_rfc3339(&s.saved_at)
-        .map_or_else(|| s.saved_at.clone(), |t| r.ago(crate::now() - t));
-    let id = if s.mine {
-        "web-suggestion-yours"
-    } else if s.decide {
-        "web-suggestion-decide"
-    } else {
-        "web-suggestion-other"
-    };
-    let msg = Message::new(id)
-        .arg("author", s.author.clone())
-        .arg("paths", s.paths.join(", "))
-        .arg("saved", saved);
-    let decides = s.decide && (!s.mine || s.force);
-    html! {
-        article {
-            p { (r.catalogue().format(&msg)) }
-            @for path in &s.paths {
-                form method="post" action=(r.url("/suggestions/view")) {
-                    input type="hidden" name="form" value=(form);
-                    input type="hidden" name="proposal" value=(s.id);
-                    input type="hidden" name="path" value=(path);
-                    button type="submit" { (r.id("web-view-suggestion")) " — " (path) }
-                }
-            }
-            @if decides {
-                form method="post" action=(r.url("/suggestions/accept")) {
-                    input type="hidden" name="form" value=(form);
-                    input type="hidden" name="id" value=(s.id);
-                    @if s.force {
-                        label { (r.id("web-override-reason")) " " input name="reason" required; }
-                    }
-                    button type="submit" { (r.id("web-accept")) }
-                }
-            }
-            @if decides {
-                form method="post" action=(r.url("/suggestions/decline")) {
-                    input type="hidden" name="form" value=(form);
-                    input type="hidden" name="id" value=(s.id);
-                    label { (r.id("web-decline-note")) " " input type="text" name="note"; }
-                    " "
-                    button type="submit" { (r.id("web-decline")) }
-                }
-            }
-        }
-    }
 }
 
 /// The result of an action: its first line as the title, the rest under

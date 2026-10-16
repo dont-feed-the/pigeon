@@ -72,8 +72,14 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("free --without-checking PATH", "cmd-free-without-checking"),
     ("keep PATH", "cmd-keep"),
     ("suggestions", "cmd-suggestions"),
-    ("accept ID [--override REASON]", "cmd-accept"),
-    ("decline ID [--note TEXT]", "cmd-decline"),
+    (
+        "accept ID [FILE… [--note TEXT]] [--override REASON]",
+        "cmd-accept",
+    ),
+    (
+        "decline ID [FILE… [--override REASON]] [--note TEXT]",
+        "cmd-decline",
+    ),
     ("conflicts", "cmd-conflicts"),
     (
         "resolve PATH --take-group | --keep-copy DEST | --suggest-again",
@@ -223,14 +229,22 @@ enum Command {
     Accept {
         #[arg(add = complete::suggestions())]
         id: String,
+        #[arg(value_name = "FILE", value_hint = ValueHint::AnyPath)]
+        files: Vec<String>,
         #[arg(long = "override", value_name = "REASON")]
         reason: Option<String>,
+        #[arg(long)]
+        note: Option<String>,
     },
     Decline {
         #[arg(add = complete::suggestions())]
         id: String,
+        #[arg(value_name = "FILE", value_hint = ValueHint::AnyPath)]
+        files: Vec<String>,
         #[arg(long)]
         note: Option<String>,
+        #[arg(long = "override", value_name = "REASON")]
+        reason: Option<String>,
     },
     Conflicts,
     #[command(group(ArgGroup::new("choice").args(["take_group", "keep_copy", "suggest_again"]).required(true)))]
@@ -343,6 +357,23 @@ pub fn absolute(path: &str) -> String {
         .unwrap_or_else(|_| Path::new(path).to_path_buf())
         .to_string_lossy()
         .into_owned()
+}
+
+/// The files of a suggestion named on the command line (ADR 0075): a file
+/// here is made absolute; a name that is not here, such as a new file the
+/// suggestion adds, is a path in the group's folder as `pigeon
+/// suggestions` lists it.
+fn chosen(files: &[String]) -> Vec<String> {
+    files
+        .iter()
+        .map(|f| {
+            if Path::new(f).is_absolute() || Path::new(f).exists() {
+                absolute(f)
+            } else {
+                f.clone()
+            }
+        })
+        .collect()
 }
 
 fn hostname() -> String {
@@ -511,11 +542,35 @@ fn action(c: Command) -> Action {
             },
         }),
         Command::Suggestions => send(Request::Proposals),
-        Command::Accept { id, reason } => send(Request::Accept {
+        Command::Accept {
+            id,
+            files,
+            reason,
+            note,
+        } if !files.is_empty() => send(Request::DecideFiles {
+            proposal: id,
+            paths: chosen(&files),
+            accept: true,
+            note,
+            reason,
+        }),
+        Command::Accept { id, reason, .. } => send(Request::Accept {
             proposal: id,
             reason,
         }),
-        Command::Decline { id, note } => send(Request::Reject { proposal: id, note }),
+        Command::Decline {
+            id,
+            files,
+            note,
+            reason,
+        } if !files.is_empty() => send(Request::DecideFiles {
+            proposal: id,
+            paths: chosen(&files),
+            accept: false,
+            note,
+            reason,
+        }),
+        Command::Decline { id, note, .. } => send(Request::Reject { proposal: id, note }),
         Command::Conflicts => send(Request::Conflicts),
         Command::Resolve {
             path,

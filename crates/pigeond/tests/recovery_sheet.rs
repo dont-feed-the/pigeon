@@ -134,7 +134,7 @@ fn a_sheet_recovers_an_admin_from_someone_elses_backup() {
         pigeon(&alice, &["suggestions"])
             .into_iter()
             .find_map(|r| match r {
-                Response::Proposals { proposals } => Some(proposals),
+                Response::Proposals { proposals, .. } => Some(proposals),
                 _ => None,
             })
             .unwrap_or_default()

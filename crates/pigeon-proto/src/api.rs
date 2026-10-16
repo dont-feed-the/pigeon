@@ -250,6 +250,28 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         note: Option<String>,
     },
+    /// `pigeon accept ID PATH…` · `pigeon decline ID PATH… [--note TEXT]`:
+    /// one decision on every file of a proposal, the files named accepted
+    /// and the others declined, or the reverse (ADR 0075). A new request,
+    /// so that an older `pigeond` refuses it rather than deciding the
+    /// whole proposal.
+    DecideFiles {
+        /// The proposal's commit, or a prefix of it.
+        proposal: String,
+        /// Files of the proposal, relative to the group or absolute within
+        /// it; a file renamed counts with its old name.
+        paths: Vec<String>,
+        /// Whether the files named are accepted (and the others declined),
+        /// or declined (and the others accepted).
+        accept: bool,
+        /// Why some are declined, for its author.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        note: Option<String>,
+        /// The Force reason (04 §4.6), when nobody may make a change it
+        /// accepts.
+        #[serde(default, rename = "override", skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+    },
     /// `pigeon conflicts`: the paths whose file differs from the group's
     /// version on this computer (07 §7.6).
     Conflicts,
@@ -370,6 +392,13 @@ pub enum Response {
     Proposals {
         /// Oldest first.
         proposals: Vec<Suggestion>,
+        /// This person's suggestions decided lately, newest first (ADR
+        /// 0075).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        decided: Vec<Outcome>,
+        /// The group's folder on this computer, which the paths are in.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        root: String,
     },
     /// The answer to `Folders`.
     Folders {
@@ -648,6 +677,66 @@ pub struct Suggestion {
     /// Whether it is this person's.
     #[serde(default)]
     pub mine: bool,
+    /// What it changes, file by file: a rename is one file (ADR 0075).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<SuggestedFile>,
+}
+
+/// What a suggestion changes in one file (ADR 0075).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SuggestedFile {
+    /// Its path in the group's folder; for a rename, the new one.
+    pub path: String,
+    /// How it changes.
+    pub change: FileChange,
+    /// For a rename, the path it had.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
+    /// Its size before, in bytes; absent for a new file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<u64>,
+    /// Its size after, in bytes; absent for a deletion.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after: Option<u64>,
+    /// For a small text file whose two versions this computer holds, the
+    /// lines added and the lines removed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lines: Option<(u64, u64)>,
+}
+
+/// How a suggestion changes a file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FileChange {
+    /// A new file.
+    Added,
+    /// Its content changes.
+    Changed,
+    /// It is deleted.
+    Deleted,
+    /// It moves to a new name, its content unchanged.
+    Renamed,
+}
+
+/// A suggestion of this person that was decided (ADR 0075): which of its
+/// files were accepted and which declined, by whom, and why.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Outcome {
+    /// The proposal's commit.
+    pub id: String,
+    /// The name of the person who decided.
+    pub by: String,
+    /// When, RFC 3339.
+    pub decided_at: String,
+    /// The files now in the group's version.
+    #[serde(default)]
+    pub accepted: Vec<String>,
+    /// The files declined.
+    #[serde(default)]
+    pub declined: Vec<String>,
+    /// The decider's note.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
 }
 
 /// A held batch of deletions (07 §7.4).

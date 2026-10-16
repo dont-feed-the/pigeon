@@ -312,7 +312,7 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             folder,
             from,
         } => crate::recovery::recover(d, &sheet, folder, from).await,
-        Request::Proposals => crate::decide::list(d).await,
+        Request::Proposals => crate::decide::list_detailed(d).await,
         Request::Conflicts => crate::resolve::list(d).await,
         Request::Resolve { path, choice } => {
             crate::resolve::resolve(d, Path::new(&path), &choice).await
@@ -322,6 +322,16 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         }
         Request::Reject { proposal, note } => {
             crate::decide::decline(d, &proposal, note.as_deref()).await
+        }
+        Request::DecideFiles {
+            proposal,
+            paths,
+            accept,
+            note,
+            reason,
+        } => {
+            let (note, reason) = (note.as_deref(), reason.as_deref());
+            crate::decide_files::decide(d, &proposal, &paths, accept, note, reason).await
         }
         Request::Hello { .. }
         | Request::Address { .. }

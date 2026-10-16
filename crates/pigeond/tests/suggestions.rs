@@ -204,7 +204,7 @@ fn a_change_its_person_may_not_make_becomes_a_relayed_suggestion() {
 
     // Ana decides; Cid may not.
     let listed = |d: &Daemon| match pigeon(d, &["suggestions"]).as_slice() {
-        [Response::Proposals { proposals }] => proposals.clone(),
+        [Response::Proposals { proposals, .. }] => proposals.clone(),
         other => panic!("suggestions: {other:?}"),
     };
     eventually_within(

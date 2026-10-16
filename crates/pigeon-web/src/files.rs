@@ -220,8 +220,10 @@ pub async fn file_page(
         }
     }
     let newest = rows.iter().map(|v| v.number).max();
+    let suggested = crate::suggestions::on_file(&web, &r, &at.path).await;
     let body = html! {
         (list(&other))
+        (suggested)
         h2 { (r.id("web-versions")) }
         @for v in &rows { (version(&r, &at.path, v, Some(v.number) != newest, &form.0)) }
         p { a href=(r.url("/files")) { (r.id("web-back")) } }

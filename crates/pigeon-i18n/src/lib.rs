@@ -11,6 +11,7 @@ pub mod ids;
 pub mod lang;
 pub mod recovery;
 pub mod render;
+mod suggestions;
 
 use std::collections::BTreeMap;
 

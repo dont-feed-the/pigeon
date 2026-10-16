@@ -93,8 +93,8 @@ cmd-restore = Restore a version, or a deleted file
 cmd-free = Free up a folder's space on this computer
 cmd-keep = Keep a folder on this computer
 cmd-suggestions = List the suggested changes waiting for a decision
-cmd-accept = Accept a suggested change into the group's files
-cmd-decline = Decline a suggested change, saying why if you like
+cmd-accept = Accept a suggested change into the group's files; name files to accept only those and decline the others
+cmd-decline = Decline a suggested change, saying why if you like; name files to decline only those and accept the others
 cmd-conflicts = List your files that differ from the group's version
 cmd-resolve = Choose for a file that differs: the group's version, yours as a copy, or suggest it again
 cmd-remove-computer = Remove a lost or retired computer from the group
@@ -124,6 +124,56 @@ suggestion-other = { $id }  { $author } suggests a change of { $paths }, saved {
 suggestion-yours = { $id }  Your change of { $paths }, saved { $saved }, waits for a decision.
 accepted-suggestion = { $author }'s suggestion is now in the group's files.
 declined-suggestion = { $author }'s suggestion is declined; they will be told.
+decided-all-accepted =
+    { $count ->
+        [one] You accepted { $author }'s change ({ $paths }). { $author } will be told.
+       *[other] You accepted { $author }'s { $count } changes ({ $paths }). { $author } will be told.
+    }
+decided-all-declined =
+    { $count ->
+        [one] You declined { $author }'s change ({ $paths }). { $author } will be told.
+       *[other] You declined { $author }'s { $count } changes ({ $paths }). { $author } will be told.
+    }
+decided-some = You accepted { $accepted } of { $author }'s changes ({ $accepted-paths }) and declined { $declined } ({ $declined-paths }). { $author } will be told.
+suggestion-file-added = { $path }: new file, { $after }
+suggestion-file-changed = { $path }: changed, { $before } → { $after }
+suggestion-file-changed-lines =
+    { $path }: changed, { $before } → { $after }, { $added ->
+        [one] 1 line added
+       *[other] { $added } lines added
+    } and { $removed ->
+        [one] 1 removed
+       *[other] { $removed } removed
+    }
+suggestion-file-deleted = { $path }: deleted (it was { $before })
+suggestion-file-renamed = { $path }: renamed from { $from }, content unchanged ({ $after })
+suggestion-files-hint = To accept some files only, and decline the others: pigeon accept { $id } FILE…
+suggestion-outcome-accepted =
+    { $count ->
+        [one] { $by } accepted your change ({ $paths }), { $when }.
+       *[other] { $by } accepted your { $count } changes ({ $paths }), { $when }.
+    }
+suggestion-outcome-declined =
+    { $count ->
+        [one] { $by } declined your change ({ $paths }), { $when }.
+       *[other] { $by } declined your { $count } changes ({ $paths }), { $when }.
+    }
+suggestion-outcome-some = { $by } accepted { $accepted } of your changes ({ $accepted-paths }) and declined { $declined } ({ $declined-paths }), { $when }.
+suggestion-outcome-someone = Someone
+suggestion-outcome-note = Note from { $by }: “{ $note }”
+suggestion-outcome-kept = The files declined stay as you saved them on this computer; nobody else has your version of them.
+file-size =
+    { $unit ->
+        [kb] { $amount } kB
+        [mb] { $amount } MB
+       *[gb] { $amount } GB
+    }
+file-size-bytes =
+    { $bytes ->
+        [one] { $bytes } byte
+       *[other] { $bytes } bytes
+    }
+decimal-separator = .
 conflicts-none = Every file here is the group's version.
 conflict-waiting = { $path }: your suggestion waits for a decision.
 conflict-choose = { $path }: your version differs from the group's. Choose with: pigeon resolve
@@ -204,6 +254,10 @@ problem-not-in-group = This computer is not a member of the group.
 problem-not-allowed = You are not allowed to do this in this group.
 problem-suggestion-unknown = No waiting suggestion is called { $id }.
 hint-suggestion-unknown = See them with: pigeon suggestions
+problem-suggestion-file-unknown = { $path } is not one of the files of this suggestion.
+hint-suggestion-file-unknown = See its files with: pigeon suggestions
+problem-no-files-chosen = Choose at least one file of the suggestion.
+hint-no-files-chosen = See its files with: pigeon suggestions
 problem-not-diverging = { $path } is the group's version already.
 hint-not-diverging = See the files that differ with: pigeon conflicts
 problem-changed-since = { $path } was saved again since it was recorded; nothing was replaced.
@@ -268,6 +322,26 @@ web-override-reason = Reason for the admin override
 web-managed-client = This is your client’s Pigeon peer on the bridge. Choose which files to keep offline in your Nextcloud app.
 web-decline = Decline
 web-decline-note = Why (optional)
+web-suggestions-for-you = For you to decide
+web-suggestions-yours = Your suggestions
+web-suggestions-others = For someone else to decide
+web-suggestions-decided = Your suggestions decided lately
+web-suggestion-files = Files in this suggestion
+web-suggestion-choose = Every file is selected. “Accept selected” accepts the selected files and declines the others; “Decline selected” declines the selected files and accepts the others.
+web-review-file = Review { $path }
+web-accept-selected = Accept selected
+web-decline-selected = Decline selected
+web-note-for = Note for { $author } about the files you decline (optional)
+web-decide-all = { $count } suggestions wait for you. To decide them all at once, every file of each:
+web-accept-all = Accept all
+web-decline-all = Decline all
+web-decided-all =
+    { $count ->
+        [one] You decided 1 suggestion.
+       *[other] You decided { $count } suggestions.
+    }
+web-decide-all-skipped = { $author }'s suggestion needs a reason for the admin override: decide it on its own.
+web-file-suggestion-waiting = Your change to this file, saved { $saved }, waits for a decision. Until then, the others keep the group's version.
 web-back = Back
 web-form-expired = This page is out of date. Reload it and try again.
 web-nav-files = Files
