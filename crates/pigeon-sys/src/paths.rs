@@ -177,11 +177,6 @@ impl RepoFiles {
         self.root.join("clock.json")
     }
 
-    /// The invitations, `invitations.json`.
-    pub fn invitations(&self) -> PathBuf {
-        self.root.join("invitations.json")
-    }
-
     /// Where install step 4 moves the file of entry `seq`.
     pub fn aside(&self, seq: u64) -> PathBuf {
         self.root.join("aside").join(seq.to_string())

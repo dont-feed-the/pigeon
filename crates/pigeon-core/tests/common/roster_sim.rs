@@ -20,6 +20,9 @@ pub const NR: usize = 2;
 /// Author times.
 pub const TIMES: [i64; 3] = [0, 1, 2];
 
+/// The genesis's invitation.
+pub const INVITATION: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
 /// Person `i`'s ID.
 pub fn pid(i: usize) -> PersonId {
     PersonId(format!("p{i}"))
@@ -56,6 +59,7 @@ pub fn genesis() -> Roster {
     Roster {
         rules: 1,
         group: "group".into(),
+        invitation: INVITATION.into(),
         k: 1,
         retention_days: 30,
         telemetry_device: None,

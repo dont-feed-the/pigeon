@@ -1,5 +1,5 @@
 //! Make admission requests and publish independently verifiable causal
-//! certificates (proposed ADR 0076). Every commit uses a private tree and
+//! certificates (proposed ADR 0078). Every commit uses a private tree and
 //! a main CAS. No private working or staged file enters these commits.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -79,7 +79,7 @@ pub async fn round(g: &Group) -> Result<bool, Error> {
         .ok_or_else(|| invalid("no main"))?;
     let state = membership::read(g, &main).await?;
     let roster = membership::roster(g, &main).await?;
-    if state.upgrade.is_some() && roster.rules == 1 && admin(g) {
+    if state.upgrade.is_some() && roster.rules < pigeon_core::purge::RULES && admin(g) {
         let mut tree = g.git.tree(&main).await?;
         set_rules(g, &mut tree, roster).await?;
         commit(g, &main, &tree, "pigeon: enable verified erasure protocol").await?;
@@ -221,7 +221,7 @@ async fn set_rules(
     tree: &mut Tree,
     mut roster: pigeon_core::roster::Roster,
 ) -> Result<(), Error> {
-    roster.rules = 2;
+    roster.rules = pigeon_core::purge::RULES;
     let text = crate::roster_file::render(&crate::roster_file::RosterDoc { roster })
         .map_err(|e| invalid(&e))?;
     insert(g, tree, ROSTER.into(), &text).await

@@ -51,8 +51,9 @@ pub fn archive(raw: &[u8]) -> Option<Archive> {
     })
 }
 
-/// A new group's roster, preserving the old group's folder boundaries.
-pub fn roster(old: &Roster, me: &DeviceId) -> Option<Roster> {
+/// A new group's roster, preserving the old group's folder boundaries,
+/// with its own `invitation`: the old one stays the old group's.
+pub fn roster(old: &Roster, me: &DeviceId, invitation: &str) -> Option<Roster> {
     let device = old.devices.get(me)?.clone();
     if device.role == Role::Recovery {
         return None;
@@ -71,6 +72,7 @@ pub fn roster(old: &Roster, me: &DeviceId) -> Option<Roster> {
                     stewards.retain(|person| person == &owner);
                     Rule::AddOnly(stewards)
                 }
+                Rule::PerPerson => Rule::PerPerson,
             };
             folder
         })
@@ -78,11 +80,16 @@ pub fn roster(old: &Roster, me: &DeviceId) -> Option<Roster> {
     let new = Roster {
         // A new authority domain must prepare its own erasure quorum;
         // old capability votes are bound to the archived genesis.
-        rules: 1,
+        rules: if old.folders.iter().any(|f| f.rule == Rule::PerPerson) {
+            2
+        } else {
+            1
+        },
         persons: BTreeMap::from([(owner, person)]),
         devices: BTreeMap::from([(me.clone(), device)]),
         removed: BTreeMap::new(),
         folders,
+        invitation: invitation.to_owned(),
         ..old.clone()
     };
     new.validate().ok()?;

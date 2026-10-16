@@ -45,10 +45,18 @@ fn preparation_confirmation_and_cancellation_preserve_current_and_retained_bytes
     );
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
     join(&alice, &vault, &all);
-    let invite = pigeon(&alice, &["invite", "Bob"]);
-    let code = said(&invite, "invitation", "code").unwrap();
+    let code = invitation(&alice);
     let bob_files = root.join("bob-files");
-    let joined = pigeon(&bob, &["join", &code, bob_files.to_str().unwrap()]);
+    let joined = pigeon(
+        &bob,
+        &[
+            "join",
+            &code,
+            bob_files.to_str().unwrap(),
+            "--person",
+            "Bob",
+        ],
+    );
     assert!(said(&joined, "joined", "group").is_some(), "{joined:?}");
     until(&alice, State::Protected, &all);
     let path = file.to_str().unwrap();
@@ -294,8 +302,8 @@ fn refounding_archives_a_pending_request_and_requires_fresh_preparation_after_re
         "{restored:?}"
     );
     assert_eq!(std::fs::read(&file).unwrap(), bytes);
-    let invite = pigeon(&alice, &["invite", "--backup-machine", "vault"]);
-    let code = said(&invite, "invitation", "code").unwrap();
+    let code = invitation(&alice);
+    let owner = person(&alice);
     let joined = pigeon(
         &vault,
         &[
@@ -303,6 +311,8 @@ fn refounding_archives_a_pending_request_and_requires_fresh_preparation_after_re
             "--backup-machine",
             &code,
             backup.path.to_str().unwrap(),
+            "--person",
+            &owner,
             "--yes",
         ],
     );

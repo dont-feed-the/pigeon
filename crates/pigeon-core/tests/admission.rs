@@ -1,4 +1,4 @@
-//! Admission laws (proposed ADR 0076): no empty or incomplete quorum,
+//! Admission laws (proposed ADR 0078): no empty or incomplete quorum,
 //! exact capability and causal acknowledgement boundaries, and no sealing
 //! an old decision across a pending or changed membership epoch.
 #![allow(clippy::unwrap_used, reason = "admission law fixture")]

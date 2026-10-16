@@ -1,6 +1,7 @@
 format = 2
-rules = 1
+rules = 2
 group = "fixture"
+invitation = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 k = 2
 retention_days = 30
 
@@ -52,3 +53,7 @@ owner = "ana"
 path = "Shared"
 rule = "add-only"
 stewards = ["cleo"]
+
+[[folders]]
+path = "Work"
+rule = "per-person"

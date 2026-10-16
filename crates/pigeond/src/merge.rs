@@ -336,10 +336,10 @@ async fn judge_step(
     witnesses.extend(
         crate::admission_proofs::checks(g, after, &changed, &authority::parents(raw)).await?,
     );
-    if new_roster
-        .as_ref()
-        .is_some_and(|r| r.as_ref().is_ok_and(|r| r.rules == 2))
-        && rosters.iter().any(|r| r.rules < 2)
+    if new_roster.as_ref().is_some_and(|r| {
+        r.as_ref()
+            .is_ok_and(|r| r.rules >= pigeon_core::purge::RULES)
+    }) && rosters.iter().any(|r| r.rules < pigeon_core::purge::RULES)
     {
         witnesses.insert(
             ROSTER.into(),

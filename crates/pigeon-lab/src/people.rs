@@ -25,7 +25,7 @@ impl Laptop {
             expect: Outcome::Done,
         }
     }
-    /// `pigeon invite [--admin] PERSON` for `l`'s person; `l` joins.
+    /// `pigeon invite`; `l` joins with it as its person.
     pub fn invites_laptop(self, l: Laptop) -> Step {
         self.asks(LaptopOp::Join { laptop: l })
     }

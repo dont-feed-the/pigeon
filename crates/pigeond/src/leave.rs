@@ -12,7 +12,8 @@
 //! `<state>/left/<group>-<time>/`: the folder keeps its files as plain
 //! files. A custodian's repository stays where it is. Once no group is
 //! left, the device key is deleted. The folder itself is never deleted
-//! here **[no ADR]**.
+//! here **[no ADR]**. A computer alone in its group has nobody to tell, so
+//! it forgets the group at once, last admin or not.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -68,6 +69,22 @@ pub async fn leave(d: &Daemon) -> Vec<Response> {
         return vec![problem("not-in-group", &[], None)];
     };
     let me = DeviceId(d.device.clone());
+    let name = doc
+        .roster
+        .devices
+        .get(&me)
+        .map_or_else(|| d.device.clone(), |x| x.name.clone());
+    if peers(&doc.roster, &me).is_empty() {
+        if let Err(e) = finish(d, &g).await {
+            return vec![problem("internal-error", &[], Some(e))];
+        }
+        return vec![Response::Said {
+            message: msg(
+                "left",
+                &[("name", text(&name)), ("group", text(&doc.roster.group))],
+            ),
+        }];
+    }
     let change = [Edit::RemoveDevice(me.clone())];
     if !may_sign(&doc.roster, &me, &change) {
         return vec![problem("not-allowed", &[], None)];
@@ -80,11 +97,6 @@ pub async fn leave(d: &Daemon) -> Vec<Response> {
         // No key could sign the group's admin changes any more.
         return vec![problem("leave-last-admin", &[], None)];
     }
-    let name = doc
-        .roster
-        .devices
-        .get(&me)
-        .map_or_else(|| d.device.clone(), |x| x.name.clone());
     let refusing = peers(&doc.roster, &me)
         .into_iter()
         .filter(|p| d.node.refusal(p, &g.id) == Some(Refusal::NotInRoster))
@@ -169,19 +181,19 @@ pub async fn round(d: &Daemon, g: &std::sync::Arc<Group>) -> bool {
     let Some(l) = leaving(g) else {
         return false;
     };
-    if seen(d, g, &l).await {
-        finish(d, g).await;
+    if seen(d, g, &l).await
+        && let Err(e) = finish(d, g).await
+    {
+        tracing::warn!(group = %g.id, error = %e, "config-write-failed");
     }
     true
 }
 
 /// Forgets `g`: out of `config.toml` and the served groups, its
-/// remotedaemon stopped, a folder's repository moved out of it.
-async fn finish(d: &Daemon, g: &std::sync::Arc<Group>) {
-    if let Err(e) = crate::config::remove_group(&d.dirs.config_file(), &g.id) {
-        tracing::warn!(group = %g.id, error = %e, "config-write-failed");
-        return;
-    }
+/// remotedaemon stopped, a folder's repository moved out of it. Fails,
+/// changing nothing, when `config.toml` cannot be written.
+async fn finish(d: &Daemon, g: &std::sync::Arc<Group>) -> Result<(), String> {
+    crate::config::remove_group(&d.dirs.config_file(), &g.id).map_err(|e| e.to_string())?;
     let absent = if g.role == Role::Laptop {
         absent_files(g).await
     } else {
@@ -213,6 +225,7 @@ async fn finish(d: &Daemon, g: &std::sync::Arc<Group>) {
         let _ = std::fs::remove_file(d.dirs.device_key());
         tracing::info!("device-key-deleted");
     }
+    Ok(())
 }
 
 /// The files of `g`'s folder whose committed content is not here, which
@@ -261,6 +274,54 @@ fn move_out(wt: &Path, to: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pigeon_core::roster::{Device, Person, PersonId, Roster};
+
+    fn device(person: &str, role: DeviceRole) -> Device {
+        Device {
+            person: PersonId(person.into()),
+            name: person.into(),
+            role,
+            annex_uuid: None,
+            maxsize: None,
+        }
+    }
+
+    #[test]
+    fn alone_a_computer_has_no_peer_and_else_an_admin_must_remain() {
+        let ana = DeviceId("a1".into());
+        let mut roster = Roster {
+            rules: 1,
+            group: "Family".into(),
+            invitation: String::new(),
+            k: 1,
+            retention_days: 30,
+            relay: None,
+            telemetry_device: None,
+            persons: [("ana", true), ("bob", false)]
+                .into_iter()
+                .map(|(id, admin)| {
+                    let name = id.into();
+                    (PersonId(id.into()), Person { name, admin })
+                })
+                .collect(),
+            devices: [(ana.clone(), device("ana", DeviceRole::Laptop))].into(),
+            removed: std::collections::BTreeMap::new(),
+            folders: Vec::new(),
+        };
+        let sheet = DeviceId("sheet".into());
+        roster
+            .devices
+            .insert(sheet, device("ana", DeviceRole::Recovery));
+        assert!(peers(&roster, &ana).is_empty(), "a sheet is no peer");
+        roster
+            .devices
+            .insert(DeviceId("b1".into()), device("bob", DeviceRole::Laptop));
+        assert_eq!(peers(&roster, &ana), ["b1"]);
+        roster.devices.retain(|id, _| *id != ana);
+        assert!(signs_for_an_admin(&roster), "Ana's sheet still signs");
+        roster.devices.retain(|_, x| x.role != DeviceRole::Recovery);
+        assert!(!signs_for_an_admin(&roster), "only Bob's laptop is left");
+    }
 
     #[test]
     fn only_pointers_to_absent_content_are_removed_on_leaving() {

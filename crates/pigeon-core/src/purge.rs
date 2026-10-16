@@ -7,6 +7,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Roster rules requiring signed purge preparation. Rules 2 only add
+/// per-person folders and never imply purge capability or consent.
+pub const RULES: u32 = 3;
+
 /// A key's birth: this commit has it at path, and no parent does.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Reference<C, K> {

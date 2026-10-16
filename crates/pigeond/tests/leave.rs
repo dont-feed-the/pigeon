@@ -1,9 +1,10 @@
-//! `pigeon leave` (09 §9.7): Ana's only laptop may not leave, being the
-//! group's last admin computer; once a backup machine and her second
-//! laptop joined, the second laptop leaves. Its removal reaches the first
-//! laptop, which drops it from the machines; the leaver then forgets the
-//! group, keeps its files as plain files without `.git`, and, in no group
-//! any more, deletes its device key.
+//! `pigeon leave` (09 §9.7): Ana's laptop, in one group, may not create a
+//! second; alone in the group, it leaves it at once and creates it again
+//! with the same key. Once a backup machine and her second laptop joined,
+//! the second laptop leaves. Its removal reaches the first laptop, which
+//! drops it from the machines; the leaver then forgets the group, keeps its
+//! files as plain files without `.git`, and, in no group any more, deletes
+//! its device key.
 //!
 //! Needs what `tests/slice.rs` needs: git-annex, and `pigeon` and
 //! `git-annex-p2p-iroh` built next to `pigeond`.
@@ -12,7 +13,7 @@
 
 mod common;
 
-use common::{SERIAL, dirs, eventually_within, join, logs, pigeon, said, start, until};
+use common::{SERIAL, dirs, eventually_within, invitation, join, logs, pigeon, said, start, until};
 use pigeon_proto::Response;
 use pigeon_proto::api::State;
 
@@ -54,20 +55,51 @@ fn a_laptop_leaves_once_a_peer_has_its_removal() {
     let f = fa.to_str().unwrap();
     let created = pigeon(&a1, &["create", "Family", f, "--k", "1", "--name", "ana-1"]);
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
+    let other = root.join("other");
+    let second = pigeon(&a1, &["create", "Other", other.to_str().unwrap()]);
+    assert_eq!(
+        problem(&second).as_deref(),
+        Some("in-another-group"),
+        "{second:?}"
+    );
+    assert!(!other.join(".git").exists(), "nothing was written");
+
+    let key = a1.home.join("config/device-key");
+    let before = std::fs::read_to_string(&key).unwrap();
     let alone = pigeon(&a1, &["leave", "--yes"]);
     assert_eq!(
-        problem(&alone).as_deref(),
-        Some("leave-last-admin"),
+        said(&alone, "left", "group").as_deref(),
+        Some("Family"),
         "{alone:?}"
+    );
+    assert!(!fa.join(".git").exists(), "the folder keeps no repository");
+    assert_eq!(
+        std::fs::read_to_string(fa.join("a.txt")).unwrap(),
+        "first\n"
+    );
+    let again = pigeon(&a1, &["create", "Family", f, "--k", "1", "--name", "ana-1"]);
+    assert!(said(&again, "created", "group").is_some(), "{again:?}");
+    assert_eq!(
+        std::fs::read_to_string(&key).unwrap(),
+        before,
+        "the running key is written back"
     );
 
     join(&a1, &c1, &all);
     until(&a1, State::Protected, &all);
-    let answer = pigeon(&a1, &["invite", "ana"]);
-    let code = said(&answer, "invitation", "code").unwrap_or_else(|| panic!("{answer:?}"));
+    let code = invitation(&a1);
     let joined = pigeon(
         &a2,
-        &["join", &code, fa2.to_str().unwrap(), "--name", "ana-2"],
+        &[
+            "join",
+            &code,
+            "--person",
+            "ana",
+            "--yes",
+            fa2.to_str().unwrap(),
+            "--name",
+            "ana-2",
+        ],
     );
     assert!(
         said(&joined, "joined", "group").is_some(),
@@ -162,13 +194,15 @@ fn a_peer_that_never_learned_the_join_cannot_acknowledge_the_leave() {
     // Its first NotInRoster after the leave is therefore no acknowledgement.
     let _ = pigeon(&c1, &["pause"]);
     drop(c1);
-    let answer = pigeon(&a1, &["invite", "ana"]);
-    let code = said(&answer, "invitation", "code").unwrap();
+    let code = invitation(&a1);
     let joined = pigeon(
         &a2,
         &[
             "join",
             &code,
+            "--person",
+            "ana",
+            "--yes",
             root.join("ana-2").to_str().unwrap(),
             "--name",
             "ana-2",

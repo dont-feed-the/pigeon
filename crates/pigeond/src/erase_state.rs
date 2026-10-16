@@ -90,7 +90,7 @@ pub async fn readiness(g: &Group, main: &str) -> Result<Readiness, Error> {
         .is_some_and(|p| p.admin);
     Ok(Readiness {
         can_prepare,
-        ready: roster.rules >= 2
+        ready: roster.rules >= pigeon_core::purge::RULES
             && !state.eligible.is_empty()
             && state.pending.is_empty()
             && problem.is_none(),

@@ -1,4 +1,4 @@
-//! Signed rules-2 preparation for destructive-driver fixtures. This uses
+//! Signed rules-3 preparation for destructive-driver fixtures. This uses
 //! the real request, report and witness readers, not a test bypass. The
 //! known fixture keys are never used by a running production daemon.
 #![allow(clippy::unwrap_used, reason = "signed protocol upgrade fixtures")]
@@ -109,7 +109,7 @@ pub async fn upgrade(g: &Group) -> String {
     };
     let (path, text) = witness.render().unwrap();
     tree.insert(path, put(g, &text).await);
-    roster.roster.rules = 2;
+    roster.roster.rules = pigeon_core::purge::RULES;
     tree.insert(
         ROSTER.into(),
         put(g, &pigeond::roster_file::render(&roster).unwrap()).await,

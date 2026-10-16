@@ -50,7 +50,7 @@ pub struct Status {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub purge: Vec<Purge>,
     /// Exact protocol-upgrade or pending-custodian requests acknowledged
-    /// after their local sealing fence became durable (ADR 0076 proposed).
+    /// after their local sealing fence became durable (ADR 0078 proposed).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub acknowledgements: Vec<AdmissionAck>,
     /// Its queues.

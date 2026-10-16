@@ -61,6 +61,7 @@ fn group() -> Roster {
     Roster {
         rules: 1,
         group: "g".into(),
+        invitation: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".into(),
         k: 2,
         retention_days: 30,
         telemetry_device: None,
@@ -197,7 +198,7 @@ fn judge(
 #[hegel::test(test_cases = 1000)]
 fn purge_requires_admin_seen_scope_and_the_original_minimum_wait(tc: TestCase) {
     let mut roster = group();
-    roster.rules = 2;
+    roster.rules = pigeon_core::purge::RULES;
     roster.retention_days = int(&tc, 1, 100_000) as u32;
     let path = format!(".pigeon/decisions/purge-{}.toml", int(&tc, 0, 1_000_000));
     let before = base();
@@ -920,15 +921,16 @@ fn completion_witnesses_need_independent_proof_and_are_immutable(tc: TestCase) {
 }
 
 #[hegel::test(test_cases = 1000)]
-fn the_first_rules_two_transition_requires_independent_upgrade_evidence(tc: TestCase) {
-    let roster = group();
+fn the_first_purge_transition_requires_independent_upgrade_evidence(tc: TestCase) {
+    let mut roster = group();
+    roster.rules = int(&tc, 1, 2) as u32;
     let mut upgraded = roster.clone();
-    upgraded.rules = 2;
+    upgraded.rules = pigeon_core::purge::RULES;
     let before = base();
     let mut after = before.clone();
     after.insert(
         authority::ROSTER.into(),
-        entry(&format!("rules-two-{}", int(&tc, 0, 1_000_000))),
+        entry(&format!("purge-rules-{}", int(&tc, 0, 1_000_000))),
     );
     let judge = |signer, witnesses: &BTreeMap<_, _>| {
         authority::judge(&Step {

@@ -1,4 +1,4 @@
-# 0076. Completed purge epochs fence custodian membership
+# 0078. Completed purge epochs fence custodian membership
 
 - **Status:** Proposed, 16 October 2026, for M5.
 
@@ -47,7 +47,7 @@ one device cannot establish the causal order or survive recovery safely.
   they do not reopen its waiting period. Current and uncovered reference
   births, cancellation and immutable held sets still prevent key release.
   A restored or copied version has a new birth even for the same key.
-- Enable these authority rules before accepting the first purge (rules 2).
+- Enable these authority rules before accepting the first purge (rules 3).
   That first upgrade needs signed acknowledgements from every current
   non-recovery device, with a nonempty custodian quorum. Each device binds
   its acknowledgement to one upgrade request; the final accepted head
@@ -61,7 +61,7 @@ one device cannot establish the causal order or survive recovery safely.
   then waits indefinitely. Explicit refounding creates a different authority
   domain with fresh preparation after rejoining; it never edits old votes or
   treats their signatures as the new participants' consent (proposed ADR
-  0077). The old group's pending activity can still finish there.
+  0079). The old group's pending activity can still finish there.
 - Pending membership is a derived admission phase, not an arbitrary change
   to an existing device's identity, role or annex UUID. A configured backup
   without its required activation witness is shown as checking, never

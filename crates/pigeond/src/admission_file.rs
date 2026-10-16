@@ -1,4 +1,4 @@
-//! Closed, content-addressed admission metadata (proposed ADR 0076).
+//! Closed, content-addressed admission metadata (proposed ADR 0078).
 //! An upgrade request freezes its starting membership; a custody request
 //! names the actual accepted device introduction. Full signed reports are
 //! retained separately, since hashes written in TOML are not Git edges.

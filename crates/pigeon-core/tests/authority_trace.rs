@@ -75,6 +75,7 @@ fn genesis() -> Roster {
     Roster {
         rules: 1,
         group: "g".into(),
+        invitation: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".into(),
         k: 1,
         retention_days: 30,
         telemetry_device: None,
@@ -102,7 +103,9 @@ fn genesis() -> Roster {
 fn owner(r: &Roster) -> u64 {
     match &r.folders[0].rule {
         Rule::Owned(p) => p.0[1..].parse().unwrap(),
-        Rule::AddOnly(_) => unreachable!(),
+        Rule::AddOnly(_) | Rule::PerPerson => {
+            unreachable!("this history generates only owned folder rules")
+        }
     }
 }
 

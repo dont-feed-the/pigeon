@@ -18,12 +18,13 @@ use serde::{Deserialize, Serialize};
 use toml_edit::{Item, TableLike};
 
 /// The format this release reads and writes.
-pub const FORMAT: u32 = 1;
+pub const FORMAT: u32 = 2;
 
 const TOP: &[&str] = &[
     "format",
     "rules",
     "group",
+    "invitation",
     "k",
     "retention_days",
     "relay",
@@ -50,6 +51,7 @@ struct FileT {
     format: u32,
     rules: u32,
     group: String,
+    invitation: String,
     k: u32,
     #[serde(default = "thirty")]
     retention_days: u32,
@@ -197,7 +199,10 @@ pub fn parse(text: &str) -> Result<RosterDoc, Unread> {
         let rule = match (x.rule.as_str(), x.owner) {
             ("owned", Some(o)) => Rule::Owned(PersonId(o)),
             ("add-only", None) => Rule::AddOnly(x.stewards.into_iter().map(PersonId).collect()),
-            ("owned" | "add-only", _) => return malformed(format!("folder {} owner", x.path)),
+            ("per-person", None) if x.stewards.is_empty() => Rule::PerPerson,
+            ("owned" | "add-only" | "per-person", _) => {
+                return malformed(format!("folder {} owner", x.path));
+            }
             (r, _) => return Err(Unread::Unknown(format!("folder rule {r}"))),
         };
         folders.push(Folder { path: x.path, rule });
@@ -205,6 +210,7 @@ pub fn parse(text: &str) -> Result<RosterDoc, Unread> {
     let roster = Roster {
         rules: f.rules,
         group: f.group,
+        invitation: f.invitation,
         k: f.k,
         retention_days: f.retention_days,
         relay: f.relay,
@@ -240,6 +246,7 @@ pub fn render(doc: &RosterDoc) -> Result<String, String> {
         format: FORMAT,
         rules: r.rules,
         group: r.group.clone(),
+        invitation: r.invitation.clone(),
         k: r.k,
         retention_days: r.retention_days,
         relay: r.relay.clone(),
@@ -294,8 +301,22 @@ pub fn render(doc: &RosterDoc) -> Result<String, String> {
                     owner: None,
                     stewards: s.iter().map(|p| p.0.clone()).collect(),
                 },
+                Rule::PerPerson => FolderT {
+                    path: x.path.clone(),
+                    rule: "per-person".to_owned(),
+                    owner: None,
+                    stewards: Vec::new(),
+                },
             })
             .collect(),
     };
     toml_edit::ser::to_string_pretty(&f).map_err(|e| e.to_string())
+}
+
+/// Human-readable diagnostics must not disclose the permanent join secret.
+/// This copy is never persisted as a roster or used to judge signed history.
+pub(crate) fn diagnostic(doc: &RosterDoc) -> Result<String, String> {
+    let mut public = doc.clone();
+    public.roster.invitation = "[redacted]".into();
+    render(&public)
 }

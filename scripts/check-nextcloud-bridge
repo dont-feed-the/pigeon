@@ -97,9 +97,9 @@ def run():
             (files / "Docs").mkdir(parents=True)
             (files / "Docs/review.txt").write_text("Alice's original\n")
             rpc(alice, dict(type="Create", name="Bridge test", folder=str(files), k=1, device_name="Alice control"))
-            invitation = rpc(alice, dict(type="Invite", person="Bob", admin=False, custodian=False))
-            rpc(bob, dict(type="Join", invitation=invitation["message"]["args"]["code"],
-                          folder=str(root / "bob-files"), keep=True, name="Bob control"))
+            invitation = rpc(alice, dict(type="Invite"))
+            rpc(bob, dict(type="Join", invitation=invitation["message"]["args"]["command"],
+                          folder=str(root / "bob-files"), keep=True, name="Bob control", person="Bob"))
             with socket.socket() as listener:
                 listener.bind(("127.0.0.1", 0))
                 port = listener.getsockname()[1]

@@ -1,0 +1,10 @@
+# cargo nextest, the default test runner (docs/development.md): each test is
+# its own process, and as many run at once as the machine has cores. Tests
+# must pass under that load; one that only passes alone is a bug, so no
+# test group caps them. The `SERIAL` lock of pigeond's tests only holds
+# within one process, so it orders `cargo test` runs, not these.
+[profile.default]
+fail-fast = false
+# A test still running after a minute is reported as slow; after ten
+# minutes it is stopped, with its output, as hung.
+slow-timeout = { period = "60s", terminate-after = 10 }

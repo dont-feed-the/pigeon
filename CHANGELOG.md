@@ -1,10 +1,11 @@
 # Changelog
 
-All notable user-visible changes to pigeon are documented here. While the
-version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
-the second number, and every other pull request the third.
+All notable user-visible changes to pigeon are documented here. Changes
+not yet released are under *Unreleased*. While the version is 0.x, a
+release that completes a milestone of the [roadmap](docs/roadmap.md)
+increments the second number, and every other release the third.
 
-## 0.6.0 — 2026-10-16
+## Unreleased
 
 ### Added
 
@@ -15,6 +16,36 @@ the second number, and every other pull request the third.
 - Backup machines check retained files every 30 days during the nightly
   window, using idle I/O priority on Linux. Set `resources.scrub_window`
   to choose another local-time window.
+
+- Per-person folders: `pigeon folder-rule ~/Group/src --per-person` (or
+  *Each folder in it belongs to the person it is named after* in a folder's
+  sharing rule in `pigeon open`) makes every `src/<name>` belong to the
+  person of that name, including people who join later; others' changes
+  there become suggestions. A folder's name is the person's name in
+  lowercase letters and digits (Laurent's is `src/laurent`), and
+  `pigeon folder-rule ~/Group/src` lists them. The first such rule moves the
+  group to newer rules: pigeon lists the other computers with the pigeon
+  they last reported and asks first, as a computer running an older pigeon
+  waits for the group's changes until it is updated.
+
+### Changed
+
+- A computer is now in one group only. `pigeon create`, `pigeon join` and
+  `pigeon recover` (and joining or creating in the web interface) refuse a
+  second group, before writing anything, and say how to leave the first:
+  `pigeon leave`, or *Leave the group* in Settings in `pigeon open`. Before,
+  a second group was created, but `pigeon open` and the commands that take
+  no folder only ever showed the first one.
+- `pigeon leave` on a computer that is the only machine of its group leaves
+  it at once, even as the group's last admin computer; its files stay in
+  the folder. It used to refuse, so a group created by mistake could not be
+  left.
+- Pull requests run the checks relevant to their changed files. Documentation,
+  installer and formal-model changes avoid unrelated expensive jobs, while
+  shared dependencies, unknown paths and CI changes retain broader checks.
+  Releases and periodic validation still run the full set.
+- Client revocation addresses the saved signing key directly, so a change to
+  a computer's name cannot redirect its roster removal.
 
 ### Fixed
 
@@ -37,6 +68,85 @@ the second number, and every other pull request the third.
 - A save, deletion or executable-bit change made while restore checks history
   stays in place, even if pigeon has already saved that change. Members can
   retry a waiting restore without losing their intervening saved suggestions.
+
+- Files no longer stay "receiving" when a peer was initially unavailable
+  and git-annex disabled its remote. Pigeon re-enables peers still in the
+  group when checking their settings, so transfers can resume.
+- On Linux with a umask of 002, the default on Ubuntu and Fedora desktops,
+  pigeon thought every file might be in use: it delayed writing the group's
+  versions into your folder, `pigeon free` and *Free up space* deleted
+  nothing, and `pigeon restore` said the file was in use. Files are now
+  only held back when another user's program could really be writing them.
+- A computer that left its last group and then created or joined another
+  one, without restarting pigeon, no longer changes identity at the next
+  restart, which made the new group no longer recognise it.
+- A client-management page, download or conflict action queued behind client
+  revocation now checks the updated access state before contacting that peer.
+- Reusing a shared content object after an interrupted publication completes
+  its directory sync before reporting success.
+- Pending suggestions keep their author's identity after the signing client
+  is revoked, so the person's remaining devices can still manage them.
+- Concurrent saves from separate clients no longer leave a hidden conflict
+  that stops later synchronization. Existing affected peers recover when the
+  saved version is safely retained under its conflict filename.
+
+## 0.5.12 — 2026-10-16
+
+### Fixed
+
+- Existing shell startup files using `pigeon completions zsh`, `bash` or
+  `fish` work again, without the "not in this build" warning. They load
+  the current Tab completion, even when the daemon is stopped.
+- Diagnostic bundles hide the group's permanent invitation secret in both
+  this computer's information and parts shared by other computers. Sharing
+  diagnostics keeps the roster readable without sharing permission to join.
+
+## 0.5.11 — 2026-10-16
+
+### Changed
+
+- `pigeon create` now prints one line to share with everyone you want in the
+  group. Run on another computer, it installs or updates pigeon, then joins:
+  it asks which folder to use and your name in the group.
+  `pigeon invite` prints the same line again, on any computer of the group,
+  and People in the web interface shows it with a *Copy* button.
+- The line works for everyone and never expires. Whoever has it can join
+  under any name, with the rights of the person of that name, so share it
+  only with the group. Giving the name of someone already in the group adds
+  your computer to them, once you confirm (`--yes` confirms on the command
+  line). Add `--backup-machine` at the end of the line on a backup machine.
+- `pigeon join` asks for your name in the group (`--person NAME`) and, on a
+  terminal, for the folder.
+- A refounded group has its own line; the old one no longer works.
+
+### Removed
+
+- One-time invitations: `pigeon invite PERSON`, `--admin`,
+  `--backup-machine`, `--list` and `--cancel`, and the `pgn1-` codes. Groups
+  made by earlier releases cannot be read by this one: create the group
+  again.
+
+## 0.5.10 — 2026-10-16
+
+### Fixed
+
+- `pigeon update` on macOS no longer leaves pigeond stopped. It failed with
+  "Bootstrap failed: 5: Input/output error" when macOS had not yet finished
+  stopping the old pigeond; the update now waits for that, up to ten
+  seconds, before starting the new one.
+
+## 0.5.9 — 2026-10-16
+
+### Changed
+
+- Routine verification uses checked proofs for two more token hand-off
+  cases and for suggestion adoption permissions. Their large finite checks
+  remain available in the weekly audit and on request.
+
+### Fixed
+
+- Release validation waits for Free to finish before checking its final
+  protection status.
 
 ## 0.5.8 — 2026-10-16
 

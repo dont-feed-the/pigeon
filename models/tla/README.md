@@ -13,6 +13,7 @@ are normative. `scripts/run-tlc` runs the configurations: the fast set in
 run `scripts/check-proofs`: parameterized TLAPS safety proofs, checks that
 their assumptions cover the actual configurations, and mutations that must
 fail. The proof-covered `AnnexDrop_design4`, `Purge_full3` and `T_n42o4` rows
+and the additional `T_n31o5`, `T_n32o5` and `Authority_mixed` cases
 are `audit` checks: a separate TLC job runs them on Mondays even without
 new commits, and by hand (`scripts/run-tlc --audit-only`) or when explicitly
 named. Release tags check fresh proofs instead of repeating those graphs. See
@@ -48,7 +49,8 @@ scenario deadlines stay the same.
 | `T_idem` | `CustodyTokens` | `violation:TokensNeverLost` | idempotent acknowledgements lose tokens |
 | `T_nononce` | `CustodyTokens` | `violation:TokensNeverLost` | offers without nonces lose tokens |
 | `T_nonce` | `CustodyTokens` | `pass` | nonces make the hand-off safe |
-| `T_n42o3`, `T_n31o5`, `T_n32o5` | `CustodyTokens` | `pass` (fast set) | N, K and offers varied |
+| `T_n42o3` | `CustodyTokens` | `pass` (fast set) | four nodes, two tokens, three offers; a routine cross-check alongside `T_nonce` |
+| `T_n31o5`, `T_n32o5` | `CustodyTokens` | `pass` (audit) | three nodes, one or two tokens, five offers; the existing parameterized token proof covers both, with separate configuration checks |
 | `T_n42o4` | `CustodyTokens` | `pass` (audit) | N = 4, K = 2, 4 offers. `CustodyTokensProof` proves all four invariants for arbitrary valid counts and offer bounds; [proof and measurements](../../docs/custody-token-proof.md). |
 | `AnnexDrop_design` | `AnnexDrop` | `pass` (fast set) | git-annex's verified drop as pigeon uses it (ADR 0046, [09 §9.4](../../docs/spec/09-network-and-joining.md)): each custodian drops only its own copy, under its removal lock, once it has locked, or seen present by a check that honours removal locks, K copies among those its location log lists; location logs go stale, partitions cut a drop off, a lock expires under a stalled drop, a custodian is marked `dead`, a new copy is made. The key stays on K custodians (INV_K) and a locked copy stays (LockedStays); 3 custodians, K = 2: 406 880 distinct states, 11 s on 1 worker |
 | `AnnexDrop_ranked` | `AnnexDrop` | `pass` (fast set) | with git-annex's P2P check, which ignores removal locks, a drop that counts only custodians ranked above its own is safe: the alternative [09 §9.4](../../docs/spec/09-network-and-joining.md) rejects, for liveness |
@@ -110,7 +112,7 @@ scenario deadlines stay the same.
 | `Authority_live` | `Authority` | `pass` (fast set) | `Converge` under fairness of fetches and merges, with the removed laptop signing on old parents: 938 states, 399 distinct, 11 s |
 | `Authority_decide4`, `Authority_faulty2`, `Authority_revoke2` | `Authority` | `pass` (full set) | four changes; two faulty commits, with transfers; saves and the removed laptop's merges: 1 178 047, 1 360 807 and 1 645 961 distinct states, 10, 7 and 6 minutes |
 | `Authority_proposal` | `Authority` | `violation:DecidersCanAdopt` | deciders under the roster at the proposal's parents (ADR 0051's words). a suggests a change in b's folder, then gives the folder to himself. b still decides, but rule 3 rejects b's adoption (3 states) |
-| `Authority_mixed` | `Authority` | `pass` (fast set) | the proposal's own diff under today's roster. It used to fail: a adds the root file, c suggests adding it and a file in F, b decides, and adopting keeps both versions of the root file, which the model took for a change only the admins may make. A version beside the old ones is a conflict copy, a new file that anyone may add at the root, as the code judges it (`AuthorityTrace`): in this world the proposal's diff now gives deciders who can adopt, 240 s on 2 workers |
+| `Authority_mixed` | `Authority` | `pass` (audit) | the proposal's own diff under today's roster. It used to fail: a adds the root file, c suggests adding it and a file in F, b decides, and adopting keeps both versions of the root file, which the model took for a change only the admins may make. A version beside the old ones is a conflict copy, a new file that anyone may add at the root, as the code judges it (`AuthorityTrace`): in this world the proposal's diff now gives deciders who can adopt, 240 s on 2 workers. `AuthorityDecidersProof` proves this configured guarantee without a history bound; [scope and fold migration checks](../../docs/authority-proof.md) |
 | `Authority_noforce` | `Authority` | `violation:DecidersCanAdopt` | a suggestion that nobody may make falls to the admins, whose adoption folder rules reject without Force |
 | `Authority_fakeadopt` | `Authority` | `violation:AdoptionHoldsContent` | without rule 7, c's clean merge of `main` with a's suggestion marks it accepted with none of its content |
 | `Authority_base` | `Authority` | `violation:AuthorisedContent` | proposals counted in a merge's base, without rule 7: a suggestion's content enters with no decider |
@@ -323,3 +325,31 @@ edited or a re-frozen side met the other.
 post-save refreshes. `BridgeCatalogueTrace` checks observed RPCs and returned
 metadata; [the guide](../../docs/bridge-catalogue-traces.md) describes its scope,
 regressions and deliberate trace corruptions.
+
+`BridgeSync` checks observed DAV transactions from a loaded view through Apply,
+pinned refresh and constructed HTTP response. `BridgeSyncSystem` explores the
+conditional-save and suggestion interface with two clients. It takes native
+catalogue updates as inputs; it does not implement distributed native merging.
+`BridgeLifecycle` checks persisted identities, selected daemon sockets and local
+revocation, including across restarts. Their trace adapters consume actual
+observations without supplying missing operations.
+
+`MultiDeviceAuthority` separates person permissions from device signatures and
+individual removal for two same-person bridge clients and two regular peers.
+Its good and fair-exchange configurations use two decision/removal events; the
+full configuration permits three events with at most one removal, of client A.
+Negative configurations check faulty policies and required scenario reachability.
+This complements `Authority` without changing its existing proof contracts.
+
+`BridgeSharedStorage` checks one key's immutable pool publication, retry after
+an interrupted sync, private aliases and custody failure domains. Pool GC and
+physical power-loss durability are outside its scope. The
+[bridge system guide](../../docs/bridge-system-verification.md) connects these
+models with real multi-peer scenarios and records their trust boundaries.
+
+`BridgeSparseConflict` covers a sparse accepted version acquiring a conflict
+name, preserving real local files, and narrowly repairing phantom overlays left
+by the old branch ordering. Negative controls reproduce both the synthetic
+overlay and its fetch stall, or remove individual recovery guards. The
+[sparse conflict guide](../../docs/bridge-sparse-conflict.md) records the exact
+filesystem and catalogue assumptions and corresponding native regressions.

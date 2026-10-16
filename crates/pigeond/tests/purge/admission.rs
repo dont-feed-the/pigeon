@@ -1,5 +1,5 @@
 //! Real signed acknowledgements, external receipts, restored repository
-//! rollback and missing-receipt recovery (proposed ADR 0076).
+//! rollback and missing-receipt recovery (proposed ADR 0078).
 
 use super::*;
 use pigeond::admission_file::Request;
@@ -72,7 +72,7 @@ async fn an_upgrade_and_new_backup_require_exact_signed_causal_quorums() {
     move_main(&w, &requested, &w.genesis).await;
     // A roster edit alone cannot assert that every participant upgraded.
     let mut r = w.g.roster().unwrap();
-    r.roster.rules = 2;
+    r.roster.rules = pigeon_core::purge::RULES;
     let mut unproved = tree.clone();
     unproved.insert(
         ROSTER.into(),
@@ -95,7 +95,10 @@ async fn an_upgrade_and_new_backup_require_exact_signed_causal_quorums() {
     );
     report(&w, &requested, &upgrade, 2).await;
     assert!(pigeond::admission_publish::round(&w.g).await.unwrap());
-    assert_eq!(w.g.roster().unwrap().roster.rules, 2);
+    assert_eq!(
+        w.g.roster().unwrap().roster.rules,
+        pigeon_core::purge::RULES
+    );
     let upgraded = w.g.git.rev("refs/heads/main").await.unwrap();
     assert_eq!(
         pigeond::membership::read(&w.g, &upgraded)
@@ -393,7 +396,10 @@ async fn split_initial_choices_survive_restart_and_recover_only_in_a_new_authori
         report(&w, &requested, &fresh, n).await;
     }
     assert!(pigeond::admission_publish::round(&w.g).await.unwrap());
-    assert_eq!(w.g.roster().unwrap().roster.rules, 2);
+    assert_eq!(
+        w.g.roster().unwrap().roster.rules,
+        pigeon_core::purge::RULES
+    );
     let current = w.g.git.rev("refs/heads/main").await.unwrap();
     let readiness = pigeond::erase_state::readiness(&w.g, &current)
         .await

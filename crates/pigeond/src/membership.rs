@@ -1,5 +1,5 @@
 //! Derive purge-capable custody from accepted admission witnesses (ADR
-//! 0076, proposed). Configured roles remain immutable. A rules-2 backup
+//! 0078, proposed). Configured roles remain immutable. A rules-3 backup
 //! without activation is pending, regardless of what its report claims.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -66,7 +66,7 @@ pub fn configured(roster: &Roster) -> BTreeSet<String> {
         .collect()
 }
 
-/// Cheap status/transport reading. A changed rules-2 roster waits until
+/// Cheap status/transport reading. A changed rules-3 roster waits until
 /// the daemon has derived its new eligibility; old reports cannot bypass
 /// this local check. Legacy groups continue sharing before the upgrade.
 pub fn pending(g: &Group, device: &str) -> bool {
@@ -84,7 +84,7 @@ pub fn pending(g: &Group, device: &str) -> bool {
     if k.admission_error.is_some() {
         return true;
     }
-    if roster.rules < 2 {
+    if roster.rules < pigeon_core::purge::RULES {
         return false;
     }
     match &k.membership {
@@ -162,8 +162,8 @@ pub async fn read(g: &Group, main: &str) -> Result<State, Error> {
     }
     let configured = configured(&roster);
     let Some(upgrade) = &state.upgrade else {
-        if roster.rules >= 2 {
-            return Err(invalid("rules 2 has no verified initial upgrade"));
+        if roster.rules >= pigeon_core::purge::RULES {
+            return Err(invalid("rules 3 has no verified initial upgrade"));
         }
         state.eligible = configured;
         return Ok(state);

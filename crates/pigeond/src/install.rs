@@ -520,7 +520,10 @@ async fn incoming_at(
             continue;
         }
         let old = key_of(g, h).await;
+        // An accepted sparse version already survives at its conflict name.
+        // Only a live local file needs an overlay at the original path.
         if let (Some(h), Some(_)) = (h, w)
+            && !crate::shared_overlay::hidden_absent(g, path, &hidden)
             && lost_the_name(g, me, &main, path, h).await
         {
             let stat = g.worktree.as_ref().and_then(|wt| stat_of(&wt.join(path)));

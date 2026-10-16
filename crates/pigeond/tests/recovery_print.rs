@@ -33,13 +33,14 @@ fn an_unprinted_sheet_is_revoked_when_no_backup_receives_it() {
             "Alice",
         ],
     );
-    let invitation = pigeon(&alice, &["invite", "Bob"]);
-    let ticket = said(&invitation, "invitation", "code").unwrap();
+    let ticket = invitation(&alice);
     pigeon(
         &bob,
         &[
             "join",
             &ticket,
+            "--person",
+            "Bob",
             root.join("bob-files").to_str().unwrap(),
             "--name",
             "Bob",

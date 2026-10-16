@@ -91,6 +91,7 @@ fn group() -> Roster {
     Roster {
         rules: 1,
         group: "fixture".into(),
+        invitation: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".into(),
         k: 2,
         retention_days: 30,
         telemetry_device: None,
@@ -176,6 +177,19 @@ fn known_rosters() -> Vec<(&'static str, Roster)> {
     relay.relay = Some("https://relay.example.org".into());
     let mut rules2 = g.clone();
     rules2.rules = 2;
+    let mut rules3 = g.clone();
+    rules3.rules = 3;
+    let mut rules4 = g.clone();
+    rules4.rules = 4;
+    // Work/<person ID>/… is that person's (rules 2).
+    let mut per_person = rules2.clone();
+    per_person.folders.push(Folder {
+        path: "Work".into(),
+        rule: Rule::PerPerson,
+    });
+    // The same rule in a roster of rules 1, which makes it invalid.
+    let mut per_person_rules1 = per_person.clone();
+    per_person_rules1.rules = 1;
     let mut minimal = g.clone();
     minimal.persons.retain(|p, _| p.0 == "ana");
     minimal.devices.retain(|d, _| *d == dev(1));
@@ -188,6 +202,10 @@ fn known_rosters() -> Vec<(&'static str, Roster)> {
         ("group-k3.toml", k3),
         ("group-relay.toml", relay),
         ("group-rules-2.toml", rules2),
+        ("group-rules-3.toml", rules3),
+        ("group-rules-4.toml", rules4),
+        ("group-per-person.toml", per_person),
+        ("group-per-person-rules-1.toml", per_person_rules1),
         ("minimal.toml", minimal),
     ]
 }
@@ -427,13 +445,7 @@ fn commit_cases_get_their_verdicts() {
             purges: &BTreeMap::new(),
             witnesses: &BTreeMap::new(),
         });
-        let want = if authority::RULES >= 2 {
-            case.get("verdict_rules_2")
-                .and_then(Item::as_str)
-                .unwrap_or_else(|| case["verdict"].as_str().unwrap())
-        } else {
-            case["verdict"].as_str().unwrap()
-        };
+        let want = case["verdict"].as_str().unwrap();
         assert_eq!(verdict(&v), want, "commits/{name}: {v:?}");
     }
     assert!(seen > 0, "no commit case");

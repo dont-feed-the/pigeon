@@ -16,6 +16,8 @@ pub enum Change {
         /// Person IDs or unique names.
         stewards: Vec<String>,
     },
+    /// Each folder in it named by a person's ID belongs to that person.
+    PerPerson,
     /// Remove the direct rule.
     Inherit,
 }
@@ -44,6 +46,9 @@ pub struct Rule {
     pub stewards: Vec<String>,
     /// Whether this folder has its own entry rather than inheritance.
     pub direct: bool,
+    /// Each folder in it named by a person's ID belongs to that person.
+    #[serde(default)]
+    pub per_person: bool,
 }
 
 /// Folder rules and the current people they refer to.

@@ -49,6 +49,7 @@ fn roster(k: u32) -> Roster {
     Roster {
         rules: 1,
         group: "merge".into(),
+        invitation: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".into(),
         k,
         retention_days: 30,
         telemetry_device: None,

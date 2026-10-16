@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 use hegel::TestCase;
 use hegel::generators as gs;
 use pigeon_proto::api::{
-    Choice, DeletedFile, Divergence, FileEntry, Folder, HeldChoice, HeldEntry, InvitationEntry,
-    Level, Machine, PersonEntry, Setting, State, StatusReport, Suggestion, VersionStatus,
+    Choice, DeletedFile, Divergence, FileEntry, Folder, HeldChoice, HeldEntry, Level, Machine,
+    PersonEntry, Setting, State, StatusReport, Suggestion, VersionStatus,
 };
 use pigeon_proto::stream::{Refusal, StreamAnswer, StreamHeader};
 use pigeon_proto::{Arg, Envelope, LineDecoder, Message, Problem, Request, Response, encode};
@@ -28,7 +28,8 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(46)) {
+    match tc.draw(gs::integers::<u8>().max_value(47)) {
+        47 => Request::RemoveDeviceId { device: text(tc) },
         46 => Request::Capacity,
         45 => Request::ViewSuggestion {
             proposal: text(tc),
@@ -39,9 +40,11 @@ fn request(tc: &TestCase) -> Request {
         },
         44 => Request::SetFolderRule {
             folder: text(tc),
-            rule: match tc.draw(gs::integers::<u8>().max_value(2)) {
+            confirmed: tc.draw(gs::booleans()),
+            rule: match tc.draw(gs::integers::<u8>().max_value(3)) {
                 0 => pigeon_proto::policy::Change::Inherit,
                 1 => pigeon_proto::policy::Change::Owned { person: text(tc) },
+                2 => pigeon_proto::policy::Change::PerPerson,
                 _ => pigeon_proto::policy::Change::AddOnly {
                     stewards: (0..tc.draw(gs::integers::<u8>().max_value(3)))
                         .map(|_| text(tc))
@@ -63,17 +66,15 @@ fn request(tc: &TestCase) -> Request {
             k: tc.draw(gs::integers::<u32>()),
             device_name: text(tc),
         },
-        3 => Request::Invite {
-            person: text(tc),
-            admin: flag(tc),
-            custodian: flag(tc),
-            name: maybe_text(tc),
-        },
+        3 => Request::Invite,
         4 => Request::Join {
             invitation: text(tc),
             folder: maybe_text(tc),
             keep: flag(tc),
             name: maybe_text(tc),
+            person: maybe_text(tc),
+            existing: flag(tc),
+            custodian: flag(tc),
         },
         5 => Request::Keep { folder: text(tc) },
         6 => Request::Evict { folder: text(tc) },
@@ -99,10 +100,6 @@ fn request(tc: &TestCase) -> Request {
         },
         31 => Request::Resume,
         32 => Request::People,
-        33 => Request::Invitations,
-        34 => Request::CancelInvitation {
-            invitation: text(tc),
-        },
         35 => Request::Leave,
         36 => Request::Held,
         41 => Request::AllowDebug { peer: text(tc) },
@@ -264,16 +261,6 @@ fn response(tc: &TestCase) -> Response {
                     recovery: flag(tc),
                     heard_at: maybe_text(tc),
                     this_device: flag(tc),
-                })
-                .collect(),
-        },
-        18 => Response::Invitations {
-            invitations: (0..tc.draw(gs::integers::<u8>().max_value(3)))
-                .map(|_| InvitationEntry {
-                    id: text(tc),
-                    who: text(tc),
-                    custodian: flag(tc),
-                    expires: text(tc),
                 })
                 .collect(),
         },

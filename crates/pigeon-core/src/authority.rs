@@ -18,8 +18,9 @@ use crate::names;
 use crate::roster::{self, DeviceId, Invalid, PersonId, Role, Roster, Rule};
 use crate::sig::{self, SigError};
 
-/// The rule sets this release judges (ADR 0048).
-pub const RULES: u32 = 2;
+/// The rule sets this release judges (ADR 0048): 2 adds per-person folders,
+/// and 3 adds reference-aware purge with signed preparation and witnesses.
+pub const RULES: u32 = crate::purge::RULES;
 /// The roster's path.
 pub const ROSTER: &str = ".pigeon/roster.toml";
 /// The trailer of a Force (04 §4.6).
@@ -117,7 +118,7 @@ pub struct Step<'a> {
 pub struct PurgeCheck {
     /// Its declared UTC end, checked against R(p) and signed author time.
     pub end: i64,
-    /// Rules-2 custody is nonempty and every pending admission has settled.
+    /// Rules-3 custody is nonempty and every pending admission has settled.
     pub quorum_ready: bool,
     /// The base is accepted history of this group or a verified archive.
     pub base_seen: bool,
@@ -324,14 +325,24 @@ pub fn author_time(raw: &[u8]) -> Option<(i64, i32)> {
 }
 
 /// The rule of `path` under `roster`: the folder entry with the longest
-/// path prefix of it; with none, add-only with the admins as stewards.
-pub fn rule_of<'a>(roster: &'a Roster, path: &str) -> Option<&'a Rule> {
-    roster
+/// path prefix of it; with none, add-only with the admins as stewards. A
+/// per-person entry gives `<entry>/<id>/…` to the person `<id>`, and passes
+/// any other path in it to the next longest entry.
+pub fn rule_of(roster: &Roster, path: &str) -> Option<Rule> {
+    let mut entries: Vec<&roster::Folder> = roster
         .folders
         .iter()
         .filter(|f| path == f.path || path.starts_with(&format!("{}/", f.path)))
-        .max_by_key(|f| f.path.len())
-        .map(|f| &f.rule)
+        .collect();
+    entries.sort_by_key(|f| std::cmp::Reverse(f.path.len()));
+    entries.into_iter().find_map(|f| match &f.rule {
+        Rule::PerPerson => {
+            let rest = path.strip_prefix(f.path.as_str())?.strip_prefix('/')?;
+            let id = PersonId(rest.split('/').next()?.to_owned());
+            roster.persons.contains_key(&id).then_some(Rule::Owned(id))
+        }
+        rule => Some(rule.clone()),
+    })
 }
 
 /// Whether person `u` of `roster` may add (`added`) or change `path`, on
@@ -351,7 +362,7 @@ pub fn allowed(
     }
     let mine = || sole_writer(writers, u, path);
     match rule_of(roster, path) {
-        Some(Rule::Owned(owner)) => owner == u,
+        Some(Rule::Owned(owner)) => owner == *u,
         Some(Rule::AddOnly(stewards)) if !stewards.is_empty() => {
             added || stewards.contains(u) || mine()
         }
@@ -538,7 +549,7 @@ pub fn judge(step: &Step<'_>) -> Verdict {
 /// Admins add or cancel a purge, never edit one in place. Ordinary members
 /// may propose a well-formed addition; only admins decide its adoption.
 fn purge(step: &Step<'_>, path: &str, admin: bool) -> Result<(), Box<Verdict>> {
-    if step.roster.rules < 2 {
+    if step.roster.rules < crate::purge::RULES {
         return Err(Box::new(Verdict::Unknown("purge-protocol")));
     }
     let refused = |why| {
@@ -627,7 +638,10 @@ fn roster_change(step: &Step<'_>, signer: &DeviceId) -> Result<Roster, Box<Verdi
     if new.rules < step.roster.rules {
         return refused(Refusal::RosterNotAChange);
     }
-    if new.rules == 2 && step.roster.rules < 2 && step.witnesses.get(ROSTER) != Some(&Ok(())) {
+    if new.rules >= crate::purge::RULES
+        && step.roster.rules < crate::purge::RULES
+        && step.witnesses.get(ROSTER) != Some(&Ok(()))
+    {
         return Err(Box::new(Verdict::Unknown("upgrade-proof")));
     }
     if let Err(why) = new.validate() {

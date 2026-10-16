@@ -30,8 +30,8 @@ brew services start pigeon
 ## Use
 
 ```sh
-pigeon create Family ~/Family    # start a group with a folder
-pigeon invite Laurent            # prints a line for Laurent to run
+pigeon create Family ~/Family    # start a group; prints the line to share
+pigeon invite                    # prints that line again
 pigeon status                    # are my files safe?
 ```
 

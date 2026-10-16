@@ -36,8 +36,8 @@ class Installation(unittest.TestCase):
         # Exercise both supervisors without starting a service on the test host.
         self.commands = self.root / "commands"
         self.commands.mkdir()
-        for name in ("systemctl", "launchctl"):
-            self.executable(self.commands / name, "exit 0")
+        self.executable(self.commands / "systemctl", "exit 0")
+        self.executable(self.commands / "launchctl", '[ "$1" != print ] || exit 113')
         self.env["PATH"] = f"{self.commands}:{os.environ['PATH']}"
         self.release("v0.3.2")
         self.release("v0.3.3")
@@ -54,7 +54,10 @@ class Installation(unittest.TestCase):
         stage.mkdir()
         binaries = stage / "bin"
         binaries.mkdir()
-        self.executable(binaries / "pigeon", f"echo 'pigeon {tag[1:]}'")
+        self.executable(
+            binaries / "pigeon",
+            f"if [ \"$1\" = join ]; then printf '<%s>' \"$@\"; echo; else echo 'pigeon {tag[1:]}'; fi",
+        )
         for name in ("pigeond", "git-annex-p2p-iroh"):
             self.executable(binaries / name, "exit 0")
         for name in ("pigeon-install", "install-git-annex", "pigeon-service"):
@@ -105,6 +108,16 @@ class Installation(unittest.TestCase):
         self.assertFalse((self.home / ".local/bin/pigeon").is_symlink())
         self.assertEqual(sentinel.read_text(), "keep this identity and group data")
 
+    def test_join_runs_after_installing_or_finding_the_release(self):
+        args = ("--join", "pgn2-abc", "My Folder", "--person", "L'Ami", "--backup-machine")
+        joined = "<join><pgn2-abc><My Folder><--person><L'Ami><--backup-machine>"
+        self.assertIn(joined, self.run_installer("--no-service", *args).stdout)
+        self.assertEqual(self.version(), "pigeon 0.3.3")
+        again = self.run_installer("--no-service", *args).stdout
+        self.assertIn("already installed", again)
+        self.assertIn(joined, again)
+        self.run_installer("--join", ok=False)
+
     def test_bad_checksum_leaves_current_installation_untouched(self):
         self.run_installer("--version", "v0.3.2", "--no-service")
         archive = next((self.releases / "download/v0.3.3").glob("pigeon-*.tar.gz"))
@@ -141,6 +154,57 @@ class Installation(unittest.TestCase):
         self.assertEqual(self.version(), "pigeon 0.3.4+gabcdef123456")
         self.assertTrue((self.prefix / "bin/pigeon-service").is_file())
 
+    def test_a_checkout_is_built_where_it_is_and_a_dirty_one_placed_again(self):
+        source = self.root / "checkout"
+        (source / "packaging").mkdir(parents=True)
+        (source / "Cargo.toml").write_text('[workspace.package]\nversion = "0.3.4"\n')
+        for name in ("pigeon-install", "pigeon-service"):
+            shutil.copy2(PACKAGING / name, source / "packaging" / name)
+        built = self.root / "git-annex-built-from"
+        self.executable(
+            source / "packaging/install-git-annex",
+            f'while [ $# -gt 0 ]; do [ "$1" != --build ] || echo "$2" >> "{built}"; shift; done',
+        )
+        target = source / "target/release"
+        target.mkdir(parents=True)
+        self.executable(target / "pigeon", "echo pigeon 0.3.4+gabcdef123456.dirty")
+        for name in ("pigeond", "git-annex-p2p-iroh"):
+            self.executable(target / name, "exit 0")
+        self.executable(
+            self.commands / "git",
+            'case "$*" in *rev-parse*) echo abcdef123456 ;; *status*) echo " M src/lib.rs" ;; esac',
+        )
+        self.executable(self.commands / "cargo", "exit 0")
+        self.env.pop("CARGO_TARGET_DIR", None)
+        self.run_installer("--source", str(source))
+        self.assertEqual(self.version(), "pigeon 0.3.4+gabcdef123456.dirty")
+        self.assertEqual(built.read_text().split(), [f"{source.resolve()}/third_party/git-annex"])
+        self.assertFalse((self.prefix / "src").exists())
+        again = self.run_installer("--source", str(source))
+        self.assertNotIn("already installed", again.stdout)
+        self.assertTrue((self.prefix / "bin.previous/pigeon").is_file())
+
+    def test_a_copy_without_history_takes_its_commit_from_the_environment(self):
+        source = self.root / "copy"
+        (source / "packaging").mkdir(parents=True)
+        (source / "Cargo.toml").write_text('[workspace.package]\nversion = "0.3.4"\n')
+        for name in ("pigeon-install", "pigeon-service"):
+            shutil.copy2(PACKAGING / name, source / "packaging" / name)
+        self.executable(source / "packaging/install-git-annex", "exit 0")
+        target = self.root / "build/release"
+        target.mkdir(parents=True)
+        self.executable(target / "pigeon", "echo pigeon 0.3.4+gfeedface0000.dirty")
+        for name in ("pigeond", "git-annex-p2p-iroh"):
+            self.executable(target / name, "exit 0")
+        self.executable(self.commands / "git", "echo 'no repository here' >&2; exit 128")
+        self.executable(self.commands / "cargo", "exit 0")
+        self.env.update(CARGO_TARGET_DIR=str(self.root / "build"), PIGEON_COMMIT="feedface0000.dirty")
+        self.run_installer("--source", str(source))
+        self.assertEqual(self.version(), "pigeon 0.3.4+gfeedface0000.dirty")
+        del self.env["PIGEON_COMMIT"]
+        refused = self.run_installer("--source", str(source), ok=False)
+        self.assertIn("PIGEON_COMMIT", refused.stderr)
+
     def test_conflicting_modes_leave_the_installation_untouched(self):
         self.run_installer("--version", "v0.3.2", "--no-service")
         self.run_installer("--main", "--uninstall", ok=False)
@@ -174,6 +238,41 @@ class Installation(unittest.TestCase):
                      "StateDirectory=pigeon", "RuntimeDirectory=pigeon", "WantedBy=multi-user.target"):
             self.assertIn(line, result)
         self.assertNotIn("Nice=", result)
+
+    def launch_agent(self, launchctl):
+        """Install the macOS agent against a launchctl stand-in; time passes instantly."""
+        self.executable(self.commands / "uname", "echo Darwin")
+        self.executable(self.commands / "sleep", "exit 0")
+        self.executable(self.commands / "launchctl", launchctl)
+        return subprocess.run(
+            ["sh", str(PACKAGING / "pigeon-service"), "--prefix", "/opt/pigeon"],
+            env=self.env, capture_output=True, text=True, timeout=30,
+        )
+
+    def test_agent_waits_until_launchd_has_unloaded_the_old_job(self):
+        state = self.root / "launchd"
+        state.mkdir()
+        # launchd keeps the job for three more polls after bootout returns, and
+        # refuses to bootstrap it until then, as on a real Mac.
+        result = self.launch_agent(f"""
+            cd "{state}"
+            case $1 in
+              bootout) echo 3 > teardown ;;
+              print) n=$(cat teardown); [ "$n" -gt 0 ] || exit 113; echo $((n - 1)) > teardown ;;
+              bootstrap) [ "$(cat teardown)" = 0 ] || {{ echo "Bootstrap failed: 5: Input/output error" >&2; exit 5; }}
+                         touch bootstrapped ;;
+            esac""")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((state / "bootstrapped").exists())
+        agent = plistlib.loads((self.home / "Library/LaunchAgents/org.pigeon.pigeond.plist").read_bytes())
+        self.assertEqual(agent["ProgramArguments"], ["/opt/pigeon/bin/pigeond"])
+
+    def test_agent_gives_up_when_launchd_never_unloads_the_old_job(self):
+        bootstrapped = self.root / "bootstrapped"
+        result = self.launch_agent(f'[ "$1" != bootstrap ] || touch "{bootstrapped}"')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("still runs pigeond ten seconds after stopping it", result.stderr)
+        self.assertFalse(bootstrapped.exists())
 
 
 if __name__ == "__main__":

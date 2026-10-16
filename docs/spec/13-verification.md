@@ -42,6 +42,14 @@ trace checks retain their existing frequency. See
 checks the planned protocol; purge is not yet coded. Its smaller positive
 case stays in the fast set, alongside its negative protocol cases.
 
+`T_n31o5` and `T_n32o5` share the token proof but have separate checks of
+their constants and all four configured invariants. `AuthorityDecidersProof`
+establishes `DecidersCanAdopt` for decision/mixed policy and enabled Force,
+which covers the entire `Authority_mixed` contract. Those three graphs
+are audits. The other Authority contracts still run with TLC; the policy
+theorem does not establish their additional invariants. See
+[authority-proof.md](../authority-proof.md).
+
 | Model | Invariants; liveness | Specified in |
 |---|---|---|
 | `CaptureInstall` | `NoLoss`, `Journal`, `IndexHonest`, `CaptureFirst`, `NoOverwrite`, `DeletionKept`; `SavesCaptured`, `Converges` | [07 §7.5](07-capture-and-install.md), [07 §7.7](07-capture-and-install.md) |
@@ -228,7 +236,7 @@ two folders.
 |---|---|---|
 | crates ([14 §14.6](14-platforms-and-packaging.md)) | `pigeon-core`, `pigeon-proto`, `pigeon-i18n` (the English bundle), `pigeon-git`, `pigeon-sys`, `pigeond`, `pigeon`, `git-annex-p2p-iroh` | `pigeon-web`, `pigeon-telemetry`, the French bundle (ADR 0028) |
 | loops ([08 §8.1](08-custody-loops.md)) | capture, accept, install with its journal ([07 §7.5](07-capture-and-install.md)), place, repair (started by a removed custodian), free and keep, settings check; the filter with its `CHECKPRESENT` probe ([09 §9.4](09-network-and-joining.md)) | scrub, purge |
-| commands ([10](10-interfaces.md)) | `create`, `invite` (a person's laptop, or `--backup-machine`), `join`, `status`, `machines`, `history`, `restore`, `free`, `keep`, `remove-computer`, `recovery-sheet`, `recover`, `doctor`, `debug bundle` | the rest answer `not-in-this-build` |
+| commands ([10](10-interfaces.md)) | `create`, `invite` (the line that joins), `join`, `status`, `machines`, `history`, `restore`, `free`, `keep`, `remove-computer`, `recovery-sheet`, `recover`, `doctor`, `debug bundle` | the rest answer `not-in-this-build` |
 | content | regular files and folders, the executable bit, portable names ([07 §7.9](07-capture-and-install.md)) | other file systems: `create` and `join` name the one they refuse (`file-system-not-in-this-build`, 10 §10.5) |
 | network | iroh with direct addresses and mDNS | relays and discovery (ADR 0016) |
 | diagnostics | JSON logs (ADR 0022), trace logs (ADR 0008) | telemetry transport and dashboards (ADR 0025) |
@@ -278,8 +286,8 @@ from this specification as follows, each to close before S1–S11 run
   proposal. *Keep mine*, *Keep Paul's*, *Keep both* and `pigeon view` are
   not in it, and a refused commit on a peer's `main` is not kept as a
   proposal ([08 §8.2](08-custody-loops.md) step 4);
-- laptops join by invitation, of a new person or of a person of the
-  roster ([09 §9.6](09-network-and-joining.md)), and keep every folder:
+- laptops join with the group's invitation, as a new person or as a
+  person of the roster ([09 §9.6](09-network-and-joining.md)), and keep every folder:
   choosing them at the join, and the safety words, are not in it;
   `crates/pigeond/tests/people.rs` runs two people, three laptops and two
   backup machines on one host, through a concurrent edit;
@@ -291,8 +299,8 @@ from this specification as follows, each to close before S1–S11 run
   header or join message yet ([12 §12.3](12-observability.md)); `history`
   takes older versions' states from their copy counts;
 - the device key is hex, not OpenSSH ([11 §11.2](11-local-state.md)); an
-  invitation is base32 of JSON, and also carries the group's name, K and the
-  inviter's name;
+  invitation is base32 of JSON, and also carries the group's name, K and its
+  admitters' person names;
 - status reports are published, fetched, counted and relayed
   ([06 §6.3](06-status.md)), but a custodian neither refuses `tmpfs` nor
   stops serving once its repository is lost, and reports no proposals,
@@ -308,7 +316,7 @@ from this specification as follows, each to close before S1–S11 run
   notice (remotedaemon's `CONNECTED` and `DONESYNCING`); `free` and `keep`
   only record the target; `status` on a laptop captures first;
 - a peer is dialled at the direct addresses it last gave (an opener's in its
-  stream header; the inviter's known peers' in a join's welcome; iroh still
+  stream header; the admitter's known peers' in a join's welcome; iroh still
   authenticates by key), and a device keeps
   the port it picked across restarts (`<state>/port`); a custodian that
   answers but serves the group no more (`unknown-group`) counts for nothing
@@ -379,7 +387,8 @@ locks (11 §11.4).
 | S16 | two laptops each admit a new person while they cannot reach each other: the roster forks, then every laptop lists every device and the newcomers' files reach everyone (ADR 0051) |
 
 S14–S16 (`pigeon-lab/src/people.rs`) give laptops persons: a spare laptop
-joins with `pigeon invite PERSON` and `pigeon join … --name`. The model
+joins with the line `pigeon invite` prints, as `pigeon join … --name …
+--person …`. The model
 follows the default root rule (an admin or the file's only author changes
 a file, anyone adds one, another change is a suggestion); conflict copies
 are observed by the executor only, as `Catalogue.tla` and `Authority.tla`
@@ -450,17 +459,21 @@ protected.
 
 The `refound` algebra's four laws (`tests/refound.rs`, 1000 cases each)
 cover a valid sole-person roster, preserved folder boundaries and group
-settings, permitted surviving computers and idempotence. The `invitation`
-algebra's four laws (`tests/invitation.rs`, 1000 cases each) bind redemption
-to the issuing group and first authenticated identity; a retry resumes
-without granting a second first use. Adapter checks additionally enforce
-expiry, current role, annex UUID and removal.
+settings, permitted surviving computers and idempotence; a refounded
+roster has its own invitation. The `invitation` algebra's five laws
+(`tests/invitation.rs`, 1000 cases each): every addition applies and never
+makes an admin; a name of the roster is taken only with consent; a device
+of the roster is welcomed again only with its role and annex UUID; a
+removed device is never admitted; a new person's ID and a new device's
+name are fresh. `pigeond/tests/invitation.rs` checks on the wire that the
+invitation admits again, binds its proof to the device, and that a
+refounded group's old invitation refuses.
 
 Local replay tests refuse malformed/future intents, preserve configuration
 and proposals, and leave later index changes intact after a completed
 transition. `pigeond/tests/refound_restart.rs` kills real lab daemons at
 each main/index/configuration seam for both refounding and a bare backup
-rejoining in place. Restart must finish without an inviter, with unchanged
+rejoining in place. Restart must finish without an admitter, with unchanged
 annex identity, object bytes and inodes. These supplement welcome history
 validation; a private replay journal does not authorize remote history.
 

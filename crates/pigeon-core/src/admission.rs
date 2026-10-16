@@ -1,4 +1,4 @@
-//! Purge-capable membership admission (proposed ADR 0076). A pending backup
+//! Purge-capable membership admission (proposed ADR 0078). A pending backup
 //! is configured but not yet eligible for custody. Signed acknowledgements
 //! bind its introduction; activation first merges their histories. The
 //! initial protocol upgrade requires every non-recovery participant and a
@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// The admission operation whose independently verified reports are read.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Kind<D> {
-    /// Initial rules-2 enablement, after every participant acknowledges it.
+    /// Initial rules-3 enablement, after every participant acknowledges it.
     Upgrade,
     /// A configured backup's activation, including its own capability ack.
     Custodian(D),

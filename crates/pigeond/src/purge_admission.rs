@@ -88,7 +88,7 @@ pub(crate) async fn checks(
             continue;
         }
         let roster = crate::membership::roster(g, parent).await?;
-        if roster.rules < 2 {
+        if roster.rules < pigeon_core::purge::RULES {
             quorum_ready = false;
             break;
         }

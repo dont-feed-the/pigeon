@@ -11,6 +11,7 @@ mod args;
 mod complete;
 mod erase;
 mod export;
+mod join;
 mod render;
 mod repo;
 mod startup;
@@ -149,24 +150,33 @@ fn show(out: &Renderer, json: bool, r: &Response) -> (bool, bool) {
 }
 
 fn exchange(out: &Renderer, json: bool, request: &Request) -> ExitCode {
-    let fail = |p: Problem| {
-        show(out, json, &Response::Problem(p));
-        ExitCode::from(1)
-    };
-    let mut client = match Client::open(None).or_else(|code| {
-        if code == "daemon-not-running" && matches!(request, Request::OpenWeb) {
-            crate::startup::connect()
-                .ok_or(code)
-                .and_then(|stream| Client::greet(stream, None))
-        } else {
-            Err(code)
-        }
-    }) {
-        Ok(client) => client,
-        Err(code) => return fail(local_problem(code, &[])),
-    };
+    let (_, problem) = show(out, json, &answer(out, json, request));
+    ExitCode::from(u8::from(problem))
+}
+
+/// Sends `request` and shows its progress: answers its last response,
+/// unshown, or the problem of a daemon that cannot be reached.
+fn answer(out: &Renderer, json: bool, request: &Request) -> Response {
+    sent(out, json, request).unwrap_or_else(|p| Response::Problem(*p))
+}
+
+fn sent(out: &Renderer, json: bool, request: &Request) -> Result<Response, Box<Problem>> {
+    let unreachable = |code: &str| Box::new(local_problem(code, &[]));
+    let mut client = Client::open(None)
+        .or_else(|code| {
+            if code == "daemon-not-running"
+                && matches!(request, Request::OpenWeb | Request::Join { .. })
+            {
+                crate::startup::connect()
+                    .ok_or(code)
+                    .and_then(|stream| Client::greet(stream, None))
+            } else {
+                Err(code)
+            }
+        })
+        .map_err(unreachable)?;
     if client.send(2, request).is_err() {
-        return fail(local_problem("daemon-not-running", &[]));
+        return Err(unreachable("daemon-not-running"));
     }
     let waiting = match request {
         Request::Restore { path, .. } => Some(("progress-restore", vec![("path", path.as_str())])),
@@ -174,6 +184,7 @@ fn exchange(out: &Renderer, json: bool, request: &Request) -> ExitCode {
         Request::RecoverySheet => Some(("progress-recovery-sheet", Vec::new())),
         Request::DebugBundle { .. } => Some(("progress-debug-bundle", Vec::new())),
         Request::Recover { .. } => Some(("progress-recover", Vec::new())),
+        Request::Join { .. } => Some(("progress-join", Vec::new())),
         _ => None,
     };
     if let Some((id, args)) = waiting {
@@ -195,13 +206,13 @@ fn exchange(out: &Renderer, json: bool, request: &Request) -> ExitCode {
         );
     }
     loop {
-        let Ok(env) = client.next() else {
-            return fail(local_problem("daemon-not-running", &[]));
-        };
-        let (last, problem) = show(out, json, &env.body);
-        if last {
-            return ExitCode::from(u8::from(problem));
+        let env = client
+            .next()
+            .map_err(|_| unreachable("daemon-not-running"))?;
+        if !matches!(env.body, Response::Progress { .. }) {
+            return Ok(env.body);
         }
+        show(out, json, &env.body);
     }
 }
 
@@ -242,6 +253,14 @@ fn run() -> ExitCode {
             emit(&[version], false);
             ExitCode::SUCCESS
         }
+        Action::Completions(shell) => match complete::register(*shell) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(_) => {
+                let p = local_problem("internal-error", &[]);
+                show(&out, line.json, &Response::Problem(p));
+                ExitCode::from(1)
+            }
+        },
         Action::Update(args) => {
             let code = match update(args).kind() {
                 std::io::ErrorKind::NotFound => "not-installed",
@@ -265,6 +284,9 @@ fn run() -> ExitCode {
         },
         Action::Erase { operation, preview } => erase::run(&out, &line, operation, *preview),
         Action::Send(Request::Drop { path, .. }) => drop(&out, &line, path),
+        Action::Send(Request::SetFolderRule { folder, rule, .. }) => {
+            folder_rule(&out, &line, folder, rule)
+        }
         Action::Send(request) => {
             if !line.yes
                 && let Some(question) = question(request)
@@ -272,7 +294,10 @@ fn run() -> ExitCode {
             {
                 return code;
             }
-            exchange(&out, line.json, request)
+            match request {
+                Request::Join { .. } => join::run(&out, &line, request),
+                _ => exchange(&out, line.json, request),
+            }
         }
     }
 }
@@ -310,6 +335,44 @@ fn drop(out: &Renderer, line: &args::Line, path: &str) -> ExitCode {
         if let Err(code) = confirmed(out, line, &question) {
             return code;
         }
+    }
+    exchange(out, line.json, &send(true))
+}
+
+/// `pigeon folder-rule PATH …` (04 §4.3): a rule that raises the group's
+/// rules (ADR 0048) first says which computers may wait for changes, then
+/// asks; `--yes` confirms at once.
+fn folder_rule(
+    out: &Renderer,
+    line: &args::Line,
+    folder: &str,
+    rule: &pigeon_proto::policy::Change,
+) -> ExitCode {
+    let send = |confirmed| Request::SetFolderRule {
+        folder: folder.to_owned(),
+        rule: rule.clone(),
+        confirmed,
+    };
+    let first = answer(out, line.json, &send(line.yes));
+    let Response::Problem(raise) = &first else {
+        return ExitCode::from(u8::from(show(out, line.json, &first).1));
+    };
+    if raise.code != "rules-raise" || line.yes {
+        return ExitCode::from(u8::from(show(out, line.json, &first).1));
+    }
+    show(
+        out,
+        line.json,
+        &Response::Said {
+            message: raise.message.clone(),
+        },
+    );
+    let question = Message {
+        id: "confirm-rules-raise".to_owned(),
+        args: std::collections::BTreeMap::new(),
+    };
+    if let Err(code) = confirmed(out, line, &question) {
+        return code;
     }
     exchange(out, line.json, &send(true))
 }

@@ -45,8 +45,9 @@ using `PIGEON_SOCKET=/srv/pigeon/alice/run/pigeond.sock pigeon join …`.
 The control peer must belong to the actual person's roster identity. A bridge
 login name is just an account name; it does not grant Pigeon authority.
 
-The bridge uses that control peer to invite each new client as another device
-of the same person, and for the portal's account-level suggestion review.
+The bridge joins each new client with the group's invitation, which that
+control peer prints and admits, as another device of the same person; it also
+uses the control peer for the portal's account-level suggestion review.
 The control peer must be reachable during authorization and that review.
 Already authorized clients use their own daemons and peer UI independently.
 
@@ -284,6 +285,10 @@ files into their ancestors without scanning the entire tree per directory.
   compatibility with every app or every server feature.
 
 ## Verification
+
+The [bridge system verification guide](bridge-system-verification.md) describes
+the TLA models, per-client identity and DAV transaction traces, concurrent
+native/client scenarios, and the boundaries of that evidence.
 
 ```sh
 cargo test -p pigeon-bridge --lib

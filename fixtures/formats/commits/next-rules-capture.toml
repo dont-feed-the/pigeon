@@ -1,7 +1,6 @@
-about = "Ben's laptop captures under a roster of rules 2."
+about = "Ben's laptop captures under a roster of rules 4."
 verdict = "unknown"
-verdict_rules_2 = "accepted"
-roster = "known/group-rules-2.toml"
+roster = "known/group-rules-4.toml"
 signer = 2
 message = "pigeon: capture"
 
@@ -10,4 +9,4 @@ message = "pigeon: capture"
 "Ana/notes.txt" = "/annex/objects/SHA256E-s5--ab5aa97074c454a0632057e704220d9a6678fbf773a0a5806fc09b8173b07309.txt\n"
 
 [after]
-"Shared/b.jpg" = "/annex/objects/SHA256E-s7--616f9c106aed88c71689821e8292c081b74bd412630f03d35ed8b5b98b5af541.jpg\n"
+"Shared/b.jpg" = "/annex/objects/SHA256E-s7--74635e6c5a3174a2c3e9aacf2369afecf785c1e73a83fcbc28a34e88b2f6bf03.jpg\n"

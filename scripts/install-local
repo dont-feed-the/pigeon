@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Installs pigeon from this checkout's working tree, uncommitted changes
+# included, in place of the installed one: packaging/pigeon-install --source
+# builds it here and places it as `pigeon update --main` does (the old
+# programs in bin.previous, so `pigeon update --rollback` brings them back,
+# then pigeond restarted). Other arguments go to the installer, such as
+# --no-service or --prefix DIR.
+#
+#   scripts/install-local [--no-service] [--prefix DIR]
+set -euo pipefail
+
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+exec sh "$root/packaging/pigeon-install" --source "$root" "$@"

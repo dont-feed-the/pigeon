@@ -61,6 +61,7 @@ fn roster() -> Roster {
     Roster {
         rules: 1,
         group: "install".into(),
+        invitation: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".into(),
         k: 2,
         retention_days: 30,
         telemetry_device: None,
@@ -549,6 +550,9 @@ async fn a_renamed_file_is_captured_with_its_trailer() {
 
 #[path = "install/storage.rs"]
 mod storage;
+
+#[path = "install/shared.rs"]
+mod shared;
 
 #[cfg(all(feature = "lab", feature = "tla-trace"))]
 #[path = "install/tracing.rs"]

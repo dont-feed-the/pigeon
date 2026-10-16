@@ -1,6 +1,6 @@
 # M5 implementation progress
 
-The working version is 0.6.0. M5 is not complete or tagged. Erase is implemented in the working CLI and
+M5 is not complete or tagged. Its branch leaves the published version unchanged. Erase is implemented in the working CLI and
 web interface; destructive protocol conformance and the remaining recovery
 semantics still need release evidence.
 
@@ -16,7 +16,7 @@ semantics still need release evidence.
   fetching them permits history admission to resume.
 - Completion evidence survives adding and removing backups and restarting.
   Metadata fetching includes the full reports during join and recovery.
-- Initial rules-2 enablement needs every participant's signed capability
+- Initial rules-3 enablement needs every participant's signed capability
   acknowledgement and a nonempty custody seed. A roster edit alone cannot
   assert readiness. New backups remain pending until the existing quorum
   and the joining backup acknowledge their actual introduction.
@@ -95,8 +95,8 @@ skip the configured month or claim physical purge completion.
   vote. Explicit refounding creates a fresh authority domain; the finite
   model and signed-history fixture below check this separation; actual
   network partition recovery and broader implementation traces still need evidence.
-- Release validation on both supported runners, followed by the tag and
-  publication gates. This checkpoint supplies no longitudinal test claim.
+- Linux release validation and both platforms’ archive builds, followed by
+  publication; macOS tests supply periodic background evidence. This checkpoint supplies no longitudinal test claim.
 
 ## Browser usability checkpoint
 
@@ -144,12 +144,12 @@ stopped and reaped. Headless transport limitations are recorded separately.
 
 ## Refounding checkpoint
 
-Refounding now starts a new rules-1 authority domain, preserving old votes
+Refounding now starts a new authority domain with the rules needed by its folder settings, preserving old votes
 and decisions in its signed archive. It carries completed erasure forward
 only after verifying the original full signed epoch proofs with the old
 group's judge. Missing or substituted archive anchors pause content, even
 after a successful cached check. Current files have new reference births.
-This design is recorded in proposed [ADR 0077](../adr/0077-refounding-keeps-completed-erasure-in-its-signed-archive.md).
+This design is recorded in proposed [ADR 0079](../adr/0079-refounding-keeps-completed-erasure-in-its-signed-archive.md).
 
 The physical-purge fixture closes a real signed epoch, refounds, restarts
 and verifies that the old key stays released while a current alias, another

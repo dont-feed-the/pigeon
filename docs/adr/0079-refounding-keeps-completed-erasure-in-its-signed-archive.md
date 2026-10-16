@@ -1,4 +1,4 @@
-# 0077. Refounding keeps completed erasure in its signed archive
+# 0079. Refounding keeps completed erasure in its signed archive
 
 - **Status:** Proposed, 16 October 2026, for M5.
 - Supersedes ADR 0047 only where preserving every old metadata entry or
@@ -19,7 +19,7 @@ Refounding selects an independently accepted old snapshot and retains its
 signed archive link. Before selecting it, root completion certificates for
 any locally complete erasure epochs. A new genesis keeps the current file
 tree and settings, replaces the roster, and omits old custody-admission,
-purge-decision and completion documents. It begins at rules 1; its own new
+purge-decision and completion documents. It begins at rules 1 (or rules 2 when per-person folders are retained); its own new
 participants must explicitly prepare a fresh erasure quorum. Old immutable
 votes and receipt fences are never edited to simulate agreement.
 

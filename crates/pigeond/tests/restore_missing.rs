@@ -193,10 +193,18 @@ fn a_member_requests_absent_bytes_as_a_signed_suggestion_without_changing_main()
         "first version missing",
         &[&alice, &bob],
     );
-    let invite = pigeon(&alice, &["invite", "Bob"]);
-    let code = said(&invite, "invitation", "code").unwrap();
+    let code = invitation(&alice);
     let bob_folder = root.join("bob-files");
-    let joined = pigeon(&bob, &["join", &code, bob_folder.to_str().unwrap()]);
+    let joined = pigeon(
+        &bob,
+        &[
+            "join",
+            &code,
+            bob_folder.to_str().unwrap(),
+            "--person",
+            "Bob",
+        ],
+    );
     assert!(said(&joined, "joined", "group").is_some(), "{joined:?}");
     let bob_file = bob_folder.join("notes.txt");
     eventually_within(

@@ -97,9 +97,9 @@ pub fn refounded(raw: &[u8]) -> Option<(String, String)> {
 }
 
 /// The roster of the new group: `old`'s settings and folders, with `me`'s
-/// person as the only admin and `me` as the only device.
+/// person as the only admin, `me` as the only device, and a new invitation.
 pub fn new_roster(old: &Roster, me: &DeviceId) -> Option<Roster> {
-    pigeon_core::refound::roster(old, me)
+    pigeon_core::refound::roster(old, me, &crate::invite::new_secret().ok()?)
 }
 
 fn group_at(d: &Daemon, repository: Option<&Path>) -> Option<std::sync::Arc<Group>> {
@@ -234,7 +234,7 @@ async fn genesis(
     Ok((new, name, person))
 }
 
-/// New authority-domain tree (proposed ADR 0077). Current files and other
+/// New authority-domain tree (proposed ADR 0079). Current files and other
 /// settings survive. Old votes and erasure identities stay in their signed
 /// archive; completed epochs are consumed there, with their original judge.
 pub async fn new_tree(g: &Group, main: &str, me: &DeviceId) -> Result<authority::Tree, String> {
@@ -336,6 +336,7 @@ mod tests {
         Roster {
             rules: 1,
             group: "Family".to_owned(),
+            invitation: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".into(),
             k: 2,
             retention_days: 30,
             telemetry_device: None,
@@ -364,6 +365,8 @@ mod tests {
         assert_eq!(new.persons.len(), 1);
         assert!(new.persons[&PersonId("bob".to_owned())].admin);
         assert!(new.removed.is_empty());
+        assert_ne!(new.invitation, old.invitation);
+        assert_eq!(new.validate(), Ok(()));
         assert_eq!(
             (new.group, new.k, new.retention_days, new.relay),
             (old.group, old.k, old.retention_days, old.relay)

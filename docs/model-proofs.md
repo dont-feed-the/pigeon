@@ -21,6 +21,7 @@ there is no separately maintained transition relation.
 | `AnnexDropProof.Safety` | `Spec => [](TypeOK /\ LockedStays /\ INV_K)`: a locked copy stays present and at least K copies remain | Any finite `Cust`, natural `K <= Cardinality(Cust)`, and natural `MaxGets`; safe checks, named remotes, no trusted repositories, no log-only proof, **no lock expiry**. Any execution length, partitions, stale logs, aborts, dead markings, and gets admitted by `AnnexDrop`. It does not cover force drops, disk faults, corruption, ranked P2P checks or expiry. |
 | `PurgeProof.Safety` | `Spec => [](KeepWins /\ WaitingPeriod /\ NoResurrection)` | Full-mode purge; any nonempty custodian set disjoint from laptops, valid decider and initial holders, at least one initial copy, natural waiting period and time bound. Covers all original actions and message orders. Purge is not yet implemented; see [scope and proof structure](purge-proof.md). |
 | `CustodyTokensProof.Safety` | `Spec => [](TokensNeverLost /\ TokenHolderHasContent /\ KCopies /\ AtMostOneToken)` | Any natural `N`, `K <= N` and `MaxOffers`; fresh nonces and non-idempotent acknowledgements. Covers the original initial state and every original action for any execution length. This is the exploratory token hand-off model, not git-annex or the implemented custody protocol. See [proof and timings](custody-token-proof.md). |
+| `AuthorityDecidersProof.Safety` | `[]DecidersCanAdopt`: each selected decider has permission for the adoption | `ForceAdopt = TRUE`; `DecidersAt` is `"decision"` or `"mixed"`. A state theorem over the original policy definitions, independent of history length, commit bounds and message ordering. It does not establish authorization, revocation, catalogue agreement, acceptance of the adoption action or liveness. See [authority-proof.md](authority-proof.md). |
 
 The capture proof keeps the staged value and prior committed index across a
 failure. Only an idle install may displace the index, and that index is
@@ -81,6 +82,17 @@ separate job on Mondays even if main has not moved, and on manual workflow
 runs. `scripts/run-tlc --audit-only` runs precisely these graphs;
 `--audit` retains its existing meaning of every configuration.
 
+`T_n31o5` and `T_n32o5` now use that same token proof and are audits too.
+The root theorem is checked once, while each of the three actual token
+configurations gets its own configured-property theorem and parameter check.
+`T_nonce`, `T_n42o3` and both negative token designs remain routine checks.
+`Authority_mixed` is an audit because its only configured invariant is
+`DecidersCanAdopt`, established by the new unconditional policy theorem.
+The other Authority configurations retain every existing guarantee and
+their frequency. Guard removal must break the new proof and yield a real
+TLC counterexample; unsupported policy flags and an extra unproved claim
+must fail coverage.
+
 The four ordinary full shards use `--balanced` and `models/tla/costs.tsv`.
 Longest-first placement separates the expensive remaining cases; missing
 estimates default to two seconds and never exclude a row. This changes
@@ -140,7 +152,7 @@ worker and a 1 GiB heap, TLAPS two workers). They are not CI benchmarks:
 | Apalache capture induction, base + step + implication | 21.1 s | Arbitrary execution length over the chosen three values |
 | Apalache unguarded-install counterexample, length 6 | 7.16 s | Detects the existing negative design |
 
-The complete four-family proof job also checks mutations; it took 189 seconds
+The earlier four-family proof job also checked mutations; it took 189 seconds
 with tools already installed on 16 October 2026. A fresh download and TLAPS installation took about
 55 seconds and was tested separately. Cache
 restoration/download and first installation add overhead; the approximately
@@ -149,10 +161,10 @@ its finite traversal, not total workflow time or daemon testing time.
 
 ## Further reductions
 
-Authority is the next substantial proof project. Before moving
+The remaining Authority contracts are the next substantial proof project. Before moving
 `Authority_decide4`, `Authority_faulty2` or `Authority_revoke2` to audits,
 the proof must establish every invariant of each actual configuration.
-An adoption-permission lemma alone would leave authorization, revocation,
+The new adoption-permission theorem alone leaves authorization, revocation,
 catalogue agreement and quiet-state convergence unchecked. The first
 shared lemma is history-prefix stability: appending a commit cannot change
 the ancestry, verdict, folded roster or catalogue of a fixed set of older

@@ -1,5 +1,5 @@
 //! Independently check signed custody admission evidence (proposed ADR
-//! 0076). No present-day clock or report freshness changes an immutable
+//! 0078). No present-day clock or report freshness changes an immutable
 //! certificate. Missing proof objects remain provisional during fetching.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -77,7 +77,7 @@ async fn verify_inner(g: &Group, witness: &Witness, parents: &[String]) -> Resul
     let request_id = request.id().map_err(|e| invalid(&e))?;
     let kind = match request.kind {
         AdmissionKind::Upgrade => {
-            if base.rules != 1
+            if !(1..pigeon_core::purge::RULES).contains(&base.rules)
                 || state.upgrade.as_ref().is_some_and(|old| old != request)
                 || state.requests.get(&request_id) != Some(request)
                 || membership::participants(&base) != membership::participants(&roster)
@@ -270,7 +270,7 @@ pub(crate) async fn checks(
     Ok(out)
 }
 
-/// Independent evidence for the roster's first rules-2 transition. A
+/// Independent evidence for the roster's first rules-3 transition. A
 /// previously accepted certificate remains valid; it need not be rewritten
 /// with the roster. Two different initial choices can never form a quorum.
 pub(crate) async fn upgrade(

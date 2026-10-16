@@ -195,14 +195,15 @@ fn another_laptop_proves_retained_publication_after_backup_removal() {
         ],
     );
     assert!(said(&answer, "created", "group").is_some(), "{answer:?}");
-    let invitation = pigeon(&lap, &["invite", "Bob"]);
-    let code = said(&invitation, "invitation", "code").unwrap();
+    let code = invitation(&lap);
     let other = root.join("bob-files");
     let joined = pigeon(
         &bob,
         &[
             "join",
             &code,
+            "--person",
+            "Bob",
             other.to_str().unwrap(),
             "--name",
             "bob-laptop",

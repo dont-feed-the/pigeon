@@ -267,6 +267,8 @@ pub async fn recover(
         traceparent: None,
         invitation_hash: String::new(),
         proof: String::new(),
+        person: String::new(),
+        existing: false,
         device_name: name.into(),
         role: "laptop".into(),
         annex_uuid: uuid.into(),

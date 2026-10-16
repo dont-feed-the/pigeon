@@ -5,6 +5,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::Arc;
 use std::time::Duration;
 
 use pigeon_proto::bridge::{Operation, Reply};
@@ -21,13 +22,15 @@ use crate::{
 pub struct Peers {
     config: Config,
     children: Mutex<BTreeMap<String, Child>>,
+    trace: Arc<crate::lifecycle_trace::Trace>,
 }
 
 impl Peers {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config, trace: Arc<crate::lifecycle_trace::Trace>) -> Self {
         Self {
             config,
             children: Mutex::default(),
+            trace,
         }
     }
     pub fn home(&self, id: &str) -> PathBuf {
@@ -131,9 +134,19 @@ impl Peers {
             Reply::Info {
                 device,
                 annex_uuid,
-                shared: true,
+                shared,
                 ..
-            } if device == client.device && annex_uuid == client.annex_uuid => Ok(socket),
+            } => {
+                let accepted = shared && device == client.device && annex_uuid == client.annex_uuid;
+                self.trace
+                    .checked(client, &socket, &device, &annex_uuid, shared, accepted);
+                if accepted {
+                    self.trace.route(client, &client.user, &socket);
+                    Ok(socket)
+                } else {
+                    Err("The client's saved Pigeon identity does not match its daemon".into())
+                }
+            }
             _ => Err("The client's saved Pigeon identity does not match its daemon".into()),
         }
     }
@@ -165,19 +178,10 @@ impl Peers {
             ),
         )
         .await;
-        let invitation = rpc::call(
-            &account.control_socket,
-            Request::Invite {
-                person,
-                admin: false,
-                custodian: false,
-                name: None,
-            },
-        )
-        .await?;
+        let invitation = rpc::call(&account.control_socket, Request::Invite).await?;
         let code = match invitation {
-            Response::Said { message } => message.args.get("code").and_then(|a| match a {
-                Arg::Text(s) => Some(s.clone()),
+            Response::Said { message } => message.args.get("command").and_then(|a| match a {
+                Arg::Text(s) => Some(pigeon_proto::join::invitation(s)),
                 _ => None,
             }),
             _ => None,
@@ -192,6 +196,9 @@ impl Peers {
                 folder: Some(self.home(&id).join("files").display().to_string()),
                 keep: true,
                 name: Some(name.clone()),
+                person: Some(person),
+                existing: true,
+                custodian: false,
             },
         )
         .await?;

@@ -1,5 +1,5 @@
 //! Completed erasure in signed refounding archives (08 §8.6, proposed
-//! ADR 0077). Each old group gets its own history judge. Only complete
+//! ADR 0079). Each old group gets its own history judge. Only complete
 //! immutable epochs continue into the new authority domain; pending old
 //! requests remain readable in the archive and are not silently reissued.
 

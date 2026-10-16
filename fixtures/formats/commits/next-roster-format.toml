@@ -1,4 +1,4 @@
-about = "Ana writes a roster of format 2: this release waits."
+about = "Ana writes a roster of format 3: this release waits."
 verdict = "unknown"
 roster = "known/group.toml"
 signer = 1
@@ -9,4 +9,4 @@ message = "pigeon: roster"
 "Ana/notes.txt" = "/annex/objects/SHA256E-s5--ab5aa97074c454a0632057e704220d9a6678fbf773a0a5806fc09b8173b07309.txt\n"
 
 [after]
-".pigeon/roster.toml" = { roster = "unknown/format-2.toml" }
+".pigeon/roster.toml" = { roster = "unknown/format-3.toml" }

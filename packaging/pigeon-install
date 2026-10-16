@@ -1,23 +1,24 @@
 #!/bin/sh
-# Installs a release of pigeon (14 §14.5) under PREFIX, pigeon's directory
-# (~/.local/share/pigeon, ~/Library/Application Support/pigeon on macOS):
-# the latest release, or --version's, fetched from GitHub with its checksum
-# from the release's SHA256SUMS; with --main, main's latest commit, fetched
-# into PREFIX/src and built there. The new copy of this script then places
-# it: the programs in PREFIX/bin, the one they replace kept in
-# PREFIX/bin.previous, git-annex by install-git-annex (14 §14.3), a link to
-# `pigeon` in ~/.local/bin, pigeond (re)started as the systemd user unit or
-# the launchd agent of 14 §14.4, and the launcher that runs `pigeon open`
-# (10 §10.4, ADR 0029). `pigeon update` runs this script; installing the
-# release already here changes nothing.
+# Installs a release of pigeon (14 §14.5) under PREFIX (~/.local/share/pigeon,
+# ~/Library/Application Support/pigeon on macOS): the latest release, or
+# --version's, checked against its SHA256SUMS; with --main, main's latest
+# commit, built in PREFIX/src; with --source, a checkout's working tree,
+# built where it is (scripts/install-local). The new copy of this script
+# places it: the programs in PREFIX/bin (the old ones in bin.previous),
+# git-annex (14 §14.3), a link in ~/.local/bin, pigeond's unit or agent
+# (14 §14.4) and the launcher (ADR 0029). A release already here is not
+# fetched again. With --join, which takes the rest of the arguments, it then
+# runs `pigeon join` on the terminal.
 #
 #   curl -fsSL https://github.com/dont-feed-the/pigeon/releases/latest/download/pigeon-install | sh
-#   pigeon-install [--version vX.Y.Z | --main | --rollback | --uninstall] [--system]
+#   pigeon-install [--version vX.Y.Z | --main | --source DIR | --rollback | --uninstall] [--system]
+#   pigeon-install --join INVITATION [FOLDER] [--person NAME] [--backup-machine]
 #
 # --rollback puts PREFIX/bin.previous back; --no-service starts nothing.
-# PIGEON_RELEASES names where releases are, a directory laid out as GitHub's
-# (latest, a file holding the tag, and download/<tag>/<asset>), and
-# PIGEON_REPOSITORY the git repository --main fetches, for tests.
+# PIGEON_RELEASES names a directory laid out as GitHub's releases, and
+# PIGEON_REPOSITORY the repository --main fetches, for tests. With --source,
+# PIGEON_COMMIT names the commit of a copy that has no history of its own
+# (scripts/install-remote --build-there).
 set -eu
 
 releases=${PIGEON_RELEASES:-https://github.com/dont-feed-the/pigeon/releases}
@@ -57,12 +58,22 @@ case "$(uname -m)" in
   arm64 | aarch64) arch=arm64 ;;
   *) arch=$(uname -m) ;;
 esac
-version= rollback= main= uninstall= system= service=1 place= custom_prefix=
+# quote ARG: ARG as one word of sh, for eval.
+quote() { printf "'%s' " "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+
+version= rollback= main= source= uninstall= system= service=1 place= custom_prefix= joining= join_args=
 while [ $# -gt 0 ]; do
   case $1 in
+    --join)
+      shift
+      [ $# -gt 0 ] || die "--join needs an invitation"
+      joining=1
+      for a in "$@"; do join_args="$join_args$(quote "$a")"; done
+      break ;;
     --version) version=${2:?--version needs a tag}; shift 2 ;;
     --rollback) rollback=1; shift ;;
     --main) main=1; shift ;;
+    --source) source=${2:?--source needs a checkout}; main=1; shift 2 ;;
     --uninstall) uninstall=1; shift ;;
     --system) system=1; shift ;;
     --prefix) prefix=${2:?--prefix needs a directory}; custom_prefix=1; shift 2 ;;
@@ -80,11 +91,27 @@ fi
 case $prefix in /*) ;; *) die "--prefix must name an absolute directory" ;; esac
 if [ -d "$prefix" ]; then prefix=$(cd "$prefix" && pwd -P); fi
 case $prefix in / | /usr | /usr/local | /opt | /bin | /sbin) die "use a directory reserved for pigeon" ;; esac
+if [ -n "$source" ]; then
+  [ -d "$source" ] || die "--source $source is no directory"
+  source=$(cd "$source" && pwd -P)
+fi
 if [ -z "$place" ]; then
   case "${version:+v}${main:+m}${rollback:+r}${uninstall:+u}" in
     ??*) die "choose one of --version, --main, --rollback and --uninstall" ;;
   esac
 fi
+
+# Ends the script: with --join, runs `pigeon join` with its arguments,
+# reading the terminal even when this script came through a pipe.
+finish() {
+  [ -n "$joining" ] || exit 0
+  eval "set -- $join_args"
+  if (: </dev/tty) 2>/dev/null; then exec "$prefix/bin/pigeon" join "$@" </dev/tty; fi
+  exec "$prefix/bin/pigeon" join "$@"
+}
+
+# Passes --join and its arguments on to the next stage of this script.
+pass_join() { [ -z "$joining" ] || printf -- '--join %s' "$join_args"; }
 
 # Writes pigeond's unit or agent and (re)starts it (14 §14.4).
 start_service() {
@@ -187,22 +214,37 @@ if [ -z "$place" ] && [ -n "$main" ]; then
   # touches, laid out as a release's archive; then main's script places it.
   command -v git >/dev/null 2>&1 || die "--main needs git"
   command -v cargo >/dev/null 2>&1 || die "--main needs Rust: install rustup (https://rustup.rs), then run this again"
-  src="$prefix/src"
-  [ -d "$src/.git" ] || git init --quiet "$src"
-  say "fetching main from $repository"
-  git -C "$src" fetch --quiet --depth 1 "$repository" main || die "could not fetch main from $repository"
-  git -C "$src" checkout --quiet --force --detach FETCH_HEAD
-  commit=$(git -C "$src" rev-parse --short=12 HEAD)
+  if [ -n "$source" ]; then
+    # A checkout as it is: its commit, marked `.dirty` when tracked files
+    # changed since, which its version cannot tell apart, so it is always
+    # built and placed again.
+    src=$source
+    [ -f "$src/Cargo.toml" ] && [ -f "$src/packaging/pigeon-install" ] || die "$src is no pigeon checkout"
+    if [ -n "${PIGEON_COMMIT:-}" ]; then
+      commit=$PIGEON_COMMIT
+    else
+      commit=$(git -C "$src" rev-parse --short=12 HEAD) || die "$src is no git checkout; name its commit with PIGEON_COMMIT"
+      [ -z "$(git -C "$src" status --porcelain --untracked-files=no)" ] || commit="$commit.dirty"
+    fi
+  else
+    src="$prefix/src"
+    [ -d "$src/.git" ] || git init --quiet "$src"
+    say "fetching main from $repository"
+    git -C "$src" fetch --quiet --depth 1 "$repository" main || die "could not fetch main from $repository"
+    git -C "$src" checkout --quiet --force --detach FETCH_HEAD
+    commit=$(git -C "$src" rev-parse --short=12 HEAD)
+  fi
   v=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$src/Cargo.toml" | head -n 1)
   version="v$v+g$commit"
-  if [ "$(installed bin)" = "$version" ]; then
+  if [ "$(installed bin)" = "$version" ] && [ "${commit%.dirty}" = "$commit" ]; then
     say "pigeon $version is already installed in $prefix"
-    exit 0
+    finish
   fi
   say "building pigeon $version in $src"
   (cd "$src" && PIGEON_COMMIT=$commit cargo build --release --locked -p pigeond -p pigeon -p git-annex-p2p-iroh) ||
     die "the build of main failed"
   target=${CARGO_TARGET_DIR:-$src/target}
+  mkdir -p "$prefix"
   tmp=$(mktemp -d "$prefix/.pigeon-install.XXXXXX")
   trap 'rm -rf "$tmp"' EXIT
   mkdir -p "$tmp/release/bin"
@@ -212,7 +254,8 @@ if [ -z "$place" ] && [ -n "$main" ]; then
   trap - EXIT
   if [ -n "$service" ]; then set --; else set -- --no-service; fi
   if [ -n "$system" ]; then set -- "$@" --system; fi
-  exec "$tmp/release/bin/pigeon-install" --place "$tmp" --version "$version" --main --prefix "$prefix" "$@"
+  eval "set -- \"\$@\" $(pass_join)"
+  exec "$tmp/release/bin/pigeon-install" --place "$tmp" --version "$version" --main --source "$src" --prefix "$prefix" "$@"
 fi
 
 if [ -z "$place" ]; then
@@ -221,7 +264,7 @@ if [ -z "$place" ]; then
   [ -n "$version" ] || die "could not find the latest release at $releases"
   if [ "$(installed bin)" = "$version" ]; then
     say "pigeon $version is already installed in $prefix"
-    exit 0
+    finish
   fi
   archive="pigeon-$version-$os-$arch.tar.gz"
   mkdir -p "$prefix"
@@ -239,6 +282,7 @@ if [ -z "$place" ]; then
   trap - EXIT
   if [ -n "$service" ]; then set --; else set -- --no-service; fi
   if [ -n "$system" ]; then set -- "$@" --system; fi
+  eval "set -- \"\$@\" $(pass_join)"
   exec "$tmp/release/bin/pigeon-install" --place "$tmp" --version "$version" --prefix "$prefix" "$@"
 fi
 
@@ -257,10 +301,10 @@ if [ -n "$main" ]; then
     sha=$(awk -v a="$annex" '$2 == a || $2 == "*" a { print $1 }' "$place/latest-SHA256SUMS")
   fi
   if [ -n "$sha" ]; then
-    "$place/release/bin/install-git-annex" --prefix "$prefix" --build "$prefix/src/third_party/git-annex" \
+    "$place/release/bin/install-git-annex" --prefix "$prefix" --build "${source:-$prefix/src}/third_party/git-annex" \
       --archive "$releases/download/$tag/$annex" --sha256 "$sha" </dev/null
   else
-    "$place/release/bin/install-git-annex" --prefix "$prefix" --build "$prefix/src/third_party/git-annex" </dev/null
+    "$place/release/bin/install-git-annex" --prefix "$prefix" --build "${source:-$prefix/src}/third_party/git-annex" </dev/null
   fi
 elif [ -n "$annex_sha" ]; then
   "$place/release/bin/install-git-annex" --prefix "$prefix" \
@@ -274,3 +318,4 @@ mv "$place/release/bin" "$prefix/bin"
 if [ -z "$system" ]; then link_pigeon; add_launcher; fi
 start_service
 say "pigeon $version is installed in $prefix"
+finish

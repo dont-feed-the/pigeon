@@ -12,7 +12,11 @@ use pigeon_core::{
 
 fn input(tc: &TestCase) -> (Roster, DeviceId) {
     let mut old = genesis();
-    old.rules = tc.draw(gs::integers::<u32>().min_value(1).max_value(2));
+    old.rules = tc.draw(
+        gs::integers::<u32>()
+            .min_value(1)
+            .max_value(pigeon_core::purge::RULES),
+    );
     old.k = tc.draw(gs::integers::<u32>().min_value(1).max_value(9));
     old.retention_days = tc.draw(gs::integers::<u32>().min_value(1).max_value(365));
     old.relay = tc
@@ -20,7 +24,9 @@ fn input(tc: &TestCase) -> (Roster, DeviceId) {
         .then(|| "https://relay.example".into());
     for i in 0..tc.draw(gs::integers::<usize>().max_value(12)) {
         let owner = tc.draw(gs::integers::<usize>().min_value(1).max_value(NP));
-        let rule = if tc.draw(gs::booleans()) {
+        let rule = if old.rules >= 2 && tc.draw(gs::booleans()) {
+            Rule::PerPerson
+        } else if tc.draw(gs::booleans()) {
             Rule::Owned(pid(owner))
         } else {
             Rule::AddOnly(
@@ -45,10 +51,13 @@ fn input(tc: &TestCase) -> (Roster, DeviceId) {
     (old, me)
 }
 
+/// The refounded group's invitation.
+const NEW: &str = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+
 #[hegel::test(test_cases = 1000)]
 fn sole_person_authority_is_valid(tc: TestCase) {
     let (old, me) = input(&tc);
-    let new = roster(&old, &me).unwrap();
+    let new = roster(&old, &me, NEW).unwrap();
     assert!(new.validate().is_ok());
     assert_eq!(new.devices.len(), 1);
     assert_eq!(new.devices[&me], old.devices[&me]);
@@ -60,7 +69,7 @@ fn sole_person_authority_is_valid(tc: TestCase) {
 #[hegel::test(test_cases = 1000)]
 fn folder_boundaries_and_group_settings_survive(tc: TestCase) {
     let (old, me) = input(&tc);
-    let new = roster(&old, &me).unwrap();
+    let new = roster(&old, &me, NEW).unwrap();
     assert_eq!(
         (
             &new.group,
@@ -77,7 +86,18 @@ fn folder_boundaries_and_group_settings_survive(tc: TestCase) {
             &old.telemetry_device
         )
     );
-    assert_eq!(new.rules, 1, "new custody requires its own preparation");
+    assert!(
+        new.rules < pigeon_core::purge::RULES,
+        "new custody requires its own preparation"
+    );
+    assert_eq!(
+        new.rules,
+        if old.folders.iter().any(|f| f.rule == Rule::PerPerson) {
+            2
+        } else {
+            1
+        }
+    );
     assert_eq!(new.folders.len(), old.folders.len());
     for (a, b) in old.folders.iter().zip(&new.folders) {
         assert_eq!(a.path, b.path);
@@ -90,6 +110,7 @@ fn folder_boundaries_and_group_settings_survive(tc: TestCase) {
             Rule::AddOnly(stewards) => {
                 assert!(stewards.iter().all(|p| p == &old.devices[&me].person))
             }
+            Rule::PerPerson => {}
         }
     }
 }
@@ -97,16 +118,17 @@ fn folder_boundaries_and_group_settings_survive(tc: TestCase) {
 #[hegel::test(test_cases = 1000)]
 fn only_a_surviving_computer_can_refound(tc: TestCase) {
     let (mut old, me) = input(&tc);
-    assert!(roster(&old, &DeviceId("unknown".into())).is_none());
+    assert!(roster(&old, &DeviceId("unknown".into()), NEW).is_none());
     let device = old.devices.get_mut(&me).unwrap();
     device.role = Role::Recovery;
     device.annex_uuid = None;
-    assert!(roster(&old, &me).is_none());
+    assert!(roster(&old, &me, NEW).is_none());
 }
 
 #[hegel::test(test_cases = 1000)]
 fn refounding_is_idempotent(tc: TestCase) {
     let (old, me) = input(&tc);
-    let new = roster(&old, &me).unwrap();
-    assert_eq!(roster(&new, &me), Some(new));
+    let new = roster(&old, &me, NEW).unwrap();
+    assert_eq!(new.invitation, NEW);
+    assert_eq!(roster(&new, &me, NEW), Some(new));
 }

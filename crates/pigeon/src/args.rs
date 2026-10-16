@@ -20,6 +20,8 @@ pub enum Action {
     Help,
     /// Print this program's version.
     Version,
+    /// Print a shell's live completion registration, without a daemon.
+    Completions(clap_complete::Shell),
     /// Run the installer beside this program with these arguments (14 §14.5).
     Update(Vec<String>),
     /// Write the files without `pigeond` (09 §9.9).
@@ -54,16 +56,18 @@ pub const COMMANDS: &[(&str, &str)] = &[
         "create NAME [FOLDER | --folder FOLDER] [--k N] [--name NAME]",
         "cmd-create",
     ),
-    ("invite [--admin] PERSON", "cmd-invite-person"),
-    ("invite --backup-machine [NAME]", "cmd-invite"),
-    ("join INVITATION [FOLDER] [--name NAME]", "cmd-join"),
+    ("invite", "cmd-invite"),
+    (
+        "join INVITATION [FOLDER] [--person NAME] [--name NAME] [--backup-machine]",
+        "cmd-join",
+    ),
     (
         "status [PATH] [--not-shared] | status --capacity",
         "cmd-status",
     ),
     ("machines", "cmd-machines"),
     (
-        "folder-rule [PATH [--owner PERSON | --add-only [--steward PERSON…] | --default]]",
+        "folder-rule [PATH [--owner PERSON | --add-only [--steward PERSON…] | --per-person | --default]]",
         "cmd-folder-rule",
     ),
     ("open", "cmd-open"),
@@ -107,6 +111,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("debug bundle [--from NAME…]", "cmd-debug-bundle"),
     ("debug allow NAME", "cmd-debug-allow"),
     ("update [--version TAG | --main | --rollback]", "cmd-update"),
+    ("completions SHELL", "cmd-completions"),
 ];
 
 /// The command line as `clap` reads it. `--help` and `--version` are
@@ -134,6 +139,10 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Command {
     Help,
+    Completions {
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
     Create {
         name: String,
         #[arg(value_name = "FOLDER", value_hint = ValueHint::DirPath, conflicts_with = "folder")]
@@ -145,34 +154,19 @@ enum Command {
         #[arg(long = "name")]
         device_name: Option<String>,
     },
-    Invite {
-        #[arg(
-            value_name = "PERSON",
-            conflicts_with_all = ["list", "cancel"],
-            required_unless_present_any = ["list", "cancel", "backup_machine"]
-        )]
-        who: Option<String>,
-        #[arg(long, conflicts_with_all = ["backup_machine", "list", "cancel"])]
-        admin: bool,
-        #[arg(long, conflicts_with_all = ["list", "cancel"])]
-        backup_machine: bool,
-        #[arg(long, conflicts_with = "cancel")]
-        list: bool,
-        #[arg(long, value_name = "ID", add = complete::invitations())]
-        cancel: Option<String>,
-    },
+    Invite,
     Join {
         invitation: String,
         #[arg(value_hint = ValueHint::DirPath)]
         folder: Option<String>,
-        /// The invitation says the role; the flag is kept for the scripts
-        /// that pass it.
         #[arg(long)]
         backup_machine: bool,
         #[arg(long)]
         keep: bool,
         #[arg(long)]
         name: Option<String>,
+        #[arg(long)]
+        person: Option<String>,
     },
     Status {
         #[arg(value_hint = ValueHint::AnyPath)]
@@ -193,6 +187,8 @@ enum Command {
         add_only: bool,
         #[arg(long = "steward", requires = "add_only")]
         stewards: Vec<String>,
+        #[arg(long = "per-person", conflicts_with_all = ["owner", "add_only", "inherit"])]
+        per_person: bool,
         #[arg(long = "default")]
         inherit: bool,
     },
@@ -424,6 +420,7 @@ fn action(c: Command) -> Action {
     let send = Action::Send;
     match c {
         Command::Help => Action::Help,
+        Command::Completions { shell } => Action::Completions(shell),
         Command::Create {
             name,
             at,
@@ -436,38 +433,22 @@ fn action(c: Command) -> Action {
             k,
             device_name: device_name.unwrap_or_else(hostname),
         }),
-        Command::Invite { list: true, .. } => send(Request::Invitations),
-        Command::Invite {
-            cancel: Some(invitation),
-            ..
-        } => send(Request::CancelInvitation { invitation }),
-        Command::Invite {
-            who,
-            backup_machine: true,
-            ..
-        } => send(Request::Invite {
-            person: String::new(),
-            admin: false,
-            custodian: true,
-            name: who,
-        }),
-        Command::Invite { who, admin, .. } => send(Request::Invite {
-            person: who.unwrap_or_default(),
-            admin,
-            custodian: false,
-            name: None,
-        }),
+        Command::Invite => send(Request::Invite),
         Command::Join {
             invitation,
             folder,
-            backup_machine: _,
+            backup_machine,
             keep,
             name,
+            person,
         } => send(Request::Join {
             invitation,
             folder: folder.map(|f| absolute(&f)),
             keep,
             name,
+            person,
+            existing: false,
+            custodian: backup_machine,
         }),
         Command::Status { capacity: true, .. } => send(Request::Capacity),
         Command::Status {
@@ -482,6 +463,7 @@ fn action(c: Command) -> Action {
             owner,
             add_only,
             stewards,
+            per_person,
             inherit,
         } => {
             let folder = path.map(|p| absolute(&p));
@@ -489,13 +471,19 @@ fn action(c: Command) -> Action {
                 Some(pigeon_proto::policy::Change::Owned { person })
             } else if add_only {
                 Some(pigeon_proto::policy::Change::AddOnly { stewards })
+            } else if per_person {
+                Some(pigeon_proto::policy::Change::PerPerson)
             } else if inherit {
                 Some(pigeon_proto::policy::Change::Inherit)
             } else {
                 None
             };
             match (folder, rule) {
-                (Some(folder), Some(rule)) => send(Request::SetFolderRule { folder, rule }),
+                (Some(folder), Some(rule)) => send(Request::SetFolderRule {
+                    folder,
+                    rule,
+                    confirmed: false,
+                }),
                 (folder, None) => send(Request::FolderRules { folder }),
                 _ => Action::Usage("folder-rule".into()),
             }
