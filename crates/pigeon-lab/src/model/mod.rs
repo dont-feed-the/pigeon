@@ -27,7 +27,7 @@ use pigeon_core::state::{self, Settings, State, Version};
 use pigeon_core::time::{Span, Time};
 
 use crate::run::{Interpreter, Measure, Verdict};
-use crate::scenario::Label;
+use crate::scenario::{Item, Label};
 use crate::step::{Condition, CrashPoint, CustodianOp, DeviceOp, Kind, LaptopOp, Outcome, Step};
 use crate::world::{Content, Device, File, Folder, Key, Laptop, World};
 
@@ -660,7 +660,7 @@ impl Interpreter for ModelRun {
             .unwrap_or_default()
     }
 
-    fn trace(&mut self) -> Option<Vec<Label>> {
+    fn trace(&mut self, _wanted: &[Item]) -> Option<Vec<Label>> {
         self.model.as_ref().map(|m| m.trace.clone())
     }
 

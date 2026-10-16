@@ -51,7 +51,7 @@ fn a_wrong_expectation_fails_in_the_model() {
 #[test]
 fn a_failed_scenario_still_collects_its_trace() {
     use pigeon_lab::run::{Interpreter, Measure};
-    use pigeon_lab::scenario::Label;
+    use pigeon_lab::scenario::{Item, Label};
     use pigeon_lab::step::Step;
     use pigeon_lab::world::World;
 
@@ -73,7 +73,7 @@ fn a_failed_scenario_still_collects_its_trace() {
         fn measures(&mut self) -> Vec<Measure> {
             Vec::new()
         }
-        fn trace(&mut self) -> Option<Vec<Label>> {
+        fn trace(&mut self, _wanted: &[Item]) -> Option<Vec<Label>> {
             assert!(!self.ended, "collect before teardown");
             self.traced = true;
             Some(Vec::new())

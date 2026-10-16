@@ -11,7 +11,8 @@ VARIABLES hidden, operation
 driverVars == <<vars, hidden, operation>>
 SameControl == UNCHANGED <<hidden, operation>>
 Begin(op, new, old, st, res) ==
-  /\ StageWith(new, old, st, res, FALSE, op = "restore")
+  /\ \E t \in IF new = Absent THEN {0} ELSE Inodes \ (Linked \cup hnd \cup hid) :
+       StageAt(new, old, st, res, FALSE, op = "restore", t)
   /\ operation' = op /\ UNCHANGED hidden
 (* The caller's dirty scan can be stale. Preparing a replacement is safe
    even then: its proof must still check both the recorded stat and hash.

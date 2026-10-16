@@ -8,10 +8,16 @@
 //! replays of a failing case do not overwrite them, and a failure is
 //! printed and appended to `failures.txt` at once: hegel prints no message
 //! for a failure its replays do not confirm.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "tests"
+)]
 mod common;
 
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use hegel::{HealthCheck, TestCase};
@@ -22,6 +28,33 @@ use pigeon_lab::slice;
 
 /// The cases run so far in this process.
 static CASES: AtomicUsize = AtomicUsize::new(0);
+
+// Socket paths include the process ID and device number, so worlds in the
+// same test process must run one at a time, even with separate work roots.
+static WORLD: Mutex<()> = Mutex::new(());
+
+#[test]
+fn trace_collection_supervises_a_late_capture_crash() {
+    use pigeon_lab::step::CrashPoint::{CaptureBeforeRef, KeepAfterBegin};
+
+    let Ok(bin) = std::env::var("PIGEON_LAB_BIN") else {
+        return;
+    };
+    let _world = WORLD.lock().unwrap_or_else(|e| e.into_inner());
+    let id = "S9-regression-late-capture";
+    let cfg = Config {
+        bin: std::fs::canonicalize(bin).unwrap(),
+        // Keep the fixed scenario's disks separate from randomized cases.
+        work: PathBuf::from(format!("/tmp/p9-fixed-{}", std::process::id())),
+        out: PathBuf::from(
+            std::env::var("PIGEON_LAB_OUT").unwrap_or_else(|_| "target/lab/s9".into()),
+        ),
+        isolation: Isolation::detect(),
+    };
+    let scenario = slice::s9(id, &[(6, CaptureBeforeRef, 1), (2, KeepAfterBegin, 3)]);
+    let report = run(&scenario, &mut Exec::new(cfg, id));
+    assert!(report.passed(), "{:?}", report.failure());
+}
 
 #[hegel::test(suppress_health_check = [HealthCheck::TooSlow])]
 fn random_crash_schedules_lose_and_duplicate_nothing(tc: TestCase) {
@@ -35,6 +68,7 @@ fn random_crash_schedules_lose_and_duplicate_nothing(tc: TestCase) {
     {
         return;
     }
+    let _world = WORLD.lock().unwrap_or_else(|e| e.into_inner());
     let out =
         PathBuf::from(std::env::var("PIGEON_LAB_OUT").unwrap_or_else(|_| "target/lab/s9".into()));
     let plan = common::schedule(&tc);

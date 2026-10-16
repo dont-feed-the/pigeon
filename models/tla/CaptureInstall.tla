@@ -172,17 +172,23 @@ Refresh ==
   /\ UNCHANGED <<fc, fm, fresh, at, kept, orph, hnd, hid, punl, cur, store, saved, dropped, div, pc, jr, deferred, who, pdel, gap, disp, n>>
 
 (* Install, 07 §7.5: steps 1-3 (content, new file, journal) in one action. *)
-StageWith(new, exp, st, res, use, discardDeletion) ==
-  LET t == IF new = Absent THEN 0 ELSE n.ino + 1 IN
-  /\ new = Absent \/ n.ino < MaxIno
+StageAt(new, exp, st, res, use, discardDeletion, t) ==
+  /\ IF new = Absent THEN t = 0
+     ELSE t \in Inodes \ (Linked \cup hnd \cup hid)
   /\ fc' = IF t = 0 THEN fc ELSE [fc EXCEPT ![t] = new]
+  /\ fm' = IF t = 0 \/ t > n.ino THEN fm ELSE [fm EXCEPT ![t] = @ + 1]
+  /\ punl' = punl \ {t}
   /\ fresh' = fresh \cup ({t} \ {0})
   /\ at' = [at EXCEPT !.stage = t]
   /\ jr' = [open |-> "journal" \notin Off, new |-> new, exp |-> exp, st |-> st, tmp |-> t,
             res |-> res, proved |-> FALSE]
   /\ pc' = "begun" /\ pdel' = IF discardDeletion THEN FALSE ELSE pdel
-  /\ n' = [n EXCEPT !.ino = IF t = 0 THEN @ ELSE @ + 1, !.res = IF use THEN @ + 1 ELSE @]
-  /\ UNCHANGED <<fm, kept, orph, hnd, hid, punl, idx, cur, store, saved, dropped, div, deferred, who, gap, disp>>
+  /\ n' = [n EXCEPT !.ino = IF t > @ THEN t ELSE @, !.res = IF use THEN @ + 1 ELSE @]
+  /\ UNCHANGED <<kept, orph, hnd, hid, idx, cur, store, saved, dropped, div, deferred, who, gap, disp>>
+(* The design configurations keep their monotone fresh-inode allocator.
+   The trace driver can also observe a recycled physical inode number. *)
+StageWith(new, exp, st, res, use, discardDeletion) ==
+  StageAt(new, exp, st, res, use, discardDeletion, IF new = Absent THEN 0 ELSE n.ino + 1)
 Stage(new, exp, st, res, use) == StageWith(new, exp, st, res, use, FALSE)
 Start == pc = "idle" /\ ~deferred /\ div.k = "none" /\ idx.key # cur /\ Clean
          /\ Stage(cur, idx.key, idx.st, FALSE, FALSE)

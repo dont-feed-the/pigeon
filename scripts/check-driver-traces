@@ -248,6 +248,22 @@ def pipeline_mutations(out, java):
             print(f"ok   {name} with another valid log: rejected", flush=True)
 
 
+def recorded_regressions(java):
+    for name in ("write-during-keep-index", "recycled-stage-inode"):
+        path = ROOT / "models/tla/daemon-fixtures" / (name + ".ndjson")
+        events = [json.loads(line) for line in path.read_text().splitlines()]
+        got = checker.check(events, java, 4, diagnostics=False)
+        if got != "trace:accepted":
+            sys.exit(f"FAIL recorded {path.stem}: {got}")
+        print(f"ok   recorded {path.stem}: {got}", flush=True)
+        if path.stem == "recycled-stage-inode":
+            missing = [e for e in events if e["action"] != "Release"]
+            got = checker.check(missing, java, 4, diagnostics=False)
+            if not got.startswith("trace:rejected:"):
+                sys.exit(f"FAIL recycled inode without release: {got}")
+            print("ok   recycled inode without release: rejected by TLC", flush=True)
+
+
 def run(out, java, generate=True):
     for case, (test, _) in (CASES.items() if generate else []):
         directory = out / case
@@ -264,6 +280,7 @@ def run(out, java, generate=True):
     if result.returncode:
         sys.exit(result.stderr or "FAIL daemon traces did not pass the common lab checker")
     mutations(streams, java)
+    recorded_regressions(java)
     cancelled_prefix(streams, java)
     roster_mutations(out, java)
     pipeline_mutations(out, java)

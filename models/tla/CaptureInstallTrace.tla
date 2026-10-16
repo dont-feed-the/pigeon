@@ -4,11 +4,12 @@
    writer observations, keep sets and Git's cache-clean result. The model
    supplies unobserved clocks and ghost history; it never supplies outputs
    to the implementation. Each operation's before and after must be one
-   actual model step. Bounded environment steps explain the gaps between
-   operations, never replace a missing driver action. *)
+   driver step, with bounded person/time steps within the observation pair.
+   Environment steps explain gaps between operations; they never replace
+   a missing driver action. *)
 EXTENDS DaemonDriver, Sequences, CaptureInstallCodeLog
 CONSTANTS TraceLog, EnvBudget
-VARIABLES l, budget
+VARIABLES l, budget, segment
 ToSet(s) == {s[i] : i \in DOMAIN s}
 Ev == TraceLog[l]
 Present(v) == {v.p, v.aside, v.stage} \ {0}
@@ -48,7 +49,7 @@ TraceInit ==
       ids == (Present(v) \cup {x.i : x \in ToSet(v.kept)} \cup {v.expected_inode}) \ {0}
       contents == Bytes(v) \cup ToSet(v.signed) \cup {v.index, v.current, v.new, v.expected, v.mine}
   IN
-  /\ l = 1 /\ budget = 0
+  /\ l = 1 /\ budget = 0 /\ segment = "gap"
   /\ hidden = v.hidden
   /\ operation = IF v.open /\ v.operation # "" THEN v.operation ELSE TraceLog[1].vars.kind
   /\ fc = [i \in Inodes |-> IF \E x \in Files(v) : x.i = i
@@ -118,15 +119,15 @@ DriverStep == /\ (Ev.action \in {"Start", "TakeGroup", "Release"} => ~Ev.vars.be
                  \/ ~Ev.vars.ok /\ UNCHANGED driverVars
 (* Only explore handles that can explain a remaining observation. Removing
    irrelevant opens/closes prunes the search without admitting new steps. *)
-FutureWrite(i) == \E k \in l..Len(TraceLog), edge \in {"before", "after"} :
-                   \E x \in Files(TraceLog[k].vars[edge]) : x.i = i /\ x.c # fc[i]
+FutureWrite(i) == \E k \in l..Len(TraceLog), side \in {"before", "after"} :
+                   \E x \in Files(TraceLog[k].vars[side]) : x.i = i /\ x.c # fc[i]
 NeededOpen(v) ==
   /\ Open
   /\ \/ at.p \in Writers(v) \ hnd /\ hnd' = hnd \cup {at.p} /\ UNCHANGED hid
      \/ at.p \notin hid /\ FutureWrite(at.p) /\ hid' = hid \cup {at.p} /\ UNCHANGED hnd
 NeededClose(v) == \E i \in (hnd \ Writers(v)) \cup {j \in hid : ~FutureWrite(j)} :
                     Close /\ hnd' = hnd \ {i} /\ hid' = hid \ {i}
-EnvironmentStep(v) ==
+PersonStep(v) ==
   \/ \E x \in Files(v) : x.i \in Linked /\ fc[x.i] # x.c
                          /\ (x.i = at.p \/ x.i \in hnd \cup hid)
                          /\ WriteValue(x.i, x.c)
@@ -139,6 +140,8 @@ EnvironmentStep(v) ==
   \/ NeededOpen(v)
   \/ NeededClose(v)
   \/ Tick
+EnvironmentStep(v) ==
+  \/ PersonStep(v)
   \/ \E c \in (ToSet(v.signed) \ store) \cup {v.current} : VersionValueWith(c, FALSE)
   \/ v.clean /\ Refresh
   \/ Retry
@@ -148,12 +151,22 @@ Environment ==
   \/ ~v.hidden /\ VisibleBit
   \/ EnvironmentStep(v) /\ SameControl
 TraceNext == l <= Len(TraceLog) /\
-  \/ /\ budget < EnvBudget /\ Environment /\ Safety'
-     /\ budget' = budget + 1 /\ UNCHANGED l
-  \/ /\ Match(Projection, Ev.vars.before) /\ DriverStep
-     /\ Match(Projection', Ev.vars.after) /\ Safety'
+  \/ /\ segment = "gap" /\ budget < EnvBudget /\ Environment /\ Safety'
+     /\ budget' = budget + 1 /\ UNCHANGED <<l, segment>>
+  \/ /\ segment = "gap" /\ Match(Projection, Ev.vars.before)
+     /\ segment' = "before" /\ budget' = 0 /\ UNCHANGED <<driverVars, l>>
+  (* The person can act while an asynchronous driver call is in flight.
+     Exactly one driver action still lies between the two observations;
+     only person/time steps can interleave within that interval. *)
+  \/ /\ segment \in {"before", "after"} /\ budget < EnvBudget
+     /\ PersonStep(Ev.vars.after) /\ SameControl /\ Safety'
+     /\ budget' = budget + 1 /\ UNCHANGED <<l, segment>>
+  \/ /\ segment = "before" /\ DriverStep /\ Safety'
      /\ (Ev.vars.ok /\ ~Ev.vars.crashed /\ Ev.action # "Cleanup" => pc' = Ev.vars.phase)
-     /\ l' = l + 1 /\ budget' = 0
-TraceSpec == TraceInit /\ [][TraceNext]_<<driverVars, l, budget>>
+     /\ segment' = "after" /\ UNCHANGED <<l, budget>>
+  \/ /\ segment = "after" /\ Match(Projection, Ev.vars.after)
+     /\ (Ev.vars.ok /\ ~Ev.vars.crashed /\ Ev.action # "Cleanup" => pc' = Ev.vars.phase)
+     /\ l' = l + 1 /\ budget' = 0 /\ segment' = "gap" /\ UNCHANGED driverVars
+TraceSpec == TraceInit /\ [][TraceNext]_<<driverVars, l, budget, segment>>
 TraceNotConsumed == l <= Len(TraceLog)
 =============================================================================

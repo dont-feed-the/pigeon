@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
-use crate::scenario::{Label, Scenario, embeds_per_device, project, step_text, validate};
+use crate::scenario::{Item, Label, Scenario, embeds_per_device, project, step_text, validate};
 use crate::step::Step;
 use crate::world::World;
 
@@ -90,8 +90,9 @@ pub trait Interpreter {
     /// The disk measures so far.
     fn measures(&mut self) -> Vec<Measure>;
     /// The trace labels the devices logged, merged in clock order; `None`
-    /// when this interpreter has no trace.
-    fn trace(&mut self) -> Option<Vec<Label>>;
+    /// when this interpreter has no trace. `wanted` names already performed
+    /// actions whose asynchronous effects may still be running.
+    fn trace(&mut self, wanted: &[Item]) -> Option<Vec<Label>>;
     /// Tears the world down.
     fn end(&mut self);
 }
@@ -137,12 +138,16 @@ pub fn run<I: Interpreter>(scenario: &Scenario, interp: &mut I) -> Report {
         });
     }
     // Preserve the observations even when a behavioral check failed.
-    let trace = interp.trace();
+    let wanted = if failed {
+        Vec::new()
+    } else {
+        project(&scenario.steps)
+    };
+    let trace = interp.trace(&wanted);
     if !failed {
         let verdict = match trace {
             None => Verdict::Skip("no trace".into()),
             Some(trace) => {
-                let wanted = project(&scenario.steps);
                 if embeds_per_device(&wanted, &trace) {
                     Verdict::Pass
                 } else {

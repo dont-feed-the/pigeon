@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use serde_json::Value;
 
 use super::observe::walk;
-use crate::scenario::Label;
+use crate::scenario::{Item, Label, embeds_per_device};
 use crate::world::Device;
 
 /// One trace event.
@@ -130,6 +130,11 @@ pub fn settled(lines: &[Line]) -> bool {
     pending.is_empty()
 }
 
+/// A complete prefix includes the requested actions as well as their ends.
+pub fn complete(lines: &[Line], ids: &BTreeMap<String, Device>, wanted: &[Item]) -> bool {
+    settled(lines) && embeds_per_device(wanted, &labels(lines, ids))
+}
+
 /// Writes the merged events, one per line.
 pub fn write(lines: &[Line], path: &Path) -> std::io::Result<()> {
     let mut text = String::new();
@@ -171,7 +176,7 @@ pub fn labels(lines: &[Line], ids: &BTreeMap<String, Device>) -> Vec<Label> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Line, settled};
+    use super::{Item, Label, Line, complete, settled};
 
     fn edge(edge: &str, clock: u64) -> Line {
         Line {
@@ -193,5 +198,23 @@ mod tests {
             edge("after", 2),
             edge("before", 3)
         ]));
+    }
+
+    #[test]
+    fn an_idle_prefix_cannot_hide_a_requested_action_that_has_not_started() {
+        let device = crate::world::Device::Laptop(crate::world::Laptop(0));
+        let ids = std::collections::BTreeMap::from([("device".to_owned(), device)]);
+        let wanted = [Item::One(Label {
+            spec: "CaptureInstall",
+            action: "Capture",
+            device,
+        })];
+        assert!(!complete(&[], &ids, &wanted));
+        assert!(!complete(&[edge("before", 1)], &ids, &wanted));
+        assert!(complete(
+            &[edge("before", 1), edge("after", 2)],
+            &ids,
+            &wanted
+        ));
     }
 }

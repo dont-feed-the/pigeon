@@ -32,23 +32,37 @@ pub(crate) fn operation(e: &pigeon_core::journal::Entry) -> &'static str {
 
 /// A filesystem name, read without following links or changing the index.
 fn file(path: &Path, observe_writers: bool) -> Result<Value, String> {
-    let Some(stat) = lstat(path).map_err(|e| e.to_string())? else {
-        return Ok(json!({"inode": "", "content": "", "writers": false, "stat": ""}));
-    };
-    if !stat.is_regular() {
-        return Err("trace encountered a non-regular file".to_owned());
+    file_with(path, observe_writers, crate::net::sync::sha256_file)
+}
+
+fn file_with(
+    path: &Path,
+    observe_writers: bool,
+    mut hash: impl FnMut(&Path) -> std::io::Result<String>,
+) -> Result<Value, String> {
+    for _ in 0..3 {
+        let Some(stat) = lstat(path).map_err(|e| e.to_string())? else {
+            return Ok(json!({"inode": "", "content": "", "writers": false, "stat": ""}));
+        };
+        if !stat.is_regular() {
+            return Err("trace encountered a non-regular file".to_owned());
+        }
+        let digest = hash(path);
+        if lstat(path).map_err(|e| e.to_string())? != Some(stat) {
+            // A person can finish a write during hashing. Retry this same
+            // observation before emitting it; never mix its old stat with
+            // new bytes, or discard an already emitted trace record.
+            continue;
+        }
+        return Ok(json!({
+            "inode": format!("{}:{}", stat.id.dev, stat.id.ino),
+            "content": digest.map_err(|e| e.to_string())?, "writers": if observe_writers {
+                json!(!crate::asides::writers_clear(&stat))
+            } else { Value::Null },
+            "stat": format!("{}:{}:{}:{}", stat.id.dev, stat.id.ino, stat.size, stat.mtime_ns),
+        }));
     }
-    let hash = crate::net::sync::sha256_file(path).map_err(|e| e.to_string())?;
-    if lstat(path).map_err(|e| e.to_string())? != Some(stat) {
-        return Err("file changed during trace observation".to_owned());
-    }
-    Ok(json!({
-        "inode": format!("{}:{}", stat.id.dev, stat.id.ino),
-        "content": hash, "writers": if observe_writers {
-            json!(!crate::asides::writers_clear(&stat))
-        } else { Value::Null },
-        "stat": format!("{}:{}:{}:{}", stat.id.dev, stat.id.ino, stat.size, stat.mtime_ns),
-    }))
+    Err("file kept changing during trace observation".to_owned())
 }
 
 fn digest(key: Option<&str>) -> Result<String, String> {
@@ -454,6 +468,32 @@ impl DiskSpan<'_> {
 #[cfg(test)]
 #[allow(clippy::unwrap_used, reason = "tests")]
 mod tests {
+    #[test]
+    fn a_racing_write_is_reobserved_or_refused_without_mixing_stat_and_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("file");
+        std::fs::write(&path, "old").unwrap();
+        let mut changed = false;
+        let value = super::file_with(&path, false, |path| {
+            if !changed {
+                std::fs::write(path, "new contents")?;
+                changed = true;
+            }
+            crate::net::sync::sha256_file(path)
+        })
+        .unwrap();
+        assert_eq!(value, super::file(&path, false).unwrap());
+        let mut n = 0;
+        assert!(
+            super::file_with(&path, false, |path| {
+                n += 1;
+                std::fs::write(path, vec![b'x'; n])?;
+                crate::net::sync::sha256_file(path)
+            })
+            .is_err()
+        );
+    }
+
     #[test]
     fn a_trace_never_hides_a_bad_complete_journal_record() {
         use pigeon_core::journal::{End, Record};

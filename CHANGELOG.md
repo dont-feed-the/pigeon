@@ -4,7 +4,7 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
-## 0.3.5 — 2026-10-15
+## 0.3.5 — 2026-10-16
 
 ### Fixed
 

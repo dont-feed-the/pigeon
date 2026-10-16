@@ -80,8 +80,24 @@ A trailing unmatched record, failed observation or unexplained transition
 fails rather than becoming an unchecked family.
 
 At the end of a lab scenario, collection retries for up to ten seconds to
-read a boundary between operations. It retains every record read; if no
-complete boundary appears, the incomplete trace is saved and fails TLC.
+read a boundary between operations, supervising scheduled crashes so the
+restarted daemon can supply a real recovery checkpoint. Collection also waits
+for the scenario's requested actions, so an idle prefix cannot hide work that
+has not started yet. It retains every record read; if no complete boundary
+appears, the incomplete trace is saved and fails TLC.
+
+Each observation pair contains exactly one driver action. Up to four
+person/time steps may occur before or after that action within the pair:
+a person can write while an asynchronous Git call runs. Group changes and
+additional driver actions are not admitted inside an observation pair.
+Staging may reuse an inode number only when that inode is neither linked
+nor held open in the model. The bounded design models retain their original
+monotone allocator. Saved CI traces exercise both cases and require TLC to
+reject an omitted release boundary.
+
+If a file changes during hashing, the observer makes up to three attempts
+at that same boundary before emitting a record. Only a consistent stat/hash
+pair is emitted; persistent changes and I/O errors still fail the trace.
 
 CI requires normal/concurrent/recent captures (including a recent save by
 someone who cannot modify the original name), all six filesystem modes,
@@ -95,7 +111,8 @@ bad roster folds; schema and pipeline checks reject missing fields/logs.
 ## Limits of this evidence
 
 This checks finite executions from their first observed checkpoint, with
-at most four environment steps between operations. It is not a universal
+at most four environment steps between operations and four person/time
+steps within each observation pair. It is not a universal
 refinement proof. Unobserved writes that disappear entirely cannot be
 reconstructed. Arbitrary partial I/O failures and finer interleavings may
 need a richer adapter; unstable or unexplained observations currently fail.
