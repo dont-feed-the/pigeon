@@ -26,12 +26,16 @@ use pigeon_i18n::Catalogue;
 
 mod actions;
 mod files;
+mod folder_rules;
+mod health;
 mod held;
 mod join;
 mod leave;
 mod machines;
 mod pages;
+mod recovery;
 mod settings;
+mod space;
 mod view;
 
 /// What a backend answers a request with: progress, then one result.
@@ -143,18 +147,26 @@ impl Web {
             .route("/create", post(join::create))
             .route("/machines", get(machines::machines))
             .route("/machines/remove", post(machines::remove))
+            .route("/machines/recovery-sheet", post(recovery::sheet))
             .route("/machines/invite", post(machines::invite))
             .route("/machines/cancel-invitation", post(machines::cancel))
             .route("/suggestions", get(pages::suggestions))
             .route("/events", get(pages::events))
             .route("/files", get(files::files))
+            .route("/space", get(space::page))
             .route("/folder", get(files::folder_page))
+            .route(
+                "/folder-rule",
+                get(folder_rules::view).post(folder_rules::set),
+            )
             .route("/deleted", get(files::deleted_page))
             .route("/file", get(files::file_page))
             .route("/files/restore", post(actions::restore))
             .route("/files/keep", post(actions::keep))
             .route("/files/free", post(actions::free))
             .route("/settings", get(settings::settings).post(settings::save))
+            .route("/doctor", get(settings::doctor))
+            .route("/settings/diagnostics", post(settings::diagnostics))
             .route("/pause", post(settings::pause))
             .route("/resume", post(settings::resume))
             .route("/held/share", post(held::share))
@@ -162,6 +174,7 @@ impl Web {
             .route("/held/rename", post(held::rename))
             .route("/leave", post(leave::leave))
             .route("/files/view", post(view::view))
+            .route("/suggestions/view", post(view::view))
             .route("/suggestions/accept", post(actions::accept))
             .route("/suggestions/decline", post(actions::decline))
             .route_layer(middleware::from_fn_with_state(self.clone(), session))

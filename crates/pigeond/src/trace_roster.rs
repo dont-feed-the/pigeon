@@ -34,6 +34,7 @@ fn edit(e: &Edit) -> Value {
                 Field::RetentionDays => ("retention", String::new()),
                 Field::Rules => ("rules", String::new()),
                 Field::Relay => ("relay", String::new()),
+                Field::TelemetryDevice => ("telemetry", String::new()),
                 Field::PersonName(p) => ("person_name", text(&p.0)),
                 Field::PersonAdmin(p) => ("admin", text(&p.0)),
                 Field::DeviceName(d) => ("device_name", d.0.clone()),

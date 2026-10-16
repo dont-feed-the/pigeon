@@ -52,11 +52,21 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("invite [--admin] PERSON", "cmd-invite-person"),
     ("invite --backup-machine [NAME]", "cmd-invite"),
     ("join INVITATION [FOLDER] [--name NAME]", "cmd-join"),
-    ("status [PATH] [--not-shared]", "cmd-status"),
+    (
+        "status [PATH] [--not-shared] | status --capacity",
+        "cmd-status",
+    ),
     ("machines", "cmd-machines"),
+    (
+        "folder-rule [PATH [--owner PERSON | --add-only [--steward PERSON…] | --default]]",
+        "cmd-folder-rule",
+    ),
     ("open", "cmd-open"),
     ("history PATH", "cmd-history"),
-    ("view PATH [--version N | --group]", "cmd-view"),
+    (
+        "view PATH [--version N | --suggestion ID | --group]",
+        "cmd-view",
+    ),
     ("restore PATH [--version N | --at TIME]", "cmd-restore"),
     ("free PATH", "cmd-free"),
     ("free --without-checking PATH", "cmd-free-without-checking"),
@@ -86,6 +96,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ),
     ("doctor [--details]", "cmd-doctor"),
     ("debug bundle [--from NAME…]", "cmd-debug-bundle"),
+    ("debug allow NAME", "cmd-debug-allow"),
     ("update [--version TAG | --main | --rollback]", "cmd-update"),
 ];
 
@@ -159,8 +170,23 @@ enum Command {
         path: Option<String>,
         #[arg(long)]
         not_shared: bool,
+        #[arg(long, conflicts_with_all = ["path", "not_shared"])]
+        capacity: bool,
     },
     Machines,
+    #[command(group(ArgGroup::new("rule").args(["owner", "add_only", "inherit"]).requires("path")))]
+    FolderRule {
+        #[arg(value_hint = ValueHint::DirPath)]
+        path: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        add_only: bool,
+        #[arg(long = "steward", requires = "add_only")]
+        stewards: Vec<String>,
+        #[arg(long = "default")]
+        inherit: bool,
+    },
     People,
     Deleted {
         #[arg(value_hint = ValueHint::AnyPath)]
@@ -225,6 +251,8 @@ enum Command {
         version: Option<u64>,
         #[arg(long)]
         group: bool,
+        #[arg(long, value_name = "ID", conflicts_with_all = ["version", "group"])]
+        suggestion: Option<String>,
     },
     History {
         #[arg(value_hint = ValueHint::AnyPath)]
@@ -293,6 +321,10 @@ enum Command {
 
 #[derive(Subcommand, Debug)]
 enum DebugCommand {
+    Allow {
+        #[arg(value_name = "NAME", add = complete::machines())]
+        peer: String,
+    },
     Bundle {
         #[arg(long = "from", value_name = "NAME", add = complete::machines())]
         peers: Vec<String>,
@@ -415,11 +447,37 @@ fn action(c: Command) -> Action {
             keep,
             name,
         }),
-        Command::Status { path, not_shared } => send(Request::Status {
+        Command::Status { capacity: true, .. } => send(Request::Capacity),
+        Command::Status {
+            path, not_shared, ..
+        } => send(Request::Status {
             path: path.map(|p| absolute(&p)),
             not_shared,
         }),
         Command::Machines => send(Request::Machines),
+        Command::FolderRule {
+            path,
+            owner,
+            add_only,
+            stewards,
+            inherit,
+        } => {
+            let folder = path.map(|p| absolute(&p));
+            let rule = if let Some(person) = owner {
+                Some(pigeon_proto::policy::Change::Owned { person })
+            } else if add_only {
+                Some(pigeon_proto::policy::Change::AddOnly { stewards })
+            } else if inherit {
+                Some(pigeon_proto::policy::Change::Inherit)
+            } else {
+                None
+            };
+            match (folder, rule) {
+                (Some(folder), Some(rule)) => send(Request::SetFolderRule { folder, rule }),
+                (folder, None) => send(Request::FolderRules { folder }),
+                _ => Action::Usage("folder-rule".into()),
+            }
+        }
         Command::People => send(Request::People),
         Command::Deleted { path } => send(Request::Deleted {
             path: path.map(|p| absolute(&p)),
@@ -478,10 +536,17 @@ fn action(c: Command) -> Action {
             path,
             version,
             group,
-        } => send(Request::View {
-            path: absolute(&path),
-            version,
-            group,
+            suggestion,
+        } => send(match suggestion {
+            Some(proposal) => Request::ViewSuggestion {
+                proposal,
+                path: absolute(&path),
+            },
+            None => Request::View {
+                path: absolute(&path),
+                version,
+                group,
+            },
         }),
         Command::History { path } => send(Request::History {
             path: absolute(&path),
@@ -522,6 +587,9 @@ fn action(c: Command) -> Action {
         Command::Debug {
             what: DebugCommand::Bundle { peers },
         } => send(Request::DebugBundle { peers }),
+        Command::Debug {
+            what: DebugCommand::Allow { peer },
+        } => send(Request::AllowDebug { peer }),
         Command::Export {
             to,
             at,

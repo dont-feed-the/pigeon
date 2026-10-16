@@ -67,6 +67,9 @@ pub(crate) fn command(dir: &Path, env: &GitEnv, args: &[String]) -> Result<Comma
     })?;
     let mut cmd = Command::new("git");
     env.apply(&mut cmd);
+    if let Some(parent) = pigeon_telemetry::traceparent() {
+        cmd.env("TRACEPARENT", parent);
+    }
     cmd.args(args).current_dir(dir).kill_on_drop(true);
     Ok(cmd)
 }
@@ -125,6 +128,26 @@ impl Repo {
         input: Option<&[u8]>,
         timeout: Duration,
     ) -> Result<(Option<i32>, Output)> {
+        let mut span = pigeon_telemetry::span("git.call");
+        span.set("repository", self.dir.to_string_lossy().into_owned())
+            .set("command", args.first().copied().unwrap_or("unknown"));
+        let result = span
+            .in_scope(self.run_status_inner(args, input, timeout))
+            .await;
+        if let Err(error) = &result {
+            span.fail(&error.to_string());
+        }
+        result
+    }
+
+    async fn run_status_inner(
+        &self,
+        args: &[&str],
+        input: Option<&[u8]>,
+        timeout: Duration,
+    ) -> Result<(Option<i32>, Output)> {
+        let mut timer = (args.first() == Some(&"annex"))
+            .then(|| pigeon_telemetry::AnnexCall::start(args.get(1).copied().unwrap_or("unknown")));
         let argv: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
         let mut cmd = command(&self.dir, &self.env, &argv)?;
         cmd.stdin(if input.is_some() {
@@ -175,6 +198,11 @@ impl Repo {
             Ok(Err(source)) => return Err(Error::Pipe { argv, source }),
             Ok(Ok(out)) => out,
         };
+        if out.status.success()
+            && let Some(timer) = &mut timer
+        {
+            timer.succeeded();
+        }
         Ok((
             out.status.code(),
             Output {

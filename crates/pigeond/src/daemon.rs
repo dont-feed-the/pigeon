@@ -48,6 +48,8 @@ pub struct Daemon {
     pub web: OnceLock<Arc<pigeon_web::Web>>,
     /// Starts a round at once: a request, or a peer's change notice.
     pub wake: Arc<tokio::sync::Notify>,
+    /// One-use diagnostic permissions granted by this computer’s user.
+    pub debug: crate::debug::Permissions,
     /// Trace events.
     pub tracer: Tracer,
 }
@@ -86,7 +88,8 @@ impl Daemon {
     }
 
     /// Serves a new group: records it in `config.toml` and starts its loops.
-    pub async fn add_group(&self, g: Group, path: &Path) -> Arc<Group> {
+    pub async fn add_group(&self, g: impl Into<Arc<Group>>, path: &Path) -> Arc<Group> {
+        let g = g.into();
         let entry = GroupEntry {
             id: g.id.clone(),
             path: path.to_path_buf(),
@@ -94,15 +97,29 @@ impl Daemon {
         if let Err(e) = config::add_group(&self.dirs.config_file(), &entry) {
             tracing::warn!(error = %e, "config-write-failed");
         }
-        let g = Arc::new(g);
-        crate::settings::check(&g).await;
-        g.ensure_remotedaemon(&self.wake).await;
-        self.groups
-            .write()
-            .unwrap_or_else(|p| p.into_inner())
-            .push(g.clone());
-        self.wake.notify_one();
+        self.serve_group(g.clone(), None).await;
         g
+    }
+
+    /// Serves a group in memory, optionally replacing a suspended one at
+    /// its existing position. The caller holds `busy` during a pending join
+    /// and records configuration only after its welcome is verified.
+    pub(crate) async fn serve_group(&self, g: Arc<Group>, replacing: Option<&str>) {
+        crate::settings::check(&g).await;
+        {
+            let mut groups = self.groups.write().unwrap_or_else(|p| p.into_inner());
+            let position = groups
+                .iter()
+                .position(|old| old.id == g.id || Some(old.id.as_str()) == replacing);
+            if let Some(position) = position {
+                groups[position] = g.clone();
+            } else {
+                groups.push(g.clone());
+            }
+        }
+        // The helper's Listen request must already be able to find the group.
+        g.ensure_remotedaemon(&self.wake).await;
+        self.wake.notify_one();
     }
 
     /// The direct addresses this device tells peers.
@@ -112,17 +129,27 @@ impl Daemon {
 
     /// One round of the loops for `g`.
     pub async fn round(&self, g: &Arc<Group>) {
-        let _busy = g.busy.lock().await;
         // One trace per round, a span per step (12 §12.2).
         let mut round = pigeon_telemetry::span("round");
         round
             .set("group", g.id.as_str())
             .set("device", self.device.as_str())
             .set("lamport", self.tracer.clock());
+        round.in_scope(self.round_inner(g, &round)).await;
+    }
+
+    async fn round_inner(&self, g: &Arc<Group>, round: &pigeon_telemetry::Span) {
+        let _busy = g.busy.lock().await;
+        if !self.group(&g.id).is_some_and(|live| Arc::ptr_eq(&live, g)) {
+            return;
+        }
         crate::locks::clear(&g.git_dir);
         crate::settings::check(g).await;
         g.ensure_remotedaemon(&self.wake).await;
         g.reload_roster().await;
+        if let Err(error) = crate::change::repair_roster_index(g).await {
+            tracing::info!(group = %g.id, %error, "roster-index-waits");
+        }
         crate::recovery_txt::write(g, &self.device);
         if crate::leave::round(self, g).await {
             return;
@@ -156,6 +183,7 @@ impl Daemon {
         }
         if crate::pause::now(self).is_some() {
             // Paused by the person: all but capture waits (15 §15.6).
+            crate::telemetry::flush_protection(g).await;
             crate::clock_file::save(g, self.tracer.clock());
             return;
         }
@@ -189,6 +217,7 @@ impl Daemon {
             let _step = round.child("publish");
             crate::report::publish(g, &self.device).await;
         }
+        crate::telemetry::flush_protection(g).await;
         crate::clock_file::save(g, self.tracer.clock());
     }
 }
@@ -243,6 +272,12 @@ impl Directory for Daemon {
 
     fn admit(&self, group: &str, device: &str) -> Option<Admitted> {
         let g = Daemon::group(self, group)?;
+        if let Some((peer, uuid)) = g.lock().bootstrap_peer.clone() {
+            return (device == peer).then_some(Admitted {
+                annex_uuid: Some(uuid),
+                custodian: false,
+            });
+        }
         let doc = g.roster()?;
         let d = doc.roster.devices.get(&DeviceId(device.to_owned()))?;
         (d.role != DeviceRole::Recovery).then(|| Admitted {
@@ -258,6 +293,16 @@ impl Directory for Daemon {
         {
             g.set_addresses(device, addresses);
         }
+    }
+
+    fn telemetry_device(&self, group: &str) -> Option<String> {
+        let doc = Daemon::group(self, group)?.roster()?;
+        let id = doc.roster.telemetry_device?;
+        doc.roster
+            .devices
+            .get(&id)
+            .filter(|d| d.role != DeviceRole::Recovery)
+            .map(|_| id.0)
     }
 
     fn addresses(&self, device: &str) -> Vec<SocketAddr> {
@@ -390,7 +435,6 @@ async fn bind_node(
 
 /// Runs `pigeond` until it is told to stop.
 pub async fn run(dirs: Dirs) -> Result<(), String> {
-    crate::logs::init(dirs.logs());
     let config = config::load(&dirs.config_file()).map_err(|e| e.to_string())?;
     let secret = crate::util::device_key(&dirs.device_key()).map_err(|e| e.to_string())?;
     crate::git::set_signer(secret);
@@ -412,7 +456,12 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     };
     let device = node.device_id();
     pigeon_telemetry::init(dirs.state.join("telemetry"), "pigeond", &device);
+    crate::logs::init(dirs.logs());
     let tracer = Tracer::new(dirs.traces(), &device);
+    for entry in &config.groups {
+        crate::join_transition::recover(entry, &dirs.config_file(), &env).await?;
+    }
+    let config = config::load(&dirs.config_file()).map_err(|e| e.to_string())?;
     let mut groups = Vec::new();
     for entry in &config.groups {
         match Group::open(&entry.id, &entry.path, &env).await {
@@ -439,6 +488,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
         web: OnceLock::new(),
         wake: Arc::new(tokio::sync::Notify::new()),
         tracer,
+        debug: crate::debug::Permissions::default(),
     });
     // Each group's install journal is replayed while the socket already
     // answers: whatever needs the worktree waits on `busy`, held from here.
@@ -460,6 +510,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     crate::web::serve(&daemon).await;
     tokio::spawn(serve_socket(net.clone(), listener));
     tokio::spawn(accept_loop(net.clone()));
+    tokio::spawn(crate::telemetry::collect(daemon.clone()));
     tracing::info!(device = %device, socket = %socket.display(), "started");
     for (g, busy) in groups.iter().zip(held) {
         crate::evict::recover(g, &daemon.tracer).await;
@@ -484,6 +535,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
         g.stop_remotedaemon().await;
     }
     node.close().await;
+    pigeon_telemetry::flush();
     let _ = std::fs::remove_file(&socket);
     Ok(())
 }

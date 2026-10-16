@@ -11,6 +11,14 @@ use tower::ServiceExt;
 
 use crate::{Answer, Backend, Web};
 
+#[path = "tests/doctor.rs"]
+mod doctor;
+#[path = "tests/folder_rules.rs"]
+mod folder_rules;
+#[path = "tests/health.rs"]
+mod health;
+#[path = "tests/recovery.rs"]
+mod recovery;
 #[path = "tests/usability.rs"]
 mod usability;
 
@@ -19,16 +27,38 @@ struct Fixed;
 impl Backend for Fixed {
     fn request(&self, request: pigeon_proto::Request) -> Answer {
         let answer = match request {
-            pigeon_proto::Request::Status { .. } => vec![Response::Status(StatusReport {
-                headline: Message {
-                    id: "headline-safe".into(),
-                    args: [("ago".to_owned(), pigeon_proto::Arg::Text("x".into()))].into(),
+            pigeon_proto::Request::Status { .. } | pigeon_proto::Request::Health => {
+                vec![Response::Status(StatusReport {
+                    headline: Message {
+                        id: "headline-safe".into(),
+                        args: [("ago".to_owned(), pigeon_proto::Arg::Text("x".into()))].into(),
+                    },
+                    level: Level::Safe,
+                    state: State::Protected,
+                    versions: Vec::new(),
+                    not_shared: Vec::new(),
+                })]
+            }
+            pigeon_proto::Request::Capacity => vec![Response::Capacity(Box::new(
+                pigeon_proto::capacity::Report {
+                    group: "Family <space>".into(),
+                    at: "2026-10-16T06:00:00Z".into(),
+                    k: 1,
+                    current: 40,
+                    history: 0,
+                    suggestions: 18,
+                    overflow: None,
+                    configured: 58,
+                    short: true,
+                    machines: Vec::new(),
+                    proposals: vec![pigeon_proto::capacity::Proposal {
+                        id: "a".repeat(40),
+                        saved_at: "2026-10-16T05:00:00Z".into(),
+                        state: "rejected".into(),
+                        additional_bytes: 18,
+                    }],
                 },
-                level: Level::Safe,
-                state: State::Protected,
-                versions: Vec::new(),
-                not_shared: Vec::new(),
-            })],
+            ))],
             pigeon_proto::Request::Proposals => vec![Response::Proposals {
                 proposals: vec![Suggestion {
                     id: "c0ffee".into(),
@@ -74,6 +104,7 @@ impl Backend for Fixed {
                         name: name.into(),
                         device: "d".into(),
                         custodian: false,
+                        recovery: false,
                         heard_at: None,
                         this_device: name == "mine",
                     })
@@ -680,8 +711,11 @@ async fn the_pages_are_written_for_axe() {
         ("deleted", "/deleted"),
         ("file", "/file?path=%2Fg%2Ftarte.docx"),
         ("settings", "/settings"),
+        ("space", "/space"),
+        ("doctor", "/doctor"),
     ];
     for lang in ["en", "fr"] {
+        folder_rules::write_pages(&dir, lang).await;
         let w = Web::new(Arc::new(Fixed), lang.parse().unwrap(), 4321);
         let app = w.router();
         let cookie = logged_in(&app, &w).await;

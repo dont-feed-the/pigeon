@@ -9,10 +9,13 @@
 //! ([`serve`]). What the roster says comes from a [`Directory`]; the loops
 //! of `pigeond` provide it, and tests use [`StaticDirectory`].
 
+mod debug;
+pub mod recovery;
 mod relays;
 pub mod serve;
 pub mod socket;
 pub mod sync;
+mod telemetry;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -24,7 +27,8 @@ use iroh::{Endpoint, EndpointAddr, PublicKey, SecretKey};
 use pigeon_core::filter::Role;
 use pigeon_proto::join::{Join, JoinAnswer};
 use pigeon_proto::stream::{
-    ALPN_ANNEX, ALPN_JOIN, MAX_HEADER, Refusal, StreamAnswer, StreamHeader,
+    ALPN_ANNEX, ALPN_DEBUG, ALPN_JOIN, ALPN_RECOVERY, ALPN_TELEMETRY, MAX_HEADER, Refusal,
+    StreamAnswer, StreamHeader,
 };
 use pigeon_proto::{Request, Response};
 use tokio::io::{AsyncRead, AsyncReadExt};
@@ -67,6 +71,10 @@ pub trait Directory: Send + Sync + 'static {
     fn admit(&self, group: &str, device: &str) -> Option<Admitted>;
     /// Direct addresses known for `device`, besides what mDNS finds.
     fn addresses(&self, device: &str) -> Vec<SocketAddr>;
+    /// Optional collector of this group; no default data export.
+    fn telemetry_device(&self, _group: &str) -> Option<String> {
+        None
+    }
     /// Keeps the direct addresses that `device`, admitted for `group`,
     /// gave for itself in its stream header.
     fn learn(&self, _group: &str, _device: &str, _addresses: Vec<SocketAddr>) {}
@@ -82,6 +90,23 @@ pub trait Loops: Send + Sync + 'static {
     fn request(&self, request: Request) -> Answer<Vec<Response>>;
     /// Answers the join of `device`, authenticated by the QUIC handshake.
     fn join(&self, device: String, join: Join) -> Answer<JoinAnswer>;
+    /// Read-only metadata for a recovery device authenticated by QUIC.
+    fn recovery_bundle(&self, _group: String, _device: String) -> Answer<Option<recovery::Bundle>> {
+        Box::pin(async { None })
+    }
+    /// A diagnostic snapshot, after explicit local consent for this peer.
+    fn diagnostics(&self, _group: String, _device: String) -> Answer<Option<serde_json::Value>> {
+        Box::pin(async { None })
+    }
+    /// Stores authenticated telemetry on the group's selected collector.
+    fn telemetry(
+        &self,
+        _group: String,
+        _device: String,
+        _records: Vec<serde_json::Value>,
+    ) -> Answer<bool> {
+        Box::pin(async { false })
+    }
 }
 
 /// A [`Directory`] held in memory, set up by its owner.
@@ -270,7 +295,13 @@ impl Node {
         let defaults = map.urls::<Vec<_>>();
         let mut builder = builder
             .secret_key(SecretKey::from_bytes(&config.secret_key))
-            .alpns(vec![ALPN_ANNEX.to_vec(), ALPN_JOIN.to_vec()])
+            .alpns(vec![
+                ALPN_ANNEX.to_vec(),
+                ALPN_JOIN.to_vec(),
+                ALPN_RECOVERY.to_vec(),
+                ALPN_DEBUG.to_vec(),
+                ALPN_TELEMETRY.to_vec(),
+            ])
             .clear_ip_transports()
             .bind_addr(config.bind)
             .map_err(|e| NetError::Bind(e.to_string()))?;
@@ -351,6 +382,7 @@ impl Node {
             let admitted = Self::admit(&connection, group, &own);
             match tokio::time::timeout(CONNECT_TIMEOUT, admitted).await {
                 Ok(Ok(pair)) => {
+                    observe_path(&connection, group, device, "outgoing");
                     self.note(key, group, None);
                     return Ok(pair);
                 }
@@ -401,7 +433,7 @@ impl Node {
         let header = StreamHeader {
             v: pigeon_proto::stream::HEADER_VERSION,
             group: group.to_owned(),
-            traceparent: None,
+            traceparent: pigeon_telemetry::traceparent(),
             addresses: own.iter().map(ToString::to_string).collect(),
         };
         send.write_all(&header.to_line())
@@ -438,7 +470,9 @@ impl Node {
             .open_bi()
             .await
             .map_err(|e| NetError::Connect(e.to_string()))?;
-        let mut line = serde_json::to_vec(join).map_err(|e| NetError::Connect(e.to_string()))?;
+        let mut join = join.clone();
+        join.traceparent = pigeon_telemetry::traceparent();
+        let mut line = serde_json::to_vec(&join).map_err(|e| NetError::Connect(e.to_string()))?;
         line.push(b'\n');
         send.write_all(&line)
             .await
@@ -447,6 +481,67 @@ impl Node {
         let _ = send.finish();
         connection.close(0u32.into(), b"joined");
         serde_json::from_slice(&answer).map_err(|e| NetError::Connect(e.to_string()))
+    }
+
+    /// Ships one bounded batch to a collector on its own authenticated ALPN.
+    /// It never shares an annex connection or delays an annex transfer.
+    pub async fn telemetry(
+        &self,
+        device: &str,
+        group: &str,
+        addresses: Vec<SocketAddr>,
+        records: &[serde_json::Value],
+    ) -> Result<(), NetError> {
+        let payload = serde_json::to_vec(records).map_err(|e| NetError::Connect(e.to_string()))?;
+        if payload.len() > telemetry::MAX_BATCH {
+            return Err(NetError::Connect("telemetry batch too large".into()));
+        }
+        let key = parse_device_id(device).ok_or_else(|| NetError::Connect("device id".into()))?;
+        let mut address = EndpointAddr::new(key);
+        for a in addresses {
+            address = address.with_ip_addr(a);
+        }
+        let exchange = async {
+            let connection = self
+                .endpoint
+                .connect(address, ALPN_TELEMETRY)
+                .await
+                .map_err(|e| NetError::Connect(e.to_string()))?;
+            let (mut send, mut recv) = connection
+                .open_bi()
+                .await
+                .map_err(|e| NetError::Connect(e.to_string()))?;
+            let header = StreamHeader {
+                v: pigeon_proto::stream::HEADER_VERSION,
+                group: group.to_owned(),
+                traceparent: pigeon_telemetry::traceparent(),
+                addresses: Vec::new(),
+            };
+            send.write_all(&header.to_line())
+                .await
+                .map_err(|e| NetError::Connect(e.to_string()))?;
+            let answer = read_line(&mut recv).await?;
+            let answer: StreamAnswer =
+                serde_json::from_slice(&answer).map_err(|e| NetError::Connect(e.to_string()))?;
+            if !answer.ok {
+                return Err(NetError::Refused(answer.refusal));
+            }
+            send.write_all(&payload)
+                .await
+                .map_err(|e| NetError::Connect(e.to_string()))?;
+            send.finish()
+                .map_err(|e| NetError::Connect(e.to_string()))?;
+            let ack = read_line(&mut recv).await?;
+            connection.close(0u32.into(), b"telemetry complete");
+            if ack == b"ok" {
+                Ok(())
+            } else {
+                Err(NetError::Connect("telemetry refused".into()))
+            }
+        };
+        tokio::time::timeout(std::time::Duration::from_secs(15), exchange)
+            .await
+            .map_err(|_| NetError::Connect("telemetry timeout".into()))?
     }
 
     /// The open connection to `key`, or a new one. Each peer has a slot
@@ -485,6 +580,26 @@ impl Node {
 
 /// One peer's connection, dialled at most once at a time.
 type Slot = Arc<tokio::sync::Mutex<Option<Connection>>>;
+
+fn observe_path(connection: &Connection, group: &str, peer: &str, direction: &str) {
+    let paths = connection.paths();
+    let selected = paths.iter().find(|p| p.is_selected());
+    let path = match selected {
+        Some(p) if p.is_ip() => "direct",
+        Some(p) if p.is_relay() => "relay",
+        _ => "unknown",
+    };
+    pigeon_telemetry::counter(
+        "pigeon.connection.observations",
+        1,
+        &[
+            ("group", group),
+            ("peer", peer),
+            ("direction", direction),
+            ("path", path),
+        ],
+    );
+}
 
 /// How long dialling a peer may take before it counts as unreachable.
 pub const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);

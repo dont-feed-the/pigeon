@@ -70,7 +70,7 @@ pub async fn join(
     if !f.yes
         && let Some((group, refounded)) = pigeon_proto::join::refounded(invitation)
     {
-        let message = pigeon_i18n::Message::new("confirm-join-refounded")
+        let message = pigeon_i18n::Message::new("web-join-refounded")
             .arg("group", group)
             .arg("name", refounded.by)
             .arg("date", refounded.at.get(..10).unwrap_or(&refounded.at));

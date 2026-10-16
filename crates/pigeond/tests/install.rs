@@ -63,6 +63,7 @@ fn roster() -> Roster {
         group: "install".into(),
         k: 2,
         retention_days: 30,
+        telemetry_device: None,
         relay: None,
         persons: [
             (PersonId("ana".into()), person("Ana", true)),
@@ -103,6 +104,10 @@ struct Laptop {
 
 /// Ana's laptop, created as `pigeon create` makes one, without the network.
 async fn laptop() -> Option<Laptop> {
+    laptop_fixture(false).await
+}
+
+async fn laptop_fixture(with_custodian: bool) -> Option<Laptop> {
     let serial = SERIAL.lock().await;
     if !annex_present() {
         assert!(
@@ -129,7 +134,19 @@ async fn laptop() -> Option<Laptop> {
     pigeond::settings::check(&pending).await;
     git.run(&["annex", "init", "lap"]).await.unwrap();
     pigeond::git::set_signer(key(1));
-    let text = roster_file::render(&RosterDoc { roster: roster() }).unwrap();
+    let mut roster = roster();
+    if with_custodian {
+        // Repository UUIDs are immutable identities (04 §4.7). Configure
+        // the actual backup before genesis instead of rewriting one later.
+        let remote = dir.path().join("custodian.git");
+        std::fs::create_dir(&remote).unwrap();
+        let backup = Git::new(&remote, env.clone());
+        backup.run(&["init", "--bare", "-q"]).await.unwrap();
+        backup.run(&["annex", "init", "backup"]).await.unwrap();
+        roster.k = 1;
+        roster.devices.get_mut(&dev(3)).unwrap().annex_uuid = backup.config("annex.uuid").await;
+    }
+    let text = roster_file::render(&RosterDoc { roster }).unwrap();
     let attributes = pigeond::settings::GITATTRIBUTES.as_bytes();
     pigeond::change::stage_file(&git, Some(&wt), ".gitattributes", attributes)
         .await

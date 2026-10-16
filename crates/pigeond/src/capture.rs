@@ -448,6 +448,8 @@ async fn commit_batch(g: &Group, b: Batch<'_>, mut done: Captured) -> Result<Cap
         all,
     } = b;
     let remove = hold_mass_deletions(g, &mut held, &before, &add, remove).await?;
+    let mut queue =
+        crate::telemetry::Queue::start(&g.id, "capture", "batch", all.len() + remove.len());
     for chunk in all.chunks(64) {
         let mut args = vec![
             "-c",
@@ -460,11 +462,41 @@ async fn commit_batch(g: &Group, b: Batch<'_>, mut done: Captured) -> Result<Cap
         ];
         args.extend(chunk.iter().map(String::as_str));
         g.git.run(&args).await?;
+        // git-annex 10.20261006 Annex/Ingest.hs ingestAdd' reads mode
+        // from contentLocation, not the working file (Annex/Link.hs
+        // stagePointerFile). Keep the working executable bit explicitly.
+        let mut executable = Vec::new();
+        let mut ordinary = Vec::new();
+        for path in chunk {
+            let stat = g
+                .worktree
+                .as_ref()
+                .and_then(|wt| lstat(&wt.join(path)).ok().flatten())
+                .filter(|stat| stat.mode & 0o170_000 == 0o100_000)
+                .ok_or_else(|| Error::Parse {
+                    argv: vec!["capture mode".into(), path.clone()],
+                    detail: "saved file mode is unavailable".into(),
+                })?;
+            if stat.mode & 0o111 != 0 {
+                executable.push(path.as_str());
+            } else {
+                ordinary.push(path.as_str());
+            }
+        }
+        for (mode, paths) in [("--chmod=+x", executable), ("--chmod=-x", ordinary)] {
+            if !paths.is_empty() {
+                let mut args = vec!["update-index", mode, "--"];
+                args.extend(paths);
+                g.git.run(&args).await?;
+            }
+        }
+        queue.complete(chunk.len());
     }
     for chunk in remove.chunks(64) {
         let mut args = vec!["update-index", "--remove", "--"];
         args.extend(chunk.iter().map(String::as_str));
         g.git.run(&args).await?;
+        queue.complete(chunk.len());
     }
     let settled = settle(g, head.as_deref(), main.as_ref(), &before, &pending, &gone).await?;
     note_diverging(g, settled.diverging);
@@ -548,6 +580,7 @@ async fn commit_main(
         .update_ref("refs/heads/main", &commit, head.as_deref())
         .await?;
     tracing::info!(group = %g.id, commit = %commit, added = done.added, removed = done.removed, renamed = renames.len(), "captured");
+    crate::telemetry::captured(g, &commit);
     done.commit = Some(commit);
     Ok(done)
 }

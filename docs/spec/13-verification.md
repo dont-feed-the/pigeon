@@ -417,6 +417,7 @@ the same way: `pigeond/tests/codecs.rs` and `net_laws.rs`,
 | a signed commit verifies to its signer; changing any byte of it never does; signing then cutting the signature off gives the commit back | `sig` | `tests/sig.rs` | — |
 | a commit signed by a device of R(p) that changes only what its person may is accepted; one unsigned, forged or signed outside R(p) is refused; a path's change is allowed exactly as §4.3's tables say; a roster change is accepted iff `may_sign` allows it and it applies whole; a proposal's deciders are those allowed every change of it, else the admins with Force, and exactly their devices may sign its adoption; capture's split of a batch loses nothing, its commit on `main` is accepted and each proposal is refused for folder rules alone; a new decision is accepted iff a decider declines or the author withdraws, a changed one never; an adoption holds its proposal's change, keeps what `main` changed meanwhile, adds only conflict copies, and is the proposal on an unchanged `main` (`tests/proposal.rs`); `diff` is a right inverse of `apply` and says every change of one edit; a roster of a newer `format`, or with a key, role or folder rule this release does not know, is *unknown*, never refused, and so is every commit under `rules` it does not support (ADR 0048) | `authority` | `tests/authority.rs`; `pigeond/tests/codecs.rs`, and `pigeond/tests/formats.rs` on the fixtures of §13.6; `tests/authority_trace.rs` | `Authority` (`AuthorisedContent`, `DecisionsByDeciders`); each verdict of `commit::judge`, on commits, decisions and adoptions, is `Judge`'s (`AuthorityTrace`) |
 | the latest report of each device is a semilattice; the order of arrival does not matter; an older report never replaces a newer; only a report signed by the roster device it names, known and not from the future, counts; relaying what counted changes nothing | `report` | `tests/report.rs` | — |
+| nearest explicit Free or Keep applies to descendants; a later parent request replaces older child choices; unrelated requests commute; the root covers every path | `keep_targets` | `tests/keep_targets.rs` (1000 cases each); real nested Free/Keep in `pigeond/tests/slice.rs` | — |
 | the queue order is total; a higher class goes first; arrival order is irrelevant; a key on fewer custodians never waits behind one on more | `queue` | `tests/queue.rs` | — |
 | admitted bytes never exceed the room; an endangered key is never deferred for one that is not; the plan does not depend on arrival and keeps queue order, each item once; a deferred item says the bytes it misses, and that much more room admits everything; the reserve is a floor or a share; the parts of the need sum to K times each distinct key; capacity counts at most one copy per custodian | `capacity` | `tests/capacity.rs`, `tests/admit_trace.rs` | `Admission` (`ReserveKept`, `EndangeredFirst`) |
 | recovery ends every entry and a second does nothing; a crash during recovery ends as one recovery; a person's save is never lost; a deletion after install stays; without a person, the path ends old or new and the index agrees (INV-Journal); pigeon never renames over a name | `journal` | `tests/journal.rs` | `CaptureInstall` (`NoLoss`, `Journal`, `NoOverwrite`, `DeletionKept`) |
@@ -427,3 +428,41 @@ the same way: `pigeond/tests/codecs.rs` and `net_laws.rs`,
 | what goes and what is held split a round's deletions; nothing held goes unless released; what goes unasked stays within the limit and touches no removed top folder; a larger round is held whenever a smaller one is (07 §7.4) | `held` | `tests/held.rs` | — |
 | a manifest reads back as written; content matches a key exactly when its size and SHA-256 are the key's; a safe path stays below the export directory; a pointer gives back its key; a free name is never a tree path nor its folder (09 §9.9) | `export` | `tests/export.rs` | — |
 | a trace line parses back to its event; the Lamport clock orders a receive after its send; every action name is an operator of its `.tla` | `trace` | `tests/trace.rs`, `tests/roster_trace.rs` | every `*Trace.tla` |
+
+
+## 13.14 Local diagnostic consent
+
+The pure `consent::Grant` algebra is independent of replicated authority.
+Its four laws (`tests/consent.rs`, 1000 cases each) cover expiry, complete
+recipient/group matching, one use, and refusals that leave consent unspent.
+The adapter uses a monotonic clock, checks current roster membership before
+and after preparing a part, and exposes no remote grant operation. Real
+peer tests cover default refusal, local confirmation, one-use disclosure,
+private output and other-group canaries; web tests reject missing consent
+and forged forms. Diagnostic collection is never evidence that a file is
+protected.
+
+## 13.15 Refounding and invitation continuity
+
+The `refound` algebra's four laws (`tests/refound.rs`, 1000 cases each)
+cover a valid sole-person roster, preserved folder boundaries and group
+settings, permitted surviving computers and idempotence. The `invitation`
+algebra's four laws (`tests/invitation.rs`, 1000 cases each) bind redemption
+to the issuing group and first authenticated identity; a retry resumes
+without granting a second first use. Adapter checks additionally enforce
+expiry, current role, annex UUID and removal.
+
+Local replay tests refuse malformed/future intents, preserve configuration
+and proposals, and leave later index changes intact after a completed
+transition. `pigeond/tests/refound_restart.rs` kills real lab daemons at
+each main/index/configuration seam for both refounding and a bare backup
+rejoining in place. Restart must finish without an inviter, with unchanged
+annex identity, object bytes and inodes. These supplement welcome history
+validation; a private replay journal does not authorize remote history.
+
+Offline archive-link laws (`tests/refound_archive.rs`, 1000 cases each)
+cover exact signed-root links, unsigned or changed bytes, non-root commits,
+and malformed or ambiguous trailers. Export integration tests cover nested
+archives, missing/substituted/unsigned links, output symlink conflicts,
+temporary-name collisions and case-folded metadata names. Bare-backup
+integration checks old history and exact read-only views after rejoining.

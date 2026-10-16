@@ -28,18 +28,19 @@ headline-capturing =
        *[other] Checking { $files } changed files; they are not safe yet.
     }
 headline-checking = The local folder could not be checked. Run: pigeon doctor
+headline-inventory-unreadable = Pigeon cannot check every saved version right now.
 headline-too-few-backups = Not safe yet: add a backup machine.
 why-capturing = This change is waiting to be captured and copied to the backup machines.
 why-too-few-backups = { $have } of { $need } backup machines are set up. Add one with: pigeon invite --backup-machine
 headline-not-safe =
     { $files ->
-        [one] 1 file is not safe yet.
-       *[other] { $files } files are not safe yet.
+        [one] 1 file version is not safe yet.
+       *[other] { $files } file versions are not safe yet.
     }
 headline-working =
     { $files ->
-        [one] Sending 1 file to the backup machines…
-       *[other] Sending { $files } files to the backup machines…
+        [one] Sending 1 file version to the backup machines…
+       *[other] Sending { $files } file versions to the backup machines…
     }
 headline-not-checked = Last confirmed safe { $when }. pigeon can't reach the group right now; changes since then are only on this computer.
 headline-disk-full = Your disk is full. pigeon can't save new changes. Free up space or empty the trash.
@@ -109,13 +110,13 @@ help-commands = Commands:
 
 ## Results
 
-free-result = { $safe } of { $total } files are safe and their space is freed.
+free-result = { $safe } of { $total } files are safe and eligible to free. Pigeon will free their space in the background; other files wait for safe copies.
 free-waiting =
     { $files ->
         [one] 1 file is not safe yet; pigeon will free it once it is.
        *[other] { $files } files are not safe yet; pigeon will free them once they are.
     }
-keep-result = { $folder } is kept on this computer.
+keep-result = { $folder } will be kept on this computer. Files that are absent will download when a copy is reachable; check Home for progress.
 suggestions-none = No suggestion is waiting.
 suggestion-decide = { $id }  { $author } suggests a change of { $paths }, saved { $saved }. Accept it with: pigeon accept { $id }
 suggestion-other = { $id }  { $author } suggests a change of { $paths }, saved { $saved }; someone else decides.
@@ -130,13 +131,23 @@ resolved-keep-copy = Your version of { $path } is kept as { $dest }; { $path } i
 resolved-suggest-again = Your version of { $path } is suggested again.
 undo-free = Undo: pigeon keep { $folder }
 undo-keep = Undo: pigeon free { $folder }
-restore-result = { $path } is restored; the newer version stays in its history.
+restore-result = { $path } is restored on this computer; the newer version stays in its history. Check Home for sharing and protection, and Suggestions if approval is needed.
+restore-folder-result = { $path }: { $files } files restored on this computer. Newer files and saved history are kept. Check Home and Suggestions for sharing and approval.
+problem-restore-folder-incomplete = { $path }: { $files } files restored; { $skipped } could not be restored and were left unchanged. The operation needs attention. Files to check: { $paths }. Close files in use and try again; use pigeon doctor for other problems. Check Home and Suggestions for sharing and approval.
+problem-restore-in-use = { $path } changed or is being used. Pigeon left it unchanged. Open an old copy with View, or close the file and try again.
+problem-restore-folder-version = To restore a folder, choose a date with --at or omit the version option to restore its latest saved snapshot.
+web-restore-folder = Restore this folder
+web-files-arriving = Waiting for { $files } files to be available on this computer. Leave pigeon running; it will receive them when a copy is reachable.
+web-restore-folder-help = Restore a whole deleted folder from its latest saved state. Newer files and saved history are kept. Individual files are listed below.
 recovery-sheet-text = { $sheet }
-recovered = This computer is back in { $group }. Its files arrive from the backup machines; then remove the lost computers and print a new recovery sheet.
+recovered = This computer is back in { $group }. Its files arrive from the backup machines; then remove the lost computers, revoke the used recovery sheet with remove-computer, and print a new sheet.
 not-shared-kind = { $path }: not shared ({ $kind })
 doctor-lab-build = This is a lab build: its status reports are marked, and no release counts them.
 doctor-version = { $program } { $found } (at least { $minimum } is needed)
 doctor-ok = Everything pigeon needs is in place.
+web-doctor = Check installation
+problem-transport-helper-unavailable = Pigeon's transport helper is missing, cannot run, or belongs to a different release.
+hint-transport-helper-unavailable = Reinstall this pigeon release with all its binaries, then restart pigeon and run pigeon doctor again.
 created = The group “{ $group }” is created. Add a backup machine with: pigeon invite --backup-machine
 invitation =
     { $who ->
@@ -170,6 +181,7 @@ confirm-yes = yes
 confirm-leave = Remove this computer from the group? Its files stay in the folder, but it stops sharing them. [y/N]
 confirm-refound = Refound the group with you as its only admin? It becomes a new group: every other member joins it again by an invitation from you, and the old history stays readable. [y/N]
 confirm-join-refounded = { $group } was refounded by { $name } on { $date }: joining it means accepting { $name } as its admin. Join? [y/N]
+web-join-refounded = { $group } was refounded by { $name } on { $date }. Joining it means accepting { $name } as its admin. Choose Join to continue.
 confirm-held-share = Delete the files of { $batch } for everyone? They stay in the history. [y/N]
 
 ## Problems (10 §10.6, ADR 0023): problem-<code>, and hint-<code> when there is one
@@ -404,4 +416,117 @@ confirm-drop = Remove this computer's copy anyway? What no other machine has is 
 cmd-view = Open a read-only copy of a version of a file, outside the folder
 view-ready = A read-only copy is at { $path }; it is removed after seven days.
 
+setting-telemetry-device = Share diagnostics with
+setting-off = Keep diagnostics on each computer
 problem-join-history-unverified = Pigeon could not verify this group's history. Ask the person who invited you to update pigeon and send a new invitation.
+problem-export-history-unverified = Pigeon could not verify the archived history. Keep this repository and ask another member for a complete copy before exporting deleted files.
+
+problem-recovery-not-allowed = This recovery sheet can no longer add computers. Use a current sheet, or ask an admin for an invitation.
+
+machine-recovery = { $name }: paper recovery key
+web-revoke-sheet = Revoke recovery sheet
+
+revoked-sheet = { $name } is revoked; this recovery sheet can no longer add computers.
+web-revoke-confirm = Revoke { $name }? This recovery sheet can no longer add computers.
+
+progress-restore = Restoring { $path }; waiting for this group’s checks and available copies.
+progress-remove = Removing { $name }; waiting for this group’s checks.
+progress-recovery-sheet = Preparing a recovery sheet and waiting for a backup machine to receive it.
+progress-recover = Recovering this computer; checking the backup’s history and the new computer’s authority.
+
+confirm-revoke-sheet = Revoke { $name }? This paper key will no longer add computers. [y/N]
+
+cmd-debug-allow = Allow one diagnostic bundle to a chosen computer for ten minutes
+debug-allowed = { $name } may collect diagnostics for this group once, including file names. This permission expires in ten minutes. Restarting pigeon cancels this permission.
+problem-debug-not-allowed = { $name } has not allowed a diagnostic part. Ask its person to open Settings and allow one bundle for this computer, then try again.
+confirm-debug-bundle = Save diagnostics, including file names, in a private local file? Chosen peers share only with their own permission. [y/N]
+confirm-debug-allow = Allow { $name } to collect one diagnostic part for this group, including file names, during the next ten minutes? [y/N]
+progress-debug-bundle = Collecting diagnostics; chosen computers share only after their users allow it.
+web-diagnostics = Share diagnostics once
+web-diagnostics-consent = I agree to share this group’s diagnostics, including file names, once during the next ten minutes with the chosen computer.
+web-diagnostic-peer = Computer receiving the diagnostic part
+web-allow-diagnostics = Allow one diagnostic part
+
+action-cancelled = Cancelled.
+
+recovery-title = pigeon recovery sheet
+recovery-group = Group: { $name } ({ $group })
+recovery-person = Person: { $name }
+recovery-backups = Backup machines:
+recovery-secret = Keep this sheet like a passport: whoever holds it can add computers for you. Print it and store it somewhere safe; do not send it to anyone.
+recovery-instructions = On a new computer, save the code as a text file and run: pigeon recover THIS-FILE FOLDER
+recovery-qr-too-large = This sheet has too much information for one QR code. Keep the complete text code on this sheet; it works in the same way.
+recovery-recommendation = { $name } has only one signing computer. Print a recovery sheet or add a second computer so a lost computer does not lock you out.
+web-print-recovery = Prepare a recovery sheet
+web-recovery-print-help = Use your browser’s Print command to print this page. Keep the complete code and QR code together. Close this page when you have stored the sheet safely.
+
+recovery-refresh-recommendation = The backup machines have changed since { $name }’s recovery sheets were prepared. Prepare a replacement sheet with the current backup machines.
+
+problem-recovery-needs-backup = Add a backup machine before preparing a recovery sheet. A backup must receive the sheet’s permission before it can help you recover.
+
+problem-join-incomplete = The new group was verified, but recovery could not finish. Restart pigeon to finish the recorded operation. Your old history is kept.
+problem-repository-busy = This repository has an unfinished file update. Let pigeon finish it, or restart pigeon before trying recovery again.
+problem-folder-not-empty = This folder is not empty and does not belong to the group being recovered. Choose an empty folder or the existing repository of the refounded group.
+
+# Group health from replicated state (ADR 0025).
+web-health = Group health
+web-health-current = Current files
+web-health-retained = Other versions being kept
+web-health-unavailable = Not checked yet; pigeon may be busy.
+web-health-no-report = No report yet.
+web-health-counts = Safe: { $protected } · Shared, not safe yet: { $published } · Only on this computer: { $local } · Not checked recently: { $uncertain } · Missing: { $missing } · Erased forever: { $erased }
+headline-empty = No files yet. Add files to your shared folder to get started.
+web-health-size = { $mb } MB
+web-health-kb = { $kb } kB
+web-health-bytes = { $bytes } B
+web-health-no-limit = not set
+web-health-paper = A paper key keeps no files.
+web-health-disk = Stored: { $used } · Free: { $free } · Limit: { $limit } · Reserved: { $reserve }
+web-health-full = This disk needs more free space.
+web-health-lost = This backup reports its repository lost.
+web-health-checking = Checking stored files; these copies do not count as protected yet.
+web-health-queue = Waiting to send: { $send } · To receive: { $receive } · Waiting for space: { $deferred } items, { $missing } needed
+web-health-report = Storage and work report: { $when }.
+web-health-report-old = Storage and work report is not recent: { $when }. New contact does not update these figures.
+web-health-suggestions = Suggestions awaiting a decision: { $count }
+web-health-repair = File contents marked for replacement copies: { $count }
+web-health-updated = View updated: { $when }. Storage figures carry their own report times.
+web-health-omitted = { $count } further file explanations are not listed here. Use Files to choose a folder.
+web-health-machines = Computers, contact and storage
+web-health-epochs = After computers were removed
+web-health-no-epochs = No content-holding computer has been removed.
+web-health-epoch = { $name } was removed: { $when }.
+
+cmd-folder-rule = See folder sharing rules, or let an admin change who owns a folder or decides suggestions. Use --owner me for your own folder.
+folder-rule-owned = { $folder }: only { $owner } can change this folder.
+folder-rule-add-only = { $folder }: everyone can add; other changes are decided by { $stewards }.
+folder-rule-result = The sharing rule for { $folder } is saved on this computer. Others use it after their next sharing check. View the folder's rule on another computer to confirm it has arrived.
+problem-folder-rule-path = Choose a portable subfolder using its original spelling. The group root and pigeon's own files cannot receive a folder rule.
+problem-folder-rule-person = No single current member matches “{ $name }”. Choose their name from People & machines, or use me for yourself.
+web-folder-rule = Folder sharing rule
+web-subfolders = Subfolders
+web-folder-rule-help = Choose who can change this folder. Everyone else can suggest changes. Subfolders inherit this rule unless they have their own.
+web-folder-rule-admin = An admin can change this sharing rule.
+web-folder-rule-owner = Only one person can change it
+web-folder-rule-add-only = Everyone can add; selected people decide other changes
+web-folder-rule-inherit = Inherit the rule of its parent folder
+web-folder-rule-stewards = People who decide changes
+web-folder-rule-default-admins = Leave all unchecked to let the admins decide.
+
+web-view-suggestion = Review suggested file
+suggestion-deletes-file = This suggestion deletes { $path }. The shared file stays unchanged until the suggestion is accepted.
+
+space-title = Backup storage
+space-need = Required storage for { $copies } backup copies: current files { $current } bytes; history { $history } bytes; suggestions { $suggestions } bytes.
+space-offered = Configured capacity for this content: { $bytes } bytes. Each backup computer counts for at most one copy, including computers with no recent storage report.
+space-overflow = Extra copies: { $bytes } bytes, from reported locations.
+space-overflow-unknown = Extra copies have not been checked.
+space-short = There is less than 25% spare configured backup capacity. Add another backup computer, or raise a storage limit that is below one copy. Each computer’s reported free disk space is shown below.
+space-disk = Stored { $used } bytes; free { $free } bytes; storage limit { $limit }; reserve { $reserve } bytes.
+space-proposal = Suggestion { $id }, { $state }, saved { $when }: { $bytes } additional bytes before backup copies.
+space-shared = Shared content counts once in the totals and can appear in several suggestion rows. Declined suggestions stay until you erase them.
+space-open = awaiting a decision
+space-adopted = accepted
+space-rejected = declined
+space-withdrawn = withdrawn
+space-snapshot = { $group }, checked at { $when }.

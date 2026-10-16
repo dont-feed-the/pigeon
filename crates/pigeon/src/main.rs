@@ -19,9 +19,7 @@ use std::os::unix::net::UnixStream;
 use std::process::ExitCode;
 use std::time::Duration;
 
-use pigeon_proto::{
-    Envelope, LineDecoder, Message, PROTOCOL_VERSION, Problem, Request, Response, encode,
-};
+use pigeon_proto::{Envelope, LineDecoder, Message, PROTOCOL_VERSION, Problem, Request, Response};
 
 use crate::args::Action;
 use crate::render::{Renderer, emit};
@@ -85,7 +83,8 @@ impl Client {
     }
 
     fn send(&mut self, id: u64, r: &Request) -> std::io::Result<()> {
-        let line = encode(id, r).map_err(|e| std::io::Error::other(e.to_string()))?;
+        let line = pigeon_proto::wire::encode_with_context(id, r, pigeon_telemetry::traceparent())
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
         self.stream.write_all(&line)
     }
 
@@ -168,6 +167,32 @@ fn exchange(out: &Renderer, json: bool, request: &Request) -> ExitCode {
     if client.send(2, request).is_err() {
         return fail(local_problem("daemon-not-running", &[]));
     }
+    let waiting = match request {
+        Request::Restore { path, .. } => Some(("progress-restore", vec![("path", path.as_str())])),
+        Request::RemoveDevice { name } => Some(("progress-remove", vec![("name", name.as_str())])),
+        Request::RecoverySheet => Some(("progress-recovery-sheet", Vec::new())),
+        Request::DebugBundle { .. } => Some(("progress-debug-bundle", Vec::new())),
+        Request::Recover { .. } => Some(("progress-recover", Vec::new())),
+        _ => None,
+    };
+    if let Some((id, args)) = waiting {
+        let message = Message {
+            id: id.to_owned(),
+            args: args
+                .into_iter()
+                .map(|(k, v)| (k.to_owned(), pigeon_proto::Arg::Text(v.to_owned())))
+                .collect(),
+        };
+        show(
+            out,
+            json,
+            &Response::Progress {
+                message,
+                done: None,
+                total: None,
+            },
+        );
+    }
     loop {
         let Ok(env) = client.next() else {
             return fail(local_problem("daemon-not-running", &[]));
@@ -181,8 +206,21 @@ fn exchange(out: &Renderer, json: bool, request: &Request) -> ExitCode {
 
 fn main() -> ExitCode {
     complete::answer();
+    let result = run();
+    pigeon_telemetry::flush();
+    result
+}
+
+fn run() -> ExitCode {
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let line = args::parse(&argv);
+    let _span = matches!(line.action, Action::Send(_)).then(|| {
+        if let Ok(dirs) = pigeon_sys::paths::Dirs::for_role(pigeon_sys::paths::Role::Person) {
+            pigeon_telemetry::init(dirs.state.join("telemetry"), "pigeon", "local-cli");
+        }
+        pigeon_telemetry::span("cli.request")
+    });
+    let _context = _span.as_ref().map(pigeon_telemetry::Span::enter);
     let out = render::for_person(now());
     match &line.action {
         Action::Help => {
@@ -231,13 +269,11 @@ fn main() -> ExitCode {
         }
         Action::Send(Request::Drop { path, .. }) => drop(&out, &line, path),
         Action::Send(request) => {
-            if let Some(question) = question(request)
-                && !line.yes
-                && !confirm(&out, &line, &question)
+            if !line.yes
+                && let Some(question) = question(request)
+                && let Err(code) = confirmed(&out, &line, &question)
             {
-                let p = local_problem("needs-confirmation", &[]);
-                show(&out, line.json, &Response::Problem(p));
-                return ExitCode::from(1);
+                return code;
             }
             exchange(&out, line.json, request)
         }
@@ -274,10 +310,8 @@ fn drop(out: &Renderer, line: &args::Line, path: &str) -> ExitCode {
             id: "confirm-drop".to_owned(),
             args: std::collections::BTreeMap::new(),
         };
-        if !confirm(out, line, &question) {
-            let p = local_problem("needs-confirmation", &[]);
-            show(out, line.json, &Response::Problem(p));
-            return ExitCode::from(1);
+        if let Err(code) = confirmed(out, line, &question) {
+            return code;
         }
     }
     exchange(out, line.json, &send(true))
@@ -293,7 +327,16 @@ fn question(request: &Request) -> Option<Message> {
             .collect(),
     };
     match request {
-        Request::RemoveDevice { name } => Some(ask("confirm-remove-computer", &[("name", name)])),
+        Request::DebugBundle { .. } => Some(ask("confirm-debug-bundle", &[])),
+        Request::AllowDebug { peer } => Some(ask("confirm-debug-allow", &[("name", peer)])),
+        Request::RemoveDevice { name } => {
+            let kind = if recovery_key(name) {
+                "confirm-revoke-sheet"
+            } else {
+                "confirm-remove-computer"
+            };
+            Some(ask(kind, &[("name", name)]))
+        }
         Request::Leave => Some(ask("confirm-leave", &[])),
         Request::Join { invitation, .. } => {
             let (group, r) = pigeon_proto::join::refounded(invitation)?;
@@ -312,23 +355,71 @@ fn question(request: &Request) -> Option<Message> {
     }
 }
 
+/// Reads the paper-key role before wording a removal confirmation. A
+/// failed lookup retains the ordinary computer-removal confirmation.
+fn recovery_key(name: &str) -> bool {
+    let Ok(mut client) = Client::open(None) else {
+        return false;
+    };
+    if client.send(2, &Request::Machines).is_err() {
+        return false;
+    }
+    while let Ok(answer) = client.next() {
+        match answer.body {
+            Response::Machines { machines } => {
+                return machines.iter().any(|m| m.name == name && m.recovery);
+            }
+            Response::Progress { .. } => {}
+            _ => return false,
+        }
+    }
+    false
+}
+
 /// Asks `question`, on a terminal only (10 §10.2).
-fn confirm(out: &Renderer, line: &args::Line, question: &Message) -> bool {
+fn confirmed(out: &Renderer, line: &args::Line, question: &Message) -> Result<(), ExitCode> {
+    match confirmation(out, line, question) {
+        Some(true) => Ok(()),
+        Some(false) => {
+            show(
+                out,
+                line.json,
+                &Response::Said {
+                    message: Message {
+                        id: "action-cancelled".into(),
+                        args: Default::default(),
+                    },
+                },
+            );
+            Err(ExitCode::SUCCESS)
+        }
+        None => {
+            show(
+                out,
+                line.json,
+                &Response::Problem(local_problem("needs-confirmation", &[])),
+            );
+            Err(ExitCode::from(1))
+        }
+    }
+}
+
+fn confirmation(out: &Renderer, line: &args::Line, question: &Message) -> Option<bool> {
     use std::io::IsTerminal;
     if line.no_input || !std::io::stdin().is_terminal() {
-        return false;
+        return None;
     }
     let _ = write!(std::io::stderr(), "{} ", out.text(question));
     let mut answer = String::new();
     if std::io::stdin().read_line(&mut answer).is_err() {
-        return false;
+        return None;
     }
     let yes = out.text(&Message {
         id: "confirm-yes".to_owned(),
         args: std::collections::BTreeMap::new(),
     });
     let a = answer.trim().to_lowercase();
-    !a.is_empty() && (yes.to_lowercase().starts_with(&a) || a == "y" || a == "yes")
+    Some(!a.is_empty() && (yes.to_lowercase().starts_with(&a) || a == "y" || a == "yes"))
 }
 
 #[cfg(test)]

@@ -33,14 +33,53 @@ pub async fn settings(
             a => other.extend(r.response(&a).0),
         }
     }
+    let mut peers = Vec::new();
+    for answer in web.ask(Request::Machines).await {
+        if let pigeon_proto::Response::Machines { machines } = answer {
+            peers = machines
+                .into_iter()
+                .filter(|m| !m.this_device && !m.recovery)
+                .collect();
+        }
+    }
     let body = html! {
         (list(&other))
         @for s in &rows { (setting(&r, s, &form.0)) }
+        p { a href="/space" { (r.id("space-title")) } }
         p { (r.id("status-freshness")) }
         (pausing(&r, &form.0))
         (crate::leave::form(&r, &form.0))
+        h2 { (r.id("web-diagnostics")) }
+        p { a href="/doctor" { (r.id("web-doctor")) } }
+        p { (r.id("web-diagnostics-consent")) }
+        form method="post" action="/settings/diagnostics" {
+            input type="hidden" name="form" value=(&form.0);
+            label for="diagnostic-peer" { (r.id("web-diagnostic-peer")) }
+            select id="diagnostic-peer" name="peer" {
+                @for peer in &peers { option value=(&peer.device) { (&peer.name) } }
+            }
+            label {
+                input type="checkbox" name="consent" value="true" required;
+                (r.id("web-diagnostics-consent"))
+            }
+            button type="submit" { (r.id("web-allow-diagnostics")) }
+        }
     };
     page(&r, "/settings", &r.id("web-nav-settings"), &body)
+}
+
+/// Installation and group diagnostics use the same read-only request as CLI.
+pub async fn doctor(State(web): State<Arc<Web>>) -> Html<String> {
+    let r = web.renderer();
+    let answers = web.ask(Request::Doctor { details: false }).await;
+    pages::result(
+        &r,
+        "/settings",
+        answers
+            .iter()
+            .flat_map(|answer| r.response(answer).0)
+            .collect(),
+    )
 }
 
 /// What a value is called: a language by its own name, the others from
@@ -48,6 +87,8 @@ pub async fn settings(
 fn label(r: &Renderer, key: &str, value: &str) -> String {
     match (key, value) {
         (_, "auto") => r.id("setting-auto"),
+        ("telemetry-device", "off") => r.id("setting-off"),
+        ("telemetry-device", name) => name.to_owned(),
         ("language", lang) => r.id(&format!("language-{lang}")),
         (_, v) => r.id(&format!("setting-{v}")),
     }
@@ -191,4 +232,25 @@ pub async fn save(
         }
     }).collect();
     pages::result(&r, "/settings", lines).into_response()
+}
+
+/// An explicit local permission to disclose one group diagnostic part.
+#[derive(serde::Deserialize)]
+pub struct DiagnosticConsent {
+    form: String,
+    peer: String,
+    #[serde(default)]
+    consent: bool,
+}
+
+/// No checkbox, stale form or forged token can grant diagnostic access.
+pub async fn diagnostics(
+    State(web): State<Arc<Web>>,
+    Extension(token): Extension<FormToken>,
+    Form(f): Form<DiagnosticConsent>,
+) -> Response {
+    if !f.consent {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    answer(&web, &token, &f.form, Request::AllowDebug { peer: f.peer }).await
 }

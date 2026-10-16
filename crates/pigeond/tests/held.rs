@@ -190,18 +190,27 @@ fn a_non_portable_name_waits_for_a_rename() {
     join(&a1, &c1, &all);
     until(&a1, State::Protected, &all);
 
+    // Default APFS aliases these paths: writing Ok.TXT there edits ok.txt
+    // rather than creating the second, colliding entry this fixture needs.
+    // Portable case collisions are also checked by the core name laws.
+    let distinct_case_name = !fa.join("Ok.TXT").exists();
     std::fs::write(fa.join("a:b.txt"), "colon\n").unwrap();
-    std::fs::write(fa.join("Ok.TXT"), "respelt\n").unwrap();
+    if distinct_case_name {
+        std::fs::write(fa.join("Ok.TXT"), "respelt\n").unwrap();
+    }
+    let expected_held = if distinct_case_name { 2 } else { 1 };
     eventually_within(
         60,
-        || held(&a1).len() == 2,
+        || held(&a1).len() == expected_held,
         "the names were never held back",
         &all,
     );
     let names = held(&a1);
     let suggested: Vec<Option<&str>> = names.iter().map(|h| h.suggested.as_deref()).collect();
     assert!(suggested.contains(&Some("a-b.txt")), "{names:?}");
-    assert!(suggested.contains(&Some("Ok 2.TXT")), "{names:?}");
+    if distinct_case_name {
+        assert!(suggested.contains(&Some("Ok 2.TXT")), "{names:?}");
+    }
     assert!(
         names.iter().all(|h| h.reason.id == "held-name"),
         "{names:?}"
@@ -219,7 +228,11 @@ fn a_non_portable_name_waits_for_a_rename() {
         said(&renamed, "held-renamed", "to").is_some(),
         "{renamed:?}"
     );
-    std::fs::rename(fa.join("Ok.TXT"), fa.join("other.txt")).unwrap();
+    if distinct_case_name {
+        std::fs::rename(fa.join("Ok.TXT"), fa.join("other.txt")).unwrap();
+    } else {
+        std::fs::write(fa.join("other.txt"), "respelt\n").unwrap();
+    }
     eventually_within(
         60,
         || in_main(&fa) == ["a-b.txt", "ok.txt", "other.txt"],
@@ -227,6 +240,8 @@ fn a_non_portable_name_waits_for_a_rename() {
         &all,
     );
     eventually_within(60, || held(&a1).is_empty(), "the names stayed held", &all);
+    assert_eq!(std::fs::read(fa.join("ok.txt")).unwrap(), b"ok\n");
+    assert_eq!(std::fs::read(fa.join("other.txt")).unwrap(), b"respelt\n");
     assert_eq!(
         std::fs::read_to_string(fa.join("a-b.txt")).unwrap(),
         "colon\n"

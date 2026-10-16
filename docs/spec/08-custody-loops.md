@@ -128,6 +128,12 @@ handles them by key. A stale `index.lock` or `info/sparse-checkout.lock`
 left by a killed git of `pigeond`, the only writer, is removed at start
 (`Evict_lockfile`).
 
+Local targets are inherited by the nearest explicit folder choice: a Keep
+inside a freed parent overrides it for that subtree, including future files.
+A new choice for a parent replaces older choices below it. `freed.json`
+format 1 stores these choices; legacy lists are read as Free choices. The
+pure `keep_targets` algebra and its three 1000-case laws define this rule.
+
 ## 8.6 Purge: erase forever (ADR 0018)
 
 Not yet coded; `Purge.tla` checks the protocol and E14 asserts it with
@@ -238,6 +244,12 @@ report ([06 §6.3](06-status.md)).
   *Space* page show the parts of the need, each custodian's offered, used
   and free space, and declined suggestions by size and age, which `pigeon
   erase --suggestion ID` (§8.6) erases. Nothing expires by itself.
+
+The capacity view is implemented by `capacity_view` using the core capacity
+algebra: `status --capacity` and `/space` share distinct-key totals and signed
+disk report times. Extra-copy location observations have a five-second bound
+and remain unknown on incomplete evidence. Suggestions retain their size and
+age after a decline. Erase and purge remain the next implementation step.
 
 ## 8.10 Rebalancing
 

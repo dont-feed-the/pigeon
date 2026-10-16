@@ -77,6 +77,7 @@ fn genesis() -> Roster {
         group: "g".into(),
         k: 1,
         retention_days: 30,
+        telemetry_device: None,
         relay: None,
         persons: (1..=3)
             .map(|p| {

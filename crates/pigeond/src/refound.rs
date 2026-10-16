@@ -6,7 +6,6 @@
 //! repository then serves the new group in place, with the same annex UUID
 //! and token, and the others join it again by invitation.
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
 use pigeon_core::authority;
@@ -47,9 +46,6 @@ pub fn described(g: &Group) -> Option<Refounded> {
 /// Records what `g`'s genesis says of its refounding, for [`described`]:
 /// the old group, the only person of its roster, and its time.
 pub async fn remember(g: &Group) {
-    if described_file(g).exists() {
-        return;
-    }
     let Ok(raw) = g.git.object(&g.id).await else {
         return;
     };
@@ -71,7 +67,9 @@ pub async fn remember(g: &Group) {
         by,
         at: crate::util::rfc3339(at),
     };
-    if let Ok(bytes) = serde_json::to_vec(&r) {
+    if let Ok(bytes) = serde_json::to_vec(&r)
+        && std::fs::read(described_file(g)).ok().as_deref() != Some(bytes.as_slice())
+    {
         let _ = pigeon_sys::fs::write_atomic(&described_file(g), &bytes);
     }
 }
@@ -81,21 +79,8 @@ pub async fn remember(g: &Group) {
 /// `refs/pigeon/archive/<old group>/main` (ADR 0047).
 pub async fn adopt(g: &Group) {
     remember(g).await;
-    let Ok(raw) = g.git.object(&g.id).await else {
-        return;
-    };
-    let Some((old, old_main)) = refounded(&raw) else {
-        return;
-    };
-    let name = archive_ref(&old);
-    if g.git.rev(&name).await.is_some() {
-        return;
-    }
-    let commit = format!("{old_main}^{{commit}}");
-    if g.git.ok(&["cat-file", "-e", &commit]).await
-        && g.git.update_ref(&name, &old_main, None).await.is_ok()
-    {
-        tracing::info!(group = %g.id, old = %old, "archive-kept");
+    if let Err(error) = crate::archive_chain::retain(g, &g.id).await {
+        tracing::debug!(group = %g.id, %error, "archive-validation-waits");
     }
 }
 
@@ -114,17 +99,7 @@ pub fn refounded(raw: &[u8]) -> Option<(String, String)> {
 /// The roster of the new group: `old`'s settings and folders, with `me`'s
 /// person as the only admin and `me` as the only device.
 pub fn new_roster(old: &Roster, me: &DeviceId) -> Option<Roster> {
-    let device = old.devices.get(me)?.clone();
-    let mut person = old.persons.get(&device.person)?.clone();
-    person.admin = true;
-    let r = Roster {
-        persons: BTreeMap::from([(device.person.clone(), person)]),
-        devices: BTreeMap::from([(me.clone(), device)]),
-        removed: BTreeMap::new(),
-        ..old.clone()
-    };
-    r.validate().ok()?;
-    Some(r)
+    pigeon_core::refound::roster(old, me)
 }
 
 fn group_at(d: &Daemon, repository: Option<&Path>) -> Option<std::sync::Arc<Group>> {
@@ -146,15 +121,34 @@ pub async fn refound(d: &Daemon, repository: Option<&Path>) -> Vec<Response> {
     if crate::leave::leaving(&g).is_some() {
         return vec![problem("not-allowed", &[], Some("leaving".into()))];
     }
-    let made = {
-        let _busy = g.busy.lock().await;
-        genesis(d, &g).await
-    };
-    let (new, name, person) = match made {
+    let _busy = g.busy.lock().await;
+    if crate::join_transition::pending(&g) {
+        return vec![problem("join-incomplete", &[], None)];
+    }
+    if crate::evict::unsettled(&g) || crate::capture_file::pending(&g) {
+        return vec![problem("repository-busy", &[], None)];
+    }
+    let position = d
+        .groups()
+        .iter()
+        .position(|live| std::sync::Arc::ptr_eq(live, &g));
+    let (new, name, person) = match genesis(d, &g).await {
         Ok(x) => x,
-        Err(e) => return vec![problem("internal-error", &[], Some(e))],
+        Err(e) => {
+            if crate::join_transition::pending(&g) {
+                g.stop_remotedaemon().await;
+                d.groups
+                    .write()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .retain(|live| !std::sync::Arc::ptr_eq(live, &g));
+                return vec![problem("join-incomplete", &[], Some(e))];
+            }
+            return vec![problem("internal-error", &[], Some(e))];
+        }
     };
-    switch(d, &g, &new).await;
+    if let Err(e) = switch(d, &g, &new, position).await {
+        return vec![problem("join-incomplete", &[], Some(e))];
+    }
     vec![said(
         "refounded",
         &[("group", Arg::Text(name)), ("name", Arg::Text(person))],
@@ -163,7 +157,10 @@ pub async fn refound(d: &Daemon, repository: Option<&Path>) -> Vec<Response> {
 
 /// Signs the new genesis, archives the old `main` and moves `main` to it.
 /// Answers the new group's ID, its name and the new admin's name.
-async fn genesis(d: &Daemon, g: &Group) -> Result<(String, String, String), String> {
+async fn genesis(
+    d: &Daemon,
+    g: &std::sync::Arc<Group>,
+) -> Result<(String, String, String), String> {
     let me = DeviceId(d.device.clone());
     let doc = g.roster().ok_or("no roster")?;
     let roster = new_roster(&doc.roster, &me).ok_or("this device is not in the roster")?;
@@ -196,38 +193,66 @@ async fn genesis(d: &Daemon, g: &Group) -> Result<(String, String, String), Stri
     let name = doc.roster.group.clone();
     let message = format!("pigeon: refound {name}\n\n{TRAILER} {} {old_main}", g.id);
     let new = g.git.commit_tree(&oid, &[], &message).await.map_err(fail)?;
-    g.git
-        .update_ref(&archive_ref(&g.id), &old_main, None)
+    let judge = g.history_judge(&new);
+    if crate::verify::judge(&judge, None, &new)
         .await
-        .map_err(fail)?;
-    g.git
-        .update_ref("refs/heads/main", &new, Some(&old_main))
-        .await
-        .map_err(fail)?;
-    // The folder and the index get the new roster; nothing else changed.
-    crate::change::stage_file(
-        &g.git,
-        g.worktree.as_deref(),
-        authority::ROSTER,
-        text.as_bytes(),
-    )
-    .await
-    .map_err(fail)?;
+        .map_err(fail)?
+        .accepted
+        .as_deref()
+        != Some(new.as_str())
+    {
+        return Err("refounded genesis failed validation".into());
+    }
+    let plan = crate::join_transition::Plan {
+        format: 1,
+        old_group: g.id.clone(),
+        old_main: old_main.clone(),
+        group: new.clone(),
+        main: new.clone(),
+        archive_main: old_main,
+        stage: None,
+        source: None,
+    };
+    crate::join_transition::record(g, &plan)?;
+    g.stop_remotedaemon().await;
+    d.groups
+        .write()
+        .unwrap_or_else(|p| p.into_inner())
+        .retain(|live| !std::sync::Arc::ptr_eq(live, g));
+    crate::join_transition::finish(g, &d.dirs.config_file()).await?;
     tracing::info!(old = %g.id, group = %new, "refounded");
     Ok((new, name, person))
 }
 
 /// Serves the repository of `old` as the group `new`.
-async fn switch(d: &Daemon, old: &std::sync::Arc<Group>, new: &str) {
+async fn switch(
+    d: &Daemon,
+    old: &std::sync::Arc<Group>,
+    new: &str,
+    position: Option<usize>,
+) -> Result<(), String> {
     let path = old.worktree.clone().unwrap_or_else(|| old.git_dir.clone());
-    forget(d, old).await;
-    match Group::open(new, &path, &d.env).await {
-        Some(g) => {
-            remember(&g).await;
-            d.add_group(g, &path).await;
+    let g = std::sync::Arc::new(
+        Group::open(new, &path, &d.env)
+            .await
+            .ok_or("refounded repository missing")?,
+    );
+    let busy = g.busy.lock().await;
+    remember(&g).await;
+    d.serve_group(g.clone(), None).await;
+    if let Some(position) = position {
+        let mut groups = d.groups.write().unwrap_or_else(|p| p.into_inner());
+        if let Some(index) = groups
+            .iter()
+            .position(|live| std::sync::Arc::ptr_eq(live, &g))
+        {
+            let g = groups.remove(index);
+            let position = position.min(groups.len());
+            groups.insert(position, g);
         }
-        None => tracing::warn!(group = %new, "refound-open-failed"),
     }
+    drop(busy);
+    Ok(())
 }
 
 /// Stops serving `old`, once its round ends, and takes it out of
@@ -272,6 +297,7 @@ mod tests {
             group: "Family".to_owned(),
             k: 2,
             retention_days: 30,
+            telemetry_device: None,
             relay: Some("https://relay.example".to_owned()),
             persons: BTreeMap::from([
                 (PersonId("ana".to_owned()), person("Ana", true)),

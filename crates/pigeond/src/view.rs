@@ -13,8 +13,9 @@ use std::time::{Duration, SystemTime};
 use pigeon_proto::Response;
 use pigeon_proto::api::Arg;
 
-use crate::api::{problem, relative};
+use crate::api::problem;
 use crate::daemon::Daemon;
+use crate::history::relative;
 
 /// How long a copy stays.
 pub const KEPT: Duration = Duration::from_secs(7 * 24 * 3600);
@@ -108,6 +109,67 @@ pub async fn view(d: &Daemon, path: &Path, version: Option<u64>, group: bool) ->
             message: crate::status::msg("view-ready", &[("path", text(&at.to_string_lossy()))]),
         }],
         Err(e) => vec![problem("internal-error", &[], Some(e.to_string()))],
+    }
+}
+
+/// Open only a changed path from a currently pending, verified proposal.
+/// The shared file and the accepted catalogue are never installed or changed.
+pub async fn suggestion(d: &Daemon, id: &str, path: &Path) -> Vec<Response> {
+    let g = if path.is_absolute() {
+        d.group_at(path).or_else(|| d.group_at(path.parent()?))
+    } else {
+        d.default_group()
+    };
+    let Some(g) = g else {
+        return vec![problem("not-in-group", &[], None)];
+    };
+    let rel = if path.is_absolute() {
+        relative(&g, path)
+    } else {
+        path.to_str().map(str::to_owned)
+    };
+    let pending = match crate::decide::pending(&g).await {
+        Ok(pending) => pending,
+        Err(error) => return vec![problem("internal-error", &[], Some(error.to_string()))],
+    };
+    let found: Vec<_> = pending
+        .iter()
+        .filter(|p| id.len() >= 4 && p.id.starts_with(id))
+        .collect();
+    let Some(p) = found.first().filter(|_| found.len() == 1) else {
+        return vec![problem(
+            "suggestion-unknown",
+            &[("id", Arg::Text(id.into()))],
+            None,
+        )];
+    };
+    let Some(rel) = rel.filter(|r| p.paths.contains(r)) else {
+        return vec![problem("not-allowed", &[], None)];
+    };
+    let keys = match g.git.keys(&p.id).await {
+        Ok(keys) => keys,
+        Err(error) => return vec![problem("internal-error", &[], Some(error.to_string()))],
+    };
+    let Some(key) = keys.get(&rel) else {
+        return vec![crate::api::said(
+            "suggestion-deletes-file",
+            &[("path", Arg::Text(rel))],
+        )];
+    };
+    if let Err(code) = crate::restore::bring(&g, key).await {
+        return vec![problem(code, &[], None)];
+    }
+    let Some(object) = crate::custody::present(&g, key).await else {
+        return vec![problem("receiving", &[], None)];
+    };
+    let views = d.dirs.cache.join("view");
+    sweep(&views);
+    match write_copy(&views, &object, &copy_name(&rel, "suggested version")) {
+        Ok(copy) => vec![crate::api::said(
+            "view-ready",
+            &[("path", Arg::Text(copy.to_string_lossy().into_owned()))],
+        )],
+        Err(error) => vec![problem("internal-error", &[], Some(error.to_string()))],
     }
 }
 

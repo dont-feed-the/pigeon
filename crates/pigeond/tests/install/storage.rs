@@ -5,6 +5,53 @@ use super::*;
 
 use pigeon_core::journal::{Begin, End, Record};
 
+#[tokio::test]
+async fn a_durable_roster_change_survives_a_locked_index_and_repairs_only_its_metadata() {
+    let Some(l) = laptop().await else { return };
+    let bytes = b"private staged work, never shared\n";
+    pigeond::change::stage_file(&l.git, Some(&l.wt), "private.txt", bytes)
+        .await
+        .unwrap();
+    let private = l.git.index().await.unwrap()["private.txt"].clone();
+    let lock = l.g.git_dir.join("index.lock");
+    std::fs::write(&lock, b"another git writer holds the index").unwrap();
+    let mut doc = l.g.roster().unwrap();
+    doc.roster.k = 1;
+    let commit = pigeond::change::commit_roster(&l.g, &doc, "pigeon: change K", &l.t)
+        .await
+        .unwrap();
+    assert_eq!(
+        l.git.rev("refs/heads/main").await.as_deref(),
+        Some(commit.as_str())
+    );
+    assert_eq!(l.g.roster().unwrap().roster.k, 1);
+    assert!(l.g.lock().roster_index_pending);
+    assert!(
+        !l.git
+            .tree(&commit)
+            .await
+            .unwrap()
+            .contains_key("private.txt")
+    );
+    let resumed = Group::open(&l.g.id, &l.wt, &GitEnv::default())
+        .await
+        .unwrap();
+    assert_eq!(resumed.roster().unwrap().roster.k, 1);
+    assert!(resumed.lock().roster_index_pending);
+    std::fs::remove_file(lock).unwrap();
+    pigeond::change::repair_roster_index(&resumed)
+        .await
+        .unwrap();
+    assert!(!resumed.lock().roster_index_pending);
+    let index = l.git.index().await.unwrap();
+    assert_eq!(index["private.txt"], private);
+    assert_eq!(std::fs::read(l.wt.join("private.txt")).unwrap(), bytes);
+    assert_eq!(
+        index[".pigeon/roster.toml"],
+        l.git.tree(&commit).await.unwrap()[".pigeon/roster.toml"]
+    );
+}
+
 fn seed_recovered(l: &Laptop, bytes: &[u8]) {
     let seq = 1;
     let aside = l.g.files.aside(seq);
@@ -286,22 +333,11 @@ async fn failed_capture_does_not_let_install_replace_the_uncaptured_save() {
 
 #[tokio::test]
 async fn placement_copies_historical_captured_versions_too() {
-    let Some(l) = laptop().await else { return };
+    let Some(l) = laptop_fixture(true).await else {
+        return;
+    };
     let remote = l.dir.path().join("custodian.git");
-    std::fs::create_dir(&remote).unwrap();
     let rg = Git::new(&remote, GitEnv::default());
-    rg.run(&["init", "--bare", "-q"]).await.unwrap();
-    let uuid = l.g.roster().unwrap().roster.devices[&dev(3)]
-        .annex_uuid
-        .clone()
-        .unwrap();
-    rg.run(&["config", "annex.uuid", &uuid]).await.unwrap();
-    rg.run(&["annex", "init", "backup"]).await.unwrap();
-    let mut doc = l.g.roster().unwrap();
-    doc.roster.k = 1;
-    pigeond::change::commit_roster(&l.g, &doc, "pigeon: configure test custodian", &l.t)
-        .await
-        .unwrap();
     l.g.git
         .run(&["remote", "add", &dev(3).0, remote.to_str().unwrap()])
         .await

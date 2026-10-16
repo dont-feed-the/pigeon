@@ -24,7 +24,38 @@ pub struct Api(pub Arc<Daemon>);
 impl Loops for Api {
     fn request(&self, request: Request) -> Answer<Vec<Response>> {
         let d = self.0.clone();
-        Box::pin(async move { handle(&d, request).await })
+        Box::pin(async move {
+            let mut span = pigeon_telemetry::span("api.request");
+            span.set("device", d.device.clone());
+            if let Some(g) = d.default_group() {
+                span.set("group", g.id.clone());
+            }
+            span.in_scope(handle(&d, request)).await
+        })
+    }
+
+    fn recovery_bundle(
+        &self,
+        group: String,
+        device: String,
+    ) -> Answer<Option<crate::net::recovery::Bundle>> {
+        let d = self.0.clone();
+        Box::pin(async move { crate::recovery::bundle(&d, &group, &device).await })
+    }
+
+    fn diagnostics(&self, group: String, device: String) -> Answer<Option<serde_json::Value>> {
+        let d = self.0.clone();
+        Box::pin(async move { crate::debug::share(&d, &group, &device).await })
+    }
+
+    fn telemetry(
+        &self,
+        group: String,
+        device: String,
+        records: Vec<serde_json::Value>,
+    ) -> Answer<bool> {
+        let d = self.0.clone();
+        Box::pin(async move { crate::telemetry::receive(&d, &group, &device, records).await })
     }
 
     fn join(&self, device: String, join: Join) -> Answer<JoinAnswer> {
@@ -96,6 +127,10 @@ pub(crate) fn group_of(d: &Daemon, path: &Path) -> Option<Arc<Group>> {
 
 pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
     match request {
+        Request::FolderRules { folder } => crate::folder_rules::list(d, folder.as_deref()),
+        Request::SetFolderRule { folder, rule } => crate::folder_rules::set(d, &folder, rule).await,
+        Request::Capacity => crate::capacity_view::report(d).await,
+        Request::Health => crate::health::report(d).await,
         Request::Create {
             name,
             folder,
@@ -143,6 +178,11 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             let Some(g) = d.default_group() else {
                 return vec![problem("not-in-group", &[], None)];
             };
+            let _busy = g.busy.lock().await;
+            if d.group(&g.id).is_none() {
+                return vec![problem("not-in-group", &[], None)];
+            }
+            crate::refound::remember(&g).await;
             let ask = crate::invite::Ask {
                 person: &person,
                 admin,
@@ -179,7 +219,7 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         }
         Request::Keep { folder } => keep(d, Path::new(&folder)).await,
         Request::Machines => machines(d),
-        Request::People => people(d),
+        Request::People => people(d).await,
         Request::Invitations => match d.default_group() {
             Some(g) => vec![Response::Invitations {
                 invitations: crate::invite::pending(&g),
@@ -223,10 +263,16 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             }
         }
         Request::GetSettings { key } => crate::prefs::get(d, key.as_deref()),
+        Request::SetSettings { key, value } if key == "telemetry-device" => {
+            crate::telemetry::set_collector(d, value.trim()).await
+        }
         Request::SetSettings { key, value } => crate::prefs::set(d, &key, &value),
         Request::Pause { duration } => crate::pause::pause(d, duration.as_deref()),
         Request::Resume => crate::pause::resume(d),
         Request::History { path } => crate::history::history(d, Path::new(&path)).await,
+        Request::ViewSuggestion { proposal, path } => {
+            crate::view::suggestion(d, &proposal, Path::new(&path)).await
+        }
         Request::View {
             path,
             version,
@@ -240,7 +286,8 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         Request::Held => crate::held::list(d),
         Request::ReleaseHeld { batch, choice } => crate::held::release(d, &batch, choice).await,
         Request::Doctor { details } => crate::history::doctor(d, details).await,
-        Request::DebugBundle { .. } => crate::history::debug_bundle(d).await,
+        Request::DebugBundle { peers } => crate::debug::collect(d, &peers).await,
+        Request::AllowDebug { peer } => crate::debug::allow(d, &peer),
         Request::Restore { path, version, at } => {
             crate::restore::restore(d, Path::new(&path), version, at.as_deref()).await
         }
@@ -298,9 +345,13 @@ fn join_problem(code: &str, invitation: &str) -> Response {
         "invite-used" => with_hint(problem(code, &[], None), "hint-invite-used"),
         "inviter-offline" => with_hint(problem(code, &who, None), "hint-inviter-offline"),
         "invite-not-allowed" => problem(code, &who, None),
-        "join-history-unverified" | "invite-unknown" | "not-in-group" | "not-allowed" => {
-            problem(code, &[], None)
-        }
+        "join-history-unverified"
+        | "invite-unknown"
+        | "not-in-group"
+        | "not-allowed"
+        | "join-incomplete"
+        | "repository-busy"
+        | "folder-not-empty" => problem(code, &[], None),
         "not-in-this-build" => problem(code, &[("command", text("join"))], None),
         other => problem("internal-error", &[], Some(other.to_owned())),
     }
@@ -370,6 +421,7 @@ async fn create_inner(
         group: name.to_owned(),
         k,
         retention_days: 30,
+        telemetry_device: None,
         relay: None,
         persons: BTreeMap::from([(
             PersonId(pid.clone()),
@@ -440,7 +492,9 @@ async fn free(d: &Daemon, path: &Path) -> Vec<Response> {
     let Some(prefix) = relative(&g, path) else {
         return vec![problem("not-in-group", &[], None)];
     };
-    crate::evict::set_target(&g, &prefix, true);
+    if let Err(error) = crate::evict::set_target(&g, &prefix, true) {
+        return vec![problem("internal-error", &[], Some(error))];
+    }
     let observed = crate::status::observe(&g, &d.device, &prefix).await;
     let safe = observed
         .iter()
@@ -473,7 +527,9 @@ async fn keep(d: &Daemon, path: &Path) -> Vec<Response> {
     let Some(prefix) = relative(&g, path) else {
         return vec![problem("not-in-group", &[], None)];
     };
-    crate::evict::set_target(&g, &prefix, false);
+    if let Err(error) = crate::evict::set_target(&g, &prefix, false) {
+        return vec![problem("internal-error", &[], Some(error))];
+    }
     wake_soon(d);
     vec![said("keep-result", &[("folder", text(&prefix))])]
 }
@@ -494,7 +550,10 @@ fn machines(d: &Daemon) -> Vec<Response> {
             name: x.name.clone(),
             device: id.0.clone(),
             custodian: x.role == DeviceRole::Custodian,
-            heard_at: heard.get(&id.0).map(|t| crate::util::rfc3339(*t)),
+            recovery: x.role == DeviceRole::Recovery,
+            heard_at: (x.role != DeviceRole::Recovery)
+                .then(|| heard.get(&id.0).map(|t| crate::util::rfc3339(*t)))
+                .flatten(),
             this_device: id.0 == d.device,
         })
         .collect();
@@ -502,17 +561,36 @@ fn machines(d: &Daemon) -> Vec<Response> {
 }
 
 /// `pigeon people`: each person of the roster, with their machines.
-fn people(d: &Daemon) -> Vec<Response> {
-    let Some(doc) = d.default_group().and_then(|g| g.roster()) else {
+async fn people(d: &Daemon) -> Vec<Response> {
+    let Some(g) = d.default_group() else {
+        return vec![problem("not-in-group", &[], None)];
+    };
+    let Some(doc) = g.roster() else {
         return vec![problem("not-in-group", &[], None)];
     };
     let r = &doc.roster;
+    let refresh = crate::recovery_advice::refresh(&g, r).await;
     let people = r
         .persons
         .iter()
         .map(|(id, p)| pigeon_proto::api::PersonEntry {
             name: p.name.clone(),
             admin: p.admin,
+            this_person: r
+                .devices
+                .get(&DeviceId(d.device.clone()))
+                .is_some_and(|x| x.person == *id),
+            recovery_refresh_recommended: p.admin && refresh.contains(id),
+            recovery_recommended: p.admin
+                && r.devices
+                    .values()
+                    .filter(|x| x.person == *id && x.role != DeviceRole::Recovery)
+                    .count()
+                    == 1
+                && !r
+                    .devices
+                    .values()
+                    .any(|x| x.person == *id && x.role == DeviceRole::Recovery),
             machines: r
                 .devices
                 .values()

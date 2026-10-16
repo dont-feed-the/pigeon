@@ -30,9 +30,20 @@ pub struct Config {
     /// The loops.
     #[serde(default)]
     pub loops: Loops,
+    /// Optional backend on this device; no default endpoint (ADR 0025).
+    #[serde(default)]
+    pub telemetry: Telemetry,
     /// The groups of this device.
     #[serde(default)]
     pub groups: Vec<GroupEntry>,
+}
+
+/// `[telemetry]`: configured locally, never learned from another member.
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct Telemetry {
+    /// OTLP HTTP base URL, such as `http://127.0.0.1:4318`.
+    #[serde(default)]
+    pub endpoint: Option<String>,
 }
 
 /// `[network]`.
@@ -235,6 +246,47 @@ pub fn add_group(path: &Path, entry: &GroupEntry) -> Result<(), ConfigError> {
     write_doc(path, &doc)
 }
 
+/// Atomically replaces an in-place join's old entry, preserving position
+/// and other settings. Repeating it removes duplicate old/new entries.
+pub fn replace_group(path: &Path, old: &str, entry: &GroupEntry) -> Result<(), ConfigError> {
+    let mut doc = read_doc(path)?;
+    let mut replacement = toml_edit::Table::new();
+    replacement.insert("id", toml_edit::value(entry.id.clone()));
+    replacement.insert(
+        "path",
+        toml_edit::value(entry.path.to_string_lossy().into_owned()),
+    );
+    let mut changed = toml_edit::ArrayOfTables::new();
+    let mut inserted = false;
+    if let Some(groups) = doc
+        .get("groups")
+        .and_then(toml_edit::Item::as_array_of_tables)
+    {
+        for table in groups {
+            let id = table.get("id").and_then(toml_edit::Item::as_str);
+            let same_path = table
+                .get("path")
+                .and_then(toml_edit::Item::as_str)
+                .is_some_and(|p| {
+                    std::fs::canonicalize(p).unwrap_or_else(|_| PathBuf::from(p)) == entry.path
+                });
+            if (id == Some(old) && same_path) || id == Some(entry.id.as_str()) {
+                if !inserted {
+                    changed.push(replacement.clone());
+                    inserted = true;
+                }
+            } else {
+                changed.push(table.clone());
+            }
+        }
+    }
+    if !inserted {
+        changed.push(replacement);
+    }
+    doc.insert("groups", toml_edit::Item::ArrayOfTables(changed));
+    write_doc(path, &doc)
+}
+
 /// Removes the `[[groups]]` entry of the group `id` (`pigeon leave`, 09
 /// §9.7), keeping the rest of the file as it is.
 pub fn remove_group(path: &Path, id: &str) -> Result<(), ConfigError> {
@@ -293,5 +345,56 @@ mod tests {
         );
         assert_eq!(c.language.as_deref(), Some("fr"));
         assert!(std::fs::read_to_string(&path).unwrap().contains("# mine"));
+    }
+
+    #[test]
+    fn an_in_place_replacement_is_idempotent_and_preserves_other_groups() {
+        let t = tempfile::tempdir().unwrap();
+        let path = t.path().join("config.toml");
+        std::fs::write(&path, "# mine\nlanguage = \"fr\"\nfuture_option = 7\n").unwrap();
+        let old_path = t.path().join("old");
+        std::fs::create_dir(&old_path).unwrap();
+        let entries = [
+            GroupEntry {
+                id: "first".into(),
+                path: t.path().join("first"),
+            },
+            GroupEntry {
+                id: "old".into(),
+                path: old_path.clone(),
+            },
+            GroupEntry {
+                id: "old".into(),
+                path: t.path().join("another-repository"),
+            },
+            GroupEntry {
+                id: "last".into(),
+                path: t.path().join("last"),
+            },
+        ];
+        for entry in &entries {
+            add_group(&path, entry).unwrap();
+        }
+        let new = GroupEntry {
+            id: "new".into(),
+            path: old_path,
+        };
+        // A duplicate left by an older implementation is removed too.
+        add_group(&path, &new).unwrap();
+        replace_group(&path, "old", &new).unwrap();
+        let first = std::fs::read_to_string(&path).unwrap();
+        replace_group(&path, "old", &new).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), first);
+        assert_eq!(
+            load(&path).unwrap().groups,
+            [
+                entries[0].clone(),
+                new,
+                entries[2].clone(),
+                entries[3].clone()
+            ]
+        );
+        assert!(first.contains("# mine") && first.contains("future_option = 7"));
+        assert_eq!(load(&path).unwrap().language.as_deref(), Some("fr"));
     }
 }

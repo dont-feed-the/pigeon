@@ -15,6 +15,7 @@ result, progress events then a result, or a `Problem` (§10.6).
 | Request | CLI | Web | Specified in |
 |---|---|---|---|
 | `Status {path?, not_shared}` | `pigeon status [PATH] [--not-shared]` | Home; the folder view's *Not shared* list | [06](06-status.md), [07 §7.9](07-capture-and-install.md) |
+| `Health` | — | Home's headline, current and older counts, timestamped capacity and queues, suggestions and repair epochs | [12 §12.2](12-observability.md) |
 | `Create {name, folder, k, device_name}` | `pigeon create NAME` | Welcome → Create | [04 §4.1](04-roster-and-authority.md) |
 | `Invite {person, admin, custodian, name?}` | `pigeon invite [--admin] PERSON`, `pigeon invite --backup-machine [NAME]` | People → Invite someone | [09 §9.6](09-network-and-joining.md) |
 | `Join {invitation, folder, keep, name?}` | `pigeon join INVITATION [FOLDER] [--name NAME]` | Welcome → Join | [09 §9.6](09-network-and-joining.md) |
@@ -39,6 +40,7 @@ result, progress events then a result, or a `Problem` (§10.6).
 | `DebugBundle {peers}` | `pigeon debug bundle [--from NAME…]` | Settings → Advanced | [12](12-observability.md) |
 | `Folders` | `pigeon status` (by file) | Files | [08 §8.5](08-custody-loops.md) |
 | `Files {folder}` | `pigeon status FOLDER` | Files → a folder | [06 §6.2](06-status.md) |
+| `FolderRules {folder?}` · `SetFolderRule {folder, rule}` | `pigeon folder-rule [PATH [--owner PERSON \| --add-only [--steward PERSON…] \| --default]]` | Files → a folder → Sharing rule | [04 §4.3](04-roster-and-authority.md) |
 | `Deleted` | `pigeon restore PATH` | Files → Deleted files | [10 §10.3](10-interfaces.md) |
 | `Subscribe` | — | live updates (SSE) | §10.3 |
 
@@ -50,6 +52,36 @@ result, progress events then a result, or a `Problem` (§10.6).
   --cancel ID` complete ux.md §7 **[no ADR: verbs]**.
 - `pigeond` answers `Hello` with its version; a CLI of another version
   refuses with `version-mismatch`.
+
+`restore FILE` without a version selects its latest saved version,
+including the version before deletion. `restore FOLDER` selects the latest
+nonempty accepted snapshot of the folder; `--at` applies an inclusive
+author-time cutoff. A folder uses one snapshot, never a mixture of per-file
+times. Files absent from that snapshot are not deleted. `--version` is a
+file-history number; it is refused for folders with instructions to use
+`--at`. Missing nested working directories can be rebuilt, while symlinks
+and nested repositories are refused. Capture records a successful restore
+as new history, keeping earlier bytes and modes.
+
+Restores use the install journal and preserve saved executable modes.
+Changed or open files win over the restore. A folder's incomplete result
+is one final Problem with restored/unchanged counts and paths to check;
+the CLI exits unsuccessfully rather than stopping at an earlier success.
+Deleted files offers whole-folder actions only for wholly deleted subtrees;
+individual Restore selects the latest saved version. Free and keep confirm
+scheduled work; Files reports requested local copies still arriving.
+Evidence: [folder-restore-5](../reports/folder-restore-5.md).
+
+Folder rules are readable by every current member. Only an admitted admin
+computer may change them; recovery keys cannot. The editor resolves current
+person names or IDs, refuses ambiguous names, and supports `me`. An empty
+add-only steward set follows the current admins. Reset removes one direct
+rule and inherits the closest ancestor, leaving deeper rules untouched.
+The daemon signs a roster-only change from the accepted tree, judges it
+before publishing, and preserves unrelated working and index contents.
+Rules version 1 retains its literal prefix matching; the editor refuses a
+case or Unicode alias of an existing scope. It does not reinterpret old
+signed history. Evidence: [folder-rules-5](../reports/folder-rules-5.md).
 
 ## 10.2 The command line (ADR 0024)
 
@@ -208,3 +240,16 @@ first build adds **[no ADR]**: `usage` (exit code 2), `unknown-computer`,
 - A request that changes the catalogue checks the roster first and fails
   with `not-allowed` rather than make a surprise proposal; capture, which
   cannot ask, makes proposals ([07 §7.3](07-capture-and-install.md)).
+
+Doctor also checks that `git-annex-p2p-iroh --version` runs in the same
+child environment used by git-annex and matches the daemon release. A
+missing, failed, stale or timed-out helper gives
+`transport-helper-unavailable`, with a reinstall remedy. An installation
+or group problem suppresses the final everything-in-place reassurance.
+
+A pending suggestion can be reviewed with `ViewSuggestion {proposal, path}`
+(`pigeon view PATH --suggestion ID`). Only a changed path in one currently
+pending verified proposal is eligible. The daemon returns a read-only copy
+outside the shared folder, or explains that the proposal deletes that path.
+Review does not adopt the proposal or replace accepted bytes. The web uses
+a checked POST before downloading the copy.

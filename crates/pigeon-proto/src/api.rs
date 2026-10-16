@@ -13,6 +13,22 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Request {
+    /// View direct rules, or the effective rule of one local folder.
+    FolderRules {
+        /// Local folder, or all rules of the default group.
+        folder: Option<String>,
+    },
+    /// Admin configuration of a signed folder rule (04 §4.3).
+    SetFolderRule {
+        /// The local folder.
+        folder: String,
+        /// New rule or inheritance.
+        rule: crate::policy::Change,
+    },
+    /// Group health from accepted state and signed reports (ADR 0025).
+    Health,
+    /// Read-only distinct-key storage need and signed disk observations.
+    Capacity,
     /// The first request of a connection: the client's protocol version.
     Hello {
         /// The client's [`crate::PROTOCOL_VERSION`].
@@ -99,6 +115,13 @@ pub enum Request {
         /// The group's version rather than the person's.
         #[serde(default)]
         group: bool,
+    },
+    /// A read-only copy of one changed file in a pending suggestion.
+    ViewSuggestion {
+        /// The pending suggestion's ID (unambiguous prefix allowed).
+        proposal: String,
+        /// A changed path, relative to the group or absolute within it.
+        path: String,
     },
     /// `pigeon history PATH`.
     History {
@@ -245,6 +268,11 @@ pub enum Request {
         #[serde(default)]
         peers: Vec<String>,
     },
+    /// Allow one diagnostic bundle to this peer during the next ten minutes.
+    AllowDebug {
+        /// The peer's device ID or current name.
+        peer: String,
+    },
     /// The helper's `address` mode: this device's address for git-annex.
     Address {
         /// The repository the helper runs for (09 §9.2).
@@ -270,6 +298,12 @@ pub enum Request {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Response {
+    /// Folder rules with human names and explicit edit authority.
+    FolderRules(Box<crate::policy::Report>),
+    /// Local group health, without an optional telemetry collector.
+    Health(Box<crate::health::HealthReport>),
+    /// Required storage and each backup machine's reported capacity.
+    Capacity(Box<crate::capacity::Report>),
     /// The answer to `Hello`.
     Hello {
         /// `pigeond`'s [`crate::PROTOCOL_VERSION`].
@@ -502,6 +536,15 @@ pub struct PersonEntry {
     pub name: String,
     /// Whether they are an admin.
     pub admin: bool,
+    /// Whether this device belongs to them.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub this_person: bool,
+    /// An admin with one signing computer and no paper key.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub recovery_recommended: bool,
+    /// Their paper keys name a different set of backup machines.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub recovery_refresh_recommended: bool,
     /// The names of their computers and backup machines.
     pub machines: Vec<String>,
 }
@@ -515,6 +558,9 @@ pub struct Machine {
     pub device: String,
     /// Whether it is a custodian (backup machine).
     pub custodian: bool,
+    /// A paper recovery key; it never holds content or appears offline.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub recovery: bool,
     /// When it was last heard of, RFC 3339.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub heard_at: Option<String>,
@@ -536,6 +582,9 @@ pub struct Folder {
     pub state: State,
     /// Whether its space is freed on this computer (or is being freed).
     pub freed: bool,
+    /// Requested local files that have not arrived or been installed yet.
+    #[serde(default)]
+    pub arriving: u64,
 }
 
 /// A file of the group, with the state of its current version.

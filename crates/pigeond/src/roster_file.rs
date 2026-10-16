@@ -27,6 +27,7 @@ const TOP: &[&str] = &[
     "k",
     "retention_days",
     "relay",
+    "telemetry_device",
     "persons",
     "devices",
     "removed",
@@ -54,6 +55,8 @@ struct FileT {
     retention_days: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     relay: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    telemetry_device: Option<String>,
     #[serde(default)]
     persons: BTreeMap<String, PersonT>,
     #[serde(default)]
@@ -205,6 +208,7 @@ pub fn parse(text: &str) -> Result<RosterDoc, Unread> {
         k: f.k,
         retention_days: f.retention_days,
         relay: f.relay,
+        telemetry_device: f.telemetry_device.map(DeviceId),
         persons: f
             .persons
             .into_iter()
@@ -239,6 +243,7 @@ pub fn render(doc: &RosterDoc) -> Result<String, String> {
         k: r.k,
         retention_days: r.retention_days,
         relay: r.relay.clone(),
+        telemetry_device: r.telemetry_device.as_ref().map(|d| d.0.clone()),
         persons: r
             .persons
             .iter()

@@ -232,6 +232,39 @@ fn a_change_its_person_may_not_make_becomes_a_relayed_suggestion() {
     };
     eventually_within(WAIT, || told(&a1) == 1, "Ana was not told", &all);
     assert_eq!(told(&b1), 0, "Cid was told of his own suggestion");
+    // The steward can inspect exact proposed bytes without accepting it.
+    let preview = pigeon(
+        &a1,
+        &[
+            "view",
+            fa.join("a.txt").to_str().unwrap(),
+            "--suggestion",
+            &new[..12],
+        ],
+    );
+    let copy = said(&preview, "view-ready", "path").unwrap_or_else(|| panic!("{preview:?}"));
+    assert_eq!(std::fs::read(&copy).unwrap(), b"cid's second edit\n");
+    use std::os::unix::fs::PermissionsExt;
+    assert_eq!(
+        std::fs::metadata(&copy).unwrap().permissions().mode() & 0o222,
+        0
+    );
+    assert!(!Path::new(&copy).starts_with(&fa));
+    assert_eq!(text(&fa, "a.txt"), "first\n");
+    let unmodified = pigeon(
+        &a1,
+        &[
+            "view",
+            fa.join("c.txt").to_str().unwrap(),
+            "--suggestion",
+            &new[..12],
+        ],
+    );
+    assert!(
+        unmodified
+            .iter()
+            .any(|r| matches!(r, Response::Problem(p) if p.code == "not-allowed"))
+    );
     let refused = pigeon(&b1, &["accept", &new[..12]]);
     assert!(
         refused
@@ -299,4 +332,20 @@ fn a_change_its_person_may_not_make_becomes_a_relayed_suggestion() {
     assert!(listed(&a1).is_empty() && listed(&b1).is_empty());
     assert_eq!(text(&fa, "a.txt"), "cid's second edit\n");
     assert_eq!(text(&fc, "a.txt"), "cid's third edit\n");
+    // A fresh laptop must verify the separately retained declined proposal,
+    // not reject the group's valid decision history as unverified.
+    let a2 = start(&root, s, "a2");
+    let invited = pigeon(&a1, &["invite", "ana"]);
+    let code = said(&invited, "invitation", "code").unwrap();
+    let second_folder = root.join("ana-2");
+    let joined = pigeon(&a2, &["join", &code, second_folder.to_str().unwrap()]);
+    assert!(said(&joined, "joined", "group").is_some(), "{joined:?}");
+    eventually_within(
+        WAIT,
+        || text(&second_folder, "a.txt") == "cid's second edit\n",
+        "fresh join after decline",
+        &[&a1, &b1, &c1, &a2],
+    );
+    assert_eq!(text(&second_folder, "c.txt"), "cid's own edit\n");
+    assert!(listed(&a2).is_empty());
 }

@@ -28,10 +28,16 @@ use crate::roster_file::{self, RosterDoc};
 /// What the loops know of a group, behind a lock never held across a wait.
 #[derive(Debug, Default)]
 pub struct Known {
+    /// A temporary, non-listening metadata fetch admits only its inviter.
+    pub bootstrap_peer: Option<(String, String)>,
     /// The roster of `main`.
     pub roster: Option<RosterDoc>,
     /// The commit that roster was read from.
     pub roster_commit: Option<String>,
+    /// A durable roster change still needs its metadata index refreshed.
+    pub roster_index_pending: bool,
+    /// Repair history changes only when the removed-device set grows.
+    pub health_repair_epochs: Option<(BTreeSet<String>, Vec<pigeon_proto::health::RepairEpoch>)>,
     /// When each peer was last heard of, by device ID.
     pub heard: BTreeMap<String, i64>,
     /// Direct addresses by device ID.
@@ -64,11 +70,19 @@ pub struct Known {
     /// The bytes place left to send (a laptop) or to receive (a custodian)
     /// in its last round.
     pub queue_bytes: u64,
+    /// Bounded, per-process diagnostic observations; never safety state.
+    pub telemetry_latency: pigeon_core::latency::Ledger<String>,
+    /// Current versions observed before protection, at most 4096 identities.
+    pub telemetry_unprotected: BTreeSet<String>,
+    /// One bounded immutable protection snapshot awaiting the group lock.
+    pub(crate) telemetry_protection: Option<crate::telemetry::ProtectionSample>,
     /// Every commit judged so far and the catalogue of each (05 §5.2):
     /// accept's memory, rebuilt from the genesis after a restart.
     pub engine: pigeon_core::catalogue::Engine<pigeon_core::authority::Entry>,
     /// The roster changes of the accepted commits, for the fold (`fold`).
     pub history: Option<pigeon_core::roster::History<String>>,
+    /// Immutable archive tips checked in isolated history judges.
+    pub verified_archives: BTreeSet<String>,
     /// The verdict on each judged commit that was not accepted (04 §4.4).
     pub verdicts: BTreeMap<String, pigeon_core::authority::Verdict>,
     /// The paths install lately wrote over another version: when, in
@@ -182,9 +196,28 @@ impl Group {
             k.annex_uuid = uuid;
             k.token = token;
             k.addresses = addresses;
+            k.roster_index_pending = role == Role::Laptop;
         }
         g.reload_roster().await;
         Some(g)
+    }
+
+    /// An isolated in-memory judge for archived history. Judging another
+    /// genesis must not replace the live group's roster fold or catalogue.
+    pub(crate) fn history_judge(&self, genesis: &str) -> Group {
+        Group {
+            id: genesis.to_owned(),
+            role: self.role,
+            git_dir: self.git_dir.clone(),
+            worktree: self.worktree.clone(),
+            git: self.git.clone(),
+            files: self.files.clone(),
+            known: Mutex::new(Known::default()),
+            busy: tokio::sync::Mutex::new(()),
+            daemon: tokio::sync::Mutex::new(None),
+            syncing: Arc::new(Mutex::new(BTreeMap::new())),
+            daemon_peers: Mutex::new(BTreeSet::new()),
+        }
     }
 
     /// The lock of what the loops know.

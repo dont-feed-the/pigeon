@@ -185,15 +185,18 @@ fn plurals_and_isolation() {
     let cat = Catalogue::new(&en, false);
     let one = Message::new("headline-not-safe").arg("files", 1i64);
     let three = Message::new("headline-not-safe").arg("files", 3i64);
-    assert_eq!(cat.format(&one), "1 file is not safe yet.");
-    assert_eq!(cat.format(&three), "3 files are not safe yet.");
+    assert_eq!(cat.format(&one), "1 file version is not safe yet.");
+    assert_eq!(cat.format(&three), "3 file versions are not safe yet.");
     let web = Catalogue::new(&en, true);
     let msg = Message::new("keep-result").arg("folder", "Photos");
-    assert_eq!(
-        web.format(&msg),
-        "\u{2068}Photos\u{2069} is kept on this computer."
+    assert!(
+        web.format(&msg)
+            .starts_with("\u{2068}Photos\u{2069} will be kept on this computer.")
     );
-    assert_eq!(cat.format(&msg), "Photos is kept on this computer.");
+    assert!(
+        cat.format(&msg)
+            .starts_with("Photos will be kept on this computer.")
+    );
     assert_eq!(cat.format(&Message::new("no-such-id")), "no-such-id");
 }
 
@@ -232,4 +235,26 @@ fn docs_problems_lists_every_code() {
     want.sort_unstable();
     got.sort_unstable();
     assert_eq!(got, want, "docs/problems.md lists exactly ids::PROBLEMS");
+}
+
+#[test]
+fn paper_recovery_keys_never_render_as_offline_computers() {
+    let machine = pigeon_proto::api::Machine {
+        name: "paper".into(),
+        device: "sheet".into(),
+        custodian: false,
+        recovery: true,
+        heard_at: None,
+        this_device: false,
+    };
+    for (language, expected, forbidden) in [
+        ("en", "paper recovery key", "last heard"),
+        ("fr", "clé de récupération sur papier", "entendu"),
+    ] {
+        let cat = Catalogue::new(&language.parse().unwrap(), false);
+        let r = render::Renderer::new(cat, 1_792_108_800);
+        let line = r.machine(&machine);
+        assert!(line.contains(expected), "{line}");
+        assert!(!line.contains(forbidden), "{line}");
+    }
 }

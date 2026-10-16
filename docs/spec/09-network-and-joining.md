@@ -145,19 +145,22 @@ person (ux.md §8) **[no ADR: reading]**, creates a one-time invitation:
   roster gets `-` and 6 hex digits of the device ID at step 3.
 - **Who may invite:** for a new person, an admin's device; for a new device
   of person P, an admin's device or one of P's (ADR 0017).
-- The inviter keeps the secret, its SHA-256, purpose and expiry in
+- The inviter keeps the issuing group, secret, its SHA-256, purpose and expiry in
   `invitations.json` ([11 §11.3](11-local-state.md); `invitations_round_trip`),
   readable by its user only. The hash finds the record; the secret checks
   the proof of step 2 **[no ADR: correction]** (issue #17). It is marked
-  used before the roster commit is signed. `pigeon invite --list` and
-  `--cancel` manage pending ones.
+  used by the authenticated device before the roster commit is signed.
+  A retry by that device resumes its welcome, checking current role and
+  annex UUID; another device, a removed member or another group cannot
+  redeem it. Legacy records without an issuing group must be reissued.
+  `pigeon invite --list` and `--cancel` manage pending ones.
 
 `pigeon join INVITATION [FOLDER] [--name NAME]` (Welcome → *Join a group*;
 `--name` names the computer in the roster **[no ADR]**):
 
 | # | Who | Step |
 |---|---|---|
-| 1 | new device | decodes the invitation, makes its key if it has none (§9.1) and its repository (one already in FOLDER gets a new UUID first, §9.9), and connects to the inviter on `pigeon/join/1`, retrying ("Waiting for Paul's computer…") until the invitation expires |
+| 1 | new device | decodes the invitation, makes its key if it has none (§9.1) and its repository (an existing repository can rejoin in place only under §9.9), and connects to the inviter on `pigeon/join/1`, retrying ("Waiting for Paul's computer…") until the invitation expires |
 | 2 | new device | sends `Join {v, invitation_hash, proof, device_name, role, annex_uuid, capacity?, addresses}`, with `proof = HMAC-SHA256(secret, "pigeon-join-1" ‖ new device ID ‖ inviter device ID)`, both IDs from the QUIC handshake, so a recorded exchange cannot be replayed; `addresses` let the inviter reach it before mDNS does **[no ADR]** |
 | 3 | inviter | checks proof, expiry and that it is unused, marks it used, and signs a roster commit adding the device (and the person, for `new-person`) under the authority rule ([04 §4.7](04-roster-and-authority.md)); a custodian's `maxsize` is its reported free space minus 10 %, at most that minus `annex.diskreserve` ([08 §8.9](08-custody-loops.md)) |
 | 4 | inviter | answers `Welcome {commit, annex_uuid}` (its own UUID), or a refusal that becomes a Problem ([10 §10.6](10-interfaces.md)): `P-INVITE-EXPIRED`, `P-INVITE-USED`, `invite-unknown`, `invite-not-allowed` |
@@ -244,7 +247,14 @@ tools are those of ADR 0047, which fixes their formats:
   commit adding the machine as the admin's device
   ([04 §4.3](04-roster-and-authority.md)); custodians admit the sheet's key
   for git only. The People page recommends a sheet or a second device while
-  an admin has a single signing device.
+  an admin has a single signing device. Admins can prepare the printable
+  sheet from People & machines: localized instructions, the exact text
+  code and an SVG QR of that code, on a `no-store` response. Oversized
+  sheets keep the complete text with an explicit QR fallback. Public roster
+  history identifies when all a person's sheets name older backup devices,
+  and the page recommends a replacement. A sheet is refused before adding
+  a key if no backup has joined; if no backup receives its roster commit
+  before the deadline, the unprinted key is revoked.
 - **Refounding:** `pigeon refound [REPOSITORY]` signs a new genesis with the
   last accepted tree and the refounder as only admin, keeping the old
   history replicated and its keys in `keys()`; existing folders join the new
@@ -253,18 +263,27 @@ tools are those of ADR 0047, which fixes their formats:
   Coded so far (`pigeond/src/refound.rs`, `join_in_place.rs`,
   `tests/refound.rs`): `Refound {repository?}` asks first (`confirm-refound`),
   then commits a root whose tree is `main`'s with a roster keeping the
-  group's name, K, retention, relay and folders, and only the refounder's
+  group's name, K, retention, relay and folder boundaries, and only the refounder's
   person (admin) and device, with `Pigeon-Refound: <old group> <old main>`.
   It sets `refs/pigeon/archive/<old group>/main`, forgets the old group and
   serves the repository as the new one with the same annex UUID and token.
+  Owned folders belong to the surviving person; add-only folders keep
+  only surviving stewards, with an empty set meaning the new admins.
   Peers fetch `refs/pigeon/archive/*`; a device keeps only the archive its
   genesis names, and `retention::keys` holds its keys. Invitations carry
   `refounded {from, by, at}`; `pigeon join` asks `confirm-join-refounded`,
-  and a laptop folder whose root is `from` joins in place: the old group
-  is forgotten, its `main` archived, the index takes the new tree without
-  touching the folder (absent annexed files hidden, other differences
-  captured as saves). Not yet: a backup machine joining in place, and the
-  web asking before a refounded join **[no ADR]**.
+  and a laptop folder or bare backup whose root is `from` joins in place.
+  The web requires a separate confirmation too. The welcome and signed
+  archive links are verified in a private staging repository with no
+  old local objects and no inbound annex listener. A rejected welcome
+  leaves the existing repository and configuration unchanged. After
+  validation a durable private intent lets startup finish locally across
+  crashes, without redeeming the invitation again. The old transport is
+  stopped before importing the new history. The exact signed archive tip
+  becomes canonical; other local old tips and proposals are preserved
+  under the old archive namespace. The index takes the new tree without
+  rewriting user files (absent annexed files hidden, other differences
+  captured as saves). Annex content, UUID and token are reused.
 - **Export without pigeon:** `pigeon export --to DIR [--at DATE|COMMIT]
   [--deleted] [REPOSITORY…]` needs no `pigeond`, network or key
   ([10 §10.2](10-interfaces.md)) and checks every object's SHA-256. Each
@@ -277,7 +296,16 @@ tools are those of ADR 0047, which fixes their formats:
   `annex/objects` or, for an unlocked file, its working tree; a file takes
   its name only once its SHA-256 matches the key. `--deleted` writes the
   last version of each deleted file under `.deleted/`; `MISSING.tsv` lists
-  what is missing or damaged. A backup machine writes `RECOVERY.txt` in its
+  what is missing, damaged or blocked by a destination conflict. Deleted
+  discovery follows the signed refounding chain, requiring each canonical
+  archive ref and old genesis to match the root's signed link. A broken
+  link refuses deleted-file export explicitly. This offline rescue checks
+  link signatures and content hashes; it does not run the daemon's complete
+  authority fold. Output files never replace another exported file, and
+  exported symlinks cannot become destination directories. Metadata names
+  avoid user paths under portable case folding. `history` and read-only
+  `view` also accept virtual file paths below a bare backup repository.
+  A backup machine writes `RECOVERY.txt` in its
   repository directory each round the note changes (`pigeond/src/recovery_txt.rs`).
 - **Replacing a custodian:** the failed one is removed (§9.7) and its
   replacement joins as a new device. A surviving disk gets a new UUID and
