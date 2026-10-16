@@ -7,6 +7,7 @@
 # it fails if `required`, and otherwise warns and leaves the stock git-annex
 # in use. A missing cache can be restored from a successful producer
 # artifact with matching source inputs, ancestry, digest and architecture.
+# An exact-version build unpacked by this workflow is used before the cache.
 name: pigeon's git-annex
 description: Restores the verified build of third_party/git-annex onto PATH.
 inputs:
@@ -27,7 +28,17 @@ runs:
           mkdir -p "$d" && ln -sf /usr/bin/git "$d/git"
           echo "$d" >> "$GITHUB_PATH"
         fi
+    - id: present
+      shell: bash
+      run: |
+        if [ -x ~/.cache/pigeon-git-annex-dist/bin/git-annex ]; then
+          . third_party/git-annex/VERSION
+          if [ "$(~/.cache/pigeon-git-annex-dist/bin/git-annex version --raw)" = "$PIGEON_VERSION" ]; then
+            echo hit=true >> "$GITHUB_OUTPUT"
+          fi
+        fi
     - id: restore
+      if: steps.present.outputs.hit != 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/pigeon-git-annex-dist
@@ -36,7 +47,7 @@ runs:
       shell: bash
       env:
         PIGEON_GITHUB_TOKEN: ${{ github.token }}
-        HIT: ${{ steps.restore.outputs.cache-hit }}
+        HIT: ${{ steps.present.outputs.hit == 'true' || steps.restore.outputs.cache-hit == 'true' }}
         REQUIRED: ${{ inputs.required }}
       run: |
         if [ "$HIT" != true ] && python3 scripts/restore-git-annex-build; then
