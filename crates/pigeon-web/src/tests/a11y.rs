@@ -69,7 +69,7 @@ async fn repeated_buttons_say_which_row_they_act_on() {
         "{machines}"
     );
     let suggestions = page_of(&w, "/suggestions").await;
-    for label in ["Accept", "Decline"] {
+    for label in ["Accept selected", "Decline selected"] {
         assert!(
             suggestions.contains(&format!(
                 "{label}<span class=\"visually-hidden\"> — the change of tarte.docx by Paul</span>"

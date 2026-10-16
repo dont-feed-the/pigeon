@@ -6,9 +6,12 @@
 //! later save stacked one) and `main` holds no decision on it; its deciders
 //! are recomputed on `main` each time. `pigeon decline` commits the
 //! decision `rejected` (`decision_file`), which a decider may sign; its
-//! author withdraws one with `withdrawn` (`resolve`).
+//! author withdraws one with `withdrawn` (`resolve`). Deciding some of its
+//! files is `decide_files` (ADR 0075); the list says what each file's
+//! change is (`suggestion_files`) and, to their author, how their
+//! suggestions were decided lately (`decided`).
 
-use pigeon_core::authority::{self, Deciders};
+use pigeon_core::authority::{self, Deciders, Tree};
 use pigeon_core::roster::{DeviceId, PersonId};
 use pigeon_proto::api::Suggestion;
 use pigeon_proto::{Arg, Response};
@@ -31,6 +34,10 @@ pub struct Pending {
     pub paths: Vec<String>,
     /// Its deciders on `main`.
     pub deciders: Deciders,
+    /// The tree of its base, the accepted commit it builds on.
+    pub at: Tree,
+    /// Its own tree.
+    pub tree: Tree,
 }
 
 /// The pending proposals of `g`, oldest first.
@@ -94,6 +101,8 @@ pub async fn pending(g: &Group) -> Result<Vec<Pending>, Error> {
             saved: authority::author_time(&raw).map_or(0, |t| t.0),
             deciders: authority::deciders(&doc.roster, &writers, &changes),
             paths,
+            at,
+            tree: mine,
         });
     }
     out.sort_by_key(|p| p.saved);
@@ -105,14 +114,25 @@ fn problem(code: &str, args: &[(&str, Arg)]) -> Vec<Response> {
 }
 
 /// This device's person in `g`'s roster.
-fn me(d: &Daemon, g: &Group) -> Option<PersonId> {
+pub(crate) fn me(d: &Daemon, g: &Group) -> Option<PersonId> {
     let doc = g.roster()?;
     let device = doc.roster.devices.get(&DeviceId(d.device.clone()))?;
     Some(device.person.clone())
 }
 
-/// `pigeon suggestions`.
+/// The pending suggestions, without what each file's change is: what the
+/// notices need, cheaply.
 pub async fn list(d: &Daemon) -> Vec<Response> {
+    listing(d, false).await
+}
+
+/// `pigeon suggestions`: the pending ones, with what each file's change is,
+/// and this person's own decided lately (ADR 0075).
+pub async fn list_detailed(d: &Daemon) -> Vec<Response> {
+    listing(d, true).await
+}
+
+async fn listing(d: &Daemon, detail: bool) -> Vec<Response> {
     let Some(g) = d.default_group() else {
         return problem("not-in-group", &[]);
     };
@@ -139,9 +159,14 @@ pub async fn list(d: &Daemon) -> Vec<Response> {
             .map(|x| x.name.clone())
             .unwrap_or_default()
     };
-    let proposals = pending
-        .iter()
-        .map(|p| Suggestion {
+    let mut proposals = Vec::new();
+    for p in &pending {
+        let files = if detail {
+            crate::suggestion_files::files(&g, &p.at, &p.tree).await
+        } else {
+            Vec::new()
+        };
+        proposals.push(Suggestion {
             id: p.id.clone(),
             author: name_of(&p.person),
             device: device_of(&p.device),
@@ -150,14 +175,29 @@ pub async fn list(d: &Daemon) -> Vec<Response> {
             decide: me.as_ref().is_some_and(|u| p.deciders.0.contains(u)),
             force: p.deciders.1,
             mine: p.person.is_some() && p.person == me,
-        })
-        .collect();
-    vec![Response::Proposals { proposals }]
+            files,
+        });
+    }
+    let (decided, root) = match (&me, detail) {
+        (Some(me), true) => (
+            crate::decided::outcomes(&g, me).await,
+            g.worktree
+                .as_ref()
+                .map(|w| w.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+        ),
+        _ => (Vec::new(), String::new()),
+    };
+    vec![Response::Proposals {
+        proposals,
+        decided,
+        root,
+    }]
 }
 
 /// The one pending proposal of `g` whose commit starts with `id`, which
 /// this device's person decides; else the problem to answer.
-async fn decided(d: &Daemon, g: &Group, id: &str) -> Result<Pending, Vec<Response>> {
+pub(crate) async fn decided(d: &Daemon, g: &Group, id: &str) -> Result<Pending, Vec<Response>> {
     let pending = match pending(g).await {
         Ok(p) => p,
         Err(e) => {
@@ -183,11 +223,19 @@ async fn decided(d: &Daemon, g: &Group, id: &str) -> Result<Pending, Vec<Respons
 }
 
 /// The name of the author of `p`.
-fn author(g: &Group, p: &Pending) -> String {
+pub(crate) fn author(g: &Group, p: &Pending) -> String {
     p.person
         .as_ref()
         .and_then(|u| g.roster()?.roster.persons.get(u).map(|x| x.name.clone()))
         .unwrap_or_default()
+}
+
+fn internal(e: impl ToString) -> Vec<Response> {
+    vec![crate::api::problem(
+        "internal-error",
+        &[],
+        Some(e.to_string()),
+    )]
 }
 
 /// `pigeon accept ID [--override REASON]`.
@@ -199,45 +247,46 @@ pub async fn accept(d: &Daemon, id: &str, reason: Option<&str>) -> Vec<Response>
         Ok(p) => p,
         Err(r) => return r,
     };
-    let force = match (p.deciders.1, reason) {
-        (true, None) => return problem("needs-override", &[]),
-        (true, Some(r)) => Some(r),
-        (false, _) => None,
-    };
-    let _busy = g.busy.lock().await;
-    let Some(main) = g.git.rev("refs/heads/main").await else {
-        return problem("not-in-group", &[]);
-    };
-    let adopted = match crate::merge::adopt(&g, &main, &p.id, force).await {
-        Ok(Some(c)) => c,
-        Ok(None) => return problem("not-allowed", &[]),
-        Err(e) => {
-            return vec![crate::api::problem(
-                "internal-error",
-                &[],
-                Some(e.to_string()),
-            )];
-        }
-    };
-    if let Err(e) = g
-        .git
-        .update_ref("refs/heads/main", &adopted, Some(&main))
-        .await
-    {
-        return vec![crate::api::problem(
-            "internal-error",
-            &[],
-            Some(e.to_string()),
-        )];
+    if let Err(r) = adopt_now(d, &g, &p, reason).await {
+        return r;
     }
-    tracing::info!(group = %g.id, proposal = %p.id, commit = %adopted, "suggestion-accepted");
-    drop(_busy);
-    crate::api::wake_soon(d);
     let author = author(&g, &p);
     vec![crate::api::said(
         "accepted-suggestion",
         &[("author", Arg::Text(author))],
     )]
+}
+
+/// Adopts `p` on `main` (`merge::adopt`), with Force when its deciders
+/// need it and `reason` gives why.
+pub(crate) async fn adopt_now(
+    d: &Daemon,
+    g: &Group,
+    p: &Pending,
+    reason: Option<&str>,
+) -> Result<String, Vec<Response>> {
+    let force = match (p.deciders.1, reason) {
+        (true, None) => return Err(problem("needs-override", &[])),
+        (true, Some(r)) => Some(r),
+        (false, _) => None,
+    };
+    let busy = g.busy.lock().await;
+    let Some(main) = g.git.rev("refs/heads/main").await else {
+        return Err(problem("not-in-group", &[]));
+    };
+    let adopted = match crate::merge::adopt(g, &main, &p.id, force).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return Err(problem("not-allowed", &[])),
+        Err(e) => return Err(internal(e)),
+    };
+    g.git
+        .update_ref("refs/heads/main", &adopted, Some(&main))
+        .await
+        .map_err(internal)?;
+    tracing::info!(group = %g.id, proposal = %p.id, commit = %adopted, "suggestion-accepted");
+    drop(busy);
+    crate::api::wake_soon(d);
+    Ok(adopted)
 }
 
 /// `pigeon decline ID [--note TEXT]`: commits the decision `rejected`.
@@ -249,19 +298,29 @@ pub async fn decline(d: &Daemon, id: &str, note: Option<&str>) -> Vec<Response> 
         Ok(p) => p,
         Err(r) => return r,
     };
-    let _busy = g.busy.lock().await;
-    let done = decision(&g, &p.id, authority::Decided::Rejected, note);
-    let commit = match done.await {
-        Ok(c) => c,
-        Err(e) => return vec![crate::api::problem("internal-error", &[], Some(e))],
-    };
-    tracing::info!(group = %g.id, proposal = %p.id, commit = %commit, "suggestion-declined");
-    drop(_busy);
-    crate::api::wake_soon(d);
+    if let Err(r) = decline_now(d, &g, &p, note).await {
+        return r;
+    }
     vec![crate::api::said(
         "declined-suggestion",
         &[("author", Arg::Text(author(&g, &p)))],
     )]
+}
+
+/// Commits the decision `rejected` on `p`, with `note`.
+pub(crate) async fn decline_now(
+    d: &Daemon,
+    g: &Group,
+    p: &Pending,
+    note: Option<&str>,
+) -> Result<String, Vec<Response>> {
+    let busy = g.busy.lock().await;
+    let done = decision(g, &p.id, authority::Decided::Rejected, note);
+    let commit = done.await.map_err(internal)?;
+    tracing::info!(group = %g.id, proposal = %p.id, commit = %commit, "suggestion-declined");
+    drop(busy);
+    crate::api::wake_soon(d);
+    Ok(commit)
 }
 
 /// Commits on `main` the decision `verdict` on `proposal` (04 §4.5), with
@@ -276,31 +335,14 @@ pub(crate) async fn decision(
         authority::Decided::Rejected => "pigeon: decline a suggestion",
         authority::Decided::Withdrawn => "pigeon: withdraw a suggestion",
     };
-    let doc = crate::decision_file::DecisionDoc {
-        proposal: proposal.to_owned(),
-        verdict,
-        note: note.map(str::to_owned),
-    };
     let main = g
         .git
         .rev("refs/heads/main")
         .await
         .ok_or_else(|| "no main".to_owned())?;
-    let text = crate::decision_file::render(&doc);
-    let blob = g
-        .git
-        .run_in(&["hash-object", "-w", "--stdin"], text.as_bytes())
-        .await
-        .map_err(|e| e.to_string())?;
     let mut tree = g.git.tree(&main).await.map_err(|e| e.to_string())?;
-    tree.insert(
-        authority::decision_path(proposal),
-        authority::Entry {
-            mode: "100644".to_owned(),
-            kind: "blob".to_owned(),
-            oid: blob.trim().to_owned(),
-        },
-    );
+    let (path, entry) = decision_entry(g, proposal, verdict, note).await?;
+    tree.insert(path, entry);
     let oid = crate::merge::write_tree(&g.git, &tree)
         .await
         .map_err(|e| e.to_string())?;
@@ -321,4 +363,31 @@ pub(crate) async fn decision(
         .await
         .map_err(|e| e.to_string())?;
     Ok(commit)
+}
+
+/// The path and written blob of the decision `verdict` on `proposal`, with
+/// `note` (`decision_file`).
+pub(crate) async fn decision_entry(
+    g: &Group,
+    proposal: &str,
+    verdict: authority::Decided,
+    note: Option<&str>,
+) -> Result<(String, authority::Entry), String> {
+    let doc = crate::decision_file::DecisionDoc {
+        proposal: proposal.to_owned(),
+        verdict,
+        note: note.map(str::to_owned),
+    };
+    let text = crate::decision_file::render(&doc);
+    let blob = g
+        .git
+        .run_in(&["hash-object", "-w", "--stdin"], text.as_bytes())
+        .await
+        .map_err(|e| e.to_string())?;
+    let entry = authority::Entry {
+        mode: "100644".to_owned(),
+        kind: "blob".to_owned(),
+        oid: blob.trim().to_owned(),
+    };
+    Ok((authority::decision_path(proposal), entry))
 }

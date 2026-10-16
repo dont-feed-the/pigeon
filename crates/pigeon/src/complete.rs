@@ -76,7 +76,7 @@ fn candidate(value: &str, help: String) -> CompletionCandidate {
 /// The suggestions waiting for a decision, for `accept` and `decline`.
 pub fn suggestions() -> ArgValueCandidates {
     listed(Request::Proposals, |r, answer| match answer {
-        Response::Proposals { proposals } => proposals
+        Response::Proposals { proposals, .. } => proposals
             .iter()
             .map(|p| candidate(&p.id, r.suggestion(p)))
             .collect(),

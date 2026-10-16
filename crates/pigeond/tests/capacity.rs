@@ -84,7 +84,9 @@ fn shared_keys_and_declined_suggestions_remain_visible_and_count_once() {
             let id = pigeon(&alice, &["suggestions"])
                 .into_iter()
                 .find_map(|r| match r {
-                    Response::Proposals { proposals } => proposals.first().map(|p| p.id.clone()),
+                    Response::Proposals { proposals, .. } => {
+                        proposals.first().map(|p| p.id.clone())
+                    }
                     _ => None,
                 });
             let found = id.is_some();

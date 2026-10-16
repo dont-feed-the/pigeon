@@ -93,8 +93,8 @@ cmd-restore = Restaurer une version, ou un fichier supprimé
 cmd-free = Libérer l'espace d'un dossier sur cet ordinateur
 cmd-keep = Garder un dossier sur cet ordinateur
 cmd-suggestions = Lister les suggestions qui attendent une décision
-cmd-accept = Accepter une suggestion dans les fichiers du groupe
-cmd-decline = Refuser une suggestion, en disant pourquoi si vous voulez
+cmd-accept = Accepter une suggestion dans les fichiers du groupe ; nommez des fichiers pour n’accepter qu’eux et refuser les autres
+cmd-decline = Refuser une suggestion, en disant pourquoi si vous voulez ; nommez des fichiers pour ne refuser qu’eux et accepter les autres
 cmd-conflicts = Lister vos fichiers qui diffèrent de la version du groupe
 cmd-resolve = Choisir pour un fichier qui diffère : la version du groupe, la vôtre en copie, ou la suggérer à nouveau
 cmd-remove-computer = Retirer du groupe un ordinateur perdu ou mis à la retraite
@@ -124,6 +124,56 @@ suggestion-other = { $id }  { $author } suggère une modification de { $paths },
 suggestion-yours = { $id }  Votre modification de { $paths }, enregistrée { $saved }, attend une décision.
 accepted-suggestion = La suggestion de { $author } est maintenant dans les fichiers du groupe.
 declined-suggestion = La suggestion de { $author } est refusée ; la personne sera prévenue.
+decided-all-accepted =
+    { $count ->
+        [one] Vous avez accepté la modification de { $author } ({ $paths }). Nous préviendrons { $author }.
+       *[other] Vous avez accepté les { $count } modifications de { $author } ({ $paths }). Nous préviendrons { $author }.
+    }
+decided-all-declined =
+    { $count ->
+        [one] Vous avez refusé la modification de { $author } ({ $paths }). Nous préviendrons { $author }.
+       *[other] Vous avez refusé les { $count } modifications de { $author } ({ $paths }). Nous préviendrons { $author }.
+    }
+decided-some = Vous avez accepté { $accepted } des modifications de { $author } ({ $accepted-paths }) et refusé { $declined } ({ $declined-paths }). Nous préviendrons { $author }.
+suggestion-file-added = { $path } : nouveau fichier, { $after }
+suggestion-file-changed = { $path } : modifié, { $before } → { $after }
+suggestion-file-changed-lines =
+    { $path } : modifié, { $before } → { $after }, { $added ->
+        [one] { $added } ligne ajoutée
+       *[other] { $added } lignes ajoutées
+    } et { $removed ->
+        [one] { $removed } retirée
+       *[other] { $removed } retirées
+    }
+suggestion-file-deleted = { $path } : supprimé (il faisait { $before })
+suggestion-file-renamed = { $path } : renommé, il s’appelait { $from } ; contenu inchangé ({ $after })
+suggestion-files-hint = Pour n’accepter que certains fichiers et refuser les autres : pigeon accept { $id } FICHIER…
+suggestion-outcome-accepted =
+    { $count ->
+        [one] { $by } a accepté votre modification ({ $paths }), { $when }.
+       *[other] { $by } a accepté vos { $count } modifications ({ $paths }), { $when }.
+    }
+suggestion-outcome-declined =
+    { $count ->
+        [one] { $by } a refusé votre modification ({ $paths }), { $when }.
+       *[other] { $by } a refusé vos { $count } modifications ({ $paths }), { $when }.
+    }
+suggestion-outcome-some = { $by } a accepté { $accepted } de vos modifications ({ $accepted-paths }) et en a refusé { $declined } ({ $declined-paths }), { $when }.
+suggestion-outcome-someone = Quelqu’un
+suggestion-outcome-note = Note de { $by } : « { $note } »
+suggestion-outcome-kept = Les fichiers refusés restent tels que vous les avez enregistrés sur cet ordinateur ; personne d’autre n’a votre version.
+file-size =
+    { $unit ->
+        [kb] { $amount } Ko
+        [mb] { $amount } Mo
+       *[gb] { $amount } Go
+    }
+file-size-bytes =
+    { $bytes ->
+        [one] { $bytes } octet
+       *[other] { $bytes } octets
+    }
+decimal-separator = ,
 conflicts-none = Chaque fichier ici est la version du groupe.
 conflict-waiting = { $path } : votre suggestion attend une décision.
 conflict-choose = { $path } : votre version diffère de celle du groupe. Choisissez avec : pigeon resolve
@@ -230,6 +280,10 @@ problem-not-in-group = Cet ordinateur n'est pas membre du groupe.
 problem-not-allowed = Vous n'avez pas le droit de faire cela dans ce groupe.
 problem-suggestion-unknown = Aucune suggestion en attente ne s'appelle { $id }.
 hint-suggestion-unknown = Voyez-les avec : pigeon suggestions
+problem-suggestion-file-unknown = { $path } ne fait pas partie des fichiers de cette suggestion.
+hint-suggestion-file-unknown = Voyez ses fichiers avec : pigeon suggestions
+problem-no-files-chosen = Choisissez au moins un fichier de la suggestion.
+hint-no-files-chosen = Voyez ses fichiers avec : pigeon suggestions
 problem-not-diverging = { $path } est déjà la version du groupe.
 hint-not-diverging = Voyez les fichiers qui diffèrent avec : pigeon conflicts
 problem-changed-since = { $path } a été enregistré de nouveau depuis ; rien n'a été remplacé.
@@ -291,10 +345,30 @@ web-suggestion-other = { $author } suggère une modification de { $paths }, enre
 web-suggestion-yours = Votre modification de { $paths }, enregistrée { $saved }, attend une décision.
 web-suggestion-label = la modification de { $paths } par { $author }
 web-accept = Accepter
-web-override-reason = Raison de la dérogation administrateur
+web-override-reason = Pourquoi vous l’acceptez quand même (obligatoire)
 web-managed-client = Voici le pair Pigeon de votre appareil sur la passerelle. Choisissez les fichiers à garder hors ligne dans votre application Nextcloud.
 web-decline = Refuser
 web-decline-note = Pourquoi (facultatif)
+web-suggestions-for-you = À vous de décider
+web-suggestions-yours = Vos suggestions
+web-suggestions-others = À quelqu’un d’autre de décider
+web-suggestions-decided = Vos suggestions décidées récemment
+web-suggestion-files = Fichiers de cette suggestion
+web-suggestion-choose = Tous les fichiers sont sélectionnés. « Accepter la sélection » accepte les fichiers sélectionnés et refuse les autres ; « Refuser la sélection » refuse les fichiers sélectionnés et accepte les autres.
+web-review-file = Examiner { $path }
+web-accept-selected = Accepter la sélection
+web-decline-selected = Refuser la sélection
+web-note-for = Note pour { $author } sur les fichiers refusés (facultatif)
+web-decide-all = { $count } suggestions vous attendent. Pour toutes les décider d’un coup, avec tous leurs fichiers :
+web-accept-all = Tout accepter
+web-decline-all = Tout refuser
+web-decided-all =
+    { $count ->
+        [one] Vous avez décidé { $count } suggestion.
+       *[other] Vous avez décidé { $count } suggestions.
+    }
+web-decide-all-skipped = La suggestion de { $author } modifie quelque chose que personne ne peut normalement modifier : un administrateur peut quand même l’accepter, en disant pourquoi. Décidez-la à part.
+web-file-suggestion-waiting = Votre modification de ce fichier, enregistrée { $saved }, attend une décision. En attendant, les autres gardent la version du groupe.
 web-back = Retour
 web-form-expired = Cette page n'est plus à jour. Rechargez-la et réessayez.
 web-nav-files = Fichiers

@@ -145,3 +145,4 @@ passes; 16 §16.3 lists where each rule now lives.
 | [0072](0072-capture-records-renames-and-the-merge-follows-them.md) | Capture records renames, and the merge follows them | Accepted |
 | [0073](0073-parameterized-proofs-complement-model-checking.md) | Parameterized safety proofs complement model checking | Proposed |
 | [0074](0074-mount-the-peer-ui-behind-bridge-authorization.md) | Mount the peer UI behind bridge authorization | Proposed |
+| [0075](0075-a-suggestion-is-decided-file-by-file-in-one-decision.md) | A suggestion is decided file by file, in one decision | Proposed |

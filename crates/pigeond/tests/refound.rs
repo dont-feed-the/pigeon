@@ -121,7 +121,7 @@ fn a_member_refounds_the_group_in_place() {
         pigeon(&a1, &["suggestions"])
             .into_iter()
             .find_map(|r| match r {
-                Response::Proposals { proposals } => Some(proposals),
+                Response::Proposals { proposals, .. } => Some(proposals),
                 _ => None,
             })
             .unwrap_or_default()

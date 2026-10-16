@@ -363,13 +363,19 @@ impl Renderer {
             Response::History { versions } => {
                 (versions.iter().map(|v| self.version(v)).collect(), false)
             }
-            Response::Proposals { proposals } if proposals.is_empty() => {
-                (vec![self.id("suggestions-none")], false)
+            Response::Proposals {
+                proposals, decided, ..
+            } => {
+                let mut lines: Vec<String> = proposals
+                    .iter()
+                    .flat_map(|p| self.suggestion_lines(p))
+                    .collect();
+                if proposals.is_empty() {
+                    lines.push(self.id("suggestions-none"));
+                }
+                lines.extend(decided.iter().flat_map(|o| self.outcome(o)));
+                (lines, false)
             }
-            Response::Proposals { proposals } => (
-                proposals.iter().map(|p| self.suggestion(p)).collect(),
-                false,
-            ),
             Response::Conflicts { conflicts } if conflicts.is_empty() => {
                 (vec![self.id("conflicts-none")], false)
             }

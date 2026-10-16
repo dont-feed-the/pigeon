@@ -9,8 +9,9 @@ use std::collections::BTreeMap;
 use hegel::TestCase;
 use hegel::generators as gs;
 use pigeon_proto::api::{
-    Choice, DeletedFile, Divergence, FileEntry, Folder, HeldChoice, HeldEntry, InvitationEntry,
-    Level, Machine, PersonEntry, Setting, State, StatusReport, Suggestion, VersionStatus,
+    Choice, DeletedFile, Divergence, FileChange, FileEntry, Folder, HeldChoice, HeldEntry,
+    InvitationEntry, Level, Machine, Outcome, PersonEntry, Setting, State, StatusReport,
+    SuggestedFile, Suggestion, VersionStatus,
 };
 use pigeon_proto::stream::{Refusal, StreamAnswer, StreamHeader};
 use pigeon_proto::{Arg, Envelope, LineDecoder, Message, Problem, Request, Response, encode};
@@ -160,6 +161,15 @@ fn request(tc: &TestCase) -> Request {
         20 => Request::Reject {
             proposal: text(tc),
             note: maybe_text(tc),
+        },
+        17 => Request::DecideFiles {
+            proposal: text(tc),
+            paths: (0..tc.draw(gs::integers::<u8>().max_value(3)))
+                .map(|_| text(tc))
+                .collect(),
+            accept: flag(tc),
+            note: maybe_text(tc),
+            reason: maybe_text(tc),
         },
         21 => Request::Conflicts,
         22 => Request::Resolve {
@@ -327,8 +337,36 @@ fn response(tc: &TestCase) -> Response {
                     decide: flag(tc),
                     force: flag(tc),
                     mine: flag(tc),
+                    files: (0..tc.draw(gs::integers::<u8>().max_value(2)))
+                        .map(|_| SuggestedFile {
+                            path: text(tc),
+                            change: match tc.draw(gs::integers::<u8>().max_value(3)) {
+                                0 => FileChange::Added,
+                                1 => FileChange::Changed,
+                                2 => FileChange::Deleted,
+                                _ => FileChange::Renamed,
+                            },
+                            from: maybe_text(tc),
+                            before: flag(tc).then_some(7),
+                            after: flag(tc).then_some(1_234_567),
+                            lines: flag(tc).then_some((3, 1)),
+                        })
+                        .collect(),
                 })
                 .collect(),
+            decided: (0..tc.draw(gs::integers::<u8>().max_value(2)))
+                .map(|_| Outcome {
+                    id: text(tc),
+                    by: text(tc),
+                    decided_at: text(tc),
+                    accepted: vec![text(tc)],
+                    declined: (0..tc.draw(gs::integers::<u8>().max_value(2)))
+                        .map(|_| text(tc))
+                        .collect(),
+                    note: maybe_text(tc),
+                })
+                .collect(),
+            root: text(tc),
         },
         11 => Response::Conflicts {
             conflicts: (0..tc.draw(gs::integers::<u8>().max_value(3)))

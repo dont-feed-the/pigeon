@@ -40,6 +40,7 @@ mod recovery;
 mod render;
 mod settings;
 mod space;
+mod suggestions;
 mod view;
 
 use render::Renderer;
@@ -208,7 +209,7 @@ impl Web {
             .route("/machines/recovery-sheet", post(recovery::sheet))
             .route("/machines/invite", post(machines::invite))
             .route("/machines/cancel-invitation", post(machines::cancel))
-            .route("/suggestions", get(pages::suggestions))
+            .route("/suggestions", get(suggestions::page_of))
             .route("/events", get(pages::events))
             .route("/files", get(files::files))
             .route("/space", get(space::page))
@@ -231,7 +232,9 @@ impl Web {
             .route("/files/view", post(view::view))
             .route("/suggestions/view", post(view::view))
             .route("/suggestions/accept", post(actions::accept))
-            .route("/suggestions/decline", post(actions::decline));
+            .route("/suggestions/decline", post(actions::decline))
+            .route("/suggestions/decide", post(suggestions::decide))
+            .route("/suggestions/all", post(suggestions::all));
         let routes = if self.mount.as_ref().is_none_or(|m| m.storage_controls) {
             routes
                 .route("/files/keep", post(actions::keep))

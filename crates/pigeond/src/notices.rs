@@ -59,7 +59,7 @@ async fn situation(d: &Daemon, now: i64) -> Option<Situation> {
     let not_safe_long = (!old.is_empty()).then(|| fingerprint(old.iter().map(String::as_str)));
     let mut waiting: Vec<String> = Vec::new();
     for r in crate::decide::list(d).await {
-        if let Response::Proposals { proposals } = r {
+        if let Response::Proposals { proposals, .. } = r {
             waiting.extend(
                 proposals
                     .into_iter()

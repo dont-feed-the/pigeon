@@ -103,9 +103,9 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
     eventually_within(
         60,
         || {
-            pigeon(&bob, &["suggestions"])
-                .iter()
-                .any(|r| matches!(r, Response::Proposals { proposals } if !proposals.is_empty()))
+            pigeon(&bob, &["suggestions"]).iter().any(
+                |r| matches!(r, Response::Proposals { proposals, .. } if !proposals.is_empty()),
+            )
         },
         "ordinary change not suggested",
         &[&lap, &bob],

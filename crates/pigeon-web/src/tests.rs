@@ -29,6 +29,8 @@ mod people;
 mod recovery;
 #[path = "tests/setup.rs"]
 mod setup;
+#[path = "tests/suggestions.rs"]
+mod suggestions;
 #[path = "tests/usability.rs"]
 mod usability;
 
@@ -79,7 +81,10 @@ impl Backend for Fixed {
                     decide: true,
                     force: false,
                     mine: false,
+                    files: Vec::new(),
                 }],
+                decided: Vec::new(),
+                root: String::new(),
             }],
             pigeon_proto::Request::Reject { proposal, note } => vec![Response::Said {
                 message: Message {

@@ -87,7 +87,10 @@ impl Backend for Review {
                     decide: true,
                     force: true,
                     mine: true,
+                    files: Vec::new(),
                 }],
+                decided: Vec::new(),
+                root: String::new(),
             },
             _ => Response::Done,
         };

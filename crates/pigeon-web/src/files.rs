@@ -245,9 +245,11 @@ pub async fn file_page(
     } else {
         "web-version-current"
     });
+    let suggested = crate::suggestions::on_file(&web, &r, &at.path).await;
     let body = html! {
         (list(&other))
         @if let Some(differs) = differs { (differs) }
+        (suggested)
         h2 { (r.id("web-versions")) }
         @for v in &rows {
             (version(&r, &at.path, v, (Some(v.number) == newest).then_some(current.as_str()), &form.0))

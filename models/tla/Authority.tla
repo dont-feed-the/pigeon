@@ -1,6 +1,8 @@
 ------------------------------ MODULE Authority ------------------------------
 (* Acceptance of commits, proposals and decisions, and the removal of a device
-   (spec 04 §4.3-4.5, 09 §9.7; ADRs 0009 and 0051).
+   (spec 04 §4.3-4.5, 09 §9.7; ADRs 0009, 0051 and 0075). With "part" in
+   Ops, a later save may add another file to a proposal, and a decider may
+   decide some of its files: accept them and reject the rest in one commit.
    Persons 1 = a (the admin), 2 = b (owner of folder F), 3 = c (a member).
    Device i is person i's; device 4 is a fresh key that c may add. Devices 1
    and 2 are honest pigeonds. With Hostile, devices 3 and 4 belong to an
@@ -226,7 +228,8 @@ Capture(d, q, del) ==
                   {}, {}, FALSE, x))
 Revise(d, p, q) ==
   /\ "revise" \in Ops /\ Room
-  /\ p \in has[d] /\ IsProposal(p) /\ cm[p].signer = d /\ q \in PDiff(p) /\ State(p, d) = "pending"
+  /\ p \in has[d] /\ IsProposal(p) /\ cm[p].signer = d /\ State(p, d) = "pending"
+  /\ q \in PDiff(p) \/ "part" \in Ops     \* with "part", a later save of another file
   /\ Write(d, New({p}, d, "propose", Overlay(cm[p].tree, {<<q, {Len(cm) + 1}>>}), {}, {}, FALSE,
                   cm[p].cbase))
 Pending(d, p) == /\ p \in has[d] /\ IsProposal(p) /\ State(p, d) = "pending"
@@ -244,6 +247,16 @@ Decide(d, p, v) ==
   /\ v \in Ops /\ Room /\ Pending(d, p)
   /\ IF v = "rejected" THEN d \in Deciders(p, x) ELSE d = Author(p)
   /\ Write(d, New({x}, d, v, cm[x].tree, {[p |-> p, v |-> v]}, {}, FALSE, x))
+(* A decision on some files Q of p (ADR 0075): one commit on main, not a
+   merge, that holds the change of Q as the adoption makes it, keeps main's
+   version elsewhere, and rejects p; Force as for the adoption. *)
+PartTree(x, p, Q) == [q \in CPaths |-> IF q \in Q THEN AdoptTree(x, p)[q] ELSE cm[x].tree[q]]
+Part(d, p, Q) ==
+  LET x == head[d] IN
+  /\ "part" \in Ops /\ Room /\ Pending(d, p) /\ d \in Deciders(p, x)
+  /\ Q # {} /\ Q \subseteq PDiff(p) /\ Q # PDiff(p)
+  /\ Write(d, New({x}, d, "part", PartTree(x, p, Q), {[p |-> p, v |-> "rejected"]}, {},
+                  ForceAdopt /\ NeedsForce(d, x, p) /\ d \in R(x).adm, x))
 Transfer(d, o) ==
   LET x == head[d] IN
   /\ "transfer" \in Ops /\ Room /\ d \in R(x).adm /\ o # R(x).own
@@ -305,6 +318,7 @@ Next ==
        \/ \E q \in CPaths, del \in BOOLEAN : Capture(d, q, del)
        \/ \E p \in Ids, q \in CPaths : Revise(d, p, q)
        \/ \E p \in Ids : Adopt(d, p) \/ Decide(d, p, "rejected") \/ Decide(d, p, "withdrawn")
+       \/ \E p \in Ids, Q \in SUBSET CPaths : Part(d, p, Q)
        \/ \E o \in Persons : Transfer(d, o)
        \/ Remove(d)
        \/ \E y \in Ids : Merge(d, y)
@@ -376,6 +390,9 @@ RemovalRevokesAdded ==
    history, and an honest merge is accepted. *)
 TreeIsCatalogue == (cm[L].acc /\ cm[L].signer \in Honest) => cm[L].tree = TreeOf({L})
 HonestMergesAccepted == (cm[L].kind = "merge") => cm[L].acc
+(* A decider's decision on some files is always accepted (ADR 0075), so
+   the files it accepts reach main by an authorised change. *)
+PartsAccepted == (cm[L].kind = "part") => cm[L].acc
 
 (* For reading counterexamples (ALIAS View): the newest commit, heads, views. *)
 View == [new |-> [id |-> L, kind |-> cm[L].kind, signer |-> cm[L].signer,
