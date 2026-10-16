@@ -9,6 +9,13 @@ increments the second number, and every other release the third.
 
 ### Added
 
+- In a per-person folder, a computer no longer keeps other people's
+  folders unless its person chooses to: Laurent's laptop gets `src/laurent`
+  but not `src/robin`, and the folder of someone who joins later arrives
+  nowhere unasked. `pigeon keep ~/Group/src/robin` brings one to this
+  computer, `pigeon free` sends it away again, and `pigeon sync` lists every
+  folder with whether it is on this computer and why;
+  `pigeon sync PATH --default` returns a folder to its default.
 - Review the exact versions covered by `pigeon erase PATH` or
   `pigeon erase --suggestion ID`, including content still needed elsewhere.
   The command and web pages show preparation, confirmation, waiting backup
@@ -75,7 +82,6 @@ increments the second number, and every other release the third.
   group to newer rules: pigeon lists the other computers with the pigeon
   they last reported and asks first, as a computer running an older pigeon
   waits for the group's changes until it is updated.
-
 ### Changed
 
 - A computer is now in one group only. `pigeon create`, `pigeon join` and

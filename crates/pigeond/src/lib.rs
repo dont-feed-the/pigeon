@@ -95,6 +95,7 @@ mod shared_pool;
 mod shared_rpc;
 pub mod status;
 pub mod suggest;
+pub mod sync;
 pub mod telemetry;
 pub mod thin;
 pub mod trace;

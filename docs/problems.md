@@ -51,7 +51,7 @@ are in `crates/pigeon-i18n/i18n/en/pigeon.ftl`; `{ $x }` is an argument.
 | `not-installed` | `P-NOT-INSTALLED` | This pigeon was not installed from a release, so it cannot update itself. | Install a release with: curl -fsSL https://github.com/mariogeiger/pigeon/releases/latest/download/pigeon-install \| sh | `pigeon update` finds no `pigeon-install` beside `pigeon` | [14](spec/14-platforms-and-packaging.md) |
 | `git-annex-too-old` | `P-GIT-ANNEX-TOO-OLD` | git-annex { $found } is too old; pigeon needs { $minimum } or newer. | — | `doctor`: git-annex below the minimum | [14 §14.3](spec/14-platforms-and-packaging.md) |
 | `git-annex-untested` | `P-GIT-ANNEX-UNTESTED` | git-annex { $found } is newer than the versions pigeon was tested with. | — | `doctor`: git-annex newer than CI tests | ADR 0048 |
-| `update-needed` | `P-UPDATE-NEEDED` | The group uses a newer pigeon. Update pigeon on this computer. | — | git below the minimum, or the group runs rules this release does not know | ADR 0048 |
+| `update-needed` | `P-UPDATE-NEEDED` | The group uses a newer pigeon. Update pigeon on this computer. | — | git below the minimum, or the group runs rules this release does not know, a join included: its history then cannot be verified here | ADR 0048 |
 | `pigeon-too-old` | `P-PIGEON-TOO-OLD` | This pigeon is too old for the group. | — | local files newer than this release | ADR 0036, ADR 0048 |
 | `peer-too-old` | `P-PEER-TOO-OLD` | { $peer } runs a pigeon too old for the group. | — | a peer speaks no protocol version in common, older | ADR 0048 |
 | `peer-too-new` | `P-PEER-TOO-NEW` | { $peer } runs a newer pigeon that this one can't follow. | — | … newer | ADR 0048 |

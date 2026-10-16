@@ -396,6 +396,31 @@ impl Renderer {
             Response::Folders { folders, .. } => {
                 (folders.iter().map(|f| self.folder(f)).collect(), false)
             }
+            Response::Sync { folders, .. } if folders.is_empty() => {
+                (vec![self.id("sync-none")], false)
+            }
+            Response::Sync { folders, .. } => (
+                folders
+                    .iter()
+                    .map(|f| {
+                        let id = if f.kept { "sync-kept" } else { "sync-not-kept" };
+                        let mut line = self
+                            .cat
+                            .format(&crate::Message::new(id).arg("folder", f.path.clone()));
+                        if f.chosen {
+                            line.push(' ');
+                            line.push_str(&self.id("sync-chosen"));
+                        } else if let Some(owner) = &f.others {
+                            line.push(' ');
+                            line.push_str(&self.cat.format(
+                                &crate::Message::new("sync-others").arg("owner", owner.clone()),
+                            ));
+                        }
+                        line
+                    })
+                    .collect(),
+                false,
+            ),
             Response::Files { files, .. } if files.is_empty() => {
                 (vec![self.id("files-none")], false)
             }

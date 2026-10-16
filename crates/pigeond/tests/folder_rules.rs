@@ -270,8 +270,9 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
 
 /// A per-person folder (04 §4.3, rules 2): setting it raises the group's
 /// rules once the admin confirms; then each person's folder in it is
-/// theirs, so Bob's files in `src/bob` are shared and his file in Ana's
-/// `src/ana` waits as a suggestion.
+/// theirs, so Bob's files in `src/bob` are accepted and his file in Ana's
+/// `src/ana` waits as a suggestion. Ana's laptop does not keep Bob's folder
+/// until she chooses to (08 §8.5).
 #[test]
 fn a_per_person_folder_gives_each_person_theirs() {
     let _one = SERIAL
@@ -348,14 +349,53 @@ fn a_per_person_folder_gives_each_person_theirs() {
         &[&lap, &bob],
     );
 
+    let synced = |d: &Daemon| -> Vec<pigeon_proto::api::SyncFolder> {
+        pigeon(d, &["sync"])
+            .into_iter()
+            .find_map(|r| match r {
+                Response::Sync { folders, .. } => Some(folders),
+                _ => None,
+            })
+            .unwrap_or_default()
+    };
+    let folders = synced(&lap);
+    let bobs = folders.iter().find(|f| f.path == "src/bob");
+    assert!(
+        bobs.is_some_and(|f| !f.kept && !f.chosen && f.others.as_deref() == Some("Bob")),
+        "{folders:?}"
+    );
+    assert!(
+        folders.iter().any(|f| f.path == "src/ana" && f.kept),
+        "{folders:?}"
+    );
+
     std::fs::create_dir_all(other.join("src/bob")).unwrap();
     std::fs::write(other.join("src/bob/shot.txt"), b"Bob's shot\n").unwrap();
     std::fs::write(other.join("src/ana/bob.txt"), b"Bob in Ana's folder\n").unwrap();
+    let shot = src.join("bob/shot.txt");
     eventually_within(
         120,
-        || std::fs::read(src.join("bob/shot.txt")).is_ok_and(|b| b == b"Bob's shot\n"),
-        "Bob's own file not shared",
+        || {
+            pigeon(&lap, &["history", shot.to_str().unwrap()])
+                .iter()
+                .any(|r| matches!(r, Response::History { versions } if !versions.is_empty()))
+        },
+        "Bob's own file not accepted",
         &[&lap, &bob],
+    );
+    assert!(!shot.exists(), "Ana's laptop got Bob's folder unasked");
+    let kept = pigeon(&lap, &["keep", src.join("bob").to_str().unwrap()]);
+    assert!(said(&kept, "keep-result", "folder").is_some(), "{kept:?}");
+    eventually_within(
+        120,
+        || std::fs::read(&shot).is_ok_and(|b| b == b"Bob's shot\n"),
+        "Bob's folder not kept once chosen",
+        &[&lap, &bob],
+    );
+    assert!(
+        synced(&lap)
+            .iter()
+            .any(|f| f.path == "src/bob" && f.kept && f.chosen)
     );
     eventually_within(
         120,
@@ -371,4 +411,19 @@ fn a_per_person_folder_gives_each_person_theirs() {
         !src.join("ana/bob.txt").exists(),
         "Bob changed Ana's folder"
     );
+
+    // A backup machine keeps everyone's folder; none is someone else's.
+    let vault = start(&root, sockets.path(), "vault");
+    join(&lap, &vault, &[&lap, &bob, &vault]);
+    eventually_within(
+        90,
+        || {
+            synced(&vault)
+                .iter()
+                .any(|f| f.path == "src/bob" && f.kept && f.others.is_none())
+        },
+        "the backup machine lists Bob's folder as not kept",
+        &[&lap, &bob, &vault],
+    );
+    assert!(synced(&vault).iter().all(|f| f.kept && f.others.is_none()));
 }

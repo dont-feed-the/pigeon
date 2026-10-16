@@ -84,6 +84,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
         "erase [PATH | --suggestion ID | --cancel ID] [--preview | --prepare]",
         "cmd-erase",
     ),
+    ("sync [PATH] [--default]", "cmd-sync"),
     ("suggestions", "cmd-suggestions"),
     ("accept ID [--override REASON]", "cmd-accept"),
     ("decline ID [--note TEXT]", "cmd-decline"),
@@ -296,6 +297,12 @@ enum Command {
     Keep {
         #[arg(value_hint = ValueHint::AnyPath)]
         path: String,
+    },
+    Sync {
+        #[arg(value_hint = ValueHint::DirPath)]
+        path: Option<String>,
+        #[arg(long = "default", requires = "path")]
+        default: bool,
     },
     RemoveComputer {
         #[arg(add = complete::machines())]
@@ -583,6 +590,15 @@ fn action(c: Command) -> Action {
         }),
         Command::Keep { path } => send(Request::Keep {
             folder: absolute(&path),
+        }),
+        Command::Sync {
+            path: Some(path),
+            default: true,
+        } => send(Request::ForgetChoice {
+            folder: absolute(&path),
+        }),
+        Command::Sync { path, .. } => send(Request::Sync {
+            folder: path.map(|p| absolute(&p)),
         }),
         Command::RemoveComputer { name } => send(Request::RemoveDevice { name }),
         Command::RecoverySheet => send(Request::RecoverySheet),

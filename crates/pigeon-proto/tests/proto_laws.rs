@@ -28,7 +28,11 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(47)) {
+    match tc.draw(gs::integers::<u8>().max_value(49)) {
+        49 => Request::ForgetChoice { folder: text(tc) },
+        48 => Request::Sync {
+            folder: tc.draw(gs::booleans()).then(|| text(tc)),
+        },
         47 => Request::RemoveDeviceId { device: text(tc) },
         46 => Request::Capacity,
         45 => Request::ViewSuggestion {
@@ -208,7 +212,18 @@ fn version(tc: &TestCase) -> VersionStatus {
 }
 
 fn response(tc: &TestCase) -> Response {
-    match tc.draw(gs::integers::<u8>().max_value(20)) {
+    match tc.draw(gs::integers::<u8>().max_value(21)) {
+        21 => Response::Sync {
+            root: text(tc),
+            folders: (0..tc.draw(gs::integers::<u8>().max_value(3)))
+                .map(|_| pigeon_proto::api::SyncFolder {
+                    path: text(tc),
+                    kept: tc.draw(gs::booleans()),
+                    chosen: tc.draw(gs::booleans()),
+                    others: tc.draw(gs::booleans()).then(|| text(tc)),
+                })
+                .collect(),
+        },
         20 => Response::FolderRules(Box::new(pigeon_proto::policy::Report {
             root: text(tc),
             rules: Vec::new(),
