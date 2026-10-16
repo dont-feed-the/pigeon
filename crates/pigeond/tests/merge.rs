@@ -24,6 +24,9 @@ use pigeond::group::Group;
 use pigeond::roster_file::{self, RosterDoc};
 use pigeond::{merge, verify};
 
+#[path = "merge/fetch_progress.rs"]
+mod fetch_progress;
+
 const T0: i64 = 1_791_892_800;
 
 fn key(i: u8) -> [u8; 32] {

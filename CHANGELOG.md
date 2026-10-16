@@ -37,6 +37,11 @@ increments the second number, and every other release the third.
 - `pigeon update` updates the installation it belongs to, wherever it is.
   On a backup machine, `sudo /opt/pigeon/bin/pigeon update` now works too.
 
+### Fixed
+
+- A slow or unavailable computer no longer delays accepting new versions
+  from the group’s reachable computers.
+
 ### Removed
 
 - The Homebrew tap. On a Mac installed with Homebrew, run

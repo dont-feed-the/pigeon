@@ -68,6 +68,7 @@ pub fn name(records: &mut [Value], name: impl Fn(Kind, &str) -> Option<String>) 
             ("resourceMetrics", "scopeMetrics", "metrics"),
             ("resourceSpans", "scopeSpans", "spans"),
         ] {
+            let spans = items == "spans";
             let Some(resources) = record.get_mut(resources).and_then(Value::as_array_mut) else {
                 continue;
             };
@@ -76,16 +77,20 @@ pub fn name(records: &mut [Value], name: impl Fn(Kind, &str) -> Option<String>) 
                     .as_array()
                     .and_then(|a| text(a, "pigeon.device"))
                     .and_then(|id| name(Kind::Device, id));
-                if r["resource"].is_object()
-                    && let Some(attrs) = attributes(&mut r["resource"])
+                if let Some(resource) = r.get_mut("resource").filter(|v| v.is_object())
+                    && let Some(attrs) = attributes(resource)
                 {
                     label(attrs, &[], &name);
                 }
                 let extra: Vec<(&str, String)> =
                     sender.into_iter().map(|s| ("device_name", s)).collect();
-                for scope in r[scopes].as_array_mut().into_iter().flatten() {
-                    for item in scope[items].as_array_mut().into_iter().flatten() {
-                        if items == "spans" {
+                // `get_mut`, never `value[key]`, which inserts a missing key
+                // and would give a metric every data kind.
+                let scopes = r.get_mut(scopes).and_then(Value::as_array_mut);
+                for scope in scopes.into_iter().flatten() {
+                    let items = scope.get_mut(items).and_then(Value::as_array_mut);
+                    for item in items.into_iter().flatten() {
+                        if spans {
                             if let Some(attrs) = attributes(item) {
                                 label(attrs, &extra, &name);
                             }
@@ -98,11 +103,11 @@ pub fn name(records: &mut [Value], name: impl Fn(Kind, &str) -> Option<String>) 
                             "exponentialHistogram",
                             "summary",
                         ] {
-                            for point in item[kind]["dataPoints"]
-                                .as_array_mut()
-                                .into_iter()
-                                .flatten()
-                            {
+                            let points = item
+                                .get_mut(kind)
+                                .and_then(|k| k.get_mut("dataPoints"))
+                                .and_then(Value::as_array_mut);
+                            for point in points.into_iter().flatten() {
                                 if let Some(attrs) = attributes(point) {
                                     label(attrs, &extra, &name);
                                 }
@@ -166,6 +171,12 @@ mod tests {
         assert_eq!(get(point, "group_name"), Some("48hfp-2026-anim"));
         assert_eq!(get(point, "device_name"), Some("rtx"));
         assert_eq!(get(point, "peer"), Some("d2"), "IDs stay");
+        let sum = r["scopeMetrics"][0]["metrics"][0].as_object().unwrap();
+        assert_eq!(
+            sum.keys().collect::<Vec<_>>(),
+            ["name", "sum"],
+            "naming adds no data kind or key to a metric"
+        );
         let other = &r["scopeMetrics"][0]["metrics"][1]["gauge"]["dataPoints"][0]["attributes"];
         assert_eq!(
             get(other, "peer_name"),
