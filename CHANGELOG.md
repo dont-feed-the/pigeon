@@ -103,6 +103,10 @@ Milestone M3, reach and installation, with early M4 usability fixes
 - `pigeon open` starts the personal daemon when it is stopped. Settings
   confirmations use translated labels and explain when safety checks age.
 
+- Releases and checks can recover the exact tested git-annex dependency
+  archive when GitHub evicts its cache, after checking its source, producer,
+  digest, architecture and version.
+
 ## 0.3.5 — 2026-10-16
 
 ### Fixed
