@@ -12,7 +12,11 @@
 name: lab
 
 on:
+  # Quick and Rust-free: part of the pull-request tier.
   push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
   workflow_dispatch:
 
 permissions:

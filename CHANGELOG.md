@@ -4,6 +4,18 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.3.7 — 2026-10-16
+
+### Changed
+
+- Checks of a pull request take about ten minutes instead of 35: pigeond's
+  daemon tests and the fast TLA+ models run in parallel shards, and the
+  lab experiments join them. A push to main also runs the safety slice
+  without its S9 crash schedules; release tags and a nightly run, skipped
+  when main has not moved, run the full models and the S9 schedules.
+- Only main saves build caches, so pull requests no longer evict the caches
+  main and the releases rely on.
+
 ## 0.3.6 — 2026-10-16
 
 ### Fixed

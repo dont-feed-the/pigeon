@@ -1,25 +1,17 @@
 # The full set of TLA+ models, slow rows included (ADR 0026), 200 runs of
 # pigeon-core checked by TLC (spec 13 §13.3), and 1000 random S9 crash schedules
 # of the slice against the lab build, in twenty shards of four processes,
-# weekly and by hand; a push checks 50 runs and 200 schedules, in four shards,
-# and only the blocked slice scenarios (13 §13.12). Runs when a
-# model or the runner changes, weekly, and by hand. GitHub runs `schedule`
-# and `workflow_dispatch` only from the default branch, so until v2 is the
-# default branch only the `push` trigger fires.
+# nightly and by hand; a release tag checks 50 runs and 200 schedules, in four
+# shards, and only the blocked slice scenarios (13 §13.12). This is the
+# release-and-nightly tier: the nightly run (from main, the default branch)
+# is skipped when main has no commit from the last 25 hours.
 name: models-full
 
 on:
   push:
-    paths:
-      - "models/tla/**"
-      - "scripts/run-tlc"
-      - "scripts/check-code-traces"
-      - "scripts/check-s9-schedules"
-      - "crates/pigeon-core/**"
-      - "crates/pigeon-lab/**"
-      - ".github/workflows/models-full.yml"
+    tags: ["v*"]
   schedule:
-    - cron: "17 3 * * 1"
+    - cron: "17 1 * * *"
   workflow_dispatch:
 
 permissions:
@@ -30,8 +22,29 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  fresh:
+    name: main moved in the last 25 hours
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.fresh.outputs.run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: fresh
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          age=$(( $(date +%s) - $(git log -1 --format=%ct) ))
+          if [ "$EVENT" != schedule ] || [ "$age" -lt 90000 ]; then
+            echo run=true >> "$GITHUB_OUTPUT"
+          else
+            echo "main has not moved since the last nightly run." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   models:
     name: TLA+ models (full set, shard ${{ matrix.shard }})
+    needs: fresh
+    if: needs.fresh.outputs.run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     strategy:
@@ -54,6 +67,8 @@ jobs:
 
   code-traces:
     name: ${{ github.event_name == 'push' && 50 || 200 }} runs of pigeon-core checked by TLC
+    needs: fresh
+    if: needs.fresh.outputs.run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
@@ -73,6 +88,8 @@ jobs:
 
   s9-schedules:
     name: S9, 50 crash schedules (shard ${{ matrix.shard }})
+    needs: fresh
+    if: needs.fresh.outputs.run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     strategy:
@@ -114,6 +131,8 @@ jobs:
 
   slice-with-blocked:
     name: blocked slice scenarios (${{ matrix.os }})
+    needs: fresh
+    if: needs.fresh.outputs.run == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -126,7 +145,9 @@ jobs:
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: restore main's Rust cache
+        id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry/index

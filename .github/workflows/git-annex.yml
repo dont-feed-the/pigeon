@@ -17,7 +17,16 @@ name: git-annex
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
+    paths:
+      - third_party/git-annex/**
+      - .github/workflows/git-annex.yml
+      - .github/actions/git-annex-pigeon/**
+      - lab/git-annex/ga-e23-p2p-drop.py
+      - lab/git-annex/ga-e25-relay-stress.py
+      - packaging/install-git-annex
+      - packaging/check-install
+  pull_request:
     paths:
       - third_party/git-annex/**
       - .github/workflows/git-annex.yml

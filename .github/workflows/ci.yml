@@ -1,7 +1,14 @@
 # Checks of main and release-tag pushes and pull requests: repository rules,
-# the fast TLA+ models with their expected verdicts (ADR 0026), the catalogue model on
-# every schedule of its cases (spec 05 §5.2), the Rust workspace on Linux (and
-# macOS on tags, 14 §14.6), and runs of pigeon-core checked by TLC (ADR 0008, 13 §13.13).
+# the fast TLA+ models with their expected verdicts (ADR 0026) in three shards,
+# the catalogue model on every schedule of its cases (spec 05 §5.2), the Rust
+# workspace on Linux (and macOS on tags, 14 §14.6), pigeond's
+# daemons-on-one-host tests in four shards, and runs of pigeon-core checked by
+# TLC (ADR 0008, 13 §13.13). This is the pull-request tier and should finish
+# in about ten minutes; lab.yml joins it, slice.yml runs on main and tags,
+# models-full.yml and the S9 crash schedules on tags and nightly.
+#
+# Caches are saved from main only: a pull request restores main's cache and
+# keeps its own build, so pull requests no longer evict main's caches.
 name: ci
 
 on:
@@ -16,6 +23,12 @@ permissions:
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  # Smaller caches and faster links: no incremental state, line tables only.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
 
 jobs:
   repository:
@@ -43,9 +56,13 @@ jobs:
         run: python3 models/catalogue/catalogue.py
 
   models:
-    name: TLA+ models (fast set)
+    name: TLA+ models (fast set, shard ${{ matrix.shard }})
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -57,9 +74,10 @@ jobs:
           path: ~/.cache/pigeon
           key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
       - name: trace logs become TLA+ modules (spec 13 §13.3)
+        if: matrix.shard == 0
         run: scripts/trace-to-tla --check
       - name: every configuration gives its expected verdict
-        run: scripts/run-tlc
+        run: scripts/run-tlc --shard ${{ matrix.shard }} 3
 
   rust:
     name: Rust workspace (${{ matrix.os }})
@@ -100,7 +118,9 @@ jobs:
         run: brew install git-annex
       - name: versions
         run: git annex version | head -1 && git --version
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: restore main's Rust cache
+        id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry/index
@@ -117,20 +137,8 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: tests, laws and the git-annex contract tests (13 §13.6)
         run: cargo test --workspace --locked --no-fail-fast
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-        with:
-          distribution: temurin
-          java-version: "21"
-      - name: real storage boundaries pass TLC and every corrupted observation fails
-        run: python3 scripts/check-storage-traces
       - name: the format fixtures, golden and next-format files (ADR 0048, 13 §13.6)
         run: cargo test -p pigeond --test formats --locked
-      - name: the lab build's seams (13 §13.12)
-        run: cargo test -p pigeon-sys --features lab --locked
-      - name: the first build of the slice, and pigeond's other daemons-on-one-host tests (13 §13.12)
-        run: |
-          cargo build -p pigeon -p git-annex-p2p-iroh --locked
-          cargo test -p pigeond --features lab --locked --tests
       - name: licences, advisories and sources (cargo deny, ADR 0019)
         if: runner.os == 'Linux'
         uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
@@ -149,6 +157,115 @@ jobs:
           cargo test -p pigeon-core --features tla-trace --locked \
             --test trace --test roster_trace --test admit_trace \
             --test authority_trace --test catalogue_trace
+      - name: save the Rust cache (main only)
+        if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+  # pigeond's daemons-on-one-host tests (feature lab, 13 §13.12) took 24 of
+  # the Rust job's 35 minutes when cargo ran them one binary after another.
+  # Each shard builds them all, from the same cache, and runs about six
+  # minutes of them; shard 3 also checks the real storage boundaries with TLC.
+  daemons:
+    name: pigeond's daemons on one host (${{ matrix.os }}, shard ${{ matrix.shard }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(startsWith(github.ref, 'refs/tags/v') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
+        shard: [0, 1, 2, 3]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      GIT_ANNEX_VERSION: "10.20261006"
+      GIT_ANNEX_SHA256: 88ea73c9bb8fb751916e0e4a0a8f489a7476f9b9e861fd2cce2601a77f4f409d
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+      PIGEON_REQUIRE_GIT_ANNEX: 1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: cached git-annex build (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/git-annex-dist
+          key: git-annex-standalone-${{ env.GIT_ANNEX_SHA256 }}
+      - name: git-annex, standalone build at the pinned checksum (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p ~/.cache/git-annex-dist
+          t=~/.cache/git-annex-dist/git-annex-standalone-amd64.tar.gz
+          [ -f "$t" ] || curl -fsSL -o "$t" \
+            https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
+          echo "$GIT_ANNEX_SHA256  $t" | sha256sum -c - || {
+            echo "::error::upstream moved past git-annex $GIT_ANNEX_VERSION; move the pin deliberately"
+            rm -f "$t"; exit 1; }
+          tar -C ~ -xzf "$t"
+          echo ~/git-annex.linux >> "$GITHUB_PATH"
+      - name: git-annex from Homebrew (macOS)
+        if: runner.os == 'macOS'
+        run: brew install git-annex
+      - name: versions
+        run: git annex version | head -1 && git --version
+      - name: restore main's Rust cache
+        id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: rust-lab-${{ matrix.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: rust-lab-${{ matrix.os }}-
+      - name: the pinned toolchain (rust-toolchain.toml)
+        run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
+      - name: the first build of the slice, and the lab build's seams (13 §13.12)
+        run: |
+          cargo build -p pigeon -p git-annex-p2p-iroh --locked
+          cargo test -p pigeond --features lab --locked --tests --no-run
+          cargo test -p pigeon-sys --features lab --locked
+      - name: this shard's daemons-on-one-host tests
+        env:
+          SHARD: ${{ matrix.shard }}
+        # Seconds on ubuntu-24.04 (run 38843601664): held 386; suggestions
+        # 254, unsettled 21, restore 16, view 8, drop 7; people 198, resolve
+        # 152; slice 161, leave 85, refound 55. Every lab test is in a shard.
+        run: |
+          case "$SHARD" in
+            0) tests="held" ;;
+            1) tests="suggestions unsettled restore view drop" ;;
+            2) tests="people resolve" ;;
+            3) tests="slice leave refound" ;;
+          esac
+          all=$(grep -l '^#!\[cfg(feature = "lab")\]' crates/pigeond/tests/*.rs | xargs -n1 basename | sed 's/\.rs$//' | sort)
+          listed=$(echo held suggestions unsettled restore view drop people resolve slice leave refound | tr ' ' '\n' | sort)
+          [ "$all" = "$listed" ] || { echo "::error::a lab test of pigeond is in no shard of ci.yml"; diff <(echo "$all") <(echo "$listed"); exit 1; }
+          args=(); for t in $tests; do args+=(--test "$t"); done
+          cargo test -p pigeond --features lab --locked --no-fail-fast "${args[@]}"
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        if: matrix.shard == 3
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: real storage boundaries pass TLC and every corrupted observation fails
+        if: matrix.shard == 3
+        run: python3 scripts/check-storage-traces
+      - name: save the Rust cache (main only)
+        if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true' && matrix.shard == 0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ steps.cache.outputs.cache-primary-key }}
 
   code-traces:
     name: runs of pigeon-core checked by TLC
@@ -164,7 +281,9 @@ jobs:
         with:
           path: ~/.cache/pigeon
           key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: restore main's Rust cache
+        id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry/index
@@ -177,3 +296,13 @@ jobs:
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
       - name: every run is accepted by its model, every mutant rejected (13 §13.3)
         run: scripts/check-code-traces --seeds 20
+      - name: save the Rust cache (main only)
+        if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ steps.cache.outputs.cache-primary-key }}
