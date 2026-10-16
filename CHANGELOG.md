@@ -4,6 +4,18 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## 0.4.5 — 2026-10-16
+
+### Added
+
+- Prepare and print a recovery sheet with a QR code from People & machines. The sheet’s instructions follow your language; the terminal prints the same code.
+- People & machines recommends a sheet or a second computer for an admin with one signing computer, and a replacement sheet when backup machines change.
+
+### Fixed
+
+- Preparing a sheet before adding a backup explains the missing step. A sheet that no backup receives is revoked rather than counted as a usable paper key.
+- Each prepared paper key has a unique date and identifier, so preparing a replacement on the same day works.
+
 ## 0.4.4 — 2026-10-16
 
 ### Added

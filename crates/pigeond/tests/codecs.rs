@@ -408,7 +408,7 @@ fn recovery_sheets_round_trip(tc: TestCase) {
             .collect(),
     };
     let code = encode(&sheet);
-    let text = format!("pigeon recovery sheet\n  {code}\nKeep it safe.\n");
+    let text = format!("pigeon recovery sheet\nGroup: pgr1-not-a-code\n  {code}\nKeep it safe.\n");
     assert_eq!(decode(&text), Some(sheet));
     let at = tc.draw(
         gs::integers::<usize>()

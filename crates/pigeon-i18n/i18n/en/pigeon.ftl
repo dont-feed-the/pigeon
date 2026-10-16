@@ -435,3 +435,18 @@ web-diagnostic-peer = Computer receiving the diagnostic part
 web-allow-diagnostics = Allow one diagnostic part
 
 action-cancelled = Cancelled.
+
+recovery-title = pigeon recovery sheet
+recovery-group = Group: { $name } ({ $group })
+recovery-person = Person: { $name }
+recovery-backups = Backup machines:
+recovery-secret = Keep this sheet like a passport: whoever holds it can add computers for you. Print it and store it somewhere safe; do not send it to anyone.
+recovery-instructions = On a new computer, save the code as a text file and run: pigeon recover THIS-FILE FOLDER
+recovery-qr-too-large = This sheet has too much information for one QR code. Keep the complete text code below; it works in the same way.
+recovery-recommendation = { $name } has only one signing computer. Print a recovery sheet or add a second computer so a lost computer does not lock you out.
+web-print-recovery = Prepare a recovery sheet
+web-recovery-print-help = Use your browser’s Print command to print this page. Keep the complete code and QR code together. Close this page when you have stored the sheet safely.
+
+recovery-refresh-recommendation = The backup machines have changed since { $name }’s recovery sheets were prepared. Prepare a replacement sheet with the current backup machines.
+
+problem-recovery-needs-backup = Add a backup machine before preparing a recovery sheet. A backup must receive the sheet’s permission before it can help you recover.

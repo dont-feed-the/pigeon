@@ -226,6 +226,13 @@ pigeon is built milestone by milestone ([roadmap](roadmap.md)):
 Keep a recovery sheet somewhere separate from your computers. Anyone who
 has it can add computers for its admin. Save the output of
 `pigeon recovery-sheet` privately or print it; pigeon does not keep the key.
+You can also open **People & machines → Prepare a recovery sheet**, then
+print the page with your browser. It includes the complete text code and
+a QR code carrying exactly that code. The instructions use your language.
+When there are too many backup addresses for one QR code, keep the full
+text instead. People & machines recommends a sheet or a second computer
+when an admin has only one signing device, and a replacement after the
+backup machines have changed.
 The command waits until a backup has received the sheet's roster entry.
 
 On a fresh computer, save the sheet's complete text in a private file, then

@@ -46,6 +46,7 @@ pub mod pause;
 pub mod prefs;
 pub mod proposal;
 pub mod recovery;
+mod recovery_advice;
 mod recovery_exchange;
 pub mod recovery_txt;
 pub mod refound;

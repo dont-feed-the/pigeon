@@ -507,6 +507,15 @@ pub struct PersonEntry {
     pub name: String,
     /// Whether they are an admin.
     pub admin: bool,
+    /// Whether this device belongs to them.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub this_person: bool,
+    /// An admin with one signing computer and no paper key.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub recovery_recommended: bool,
+    /// Their paper keys name a different set of backup machines.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub recovery_refresh_recommended: bool,
     /// The names of their computers and backup machines.
     pub machines: Vec<String>,
 }

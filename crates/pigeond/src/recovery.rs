@@ -67,9 +67,12 @@ pub fn encode(sheet: &Sheet) -> String {
     format!("pgr1-{body}-{}", sum.get(..8).unwrap_or_default())
 }
 
-/// Reads the first `pgr1-…` code in `text`, if its checksum holds.
+/// Reads the last valid `pgr1-…` code, after any user-supplied labels.
 pub fn decode(text: &str) -> Option<Sheet> {
-    let code = text.split_whitespace().find(|w| w.starts_with("pgr1-"))?;
+    text.split_whitespace().rev().find_map(decode_code)
+}
+
+fn decode_code(code: &str) -> Option<Sheet> {
     let (body, sum) = code.strip_prefix("pgr1-")?.rsplit_once('-')?;
     if sha256_hex(body.as_bytes()).get(..8) != Some(sum) {
         return None;
@@ -101,18 +104,30 @@ pub async fn sheet(d: &Daemon) -> Vec<Response> {
     if !doc.roster.persons.get(&person).is_some_and(|p| p.admin) {
         return vec![problem("not-allowed", &[], None)];
     }
+    if !doc
+        .roster
+        .devices
+        .values()
+        .any(|x| x.role == DeviceRole::Custodian)
+    {
+        return vec![problem("recovery-needs-backup", &[], None)];
+    }
     let Ok(secret) = random::<32>() else {
         return vec![problem("internal-error", &[], None)];
     };
     let id = crate::net::device_id(&iroh::SecretKey::from_bytes(&secret).public());
     let added = Device {
         person: person.clone(),
-        name: format!("recovery sheet {}", crate::util::date(crate::util::now())),
+        name: format!(
+            "{}-{}",
+            crate::util::date(crate::util::now()),
+            id.get(..6).unwrap_or_default()
+        ),
         role: DeviceRole::Recovery,
         annex_uuid: None,
         maxsize: None,
     };
-    let change = [Edit::AddDevice(DeviceId(id), added)];
+    let change = [Edit::AddDevice(DeviceId(id.clone()), added)];
     if !may_sign(&doc.roster, &me, &change) {
         return vec![problem("not-allowed", &[], None)];
     }
@@ -124,6 +139,25 @@ pub async fn sheet(d: &Daemon) -> Vec<Response> {
     };
     drop(busy);
     if !reached_custodian(d, &g, &commit).await {
+        // The key was never shown. Revoke its entry rather than making the
+        // People page count a sheet nobody could have kept.
+        let _busy = g.busy.lock().await;
+        if let Some(mut current) = g.roster() {
+            let change = [Edit::RemoveDevice(DeviceId(id))];
+            if may_sign(&current.roster, &me, &change) {
+                current.roster = apply(&current.roster, &change).roster;
+                if let Err(e) = crate::change::commit_roster(
+                    &g,
+                    &current,
+                    "pigeon: revoke an unprinted recovery sheet",
+                    &d.tracer,
+                )
+                .await
+                {
+                    return vec![problem("internal-error", &[], Some(e))];
+                }
+            }
+        }
         return vec![problem("peer-unreachable", &[], None)];
     }
     let addresses = g.lock().addresses.clone();
@@ -381,7 +415,11 @@ mod tests {
         };
         let code = encode(&s);
         let text = format!("Some words\n{code}\nmore");
-        assert_eq!(decode(&text), Some(s));
+        assert_eq!(decode(&text), Some(s.clone()));
+        let mut other = s.clone();
+        other.name = "Other group".into();
+        let label = format!("Group: {}\n{code}", encode(&other));
+        assert_eq!(decode(&label), Some(s));
         let mut typo: Vec<char> = code.chars().collect();
         typo[9] = if typo[9] == 'a' { 'b' } else { 'a' };
         let typo: String = typo.into_iter().collect();

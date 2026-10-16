@@ -210,7 +210,7 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         }
         Request::Keep { folder } => keep(d, Path::new(&folder)).await,
         Request::Machines => machines(d),
-        Request::People => people(d),
+        Request::People => people(d).await,
         Request::Invitations => match d.default_group() {
             Some(g) => vec![Response::Invitations {
                 invitations: crate::invite::pending(&g),
@@ -541,17 +541,36 @@ fn machines(d: &Daemon) -> Vec<Response> {
 }
 
 /// `pigeon people`: each person of the roster, with their machines.
-fn people(d: &Daemon) -> Vec<Response> {
-    let Some(doc) = d.default_group().and_then(|g| g.roster()) else {
+async fn people(d: &Daemon) -> Vec<Response> {
+    let Some(g) = d.default_group() else {
+        return vec![problem("not-in-group", &[], None)];
+    };
+    let Some(doc) = g.roster() else {
         return vec![problem("not-in-group", &[], None)];
     };
     let r = &doc.roster;
+    let refresh = crate::recovery_advice::refresh(&g, r).await;
     let people = r
         .persons
         .iter()
         .map(|(id, p)| pigeon_proto::api::PersonEntry {
             name: p.name.clone(),
             admin: p.admin,
+            this_person: r
+                .devices
+                .get(&DeviceId(d.device.clone()))
+                .is_some_and(|x| x.person == *id),
+            recovery_refresh_recommended: p.admin && refresh.contains(id),
+            recovery_recommended: p.admin
+                && r.devices
+                    .values()
+                    .filter(|x| x.person == *id && x.role != DeviceRole::Recovery)
+                    .count()
+                    == 1
+                && !r
+                    .devices
+                    .values()
+                    .any(|x| x.person == *id && x.role == DeviceRole::Recovery),
             machines: r
                 .devices
                 .values()

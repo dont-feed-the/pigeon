@@ -154,7 +154,23 @@ impl Renderer {
             .arg("name", p.name.as_str())
             .arg("role", self.id(role))
             .arg("machines", p.machines.join(", "));
-        self.cat.format(&msg)
+        let mut line = self.cat.format(&msg);
+        if p.recovery_recommended {
+            line.push(' ');
+            line.push_str(&self.cat.format(
+                &crate::Message::new("recovery-recommendation").arg("name", p.name.as_str()),
+            ));
+        }
+        if p.recovery_refresh_recommended {
+            line.push(' ');
+            line.push_str(
+                &self.cat.format(
+                    &crate::Message::new("recovery-refresh-recommendation")
+                        .arg("name", p.name.as_str()),
+                ),
+            );
+        }
+        line
     }
 
     /// A machine of the roster.
@@ -244,6 +260,13 @@ impl Renderer {
     /// The lines of a response, and whether they go to standard error.
     pub fn response(&self, r: &Response) -> (Vec<String>, bool) {
         match r {
+            Response::Said { message } if message.id == "recovery-sheet-text" => {
+                let sheet = match message.args.get("sheet") {
+                    Some(Arg::Text(sheet)) => crate::recovery::terminal(&self.cat, sheet),
+                    _ => self.text(message),
+                };
+                (vec![sheet], false)
+            }
             Response::Said { message } => (vec![self.text(message)], false),
             Response::Progress { message, .. } => (vec![self.text(message)], true),
             Response::Problem(p) => (self.problem(p), true),

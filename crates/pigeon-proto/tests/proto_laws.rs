@@ -269,6 +269,9 @@ fn response(tc: &TestCase) -> Response {
                 .map(|_| PersonEntry {
                     name: text(tc),
                     admin: flag(tc),
+                    this_person: flag(tc),
+                    recovery_recommended: flag(tc),
+                    recovery_refresh_recommended: flag(tc),
                     machines: (0..tc.draw(gs::integers::<u8>().max_value(2)))
                         .map(|_| text(tc))
                         .collect(),

@@ -74,6 +74,16 @@ fn a_sheet_recovers_an_admin_from_someone_elses_backup() {
         ],
     );
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
+    assert!(pigeon(&alice, &["people"]).iter().any(|a| matches!(a,
+        Response::People { people } if people.iter().any(|p| p.this_person && p.recovery_recommended))));
+    let before_backup = pigeon(&alice, &["recovery-sheet"]);
+    assert!(
+        before_backup
+            .iter()
+            .any(|a| matches!(a, Response::Problem(p) if p.code == "recovery-needs-backup"))
+    );
+    assert!(pigeon(&alice, &["people"]).iter().any(|a| matches!(a,
+        Response::People { people } if people.iter().any(|p| p.this_person && p.recovery_recommended))));
     let invited = pigeon(&alice, &["invite", "Bob"]);
     let ticket = said(&invited, "invitation", "code").unwrap();
     let joined = pigeon(
@@ -93,6 +103,9 @@ fn a_sheet_recovers_an_admin_from_someone_elses_backup() {
     until(&alice, State::Protected, &[&alice, &bob, &vault]);
     let printed = pigeon(&alice, &["recovery-sheet"]);
     let sheet_text = said(&printed, "recovery-sheet-text", "sheet").unwrap();
+    assert!(pigeon(&alice, &["people"]).iter().any(|a| matches!(a,
+        Response::People { people } if people.iter().any(|p| p.this_person
+            && !p.recovery_recommended && !p.recovery_refresh_recommended))));
     let sheet = pigeond::recovery::decode(&sheet_text).unwrap();
     let sheet_key: [u8; 32] = pigeond::util::unhex(&sheet.key)
         .unwrap()

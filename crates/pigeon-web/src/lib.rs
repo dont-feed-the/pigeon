@@ -31,6 +31,7 @@ mod join;
 mod leave;
 mod machines;
 mod pages;
+mod recovery;
 mod settings;
 mod view;
 
@@ -143,6 +144,7 @@ impl Web {
             .route("/create", post(join::create))
             .route("/machines", get(machines::machines))
             .route("/machines/remove", post(machines::remove))
+            .route("/machines/recovery-sheet", post(recovery::sheet))
             .route("/machines/invite", post(machines::invite))
             .route("/machines/cancel-invitation", post(machines::cancel))
             .route("/suggestions", get(pages::suggestions))

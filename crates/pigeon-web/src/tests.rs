@@ -11,6 +11,8 @@ use tower::ServiceExt;
 
 use crate::{Answer, Backend, Web};
 
+#[path = "tests/recovery.rs"]
+mod recovery;
 #[path = "tests/usability.rs"]
 mod usability;
 

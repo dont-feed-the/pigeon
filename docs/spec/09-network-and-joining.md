@@ -244,7 +244,14 @@ tools are those of ADR 0047, which fixes their formats:
   commit adding the machine as the admin's device
   ([04 §4.3](04-roster-and-authority.md)); custodians admit the sheet's key
   for git only. The People page recommends a sheet or a second device while
-  an admin has a single signing device.
+  an admin has a single signing device. Admins can prepare the printable
+  sheet from People & machines: localized instructions, the exact text
+  code and an SVG QR of that code, on a `no-store` response. Oversized
+  sheets keep the complete text with an explicit QR fallback. Public roster
+  history identifies when all a person's sheets name older backup devices,
+  and the page recommends a replacement. A sheet is refused before adding
+  a key if no backup has joined; if no backup receives its roster commit
+  before the deadline, the unprinted key is revoked.
 - **Refounding:** `pigeon refound [REPOSITORY]` signs a new genesis with the
   last accepted tree and the refounder as only admin, keeping the old
   history replicated and its keys in `keys()`; existing folders join the new

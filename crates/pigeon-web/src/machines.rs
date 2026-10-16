@@ -36,17 +36,17 @@ pub async fn machines(
         }
     }
     // The people first, each with their machines (ux.md §6.4).
-    let people: Vec<String> = web
+    let entries: Vec<pigeon_proto::api::PersonEntry> = web
         .ask(Request::People)
         .await
         .iter()
         .flat_map(|a| match a {
-            pigeon_proto::Response::People { people } => {
-                people.iter().map(|p| r.person(p)).collect()
-            }
+            pigeon_proto::Response::People { people } => people.clone(),
             _ => Vec::new(),
         })
         .collect();
+    let people: Vec<String> = entries.iter().map(|p| r.person(p)).collect();
+    let can_print = entries.iter().any(|p| p.this_person && p.admin);
     let mut invitations = Vec::new();
     for answer in web.ask(Request::Invitations).await {
         if let pigeon_proto::Response::Invitations { invitations: i } = answer {
@@ -57,6 +57,12 @@ pub async fn machines(
     let body = html! {
         (list(&other))
         (list(&people))
+        @if can_print {
+            form method="post" action="/machines/recovery-sheet" {
+                input type="hidden" name="form" value=(f);
+                button type="submit" { (r.id("web-print-recovery")) }
+            }
+        }
         @for m in &rows { (machine(&r, m, f)) }
         h2 { (r.id("web-invite")) }
         form method="post" action="/machines/invite" {

@@ -435,3 +435,18 @@ web-diagnostic-peer = Ordinateur recevant le diagnostic
 web-allow-diagnostics = Autoriser un diagnostic
 
 action-cancelled = Annulé.
+
+recovery-title = Fiche de récupération pigeon
+recovery-group = Groupe : { $name } ({ $group })
+recovery-person = Personne : { $name }
+recovery-backups = Machines de sauvegarde :
+recovery-secret = Gardez cette fiche comme un passeport : quiconque la détient peut ajouter des ordinateurs en votre nom. Imprimez-la et rangez-la en lieu sûr ; ne l’envoyez à personne.
+recovery-instructions = Sur un nouvel ordinateur, enregistrez le code dans un fichier texte et lancez : pigeon recover CE-FICHIER DOSSIER
+recovery-qr-too-large = Cette fiche contient trop d’informations pour un seul code QR. Gardez le code texte complet ci-dessous ; il fonctionne de la même manière.
+recovery-recommendation = { $name } n’a qu’un seul ordinateur pouvant signer. Imprimez une fiche de récupération ou ajoutez un second ordinateur pour pouvoir revenir si vous perdez cet ordinateur.
+web-print-recovery = Préparer une fiche de récupération
+web-recovery-print-help = Utilisez la commande Imprimer de votre navigateur pour imprimer cette page. Gardez le code texte complet avec le code QR. Fermez cette page une fois la fiche rangée en lieu sûr.
+
+recovery-refresh-recommendation = Les machines de sauvegarde ont changé depuis la préparation des fiches de récupération de { $name }. Préparez une nouvelle fiche avec les machines actuelles.
+
+problem-recovery-needs-backup = Ajoutez une machine de sauvegarde avant de préparer une fiche de récupération. Une sauvegarde doit recevoir l’autorisation de la fiche pour pouvoir vous aider à revenir.
