@@ -4,7 +4,7 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
-## 0.4.0 — 2026-10-15
+## 0.4.0 — 2026-10-16
 
 Milestone M3, reach and installation, with early M4 usability fixes
 ([installation evidence](docs/reports/reach-4.md),
@@ -36,6 +36,14 @@ Milestone M3, reach and installation, with early M4 usability fixes
   with links to their versions.
 - `pigeon open` starts the personal daemon when it is stopped. Settings
   confirmations use translated labels and explain when safety checks age.
+
+## 0.3.5 — 2026-10-16
+
+### Fixed
+
+- The macOS release is built again: 0.3.4's release failed to build
+  pigeon's git-annex for macOS, so 0.3.4 was never published. 0.3.5 holds
+  the same changes.
 
 ## 0.3.4 — 2026-10-16
 
