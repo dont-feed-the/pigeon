@@ -51,7 +51,7 @@ fn private_drops_and_abandoned_staging_preserve_pool_pins() {
     let store = temp.path().join("pool");
     let group = "a".repeat(40);
     let target = path(&store, &group, &key).unwrap();
-    std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+    private_dir(target.parent().unwrap()).unwrap();
     let orphan = target.with_extension("interrupted");
     std::fs::write(&orphan, b"incomplete unverified stage").unwrap();
     let retained = retain(&store, &group, &key, &source, true).unwrap();
