@@ -40,7 +40,14 @@ env:
   HOMEBREW_NO_INSTALL_CLEANUP: "1"
 
 jobs:
+  changes:
+    uses: ./.github/workflows/ci-changes.yml
+    with:
+      force-full: ${{ inputs.platform == 'macos' }}
+
   lab:
+    needs: changes
+    if: needs.changes.outputs.lab == 'true'
     name: ${{ matrix.group }} (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -111,3 +118,16 @@ jobs:
       - name: E19, install against racing saves
         if: matrix.group == 'E19'
         run: python3 lab/git-annex/ga-e19-install-races.py
+
+  selected-checks:
+    name: Lab selection verified
+    if: ${{ !cancelled() }}
+    needs: [changes, lab]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: selected jobs succeeded and only explicit exclusions were skipped
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/select-ci --verify lab

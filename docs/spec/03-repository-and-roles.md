@@ -129,6 +129,11 @@ Every other device of the roster is a remote:
   `refs/pigeon/proposals/` ([04 §4.5](04-roster-and-authority.md)): two
   peers relaying one proposal never race on a ref, and nothing unchecked is
   relayed **[no ADR]**.
+- An active roster peer's `annex-ignore` and `annex-ignore-auto` stay false.
+  The configuration round repairs these flags: git-annex 10.20261006's
+  `Remote/Git.hs` can persist them after an unsuccessful initial probe.
+  An ignored peer must not remain unavailable after it returns. Roster
+  admission and the content filter still decide which transfers are allowed.
 - One `git annex remotedaemon --foreground` per repository (ADR 0011), stdin
   held open, tells peers of changes; on a notice it only fetches by these
   refspecs, never moving `main`, `HEAD`, the index or the tree (E12).

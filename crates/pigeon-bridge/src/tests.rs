@@ -22,9 +22,9 @@ use crate::{
 };
 
 #[path = "tests/peer_ui.rs"]
-mod peer_ui;
+pub(crate) mod peer_ui;
 
-fn config(root: &std::path::Path) -> Config {
+pub(crate) fn config(root: &std::path::Path) -> Config {
     let salt = SaltString::encode_b64(b"a-test-salt-only").unwrap();
     let password_hash = Argon2::default()
         .hash_password(b"portal-password", &salt)
@@ -84,7 +84,7 @@ pub(crate) async fn app() -> (tempfile::TempDir, Arc<App>) {
     (temp, app)
 }
 
-async fn request(
+pub(crate) async fn request(
     app: Arc<App>,
     method: &str,
     path: &str,

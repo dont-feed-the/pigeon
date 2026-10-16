@@ -28,7 +28,8 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(46)) {
+    match tc.draw(gs::integers::<u8>().max_value(47)) {
+        47 => Request::RemoveDeviceId { device: text(tc) },
         46 => Request::Capacity,
         45 => Request::ViewSuggestion {
             proposal: text(tc),

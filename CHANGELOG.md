@@ -32,9 +32,18 @@ increments the second number, and every other release the third.
   it at once, even as the group's last admin computer; its files stay in
   the folder. It used to refuse, so a group created by mistake could not be
   left.
+- Pull requests run the checks relevant to their changed files. Documentation,
+  installer and formal-model changes avoid unrelated expensive jobs, while
+  shared dependencies, unknown paths and CI changes retain broader checks.
+  Releases and periodic validation still run the full set.
+- Client revocation addresses the saved signing key directly, so a change to
+  a computer's name cannot redirect its roster removal.
 
 ### Fixed
 
+- Files no longer stay "receiving" when a peer was initially unavailable
+  and git-annex disabled its remote. Pigeon re-enables peers still in the
+  group when checking their settings, so transfers can resume.
 - On Linux with a umask of 002, the default on Ubuntu and Fedora desktops,
   pigeon thought every file might be in use: it delayed writing the group's
   versions into your folder, `pigeon free` and *Free up space* deleted
@@ -43,6 +52,15 @@ increments the second number, and every other release the third.
 - A computer that left its last group and then created or joined another
   one, without restarting pigeon, no longer changes identity at the next
   restart, which made the new group no longer recognise it.
+- A client-management page, download or conflict action queued behind client
+  revocation now checks the updated access state before contacting that peer.
+- Reusing a shared content object after an interrupted publication completes
+  its directory sync before reporting success.
+- Pending suggestions keep their author's identity after the signing client
+  is revoked, so the person's remaining devices can still manage them.
+- Concurrent saves from separate clients no longer leave a hidden conflict
+  that stops later synchronization. Existing affected peers recover when the
+  saved version is safely retained under its conflict filename.
 
 ## 0.5.12 — 2026-10-16
 

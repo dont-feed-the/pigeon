@@ -20,6 +20,10 @@ includes dependency and runner waits because the API does not distinguish
 them reliably. The default workflow window is seven days; `--days` changes
 it. Draft releases and publications missing assets do not reset the clock.
 The collector exits unsuccessfully on an API error instead of inventing data.
+The JSON also retains completed intervals between installable publications,
+their timestamps, target results and sample count. Publishing resets the
+current age; it does not erase an earlier missed interval. The readable report
+shows the latest five intervals. Idle periods remain visible in these samples.
 
 The `release-kpi` workflow records a JSON artifact and a readable summary
 after each release attempt and hourly. Its one short, read-only Ubuntu job
@@ -61,3 +65,17 @@ runs daily and by hand. macOS failures remain visible background evidence.
 For an immutable older tag, the current dispatch workflow may use its exact
 tag/commit's successful Linux jobs while ignoring macOS test state. Missing,
 failed, skipped or cancelled required Linux jobs never authorize publication.
+
+One v0.5.9 crash-schedule shard spent 38 minutes 59 seconds checking traces,
+after 13 minutes 8 seconds executing its schedules. Linux slice verification
+now checks two independent logs at a time in isolated processes, with private
+generated models and TLC working directories. Every log, required family,
+clock and failure still counts. The bound is two workers in an existing job;
+macOS and ordinary local invocations retain one worker. Compare the next
+release's timings before claiming a measured publication improvement.
+
+A controlled local replay used eight copies of one recorded filesystem
+trace and eight copies of the golden storage trace. Three alternating runs
+per mode checked all 16 logs each time: the median was 18.488 seconds with
+one worker and 11.226 seconds with two. These are local replay measurements;
+the release comparison still needs the next candidate's CI evidence.

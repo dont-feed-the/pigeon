@@ -33,6 +33,16 @@ pub struct Pending {
     pub deciders: Deciders,
 }
 
+/// A proposal's author under its accepted base roster, as `commit::about`
+/// uses for decision validation. Removing its signing device later must not
+/// erase the person who wrote it or the sibling devices' authorship.
+async fn proposal_person(g: &Group, base: &str, raw: &[u8]) -> Option<PersonId> {
+    let signer = pigeon_core::sig::verify(raw).ok()?;
+    let blob = g.git.blob(&format!("{base}:{}", authority::ROSTER)).await?;
+    let doc = crate::roster_file::parse(&String::from_utf8_lossy(&blob)).ok()?;
+    doc.roster.devices.get(&signer).map(|d| d.person.clone())
+}
+
 /// The pending proposals of `g`, oldest first.
 pub async fn pending(g: &Group) -> Result<Vec<Pending>, Error> {
     let Some(main) = g.git.rev("refs/heads/main").await else {
@@ -86,11 +96,7 @@ pub async fn pending(g: &Group) -> Result<Vec<Pending>, Error> {
         out.push(Pending {
             id: c.clone(),
             device: device.clone(),
-            person: doc
-                .roster
-                .devices
-                .get(&DeviceId(device.clone()))
-                .map(|d| d.person.clone()),
+            person: proposal_person(g, &base, &raw).await,
             saved: authority::author_time(&raw).map_or(0, |t| t.0),
             deciders: authority::deciders(&doc.roster, &writers, &changes),
             paths,

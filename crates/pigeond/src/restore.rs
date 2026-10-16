@@ -181,10 +181,20 @@ pub(crate) async fn bring(g: &Group, key: &str) -> Result<(), &'static str> {
         return Err("disk-full");
     }
     let args = ["annex", "get", "--json", "--key", key];
-    g.git
-        .run_for(&args, Duration::from_secs(600))
+    let (status, output) = g
+        .git
+        .repo
+        .run_status(&args, None, Duration::from_secs(600))
         .await
-        .map_err(|_| "receiving")?;
+        .map_err(|error| {
+            tracing::debug!(group = %g.id, key, %error, "receive-waits");
+            "receiving"
+        })?;
+    if status != Some(0) {
+        tracing::debug!(group = %g.id, key, ?status, stdout = %output.text(),
+            stderr = %String::from_utf8_lossy(&output.stderr), "receive-waits");
+        return Err("receiving");
+    }
     crate::shared::adopt(g, key)
         .await
         .map_err(|_| "receiving")?;
