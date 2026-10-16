@@ -42,10 +42,17 @@ pub async fn sheet(
     });
     let result = if let Some(sheet) = sheet {
         let text = pigeon_i18n::recovery::text(r.catalogue(), sheet);
-        let qr = pigeon_i18n::recovery::code(sheet).and_then(pigeon_i18n::recovery::svg);
+        let code = pigeon_i18n::recovery::code(sheet);
+        let instructions = code
+            .and_then(|code| text.rsplit_once(code))
+            .map_or(text.as_str(), |(before, _)| before);
+        let qr = code.and_then(pigeon_i18n::recovery::svg);
         let body = html! {
             p class="no-print" { (r.id("web-recovery-print-help")) }
-            pre class="recovery-code" { (text) }
+            div class="recovery-instructions" {
+                @for line in instructions.lines().skip(1) { p { (line) } }
+            }
+            @if let Some(code) = code { pre class="recovery-code" { (code) } }
             @if let Some(qr) = qr {
                 div class="recovery-qr" role="img" aria-label=(r.id("recovery-title")) { (PreEscaped(qr)) }
             } @else { p { (r.id("recovery-qr-too-large")) } }

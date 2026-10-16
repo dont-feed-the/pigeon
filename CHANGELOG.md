@@ -27,6 +27,12 @@ the second number, and every other pull request the third.
 - Diagnostic collection asks before including file names and keeps the
   resulting bundle in a private local file.
 
+### Fixed
+
+- A busy computer can share diagnostics after a fresh permission even when
+  its telemetry history exceeds the transfer limit. Older records are
+  omitted explicitly so the newest complete records still arrive.
+
 ## 0.4.3 — 2026-10-16
 
 ### Fixed

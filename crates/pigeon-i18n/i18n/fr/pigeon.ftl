@@ -424,7 +424,7 @@ progress-recover = Récupération de cet ordinateur ; vérification de l’histo
 confirm-revoke-sheet = Révoquer { $name } ? Cette clé sur papier ne pourra plus ajouter d’ordinateurs. [o/N]
 
 cmd-debug-allow = Autoriser un diagnostic pour un ordinateur choisi pendant dix minutes
-debug-allowed = { $name } peut recueillir une partie des diagnostics de ce groupe pendant les dix prochaines minutes, noms de fichiers inclus. Redémarrer pigeon annule cette autorisation.
+debug-allowed = { $name } peut recueillir les diagnostics de ce groupe une seule fois, noms de fichiers inclus. Cette autorisation expire dans dix minutes. Redémarrer pigeon annule cette autorisation.
 problem-debug-not-allowed = { $name } n’a pas autorisé de diagnostic. Demandez à sa personne d’ouvrir les réglages et d’autoriser un diagnostic pour cet ordinateur, puis réessayez.
 confirm-debug-bundle = Enregistrer les diagnostics, noms de fichiers inclus, dans un fichier local privé ? Les autres ordinateurs ne partagent qu’avec leur propre autorisation. [o/N]
 confirm-debug-allow = Autoriser { $name } à recueillir une partie des diagnostics de ce groupe, noms de fichiers inclus, pendant les dix prochaines minutes ? [o/N]
@@ -442,7 +442,7 @@ recovery-person = Personne : { $name }
 recovery-backups = Machines de sauvegarde :
 recovery-secret = Gardez cette fiche comme un passeport : quiconque la détient peut ajouter des ordinateurs en votre nom. Imprimez-la et rangez-la en lieu sûr ; ne l’envoyez à personne.
 recovery-instructions = Sur un nouvel ordinateur, enregistrez le code dans un fichier texte et lancez : pigeon recover CE-FICHIER DOSSIER
-recovery-qr-too-large = Cette fiche contient trop d’informations pour un seul code QR. Gardez le code texte complet ci-dessous ; il fonctionne de la même manière.
+recovery-qr-too-large = Cette fiche contient trop d’informations pour un seul code QR. Gardez le code texte complet sur cette fiche ; il fonctionne de la même manière.
 recovery-recommendation = { $name } n’a qu’un seul ordinateur pouvant signer. Imprimez une fiche de récupération ou ajoutez un second ordinateur pour pouvoir revenir si vous perdez cet ordinateur.
 web-print-recovery = Préparer une fiche de récupération
 web-recovery-print-help = Utilisez la commande Imprimer de votre navigateur pour imprimer cette page. Gardez le code texte complet avec le code QR. Fermez cette page une fois la fiche rangée en lieu sûr.

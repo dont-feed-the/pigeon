@@ -35,9 +35,10 @@ padding:0 1rem;line-height:1.5;color:#1b1b1b}nav a{margin-right:1.2rem}\
 nav a[aria-current]{font-weight:bold}h1{font-size:1.5rem}li{margin:.3rem 0}\
 article{border-top:1px solid #ccc;padding:.5rem 0}form{display:inline-block;margin-right:1rem}\
 textarea{max-width:100%;box-sizing:border-box}\
+.recovery-instructions{overflow-wrap:anywhere}.recovery-instructions p{margin:.25rem 0}\
 .recovery-code{overflow-wrap:anywhere;white-space:pre-wrap;font-size:.7rem}\
 .recovery-qr svg{width:100%;max-width:32rem;height:auto}\
-@media print{nav,.no-print{display:none}body{margin:0;max-width:none}.recovery-qr svg{max-width:14cm}}";
+@media print{nav,.no-print{display:none}body{margin:0;max-width:none}.recovery-qr svg{max-width:12cm}}";
 
 /// Puts each `headline` event's text in the page's headline.
 const SCRIPT: &str = "new EventSource('/events').addEventListener('headline',\

@@ -424,7 +424,7 @@ progress-recover = Recovering this computer; checking the backup’s history and
 confirm-revoke-sheet = Revoke { $name }? This paper key will no longer add computers. [y/N]
 
 cmd-debug-allow = Allow one diagnostic bundle to a chosen computer for ten minutes
-debug-allowed = { $name } may collect one diagnostic part for this group during the next ten minutes, including file names. Restarting pigeon cancels this permission.
+debug-allowed = { $name } may collect diagnostics for this group once, including file names. This permission expires in ten minutes. Restarting pigeon cancels this permission.
 problem-debug-not-allowed = { $name } has not allowed a diagnostic part. Ask its person to open Settings and allow one bundle for this computer, then try again.
 confirm-debug-bundle = Save diagnostics, including file names, in a private local file? Chosen peers share only with their own permission. [y/N]
 confirm-debug-allow = Allow { $name } to collect one diagnostic part for this group, including file names, during the next ten minutes? [y/N]
@@ -442,7 +442,7 @@ recovery-person = Person: { $name }
 recovery-backups = Backup machines:
 recovery-secret = Keep this sheet like a passport: whoever holds it can add computers for you. Print it and store it somewhere safe; do not send it to anyone.
 recovery-instructions = On a new computer, save the code as a text file and run: pigeon recover THIS-FILE FOLDER
-recovery-qr-too-large = This sheet has too much information for one QR code. Keep the complete text code below; it works in the same way.
+recovery-qr-too-large = This sheet has too much information for one QR code. Keep the complete text code on this sheet; it works in the same way.
 recovery-recommendation = { $name } has only one signing computer. Print a recovery sheet or add a second computer so a lost computer does not lock you out.
 web-print-recovery = Prepare a recovery sheet
 web-recovery-print-help = Use your browser’s Print command to print this page. Keep the complete code and QR code together. Close this page when you have stored the sheet safely.
