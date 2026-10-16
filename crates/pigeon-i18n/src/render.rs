@@ -324,6 +324,7 @@ impl Renderer {
             Response::Progress { message, .. } => (vec![self.text(message)], true),
             Response::Problem(p) => (self.problem(p), true),
             Response::Status(s) => (self.status(s), false),
+            Response::Erasure { answer } => (crate::erase::lines(self, answer), false),
             Response::Capacity(report) => (crate::capacity::lines(self, report), false),
             Response::Health(h) => (self.status(&h.status), false),
             Response::Machines { machines } => {

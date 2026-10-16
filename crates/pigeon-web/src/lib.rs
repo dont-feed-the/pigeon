@@ -25,6 +25,7 @@ use axum::routing::{get, post};
 use pigeon_i18n::Catalogue;
 
 mod actions;
+mod erase;
 mod files;
 mod folder_rules;
 mod health;
@@ -154,6 +155,7 @@ impl Web {
             .route("/events", get(pages::events))
             .route("/files", get(files::files))
             .route("/space", get(space::page))
+            .route("/erase", get(erase::view).post(erase::submit))
             .route("/folder", get(files::folder_page))
             .route(
                 "/folder-rule",

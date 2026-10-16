@@ -22,6 +22,7 @@ async fn pending() -> (World, String, String) {
     let doc = PurgeDoc {
         format: 1,
         kind: "purge".into(),
+        history: true,
         paths: vec!["Shared/".into()],
         base: head.clone(),
         keys: vec![],

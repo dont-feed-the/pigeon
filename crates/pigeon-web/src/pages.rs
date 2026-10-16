@@ -221,6 +221,7 @@ fn suggestion(r: &Renderer, s: &Suggestion, form: &str) -> Markup {
     html! {
         article {
             p { (r.catalogue().format(&msg)) }
+            p { a href=(format!("/erase?suggestion={}", form_urlencoded::byte_serialize(s.id.as_bytes()).collect::<String>())) { (r.id("web-erase-suggestion")) } }
             @for path in &s.paths {
                 form method="post" action="/suggestions/view" {
                     input type="hidden" name="form" value=(form);

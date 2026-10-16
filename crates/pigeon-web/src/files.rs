@@ -71,6 +71,7 @@ pub async fn files(
             }
         }
         @for f in &rows { (folder(&r, &root, f, &form.0)) }
+        p { a href="/erase" { (r.id("web-erase-list")) } }
         p { a href="/space" { (r.id("space-title")) } }
         p { a href="/deleted" { (r.id("web-deleted")) } }
     };
@@ -191,6 +192,7 @@ pub async fn folder_page(
                 }
             }
         }
+        p { a href=(format!("/erase?path={}", enc(&at.path))) { (r.id("web-erase-title")) } }
         p { a href=(format!("/folder-rule?path={}", enc(&at.path))) { (r.id("web-folder-rule")) } }
         (body)
     };
@@ -224,6 +226,7 @@ pub async fn file_page(
         (list(&other))
         h2 { (r.id("web-versions")) }
         @for v in &rows { (version(&r, &at.path, v, Some(v.number) != newest, &form.0)) }
+        p { a href=(format!("/erase?path={}", enc(&at.path))) { (r.id("web-erase-title")) } }
         p { a href="/files" { (r.id("web-back")) } }
     };
     page(&r, "/files", &at.path, &body)
@@ -309,6 +312,7 @@ pub async fn deleted_page(
         @for f in &rows {
             article {
                 p { (r.deleted(f)) }
+                p { a href=(format!("/erase?path={}", enc(&std::path::Path::new(&root).join(&f.path).to_string_lossy()))) { (r.id("web-erase-title")) } }
                 form method="post" action="/files/restore" {
                     input type="hidden" name="form" value=(form.0);
                     input type="hidden" name="path" value=(std::path::Path::new(&root).join(&f.path).to_string_lossy());

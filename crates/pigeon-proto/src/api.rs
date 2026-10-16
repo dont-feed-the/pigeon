@@ -13,6 +13,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Request {
+    /// Explicit erasure review, readiness, confirmation and cancellation.
+    Erase {
+        /// Operation on the selected/default group.
+        operation: crate::erase::Operation,
+    },
     /// View direct rules, or the effective rule of one local folder.
     FolderRules {
         /// Local folder, or all rules of the default group.
@@ -303,6 +308,11 @@ pub enum Request {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Response {
+    /// Erasure review or explicit action result.
+    Erasure {
+        /// Shared typed result for the CLI and browser.
+        answer: Box<crate::erase::Answer>,
+    },
     /// Folder rules with human names and explicit edit authority.
     FolderRules(Box<crate::policy::Report>),
     /// Local group health, without an optional telemetry collector.

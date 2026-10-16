@@ -8,6 +8,10 @@ the second number, and every other pull request the third.
 
 ### Added
 
+- Review the exact versions covered by `pigeon erase PATH` or
+  `pigeon erase --suggestion ID`, including content still needed elsewhere.
+  The command and web pages show preparation, confirmation, waiting backup
+  machines and cancellation. Preparation never submits a later erasure.
 - Backup machines check retained files every 30 days during the nightly
   window, using idle I/O priority on Linux. Set `resources.scrub_window`
   to choose another local-time window.

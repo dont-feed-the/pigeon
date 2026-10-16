@@ -562,3 +562,7 @@ mod scrub_content;
 
 #[path = "purge/upgrade.rs"]
 mod purge_upgrade;
+
+#[cfg(feature = "lab")]
+#[path = "purge/restart.rs"]
+mod erase_restart;

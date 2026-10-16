@@ -121,7 +121,10 @@ pub(crate) async fn checks(
         let base_seen = accepted(g, &doc.base).await?;
         let mut proposals_seen = true;
         for tip in &doc.proposals {
-            if !proposal(g, tip).await? {
+            if !proposal(g, tip).await?
+                || (!doc.history
+                    && crate::proposal::base(g, tip).await?.as_deref() != Some(doc.base.as_str()))
+            {
                 proposals_seen = false;
                 break;
             }

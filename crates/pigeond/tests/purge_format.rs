@@ -11,6 +11,7 @@ fn doc() -> PurgeDoc {
     PurgeDoc {
         format: 1,
         kind: "purge".into(),
+        history: true,
         paths: vec!["Photos/old-scans/".into()],
         base: "a".repeat(40),
         keys: Vec::new(),
@@ -30,11 +31,13 @@ fn a_decision_round_trips_without_extending_its_scope(tc: TestCase) {
     if tc.draw(gs::booleans()) {
         d.keys.push(format!("SHA256E-s{n}--{}.jpg", "f".repeat(64)));
         d.proposals.push(format!("{n:040x}"));
+        d.history = tc.draw(gs::booleans());
     }
     assert_eq!(parse(&render(&d).unwrap()), Ok(d.clone()));
     assert_eq!(d.end(), Some(at));
     assert!(d.decision().paths.contains(&format!("Photos-{n}/été")));
     assert!(!d.decision().paths.contains("Photos"));
+    assert_eq!(d.decision().history, d.history);
 }
 
 #[test]

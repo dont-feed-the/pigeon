@@ -27,6 +27,17 @@ fn invalid(detail: &str) -> crate::git::Error {
     }
 }
 
+/// Read immutable reference metadata for a preview without holding the
+/// worktree lock. The caller must bind and recheck its exact ref snapshot.
+pub(crate) async fn reference_index(
+    g: &Group,
+    tips: &[String],
+) -> Result<Index, crate::git::Error> {
+    let mut index = g.purge.lock().await.index.clone();
+    index.extend(&g.git, tips).await?;
+    Ok(index)
+}
+
 /// Cold scans never hold the group's worktree/request lock. A changed ref
 /// will invalidate the reading again before it can authorize content.
 pub async fn prepare(g: &Group) {
@@ -238,7 +249,12 @@ async fn evaluate(g: &Group, me: &str, allow_drop: bool) -> Result<(), crate::gi
             }
         }
     }
-    g.lock().purge_seals = own.into_values().collect();
+    // Completion witnesses already retain the original full signed
+    // reports. Bound replaceable reports to still-pending decisions.
+    g.lock().purge_seals = own
+        .into_values()
+        .filter(|seal| active.contains_key(&seal.decision) && !epochs.contains_key(&seal.decision))
+        .collect();
     let released = view.released(contains);
     let after = crate::retention::snapshot(g).await?;
     if after.named != reading.named
@@ -253,20 +269,32 @@ async fn evaluate(g: &Group, me: &str, allow_drop: bool) -> Result<(), crate::gi
         return Err(invalid("retained refs changed during purge evaluation"));
     }
     if allow_drop {
+        let held_hashes: BTreeSet<_> = references
+            .iter()
+            .filter(|r| !released.contains(&r.key))
+            .filter_map(|r| crate::net::sync::key_sha256(&r.key))
+            .map(str::to_ascii_lowercase)
+            .collect();
         for key in released {
             let _lease = g.git.purge_gate.erasure().await;
             let policy = g.git.purge_gate.policy();
             if policy.waiting || !policy.released.contains(&key) {
                 return Err(invalid("ref mutation interrupted purge drops"));
             }
-            if crate::custody::present(g, &key).await.is_none() {
-                continue;
+            if crate::custody::present(g, &key).await.is_some() {
+                // --key never names a working path. Current and uncovered
+                // references were excluded by the pure algebra above.
+                g.git
+                    .run(&["annex", "drop", "--force", "--key", &key])
+                    .await?;
             }
-            // --key never names a working path. Current and uncovered
-            // references were excluded by the pure algebra above.
-            g.git
-                .run(&["annex", "drop", "--force", "--key", &key])
-                .await?;
+            if crate::net::sync::key_sha256(&key)
+                .is_some_and(|hash| !held_hashes.contains(&hash.to_ascii_lowercase()))
+            {
+                crate::shared::release(g, &key)
+                    .await
+                    .map_err(|e| invalid(&e))?;
+            }
             tracing::info!(group = %g.id, key, "purge-dropped");
         }
     }

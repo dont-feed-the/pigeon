@@ -1,4 +1,5 @@
-//! A group-scoped, append-only immutable pool. Files are verified before
+//! A group-scoped immutable pool. Only qualified erasure releases names.
+//! Files are verified before
 //! publication; hard links pin immutable source objects independently of drops.
 //! Mutable sources get independent snapshots. Per-key locks serialize writers.
 
@@ -198,3 +199,29 @@ pub(crate) fn relink(source: &Path, target: &Path) -> io::Result<()> {
 #[cfg(test)]
 #[path = "shared_pool_tests.rs"]
 mod tests;
+
+/// Release only this group's pool name after the caller proves every
+/// retaining reference to these bytes released. Other groups and active
+/// reader/annex hard links keep their own names; this is not secure wiping.
+pub(crate) fn release(store: &Path, group: &str, key: &str) -> io::Result<()> {
+    let target = path(store, group, key)?;
+    let parent = target
+        .parent()
+        .ok_or_else(|| io::Error::other("No pool parent"))?;
+    if !parent.exists() {
+        return Ok(());
+    }
+    let lock = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .open(target.with_extension("lock"))?;
+    lock.lock()?;
+    match std::fs::remove_file(&target) {
+        Ok(()) => pigeon_sys::fs::fsync_dir(parent).map_err(io::Error::other),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
+}

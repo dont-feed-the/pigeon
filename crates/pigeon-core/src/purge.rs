@@ -23,6 +23,9 @@ pub struct Reference<C, K> {
 pub struct Decision<C, K> {
     /// Accepted history the decider saw.
     pub base: C,
+    /// Include accepted history. False scopes only new births of the named
+    /// proposal beyond its accepted base, preserving identical older bytes.
+    pub history: bool,
     /// Exact path/subtree scopes; an empty scope means the group's root.
     pub paths: BTreeSet<String>,
     /// Empty means all keys in scope.
@@ -39,6 +42,7 @@ impl<C: Ord, K: Ord> Decision<C, K> {
             .iter()
             .any(|path| crate::restore::under(&reference.path, path))
             && (self.keys.is_empty() || self.keys.contains(&reference.key))
+            && (self.history || !contains(&self.base, &reference.birth))
             && (contains(&self.base, &reference.birth)
                 || self
                     .proposals

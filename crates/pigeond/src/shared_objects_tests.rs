@@ -39,9 +39,15 @@ async fn compaction_preserves_annex_locks_timestamps_and_temporary_files() {
             std::fs::write(&seed, bytes).unwrap();
             pool::retain(&store, &group, &key, &seed, false).unwrap();
         }
-        compact_objects(directory, store.clone(), group.clone(), false)
-            .await
-            .unwrap();
+        compact_objects(
+            directory,
+            store.clone(),
+            group.clone(),
+            false,
+            Default::default(),
+        )
+        .await
+        .unwrap();
         let target = pool::path(&store, &group, &key).unwrap();
         assert!(pool::same_inode(&object, &target));
         for (path, body, inode) in extras {
@@ -53,5 +59,38 @@ async fn compaction_preserves_annex_locks_timestamps_and_temporary_files() {
             );
             assert_eq!(std::fs::read(&path).unwrap(), body);
         }
+    }
+}
+
+#[tokio::test]
+async fn compaction_cannot_republish_released_or_unverified_pool_bytes() {
+    for waiting in [false, true] {
+        let temp = tempfile::tempdir().unwrap();
+        let bytes = b"qualified bytes";
+        let hash = crate::util::hex(&sha2::Sha256::digest(bytes));
+        let key = format!("SHA256E-s{}--{hash}.txt", bytes.len());
+        let directory = temp.path().join("annex/objects");
+        let parent = directory.join("ab/cd").join(&key);
+        std::fs::create_dir_all(&parent).unwrap();
+        let object = parent.join(&key);
+        std::fs::write(&object, bytes).unwrap();
+        let gate = std::sync::Arc::new(crate::purge_gate::Gate::default());
+        gate.arm();
+        if !waiting {
+            assert!(gate.publish(
+                gate.revision().unwrap(),
+                pigeon_core::filter::ContentPolicy {
+                    waiting: false,
+                    released: [key.clone()].into()
+                }
+            ));
+        }
+        let store = temp.path().join("pool");
+        let group = "a".repeat(40);
+        compact_objects(directory, store.clone(), group.clone(), false, gate)
+            .await
+            .unwrap();
+        assert!(!pool::path(&store, &group, &key).unwrap().exists());
+        assert_eq!(std::fs::read(&object).unwrap(), bytes);
     }
 }

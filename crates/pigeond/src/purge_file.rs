@@ -24,6 +24,10 @@ pub struct PurgeDoc {
     pub paths: Vec<String>,
     /// The accepted history the decider saw.
     pub base: String,
+    /// False erases only a named suggestion's births beyond its accepted
+    /// base. Older accepted versions sharing its bytes remain retained.
+    #[serde(default = "yes", skip_serializing_if = "is_yes")]
+    pub history: bool,
     /// Empty means every version in scope.
     #[serde(default)]
     pub keys: Vec<String>,
@@ -42,6 +46,13 @@ pub fn commit_id(id: &str) -> bool {
         && id
             .bytes()
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+fn yes() -> bool {
+    true
+}
+fn is_yes(value: &bool) -> bool {
+    *value
 }
 
 fn scope(path: &str) -> Option<String> {
@@ -76,6 +87,7 @@ impl PurgeDoc {
     pub fn decision(&self) -> Decision<String, String> {
         Decision {
             base: self.base.clone(),
+            history: self.history,
             paths: self.paths.iter().filter_map(|p| scope(p)).collect(),
             keys: self.keys.iter().cloned().collect(),
             proposals: self.proposals.iter().cloned().collect(),
@@ -106,6 +118,7 @@ pub fn parse(text: &str) -> Result<PurgeDoc, Unread> {
         "kind",
         "paths",
         "base",
+        "history",
         "keys",
         "proposals",
         "requested_by",
@@ -122,6 +135,7 @@ pub fn parse(text: &str) -> Result<PurgeDoc, Unread> {
     let paths: Option<BTreeSet<String>> = doc.paths.iter().map(|p| scope(p)).collect();
     if !commit_id(&doc.base)
         || doc.proposals.iter().any(|p| !commit_id(p))
+        || (!doc.history && doc.proposals.len() != 1)
         || doc.keys.iter().any(|k| {
             pigeon_core::capacity::key_size(k).is_none()
                 || !pigeon_core::authority::is_pointer(format!("/annex/objects/{k}\n").as_bytes())

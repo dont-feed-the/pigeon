@@ -186,6 +186,11 @@ impl Daemon {
             tracing::warn!(group = %g.id, error = %e, "capture-recovery-failed");
             settled = false;
         }
+        if settled && let Err(e) = crate::erase_commit::recover(g, &self.device, &self.tracer).await
+        {
+            tracing::warn!(group = %g.id, error = %e, "erase-install-waits");
+            return;
+        }
         if settled {
             crate::asides::release(g, &self.tracer).await;
         }

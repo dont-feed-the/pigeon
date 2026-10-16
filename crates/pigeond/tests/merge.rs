@@ -542,6 +542,7 @@ async fn a_purge_request_is_admin_only_and_late_approval_extends_only_its_wait()
     let doc = PurgeDoc {
         format: 1,
         kind: "purge".into(),
+        history: true,
         paths: vec!["Shared/".into()],
         base: head.clone(),
         keys: vec![],
@@ -607,6 +608,7 @@ async fn cancelling_and_readding_the_same_purge_creates_a_new_identity() {
     let doc = PurgeDoc {
         format: 1,
         kind: "purge".into(),
+        history: true,
         paths: vec!["Shared/".into()],
         base: head.clone(),
         keys: vec![],
@@ -647,6 +649,7 @@ async fn a_signed_seal_survives_replaced_reports_and_contradictions_stop_release
     let doc = PurgeDoc {
         format: 1,
         kind: "purge".into(),
+        history: true,
         paths: vec!["Shared/".into()],
         base: head.clone(),
         keys: vec![],
@@ -805,3 +808,9 @@ mod purge_admission;
 
 #[path = "purge/upgrade.rs"]
 mod purge_upgrade;
+
+#[path = "purge/suggestion.rs"]
+mod purge_suggestion;
+
+#[path = "purge/preview.rs"]
+mod erase_preview;

@@ -23,6 +23,7 @@ impl World {
         let path = format!("Photos-{}/old.jpg", tc.draw(gs::integers::<u32>()));
         let decision = Decision {
             base: 1,
+            history: true,
             paths: [path.clone()].into(),
             keys: BTreeSet::new(),
             proposals: BTreeSet::new(),
@@ -249,4 +250,23 @@ fn a_completion_epoch_cannot_precede_its_seals_or_be_empty_or_unseen(tc: TestCas
         .held
         .insert(world.key);
     assert!(world.released().is_empty());
+}
+
+#[hegel::test(test_cases = 1000)]
+fn erasing_a_suggestion_never_releases_its_accepted_base_even_when_bytes_match(tc: TestCase) {
+    let mut w = World::new(&tc);
+    let accepted = w.references.first().unwrap().clone();
+    let mut proposed = accepted.clone();
+    proposed.birth = 4;
+    let decision = w.decisions.get_mut(&100).unwrap();
+    decision.history = false;
+    decision.proposals.insert(4);
+    let contains = |tip: &u64, birth: &u64| tip >= birth;
+    assert!(!decision.covers(&accepted, &contains));
+    assert!(decision.covers(&proposed, &contains));
+    let mut newer = proposed.clone();
+    newer.birth = 5;
+    assert!(!decision.covers(&newer, &contains));
+    w.references.insert(proposed);
+    assert!(!w.view().released(contains).contains(&w.key));
 }

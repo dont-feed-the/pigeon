@@ -140,7 +140,7 @@ pub async fn round(g: &Group) -> Result<bool, Error> {
     Ok(false)
 }
 
-async fn offers(
+pub(crate) async fn offers(
     g: &Group,
     main: &str,
     request: &Request,
@@ -184,8 +184,24 @@ async fn offers(
             continue;
         }
         let Some(head) = report.main else { continue };
-        if !g.lock().engine.accepted(&head) || !g.git.contains(main, &head).await {
+        if !g.lock().engine.accepted(&head)
+            || !g.git.contains(main, &head).await
+            || !g.git.contains(&head, &request.base).await
+        {
             continue;
+        }
+        if request.kind == AdmissionKind::Upgrade {
+            let path = request.path().map_err(|e| invalid(&e))?;
+            let Some(bytes) = g.git.blob(&format!("{head}:{path}")).await else {
+                continue;
+            };
+            if Request::parse(&path, &String::from_utf8_lossy(&bytes))
+                .ok()
+                .as_ref()
+                != Some(request)
+            {
+                continue;
+            }
         }
         if report
             .acknowledgements

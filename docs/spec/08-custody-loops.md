@@ -136,8 +136,10 @@ pure `keep_targets` algebra and its three 1000-case laws define this rule.
 
 ## 8.6 Purge: erase forever (ADR 0018)
 
-Not yet coded; `Purge.tla` checks the protocol and E14 asserts it with
-git-annex. A purge releases **references**, not keys. A reference of key
+The M5 driver is being implemented; [its report](../reports/deletion-6.md)
+lists remaining release evidence. `Purge.tla` checks the fixed-roster protocol
+and E14 asserts it with git-annex. Proposed ADRs 0074 and 0075 describe the
+additional durable waits, completion witnesses and admission fences. A purge releases **references**, not keys. A reference of key
 *k* is a pair (*c*, *p*): an accepted or proposal commit *c* whose tree has
 *k* at *p* while none of its parents does. A key is dropped only once all
 its references are released.
@@ -153,6 +155,7 @@ paths = ["Photos/old-scans/"]       # every version of these paths …
 base = "<commit id>"                # … in this main and its ancestors: what the decider saw
 keys = []                           # optional: only these versions
 proposals = []                      # optional: suggestions erased too
+history = true                    # false for only a named suggestion beyond its exact base
 requested_by = "ines"
 retention_end = 2026-11-12T00:00:00Z  # ≥ the commit's recorded time + retention_days
 ```
@@ -249,7 +252,8 @@ The capacity view is implemented by `capacity_view` using the core capacity
 algebra: `status --capacity` and `/space` share distinct-key totals and signed
 disk report times. Extra-copy location observations have a five-second bound
 and remain unknown on incomplete evidence. Suggestions retain their size and
-age after a decline. Erase and purge remain the next implementation step.
+age after a decline. The working Erase interface is described in the M5 report; release validation
+is still pending.
 
 ## 8.10 Rebalancing
 

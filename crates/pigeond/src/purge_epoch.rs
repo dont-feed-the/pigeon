@@ -157,6 +157,20 @@ async fn available(g: &Group, doc: &Doc) -> Result<bool, Error> {
 /// Recheck immutable witnesses from accepted main after restart or a
 /// membership change. Several valid witnesses may close the same epoch.
 pub async fn collect(g: &Group, main: &str) -> Result<BTreeMap<String, Verified>, Error> {
+    collect_inner(g, main, true).await
+}
+
+/// Read-only status/preview observation; acceptance already rooted proof
+/// objects. No Git reference is created by this reading.
+pub async fn read(g: &Group, main: &str) -> Result<BTreeMap<String, Verified>, Error> {
+    collect_inner(g, main, false).await
+}
+
+async fn collect_inner(
+    g: &Group,
+    main: &str,
+    save: bool,
+) -> Result<BTreeMap<String, Verified>, Error> {
     let mut out = BTreeMap::new();
     for (path, entry) in g.git.tree(main).await? {
         if !path.starts_with(PREFIX) {
@@ -166,7 +180,9 @@ pub async fn collect(g: &Group, main: &str) -> Result<BTreeMap<String, Verified>
         let text = std::str::from_utf8(&bytes).map_err(|_| invalid("epoch encoding"))?;
         let doc = parse(&path, text).map_err(|_| invalid("unknown epoch"))?;
         let verified = verify(g, &doc, &[main.into()]).await?;
-        retain(g, &verified).await?;
+        if save {
+            retain(g, &verified).await?
+        }
         out.entry(doc.decision.clone()).or_insert(verified);
     }
     Ok(out)

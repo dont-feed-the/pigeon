@@ -127,6 +127,7 @@ pub(crate) fn group_of(d: &Daemon, path: &Path) -> Option<Arc<Group>> {
 
 pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
     match request {
+        Request::Erase { operation } => crate::erase::handle(d, operation).await,
         Request::FolderRules { folder } => crate::folder_rules::list(d, folder.as_deref()),
         Request::SetFolderRule { folder, rule } => crate::folder_rules::set(d, &folder, rule).await,
         Request::Capacity => crate::capacity_view::report(d).await,

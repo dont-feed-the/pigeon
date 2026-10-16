@@ -4,7 +4,13 @@
 
 use super::*;
 
-async fn signed(l: &Laptop, tree: &Tree, parents: &[&str], at: i64, signer: u8) -> String {
+pub(super) async fn signed(
+    l: &Laptop,
+    tree: &Tree,
+    parents: &[&str],
+    at: i64,
+    signer: u8,
+) -> String {
     let root = merge::write_tree(&l.git, tree).await.unwrap();
     let mut text = format!("tree {root}\n");
     for parent in parents {
@@ -48,6 +54,7 @@ async fn only_fully_released_historical_objects_drop_and_private_bytes_stay() {
     let doc = pigeond::purge_file::PurgeDoc {
         format: 1,
         kind: "purge".into(),
+        history: true,
         paths: vec!["Shared/erased.txt".into()],
         base: original.clone(),
         keys: vec![],
@@ -70,6 +77,31 @@ async fn only_fully_released_historical_objects_drop_and_private_bytes_stay() {
     let old_object = pigeond::custody::present(&l.g, &old_key).await.unwrap();
     let kept_object = pigeond::custody::present(&l.g, &kept_key).await.unwrap();
     assert_eq!(std::fs::read(&old_object).unwrap(), old_bytes);
+    // A provider's canonical pool is a separate hard link. Dropping the
+    // annex name alone would leave these exact bytes retained forever.
+    let store = l.wt.parent().unwrap().join("provider-pool");
+    std::fs::create_dir_all(&store).unwrap();
+    let pool_path = |group: &str, key: &str| {
+        let hash = pigeond::net::sync::key_sha256(key).unwrap();
+        store.join(group).join(&hash[..2]).join(hash)
+    };
+    let old_pool = pool_path(&l.g.id, &old_key);
+    let kept_pool = pool_path(&l.g.id, &kept_key);
+    let independent_pool = pool_path(&"b".repeat(40), &old_key);
+    for (target, source) in [
+        (&old_pool, &old_object),
+        (&kept_pool, &kept_object),
+        (&independent_pool, &old_object),
+    ] {
+        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+        std::fs::hard_link(source, target).unwrap();
+    }
+    let registration = serde_json::json!({ "format": 1, "store": store });
+    std::fs::write(
+        l.g.root().join("shared-provider.json"),
+        serde_json::to_vec(&registration).unwrap(),
+    )
+    .unwrap();
     let private = b"private, staged and never published\n";
     pigeond::change::stage_file(&l.git, Some(&l.wt), "private.txt", private)
         .await
@@ -118,6 +150,16 @@ async fn only_fully_released_historical_objects_drop_and_private_bytes_stay() {
         "fully qualified purge must physically drop its object"
     );
     assert!(pigeond::custody::present(&l.g, &old_key).await.is_none());
+    assert!(
+        !old_pool.exists(),
+        "qualified erasure must release the pool name too"
+    );
+    assert_eq!(std::fs::read(&kept_pool).unwrap(), kept_bytes);
+    assert_eq!(std::fs::read(&independent_pool).unwrap(), old_bytes);
+    // Cleanup remains idempotent if annex has already lost its own name.
+    std::fs::hard_link(&independent_pool, &old_pool).unwrap();
+    pigeond::purge::round(&l.g, &dev(1).0, true).await;
+    assert!(!old_pool.exists());
     assert_eq!(std::fs::read(&kept_object).unwrap(), kept_bytes);
     assert_eq!(std::fs::read(l.wt.join("private.txt")).unwrap(), private);
     assert_eq!(l.git.index().await.unwrap()["private.txt"], private_entry);
@@ -133,4 +175,100 @@ async fn only_fully_released_historical_objects_drop_and_private_bytes_stay() {
             .unwrap()
             .contains(&kept_key)
     );
+    // Extensions distinguish annex keys, while the pool shares their
+    // hash. A fresh uncovered .bin reference must retain those same bytes.
+    let alias = version(&l, "restored.bin", old_bytes, true).await;
+    let mut tree = l.git.tree(&decision).await.unwrap();
+    tree.insert("Shared/restored.bin".into(), alias);
+    let restored = signed(&l, &tree, &[&decision], pigeond::util::now(), 1).await;
+    merge::judge_history(&l.g, std::slice::from_ref(&restored))
+        .await
+        .unwrap();
+    assert!(l.g.lock().engine.accepted(&restored));
+    l.g.git
+        .update_ref("refs/heads/main", &restored, Some(&decision))
+        .await
+        .unwrap();
+    let alias_key = l.git.keys(&restored).await.unwrap()["Shared/restored.bin"].clone();
+    assert_ne!(alias_key, old_key);
+    assert_eq!(
+        pigeond::net::sync::key_sha256(&alias_key),
+        pigeond::net::sync::key_sha256(&old_key)
+    );
+    std::fs::hard_link(&independent_pool, &old_pool).unwrap();
+    pigeond::purge::prepare(&l.g).await;
+    pigeond::purge::round(&l.g, &dev(1).0, true).await;
+    assert!(l.g.git.purge_gate.policy().released.contains(&old_key));
+    assert!(!l.g.git.purge_gate.policy().released.contains(&alias_key));
+    assert_eq!(std::fs::read(&old_pool).unwrap(), old_bytes);
+    assert!(pigeond::custody::present(&l.g, &alias_key).await.is_some());
+}
+
+#[tokio::test]
+async fn confirmed_erasure_deletes_clean_current_files_and_preserves_private_saves() {
+    use pigeon_proto::erase::{Answer, Selection};
+    let Some(l) = laptop().await else { return };
+    let upgraded = purge_upgrade::upgrade(&l.g).await;
+    let clean_bytes = b"clean file reviewed for erasing\n";
+    let dirty_bytes = b"accepted bytes before private save\n";
+    let clean = version(&l, "clean.txt", clean_bytes, true).await;
+    let dirty = version(&l, "dirty.txt", dirty_bytes, true).await;
+    let mut tree = l.g.git.tree(&upgraded).await.unwrap();
+    tree.insert("Shared/clean.txt".into(), clean);
+    tree.insert("Shared/dirty.txt".into(), dirty);
+    let original = signed(&l, &tree, &[&upgraded], T0 + 100, 1).await;
+    merge::judge_history(&l.g, std::slice::from_ref(&original))
+        .await
+        .unwrap();
+    assert!(l.g.lock().engine.accepted(&original));
+    l.g.git
+        .update_ref("refs/heads/main", &original, Some(&upgraded))
+        .await
+        .unwrap();
+    install::incoming(&l.g, &dev(1).0, &l.t).await.unwrap();
+    assert_eq!(
+        std::fs::read(l.wt.join("Shared/clean.txt")).unwrap(),
+        clean_bytes
+    );
+    let private = b"new private edit must never be erased or published\n";
+    std::fs::write(l.wt.join("Shared/dirty.txt"), private).unwrap();
+    pigeond::change::stage_file(
+        &l.git,
+        Some(&l.wt),
+        "staged-private.txt",
+        b"private staged data\n",
+    )
+    .await
+    .unwrap();
+    let staged = l.git.index().await.unwrap()["staged-private.txt"].clone();
+    let selection = Selection::Path(l.wt.join("Shared").to_string_lossy().into());
+    let plan = pigeond::erase_preview::plan(&l.g, &dev(1).0, &selection)
+        .await
+        .unwrap();
+    assert_eq!(plan.preview.current_files, 2);
+    let answer = pigeond::erase_commit::submit(&l.g, &dev(1).0, plan, &l.t)
+        .await
+        .unwrap();
+    assert!(matches!(
+        answer,
+        Answer::Submitted {
+            needs_approval: false,
+            ..
+        }
+    ));
+    assert!(!l.wt.join("Shared/clean.txt").exists());
+    assert_eq!(
+        std::fs::read(l.wt.join("Shared/dirty.txt")).unwrap(),
+        private
+    );
+    assert_eq!(l.git.index().await.unwrap()["staged-private.txt"], staged);
+    let head = l.g.git.rev("refs/heads/main").await.unwrap();
+    let accepted = l.g.git.tree(&head).await.unwrap();
+    assert!(!accepted.contains_key("Shared/clean.txt"));
+    assert!(!accepted.contains_key("Shared/dirty.txt"));
+    assert!(!accepted.contains_key("staged-private.txt"));
+    let decisions = pigeond::purge_state::active(&l.g, &head).await.unwrap();
+    assert_eq!(decisions.len(), 1);
+    assert!(decisions.values().all(|a| a.doc.base == original));
+    assert!(!l.g.root().join("erase-install.toml").exists());
 }

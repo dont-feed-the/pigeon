@@ -225,6 +225,7 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
         return Ok(done);
     }
     recover(g).await?;
+    crate::erase_commit::recover(g, me, tracer).await?;
     let now = crate::util::now_ns();
     g.lock()
         .installed

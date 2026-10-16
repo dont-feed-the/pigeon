@@ -30,6 +30,19 @@ fn invalid(detail: &str) -> Error {
 /// roots are checked again after restart, against today's active identity
 /// and custodian membership, before they can authorize a drop.
 pub async fn collect(g: &Group, active: &BTreeMap<String, Active>) -> Result<Proofs, Error> {
+    collect_inner(g, active, true).await
+}
+
+/// Read-only status/preview observation, without creating proof roots.
+pub async fn read(g: &Group, active: &BTreeMap<String, Active>) -> Result<Proofs, Error> {
+    collect_inner(g, active, false).await
+}
+
+async fn collect_inner(
+    g: &Group,
+    active: &BTreeMap<String, Active>,
+    retain: bool,
+) -> Result<Proofs, Error> {
     if active.is_empty() {
         return Ok(BTreeMap::new());
     }
@@ -132,7 +145,7 @@ pub async fn collect(g: &Group, active: &BTreeMap<String, Active>) -> Result<Pro
                 continue;
             }
             let saved = format!("{PREFIX}{}/{}", seal.decision, signer.0);
-            if name != &saved {
+            if retain && name != &saved {
                 // Replacing an invalid/torn old witness still needs a CAS.
                 // Valid earlier witnesses were processed first and remain.
                 g.git

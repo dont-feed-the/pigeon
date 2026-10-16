@@ -39,6 +39,23 @@ waits depend on report arrival order.
   declared deadline before using them. A later report cannot silently
   revoke an immutable seal. Conflicting values prevent release.
 
+- Read-only erasure previews bind the group, exact named retaining refs and
+  selected scope into a confirmation digest. Changed history requires a new
+  preview. A path erasure includes accepted/archive history only; suggestions
+  require their own explicit selection. `history = false` narrows a suggestion
+  erasure to births outside its independently accepted exact base, retaining
+  older accepted references even when the suggestion reverted to their bytes.
+- Confirmation constructs an isolated tree. It never captures private work or
+  stages unrelated entries. Before an accepted main CAS, persist an installation
+  marker naming both heads. Recovery installs exactly that commit's changed
+  paths before capture, including after SIGKILL, preserving dirty files and
+  unrelated staged entries. Unknown markers remain intact and stop capture.
+- The shared immutable bridge pool obeys the content gate and releases its
+  group-scoped name during qualified erasure, even if annex already lost its
+  link. Other retaining keys with the same hash keep that pool name; other
+  groups and active reader links are independent. There is no persistent
+  tombstone to block a later uncovered birth.
+
 ## Consequences
 
 A restart or forward wall-clock jump cannot shorten a receiver's wait.
