@@ -21,6 +21,9 @@ the second number, and every other pull request the third.
 - Restoring a deleted file can finish recovery after a crash without getting
   stuck on its missing index entry.
 
+- Leaving a group waits briefly for temporary Git index contention instead
+  of failing before it can commit the computer's removal.
+
 ## 0.4.1 — 2026-10-16
 
 ### Changed
