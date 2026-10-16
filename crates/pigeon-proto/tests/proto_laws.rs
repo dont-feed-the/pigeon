@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 use hegel::TestCase;
 use hegel::generators as gs;
 use pigeon_proto::api::{
-    Choice, DeletedFile, Divergence, FileChange, FileEntry, Folder, HeldChoice, HeldEntry,
-    InvitationEntry, Level, Machine, Outcome, PersonEntry, Setting, State, StatusReport,
+    Choice, DeletedFile, Divergence, FileChange, FileEntry, Folder, FreePreview, HeldChoice,
+    HeldEntry, InvitationEntry, Level, Machine, Outcome, PersonEntry, Setting, State, StatusReport,
     SuggestedFile, Suggestion, VersionStatus,
 };
 use pigeon_proto::stream::{Refusal, StreamAnswer, StreamHeader};
@@ -29,7 +29,9 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(46)) {
+    match tc.draw(gs::integers::<u8>().max_value(48)) {
+        48 => Request::Paused,
+        47 => Request::FreePreview { folder: text(tc) },
         46 => Request::Capacity,
         45 => Request::ViewSuggestion {
             proposal: text(tc),
@@ -78,7 +80,10 @@ fn request(tc: &TestCase) -> Request {
             name: maybe_text(tc),
         },
         5 => Request::Keep { folder: text(tc) },
-        6 => Request::Evict { folder: text(tc) },
+        6 => Request::Evict {
+            folder: text(tc),
+            confirmed: flag(tc),
+        },
         7 => Request::History { path: text(tc) },
         8 => Request::Restore {
             path: text(tc),
@@ -222,7 +227,16 @@ fn version(tc: &TestCase) -> VersionStatus {
 }
 
 fn response(tc: &TestCase) -> Response {
-    match tc.draw(gs::integers::<u8>().max_value(20)) {
+    match tc.draw(gs::integers::<u8>().max_value(21)) {
+        21 => Response::FreePreview(FreePreview {
+            files: tc.draw(gs::integers::<u64>()),
+            safe: tc.draw(gs::integers::<u64>()),
+            backups: (0..tc.draw(gs::integers::<u8>().max_value(2)))
+                .map(|_| text(tc))
+                .collect(),
+            heard_at: maybe_text(tc),
+            quiet: flag(tc),
+        }),
         20 => Response::FolderRules(Box::new(pigeon_proto::policy::Report {
             root: text(tc),
             rules: Vec::new(),
@@ -265,6 +279,7 @@ fn response(tc: &TestCase) -> Response {
                 .map(|_| version(tc))
                 .collect(),
             not_shared: Vec::new(),
+            paused: flag(tc).then(|| message(tc)),
         }),
         6 => Response::Machines {
             machines: (0..tc.draw(gs::integers::<u8>().max_value(3)))
@@ -397,6 +412,7 @@ fn response(tc: &TestCase) -> Response {
                 .map(|_| FileEntry {
                     path: text(tc),
                     state: state(tc),
+                    freed: flag(tc),
                 })
                 .collect(),
         },

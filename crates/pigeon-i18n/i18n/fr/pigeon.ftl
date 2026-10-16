@@ -10,6 +10,7 @@ state-protected = En sécurité
 state-uncertain = Pas vérifié depuis { $since }
 state-missing = Aucune copie n'est trouvée
 state-erased = Effacé
+state-not-here = { $state }, pas sur cet ordinateur
 
 ## Niveaux du titre (ux.md §4)
 
@@ -65,7 +66,7 @@ headline-machine-full = { $machine } est pleine ; elle attend qu'on y libère de
 headline-machine-no-capacity = { $machine } n'a pas la place pour { $files } fichiers : il lui faut { $missing_mb } Mo d'espace libre en plus. Libérez-y de l'espace, ou ajoutez une autre machine de sauvegarde.
 headline-machine-lost = { $machine } ne trouve plus son dossier de sauvegarde ; elle ne compte plus jusqu'à ce qu'elle soit réinstallée.
 headline-removed = Cet ordinateur a été retiré du groupe. Ses fichiers restent dans son dossier, mais ils ne sont plus partagés ni sauvegardés. Pour les partager à nouveau, demandez une nouvelle invitation à quelqu’un du groupe.
-why-machine-offline = { $machine } est hors ligne depuis { $since }.
+why-machine-offline = { $machine } a donné des nouvelles pour la dernière fois { $since }.
 why-machine-not-heard = Cet ordinateur n’a pas encore eu de nouvelles de { $machine }.
 why-safe-copies = { $have } sur { $need } copies de sauvegarde
 next-when-back = Rien à faire : ils seront en sécurité quand { $machine } sera de retour.
@@ -90,6 +91,54 @@ time-days-ago =
        *[other] il y a { $days } jours
     }
 time-never = jamais
+
+## Temps à venir, à l’heure locale de cet ordinateur, et tailles (units.rs)
+
+time-clock = { $hour } h { $minute }
+time-month =
+    { $index ->
+        [1] janvier
+        [2] février
+        [3] mars
+        [4] avril
+        [5] mai
+        [6] juin
+        [7] juillet
+        [8] août
+        [9] septembre
+        [10] octobre
+        [11] novembre
+       *[12] décembre
+    }
+time-date =
+    { $day ->
+        [1] 1er { $month }
+       *[other] { $day } { $month }
+    }
+time-date-year =
+    { $day ->
+        [1] 1er { $month } { $year }
+       *[other] { $day } { $month } { $year }
+    }
+time-until =
+    { $moment ->
+        [today] jusqu’à { $clock }
+        [tomorrow] jusqu’à demain à { $clock }
+       *[other] jusqu’au { $date } à { $clock }
+    }
+time-expires =
+    { $moment ->
+        [today] expire à { $clock }
+        [tomorrow] expire demain à { $clock }
+       *[other] expire le { $date } à { $clock }
+    }
+number-decimal = { $whole },{ $tenth }
+number-thousands = { $high } { $low }
+size-bytes = { $size } o
+size-kb = { $size } ko
+size-mb = { $size } Mo
+size-gb = { $size } Go
+size-tb = { $size } To
 
 ## Commandes de la tranche de sécurité (13 §13.12)
 
@@ -129,6 +178,34 @@ free-waiting =
         [one] { $files } fichier n'est pas encore en sécurité ; pigeon le libérera dès qu'il le sera.
        *[other] { $files } fichiers ne sont pas encore en sécurité ; pigeon les libérera dès qu'ils le seront.
     }
+free-preview-leave =
+    { $files ->
+        [one] { $files } fichier sera retiré de cet ordinateur.
+       *[other] Ces { $files } fichiers seront retirés de cet ordinateur.
+    }
+free-preview-stay =
+    { $files ->
+        [one] Il reste en sécurité sur les machines de sauvegarde : { $machines }.
+       *[other] Ils restent en sécurité sur les machines de sauvegarde : { $machines }.
+    }
+free-preview-none = Aucun fichier ici n’est encore en sécurité sur les machines de sauvegarde ; rien ne quitte donc cet ordinateur pour l’instant.
+free-preview-undo = « Garder sur cet ordinateur » les ramène quand vous voulez.
+problem-backups-quiet =
+    { $backups ->
+        [one] La machine de sauvegarde { $machines } a donné des nouvelles pour la dernière fois { $heard } ; pigeon ne peut donc pas confirmer pour l’instant qu’elle a toujours ces fichiers.
+       *[other] Les machines de sauvegarde ({ $machines }) ont donné des nouvelles pour la dernière fois { $heard } ; pigeon ne peut donc pas confirmer pour l’instant qu’elles ont toujours ces fichiers.
+    }
+free-backups-never =
+    { $backups ->
+        [one] pigeon n’a encore jamais eu de nouvelles de la machine de sauvegarde { $machines } ; il ne peut donc pas confirmer qu’elle a ces fichiers.
+       *[other] pigeon n’a encore jamais eu de nouvelles des machines de sauvegarde ({ $machines }) ; il ne peut donc pas confirmer qu’elles ont ces fichiers.
+    }
+hint-backups-quiet = Si vous continuez, les fichiers quitteront cet ordinateur dès que pigeon aura des nouvelles des machines de sauvegarde et aura confirmé leurs copies, même en votre absence.
+confirm-free-quiet = Libérer l’espace quand même ? [o/N]
+web-free-title = Libérer l’espace de { $folder } ?
+web-free-quiet-title = Les machines de sauvegarde n’ont pas donné de nouvelles
+web-free-anyway = Libérer l’espace quand même
+web-free-cancel = Annuler
 keep-result = { $folder } sera gardé sur cet ordinateur. Les fichiers absents seront téléchargés dès qu’une copie sera joignable ; consultez Accueil pour suivre l’avancement.
 suggestions-none = Aucune suggestion n'attend.
 suggestion-decide = { $id }  { $author } suggère une modification de { $paths }, enregistrée { $saved }. Acceptez-la avec : pigeon accept { $id }
@@ -174,18 +251,6 @@ suggestion-outcome-some = { $by } a accepté { $accepted } de vos modifications 
 suggestion-outcome-someone = Quelqu’un
 suggestion-outcome-note = Note de { $by } : « { $note } »
 suggestion-outcome-kept = Les fichiers refusés restent tels que vous les avez enregistrés sur cet ordinateur ; personne d’autre n’a votre version.
-file-size =
-    { $unit ->
-        [kb] { $amount } Ko
-        [mb] { $amount } Mo
-       *[gb] { $amount } Go
-    }
-file-size-bytes =
-    { $bytes ->
-        [one] { $bytes } octet
-       *[other] { $bytes } octets
-    }
-decimal-separator = ,
 conflicts-none = Chaque fichier ici est la version du groupe.
 conflict-waiting = { $path } : votre suggestion attend une décision.
 conflict-choose = { $path } : votre version diffère de celle du groupe. Choisissez avec : pigeon resolve
@@ -252,8 +317,10 @@ person-row = { $name } ({ $role }) : { $machines }
 person-admin = admin
 person-member = membre
 invitations-none = Aucune invitation n'attend.
-invitation-row = { $id } : pour { $who }, jusqu'au { $expires }
-invitation-row-backup = { $id } : une machine de sauvegarde de { $who }, jusqu'au { $expires }
+invitation-row = { $id } : pour { $who }, { $expires }
+invitation-for = Invitation pour { $who }, { $expires }.
+invitation-for-backup = Invitation pour une machine de sauvegarde de { $who }, { $expires }.
+invitation-row-backup = { $id } : une machine de sauvegarde de { $who }, { $expires }
 invitation-cancelled = L'invitation { $id } ne peut plus servir.
 cmd-people = Les membres du groupe et leurs ordinateurs
 cmd-deleted = Les fichiers supprimés du groupe, que restore fait revenir
@@ -281,7 +348,7 @@ problem-not-in-this-build = « { $command } » n'est pas encore dans cette versi
 hint-not-in-this-build = Cette première version n'a que les commandes qui mettent les fichiers en sécurité ; les autres viendront.
 problem-file-system-not-in-this-build = Ce dossier est sur { $fs }, que cette version de pigeon ne prend pas encore en charge.
 hint-file-system-not-in-this-build = Choisissez un dossier sur ext4 (Linux) ou APFS (macOS).
-problem-invite-expired = Cette invitation a expiré (elle était valable jusqu'à { $until }).
+problem-invite-expired = Cette invitation a expiré (elle était valable { $until }).
 hint-invite-expired = Demandez-en une nouvelle à { $inviter }.
 problem-invite-used = Cette invitation a déjà servi.
 hint-invite-used = Demandez-en une nouvelle à { $inviter }.
@@ -411,8 +478,8 @@ folder-row =
     }
 folder-row-freed =
     { $files ->
-        [one] { $path } : { $state }, { $files } fichier ; son espace est libéré sur cet ordinateur
-       *[other] { $path } : { $state }, { $files } fichiers ; leur espace est libéré sur cet ordinateur
+        [one] { $path } : { $state }, { $files } fichier, pas sur cet ordinateur
+       *[other] { $path } : { $state }, { $files } fichiers, pas sur cet ordinateur
     }
 web-nav-settings = Réglages
 web-save = Enregistrer
@@ -433,9 +500,9 @@ problem-setting-value = « { $value } » n'est pas une valeur possible de « { $
 hint-setting-value = Voyez les valeurs avec : pigeon settings
 cmd-pause = Mettre le partage en pause un moment (par exemple 2h), ou jusqu'à resume
 cmd-resume = Reprendre le partage après une pause
-headline-paused = Le partage est en pause jusqu'à { $until }. Les changements ne sont enregistrés que sur cet ordinateur.
+headline-paused = Le partage est en pause { $until }. Les changements ne sont enregistrés que sur cet ordinateur.
 headline-paused-until-resume = Le partage est en pause. Les changements ne sont enregistrés que sur cet ordinateur jusqu'à la reprise.
-paused-until = Le partage est en pause jusqu'à { $until }.
+paused-until = Le partage est en pause { $until }.
 paused-until-resume = Le partage est en pause jusqu'à ce que vous le repreniez.
 resumed = Le partage reprend.
 cmd-leave = Retirer cet ordinateur du groupe ; ses fichiers restent
@@ -445,7 +512,11 @@ cmd-refound = Refonder le groupe avec vous pour seul administrateur, quand aucun
 refounded = { $group } est refondé avec { $name } pour seul administrateur. Invitez à nouveau les autres : leurs dossiers le rejoignent sur place.
 cmd-held = Changements que pigeon retient jusqu'à votre choix : suppressions à partager ou annuler, noms à renommer
 held-none = Rien n'est retenu.
-held-row = { $id } : { $reason } ({ $files } fichiers, depuis { $since }) : { $paths }
+held-row =
+    { $files ->
+        [one] { $id } : { $reason } ({ $files } fichier, depuis { $since }) : { $paths }
+       *[other] { $id } : { $reason } ({ $files } fichiers, depuis { $since }) : { $paths }
+    }
 held-mass-deletion = { $files } fichiers supprimés d'un coup
 held-top-folder = le dossier { $folder } supprimé
 held-shared = { $files } suppressions vont atteindre les autres ordinateurs.
@@ -529,7 +600,12 @@ web-held = Changements en attente de votre choix
 web-held-share = Supprimer pour tout le monde
 web-held-bring-back = Les faire revenir
 web-held-rename = Renommer en { $suggested }
-web-held-share-confirm = Supprimer les fichiers de { $batch } pour tout le monde ? Ils restent dans l'historique.
+web-held-share-confirm =
+    { $files ->
+        [one] Supprimer ce fichier pour tout le monde ({ $paths }) ? Il reste dans l’historique : on peut encore le faire revenir.
+       *[other] Supprimer ces { $files } fichiers pour tout le monde ({ $paths }) ? Ils restent dans l’historique : on peut encore les faire revenir.
+    }
+web-held-row = { $reason }, { $since } : { $paths }
 web-leave = Quitter le groupe
 web-leave-confirm = Retirer cet ordinateur du groupe ? Ses fichiers restent dans le dossier, mais il cesse de les partager.
 cmd-free-without-checking = Retirer la copie de cet ordinateur même si c'est la dernière
@@ -543,6 +619,9 @@ drop-done = { $files } fichiers masqués, { $dropped } contenus retirés de cet 
 confirm-drop = Retirer quand même la copie de cet ordinateur ? Ce qu'aucune autre machine n'a est perdu. [o/N]
 cmd-view = Ouvrir une copie en lecture seule d'une version d'un fichier, hors du dossier
 view-ready = Une copie en lecture seule est dans { $path } ; elle est supprimée après sept jours.
+view-name-group = version du groupe
+view-name-version = version { $number }
+view-name-suggested = version suggérée
 
 setting-telemetry-device = Partager les diagnostics avec
 setting-off = Garder les diagnostics sur chaque ordinateur
@@ -607,9 +686,6 @@ web-health-unavailable = Pas encore vérifié ; pigeon est peut-être occupé.
 web-health-no-report = Aucun état reçu pour le moment.
 web-health-counts = En sécurité : { $protected } · Partagés, pas encore en sécurité : { $published } · Seulement sur cet ordinateur : { $local } · Pas vérifiés récemment : { $uncertain } · Manquants : { $missing } · Effacés définitivement : { $erased }
 headline-empty = Aucun fichier pour le moment. Ajoutez des fichiers dans votre dossier partagé pour commencer.
-web-health-size = { $mb } Mo
-web-health-kb = { $kb } ko
-web-health-bytes = { $bytes } o
 web-health-no-limit = non définie
 web-health-paper = Une clé papier ne conserve aucun fichier.
 web-health-disk = Conservés : { $used } · Libres : { $free } · Limite : { $limit } · Réserve : { $reserve }
@@ -654,21 +730,22 @@ suggestion-deletes-file = Cette suggestion supprime { $path }. Le fichier partag
 space-title = Espace de sauvegarde
 space-need =
     { $copies ->
-        [one] Stockage nécessaire pour { $copies } copie de sauvegarde : fichiers actuels { $current } octets ; historique { $history } octets ; suggestions { $suggestions } octets.
-       *[other] Stockage nécessaire pour { $copies } copies de sauvegarde : fichiers actuels { $current } octets ; historique { $history } octets ; suggestions { $suggestions } octets.
+        [one] Stockage nécessaire pour { $copies } copie de sauvegarde : fichiers actuels { $current } ; historique { $history } ; suggestions { $suggestions }.
+       *[other] Stockage nécessaire pour { $copies } copies de sauvegarde : fichiers actuels { $current } ; historique { $history } ; suggestions { $suggestions }.
     }
-space-offered = Capacité configurée pour ce contenu : { $bytes } octets. Chaque ordinateur de sauvegarde compte pour une copie au maximum, même sans état de stockage récent.
-space-overflow = Copies supplémentaires : { $bytes } octets, selon les emplacements signalés.
+space-offered = Capacité configurée pour ce contenu : { $bytes }. Chaque ordinateur de sauvegarde compte pour une copie au maximum, même sans état de stockage récent.
+space-overflow = Copies supplémentaires : { $bytes }, selon les emplacements signalés.
 space-overflow-unknown = Les copies supplémentaires n’ont pas été vérifiées.
-space-short = La capacité de sauvegarde configurée a moins de 25 % de marge. Ajoutez un autre ordinateur de sauvegarde, ou augmentez une limite inférieure à une copie. L’espace disque libre signalé par chaque ordinateur est affiché ci-dessous.
-space-disk = Stockage utilisé { $used } octets ; libre { $free } octets ; limite { $limit } ; réserve { $reserve } octets.
-space-proposal = Suggestion { $id }, { $state }, enregistrée { $when } : { $bytes } octets supplémentaires avant les copies de sauvegarde.
+space-limit-low = La limite de stockage de { $machines } est inférieure à une copie des fichiers du groupe : cette machine ne peut pas tout garder. Une autre machine de sauvegarde, ou une limite plus haute, compense.
+space-no-spare = Il n’y a pas de machine de sauvegarde en réserve : si l’une d’elles cesse de fonctionner, vos fichiers ne sont plus en sécurité jusqu’à son remplacement. Ajouter une autre machine de sauvegarde évite cela.
+space-disk = Stockage utilisé { $used } ; libre { $free } ; limite { $limit } ; réserve { $reserve }.
+space-proposal = Une suggestion enregistrée { $when }, { $state } : { $bytes } de plus sur chaque machine de sauvegarde.
 space-shared = Un contenu commun est compté une seule fois dans les totaux et peut apparaître dans plusieurs suggestions. Les suggestions refusées restent jusqu’à leur effacement.
 space-open = en attente d’une décision
 space-adopted = acceptée
 space-rejected = refusée
 space-withdrawn = retirée
-space-snapshot = { $group }, vérifié le { $when }.
+space-snapshot = { $group }, vérifié { $when }.
 
 web-health-suggestions-unavailable = Suggestions en attente d’une décision : pas encore vérifiées.
 web-health-separator = {" : "}

@@ -132,6 +132,7 @@ async fn peer(app: &App, client: Option<Client>) -> Arc<Mutex<Vec<Rpc>>> {
                             files: vec![pigeon_proto::api::FileEntry {
                                 path: "a & b.txt".into(),
                                 state: pigeon_proto::api::State::Local,
+                                freed: false,
                             }],
                         },
                         _ => Answer::Done,

@@ -30,7 +30,8 @@ fn commands_map_to_requests() {
     assert_eq!(
         l.action,
         Action::Send(Request::Evict {
-            folder: absolute("docs")
+            folder: absolute("docs"),
+            confirmed: false,
         })
     );
     assert_eq!(
@@ -280,6 +281,7 @@ fn responses_render_without_placeholders() {
             state: State::Published,
             versions: vec![version(State::Published), version(State::Missing)],
             not_shared: Vec::new(),
+            paused: None,
         }),
         Response::Machines {
             machines: vec![

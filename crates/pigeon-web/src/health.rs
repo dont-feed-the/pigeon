@@ -34,19 +34,9 @@ fn ago(r: &Renderer, time: Option<&str>) -> String {
         )
 }
 
+/// A size as the Space page and the command line say it: "29.3 GB".
 fn size(r: &Renderer, bytes: u64) -> String {
-    if bytes < 1000 {
-        return r
-            .catalogue()
-            .format(&Message::new("web-health-bytes").arg("bytes", number(bytes)));
-    }
-    if bytes < 1_000_000 {
-        return r
-            .catalogue()
-            .format(&Message::new("web-health-kb").arg("kb", number(bytes / 1000)));
-    }
-    r.catalogue()
-        .format(&Message::new("web-health-size").arg("mb", number(bytes / 1_000_000)))
+    r.size(bytes)
 }
 
 fn disk(r: &Renderer, machine: &MachineHealth) -> String {

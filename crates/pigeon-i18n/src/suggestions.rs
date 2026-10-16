@@ -1,6 +1,6 @@
 //! The words of suggestions decided file by file (ADR 0075, 04 §4.5), for
 //! the command line and the web pages: what each file of a suggestion
-//! changes, with sizes in kB, MB and GB, never in raw bytes; and, for its
+//! changes, with sizes as people read them (`Renderer::size`); and, for its
 //! author, how a suggestion was decided, with the decider's note.
 
 use pigeon_proto::api::{FileChange, Outcome, SuggestedFile, Suggestion};
@@ -13,28 +13,6 @@ fn count(n: usize) -> crate::Arg {
 }
 
 impl Renderer {
-    /// A size in words: bytes below 1 kB, else kB, MB or GB with one
-    /// decimal below 10.
-    pub fn size(&self, bytes: u64) -> String {
-        const UNITS: [(&str, u64); 3] = [("gb", 1_000_000_000), ("mb", 1_000_000), ("kb", 1_000)];
-        let Some((unit, scale)) = UNITS.iter().find(|(_, scale)| bytes >= *scale) else {
-            return self
-                .catalogue()
-                .format(&Message::new("file-size-bytes").arg("bytes", bytes));
-        };
-        let tenths = (bytes.saturating_mul(10) + scale / 2) / scale;
-        let amount = if tenths >= 100 {
-            ((tenths + 5) / 10).to_string()
-        } else {
-            let point = self.id("decimal-separator");
-            format!("{}{point}{}", tenths / 10, tenths % 10)
-        };
-        let m = Message::new("file-size")
-            .arg("unit", *unit)
-            .arg("amount", amount);
-        self.catalogue().format(&m)
-    }
-
     /// What a suggestion changes in one file.
     pub fn suggested_file(&self, f: &SuggestedFile) -> String {
         let size = |s: Option<u64>| s.map_or_else(|| "?".to_owned(), |b| self.size(b));

@@ -52,6 +52,7 @@ impl Backend for Rules {
                 .map(|path| pigeon_proto::api::FileEntry {
                     path: path.into(),
                     state: pigeon_proto::api::State::Published,
+                    freed: false,
                 })
                 .collect(),
             }],
@@ -250,15 +251,29 @@ async fn nested_free_and_keep_submit_only_the_selected_folder_with_csrf() {
             StatusCode::OK
         );
     }
+    // *Free up space* first asks what it would do; only its confirmation
+    // frees.
     assert_eq!(
         backend.calls.lock().unwrap().as_slice(),
         &[
-            pigeon_proto::Request::Evict {
+            pigeon_proto::Request::FreePreview {
                 folder: "/Family/Photos/Enfant".into()
             },
             pigeon_proto::Request::Keep {
                 folder: "/Family/Photos/Enfant".into()
             },
         ]
+    );
+    backend.calls.lock().unwrap().clear();
+    let confirmed = format!("{form}&confirm=1");
+    app.oneshot(post("/files/free", &cookie, &confirmed))
+        .await
+        .unwrap();
+    assert_eq!(
+        backend.calls.lock().unwrap().as_slice(),
+        &[pigeon_proto::Request::Evict {
+            folder: "/Family/Photos/Enfant".into(),
+            confirmed: false,
+        }]
     );
 }

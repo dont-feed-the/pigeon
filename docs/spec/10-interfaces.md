@@ -19,7 +19,7 @@ result, progress events then a result, or a `Problem` (§10.6).
 | `Create {name, folder, k, device_name, person?}` | `pigeon create NAME [--person NAME]` | Welcome → Create (*Your name*) | [04 §4.1](04-roster-and-authority.md) |
 | `Invite {person, admin, custodian, name?}` | `pigeon invite [--admin] PERSON`, `pigeon invite --backup-machine [NAME]` | People → Invite someone | [09 §9.6](09-network-and-joining.md) |
 | `Join {invitation, folder, keep, name?}` | `pigeon join INVITATION [FOLDER] [--name NAME]` | Welcome → Join | [09 §9.6](09-network-and-joining.md) |
-| `Keep {folder}` · `Evict {folder}` | `pigeon keep PATH` · `pigeon free PATH` | Files → *Keep on this computer* | [08 §8.5](08-custody-loops.md) |
+| `Keep {folder}` · `Evict {folder, confirmed}` · `FreePreview {folder}` | `pigeon keep PATH` · `pigeon free PATH [--yes]` | Files → *Keep on this computer* · *Free up space*, confirmed | [08 §8.5](08-custody-loops.md) |
 | `Drop {path, confirmed}` | `pigeon free --without-checking PATH` | — (CLI only, ux.md §2.2) | [08 §8.7](08-custody-loops.md) |
 | `History {path}` | `pigeon history PATH` | a file's page | [05](05-catalogue-and-names.md) |
 | `View {path, version \| group}` | `pigeon view PATH [--version N \| --group]` | *Open a copy*, *Open Paul's version* | [07 §7.6](07-capture-and-install.md) |
@@ -34,7 +34,7 @@ result, progress events then a result, or a `Problem` (§10.6).
 | — | `pigeon export --to DIR [--at DATE\|COMMIT] [--deleted] [REPOSITORY…]` | — (without `pigeond`) | [09 §9.9](09-network-and-joining.md) |
 | `Purge {path}` · `CancelPurge {id}` | `pigeon erase PATH` · `pigeon erase --cancel ID` | *Erase forever* | [08 §8.6](08-custody-loops.md) |
 | `Held` · `ReleaseHeld {batch, choice}` | `pigeon held` · `pigeon held ID --share \| --bring-back \| --rename` | Home → Needs you | [07 §7.4](07-capture-and-install.md) |
-| `Pause {duration?}` · `Resume` | `pigeon pause [DURATION]` · `pigeon resume` | Settings | [15](15-resource-use.md) |
+| `Pause {duration?}` · `Resume` · `Paused` | `pigeon pause [DURATION]` · `pigeon resume` | Settings; the pause banner of every page | [15](15-resource-use.md) |
 | `GetSettings` · `SetSettings {…}` | `pigeon settings [KEY [VALUE]]` | Settings | [11 §11.2](11-local-state.md) |
 | `Doctor {details}` | `pigeon doctor [--details]` | Settings → Advanced | §10.7 |
 | `DebugBundle {peers}` | `pigeon debug bundle [--from NAME…]` | Settings → Advanced | [12](12-observability.md) |
@@ -123,7 +123,19 @@ a per-session form token. A folder's page lists its files (`Files`), a file's pa
 its versions (`History`) with *Restore this version* (`Restore`);
 Deleted files lists what `main` deleted (`Deleted`), each with *Restore*.
 Settings also pauses for an hour, a day or until *Share again* (`Pause`,
-`Resume`, also `pigeon pause` and `pigeon resume`, 15 §15.6).
+`Resume`, also `pigeon pause` and `pigeon resume`, 15 §15.6), offering
+only the action that applies; while paused, every page opens with a banner
+saying until when, with *Share again* (`Paused`, asked before each page).
+*Free up space* asks first: which files leave this computer, the backup
+machines they stay on, and that *Keep on this computer* brings them back
+(`FreePreview`); while no backup machine has been heard from within the
+hour that makes a check recent, `Evict` answers `backups-quiet` and the
+page asks a second time, saying when they were last in touch, before
+`Evict {confirmed}`. `pigeon free` asks that second question too, or takes
+`--yes`. A freed file reads "Safe, not on this computer" in Files, on its
+folder's page and on its own page (`Files` marks it `freed`).
+Times to come read as local times ("until 14:38", "expires tomorrow at
+09:00") and sizes as "29.3 GB", in the person's language.
 People & machines lists the people first (`People`, also `pigeon people`);
 `pigeon deleted` lists Deleted files.
 `pigeon invite --list` and `--cancel ID` (`Invitations`, `CancelInvitation`)

@@ -10,6 +10,7 @@ state-protected = Safe
 state-uncertain = Not checked since { $since }
 state-missing = No copy can be found
 state-erased = Erased
+state-not-here = { $state }, not on this computer
 
 ## Headline levels (ux.md §4)
 
@@ -65,7 +66,7 @@ headline-machine-full = { $machine } is full; it waits until space is freed on i
 headline-machine-no-capacity = { $machine } has no room for { $files } files: it needs { $missing_mb } MB more free space. Free up space on it, or add another backup machine.
 headline-machine-lost = { $machine } no longer finds its backup folder; it counts for nothing until it is set up again.
 headline-removed = This computer was removed from the group. Its files stay in its folder, but they are no longer shared or backed up. To share them again, ask someone in the group for a new invitation.
-why-machine-offline = { $machine } has been offline since { $since }.
+why-machine-offline = { $machine } was last heard from { $since }.
 why-machine-not-heard = { $machine } has not been heard from yet on this computer.
 why-safe-copies = { $have } of { $need } safe copies
 next-when-back = Nothing to do: they will be safe when { $machine } is back.
@@ -90,6 +91,46 @@ time-days-ago =
        *[other] { $days } days ago
     }
 time-never = never
+
+## Times to come, in this computer's local time, and sizes (units.rs)
+
+time-clock = { $hour }:{ $minute }
+time-month =
+    { $index ->
+        [1] January
+        [2] February
+        [3] March
+        [4] April
+        [5] May
+        [6] June
+        [7] July
+        [8] August
+        [9] September
+        [10] October
+        [11] November
+       *[12] December
+    }
+time-date = { $day } { $month }
+time-date-year = { $day } { $month } { $year }
+time-until =
+    { $moment ->
+        [today] until { $clock }
+        [tomorrow] until tomorrow at { $clock }
+       *[other] until { $date } at { $clock }
+    }
+time-expires =
+    { $moment ->
+        [today] expires at { $clock }
+        [tomorrow] expires tomorrow at { $clock }
+       *[other] expires on { $date } at { $clock }
+    }
+number-decimal = { $whole }.{ $tenth }
+number-thousands = { $high },{ $low }
+size-bytes = { $size } B
+size-kb = { $size } kB
+size-mb = { $size } MB
+size-gb = { $size } GB
+size-tb = { $size } TB
 
 ## Commands of the safety slice (13 §13.12)
 
@@ -129,6 +170,34 @@ free-waiting =
         [one] 1 file is not safe yet; pigeon will free it once it is.
        *[other] { $files } files are not safe yet; pigeon will free them once they are.
     }
+free-preview-leave =
+    { $files ->
+        [one] 1 file will be removed from this computer.
+       *[other] These { $files } files will be removed from this computer.
+    }
+free-preview-stay =
+    { $files ->
+        [one] It stays safe on the backup machines: { $machines }.
+       *[other] They stay safe on the backup machines: { $machines }.
+    }
+free-preview-none = No file here is safe on the backup machines yet, so nothing leaves this computer for now.
+free-preview-undo = “Keep on this computer” brings them back whenever you want.
+problem-backups-quiet =
+    { $backups ->
+        [one] The backup machine { $machines } was last in touch { $heard }, so pigeon can't confirm right now that it still has these files.
+       *[other] The backup machines ({ $machines }) were last in touch { $heard }, so pigeon can't confirm right now that they still have these files.
+    }
+free-backups-never =
+    { $backups ->
+        [one] pigeon has not heard from the backup machine { $machines } yet, so it can't confirm that it has these files.
+       *[other] pigeon has not heard from the backup machines ({ $machines }) yet, so it can't confirm that they have these files.
+    }
+hint-backups-quiet = If you go ahead, the files leave this computer as soon as pigeon hears from the backup machines again and confirms their copies, even if you are not there.
+confirm-free-quiet = Free up space anyway? [y/N]
+web-free-title = Free up space in { $folder }?
+web-free-quiet-title = The backup machines have not been in touch
+web-free-anyway = Free up space anyway
+web-free-cancel = Cancel
 keep-result = { $folder } will be kept on this computer. Files that are absent will download when a copy is reachable; check Home for progress.
 suggestions-none = No suggestion is waiting.
 suggestion-decide = { $id }  { $author } suggests a change of { $paths }, saved { $saved }. Accept it with: pigeon accept { $id }
@@ -174,18 +243,6 @@ suggestion-outcome-some = { $by } accepted { $accepted } of your changes ({ $acc
 suggestion-outcome-someone = Someone
 suggestion-outcome-note = Note from { $by }: “{ $note }”
 suggestion-outcome-kept = The files declined stay as you saved them on this computer; nobody else has your version of them.
-file-size =
-    { $unit ->
-        [kb] { $amount } kB
-        [mb] { $amount } MB
-       *[gb] { $amount } GB
-    }
-file-size-bytes =
-    { $bytes ->
-        [one] { $bytes } byte
-       *[other] { $bytes } bytes
-    }
-decimal-separator = .
 conflicts-none = Every file here is the group's version.
 conflict-waiting = { $path }: your suggestion waits for a decision.
 conflict-choose = { $path }: your version differs from the group's. Choose with: pigeon resolve
@@ -252,8 +309,10 @@ person-row = { $name } ({ $role }): { $machines }
 person-admin = admin
 person-member = member
 invitations-none = No invitation is waiting.
-invitation-row = { $id }: for { $who }, until { $expires }
-invitation-row-backup = { $id }: a backup machine of { $who }, until { $expires }
+invitation-row = { $id }: for { $who }, { $expires }
+invitation-for = Invitation for { $who }, { $expires }.
+invitation-for-backup = Invitation for a backup machine of { $who }, { $expires }.
+invitation-row-backup = { $id }: a backup machine of { $who }, { $expires }
 invitation-cancelled = Invitation { $id } can no longer be used.
 cmd-people = The group's members and their computers
 cmd-deleted = The files deleted from the group, which restore brings back
@@ -281,7 +340,7 @@ problem-not-in-this-build = “{ $command }” is not in this build of pigeon ye
 hint-not-in-this-build = This early build has only the commands that keep files safe; the others come later.
 problem-file-system-not-in-this-build = This folder is on { $fs }, which this build of pigeon does not support yet.
 hint-file-system-not-in-this-build = Choose a folder on ext4 (Linux) or APFS (macOS).
-problem-invite-expired = This invitation has expired (it was valid until { $until }).
+problem-invite-expired = This invitation has expired (it was valid { $until }).
 hint-invite-expired = Ask { $inviter } for a new one.
 problem-invite-used = This invitation has already been used.
 hint-invite-used = Ask { $inviter } for a new one.
@@ -411,8 +470,8 @@ folder-row =
     }
 folder-row-freed =
     { $files ->
-        [one] { $path }: { $state }, 1 file; its space is freed on this computer
-       *[other] { $path }: { $state }, { $files } files; their space is freed on this computer
+        [one] { $path }: { $state }, 1 file, not on this computer
+       *[other] { $path }: { $state }, { $files } files, not on this computer
     }
 web-nav-settings = Settings
 web-save = Save
@@ -433,9 +492,9 @@ problem-setting-value = “{ $value }” is not a value “{ $key }” takes.
 hint-setting-value = See the values with: pigeon settings
 cmd-pause = Pause sharing for a while (such as 2h), or until resume
 cmd-resume = Share again after a pause
-headline-paused = Sharing is paused until { $until }. Changes are saved on this computer only.
+headline-paused = Sharing is paused { $until }. Changes are saved on this computer only.
 headline-paused-until-resume = Sharing is paused. Changes are saved on this computer only, until you resume.
-paused-until = Sharing is paused until { $until }.
+paused-until = Sharing is paused { $until }.
 paused-until-resume = Sharing is paused until you resume it.
 resumed = Sharing again.
 cmd-leave = Remove this computer from the group; its files stay
@@ -445,7 +504,11 @@ cmd-refound = Found the group again with you as its only admin, when no admin ca
 refounded = { $group } is refounded with { $name } as its only admin. Invite the others again: their folders join in place.
 cmd-held = Changes pigeon holds until you choose: deletions to share or bring back, names to rename
 held-none = Nothing is held.
-held-row = { $id }: { $reason } ({ $files } files, since { $since }): { $paths }
+held-row =
+    { $files ->
+        [one] { $id }: { $reason } (1 file, since { $since }): { $paths }
+       *[other] { $id }: { $reason } ({ $files } files, since { $since }): { $paths }
+    }
 held-mass-deletion = { $files } files deleted at once
 held-top-folder = the folder { $folder } removed
 held-shared = { $files } deletions will reach the other computers.
@@ -529,7 +592,12 @@ web-held = Changes waiting for you
 web-held-share = Delete for everyone
 web-held-bring-back = Bring them back
 web-held-rename = Rename to { $suggested }
-web-held-share-confirm = Delete the files of { $batch } for everyone? They stay in the history.
+web-held-share-confirm =
+    { $files ->
+        [one] Delete this file for everyone ({ $paths })? It stays in the history, so it can still be brought back.
+       *[other] Delete these { $files } files for everyone ({ $paths })? They stay in the history, so they can still be brought back.
+    }
+web-held-row = { $reason }, { $since }: { $paths }
 web-leave = Leave the group
 web-leave-confirm = Remove this computer from the group? Its files stay in the folder, but it stops sharing them.
 cmd-free-without-checking = Remove this computer's copy even if it is the last one
@@ -543,6 +611,9 @@ drop-done = { $files } files hidden, { $dropped } contents removed from this com
 confirm-drop = Remove this computer's copy anyway? What no other machine has is lost. [y/N]
 cmd-view = Open a read-only copy of a version of a file, outside the folder
 view-ready = A read-only copy is at { $path }; it is removed after seven days.
+view-name-group = group's version
+view-name-version = version { $number }
+view-name-suggested = suggested version
 
 setting-telemetry-device = Share diagnostics with
 setting-off = Keep diagnostics on each computer
@@ -607,9 +678,6 @@ web-health-unavailable = Not checked yet; pigeon may be busy.
 web-health-no-report = No report yet.
 web-health-counts = Safe: { $protected } · Shared, not safe yet: { $published } · Only on this computer: { $local } · Not checked recently: { $uncertain } · Missing: { $missing } · Erased forever: { $erased }
 headline-empty = No files yet. Add files to your shared folder to get started.
-web-health-size = { $mb } MB
-web-health-kb = { $kb } kB
-web-health-bytes = { $bytes } B
 web-health-no-limit = not set
 web-health-paper = A paper key keeps no files.
 web-health-disk = Stored: { $used } · Free: { $free } · Limit: { $limit } · Reserved: { $reserve }
@@ -654,21 +722,22 @@ suggestion-deletes-file = This suggestion deletes { $path }. The shared file sta
 space-title = Backup storage
 space-need =
     { $copies ->
-        [one] Required storage for 1 backup copy: current files { $current } bytes; history { $history } bytes; suggestions { $suggestions } bytes.
-       *[other] Required storage for { $copies } backup copies: current files { $current } bytes; history { $history } bytes; suggestions { $suggestions } bytes.
+        [one] Required storage for 1 backup copy: current files { $current }; history { $history }; suggestions { $suggestions }.
+       *[other] Required storage for { $copies } backup copies: current files { $current }; history { $history }; suggestions { $suggestions }.
     }
-space-offered = Configured capacity for this content: { $bytes } bytes. Each backup computer counts for at most one copy, including computers with no recent storage report.
-space-overflow = Extra copies: { $bytes } bytes, from reported locations.
+space-offered = Configured capacity for this content: { $bytes }. Each backup computer counts for at most one copy, including computers with no recent storage report.
+space-overflow = Extra copies: { $bytes }, from reported locations.
 space-overflow-unknown = Extra copies have not been checked.
-space-short = There is less than 25% spare configured backup capacity. Add another backup computer, or raise a storage limit that is below one copy. Each computer’s reported free disk space is shown below.
-space-disk = Stored { $used } bytes; free { $free } bytes; storage limit { $limit }; reserve { $reserve } bytes.
-space-proposal = Suggestion { $id }, { $state }, saved { $when }: { $bytes } additional bytes before backup copies.
+space-limit-low = A storage limit on { $machines } is smaller than one copy of the group’s files, so it cannot keep a copy of everything. Another backup machine, or a higher limit, makes up for it.
+space-no-spare = There is no spare backup machine: if one stops working, your files are not safe until it is replaced. Adding another backup machine avoids this.
+space-disk = Stored { $used }; free { $free }; storage limit { $limit }; reserve { $reserve }.
+space-proposal = A suggestion saved { $when }, { $state }: { $bytes } more on each backup machine.
 space-shared = Shared content counts once in the totals and can appear in several suggestion rows. Declined suggestions stay until you erase them.
 space-open = awaiting a decision
 space-adopted = accepted
 space-rejected = declined
 space-withdrawn = withdrawn
-space-snapshot = { $group }, checked at { $when }.
+space-snapshot = { $group }, checked { $when }.
 
 web-health-suggestions-unavailable = Suggestions awaiting a decision: not checked yet.
 web-health-separator = {": "}

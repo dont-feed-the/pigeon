@@ -18,6 +18,7 @@ impl Backend for Nested {
                         .map(|path| pigeon_proto::api::FileEntry {
                             path: path.into(),
                             state: State::Protected,
+                            freed: false,
                         })
                         .collect(),
                 }]

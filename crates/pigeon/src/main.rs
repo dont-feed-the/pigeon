@@ -149,9 +149,14 @@ fn show(out: &Renderer, json: bool, r: &Response) -> (bool, bool) {
 }
 
 fn exchange(out: &Renderer, json: bool, request: &Request) -> ExitCode {
+    exchange_coded(out, json, request).0
+}
+
+/// [`exchange`], and the code of the daemon's problem it ended with.
+fn exchange_coded(out: &Renderer, json: bool, request: &Request) -> (ExitCode, Option<String>) {
     let fail = |p: Problem| {
         show(out, json, &Response::Problem(p));
-        ExitCode::from(1)
+        (ExitCode::from(1), None)
     };
     let mut client = match Client::open(None).or_else(|code| {
         if code == "daemon-not-running" && matches!(request, Request::OpenWeb) {
@@ -200,7 +205,11 @@ fn exchange(out: &Renderer, json: bool, request: &Request) -> ExitCode {
         };
         let (last, problem) = show(out, json, &env.body);
         if last {
-            return ExitCode::from(u8::from(problem));
+            let code = match env.body {
+                Response::Problem(p) => Some(p.code),
+                _ => None,
+            };
+            return (ExitCode::from(u8::from(problem)), code);
         }
     }
 }
@@ -269,6 +278,7 @@ fn run() -> ExitCode {
             ExitCode::from(1)
         }
         Action::Send(Request::Drop { path, .. }) => drop(&out, &line, path),
+        Action::Send(Request::Evict { folder, .. }) => free(&out, &line, folder),
         Action::Send(request) => {
             if !line.yes
                 && let Some(question) = question(request)
@@ -318,6 +328,28 @@ fn drop(out: &Renderer, line: &args::Line, path: &str) -> ExitCode {
     exchange(out, line.json, &send(true))
 }
 
+/// `pigeon free PATH` (08 §8.5): while no backup machine has been heard
+/// from recently, the daemon says so (`backups-quiet`), and pigeon asks
+/// before it frees; with `--yes`, it frees at once.
+fn free(out: &Renderer, line: &args::Line, folder: &str) -> ExitCode {
+    let send = |confirmed| Request::Evict {
+        folder: folder.to_owned(),
+        confirmed,
+    };
+    let (code, problem) = exchange_coded(out, line.json, &send(line.yes));
+    if problem.as_deref() != Some("backups-quiet") {
+        return code;
+    }
+    let question = Message {
+        id: "confirm-free-quiet".to_owned(),
+        args: std::collections::BTreeMap::new(),
+    };
+    if let Err(code) = confirmed(out, line, &question) {
+        return code;
+    }
+    exchange(out, line.json, &send(true))
+}
+
 /// What a request asks before it is sent, if anything (10 §10.2).
 fn question(request: &Request) -> Option<Message> {
     let ask = |id: &str, args: &[(&str, &str)]| Message {
@@ -346,10 +378,10 @@ fn question(request: &Request) -> Option<Message> {
         Request::Leave => Some(ask("confirm-leave", &[])),
         Request::Join { invitation, .. } => {
             let (group, r) = pigeon_proto::join::refounded(invitation)?;
-            let date = r.at.get(..10).unwrap_or(&r.at);
+            // The renderer words the time as a local date.
             Some(ask(
                 "confirm-join-refounded",
-                &[("group", &group), ("name", &r.by), ("date", date)],
+                &[("group", &group), ("name", &r.by), ("date", &r.at)],
             ))
         }
         Request::Refound { .. } => Some(ask("confirm-refound", &[])),

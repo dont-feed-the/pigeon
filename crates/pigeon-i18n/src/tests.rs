@@ -82,7 +82,7 @@ fn bundle_vars(src: &'static str) -> Vec<(String, BTreeSet<String>)> {
 }
 
 /// The variables that select a variant rather than appear in the text.
-const SELECTORS: &[&str] = &["who", "unit", "why"];
+const SELECTORS: &[&str] = &["who", "why", "moment", "index", "backups"];
 
 fn sample(var: &str) -> Arg {
     // Counts select plural forms; everything else is a text.
@@ -92,6 +92,7 @@ fn sample(var: &str) -> Arg {
         }
         // A selector picks a variant and need not appear in it.
         "who" => Arg::Text("computer".to_owned()),
+        "moment" => Arg::Text("other".to_owned()),
         _ => Arg::Text(format!("<{var}>")),
     }
 }
@@ -290,4 +291,109 @@ fn paper_recovery_keys_never_render_as_offline_computers() {
         let line = r.machine(&dated);
         assert!(line.contains(printed), "{line}");
     }
+}
+
+fn utc(_: i64) -> i32 {
+    0
+}
+
+fn proto(id: &str, args: &[(&str, &str)]) -> pigeon_proto::Message {
+    pigeon_proto::Message {
+        id: id.into(),
+        args: args
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), pigeon_proto::Arg::Text((*v).to_owned())))
+            .collect(),
+    }
+}
+
+#[test]
+fn status_says_the_pause_when_the_headline_is_about_something_else() {
+    let now = pigeon_proto::time::parse_rfc3339("2026-10-16T10:00:00Z").unwrap();
+    let r =
+        render::Renderer::new(Catalogue::new(&"en".parse().unwrap(), false), now).with_offset(utc);
+    let paused = proto("headline-paused", &[("until", "2026-10-16T14:38:00Z")]);
+    let mut report = pigeon_proto::api::StatusReport {
+        headline: proto("headline-disk-full", &[]),
+        level: pigeon_proto::api::Level::NeedsYou,
+        state: pigeon_proto::api::State::Local,
+        versions: Vec::new(),
+        not_shared: Vec::new(),
+        paused: Some(paused.clone()),
+    };
+    let (lines, _) = r.response(&pigeon_proto::Response::Status(report.clone()));
+    assert!(lines[0].starts_with("Your disk is full"), "{lines:?}");
+    assert_eq!(
+        lines[1],
+        "Sharing is paused until 14:38. Changes are saved on this computer only."
+    );
+    report.headline = paused;
+    let (lines, _) = r.response(&pigeon_proto::Response::Status(report));
+    assert_eq!(lines.len(), 1, "said once: {lines:?}");
+}
+
+#[test]
+fn deadlines_ages_and_freed_files_read_as_words() {
+    let now = pigeon_proto::time::parse_rfc3339("2026-10-16T10:00:00Z").unwrap();
+    let r =
+        render::Renderer::new(Catalogue::new(&"en".parse().unwrap(), false), now).with_offset(utc);
+    let invitation = pigeon_proto::api::InvitationEntry {
+        id: "inv-e838".into(),
+        who: "Ana".into(),
+        custodian: false,
+        expires: "2026-10-17T13:35:00Z".into(),
+    };
+    assert_eq!(
+        r.invitation(&invitation),
+        "Invitation for Ana, expires tomorrow at 13:35."
+    );
+    assert_eq!(
+        r.invitation_row(&invitation),
+        "inv-e838: for Ana, expires tomorrow at 13:35"
+    );
+    let expired = proto(
+        "problem-invite-expired",
+        &[("until", "2026-10-15T09:00:00Z")],
+    );
+    assert_eq!(
+        r.text(&expired),
+        "This invitation has expired (it was valid until 15 October at 09:00)."
+    );
+    let held = pigeon_proto::api::HeldEntry {
+        id: "h1".into(),
+        reason: proto("held-top-folder", &[("folder", "Photos")]),
+        files: 3,
+        since: "2026-10-16T07:00:00Z".into(),
+        paths: vec!["Photos/a.jpg".into()],
+        suggested: None,
+    };
+    assert!(
+        r.held(&held).contains("since 3 hours ago"),
+        "{}",
+        r.held(&held)
+    );
+    let mut file = pigeon_proto::api::FileEntry {
+        path: "Photos/a.jpg".into(),
+        state: pigeon_proto::api::State::Protected,
+        freed: true,
+    };
+    assert_eq!(r.file(&file), "Photos/a.jpg: Safe, not on this computer");
+    file.freed = false;
+    assert_eq!(r.file(&file), "Photos/a.jpg: Safe");
+    let preview = pigeon_proto::api::FreePreview {
+        files: 3,
+        safe: 2,
+        backups: vec!["nas".into(), "cloud".into()],
+        heard_at: None,
+        quiet: false,
+    };
+    assert_eq!(
+        r.free_preview(&preview),
+        [
+            "These 2 files will be removed from this computer.",
+            "They stay safe on the backup machines: nas, cloud.",
+            "1 file is not safe yet; pigeon will free it once it is.",
+            "“Keep on this computer” brings them back whenever you want.",
+        ]
+    );
 }

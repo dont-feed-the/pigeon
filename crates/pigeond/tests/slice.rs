@@ -117,14 +117,20 @@ fn local_published_protected_then_free_and_keep() {
     // promise that intentionally freed files will download themselves.
     // The folder's page lists its file; the file's page its version.
     let listed = common::web::page(&web, &format!("/folder?path={}", sub.display()));
-    assert!(listed.contains("sub/2019/big.bin: Safe"), "{listed}");
+    assert!(
+        listed.contains("sub/2019/big.bin: Safe, not on this computer"),
+        "{listed}"
+    );
     assert!(listed.contains("action=\"/files/free\"") && listed.contains("action=\"/files/keep\""));
     assert!(listed.contains(&format!("name=\"folder\" value=\"{}\"", sub.display())));
     let file = common::web::page(
         &web,
         &format!("/file?path={}", sub.join("big.bin").display()),
     );
-    assert!(file.contains("Versions") && file.contains("Safe"), "{file}");
+    assert!(
+        file.contains("Versions") && file.contains("Safe, not on this computer"),
+        "{file}"
+    );
     // `pigeon settings` writes config.toml, and the web speaks French at
     // once (11 §11.2).
     let set = pigeon(&lap, &["settings", "language", "fr"]);
@@ -252,8 +258,21 @@ fn local_published_protected_then_free_and_keep() {
         "{paused:?}"
     );
     match pigeon(&lap, &["status"]).as_slice() {
-        [Response::Status(r)] => assert_eq!(r.headline.id, "headline-paused", "{r:?}"),
+        [Response::Status(r)] => {
+            assert_eq!(r.headline.id, "headline-paused", "{r:?}");
+            assert_eq!(r.paused.as_ref(), Some(&r.headline), "{r:?}");
+        }
         other => panic!("status while paused: {other:?}"),
+    }
+    // Every page says so, with *Share again*; Settings offers only that.
+    let web = common::web::login(&lap);
+    for path in ["/files", "/settings"] {
+        let page = common::web::page(&web, path);
+        assert!(
+            page.contains("Sharing is paused until ") && page.contains("action=\"/resume\""),
+            "{path}: {page}"
+        );
+        assert!(!page.contains("action=\"/pause\""), "{path}: {page}");
     }
     let resumed = pigeon(&lap, &["resume"]);
     assert!(said(&resumed, "resumed", "-").is_some(), "{resumed:?}");
