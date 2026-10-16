@@ -22,6 +22,7 @@ def load(name, path):
 ROOT = Path(__file__).resolve().parents[2]
 PROOFS = load("coverage_proofs", ROOT / "scripts/check-proofs")
 TLC = load("coverage_tlc", ROOT / "scripts/run-tlc")
+FOLDS = load("coverage_authority_folds", ROOT / "scripts/check-authority-folds")
 
 
 class ConfigurationCoverage(unittest.TestCase):
@@ -78,10 +79,25 @@ class ConfigurationCoverage(unittest.TestCase):
 
 
 class ModelSelection(unittest.TestCase):
+    def test_shared_proof_is_checked_once_but_each_configuration_gets_both_checks(self):
+        checks = PROOFS.Checks.__new__(PROOFS.Checks)
+        with patch.object(PROOFS, "copy_models"), \
+                patch.object(checks, "proof") as proof, \
+                patch.object(checks, "coverage") as coverage, \
+                patch.object(checks, "configuration_theorem", return_value="Bridge"):
+            checks.positives()
+        roots = [call.args for call in proof.call_args_list if "bridge" not in call.kwargs]
+        self.assertEqual(sum(args[1] == "CustodyTokensProof" for args in roots), 1)
+        covered = [call.args[2] for call in coverage.call_args_list if call.args[1] == "CustodyTokensProof"]
+        self.assertEqual(set(covered), {"T_n42o4", "T_n31o5", "T_n32o5"})
+        bridges = [call.kwargs["name"] for call in proof.call_args_list if "bridge" in call.kwargs]
+        self.assertTrue({"properties-" + name for name in covered} <= set(bridges))
+
     def test_audits_are_separate_and_have_checked_proof_mappings(self):
         rows = list(TLC.expectations())
         audits = TLC.select_rows(rows, audit_only=True)
-        self.assertEqual({row[0] for row in audits}, set(PROOFS.PROOFS.values()) -
+        self.assertEqual({row[0] for row in audits},
+                         {config for configs in PROOFS.PROOFS.values() for config in configs} -
                          {"CaptureTransaction_safe"})
         routine = TLC.select_rows(rows, full=True)
         self.assertFalse(set(audits) & set(routine))
@@ -89,16 +105,17 @@ class ModelSelection(unittest.TestCase):
 
     def test_small_cases_negatives_and_liveness_remain_routine(self):
         fast = {row[0] for row in TLC.select_rows(TLC.expectations())}
-        self.assertTrue({"T_nonce", "T_idem", "T_nononce", "T_n42o3", "T_n31o5", "T_n32o5"} <= fast)
+        self.assertTrue({"T_nonce", "T_idem", "T_nononce", "T_n42o3"} <= fast)
         full = {row[0] for row in TLC.select_rows(TLC.expectations(), full=True)}
-        self.assertTrue({"Evict_live2", "Evict_livekeep2", "Authority_decide4", "Evict_flip"} <= full)
+        self.assertTrue({"Evict_live2", "Evict_livekeep2", "Authority_decide4", "Authority_faulty2",
+                         "Authority_revoke2", "Evict_flip"} <= full)
 
     def test_explicit_names_still_run_audits_and_shards_partition_them(self):
         rows = list(TLC.expectations())
         self.assertEqual([row[0] for row in TLC.select_rows(rows, configs=["T_n42o4"])], ["T_n42o4"])
         audits = TLC.select_rows(rows, audit_only=True)
         for count in (1, 2, 4):
-            shards = [audits[index::count] for index in range(count)]
+            shards = [TLC.shard_rows(audits, index, count, TLC.model_costs()) for index in range(count)]
             flattened = [row for shard in shards for row in shard]
             self.assertEqual(len(flattened), len(set(flattened)))
             self.assertEqual(set(flattened), set(audits))
@@ -122,6 +139,22 @@ class ModelSelection(unittest.TestCase):
         costs = {str(i): value for i, value in enumerate((100, 1, 1, 1, 100, 1, 1, 1))}
         shards = [TLC.shard_rows(rows, index, 4, costs) for index in range(4)]
         self.assertTrue(all(sum(costs[row[0]] for row in shard) <= 100 for shard in shards))
+
+
+class AuthorityFoldReference(unittest.TestCase):
+    def test_reference_keeps_current_actions_and_claims(self):
+        source = (ROOT / "models/tla/Authority.tla").read_text()
+        changed = FOLDS.reference(source)
+        self.assertIn("MODULE AuthorityRecursive", changed)
+        for name in ("ApplyAll", "FoldUpTo", "CountUpTo"):
+            self.assertIn("RECURSIVE " + name, changed)
+        self.assertEqual(source[source.index("(* Folder rules"):],
+                         changed[changed.index("(* Folder rules"):])
+
+    def test_unrecognized_fold_boundary_fails_closed(self):
+        source = (ROOT / "models/tla/Authority.tla").read_text().replace("ApplyAll(", "ChangedApplyAll(")
+        with self.assertRaises(RuntimeError):
+            FOLDS.reference(source)
 
 
 class AuditSchedule(unittest.TestCase):
