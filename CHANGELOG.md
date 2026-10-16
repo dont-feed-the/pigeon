@@ -4,6 +4,16 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
+## Unreleased
+
+### Fixed
+
+- Files whose names have accents or other non-ASCII letters, such as
+  `été.txt`, are shared and protected even when pigeon runs without a
+  UTF-8 locale, as under launchd or `brew services`. Before, one such
+  file kept every new change on Home at "Checking N changed files"
+  indefinitely, with no error shown.
+
 ## 0.5.6 — 2026-10-16
 
 ### Changed
