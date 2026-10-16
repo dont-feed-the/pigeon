@@ -50,6 +50,19 @@ increments the second number, and every other release the third.
   checks first try a faster witness search, retaining the full search and
   all safety checks if it cannot explain the observations.
 
+### Fixed
+
+- A join that fails no longer leaves the computer stuck. Before, `pigeon
+  join` said *This computer is already in this group* on every try after
+  one failed, and `pigeon leave` said *This computer is not a member of
+  the group*. Now the computer is in the group only once the join
+  succeeded, and running the same invitation line again finishes a join
+  that failed or was interrupted, in the same folder. A computer already
+  stuck that way is freed when it updates: run the line again.
+- `pigeon leave` leaves a group made by a pigeon before 0.5.10, which this
+  release cannot read, so that the computer can join or create another
+  group. Its files stay in the folder.
+
 ## 0.5.13 — 2026-10-16
 
 ### Added

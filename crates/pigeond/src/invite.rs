@@ -8,11 +8,10 @@
 //! roster change ([`pigeon_core::invitation`]) and signs it if the
 //! authority rule lets it (a device of P adds devices of P), else the new
 //! device asks the next. It then fetches `main` from the admitter and checks
-//! its genesis ([`crate::join`] for a laptop). The secret never changes: a
-//! refounded group has its own.
+//! its history ([`crate::join`]). The secret never changes: a refounded
+//! group has its own.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 use std::time::Duration;
 
 use pigeon_core::invitation::{Admission, Arrival, admit};
@@ -23,7 +22,7 @@ use pigeon_proto::join::{
 
 use crate::daemon::Daemon;
 use crate::group::Group;
-use crate::settings::{ensure_remote, init_annex};
+use crate::settings::ensure_remote;
 use crate::util::{hex, hmac_sha256, random, sha256_hex, unhex};
 
 /// A new invitation secret: 256 random bits, hex.
@@ -248,10 +247,7 @@ pub async fn join(d: &Daemon, ask: Ask) -> Result<String, String> {
         name: given(ask.name).unwrap_or_else(|| format!("{}-{short}", hostname())),
         inv,
     };
-    match j.role {
-        Role::Custodian => join_backup(d, &j, ask.folder).await,
-        _ => crate::join::laptop(d, &j, ask.folder).await,
-    }
+    crate::join::join(d, &j, ask.folder).await
 }
 
 /// The `Join` a new device sends to `admitter`, with its annex UUID.
@@ -341,64 +337,6 @@ pub async fn dial(d: &Daemon, j: &Joining, uuid: &str) -> Result<Welcomed, Strin
 /// The addresses of `admitter`, as the invitation gives them.
 pub fn admitter_addresses(admitter: &Admitter) -> Vec<std::net::SocketAddr> {
     parse(&admitter.addresses)
-}
-
-/// A backup machine's join: its bare repository, then the welcome.
-async fn join_backup(d: &Daemon, j: &Joining, folder: Option<String>) -> Result<String, String> {
-    let path = folder.map_or_else(
-        || d.dirs.config.join(format!("{}.git", j.inv.group)),
-        PathBuf::from,
-    );
-    std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
-    let path = std::fs::canonicalize(&path).map_err(|e| e.to_string())?;
-    if crate::join_in_place::applies(d, j, &path).await {
-        return crate::join_in_place::join(d, j, &path).await;
-    }
-    if std::fs::read_dir(&path)
-        .map_err(|e| e.to_string())?
-        .next()
-        .is_some()
-    {
-        return Err("folder-not-empty".into());
-    }
-    let git = crate::git::Git::new(&path, d.env.clone());
-    let fail = |e: crate::git::Error| e.to_string();
-    git.run(&["init", "-q", "--bare", "-b", "main"])
-        .await
-        .map_err(fail)?;
-    git.run(&["config", "user.name", &j.name])
-        .await
-        .map_err(fail)?;
-    let email = format!("{}@pigeon", d.device);
-    git.run(&["config", "user.email", &email])
-        .await
-        .map_err(fail)?;
-    let pending = Group::open("pending", &path, &d.env)
-        .await
-        .ok_or("not-a-repository")?;
-    crate::settings::check(&pending).await;
-    let (uuid, token) = init_annex(&git, pigeon_core::filter::Role::Custodian, &j.name, j.inv.k)
-        .await
-        .map_err(fail)?;
-    let w = dial(d, j, &uuid).await?;
-    ensure_remote(&git, &w.admitter.device, &w.annex_uuid)
-        .await
-        .map_err(fail)?;
-    let g = Group::open(&j.inv.group, &path, &d.env)
-        .await
-        .ok_or("not-a-repository")?;
-    g.set_token(&token);
-    g.set_addresses(&w.admitter.device, admitter_addresses(&w.admitter));
-    g.learn_peers(&w.peers);
-    let g = d.add_group(g, &path).await?;
-    let theirs = fetch_welcome(&g, &w.admitter.device, &j.inv.group, &w.commit, &d.device).await?;
-    g.git
-        .update_ref("refs/heads/main", &theirs, None)
-        .await
-        .map_err(|e| e.to_string())?;
-    g.reload_roster().await;
-    d.wake.notify_one();
-    Ok(j.inv.name.clone())
 }
 
 /// Fetches `main` from `admitter` for a new device `me`, checks that its

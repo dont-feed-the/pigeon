@@ -161,6 +161,28 @@ fn unknown_key(doc: &toml_edit::DocumentMut) -> Option<String> {
         .find_map(|t| extra(t, "folders.", FOLDER))
 }
 
+/// What a roster file says of itself, read whatever its format.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Declared {
+    /// Its `format`.
+    pub format: Option<i64>,
+    /// The group's name, its `group`.
+    pub group: Option<String>,
+}
+
+/// What `text` declares of itself, so that a release can name a group
+/// whose roster it does not read and tell an earlier format, which it
+/// never reads again, from a later one.
+pub fn declared(text: &str) -> Declared {
+    let Ok(doc) = text.parse::<toml_edit::DocumentMut>() else {
+        return Declared::default();
+    };
+    Declared {
+        format: doc.get("format").and_then(Item::as_integer),
+        group: doc.get("group").and_then(Item::as_str).map(str::to_owned),
+    }
+}
+
 /// Parses a roster file.
 pub fn parse(text: &str) -> Result<RosterDoc, Unread> {
     let malformed = |why: String| Err(Unread::Malformed(why));
