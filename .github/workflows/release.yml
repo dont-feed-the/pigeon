@@ -11,6 +11,13 @@ name: release
 on:
   push:
     tags: ["v*"]
+    branches: ["codex/retry-release-v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build and validate again
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -20,11 +27,34 @@ concurrency:
   group: release-${{ github.ref }}
 
 jobs:
+  target:
+    name: resolve the immutable release tag
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.target.outputs.tag }}
+      sha: ${{ steps.target.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: target
+        env:
+          REQUESTED_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          tag=${REQUESTED_TAG#codex/retry-release-}
+          sha=$(scripts/release-target "$tag")
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
   git-annex:
+    needs: target
     uses: ./.github/workflows/git-annex.yml
+    with:
+      source_ref: ${{ needs.target.outputs.sha }}
 
   build:
     name: pigeon (${{ matrix.platform }})
+    needs: target
     strategy:
       fail-fast: false
       matrix:
@@ -34,9 +64,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     env:
-      TAG: ${{ github.ref_name }}
+      TAG: ${{ needs.target.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.target.outputs.sha }}
       - name: the tag is the workspace's version
         run: |
           v=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
@@ -56,21 +88,23 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: pigeon-${{ matrix.platform }}
-          path: pigeon-${{ github.ref_name }}-${{ matrix.platform }}.tar.gz
+          path: pigeon-${{ needs.target.outputs.tag }}-${{ matrix.platform }}.tar.gz
 
   publish:
     name: install, then publish
-    needs: [git-annex, build]
+    needs: [target, git-annex, build]
     runs-on: ubuntu-24.04
     timeout-minutes: 150
     permissions:
       contents: write
       actions: read
     env:
-      TAG: ${{ github.ref_name }}
+      TAG: ${{ needs.target.outputs.tag }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.target.outputs.sha }}
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           path: ${{ runner.temp }}/artifacts
@@ -110,23 +144,38 @@ jobs:
             if sudo test -S /run/pigeon/pigeond.sock; then break; fi
             sleep 1
           done
-          sudo env PIGEON_SOCKET=/run/pigeon/pigeond.sock "$p/bin/pigeon" --json doctor
+          if sudo env PIGEON_SOCKET=/run/pigeon/pigeond.sock "$p/bin/pigeon" --json doctor > "$RUNNER_TEMP/root-client.json"; then
+            echo '::error::the service socket admitted another account'
+            exit 1
+          fi
+          grep -q '"code":"daemon-not-running"' "$RUNNER_TEMP/root-client.json"
+          sudo -u pigeon env PIGEON_SOCKET=/run/pigeon/pigeond.sock "$p/bin/pigeon" --json doctor || {
+            sudo systemctl status pigeond --no-pager || true
+            sudo journalctl -u pigeond -n 100 --no-pager
+            exit 1
+          }
           test "$(stat -c %U /var/lib/pigeon/device-key)" = pigeon
           sudo sh "$p/bin/pigeon-install" --system --prefix "$p" --uninstall
           test ! -d "$p/bin"
           sudo test -s /var/lib/pigeon/device-key
       - name: the tag's CI, lab, slice and reach must pass before publication
-        run: scripts/wait-release-checks --repository "$GITHUB_REPOSITORY" --sha "$GITHUB_SHA" --tag "$TAG"
+        run: scripts/wait-release-checks --repository "$GITHUB_REPOSITORY" --sha "${{ needs.target.outputs.sha }}" --tag "$TAG"
       - name: the release
+        id: published
         run: |
           d=$RUNNER_TEMP/releases/download/$TAG
+          git fetch origin main
+          current=$(git show origin/main:Cargo.toml | sed -n 's/^version = "\(.*\)"$/\1/p' | head -n 1)
+          latest=false
           case "${TAG#v}" in
             *-*) set -- --prerelease --latest=false ;;
-            *) set -- --latest ;;
+            "$current") set -- --latest; latest=true ;;
+            *) set -- --latest=false ;;
           esac
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
           gh release create "$TAG" --title "pigeon $TAG" --generate-notes "$@" "$d"/*
       - name: update the Homebrew tap after publication
-        if: ${{ !contains(github.ref_name, '-') }}
+        if: steps.published.outputs.latest == 'true'
         run: |
           # Only the formula changes. Preserve concurrent changes on main.
           cp "$RUNNER_TEMP/releases/download/$TAG/pigeon.rb" "$RUNNER_TEMP/pigeon.rb"
