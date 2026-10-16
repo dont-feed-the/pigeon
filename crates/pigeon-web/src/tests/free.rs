@@ -31,6 +31,7 @@ impl Backend for Freeing {
                     id: "problem-backups-quiet".into(),
                     args: [
                         ("machines".to_owned(), pigeon_proto::Arg::Text("nas".into())),
+                        ("backups".to_owned(), pigeon_proto::Arg::Number(1)),
                         ("heard".to_owned(), pigeon_proto::Arg::Text(heard)),
                     ]
                     .into(),
@@ -71,6 +72,42 @@ impl Backend for Freeing {
             _ => vec![Response::Done],
         };
         Box::pin(async move { answer })
+    }
+}
+
+/// Writes both confirmations of *Free up space*, for `scripts/check-a11y`.
+pub(super) async fn write_pages(dir: &std::path::Path, lang: &str) {
+    let web = Web::new(
+        Arc::new(Freeing {
+            calls: Mutex::new(Vec::new()),
+        }),
+        lang.parse().unwrap(),
+        4321,
+    );
+    let app = web.router();
+    let cookie = logged_in(&app, &web).await;
+    let folder = body(
+        app.clone()
+            .oneshot(get("/folder?path=%2Fg%2FPhotos", HOST, Some(&cookie)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    let token = folder
+        .split("name=\"form\" value=\"")
+        .nth(1)
+        .unwrap()
+        .split('"')
+        .next()
+        .unwrap();
+    for (name, confirm) in [("free", 0), ("free-quiet", 1)] {
+        let form = format!("form={token}&folder=%2Fg%2FPhotos&confirm={confirm}");
+        let page = app
+            .clone()
+            .oneshot(post("/files/free", &cookie, &form))
+            .await
+            .unwrap();
+        std::fs::write(dir.join(format!("{lang}-{name}.html")), body(page).await).unwrap();
     }
 }
 
@@ -139,7 +176,7 @@ async fn freeing_asks_first_then_again_while_the_backups_are_quiet() {
     .await;
     assert!(second.contains("The backup machines have not been in touch"));
     assert!(
-        second.contains("were last in touch 3 hours ago"),
+        second.contains("The backup machine nas was last in touch 3 hours ago"),
         "{second}"
     );
     assert!(second.contains("name=\"confirm\" value=\"2\""));

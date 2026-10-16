@@ -48,6 +48,31 @@ impl Backend for Pausing {
     }
 }
 
+/// Writes Home and Settings while paused, for `scripts/check-a11y`.
+pub(super) async fn write_pages(dir: &std::path::Path, lang: &str) {
+    let web = Web::new(
+        Arc::new(Pausing {
+            paused: AtomicBool::new(true),
+        }),
+        lang.parse().unwrap(),
+        4321,
+    );
+    let app = web.router();
+    let cookie = logged_in(&app, &web).await;
+    for (name, path) in [("home", "/"), ("settings", "/settings")] {
+        let page = app
+            .clone()
+            .oneshot(get(path, HOST, Some(&cookie)))
+            .await
+            .unwrap();
+        std::fs::write(
+            dir.join(format!("{lang}-paused-{name}.html")),
+            body(page).await,
+        )
+        .unwrap();
+    }
+}
+
 #[tokio::test]
 async fn every_page_says_the_pause_until_sharing_again() {
     let backend = Arc::new(Pausing {

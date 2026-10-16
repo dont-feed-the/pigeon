@@ -178,8 +178,16 @@ free-preview-stay =
     }
 free-preview-none = Aucun fichier ici n’est encore en sécurité sur les machines de sauvegarde ; rien ne quitte donc cet ordinateur pour l’instant.
 free-preview-undo = « Garder sur cet ordinateur » les ramène quand vous voulez.
-problem-backups-quiet = Les machines de sauvegarde ({ $machines }) ont donné des nouvelles pour la dernière fois { $heard } ; pigeon ne peut donc pas confirmer pour l’instant qu’elles ont toujours ces fichiers.
-free-backups-never = pigeon n’a encore jamais eu de nouvelles des machines de sauvegarde ({ $machines }) ; il ne peut donc pas confirmer qu’elles ont ces fichiers.
+problem-backups-quiet =
+    { $backups ->
+        [one] La machine de sauvegarde { $machines } a donné des nouvelles pour la dernière fois { $heard } ; pigeon ne peut donc pas confirmer pour l’instant qu’elle a toujours ces fichiers.
+       *[other] Les machines de sauvegarde ({ $machines }) ont donné des nouvelles pour la dernière fois { $heard } ; pigeon ne peut donc pas confirmer pour l’instant qu’elles ont toujours ces fichiers.
+    }
+free-backups-never =
+    { $backups ->
+        [one] pigeon n’a encore jamais eu de nouvelles de la machine de sauvegarde { $machines } ; il ne peut donc pas confirmer qu’elle a ces fichiers.
+       *[other] pigeon n’a encore jamais eu de nouvelles des machines de sauvegarde ({ $machines }) ; il ne peut donc pas confirmer qu’elles ont ces fichiers.
+    }
 hint-backups-quiet = Si vous continuez, les fichiers quitteront cet ordinateur dès que pigeon aura des nouvelles des machines de sauvegarde et aura confirmé leurs copies, même en votre absence.
 confirm-free-quiet = Libérer l’espace quand même ? [o/N]
 web-free-title = Libérer l’espace de { $folder } ?

@@ -97,15 +97,20 @@ pub fn ask_again(d: &Daemon, g: &Group) -> Option<Response> {
         return None;
     }
     let machines = Arg::Text(names.join(", "));
+    let backups = Arg::Number(i64::try_from(names.len()).unwrap_or(i64::MAX));
     let message = match last {
         Some(t) => msg(
             "problem-backups-quiet",
             &[
                 ("machines", machines),
+                ("backups", backups),
                 ("heard", Arg::Text(crate::util::rfc3339(t))),
             ],
         ),
-        None => msg("free-backups-never", &[("machines", machines)]),
+        None => msg(
+            "free-backups-never",
+            &[("machines", machines), ("backups", backups)],
+        ),
     };
     Some(Response::Problem(Problem {
         code: "backups-quiet".to_owned(),

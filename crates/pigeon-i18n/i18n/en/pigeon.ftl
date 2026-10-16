@@ -170,8 +170,16 @@ free-preview-stay =
     }
 free-preview-none = No file here is safe on the backup machines yet, so nothing leaves this computer for now.
 free-preview-undo = “Keep on this computer” brings them back whenever you want.
-problem-backups-quiet = The backup machines ({ $machines }) were last in touch { $heard }, so pigeon can't confirm right now that they still have these files.
-free-backups-never = pigeon has not heard from the backup machines ({ $machines }) yet, so it can't confirm that they have these files.
+problem-backups-quiet =
+    { $backups ->
+        [one] The backup machine { $machines } was last in touch { $heard }, so pigeon can't confirm right now that it still has these files.
+       *[other] The backup machines ({ $machines }) were last in touch { $heard }, so pigeon can't confirm right now that they still have these files.
+    }
+free-backups-never =
+    { $backups ->
+        [one] pigeon has not heard from the backup machine { $machines } yet, so it can't confirm that it has these files.
+       *[other] pigeon has not heard from the backup machines ({ $machines }) yet, so it can't confirm that they have these files.
+    }
 hint-backups-quiet = If you go ahead, the files leave this computer as soon as pigeon hears from the backup machines again and confirms their copies, even if you are not there.
 confirm-free-quiet = Free up space anyway? [y/N]
 web-free-title = Free up space in { $folder }?
