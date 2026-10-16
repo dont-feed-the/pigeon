@@ -25,9 +25,17 @@ include!(concat!(env!("OUT_DIR"), "/assets.rs"));
 pub(crate) const CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self'; \
 img-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
 
-/// `GET /assets/NAME`: an embedded file, immutable under its name.
-pub(crate) async fn serve(Path(name): Path<String>) -> Response {
-    let (asset, kind) = match name.as_str() {
+/// `GET /assets/NAME`: an embedded file, immutable under its name. A host
+/// that mounts the pages under a route of its own (the bridge's
+/// `/clients/{id}/peer/{*path}`) adds its parameters, so `name` is looked up
+/// among them rather than taken as the only one.
+pub(crate) async fn serve(Path(params): Path<Vec<(String, String)>>) -> Response {
+    let name = params
+        .iter()
+        .rev()
+        .find(|(key, _)| key == "name")
+        .map_or("", |(_, value)| value.as_str());
+    let (asset, kind) = match name {
         n if n == SCRIPT.name => (&SCRIPT, "text/javascript; charset=utf-8"),
         n if n == STYLE.name => (&STYLE, "text/css; charset=utf-8"),
         n if n == ICON.name => (&ICON, "image/svg+xml"),
