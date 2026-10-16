@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep a release unpublished until that tag's CI, lab, slice and reach pass.
+"""Keep a release unpublished until that tag's Linux CI, lab and slice pass.
 
 Checks from another commit or branch cannot satisfy a release gate. This runs
 inside release.yml after building the archives, before publishing any assets.
@@ -10,10 +10,42 @@ import json
 import subprocess
 import time
 
-REQUIRED = {"ci", "lab", "slice", "reach"}
+REQUIRED = {"ci", "lab", "slice"}
+
+# Also permits an immutable older tag's Linux evidence to finish publication
+# while its macOS jobs run periodically under the 16 October user decision.
+# Explicit job families prevent a partial/cancelled run from passing silently.
+LINUX_JOBS = {
+    "ci": {"repository rules", "catalogue model", "Rust workspace (ubuntu-24.04)",
+           "install, rollback and uninstall (ubuntu-24.04)",
+           "TLAPS safety and proof mutations", "runs of pigeon-core checked by TLC",
+           "daemon observations checked by TLC"}
+          | {f"pigeond's daemons on one host (ubuntu-24.04, shard {n})" for n in range(4)}
+          | {f"TLA+ models (fast set, shard {n})" for n in range(3)},
+    "lab": {f"{group} (ubuntu-24.04)" for group in
+            ("E20 E21 E22", "E12-E13 E14 E23", "E15 E15b E18 E24", "E19")},
+    "slice": {f"slice (ubuntu-24.04, {part})" for part in ("rest", "S5")}
+             | {f"S9, 25 random crash schedules (ubuntu-24.04, shard {n})" for n in range(2)},
+}
 
 
-def assess(runs, sha, tag):
+def linux_state(name, jobs):
+    relevant = [j for j in jobs if "macos" not in j["name"].lower()]
+    names = {j["name"].split(" / ")[-1] for j in relevant}
+    for job in relevant:
+        if job["status"] != "completed":
+            continue
+        required = job["name"].split(" / ")[-1] in LINUX_JOBS[name]
+        if job["conclusion"] != "success" and (required or job["conclusion"] != "skipped"):
+            raise RuntimeError(f"{name}'s Linux job failed: {job['name']} ({job['conclusion']})")
+    if not LINUX_JOBS[name] <= names:
+        return "waiting for required Linux jobs"
+    if any(job["status"] != "completed" for job in relevant):
+        return "waiting for Linux jobs"
+    return "passed"
+
+
+def assess(runs, sha, tag, jobs=None):
     """Return readiness and a compact status, refusing a failed tag check."""
     latest = {}
     for run in runs:
@@ -28,6 +60,8 @@ def assess(runs, sha, tag):
         run = latest.get(name)
         if run is None:
             states[name] = "waiting for run"
+        elif jobs is not None:
+            states[name] = linux_state(name, jobs.get(run["id"], []))
         elif run["status"] != "completed":
             states[name] = run["status"]
         elif run["conclusion"] != "success":
@@ -49,9 +83,24 @@ def main():
     previous = None
     while True:
         endpoint = f"repos/{args.repository}/actions/runs?head_sha={args.sha}&event=push&per_page=100"
-        pages = json.loads(subprocess.check_output(["gh", "api", "--paginate", "--slurp", endpoint], text=True))
-        runs = [run for page in pages for run in page["workflow_runs"]]
-        ready, status = assess(runs, args.sha, args.tag)
+        def api(endpoint, key):
+            raw = subprocess.check_output(["gh", "api", "--paginate", endpoint], text=True)
+            items = []
+            while raw.strip():
+                page, end = json.JSONDecoder().raw_decode(raw.lstrip())
+                items.extend(page[key])
+                raw = raw.lstrip()[end:]
+            return items
+        runs = api(endpoint, "workflow_runs")
+        selected = {}
+        for run in runs:
+            if (run.get("name") in REQUIRED and run.get("head_branch") == args.tag
+                    and run.get("head_sha") == args.sha and run.get("event") == "push"):
+                if run["name"] not in selected or run["id"] > selected[run["name"]]["id"]:
+                    selected[run["name"]] = run
+        jobs = {r["id"]: api(f"repos/{args.repository}/actions/runs/{r['id']}/jobs?per_page=100", "jobs")
+                for r in selected.values()}
+        ready, status = assess(runs, args.sha, args.tag, jobs)
         if status != previous:
             print(status, flush=True)
             previous = status

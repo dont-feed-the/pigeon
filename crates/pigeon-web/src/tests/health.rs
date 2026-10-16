@@ -138,7 +138,7 @@ fn unavailable_inventory_and_live_values_do_not_turn_into_zero_protected_files()
         values["health-suggestions"]
             .as_str()
             .unwrap()
-            .starts_with("Pas encore vérifié")
+            .ends_with("pas encore vérifiées.")
     );
     assert!(plain(values["health-retained"].as_str().unwrap()).contains("En sécurité : 5"));
     let before = event["membership"].clone();

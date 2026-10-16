@@ -16,13 +16,19 @@ on:
     branches: [main]
     tags: ["v*"]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      platform:
+        description: macos for periodic background validation; Linux for publication
+        type: string
+        default: linux
 
 permissions:
   contents: read
   actions: read
 
 concurrency:
-  group: slice-${{ github.ref }}
+  group: slice-${{ github.ref }}-${{ inputs.platform || 'linux' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
@@ -37,8 +43,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(startsWith(github.ref, 'refs/tags/v') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
+        os: ${{ fromJSON(inputs.platform == 'macos' && '["macos-latest"]' || '["ubuntu-24.04"]') }}
         scenarios: [rest, S5]
+      max-parallel: ${{ inputs.platform == 'macos' && 1 || 2 }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
@@ -142,12 +149,13 @@ jobs:
   s9-random:
     name: S9, 25 random crash schedules (${{ matrix.os }}, shard ${{ matrix.shard }})
     # Release tags and by hand; nightly, models-full.yml runs 1000 schedules.
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' || inputs.platform == 'macos'
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(startsWith(github.ref, 'refs/tags/v') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
+        os: ${{ fromJSON(inputs.platform == 'macos' && '["macos-latest"]' || '["ubuntu-24.04"]') }}
         shard: [0, 1]
+      max-parallel: ${{ inputs.platform == 'macos' && 1 || 2 }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 75
     steps:

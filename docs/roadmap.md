@@ -12,8 +12,16 @@ the interface before purge and scrub).
 
 ## How a milestone ends
 
-- Its exit checks pass in CI on `ubuntu-24.04` and `macos-latest` (ADR 0026),
-  and its scenarios have left `slice::BLOCKED`.
+Release validation policy, updated by the user on 16 October: Linux checks
+gate publication. macOS tests run periodically in the background; releases
+still build and ship macOS binaries. This replaces the earlier requirement
+to wait for macOS tests on every release. Publication throughput and its
+targets are tracked in [the release KPI](release-kpi.md).
+
+- Its exit checks pass in release-gating CI on `ubuntu-24.04`; corresponding
+  `macos-latest` results are recorded by periodic background validation
+  (ADR 0026 and the policy update above). Its scenarios have left
+  `slice::BLOCKED`.
 - Its laws run as property tests and its traces are checked against the TLA+
   modules (ADRs 0008, 0012).
 - It is tagged `v0.N.0` and reported in `docs/reports/`.

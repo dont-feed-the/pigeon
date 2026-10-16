@@ -93,15 +93,23 @@ pub(crate) async fn report(d: &Daemon) -> Vec<Response> {
     {
         status.headline = crate::pause::headline(pause);
     }
-    // Reading a count must not race the mutable proposal judge. An
-    // unavailable count is explicit while another operation holds busy.
-    let suggestions = if let Ok(_busy) = g.busy.try_lock() {
+    // Reading a count must not race the mutable proposal judge. While
+    // another operation holds busy, which the loops do most of the time,
+    // the last count read stands; none read yet is explicit.
+    let read = if let Ok(_busy) = g.busy.try_lock() {
         crate::decide::pending(&g)
             .await
             .ok()
             .map(|p| p.len().try_into().unwrap_or(u64::MAX))
     } else {
         None
+    };
+    let suggestions = {
+        let mut known = g.lock();
+        if read.is_some() {
+            known.health_suggestions = read;
+        }
+        known.health_suggestions
     };
     let now = crate::util::now();
     let (heard, reports) = {

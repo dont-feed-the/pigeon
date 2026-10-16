@@ -14,7 +14,8 @@ and the real storage boundaries is still necessary.
 
 ## Decision
 
-- Check `CaptureTransactionProof`, `AnnexDropProof` and `PurgeProof` with TLAPS
+- Check `CaptureTransactionProof`, `AnnexDropProof`, `PurgeProof` and
+  `CustodyTokensProof` with TLAPS
   1.5.0 on each pull request and main push. Import the existing model
   actions; do not maintain a separate proof implementation of the protocol.
 - Fresh checks prove all obligations from scratch, reject omitted proofs, and
@@ -25,11 +26,16 @@ and the real storage boundaries is still necessary.
   TLAPS trusts imported theorems. Unsupported assumptions or claims fail
   before a finite check can be moved out of routine CI.
 - Move `AnnexDrop_design4`, covered by the parameterized no-expiry proof,
-  and `Purge_full3`, covered by `PurgeProof`, to an audit set: Monday's
-  nightly run, release tags, manual TLC and explicit local runs.
-  The smaller positive purge case remains in the fast set.
+  `Purge_full3`, covered by `PurgeProof`, and `T_n42o4`, covered by
+  `CustodyTokensProof`, to an audit set: a separate Monday job, manual TLC
+  and explicit local runs. Monday's audit runs even without new commits;
+  release tags check fresh proofs without repeating the proved graphs.
+  The smaller positive purge and token cases remain in the fast set.
   Other safety, negative, liveness, trace, law, contract and fault-injection
   checks keep their frequency. Proofs are prerequisites of the model jobs.
+- Balance the remaining full-model shards using recorded execution costs.
+  Estimates affect placement only; every selected configuration still runs
+  once, and new configurations need no estimate to be included.
 - Keep Apalache 0.62.4 as an opt-in, reproducible benchmark and induction
   cross-check. Its bounded checks alone cannot replace exhaustive TLC;
   on the tested capture model it was slower than TLC and weaker than the
@@ -43,7 +49,7 @@ and the real storage boundaries is still necessary.
 
 ## Consequences
 
-- The three stated model safety claims hold without a fixed small domain size or
+- The stated model safety claims hold without a fixed small domain size or
   execution length. They do not prove Rust refinement, storage durability,
   crash/power-loss behavior absent from the model, or liveness.
 - The drop proof does not cover lock expiry or ranked P2P checks. The

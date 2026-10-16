@@ -39,7 +39,8 @@ APALACHE_URL = ("https://github.com/apalache-mc/apalache/releases/download/"
                 "v0.62.4/apalache-0.62.4.tgz")
 PROOFS = {"CaptureTransactionProof": "CaptureTransaction_safe",
           "AnnexDropProof": "AnnexDrop_design4",
-          "PurgeProof": "Purge_full3"}
+          "PurgeProof": "Purge_full3",
+          "CustodyTokensProof": "T_n42o4"}
 
 
 def load_tlc():
@@ -163,14 +164,20 @@ class Checks:
 
     def configuration_theorem(self, work, module, config):
         cfg = (work / f"{config}.cfg").read_text()
+        cfg = re.sub(r"\\\*[^\n]*", "", cfg)
         if ("<-" in cfg or re.search(r"^\s*(CONSTRAINTS?|ACTION_CONSTRAINTS?|"
                                       r"SYMMETRY|VIEW|INIT|NEXT|PROPERT(Y|IES))\b", cfg, re.M)):
             raise RuntimeError(f"{config}: unsupported coverage configuration directive")
         if not re.search(r"^CHECK_DEADLOCK FALSE\s*$", cfg, re.M):
             raise RuntimeError(f"{config}: the proof does not establish absence of deadlock")
-        invariants = re.findall(r"^INVARIANT ([A-Za-z_][A-Za-z_0-9]*)\s*$", cfg, re.M)
-        if not invariants or len(invariants) != len(re.findall(r"^INVARIANTS?\b", cfg, re.M)):
-            raise RuntimeError(f"{config}: expected one named safety invariant per directive")
+        clauses = re.findall(r"^[ \t]*INVARIANTS?\b(.*?)"
+                             r"(?=^[ \t]*(?:INVARIANTS?|CONSTANTS?|SPECIFICATION|CHECK_DEADLOCK)\b|\Z)",
+                             cfg, re.M | re.S)
+        if not clauses or any(not re.fullmatch(r"\s*[A-Za-z_][A-Za-z_0-9]*"
+                                               r"(?:\s+[A-Za-z_][A-Za-z_0-9]*)*\s*", clause)
+                              for clause in clauses):
+            raise RuntimeError(f"{config}: expected named safety invariants")
+        invariants = [name for clause in clauses for name in clause.split()]
         # Prove that the actual configured properties follow from Safety.
         # Checking them in just the initial state would miss a newly added
         # invariant that fails only after some transitions.
@@ -204,7 +211,7 @@ class Checks:
             if not code or "Error: The invariant of ProofParameters is equal to FALSE" not in output:
                 raise RuntimeError(f"{name}: expected a false proof assumption; inspect its log")
         elif (code or "Model checking completed. No error has been found." not in output
-              or "1 distinct states found" not in output):
+              or not re.search(r"\b[1-9]\d* distinct states found\b", output)):
             raise RuntimeError(f"{config}: not covered by {module}; inspect its log")
 
     def positives(self):
@@ -236,6 +243,10 @@ class Checks:
              "/\\ TRUE"),
             ("purge-no-wait", "Purge", "PurgeProof", "now >= seen[c] + R", "TRUE"),
             ("purge-unwanted-fetch", "Purge", "PurgeProof", "/\\ Wants(d)", "/\\ TRUE"),
+            ("tokens-stale-reply", "CustodyTokens", "CustodyTokensProof",
+             "r.id = offering[n].id", "TRUE"),
+            ("tokens-idempotent-ack", "CustodyTokens", "CustodyTokensProof",
+             "IdempotentAck /\\ o.t \\in tok[m]", "o.t \\in tok[m]"),
         ]
         for name, target, proof, old, new in cases:
             with tempfile.TemporaryDirectory() as temp:
@@ -251,6 +262,8 @@ class Checks:
                     # An unproved auxiliary invariant alone need not imply a
                     # broken protocol: require a counterexample to actual safety.
                     self.purge_tlc(work, name + "-counterexample", reject=True)
+                if target == "CustodyTokens":
+                    self.tokens_tlc(work, name + "-counterexample", reject=True)
         with tempfile.TemporaryDirectory() as temp:
             work = Path(temp)
             copy_models(work)
@@ -259,7 +272,8 @@ class Checks:
                 "=============================================================================",
                 "IndexNeverMoves == idx = 1\n============================================================================="))
             cfg = work / "CaptureTransaction_safe.cfg"
-            cfg.write_text(cfg.read_text() + "\nINVARIANT IndexNeverMoves\n")
+            cfg.write_text(cfg.read_text().replace("INVARIANT CapturedBeforeDisplacement",
+                "INVARIANTS CapturedBeforeDisplacement\n  IndexNeverMoves"))
             bridge = self.configuration_theorem(work, "CaptureTransactionProof", "CaptureTransaction_safe")
             self.proof(work, "CaptureTransactionProof", "unproved-config-invariant", reject=True, bridge=bridge)
         for constant, old, new in [("Expiry", "FALSE", "TRUE"),
@@ -276,6 +290,20 @@ class Checks:
                     raise RuntimeError(f"{constant}: coverage mutation site changed")
                 cfg.write_text(text)
                 self.coverage(work, "AnnexDropProof", "AnnexDrop_design4",
+                              f"uncovered-{constant}", reject=True)
+
+        for constant, old, new in [("Nonce", "TRUE", "FALSE"),
+                                    ("IdempotentAck", "FALSE", "TRUE")]:
+            with tempfile.TemporaryDirectory() as temp:
+                work = Path(temp)
+                copy_models(work)
+                cfg = work / "T_n42o4.cfg"
+                text, count = re.subn(rf"\b{constant} = {old}",
+                                      f"{constant} = {new}", cfg.read_text())
+                if count != 1:
+                    raise RuntimeError(f"{constant}: token coverage mutation site changed")
+                cfg.write_text(text)
+                self.coverage(work, "CustodyTokensProof", "T_n42o4",
                               f"uncovered-{constant}", reject=True)
 
         for name, changes in [
@@ -317,6 +345,30 @@ class Checks:
             work = Path(temp)
             copy_models(work)
             self.purge_tlc(work, "tlc-Purge_full3", large=True)
+
+    def tokens_tlc(self, work, name, reject=False, large=False):
+        config = "T_n42o4" if large else "TokenMutation"
+        if not large:
+            # Four offers are needed for the replayed-ack counterexample;
+            # keep the positive proof's flags while changing the action.
+            cfg = (work / "T_idem.cfg").read_text().replace("IdempotentAck = TRUE",
+                                                         "IdempotentAck = FALSE")
+            (work / "TokenMutation.cfg").write_text(cfg)
+        cmd = [self.java, "-Xmx1g", "-Xss16m", "-XX:+UseParallelGC", f"-Djava.io.tmpdir={work}",
+               "-cp", str(self.jar), "tlc2.TLC", "-workers", "1",
+               "-metadir", str(work / name), "-config", config + ".cfg", "CustodyTokens"]
+        code, output = self.run(name, cmd, work, timeout=1800 if large else 120)
+        if reject:
+            if code != 12 or "Error: Invariant TokensNeverLost is violated" not in output:
+                raise RuntimeError(f"{name}: expected a token safety counterexample")
+        elif code or "Model checking completed. No error has been found." not in output:
+            raise RuntimeError(f"{name}: independent finite token check failed")
+
+    def benchmark_tokens(self):
+        with tempfile.TemporaryDirectory() as temp:
+            work = Path(temp)
+            copy_models(work)
+            self.tokens_tlc(work, "tlc-T_n42o4", large=True)
 
     def benchmark(self, apalache, include_slow):
         with tempfile.TemporaryDirectory() as temp:
@@ -364,6 +416,7 @@ def main():
     parser.add_argument("--benchmark", action="store_true", help="also compare TLC and Apalache")
     parser.add_argument("--include-slow", action="store_true", help="benchmark the large TLC drop graph")
     parser.add_argument("--benchmark-purge", action="store_true", help="also time the large finite purge graph")
+    parser.add_argument("--benchmark-tokens", action="store_true", help="also time the large finite token graph")
     parser.add_argument("--apalache")
     args = parser.parse_args()
     args.out = args.out.resolve()
@@ -378,6 +431,8 @@ def main():
             checks.mutants()
         if args.benchmark_purge:
             checks.benchmark_purge()
+        if args.benchmark_tokens:
+            checks.benchmark_tokens()
         if args.benchmark:
             apalache = apalache_binary(args.apalache)
             version(apalache, "version", APALACHE_VERSION)

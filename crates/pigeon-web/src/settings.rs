@@ -51,16 +51,21 @@ pub async fn settings(
         @if r.mount.is_none() { (crate::leave::form(&r, &form.0)) }
         h2 { (r.id("web-diagnostics")) }
         p { a href=(r.url("/doctor")) { (r.id("web-doctor")) } }
-        p { (r.id("web-diagnostics-consent")) }
         form method="post" action=(r.url("/settings/diagnostics")) {
             input type="hidden" name="form" value=(&form.0);
-            label for="diagnostic-peer" { (r.id("web-diagnostic-peer")) }
-            select id="diagnostic-peer" name="peer" {
-                @for peer in &peers { option value=(&peer.device) { (&peer.name) } }
+            p {
+                label for="diagnostic-peer" { (r.id("web-diagnostic-peer")) }
+                " "
+                select id="diagnostic-peer" name="peer" {
+                    @for peer in &peers { option value=(&peer.device) { (&peer.name) } }
+                }
             }
-            label {
-                input type="checkbox" name="consent" value="true" required;
-                (r.id("web-diagnostics-consent"))
+            p {
+                label {
+                    input type="checkbox" name="consent" value="true" required;
+                    " "
+                    (r.id("web-diagnostics-consent"))
+                }
             }
             button type="submit" { (r.id("web-allow-diagnostics")) }
         }
@@ -72,14 +77,15 @@ pub async fn settings(
 pub async fn doctor(State(web): State<Arc<Web>>) -> Html<String> {
     let r = web.renderer();
     let answers = web.ask(Request::Doctor { details: false }).await;
-    pages::result(
-        &r,
-        "/settings",
-        answers
-            .iter()
-            .flat_map(|answer| r.response(answer).0)
-            .collect(),
-    )
+    let lines: Vec<String> = answers
+        .iter()
+        .flat_map(|answer| r.response(answer).0)
+        .collect();
+    let body = html! {
+        (list(&lines))
+        p { a href=(r.url("/settings")) { (r.id("web-back")) } }
+    };
+    page(&r, "/settings", &r.id("web-doctor"), &body)
 }
 
 /// What a value is called: a language by its own name, the others from

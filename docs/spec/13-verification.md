@@ -21,18 +21,22 @@
 
 Each protocol has a model in `models/tla/` (ADR 0008).
 `models/tla/expected.tsv` lists every configuration with its set (fast in
-`ci`, full in `models-full`, audit on Mondays, release tags and by hand)
+`ci`, full in `models-full`, audit on Mondays and by hand)
 and its expected verdict; `scripts/run-tlc`
 runs them; `models/tla/README.md` says what each shows and leaves out. The
 invariants this specification cites are normative.
 
 `scripts/check-proofs` also checks parameterized TLAPS proofs over the
-actual `CaptureTransaction`, `AnnexDrop` and `Purge` actions (ADR 0073). They remove
+actual `CaptureTransaction`, `AnnexDrop`, `Purge` and `CustodyTokens` actions (ADR 0073). They remove
 execution-length and small-domain bounds under their stated assumptions;
 TLC evaluates those assumptions against each covered configuration. The
 drop proof requires no lock expiry, safe checks, and no trusted or log-only
-copies. The covered `AnnexDrop_design4` and `Purge_full3` finite checks run
-in the audit set. Expiry-enabled, ranked, negative, liveness and implementation
+copies. The token proof requires fresh nonces and non-idempotent acknowledgements,
+and establishes all four safety invariants for arbitrary valid counts and offer
+bounds. The covered `AnnexDrop_design4`, `Purge_full3` and `T_n42o4` finite
+checks run in the audit set, separately from the full shards and even when
+main has not moved. Releases check fresh proofs without repeating those
+graphs. Expiry-enabled, ranked, negative, liveness and implementation
 trace checks retain their existing frequency. See
 [model-proofs.md](../model-proofs.md) for exact claims and measurements. The [purge proof](../purge-proof.md)
 checks the planned protocol; purge is not yet coded. Its smaller positive

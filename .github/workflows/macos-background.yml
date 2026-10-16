@@ -1,0 +1,61 @@
+# macOS validation is periodic evidence, not a release gate. Serialized
+# workflow groups bound runner demand; an active release takes priority.
+name: macos-background
+
+on:
+  schedule:
+    - cron: '31 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: macos-background
+  cancel-in-progress: false
+
+jobs:
+  available:
+    name: leave runners available to active releases
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.release.outputs.run }}
+    steps:
+      - id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          active=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/release.yml/runs?per_page=100" \
+            --jq '[.workflow_runs[] | select(.status != "completed")] | length')
+          if [ "$active" = 0 ]; then
+            echo run=true >> "$GITHUB_OUTPUT"
+          else
+            echo 'Background macOS checks deferred while a release is active.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  annex:
+    needs: available
+    if: needs.available.outputs.run == 'true'
+    uses: ./.github/workflows/git-annex.yml
+    with:
+      verify_macos: true
+
+  ci:
+    needs: annex
+    uses: ./.github/workflows/ci.yml
+    with:
+      platform: macos
+
+  lab:
+    needs: ci
+    uses: ./.github/workflows/lab.yml
+    with:
+      platform: macos
+
+  slice:
+    needs: lab
+    uses: ./.github/workflows/slice.yml
+    with:
+      platform: macos

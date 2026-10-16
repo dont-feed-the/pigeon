@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+"""Measure published, installable releases rather than tags or green PRs.
+
+Read-only GitHub collection; the same report runs locally and after releases.
+The JSON snapshot preserves timestamps, sample size and workflow/job evidence.
+"""
+
+import argparse
+from datetime import datetime, timezone, timedelta
+import json
+from pathlib import Path
+import re
+import statistics
+import subprocess
+from urllib.parse import urlencode
+
+
+def instant(value):
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def seconds(later, earlier):
+    return max(0, int((later - instant(earlier)).total_seconds()))
+
+
+def required_assets(tag):
+    return {"SHA256SUMS", "pigeon-install",
+            f"pigeon-{tag}-linux-x86_64.tar.gz", f"pigeon-{tag}-macos-arm64.tar.gz",
+            "git-annex-pigeon-linux-x86_64.tar.gz", "git-annex-pigeon-macos-arm64.tar.gz"}
+
+
+def api(repository, endpoint, collection=None):
+    command = ["gh", "api", "--paginate", f"repos/{repository}/{endpoint}"]
+    raw = subprocess.check_output(command, text=True, timeout=120)
+    pages = []
+    while raw.strip():
+        page, end = json.JSONDecoder().raw_decode(raw.lstrip())
+        pages.append(page)
+        raw = raw.lstrip()[end:]
+    return [item for page in pages for item in (page[collection] if collection else page)]
+
+
+def candidate(run):
+    tag = run.get("head_branch", "")
+    if tag.startswith("codex/retry-release-"):
+        tag = tag.removeprefix("codex/retry-release-")
+    if not tag.startswith("v"):
+        tag = run.get("display_title", "").removeprefix("release ")
+    return tag if re.fullmatch(r"v\d+\.\d+\.\d+(?:-[\w.-]+)?", tag) else None
+
+
+def target_sha(repository, run):
+    if run.get("head_branch") == candidate(run):
+        return run["head_sha"]
+    endpoint = f"repos/{repository}/git/ref/tags/{candidate(run)}"
+    obj = json.loads(subprocess.check_output(["gh", "api", endpoint], text=True, timeout=60))["object"]
+    for _ in range(5):
+        if obj["type"] == "commit":
+            return obj["sha"]
+        if obj["type"] != "tag":
+            break
+        endpoint = f"repos/{repository}/git/tags/{obj['sha']}"
+        obj = json.loads(subprocess.check_output(["gh", "api", endpoint], text=True, timeout=60))["object"]
+    raise ValueError("release tag does not resolve to a commit")
+
+
+def build_report(releases, runs, now, gap_target=7200, lead_target=3600, jobs=None):
+    published = sorted((r for r in releases if not r.get("draft") and r.get("published_at")),
+                       key=lambda r: instant(r["published_at"]), reverse=True)
+    installable = [r for r in published if required_assets(r["tag_name"]) <=
+                   {a["name"] for a in r.get("assets", [])}]
+    latest = installable[0] if installable else None
+    age = seconds(now, latest["published_at"]) if latest else None
+    published_tags = {r["tag_name"] for r in installable}
+    # Include an overlapping candidate whose run ended after publication.
+    boundary = instant(latest["published_at"]) if latest else None
+    attempts = [r for r in runs if candidate(r) and candidate(r) not in published_tags
+                and (boundary is None or instant(r["updated_at"]) >= boundary)]
+    latest_attempts = {}
+    for run in attempts:
+        tag = candidate(run)
+        previous = latest_attempts.get(tag)
+        if previous is None or (run["id"], run.get("run_attempt", 1)) > (previous["id"], previous.get("run_attempt", 1)):
+            latest_attempts[tag] = run
+    lead_times = []
+    for release in installable:
+        matching = [r for r in runs if candidate(r) == release["tag_name"]]
+        if matching:
+            first = min(matching, key=lambda r: instant(r["created_at"]))
+            lead_times.append({"tag": release["tag_name"],
+                               "seconds": seconds(instant(release["published_at"]), first["created_at"])})
+    latest_run = max((r for r in runs if candidate(r)), key=lambda r: r["id"], default=None)
+    findings = []
+    for workflow, workflow_jobs in (jobs or {}).items():
+        for job in workflow_jobs:
+            state = job.get("conclusion") if job.get("status") == "completed" else job.get("status")
+            if state in ("success", "skipped"):
+                continue
+            # GitHub fills started_at with a placeholder on queued jobs.
+            started = job.get("started_at") if job.get("status") != "queued" else None
+            created = job.get("created_at")
+            failed_step = next((s["name"] for s in job.get("steps", [])
+                                if s.get("conclusion") == "failure"), None)
+            findings.append({"workflow": workflow, "job": job["name"], "state": state,
+                             "url": job.get("html_url"), "failed_step": failed_step,
+                             "wait_before_start_seconds": seconds(instant(started) if started else now, created)
+                             if created else None})
+    return {
+        "schema": 1, "observed_at": now.isoformat().replace("+00:00", "Z"),
+        "definition": "Published non-draft release with both platform archives, pinned dependencies, installer and checksums present; asset presence is not a substitute for validation.",
+        "targets": {"publication_gap_seconds": gap_target, "candidate_lead_time_seconds": lead_target},
+        "last_installable_release": {"tag": latest["tag_name"], "published_at": latest["published_at"],
+                                      "url": latest["html_url"], "prerelease": latest.get("prerelease", False)} if latest else None,
+        "publication_gap_seconds": age,
+        "publication_gap_target_breached": age is None or age > gap_target,
+        "published_release_count_in_api": len(published),
+        "published_releases_missing_assets": [{"tag": r["tag_name"], "missing": sorted(required_assets(r["tag_name"]) -
+                                                 {a["name"] for a in r.get("assets", [])})}
+                                                for r in published if r not in installable],
+        "unpublished_candidates_since_last_publication": [{"tag": tag, "state": run.get("conclusion") or run["status"],
+                                                          "url": run["html_url"]}
+                                                         for tag, run in sorted(latest_attempts.items())],
+        "publication_lead_times": lead_times,
+        "last_publication_lead_time_seconds": next((x["seconds"] for x in lead_times
+                                                   if latest and x["tag"] == latest["tag_name"]), None),
+        "median_publication_lead_time_seconds": int(statistics.median(x["seconds"] for x in lead_times)) if lead_times else None,
+        "lead_time_sample_count": len(lead_times),
+        "latest_candidate": {"tag": candidate(latest_run), "run_id": latest_run["id"],
+                             "age_seconds": seconds(now, latest_run["created_at"]),
+                             "state": latest_run.get("conclusion") or latest_run["status"],
+                             "url": latest_run["html_url"]} if latest_run else None,
+        "latest_candidate_jobs_needing_attention": findings,
+        "unattributed_non_tag_runs": len([r for r in runs if not candidate(r)]),
+    }
+
+
+def duration(value):
+    if value is None:
+        return "unknown"
+    return f"{value // 3600}h {(value % 3600) // 60}m"
+
+
+def markdown(report):
+    release = report["last_installable_release"]
+    rows = ["# Release publication KPI", "", f"Observed: {report['observed_at']}", "",
+            f"Last installable publication: [{release['tag']}]({release['url']}) at {release['published_at']}." if release else "No installable publication found.",
+            "", "| Measure | Observed | Target during active release work |", "| --- | --- | --- |",
+            f"| Time since publication | {duration(report['publication_gap_seconds'])} | ≤ {duration(report['targets']['publication_gap_seconds'])} |",
+            f"| Last candidate → publication | {duration(report['last_publication_lead_time_seconds'])} | ≤ {duration(report['targets']['candidate_lead_time_seconds'])} |",
+            f"| Candidate → publication median | {duration(report['median_publication_lead_time_seconds'])} ({report['lead_time_sample_count']} samples) | ≤ {duration(report['targets']['candidate_lead_time_seconds'])} |", "",
+            "Publication-gap target: **" + ("missed" if report["publication_gap_target_breached"] else "met") + "**. Tags and successful builds do not reset this clock."]
+    candidate_run = report["latest_candidate"]
+    if candidate_run:
+        rows += ["", f"Latest candidate: [{candidate_run['tag']}]({candidate_run['url']}), {candidate_run['state']}, elapsed {duration(candidate_run['age_seconds'])}."]
+    attempts = report["unpublished_candidates_since_last_publication"]
+    rows += ["", f"Unpublished candidates since the last publication: **{len(attempts)}**."]
+    for attempt in attempts:
+        rows.append(f"- [{attempt['tag']}]({attempt['url']}): {attempt['state']}")
+    findings = report["latest_candidate_jobs_needing_attention"]
+    if findings:
+        rows += ["", "Current candidate jobs needing attention:", ""]
+        for finding in findings:
+            detail = f"; failed step: {finding['failed_step']}" if finding["failed_step"] else ""
+            rows.append(f"- {finding['workflow']} / [{finding['job']}]({finding['url']}): {finding['state']}; wait before start {duration(finding['wait_before_start_seconds'])}{detail}")
+    rows += ["", "Wait before start includes dependency and runner waits; it is not measured runner-queue time alone. Lead-time samples cover the queried workflow window. API failures fail collection; missing observations never count as success."]
+    return "\n".join(rows) + "\n"
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repository", default="dont-feed-the/pigeon")
+    parser.add_argument("--days", type=int, default=7)
+    parser.add_argument("--gap-target-minutes", type=int, default=120)
+    parser.add_argument("--lead-target-minutes", type=int, default=60)
+    parser.add_argument("--json-output", type=Path)
+    parser.add_argument("--markdown-output", type=Path)
+    args = parser.parse_args()
+    if not re.fullmatch(r"[\w.-]+/[\w.-]+", args.repository) or min(args.days, args.gap_target_minutes, args.lead_target_minutes) < 1:
+        parser.error("valid repository and positive observation/target periods required")
+    now = datetime.now(timezone.utc)
+    releases = api(args.repository, "releases?per_page=100")
+    query = urlencode({"per_page": 100, "created": ">=" + (now - timedelta(days=args.days)).date().isoformat()})
+    runs = api(args.repository, "actions/workflows/release.yml/runs?" + query, "workflow_runs")
+    latest = max((r for r in runs if candidate(r)), key=lambda r: r["id"], default=None)
+    jobs = {}
+    if latest:
+        query = urlencode({"per_page": 100, "head_sha": target_sha(args.repository, latest), "event": "push"})
+        checks = api(args.repository, "actions/runs?" + query, "workflow_runs")
+        workflows = {}
+        for run in checks:
+            if run.get("head_branch") == candidate(latest):
+                if run["name"] not in workflows or run["id"] > workflows[run["name"]]["id"]:
+                    workflows[run["name"]] = run
+        for name, run in workflows.items():
+            jobs[name] = api(args.repository, f"actions/runs/{run['id']}/jobs?per_page=100", "jobs")
+    report = build_report(releases, runs, datetime.now(timezone.utc), args.gap_target_minutes * 60, args.lead_target_minutes * 60, jobs)
+    report["workflow_observation_days"] = args.days
+    report["repository"] = args.repository
+    rendered = markdown(report)
+    if args.json_output:
+        args.json_output.write_text(json.dumps(report, indent=2) + "\n")
+    if args.markdown_output:
+        args.markdown_output.write_text(rendered)
+    print(rendered, end="")
+
+
+if __name__ == "__main__":
+    main()

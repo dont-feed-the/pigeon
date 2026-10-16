@@ -17,6 +17,12 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  workflow_call:
+    inputs:
+      platform:
+        description: macos for periodic background validation; Linux for publication
+        type: string
+        default: linux
   workflow_dispatch:
 
 permissions:
@@ -24,7 +30,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: lab-${{ github.ref }}
+  group: lab-${{ github.ref }}-${{ inputs.platform || 'linux' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
@@ -39,8 +45,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(startsWith(github.ref, 'refs/tags/v') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
+        os: ${{ fromJSON(inputs.platform == 'macos' && '["macos-latest"]' || '["ubuntu-24.04"]') }}
         group: [E20 E21 E22, E12-E13 E14 E23, E15 E15b E18 E24, E19]
+      max-parallel: ${{ inputs.platform == 'macos' && 1 || 4 }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:

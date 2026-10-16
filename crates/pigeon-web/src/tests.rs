@@ -21,6 +21,8 @@ mod health;
 mod mounted;
 #[path = "tests/recovery.rs"]
 mod recovery;
+#[path = "tests/setup.rs"]
+mod setup;
 #[path = "tests/usability.rs"]
 mod usability;
 
