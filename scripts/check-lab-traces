@@ -21,6 +21,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -64,6 +65,8 @@ def load(name):
 
 def check_log(log, java, jar):
     """Check one complete stream with private generated models and TLC state."""
+    started = time.monotonic()
+    print(f"checking {log}", flush=True)
     tla, tlc = load("trace-to-tla"), load("run-tlc")
     install, roster = load("check-install-traces"), load("check-roster-traces")
     failures, unchecked, partial, checked = 0, set(), {}, set()
@@ -106,6 +109,7 @@ def check_log(log, java, jar):
                         failures += 1
             complete = bool(groups)
             for identity, events in sorted(groups.items()):
+                print(f"checking {log.parent.name} filesystem {identity[-1]}: {len(events)} observations", flush=True)
                 try:
                     verdict = install.check(sorted(events, key=lambda e: e["clock"]), java, 4)
                     ok = verdict == "trace:accepted"
@@ -153,6 +157,7 @@ def check_log(log, java, jar):
                 print(tlc.excerpt(output), file=sys.stderr)
             else:
                 checked.add(spec)
+    print(f"checked {log}: {time.monotonic() - started:.1f} s", flush=True)
     return failures, unchecked, partial, checked
 
 

@@ -40,8 +40,13 @@ def worker(binary, out, index, seed, cases):
                PIGEON_LAB_BIN=str(Path(os.environ["PIGEON_LAB_BIN"]).resolve()))
     start = time.monotonic()
     print(f"S9 seed {seed}: {cases} cases, reports in {report}", flush=True)
+    # The fixed crash-supervision regression runs once per shard. Other
+    # processes run only the randomized test, with their independent seed.
+    command = [str(binary), "--nocapture"]
+    if index:
+        command += ["--exact", "random_crash_schedules_lose_and_duplicate_nothing"]
     with (report / "test.log").open("w") as log:
-        done = subprocess.run([str(binary), "--nocapture"], cwd=ROOT, env=env,
+        done = subprocess.run(command, cwd=ROOT, env=env,
                               stdout=log, stderr=subprocess.STDOUT)
     print(f"S9 seed {seed}: exit {done.returncode}, {time.monotonic() - start:.1f} s", flush=True)
     if done.returncode:
