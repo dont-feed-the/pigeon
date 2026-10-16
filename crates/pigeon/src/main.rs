@@ -10,6 +10,7 @@
 mod args;
 mod complete;
 mod export;
+mod join;
 mod render;
 mod repo;
 mod startup;
@@ -149,29 +150,44 @@ fn show(out: &Renderer, json: bool, r: &Response) -> (bool, bool) {
 }
 
 fn exchange(out: &Renderer, json: bool, request: &Request) -> ExitCode {
-    exchange_coded(out, json, request).0
+    let (_, problem) = show(out, json, &answer(out, json, request));
+    ExitCode::from(u8::from(problem))
 }
 
 /// [`exchange`], and the code of the daemon's problem it ended with.
 fn exchange_coded(out: &Renderer, json: bool, request: &Request) -> (ExitCode, Option<String>) {
-    let fail = |p: Problem| {
-        show(out, json, &Response::Problem(p));
-        (ExitCode::from(1), None)
+    let last = answer(out, json, request);
+    let code = match &last {
+        Response::Problem(p) => Some(p.code.clone()),
+        _ => None,
     };
-    let mut client = match Client::open(None).or_else(|code| {
-        if code == "daemon-not-running" && matches!(request, Request::OpenWeb) {
-            crate::startup::connect()
-                .ok_or(code)
-                .and_then(|stream| Client::greet(stream, None))
-        } else {
-            Err(code)
-        }
-    }) {
-        Ok(client) => client,
-        Err(code) => return fail(local_problem(code, &[])),
-    };
+    let (_, problem) = show(out, json, &last);
+    (ExitCode::from(u8::from(problem)), code)
+}
+
+/// Sends `request` and shows its progress: answers its last response,
+/// unshown, or the problem of a daemon that cannot be reached.
+fn answer(out: &Renderer, json: bool, request: &Request) -> Response {
+    sent(out, json, request).unwrap_or_else(|p| Response::Problem(*p))
+}
+
+fn sent(out: &Renderer, json: bool, request: &Request) -> Result<Response, Box<Problem>> {
+    let unreachable = |code: &str| Box::new(local_problem(code, &[]));
+    let mut client = Client::open(None)
+        .or_else(|code| {
+            if code == "daemon-not-running"
+                && matches!(request, Request::OpenWeb | Request::Join { .. })
+            {
+                crate::startup::connect()
+                    .ok_or(code)
+                    .and_then(|stream| Client::greet(stream, None))
+            } else {
+                Err(code)
+            }
+        })
+        .map_err(unreachable)?;
     if client.send(2, request).is_err() {
-        return fail(local_problem("daemon-not-running", &[]));
+        return Err(unreachable("daemon-not-running"));
     }
     let waiting = match request {
         Request::Restore { path, .. } => Some(("progress-restore", vec![("path", path.as_str())])),
@@ -179,6 +195,7 @@ fn exchange_coded(out: &Renderer, json: bool, request: &Request) -> (ExitCode, O
         Request::RecoverySheet => Some(("progress-recovery-sheet", Vec::new())),
         Request::DebugBundle { .. } => Some(("progress-debug-bundle", Vec::new())),
         Request::Recover { .. } => Some(("progress-recover", Vec::new())),
+        Request::Join { .. } => Some(("progress-join", Vec::new())),
         _ => None,
     };
     if let Some((id, args)) = waiting {
@@ -200,17 +217,13 @@ fn exchange_coded(out: &Renderer, json: bool, request: &Request) -> (ExitCode, O
         );
     }
     loop {
-        let Ok(env) = client.next() else {
-            return fail(local_problem("daemon-not-running", &[]));
-        };
-        let (last, problem) = show(out, json, &env.body);
-        if last {
-            let code = match env.body {
-                Response::Problem(p) => Some(p.code),
-                _ => None,
-            };
-            return (ExitCode::from(u8::from(problem)), code);
+        let env = client
+            .next()
+            .map_err(|_| unreachable("daemon-not-running"))?;
+        if !matches!(env.body, Response::Progress { .. }) {
+            return Ok(env.body);
         }
+        show(out, json, &env.body);
     }
 }
 
@@ -251,6 +264,14 @@ fn run() -> ExitCode {
             emit(&[version], false);
             ExitCode::SUCCESS
         }
+        Action::Completions(shell) => match complete::register(*shell) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(_) => {
+                let p = local_problem("internal-error", &[]);
+                show(&out, line.json, &Response::Problem(p));
+                ExitCode::from(1)
+            }
+        },
         Action::Update(args) => {
             let code = match update(args).kind() {
                 std::io::ErrorKind::NotFound => "not-installed",
@@ -286,7 +307,10 @@ fn run() -> ExitCode {
             {
                 return code;
             }
-            exchange(&out, line.json, request)
+            match request {
+                Request::Join { .. } => join::run(&out, &line, request),
+                _ => exchange(&out, line.json, request),
+            }
         }
     }
 }

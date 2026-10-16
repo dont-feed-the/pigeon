@@ -104,7 +104,7 @@ retried at every scan. A batch shares its fsyncs and one writer scan.
 | 2 | stage | the new file with its mode under `.git/pigeon/stage/`, fsynced: a hard link to an object with no other name on thin laptops, else a copy; no temporary name enters the folder | `Start` |
 | 3 | journal | `begin` (both keys, the index entry's identity and stat, staged file, aside), fsynced ([11 §11.3](11-local-state.md)) | `Start` |
 | 4 | move aside | *p* into `.git/pigeon/aside/`; *p* gone: skip | `MoveAside` |
-| 5 | writer scan | no process holds the aside open for writing or maps it writable; if some cannot be inspected, it passes only if the file is not group- or other-writable; otherwise `in-use` | `Scan` |
+| 5 | writer scan | no process holds the aside open for writing or maps it writable; a process that cannot be inspected blocks it only if it belongs to another user (not root, not the owner) whose credentials (`/proc/<pid>/status`) could write it, or, its credentials unknown too, if the file is group- or other-writable; otherwise `in-use` | `Scan` |
 | 6 | check | the aside's identity and stat are the journalled ones, link count 1 (2 for an object's inode; higher marks it *linked*, §7.9); if 5 or 6 fails, the aside goes back without replacing anything (skip), or is captured as a recovered version (§7.6) if *p* was recreated; then `proved` is journalled; a creation is proved when *p* is free | `Check` |
 | 7 | rename in | without replacing; if *p* exists, the application's file stays (`raced`) and is captured as a concurrent edit (§7.6); fsync both directories | `RenameIn` |
 | 8 | index | git records the stat only if the file holds the new key, so a later save shows as modified; pigeon never writes stat data (E19) | `Index`, `IndexHonest` |
@@ -165,7 +165,7 @@ catalogue's version and from pigeon's last install. The **divergence table**
 
 *waiting* ends when the proposal is accepted (only the index changes,
 `Decide`) and becomes *conflict* when it is rejected or `current(p)` moves;
-a decision on some files (ADR 0075) ends each path `main` now holds as
+a decision on some files (ADR 0076) ends each path `main` now holds as
 the person saved it and makes the others conflicts, path by path:
 the person is told **once**, and Home keeps a *Needs you* item. It also
 ends when the file is clean again, the person having put a version back;

@@ -37,10 +37,13 @@ APALACHE_VERSION = "0.62.4"
 APALACHE_SHA = "b781b53bba32fac14ac2e02b0332e1dc2edc64cb7b850c0608d8142cc7aa2ef4"
 APALACHE_URL = ("https://github.com/apalache-mc/apalache/releases/download/"
                 "v0.62.4/apalache-0.62.4.tgz")
-PROOFS = {"CaptureTransactionProof": "CaptureTransaction_safe",
-          "AnnexDropProof": "AnnexDrop_design4",
-          "PurgeProof": "Purge_full3",
-          "CustodyTokensProof": "T_n42o4"}
+PROOFS = {"CaptureTransactionProof": ("CaptureTransaction_safe",),
+          "AnnexDropProof": ("AnnexDrop_design4",),
+          "PurgeProof": ("Purge_full3",),
+          "CustodyTokensProof": ("T_n42o4", "T_n31o5", "T_n32o5"),
+          "AuthorityDecidersProof": ("Authority_mixed",)}
+PROOF_MODELS = {"AuthorityDecidersProof": "Authority"}
+UNCONDITIONAL = {"AuthorityDecidersProof"}
 
 
 def load_tlc():
@@ -120,10 +123,12 @@ class Checks:
         self.jar = load_tlc().tlc_jar()
         self.results = []
         rows = {config: (module, group) for config, module, group, _ in load_tlc().expectations()}
-        for proof, config in PROOFS.items():
-            if rows.get(config, (None,))[0] != proof.removesuffix("Proof"):
-                raise RuntimeError(f"{config}: proof/config module mapping changed")
-        if {config for config, (_, group) in rows.items() if group == "audit"} - set(PROOFS.values()):
+        for proof, configs in PROOFS.items():
+            for config in configs:
+                if rows.get(config, (None,))[0] != PROOF_MODELS.get(proof, proof.removesuffix("Proof")):
+                    raise RuntimeError(f"{config}: proof/config module mapping changed")
+        covered = {config for configs in PROOFS.values() for config in configs}
+        if {config for config, (_, group) in rows.items() if group == "audit"} - covered:
             raise RuntimeError("an audit row has no checked parameterized proof")
 
     def run(self, name, command, work, timeout=120):
@@ -183,9 +188,10 @@ class Checks:
         # invariant that fails only after some transitions.
         bridge = module + "Configuration"
         conjunction = " /\\ ".join(invariants)
+        premise = "" if module in UNCONDITIONAL else "Spec => "
         (work / f"{bridge}.tla").write_text(
             f"---- MODULE {bridge} ----\nEXTENDS {module}\n"
-            f"THEOREM ConfigurationSafety == Spec => []({conjunction})\n"
+            f"THEOREM ConfigurationSafety == {premise}[]({conjunction})\n"
             "BY Safety, PTL\n====\n")
         return bridge
 
@@ -215,17 +221,18 @@ class Checks:
             raise RuntimeError(f"{config}: not covered by {module}; inspect its log")
 
     def positives(self):
-        for module, config in PROOFS.items():
+        for module, configs in PROOFS.items():
             with tempfile.TemporaryDirectory() as temp:
                 work = Path(temp)
                 copy_models(work)
-                bridge = self.configuration_theorem(work, module, config)
                 # TLAPS treats imported theorems as established; checking only
                 # an extending bridge reports zero obligations for its import.
                 # Prove the root itself first, then prove the configured claim.
                 self.proof(work, module)
-                self.proof(work, module, name=f"properties-{config}", bridge=bridge)
-                self.coverage(work, module, config)
+                for config in configs:
+                    bridge = self.configuration_theorem(work, module, config)
+                    self.proof(work, module, name=f"properties-{config}", bridge=bridge)
+                    self.coverage(work, module, config)
 
     def mutants(self):
         cases = [
@@ -247,6 +254,9 @@ class Checks:
              "r.id = offering[n].id", "TRUE"),
             ("tokens-idempotent-ack", "CustodyTokens", "CustodyTokensProof",
              "IdempotentAck /\\ o.t \\in tok[m]", "o.t \\in tok[m]"),
+            ("authority-no-decider-guard", "Authority", "AuthorityDecidersProof",
+             'D == {u \\in Persons : \\A q \\in diff : AllowedC(u, q, old(q), new(q), Ro, S)}',
+             "D == Persons"),
         ]
         for name, target, proof, old, new in cases:
             with tempfile.TemporaryDirectory() as temp:
@@ -264,6 +274,8 @@ class Checks:
                     self.purge_tlc(work, name + "-counterexample", reject=True)
                 if target == "CustodyTokens":
                     self.tokens_tlc(work, name + "-counterexample", reject=True)
+                if target == "Authority":
+                    self.authority_tlc(work, name + "-counterexample", reject=True)
         with tempfile.TemporaryDirectory() as temp:
             work = Path(temp)
             copy_models(work)
@@ -305,6 +317,33 @@ class Checks:
                 cfg.write_text(text)
                 self.coverage(work, "CustodyTokensProof", "T_n42o4",
                               f"uncovered-{constant}", reject=True)
+
+        for constant, old, new in [("ForceAdopt", "TRUE", "FALSE"),
+                                    ("DecidersAt", '"mixed"', '"proposal"')]:
+            with tempfile.TemporaryDirectory() as temp:
+                work = Path(temp)
+                copy_models(work)
+                cfg = work / "Authority_mixed.cfg"
+                text, count = re.subn(rf"\b{constant} = {old}",
+                                      f"{constant} = {new}", cfg.read_text())
+                if count != 1:
+                    raise RuntimeError(f"{constant}: authority coverage mutation site changed")
+                cfg.write_text(text)
+                self.coverage(work, "AuthorityDecidersProof", "Authority_mixed",
+                              f"uncovered-{constant}", reject=True)
+
+        with tempfile.TemporaryDirectory() as temp:
+            work = Path(temp)
+            copy_models(work)
+            path = work / "Authority.tla"
+            path.write_text(path.read_text().replace(
+                "=============================================================================",
+                "NoNewCommits == Len(cm) = 1\n============================================================================="))
+            cfg = work / "Authority_mixed.cfg"
+            cfg.write_text(cfg.read_text() + "\nINVARIANT NoNewCommits\n")
+            bridge = self.configuration_theorem(work, "AuthorityDecidersProof", "Authority_mixed")
+            self.proof(work, "AuthorityDecidersProof", "authority-extra-unproved-claim",
+                       reject=True, bridge=bridge)
 
         for name, changes in [
             ("purge-seals-only", [("Mode", '"full"', '"seals"')]),
@@ -370,6 +409,25 @@ class Checks:
             copy_models(work)
             self.tokens_tlc(work, "tlc-T_n42o4", large=True)
 
+    def authority_tlc(self, work, name, reject=False):
+        cmd = [self.java, "-Xmx1g", "-Xss16m", "-XX:+UseParallelGC", f"-Djava.io.tmpdir={work}",
+               "-cp", str(self.jar), "tlc2.TLC", "-workers", "1",
+               "-metadir", str(work / name), "-config", "Authority_decide.cfg", "Authority"]
+        code, output = self.run(name, cmd, work)
+        if reject:
+            if code != 12 or "Error: Invariant DecidersCanAdopt is violated" not in output:
+                raise RuntimeError(f"{name}: expected an adoption-permission counterexample")
+        elif code or "Model checking completed. No error has been found." not in output:
+            raise RuntimeError(f"{name}: independent finite authority check failed")
+
+    def authority_equivalence(self):
+        cmd = [sys.executable, str(ROOT / "scripts/check-authority-folds"),
+               "--out", str(self.out / "authority-folds")]
+        code, output = self.run("authority-fold-equivalence", cmd, ROOT)
+        if (code or "equivalence: pass" not in output
+                or "mutant: violation:HistoryViewsAgree" not in output):
+            raise RuntimeError("Authority fold comparison or its mutant failed")
+
     def benchmark(self, apalache, include_slow):
         with tempfile.TemporaryDirectory() as temp:
             work = Path(temp)
@@ -429,6 +487,7 @@ def main():
         checks.positives()
         if not args.no_mutants:
             checks.mutants()
+            checks.authority_equivalence()
         if args.benchmark_purge:
             checks.benchmark_purge()
         if args.benchmark_tokens:

@@ -11,7 +11,8 @@
 mod common;
 
 use common::{
-    Daemon, SERIAL, dirs, eventually_within, join, logs, pigeon, said, start, status, until, web,
+    Daemon, SERIAL, dirs, eventually_within, invitation, join, logs, person, pigeon, said, start,
+    status, until, web,
 };
 use pigeon_proto::Response;
 use pigeon_proto::api::{Level, State, VersionStatus};
@@ -104,10 +105,16 @@ fn a_removed_computer_says_it_was_removed() {
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
     join(&a1, &c1, &all);
     until(&a1, State::Protected, &all);
-    let answer = pigeon(&a1, &["invite", "ana"]);
-    let code = said(&answer, "invitation", "code").unwrap_or_else(|| panic!("{answer:?}"));
+    // A second laptop of the same person.
+    let code = invitation(&a1);
+    let owner = person(&a1);
     let folder = fa2.to_str().unwrap();
-    let joined = pigeon(&a2, &["join", &code, folder, "--name", "ana-2"]);
+    let joined = pigeon(
+        &a2,
+        &[
+            "join", &code, folder, "--name", "ana-2", "--person", &owner, "--yes",
+        ],
+    );
     assert!(
         said(&joined, "joined", "group").is_some(),
         "{joined:?}\n{}",

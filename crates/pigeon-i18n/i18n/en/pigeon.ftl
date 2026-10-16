@@ -43,7 +43,7 @@ why-capture-failed =
        *[other] something went wrong
     }. It will try again.
 why-removed = This computer is no longer in the group, so this file is not backed up.
-why-too-few-backups = { $have } of { $need } backup machines are set up. Add one with: pigeon invite --backup-machine
+why-too-few-backups = { $have } of { $need } backup machines are set up. To add one, run on it the line pigeon invite prints, with --backup-machine at its end.
 headline-not-safe =
     { $files ->
         [one] 1 file version is not safe yet.
@@ -65,7 +65,7 @@ headline-machine-missing =
 headline-machine-full = { $machine } is full; it waits until space is freed on it.
 headline-machine-no-capacity = { $machine } has no room for { $files } files: it needs { $missing_mb } MB more free space. Free up space on it, or add another backup machine.
 headline-machine-lost = { $machine } no longer finds its backup folder; it counts for nothing until it is set up again.
-headline-removed = This computer was removed from the group. Its files stay in its folder, but they are no longer shared or backed up. To share them again, ask someone in the group for a new invitation.
+headline-removed = This computer was removed from the group. Its files stay in its folder, but they are no longer shared or backed up. To share them again, ask someone in the group for its invitation line and join again.
 why-machine-offline = { $machine } was last heard from { $since }.
 why-machine-not-heard = { $machine } has not been heard from yet on this computer.
 why-safe-copies = { $have } of { $need } safe copies
@@ -139,9 +139,8 @@ size-tb = { $size } TB
 ## Commands of the safety slice (13 §13.12)
 
 cmd-create = Create a group with this computer as its first member
-cmd-invite-person = Print a one-time invitation for a person's computer, valid 24 hours
-cmd-invite = Print a one-time invitation, valid 24 hours
-cmd-join = Join a group with an invitation
+cmd-invite = Print the line that adds a person, a computer or a backup machine to the group
+cmd-join = Join a group with its invitation
 cmd-status = Say whether your files are safe, and why not
 cmd-machines = List the group's computers and backup machines
 cmd-open = Open pigeon in your browser
@@ -160,6 +159,7 @@ cmd-recover = Recover the group on a new computer from its backup machines
 cmd-doctor = Check the installation and explain what is wrong
 cmd-debug-bundle = Gather diagnostics for someone helping you
 cmd-update = Install the latest release of pigeon, a given one, main built from source, or the one before
+cmd-completions = Print the shell script that enables Tab completion
 opt-json = Print the result as JSON, for scripts
 opt-backup-machine = For a backup machine rather than a person's computer
 opt-not-shared = List what is not shared, and why
@@ -287,12 +287,12 @@ doctor-ok = Everything pigeon needs is in place.
 web-doctor = Check installation
 problem-transport-helper-unavailable = Pigeon's transport helper is missing, cannot run, or belongs to a different release.
 hint-transport-helper-unavailable = Reinstall this pigeon release with all its binaries, then restart pigeon and run pigeon doctor again.
-created = The group “{ $group }” is created. Add a backup machine with: pigeon invite --backup-machine
+created =
+    The group “{ $group }” is created. To add someone, another computer or a backup machine, share this line; it installs pigeon and joins the group (on a backup machine, add --backup-machine at its end). Whoever has it can join, with the rights of the person they say they are:
+    { $command }
 invitation =
-    { $who ->
-        [backup-machine] On the backup machine, within 24 hours, run: pigeon join --backup-machine { $code }
-       *[computer] On the new computer, within 24 hours, run: pigeon join { $code } FOLDER
-    }
+    To add someone to “{ $group }”, another computer or a backup machine, share this line; it installs pigeon and joins the group (on a backup machine, add --backup-machine at its end). Whoever has it can join, with the rights of the person they say they are:
+    { $command }
 joined =
     { $who ->
         [backup-machine] This backup machine now keeps copies for “{ $group }”.
@@ -304,7 +304,7 @@ joined-renamed =
        *[computer] This computer is now in “{ $group }”. The group's files arrive in its folder.
     } Another computer in the group was already called { $asked }, so this one is called { $name }.
 removed-computer = { $name } is removed from the group; its copies no longer count.
-removed-from-group = This computer is no longer in the group: this is the group as it last knew it. To share files again, ask someone in the group for a new invitation.
+removed-from-group = This computer is no longer in the group: this is the group as it last knew it. To share files again, ask someone in the group for its invitation line and join again.
 bundle-written = The diagnostics are in { $path }. Nothing was sent.
 machine-row = { $name }: { $kind }, last heard { $heard }
 machine-kind-custodian = backup machine
@@ -312,12 +312,6 @@ machine-kind-computer = computer
 person-row = { $name } ({ $role }): { $machines }
 person-admin = admin
 person-member = member
-invitations-none = No invitation is waiting.
-invitation-row = { $id }: for { $who }, { $expires }
-invitation-for = Invitation for { $who }, { $expires }.
-invitation-for-backup = Invitation for a backup machine of { $who }, { $expires }.
-invitation-row-backup = { $id }: a backup machine of { $who }, { $expires }
-invitation-cancelled = Invitation { $id } can no longer be used.
 cmd-people = The group's members and their computers
 cmd-deleted = The files deleted from the group, which restore brings back
 machine-this = { $name }: this computer
@@ -344,12 +338,8 @@ problem-not-in-this-build = “{ $command }” is not in this build of pigeon ye
 hint-not-in-this-build = This early build has only the commands that keep files safe; the others come later.
 problem-file-system-not-in-this-build = This folder is on { $fs }, which this build of pigeon does not support yet.
 hint-file-system-not-in-this-build = Choose a folder on ext4 (Linux) or APFS (macOS).
-problem-invite-expired = This invitation has expired (it was valid { $until }).
-hint-invite-expired = Ask { $inviter } for a new one.
-problem-invite-used = This invitation has already been used.
-hint-invite-used = Ask { $inviter } for a new one.
 problem-invite-unknown = This invitation is not one the group knows.
-problem-invite-not-allowed = { $inviter } may no longer invite to this group.
+problem-invite-not-allowed = { $inviter } may not add this computer to the group.
 problem-inviter-offline = { $inviter }'s computer can't be reached right now.
 hint-inviter-offline = Try again when { $inviter }'s computer is on. Nothing was kept on this computer, so you can use the same folder.
 problem-not-in-group = This computer is not a member of the group.
@@ -454,9 +444,7 @@ web-setup-help = Ask someone in the group for an invitation, or create a group f
 web-join = Join the group
 web-create = Create a group
 web-invitation = Invitation
-web-invitation-ready = Invitation ready
-web-invite-handoff = Send this invitation to the person joining. On the other computer, install and open pigeon, choose Join or create a group, and paste the code within 24 hours. Keep this computer online until joining finishes.
-web-invitation-code = Invitation code
+web-invitation-code = The line to share
 web-command-line = Command-line instructions
 web-local-folder = Folder on this computer
 web-computer-name = This computer's name
@@ -504,6 +492,7 @@ resumed = Sharing again.
 cmd-leave = Remove this computer from the group; its files stay
 leaving = { $name } leaves the group once another machine has its removal. Its files stay in the folder.
 leaving-already = This computer is already leaving the group.
+left = { $name } has left the group “{ $group }”, where it was the only machine. Its files stay in the folder.
 cmd-refound = Found the group again with you as its only admin, when no admin can sign
 refounded = { $group } is refounded with { $name } as its only admin. Invite the others again: their folders join in place.
 cmd-held = Changes pigeon holds until you choose: deletions to share or bring back, names to rename
@@ -549,11 +538,6 @@ remove-backup-unsafe =
        *[other] After this, the group will have only { $left } backup machines, but it needs { $needed } for your files to be safe. Your files will not be safe until you add another one.
     }
 web-invite = Invite
-web-invite-person = The person's name
-web-invite-admin = as an admin
-web-invite-backup = Invite a backup machine
-web-invitations = Pending invitations
-web-cancel-invitation = Cancel
 files-none = This folder has no file yet.
 file-row = { $path }: { $state }
 web-restore = Restore this version
@@ -621,7 +605,7 @@ view-name-suggested = suggested version
 
 setting-telemetry-device = Share diagnostics with
 setting-off = Keep diagnostics on each computer
-problem-join-history-unverified = Pigeon could not verify this group's history. Ask the person who invited you to update pigeon and send a new invitation.
+problem-join-history-unverified = Pigeon could not verify this group's history. Ask the person who invited you to update pigeon, then try again.
 problem-export-history-unverified = Pigeon could not verify the archived history. Keep this repository and ask another member for a complete copy before exporting deleted files.
 
 problem-recovery-not-allowed = This recovery sheet can no longer add computers. Use a current sheet, or ask an admin for an invitation.
@@ -748,8 +732,20 @@ web-health-separator = {": "}
 web-not-found = There is no page here.
 web-noscript = This page updates by itself only with JavaScript. Reload it to see the latest state.
 web-skip = Skip to content
-problem-invite-admin-only = Only an admin of the group can invite a new person or another admin. You can invite another computer of your own, or a backup machine.
-problem-device-name-taken = A computer in the group is already called { $name }. Choose another name.
 problem-folder-not-absolute = “{ $folder }” is not a full folder path. Enter one that starts with /, such as /home/you/Family.
 problem-name-empty = Give the group and this computer a name.
 problem-copies-zero = A group needs at least one backup copy.
+
+ask-join-folder = Folder for “{ $group }” [{ $folder }]:
+ask-join-person = Your name in the group [{ $person }]:
+confirm-join-existing = { $person } is already in “{ $group }”. Add this computer to { $person }, with the same rights? [y/N]
+problem-person-exists = { $person } is already in the group.
+problem-already-in-group = This computer is already in this group.
+problem-in-another-group = This computer is already in the group “{ $group }”, and a computer can be in only one group.
+hint-in-another-group = To leave it, run pigeon leave, or choose Leave the group in Settings in pigeon open; its files stay in its folder. Then try again.
+leaving-wait = It is leaving that group: try again once another machine of the group has its removal.
+web-your-name = Your name in the group
+web-join-existing = { $person } is already in “{ $group }”. Choose Join to add this computer to { $person }, with the same rights, or go back to give another name.
+web-copy = Copy
+web-invite-help = To add someone to “{ $group }”, another computer or a backup machine, share this line; it installs pigeon and joins the group. On a backup machine, add --backup-machine at its end. Whoever has it can join, with the rights of the person they say they are.
+progress-join = Joining: waiting for the computer of an admin of the group to answer…

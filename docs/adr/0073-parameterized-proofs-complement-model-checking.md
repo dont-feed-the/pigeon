@@ -15,7 +15,7 @@ and the real storage boundaries is still necessary.
 ## Decision
 
 - Check `CaptureTransactionProof`, `AnnexDropProof`, `PurgeProof` and
-  `CustodyTokensProof` with TLAPS
+  `CustodyTokensProof`, plus `AuthorityDecidersProof`, with TLAPS
   1.5.0 on each pull request and main push. Import the existing model
   actions; do not maintain a separate proof implementation of the protocol.
 - Fresh checks prove all obligations from scratch, reject omitted proofs, and
@@ -31,6 +31,10 @@ and the real storage boundaries is still necessary.
   and explicit local runs. Monday's audit runs even without new commits;
   release tags check fresh proofs without repeating the proved graphs.
   The smaller positive purge and token cases remain in the fast set.
+  The same token root proof also covers `T_n31o5` and `T_n32o5`, each with
+  separate configuration checks. `Authority_mixed` is an audit under the
+  unconditional adoption-permission theorem; the larger Authority cases
+  keep all their checks until their complete contracts have proofs.
   Other safety, negative, liveness, trace, law, contract and fault-injection
   checks keep their frequency. Proofs are prerequisites of the model jobs.
 - Balance the remaining full-model shards using recorded execution costs.

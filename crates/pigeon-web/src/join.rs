@@ -1,5 +1,6 @@
-//! First use on a new computer (spec 09 §9.6, 10 §10.3): join by invitation
-//! or create a group. Refounded groups require a second explicit confirmation.
+//! First use on a new computer (spec 09 §9.6, 10 §10.3): join by the group's
+//! invitation or create a group. Joining a refounded group, or as a person
+//! the group has, asks a second, explicit confirmation.
 //! Every action uses the same session and form checks as the other pages.
 //! A refusal shows the forms again, under it, with what was typed.
 
@@ -34,6 +35,7 @@ fn forms(r: &Renderer, token: &str, join: &JoinForm, create: &CreateForm) -> Mar
         form method="post" action=(r.url("/join")) {
             input type="hidden" name="form" value=(token);
             p { label for="invitation" { (r.id("web-invitation")) } " " input id="invitation" name="invitation" required autocomplete="off" value=(&join.invitation); }
+            p { label for="join-person" { (r.id("web-your-name")) } " " input id="join-person" name="person" value=(&join.person); }
             p { label for="join-folder" { (r.id("web-local-folder")) } " " input id="join-folder" name="folder" value=(&join.folder); }
             p { label for="join-name" { (r.id("web-computer-name")) } " " input id="join-name" name="name" value=(&join.name); }
             button type="submit" { (r.id("web-join")) }
@@ -56,12 +58,11 @@ fn forms(r: &Renderer, token: &str, join: &JoinForm, create: &CreateForm) -> Mar
 async fn outcome(
     web: &Web,
     token: &str,
-    request: Request,
+    answers: Vec<Answer>,
     join: &JoinForm,
     create: &CreateForm,
 ) -> Response {
     let r = web.renderer();
-    let answers = web.ask(request).await;
     let lines: Vec<String> = answers
         .iter()
         .filter(|a| !matches!(a, Answer::Progress { .. }))
@@ -103,10 +104,15 @@ pub struct JoinForm {
     #[serde(default)]
     name: String,
     #[serde(default)]
+    person: String,
+    #[serde(default)]
+    existing: bool,
+    #[serde(default)]
     yes: bool,
 }
 
-/// Join, asking again before joining a refounded history.
+/// Join, asking again before joining a refounded history, and before
+/// joining as a person the group has.
 pub async fn join(
     State(web): State<Arc<Web>>,
     Extension(token): Extension<FormToken>,
@@ -131,18 +137,7 @@ pub async fn join(
                     |at| r.date(at),
                 ),
             );
-        let body = html! {
-            p { (r.catalogue().format(&message)) }
-            form method="post" action=(r.url("/join")) {
-                input type="hidden" name="form" value=(&f.form);
-                input type="hidden" name="invitation" value=(invitation);
-                input type="hidden" name="folder" value=(&f.folder);
-                input type="hidden" name="name" value=(&f.name);
-                input type="hidden" name="yes" value="true";
-                button type="submit" { (r.id("web-join")) }
-            }
-            p { a href=(r.url("/join")) { (r.id("web-back")) } }
-        };
+        let body = confirm(&r, &message, &f, invitation, true, f.existing);
         return page(&r, "/join", &r.id("web-join"), &body).into_response();
     }
     let request = Request::Join {
@@ -150,8 +145,57 @@ pub async fn join(
         folder: nonempty(&folder(&f.folder)),
         name: nonempty(&f.name),
         keep: true,
+        person: nonempty(&f.person),
+        existing: f.existing,
+        custodian: false,
     };
-    outcome(&web, &token.0, request, &f, &CreateForm::default()).await
+    let answers = web.ask(request).await;
+    let exists = answers.iter().find_map(|a| match a {
+        Answer::Problem(p) if p.code == "person-exists" => p.message.args.get("person").cloned(),
+        _ => None,
+    });
+    if let Some(person) = exists {
+        let group = pigeon_proto::join::decode(invitation).map(|i| i.name);
+        let message = pigeon_i18n::Message::new("web-join-existing")
+            .arg(
+                "person",
+                match person {
+                    pigeon_proto::Arg::Text(t) => t,
+                    pigeon_proto::Arg::Number(n) => n.to_string(),
+                },
+            )
+            .arg("group", group.unwrap_or_default());
+        let body = confirm(&r, &message, &f, invitation, f.yes, true);
+        return page(&r, "/join", &r.id("web-join"), &body).into_response();
+    }
+    outcome(&web, &token.0, answers, &f, &CreateForm::default()).await
+}
+
+/// The question `message`, and the form that joins with what was typed,
+/// once refounding is accepted (`yes`) and joining a person of the group
+/// is (`existing`).
+fn confirm(
+    r: &Renderer,
+    message: &pigeon_i18n::Message,
+    f: &JoinForm,
+    invitation: &str,
+    yes: bool,
+    existing: bool,
+) -> Markup {
+    html! {
+        p { (r.catalogue().format(message)) }
+        form method="post" action=(r.url("/join")) {
+            input type="hidden" name="form" value=(&f.form);
+            input type="hidden" name="invitation" value=(invitation);
+            input type="hidden" name="folder" value=(&f.folder);
+            input type="hidden" name="name" value=(&f.name);
+            input type="hidden" name="person" value=(&f.person);
+            @if yes { input type="hidden" name="yes" value="true"; }
+            @if existing { input type="hidden" name="existing" value="true"; }
+            button type="submit" { (r.id("web-join")) }
+        }
+        p { a href=(r.url("/join")) { (r.id("web-back")) } }
+    }
 }
 
 fn nonempty(s: &str) -> Option<String> {
@@ -193,5 +237,6 @@ pub async fn create(
         device_name: f.name.trim().to_owned(),
         person: nonempty(&f.person),
     };
-    outcome(&web, &token.0, request, &JoinForm::default(), &f).await
+    let answers = web.ask(request).await;
+    outcome(&web, &token.0, answers, &JoinForm::default(), &f).await
 }

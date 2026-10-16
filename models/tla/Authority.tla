@@ -1,6 +1,6 @@
 ------------------------------ MODULE Authority ------------------------------
 (* Acceptance of commits, proposals and decisions, and the removal of a device
-   (spec 04 §4.3-4.5, 09 §9.7; ADRs 0009, 0051 and 0075). With "part" in
+   (spec 04 §4.3-4.5, 09 §9.7; ADRs 0009, 0051 and 0076). With "part" in
    Ops, a later save may add another file to a proposal, and a decider may
    decide some of its files: accept them and reject the rest in one commit.
    Persons 1 = a (the admin), 2 = b (owner of folder F), 3 = c (a member).
@@ -58,11 +58,14 @@ Apply1(Ro, e) ==
                            THEN [ok |-> TRUE, s |-> [Ro EXCEPT !.dev[e.d] = e.p]]
                            ELSE [ok |-> FALSE, s |-> Ro]
     [] e.k = "rem" -> [ok |-> TRUE, s |-> [Ro EXCEPT !.dev[e.d] = 0, !.gone = @ \cup {e.d}]]
-RECURSIVE ApplyAll(_, _)
-ApplyAll(r, E) == IF E = {} THEN r
-                  ELSE LET e == CHOOSE x \in E : TRUE
-                           n == Apply1(r.s, e)
-                       IN ApplyAll([ok |-> r.ok /\ n.ok, s |-> n.s], E \ {e})
+ApplyAll(r, E) ==
+  LET Step(a, i) ==
+        IF a.rest = {} THEN a
+        ELSE LET e == CHOOSE x \in a.rest : TRUE
+                 n == Apply1(a.r.s, e)
+             IN [rest |-> a.rest \ {e}, r |-> [ok |-> a.r.ok /\ n.ok, s |-> n.s]]
+      f[i \in Nat] == IF i = 0 THEN [rest |-> E, r |-> r] ELSE Step(f[i - 1], i)
+  IN f[Cardinality(E)].r
 Change(Ro, E) ==
   LET r == ApplyAll([ok |-> TRUE, s |-> Ro], E)
       kept == ApplyAll([ok |-> TRUE, s |-> Ro], {e \in E : e.k = "rem"}).s
@@ -80,12 +83,14 @@ IsProposal(x) == x # 1 /\ ~cm[x].acc
 (* The fold of the commits S, of which those in C count: a counting change
    applies as in Roster.tla; of the others only the removals apply, as of a
    skipped change (ADR 0051). *)
-RECURSIVE FoldUpTo(_, _, _, _)
 FoldUpTo(S, C, Ro, i) ==
-  IF i > Len(cm) THEN Ro
-  ELSE FoldUpTo(S, C, IF i \in C THEN Change(Ro, cm[i].redits).s
-                      ELSE IF i \in S THEN Change(Ro, {e \in cm[i].redits : e.k = "rem"}).s
-                      ELSE Ro, i + 1)
+  LET Step(acc, n) ==
+        LET j == i + n - 1 IN
+        IF j \in C THEN Change(acc, cm[j].redits).s
+        ELSE IF j \in S THEN Change(acc, {e \in cm[j].redits : e.k = "rem"}).s
+        ELSE acc
+      f[n \in Nat] == IF n = 0 THEN Ro ELSE Step(f[n - 1], n)
+  IN f[IF i > Len(cm) THEN 0 ELSE Len(cm) - i + 1]
 Fold(S, C) == FoldUpTo(S, C, Genesis, 1)
 
 (* Revocation: in a set S, x is revoked when S holds a removal of x's signer
@@ -95,15 +100,17 @@ Fold(S, C) == FoldUpTo(S, C, Genesis, 1)
    except its removals. *)
 Removes(r, d) == \E e \in cm[r].redits : e.k = "rem" /\ e.d = d
 Unseen(x, S) == \E r \in S : r # x /\ Removes(r, cm[x].signer) /\ x \notin cm[r].anc
-RECURSIVE CountUpTo(_, _, _)
 CountUpTo(S, C, i) ==
-  IF i > Len(cm) THEN C
-  ELSE CountUpTo(S, IF /\ i \in S
-                       /\ \/ i = 1
-                          \/ /\ ~Unseen(i, S)
-                             /\ \/ Revocation = "contentonly"
-                                \/ cm[i].signer \in Present(Fold(S \cap (cm[i].anc \ {i}), C \cap cm[i].anc))
-                    THEN C \cup {i} ELSE C, i + 1)
+  LET Step(acc, n) ==
+        LET j == i + n - 1 IN
+        IF /\ j \in S
+           /\ \/ j = 1
+              \/ /\ ~Unseen(j, S)
+                 /\ \/ Revocation = "contentonly"
+                    \/ cm[j].signer \in Present(Fold(S \cap (cm[j].anc \ {j}), acc \cap cm[j].anc))
+        THEN acc \cup {j} ELSE acc
+      f[n \in Nat] == IF n = 0 THEN C ELSE Step(f[n - 1], n)
+  IN f[IF i > Len(cm) THEN 0 ELSE Len(cm) - i + 1]
 Counting(S) == IF Revocation \in {"revoke", "contentonly"} THEN CountUpTo(S, {}, 1) ELSE S
 RosterOf(S) == Fold(S, IF Revocation = "contentonly" THEN S ELSE Counting(S))
 
@@ -247,7 +254,7 @@ Decide(d, p, v) ==
   /\ v \in Ops /\ Room /\ Pending(d, p)
   /\ IF v = "rejected" THEN d \in Deciders(p, x) ELSE d = Author(p)
   /\ Write(d, New({x}, d, v, cm[x].tree, {[p |-> p, v |-> v]}, {}, FALSE, x))
-(* A decision on some files Q of p (ADR 0075): one commit on main, not a
+(* A decision on some files Q of p (ADR 0076): one commit on main, not a
    merge, that holds the change of Q as the adoption makes it, keeps main's
    version elsewhere, and rejects p; Force as for the adoption. *)
 PartTree(x, p, Q) == [q \in CPaths |-> IF q \in Q THEN AdoptTree(x, p)[q] ELSE cm[x].tree[q]]
@@ -390,7 +397,7 @@ RemovalRevokesAdded ==
    history, and an honest merge is accepted. *)
 TreeIsCatalogue == (cm[L].acc /\ cm[L].signer \in Honest) => cm[L].tree = TreeOf({L})
 HonestMergesAccepted == (cm[L].kind = "merge") => cm[L].acc
-(* A decider's decision on some files is always accepted (ADR 0075), so
+(* A decider's decision on some files is always accepted (ADR 0076), so
    the files it accepts reach main by an authorised change. *)
 PartsAccepted == (cm[L].kind = "part") => cm[L].acc
 

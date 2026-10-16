@@ -1,10 +1,8 @@
 //! People & machines (ux.md §6.4): the group's computers and backup
 //! machines, each but this one with *Remove* (`pigeon remove-computer`,
 //! asked again before it is done, saying what becomes of its files and
-//! whether the backup machines left keep them safe), and the forms that
-//! invite a person or a backup machine (`pigeon invite`), whose answer is
-//! the invitation, and the pending invitations, each with *Cancel*
-//! (`pigeon invite --cancel ID`).
+//! whether the backup machines left keep them safe), and the line that
+//! adds someone to the group (`pigeon invite`), with *Copy*.
 
 use std::sync::Arc;
 
@@ -16,7 +14,7 @@ use axum::{Extension, Form};
 use maud::{Markup, html};
 use pigeon_i18n::Message;
 use pigeon_proto::Request;
-use pigeon_proto::api::{InvitationEntry, Machine, Removal};
+use pigeon_proto::api::{Machine, Removal};
 
 use crate::pages::{list, page};
 use crate::{FormToken, Web, pages};
@@ -48,12 +46,14 @@ pub async fn machines(
         .collect();
     let people: Vec<String> = entries.iter().map(|p| r.person(p)).collect();
     let can_print = entries.iter().any(|p| p.this_person && p.admin);
-    let mut invitations = Vec::new();
-    for answer in web.ask(Request::Invitations).await {
-        if let pigeon_proto::Response::Invitations { invitations: i } = answer {
-            invitations = i;
-        }
-    }
+    let invitation = web
+        .ask(Request::Invite)
+        .await
+        .into_iter()
+        .find_map(|a| match a {
+            pigeon_proto::Response::Said { message } if message.id == "invitation" => Some(message),
+            _ => None,
+        });
     let f = &form.0;
     let body = html! {
         (list(&other))
@@ -65,25 +65,7 @@ pub async fn machines(
             }
         }
         @for m in &rows { (machine(&r, m, f)) }
-        h2 { (r.id("web-invite")) }
-        form method="post" action=(r.url("/machines/invite")) {
-            input type="hidden" name="form" value=(f);
-            label for="person" { (r.id("web-invite-person")) " " }
-            input id="person" name="person" required;
-            " "
-            label { input type="checkbox" name="admin" value="true"; " " (r.id("web-invite-admin")) }
-            " "
-            button type="submit" { (r.id("web-invite")) }
-        }
-        form method="post" action=(r.url("/machines/invite")) {
-            input type="hidden" name="form" value=(f);
-            input type="hidden" name="backup" value="true";
-            button type="submit" { (r.id("web-invite-backup")) }
-        }
-        @if !invitations.is_empty() {
-            h2 { (r.id("web-invitations")) }
-            @for i in &invitations { (invitation(&r, i, f)) }
-        }
+        @if let Some(message) = &invitation { (invite(&r, message)) }
     };
     page(&r, "/machines", &r.id("web-nav-machines"), &body)
 }
@@ -107,45 +89,39 @@ fn machine(r: &Renderer, m: &Machine, form: &str) -> Markup {
     }
 }
 
-/// One pending invitation, and the form that cancels it.
-fn invitation(r: &Renderer, i: &InvitationEntry, form: &str) -> Markup {
-    let line = r.invitation(i);
-    html! {
-        article {
-            p { (line) }
-            form method="post" action=(r.url("/machines/cancel-invitation")) {
-                input type="hidden" name="form" value=(form);
-                input type="hidden" name="invitation" value=(i.id);
-                button type="submit" { (r.id("web-cancel-invitation")) (pages::hidden(&line)) }
-            }
-        }
-    }
-}
-
-/// The form that cancels a pending invitation.
-#[derive(serde::Deserialize)]
-pub struct CancelForm {
-    /// The session's form token.
-    form: String,
-    /// The invitation's ID.
-    invitation: String,
-}
-
-/// *Cancel*: `pigeon invite --cancel ID`.
-pub async fn cancel(
-    State(web): State<Arc<Web>>,
-    Extension(token): Extension<FormToken>,
-    Form(f): Form<CancelForm>,
-) -> Response {
-    if let Some(refused) = expired(&web, &token, &f.form) {
-        return refused;
-    }
-    let r = web.renderer();
-    let request = Request::CancelInvitation {
-        invitation: f.invitation,
+/// The line that adds someone to the group, of the `invitation` message,
+/// with what it does and a *Copy* button, which `copy.js` shows.
+fn invite(r: &Renderer, message: &pigeon_proto::Message) -> Markup {
+    let arg = |key: &str| match message.args.get(key) {
+        Some(pigeon_proto::Arg::Text(t)) => t.clone(),
+        _ => String::new(),
     };
-    let lines = pages::lines(&web, &r, request).await;
-    pages::result(&r, "/machines", lines).into_response()
+    let help = Message::new("web-invite-help").arg("group", arg("group"));
+    html! {
+        h2 { (r.id("web-invite")) }
+        p { (r.catalogue().format(&help)) }
+        p { label for="invitation-line" { (r.id("web-invitation-code")) } }
+        textarea id="invitation-line" rows="4" cols="60" readonly { (arg("command")) }
+        p { button type="button" data-copy="invitation-line" hidden { (r.id("web-copy")) } }
+        script src=(r.url("/copy.js")) {}
+    }
+}
+
+/// Shows each *Copy* button, which copies the text of the element its
+/// `data-copy` names; an external same-origin script, as the CSP allows.
+const COPY: &str = "document.querySelectorAll('button[data-copy]').forEach(b=>{b.hidden=false;\
+b.addEventListener('click',()=>{const t=document.getElementById(b.dataset.copy);\
+t.select();if(navigator.clipboard)navigator.clipboard.writeText(t.value)})})";
+
+/// `copy.js`.
+pub async fn copy_script() -> impl IntoResponse {
+    (
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/javascript; charset=utf-8",
+        )],
+        COPY,
+    )
 }
 
 /// The form that removes a machine; `yes` once the person confirmed.
@@ -204,67 +180,6 @@ pub async fn remove(
         return page(&r, "/machines", &question, &body).into_response();
     }
     let lines = pages::lines(&web, &r, Request::RemoveDevice { name: f.name }).await;
-    pages::result(&r, "/machines", lines).into_response()
-}
-
-/// The form that invites a person, or a backup machine with `backup`.
-#[derive(serde::Deserialize)]
-pub struct InviteForm {
-    /// The session's form token.
-    form: String,
-    /// The person's name.
-    #[serde(default)]
-    person: String,
-    /// As an admin.
-    #[serde(default)]
-    admin: bool,
-    /// A backup machine.
-    #[serde(default)]
-    backup: bool,
-}
-
-/// *Invite*: `pigeon invite [--admin] PERSON` or `--backup-machine`.
-pub async fn invite(
-    State(web): State<Arc<Web>>,
-    Extension(token): Extension<FormToken>,
-    Form(f): Form<InviteForm>,
-) -> Response {
-    if let Some(refused) = expired(&web, &token, &f.form) {
-        return refused;
-    }
-    let request = Request::Invite {
-        person: if f.backup {
-            String::new()
-        } else {
-            f.person.trim().to_owned()
-        },
-        admin: f.admin && !f.backup,
-        custodian: f.backup,
-        name: None,
-    };
-    let r = web.renderer();
-    let answers = web.ask(request).await;
-    let code = answers.iter().find_map(|a| match a {
-        pigeon_proto::Response::Said { message } if message.id == "invitation" => {
-            match message.args.get("code") {
-                Some(pigeon_proto::Arg::Text(code)) => Some(code),
-                _ => None,
-            }
-        }
-        _ => None,
-    });
-    if let Some(code) = code {
-        let lines: Vec<String> = answers.iter().flat_map(|a| r.response(a).0).collect();
-        let body = html! {
-            p { (r.id("web-invite-handoff")) }
-            p { label for="invitation-code" { (r.id("web-invitation-code")) } }
-            textarea id="invitation-code" rows="6" cols="60" readonly { (code) }
-            details { summary { (r.id("web-command-line")) } (list(&lines)) }
-            p { a href=(r.url("/machines")) { (r.id("web-back")) } }
-        };
-        return page(&r, "/machines", &r.id("web-invitation-ready"), &body).into_response();
-    }
-    let lines = answers.iter().flat_map(|a| r.response(a).0).collect();
     pages::result(&r, "/machines", lines).into_response()
 }
 

@@ -105,6 +105,7 @@ impl Daemon {
     /// Serves a new group: records it in `config.toml` and starts its loops.
     pub async fn add_group(&self, mut g: Group, path: &Path) -> Result<Arc<Group>, String> {
         crate::shared::configure(&mut g, self.config.bridge_storage.as_ref())?;
+        self.keep_key()?;
         let entry = GroupEntry {
             id: g.id.clone(),
             path: path.to_path_buf(),
@@ -115,6 +116,21 @@ impl Daemon {
         let g = Arc::new(g);
         self.serve_group(g.clone(), None).await;
         Ok(g)
+    }
+
+    /// Writes the key this daemon runs with back to `<config>/device-key`
+    /// when leaving the last group deleted it (09 §9.7): the new group's
+    /// roster names this device, which must stay the same after a restart.
+    pub(crate) fn keep_key(&self) -> Result<(), String> {
+        let path = self.dirs.device_key();
+        if path.exists() {
+            return Ok(());
+        }
+        let Some(key) = crate::git::signer() else {
+            return Ok(());
+        };
+        crate::util::write_private(&path, format!("{}\n", crate::util::hex(&key)).as_bytes())
+            .map_err(|e| e.to_string())
     }
 
     /// Serves a group in memory, optionally replacing a suspended one at

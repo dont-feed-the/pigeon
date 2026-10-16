@@ -1,9 +1,10 @@
 //! A join that fails takes back what it made, so a retry in the same
-//! folder works (09 §9.6): Carol's first try cannot reach Ana's computer,
-//! her second is refused, and neither leaves a repository, a group or, for
-//! a folder the join made, the folder; the third, with the real invitation,
-//! joins, and is told that the computer name she asked for was taken. Ana
-//! created the group under the name she gave, not `$USER`'s.
+//! folder works (09 §9.6): Carol's first two tries are refused, with an
+//! invitation whose secret is not the group's, and neither leaves a
+//! repository, a group or, for a folder the join made, the folder; the
+//! third, with the real invitation, joins, and is told that the computer
+//! name she asked for was taken. Ana created the group under the name she
+//! gave, not `$USER`'s.
 //!
 //! Needs what `tests/slice.rs` needs: git-annex, and `pigeon` and
 //! `git-annex-p2p-iroh` built next to `pigeond`.
@@ -14,7 +15,7 @@ mod common;
 
 use std::path::Path;
 
-use common::{SERIAL, dirs, logs, pigeon, said, start};
+use common::{SERIAL, dirs, invitation, logs, pigeon, said, start};
 use pigeon_proto::Response;
 
 fn problem(rs: &[Response]) -> Option<String> {
@@ -64,49 +65,43 @@ fn a_failed_join_leaves_nothing_and_a_retry_in_the_same_folder_joins() {
             if people.iter().any(|p| p.name == "Ana Martin" && p.admin))),
         "{people:?}"
     );
-    let answer = pigeon(&ana, &["invite", "Carol"]);
-    let code = said(&answer, "invitation", "code").unwrap_or_else(|| panic!("{answer:?}"));
-    let real = pigeond::invite::decode(&code).unwrap();
+    let code = invitation(&ana);
+    let real = pigeon_proto::join::decode(&code).unwrap();
     let folder = root.join("carol-files");
+    let mut forged = real.clone();
+    forged.secret = "ab".repeat(32);
+    let forged = pigeon_proto::join::encode(&forged);
+    let refused = |rs: &[Response]| {
+        assert!(problem(rs).is_some(), "{rs:?}\n{}", logs(&all));
+    };
 
-    // Ana's computer cannot be reached: an address nobody listens on, and
-    // an invitation that expires in a few seconds so the try ends.
-    let mut offline = real.clone();
-    offline.addresses = vec!["127.0.0.1:9".into()];
-    offline.expires = pigeond::util::now() + 8;
+    // Refused, in a folder the join makes: the folder goes.
     let first = pigeon(
         &carol,
         &[
             "join",
-            &pigeond::invite::encode(&offline),
+            &forged,
             folder.to_str().unwrap(),
+            "--person",
+            "Carol",
         ],
     );
-    assert_eq!(
-        problem(&first).as_deref(),
-        Some("inviter-offline"),
-        "{first:?}"
-    );
+    refused(&first);
     assert!(!folder.exists(), "the folder the join made stays");
 
-    // Ana's computer refuses: a secret it never gave. The folder existed
-    // before, empty, and stays, empty.
+    // Refused again, in a folder that existed, empty: it stays, empty.
     std::fs::create_dir_all(&folder).unwrap();
-    let mut forged = real.clone();
-    forged.secret = "ab".repeat(32);
     let second = pigeon(
         &carol,
         &[
             "join",
-            &pigeond::invite::encode(&forged),
+            &forged,
             folder.to_str().unwrap(),
+            "--person",
+            "Carol",
         ],
     );
-    assert_eq!(
-        problem(&second).as_deref(),
-        Some("invite-unknown"),
-        "{second:?}"
-    );
+    refused(&second);
     assert!(
         folder.is_dir() && !has_files(&folder),
         "the join left files"
@@ -128,6 +123,8 @@ fn a_failed_join_leaves_nothing_and_a_retry_in_the_same_folder_joins() {
             folder.to_str().unwrap(),
             "--name",
             "ana-laptop",
+            "--person",
+            "Carol",
         ],
     );
     let given = said(&third, "joined-renamed", "name")

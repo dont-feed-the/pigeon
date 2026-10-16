@@ -7,7 +7,7 @@
 //! are recomputed on `main` each time. `pigeon decline` commits the
 //! decision `rejected` (`decision_file`), which a decider may sign; its
 //! author withdraws one with `withdrawn` (`resolve`). Deciding some of its
-//! files is `decide_files` (ADR 0075); the list says what each file's
+//! files is `decide_files` (ADR 0076); the list says what each file's
 //! change is (`suggestion_files`) and, to their author, how their
 //! suggestions were decided lately (`decided`).
 
@@ -127,7 +127,7 @@ pub async fn list(d: &Daemon) -> Vec<Response> {
 }
 
 /// `pigeon suggestions`: the pending ones, with what each file's change is,
-/// and this person's own decided lately (ADR 0075).
+/// and this person's own decided lately (ADR 0076).
 pub async fn list_detailed(d: &Daemon) -> Vec<Response> {
     listing(d, true).await
 }

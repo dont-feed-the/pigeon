@@ -291,23 +291,15 @@ impl Exec {
 
     fn join_custodian(&mut self, by: Laptop, c: Device, w: &World) -> Result<Outcome, String> {
         self.start(c)?;
-        let invite = self.pigeon(Device::Laptop(by), &cli::invite_custodian(w.name(c)))?;
+        let invite = self.pigeon(Device::Laptop(by), &cli::invite())?;
         if !invite.ok {
             return Ok(invite.outcome());
         }
-        let ticket = invite
-            .json
-            .as_ref()
-            .and_then(|v| cli::find_string(v, "pgn1-"))
-            .or_else(|| {
-                invite
-                    .stdout
-                    .split_whitespace()
-                    .find(|t| t.starts_with("pgn1-"))
-                    .map(s)
-            })
+        let code = cli::invitation(invite.json.as_ref(), &invite.stdout)
             .ok_or_else(|| format!("no invitation in {:?}", invite.stdout))?;
-        Ok(self.pigeon(c, &cli::join_custodian(&ticket))?.outcome())
+        let person = w.person_of(by).map(|p| p.name.clone());
+        let ask = cli::join_custodian(&code, w.name(c), person.as_deref());
+        Ok(self.pigeon(c, &ask)?.outcome())
     }
 
     fn laptop_op(&mut self, on: Laptop, op: &LaptopOp, w: &World) -> Result<Outcome, String> {

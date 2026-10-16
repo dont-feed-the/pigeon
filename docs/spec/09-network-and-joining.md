@@ -9,8 +9,9 @@
 
 - Each device has one **ed25519 key**, made when it creates or joins a
   group. Its public key in 64 lowercase hex digits is the **device ID**:
-  iroh node ID, commit signer, roster key. One `pigeond` serves all the
-  user's groups with it (ADR 0011), so two groups see the same device.
+  iroh node ID, commit signer, roster key. One `pigeond` serves the
+  user's group with it (ADR 0011); a computer is in one group only
+  (§9.6).
 - It is stored once as an OpenSSH private key, mode 0600, at
   `<config>/device-key` ([11](11-local-state.md)). git signs with it (SSH
   signatures) and iroh uses it as its secret key; pigeon verifies signatures
@@ -49,13 +50,13 @@ punching, relays), with these ALPN protocols:
 | ALPN | Carries | Accepted from |
 |---|---|---|
 | `pigeon/annex/1` | one git-annex P2P session (git and content) per stream | devices of the roster of that group |
-| `pigeon/join/1` | the join exchange (§9.6) | anyone holding a valid invitation |
+| `pigeon/join/1` | the join exchange (§9.6) | anyone holding the group's invitation |
 | `pigeon/telemetry/1` | OTLP from devices of the group to its telemetry device (ADR 0025) | devices of the roster, on the telemetry device only |
 | `pigeon/debug/1` | `pigeon debug bundle` requests ([12](12-observability.md)) | devices of the roster |
 
 - **Versions** (ADR 0048): a device offers every version of each ALPN it
   supports; with none in common, both show `peer-too-old` or `peer-too-new`
-  and the release to install. The header (§9.8) and invitations (`pgn1-`)
+  and the release to install. The header (§9.8) and invitations (`pgn2-`)
   are versioned likewise.
 - **Admission:** on `annex`, `telemetry` and `debug`, only a peer whose
   node ID is a device of the roster of the current `main` of the group the
@@ -114,59 +115,71 @@ runs (13 §13.12). A roster `relay = "<url>"` ([04 §4.2](04-roster-and-authorit
 replaces n0's relays, as an admin change: a `pigeond` set up with n0's
 uses every group's relay instead, and n0's again once no roster names one,
 while a person's own `[network] relays` wins (`net::relays`); an
-invitation carries the relay, so the new device reaches the inviter
+invitation carries the relay, so the new device reaches the admitters
 through it. Without relay or lookup, LAN and
 direct connections still work, and versions waiting for a peer carry
 `group-unreachable` ([06 §6.4](06-status.md)). Relays see only metadata
 ([02 §2.4](02-guarantees.md)).
 
-## 9.6 Invitations and joining (ADR 0017)
+## 9.6 The group's invitation and joining (ADR 0075)
 
-`pigeon invite [--admin] PERSON` (People → *Invite someone*), or `pigeon
-invite --backup-machine [NAME]` for a backup machine of the inviter's own
-person (ux.md §8) **[no ADR: reading]**, creates a one-time invitation:
+A group has one invitation: the roster's `invitation`, 256 random bits that
+`pigeon create` writes in the genesis and no roster change can change
+(`diff` answers none, [04 §4.8](04-roster-and-authority.md)). `pigeon
+invite` (People → *Invite*) prints it, on any member, inside the line to
+share:
+
+```sh
+curl -fsSL https://github.com/dont-feed-the/pigeon/releases/latest/download/pigeon-install | sh -s -- --join pgn2-…
+```
+
+The installer installs or updates pigeon, then runs `pigeon join` with the
+rest of the line on the terminal ([14 §14.5](14-platforms-and-packaging.md)).
+`pigeon create` prints the same line. The code is `pgn2-` plus the lowercase
+unpadded base32 of its JSON (`invitations_round_trip`):
 
 | Field | Value |
 |---|---|
 | `group` | the group ID (the genesis commit ID, [04 §4.1](04-roster-and-authority.md)) |
-| `inviter` | the inviter's device ID and its current direct addresses |
+| `name`, `k` | the group's name, and K for a backup machine's `wanted` |
+| `admitters` | the device that wrote it, then the admins' laptops and backup machines: each one's device ID, person's name and the direct addresses that device knew |
+| `secret` | the roster's `invitation` |
 | `relay` | the group relay, if any (§9.5) |
-| `secret` | 256 random bits |
-| `purpose` | `new-person {name, admin}`, or `new-device {person}`; `--backup-machine` adds `role = "custodian"` and the machine's name, if given |
-| `expires` | creation time + 24 hours by default |
+| `refounded` | for a refounded group, what the joiner accepts (§9.9) |
 
-- It is written `pgn1-` plus the lowercase unpadded base32 of its binary
-  encoding, shown as text and QR code **[no ADR: encoding]**.
-- `PERSON` names a person of the roster by ID or name, ignoring case: the
-  invitation is then for a new laptop of theirs (`--admin` is refused);
-  any other name is a new person, whose ID is the name's ASCII letters and
-  digits in lowercase (`person` if none), with a number if a person has it
-  (`a_new_persons_id_is_fresh`) **[no ADR]**. A device name already in the
-  roster gets `-` and 6 hex digits of the device ID at step 3, and the
-  join's answer (`joined-renamed`) tells the new device's person the name
-  it got.
-- **Who may invite:** for a new person, an admin's device; for a new device
-  of person P, an admin's device or one of P's (ADR 0017).
-- The inviter keeps the issuing group, secret, its SHA-256, purpose and expiry in
-  `invitations.json` ([11 §11.3](11-local-state.md); `invitations_round_trip`),
-  readable by its user only. The hash finds the record; the secret checks
-  the proof of step 2 **[no ADR: correction]** (issue #17). It is marked
-  used by the authenticated device before the roster commit is signed.
-  A retry by that device resumes its welcome, checking current role and
-  annex UUID; another device, a removed member or another group cannot
-  redeem it. Legacy records without an issuing group must be reissued.
-  `pigeon invite --list` and `--cancel` manage pending ones.
-
-`pigeon join INVITATION [FOLDER] [--name NAME]` (Welcome → *Join a group*;
-`--name` names the computer in the roster **[no ADR]**):
+`pigeon join INVITATION [FOLDER] [--person NAME] [--name NAME]
+[--backup-machine]` (Welcome → *Join a group*) asks, on a terminal, what
+the line did not give: the folder (the group's name in the home folder by
+default; none for a backup machine) and the person's name (the account's,
+`$USER`, by default). `--name` names the computer in the roster, else
+`<host name>-<6 hex digits of its device ID>` **[no ADR]**.
+A name another device has gets made unique at step 3, and the join's
+answer (`joined-renamed`) tells the new device's person the name it got.
+A join that fails takes back what it made: the group is served only once
+its welcome is checked, and its folder holds nothing of the attempt
+(`pigeond/src/join_attempt.rs`, `tests/join_retry.rs`), so a retry in the
+same folder starts clean **[no ADR]**.
 
 | # | Who | Step |
 |---|---|---|
-| 1 | new device | decodes the invitation, makes its key if it has none (§9.1) and its repository (an existing repository can rejoin in place only under §9.9), and connects to the inviter on `pigeon/join/1`, retrying ("Waiting for Paul's computer…") until the invitation expires |
-| 2 | new device | sends `Join {v, invitation_hash, proof, device_name, role, annex_uuid, capacity?, addresses}`, with `proof = HMAC-SHA256(secret, "pigeon-join-1" ‖ new device ID ‖ inviter device ID)`, both IDs from the QUIC handshake, so a recorded exchange cannot be replayed; `addresses` let the inviter reach it before mDNS does **[no ADR]** |
-| 3 | inviter | checks proof, expiry and that it is unused, marks it used, and signs a roster commit adding the device (and the person, for `new-person`) under the authority rule ([04 §4.7](04-roster-and-authority.md)); a custodian's `maxsize` is its reported free space minus 10 %, at most that minus `annex.diskreserve` ([08 §8.9](08-custody-loops.md)) |
-| 4 | inviter | answers `Welcome {commit, annex_uuid}` (its own UUID), or a refusal that becomes a Problem ([10 §10.6](10-interfaces.md)): `P-INVITE-EXPIRED`, `P-INVITE-USED`, `invite-unknown`, `invite-not-allowed` |
-| 5 | new device | fetches over `pigeon/annex/1`, validates the history from the genesis named in the invitation (another root is refused), checks that `commit` adds its own ID, and installs the folders to keep ([07](07-capture-and-install.md)) |
+| 1 | new device | decodes the invitation, makes its key if it has none (§9.1) and its repository (an existing repository can rejoin in place only under §9.9), and connects to each admitter in turn on `pigeon/join/1`, retrying for ten minutes |
+| 2 | new device | sends `Join {v, invitation_hash, proof, person, existing, device_name, role, annex_uuid, capacity?, addresses}`, with `proof = HMAC-SHA256(secret, "pigeon-join-1" ‖ new device ID ‖ admitter device ID)`, both IDs from the QUIC handshake, so a recorded exchange cannot be replayed; `addresses` let the admitter reach it before mDNS does **[no ADR]** |
+| 3 | admitter | finds the group whose invitation hashes to `invitation_hash`, checks the proof, and decides the change (`pigeon-core::invitation::admit`, laws in `tests/invitation.rs`): a `person` the roster lacks adds a person who is not an admin, with an ID of the name's ASCII letters and digits (`person` if none) and a number if a person has it; a person's name or ID, ignoring case, adds the device to that person only with `existing`, else it answers `person-exists`; a device of the roster with the same role and annex UUID is welcomed again with no change; a removed device, or one asking another role or UUID, is refused. A device name the roster has gets `-2`, `-3`… It signs the roster commit under the authority rule ([04 §4.7](04-roster-and-authority.md)); a custodian's `maxsize` is its reported free space minus 10 %, at most that minus `annex.diskreserve` ([08 §8.9](08-custody-loops.md)) |
+| 4 | admitter | answers `Welcome {commit, annex_uuid, peers}` (its own UUID), or a refusal that becomes a Problem ([10 §10.6](10-interfaces.md)): `person-exists`, `invite-unknown`, `invite-not-allowed`. On `invite-not-allowed` the new device asks the next admitter: an admitter that is not an admin may add only devices of its own person |
+| 5 | new device | on `person-exists`, asks whether this computer is that person's (`--yes` answers yes) and sends again with `existing`; once welcomed, fetches over `pigeon/annex/1`, validates the history from the genesis named in the invitation (another root is refused), checks that `commit` adds its own ID, and installs the folders to keep ([07](07-capture-and-install.md)) |
+
+- **Whoever holds the line joins**, under any person's name, with that
+  person's rights (ADR 0075). The invitation never changes: a person
+  removed (§9.7) can join again with it; only refounding (§9.9) gives a new
+  one. Every join is a signed, visible roster commit.
+- A device already in the group refuses to join it again
+  (`already-in-group`).
+- A computer is in **one group only** **[no ADR]**: the web pages and the
+  commands without a path show one group. While it is in a group,
+  `create`, `join` and `recover` of another one are refused before anything
+  is written (`in-another-group`), naming the group and saying how to leave
+  it (§9.7). Joining in place the refounding of the group it is in
+  replaces that group, and goes on (§9.9).
 
 A join either completes or takes back what it made **[no ADR]**
 (`pigeond/src/join_attempt.rs`, `tests/join_retry.rs`): the new device
@@ -186,14 +199,14 @@ run to their end even when the browser leaves (10 §10.3).
 three words from a fixed list of 2048, by the first 33 bits of
 `SHA-256("pigeon-words-1" ‖ secret ‖ new device ID)`, with "You are joining
 **Famille Geiger**, invited by **Paul**". They do not gate the join; they
-let the inviter notice that someone else used the invitation, and the
-inviter's "Martine's laptop joined the group" notification repeats them.
+let the admitter's person notice who joined, and the admitter's "Martine's
+laptop joined the group" notification repeats them.
 
 ## 9.7 Removing a computer
 
 `pigeon remove-computer NAME` (People → *I lost a computer*) signs a roster
 commit removing a device, valid from an admin or another device of the same
-person (ADR 0017), and visible in the history.
+person (ADR 0075), and visible in the history.
 
 - Each device that accepts it closes connections to it, deletes its remote
   and marks its UUID `dead` ([03 §3.5](03-repository-and-roles.md)). A
@@ -225,20 +238,26 @@ person (ADR 0017), and visible in the history.
   a new invitation; its lists of people and machines say they are the
   group as it last knew it. A device leaving or finishing an in-place join
   is not removed.
-- Removal cannot unshare what the device already fetched (ADR 0017).
+- Removal cannot unshare what the device already fetched (ADR 0017), and
+  does not change the group's invitation (ADR 0075).
   `pigeon leave` **[no ADR]** signs the device's own removal, then deletes
   its key and, if asked, its copy of the folder.
 
-Coded so far (`pigeond/src/leave.rs`, `tests/leave.rs`): `pigeon leave`
-refuses the group's last admin computer (`leave-last-admin`: no device of
-an admin, recovery sheets included, would remain), signs the removal and
-records it in `.git/pigeon/leaving` ([11 §11.3](11-local-state.md)). Until
-a peer has it, the group's rounds do nothing else, and the device still
-serves it. A peer has it once its fetched `main` holds it or it refuses
-the device as `not-in-roster` (§9.3). Then the group leaves `config.toml`,
-pointer files of content not here are deleted, `.git` and `.pigeon` move
-to `<state>/left/<group>-<time>/`, so the folder keeps its files as plain
-files, and the device key goes once no group is left. A custodian's
+Coded so far (`pigeond/src/leave.rs`, `tests/leave.rs`): a computer that
+is the group's only machine (recovery sheets aside) has nobody to tell: it
+forgets the group at once, as below, without signing a removal. Otherwise
+`pigeon leave` refuses the group's last admin computer (`leave-last-admin`:
+no device of an admin, recovery sheets included, would remain), signs the
+removal and records it in `.git/pigeon/leaving`
+([11 §11.3](11-local-state.md)). Until a peer has it, the group's rounds
+do nothing else, and the device still serves it. A peer has it once its
+fetched `main` holds it or it refuses the device as `not-in-roster`
+(§9.3). Then the group leaves `config.toml`, pointer files of content not
+here are deleted, `.git` and `.pigeon` move to
+`<state>/left/<group>-<time>/`, so the folder keeps its files as plain
+files, and the device key goes once no group is left; the running
+`pigeond` keeps it, and writes it back for the next group it serves, so
+the device ID that group's roster names survives a restart. A custodian's
 repository stays in place. Deleting the folder, and saying first how many
 files will have fewer safe copies, are not coded.
 
@@ -267,8 +286,8 @@ key that can sign a roster commit:
 
 | What survives | Recovery |
 |---|---|
-| a device of person P, such as P's custodian | P's new machine joins by an invitation from it (§9.6); `pigeon invite` runs on the custodian, directly or over ssh |
-| a device of an admin | the admin invites new devices of anyone |
+| a device of person P, such as P's custodian | P's new machine joins with the invitation that device prints (§9.6), as P; `pigeon invite` runs on the custodian, directly or over ssh |
+| a device of an admin | any new machine joins with the invitation; that device admits it |
 | an admin's recovery sheet | `pigeon recover SHEET` on a fresh machine (below) |
 | no key of an admin, no sheet | `pigeon refound` (below), or `pigeon export` to read the files |
 

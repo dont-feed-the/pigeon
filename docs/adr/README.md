@@ -79,7 +79,7 @@ decision is a new ADR that supersedes it.
 | [0014](0014-append-only-serving.md) | Custodians serve peers append-only: no remote `REMOVE` | Accepted |
 | [0015](0015-new-design-ignores-0.9.md) | The new design does not build on pigeon 0.9.0 | Accepted |
 | [0016](0016-relays-and-discovery.md) | Relays and discovery: n0 by default, mDNS on the LAN, own relay optional | Accepted |
-| [0017](0017-joining-by-ticket.md) | Joining by a one-time ticket; people manage their own devices | Accepted |
+| [0017](0017-joining-by-ticket.md) | Joining by a one-time ticket; people manage their own devices | Superseded by 0075 |
 | [0018](0018-deletion-keeps-custody-until-purge.md) | Deleting a file never deletes its custody copies; only a purge does | Accepted |
 | [0019](0019-licence.md) | pigeon v2 is licensed MIT OR Apache-2.0 | Accepted |
 | [0020](0020-git-annex-delivery.md) | git-annex comes from its official builds, with a checked minimum version | Superseded by 0069 |
@@ -145,4 +145,5 @@ passes; 16 §16.3 lists where each rule now lives.
 | [0072](0072-capture-records-renames-and-the-merge-follows-them.md) | Capture records renames, and the merge follows them | Accepted |
 | [0073](0073-parameterized-proofs-complement-model-checking.md) | Parameterized safety proofs complement model checking | Proposed |
 | [0074](0074-mount-the-peer-ui-behind-bridge-authorization.md) | Mount the peer UI behind bridge authorization | Proposed |
-| [0075](0075-a-suggestion-is-decided-file-by-file-in-one-decision.md) | A suggestion is decided file by file, in one decision | Proposed |
+| [0075](0075-one-invitation-per-group-shared-as-a-line.md) | One invitation per group, shared as a line that installs and joins | Accepted |
+| [0076](0076-a-suggestion-is-decided-file-by-file-in-one-decision.md) | A suggestion is decided file by file, in one decision | Proposed |

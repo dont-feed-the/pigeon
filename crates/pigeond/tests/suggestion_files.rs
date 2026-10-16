@@ -1,4 +1,4 @@
-//! A suggestion decided file by file (ADR 0075, 04 §4.5, 07 §7.6), with
+//! A suggestion decided file by file (ADR 0076, 04 §4.5, 07 §7.6), with
 //! real daemons: Ana, an admin, creates the group with a backup machine and
 //! invites Cid, who is not one. Cid edits three of Ana's files, one
 //! suggestion. Ana sees what changes in each and accepts two of them with
@@ -18,7 +18,9 @@ mod common;
 
 use std::path::Path;
 
-use common::{SERIAL, dirs, eventually_within, join, logs, pigeon, said, start, until};
+use common::{
+    SERIAL, dirs, eventually_within, invitation, join, logs, person, pigeon, said, start, until,
+};
 use pigeon_proto::Response;
 use pigeon_proto::api::{FileChange, Outcome, State, Suggestion};
 
@@ -76,9 +78,11 @@ fn some_files_of_a_suggestion_are_accepted_and_the_others_declined() {
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
     join(&a1, &c1, &all);
     until(&a1, State::Protected, &all);
-    let answer = pigeon(&a1, &["invite", "Cid"]);
-    let code = said(&answer, "invitation", "code").unwrap_or_else(|| panic!("{answer:?}"));
-    let joined = pigeon(&b1, &["join", &code, fc.to_str().unwrap()]);
+    let code = invitation(&a1);
+    let joined = pigeon(
+        &b1,
+        &["join", &code, fc.to_str().unwrap(), "--person", "Cid"],
+    );
     assert!(
         said(&joined, "joined", "group").is_some(),
         "{joined:?}\n{}",
@@ -239,10 +243,20 @@ fn some_files_of_a_suggestion_are_accepted_and_the_others_declined() {
 
     // A computer that joins later verifies this history and gets the files.
     let a2 = start(&root, s, "a2");
-    let invited = pigeon(&a1, &["invite", "ana"]);
-    let code = said(&invited, "invitation", "code").unwrap();
+    let code = invitation(&a1);
+    let owner = person(&a1);
     let later = root.join("ana-2");
-    let joined = pigeon(&a2, &["join", &code, later.to_str().unwrap()]);
+    let joined = pigeon(
+        &a2,
+        &[
+            "join",
+            &code,
+            later.to_str().unwrap(),
+            "--person",
+            &owner,
+            "--yes",
+        ],
+    );
     let everyone = [&a1, &b1, &c1, &a2];
     assert!(
         said(&joined, "joined", "group").is_some(),

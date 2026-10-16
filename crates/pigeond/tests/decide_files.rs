@@ -1,4 +1,4 @@
-//! A suggestion of several files decided file by file (ADR 0075, 04 §4.5),
+//! A suggestion of several files decided file by file (ADR 0076, 04 §4.5),
 //! on signed git objects without daemons: Bob suggests changes of three of
 //! Alice's files; Alice accepts two and declines the third with a note, in
 //! one commit on `main` that any release's judge accepts. Bob's computer
@@ -92,6 +92,7 @@ fn roster() -> Roster {
     Roster {
         rules: 1,
         group: "parts".into(),
+        invitation: "0".repeat(64),
         k: 1,
         retention_days: 30,
         relay: None,

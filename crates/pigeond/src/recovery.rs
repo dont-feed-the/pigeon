@@ -317,7 +317,7 @@ async fn recover_inner(
         .and_then(|k| k.try_into().ok())
         .ok_or("sheet-unreadable")?;
     if d.group(&s.group).is_some() {
-        return Err("invite-used".into());
+        return Err("already-in-group".into());
     }
     let home = std::env::var_os("HOME").map_or_else(|| PathBuf::from("."), PathBuf::from);
     let path = folder.map_or_else(|| home.join(&s.name), PathBuf::from);

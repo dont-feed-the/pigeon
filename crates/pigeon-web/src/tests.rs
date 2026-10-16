@@ -135,17 +135,6 @@ impl Backend for Fixed {
             pigeon_proto::Request::RemoveDevice { name } => {
                 vec![said("removed-computer", "name", name)]
             }
-            pigeon_proto::Request::Invitations => vec![Response::Invitations {
-                invitations: vec![pigeon_proto::api::InvitationEntry {
-                    id: "ab12".into(),
-                    who: "Ana".into(),
-                    custodian: false,
-                    expires: "2026-10-22T10:00:00Z".into(),
-                }],
-            }],
-            pigeon_proto::Request::CancelInvitation { invitation } => {
-                vec![said("invitation-cancelled", "id", invitation)]
-            }
             pigeon_proto::Request::Held => vec![Response::Held {
                 held: vec![
                     pigeon_proto::api::HeldEntry {
@@ -187,9 +176,19 @@ impl Backend for Fixed {
                 vec![said("held-shared", "files", format!("{batch}/{choice:?}"))]
             }
             pigeon_proto::Request::Leave => vec![said("leaving", "name", "mine".into())],
-            pigeon_proto::Request::Invite { person, .. } => {
-                vec![said("invitation", "code", format!("pgn1-{person}"))]
-            }
+            pigeon_proto::Request::Invite => vec![Response::Said {
+                message: Message {
+                    id: "invitation".into(),
+                    args: [
+                        ("group".to_owned(), pigeon_proto::Arg::Text("Family".into())),
+                        (
+                            "command".to_owned(),
+                            pigeon_proto::Arg::Text(pigeon_proto::join::command("pgn2-family")),
+                        ),
+                    ]
+                    .into(),
+                },
+            }],
             pigeon_proto::Request::History { path } => vec![Response::History {
                 versions: [1, 2]
                     .map(|number| pigeon_proto::api::VersionStatus {
@@ -244,6 +243,20 @@ fn said(id: &str, arg: &str, value: String) -> Response {
             args: [(arg.to_owned(), pigeon_proto::Arg::Text(value))].into(),
         },
     }
+}
+
+/// The invitation of a group named Family, refounded if `refounded`.
+fn invitation(refounded: Option<pigeon_proto::join::Refounded>) -> String {
+    pigeon_proto::join::encode(&pigeon_proto::join::Invitation {
+        v: pigeon_proto::join::INVITATION_VERSION,
+        group: "g".into(),
+        name: "Family".into(),
+        k: 1,
+        admitters: Vec::new(),
+        secret: "00".into(),
+        relay: None,
+        refounded,
+    })
 }
 
 fn web() -> Arc<Web> {
@@ -461,7 +474,7 @@ fn form_of(page: &str) -> String {
 }
 
 #[tokio::test]
-async fn a_machine_is_removed_once_confirmed_and_a_person_invited() {
+async fn a_machine_is_removed_once_confirmed() {
     let w = web();
     let app = w.router();
     let cookie = logged_in(&app, &w).await;
@@ -501,26 +514,10 @@ async fn a_machine_is_removed_once_confirmed_and_a_person_invited() {
         .unwrap();
     let done = body(done).await;
     assert!(done.contains("paul-laptop is removed"), "{done}");
-    let forged = app
-        .clone()
-        .oneshot(post("/machines/invite", &cookie, "form=00&person=Ana"))
-        .await
-        .unwrap();
-    assert_eq!(forged.status(), StatusCode::FORBIDDEN);
-    let invited = app
-        .oneshot(post(
-            "/machines/invite",
-            &cookie,
-            &format!("form={form}&person=Ana&admin=true"),
-        ))
-        .await
-        .unwrap();
-    let invited = body(invited).await;
-    assert!(invited.contains("pgn1-Ana"), "{invited}");
 }
 
 #[tokio::test]
-async fn a_pending_invitation_is_listed_and_cancelled() {
+async fn the_line_that_joins_the_group_is_shown_with_copy() {
     let w = web();
     let app = w.router();
     let cookie = logged_in(&app, &w).await;
@@ -530,35 +527,19 @@ async fn a_pending_invitation_is_listed_and_cancelled() {
         .await
         .unwrap();
     let page = body(page).await;
-    assert!(page.contains("Pending invitations"), "{page}");
+    assert!(page.contains("To add someone to"), "{page}");
     assert!(
-        page.contains("Invitation for Ana, expires on 22 October") && !page.contains("ab12:"),
+        page.contains("pigeon-install | sh -s -- --join pgn2-family"),
         "{page}"
     );
-    let form = form_of(&page);
-    let forged = app
-        .clone()
-        .oneshot(post(
-            "/machines/cancel-invitation",
-            &cookie,
-            "form=00&invitation=ab12",
-        ))
+    assert!(page.contains("data-copy=\"invitation-line\""), "{page}");
+    assert!(page.contains("src=\"/copy.js\""), "{page}");
+    let script = app
+        .oneshot(get("/copy.js", HOST, Some(&cookie)))
         .await
         .unwrap();
-    assert_eq!(forged.status(), StatusCode::FORBIDDEN);
-    let done = app
-        .oneshot(post(
-            "/machines/cancel-invitation",
-            &cookie,
-            &format!("form={form}&invitation=ab12"),
-        ))
-        .await
-        .unwrap();
-    let done = body(done).await;
-    assert!(
-        done.contains("Invitation ab12 can no longer be used."),
-        "{done}"
-    );
+    assert_eq!(script.status(), StatusCode::OK);
+    assert!(body(script).await.contains("clipboard"));
 }
 
 #[tokio::test]

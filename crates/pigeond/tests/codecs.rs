@@ -13,7 +13,7 @@ use hegel::generators as gs;
 use pigeon_core::authority::Unread;
 use pigeon_core::journal::{Begin, End, Record, Stat};
 use pigeon_core::roster::{Device, DeviceId, Person, PersonId, Role, Roster};
-use pigeond::invite::{Invitation, decode, encode};
+use pigeon_proto::join::{Admitter, INVITATION_VERSION, Invitation, decode, encode};
 use pigeond::roster_file::{RosterDoc, parse, render};
 use pigeond::util::{date, hex, hmac_sha256, parse_rfc3339, rfc3339, unhex};
 
@@ -152,6 +152,7 @@ fn roster_doc(tc: &TestCase) -> RosterDoc {
         roster: Roster {
             rules: 1,
             group: word(tc),
+            invitation: hex(&tc.draw(gs::binary().min_size(32).max_size(32))),
             k: tc.draw(gs::integers::<u32>().min_value(1).max_value(5)),
             retention_days: tc.draw(gs::integers::<u32>().max_value(3650)),
             telemetry_device: tc.draw(gs::booleans()).then(|| device_id(tc)),
@@ -181,7 +182,7 @@ fn roster_files_round_trip(tc: TestCase) {
 }
 
 /// Law *closed roster* (ADR 0048): a rendered roster with a newer `format`,
-/// or with one key format 1 does not define, at the top or in a person, a
+/// or with one key format 2 does not define, at the top or in a person, a
 /// device or a folder, is unknown: never read, and never refused.
 #[hegel::test(test_cases = 1000)]
 fn a_roster_a_newer_release_could_write_is_unknown(tc: TestCase) {
@@ -190,7 +191,10 @@ fn a_roster_a_newer_release_could_write_is_unknown(tc: TestCase) {
     let key = format!("x{}", tc.draw(gs::integers::<u16>()));
     let value = toml_edit::value(tc.draw(gs::integers::<i64>()));
     match tc.draw(gs::integers::<u8>().max_value(4)) {
-        0 => newer["format"] = toml_edit::value(tc.draw(gs::integers::<i64>().min_value(2))),
+        0 => {
+            let next = i64::from(pigeond::roster_file::FORMAT) + 1;
+            newer["format"] = toml_edit::value(tc.draw(gs::integers::<i64>().min_value(next)));
+        }
         1 => newer["persons"]["ada"][&key] = value,
         2 => {
             let devices = newer["devices"].as_table_mut().unwrap();
@@ -207,37 +211,27 @@ fn a_roster_a_newer_release_could_write_is_unknown(tc: TestCase) {
     assert!(matches!(parse(&text), Err(Unread::Unknown(_))), "{text}");
 }
 
-/// Law *invitation*: an invitation decodes from its `pgn1-` code, which is
-/// lower-case base32, and a damaged code decodes to nothing else.
+/// Law *invitation*: an invitation decodes from its `pgn2-` code, which is
+/// lower-case base32, also inside the line that shares it, and a damaged
+/// code decodes to nothing else.
 #[hegel::test(test_cases = 1000)]
 fn invitations_round_trip(tc: TestCase) {
-    let n = tc.draw(gs::integers::<u8>().max_value(3));
+    let admitters = (0..tc.draw(gs::integers::<u8>().max_value(3)))
+        .map(|i| Admitter {
+            device: device_id(&tc).0,
+            person: word(&tc),
+            addresses: (0..i)
+                .map(|j| format!("127.0.0.1:{}", 4000 + u32::from(j)))
+                .collect(),
+        })
+        .collect();
     let inv = Invitation {
-        v: 1,
+        v: INVITATION_VERSION,
         group: hex(&tc.draw(gs::binary().min_size(20).max_size(20))),
         name: word(&tc),
         k: tc.draw(gs::integers::<u32>().min_value(1).max_value(5)),
-        inviter: device_id(&tc).0,
-        from: word(&tc),
-        addresses: (0..n)
-            .map(|i| format!("127.0.0.1:{}", 4000 + u32::from(i)))
-            .collect(),
+        admitters,
         secret: hex(&tc.draw(gs::binary().min_size(32).max_size(32))),
-        person: word(&tc),
-        new_person: if tc.draw(gs::booleans()) {
-            word(&tc)
-        } else {
-            String::new()
-        },
-        admin: tc.draw(gs::booleans()),
-        role: if tc.draw(gs::booleans()) {
-            "custodian"
-        } else {
-            "laptop"
-        }
-        .to_owned(),
-        device: word(&tc),
-        expires: tc.draw(gs::integers::<i64>().min_value(0).max_value(1 << 40)),
         relay: tc
             .draw(gs::booleans())
             .then(|| format!("https://{}.example.org", word(&tc))),
@@ -255,14 +249,18 @@ fn invitations_round_trip(tc: TestCase) {
         pigeon_proto::join::refounded(&code),
         inv.refounded.clone().map(|r| (inv.name.clone(), r))
     );
-    let body = code.strip_prefix("pgn1-").unwrap();
+    assert_eq!(
+        pigeon_proto::join::invitation(&pigeon_proto::join::command(&code)),
+        code
+    );
+    let body = code.strip_prefix("pgn2-").unwrap();
     assert!(
         body.bytes()
             .all(|b| b.is_ascii_lowercase() || (b'2'..=b'7').contains(&b))
     );
     assert_eq!(decode(&code), Some(inv.clone()));
     assert_eq!(
-        decode(&code.to_uppercase().replacen("PGN1-", "pgn1-", 1)),
+        decode(&code.to_uppercase().replacen("PGN2-", "pgn2-", 1)),
         Some(inv)
     );
     assert_eq!(decode(body), None);
@@ -300,48 +298,6 @@ fn capture_intents_round_trip(tc: TestCase) {
         ..i
     };
     assert_eq!(parse(&render(&newer)), None);
-}
-
-/// Law *new person* (09 §9.6): the ID an invitation gives a new person is
-/// lowercase ASCII letters and digits, no person of the roster has it, and
-/// the person is found by it once added.
-#[hegel::test(test_cases = 1000)]
-fn a_new_persons_id_is_fresh(tc: TestCase) {
-    use pigeon_core::roster::{Person, PersonId, Roster};
-    use pigeond::invite::{find_person, new_person_id};
-    let mut roster = Roster {
-        rules: 1,
-        group: "g".into(),
-        k: 1,
-        retention_days: 30,
-        telemetry_device: None,
-        relay: None,
-        persons: BTreeMap::new(),
-        devices: BTreeMap::new(),
-        removed: BTreeMap::new(),
-        folders: Vec::new(),
-    };
-    let names = ["Ana", "ana", "Ana2", "Zoé", "", "Ünal", "person", "ana3"];
-    let n = tc.draw(gs::integers::<usize>().max_value(6));
-    for _ in 0..n {
-        let name = names[tc.draw(gs::integers::<usize>().max_value(names.len() - 1))];
-        let id = new_person_id(&roster, name);
-        assert!(
-            !id.0.is_empty()
-                && id
-                    .0
-                    .bytes()
-                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()),
-            "{id:?}"
-        );
-        assert!(!roster.persons.contains_key(&id), "{id:?}");
-        let person = Person {
-            name: name.to_owned(),
-            admin: false,
-        };
-        roster.persons.insert(id.clone(), person);
-        assert_eq!(find_person(&roster, &id.0), Some(PersonId(id.0.clone())));
-    }
 }
 
 /// Law *round trip* (11 §11.5): a divergence table (`conflicts.json`, 07

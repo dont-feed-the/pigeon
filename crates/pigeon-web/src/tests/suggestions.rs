@@ -1,4 +1,4 @@
-//! The Suggestions page decides file by file (ADR 0075): each file with
+//! The Suggestions page decides file by file (ADR 0076): each file with
 //! what changes in it, a review button and a ticked checkbox; *Accept
 //! selected* and *Decline selected* become one `DecideFiles`; *Accept all*
 //! and *Decline all* decide every file of each; the author sees what was

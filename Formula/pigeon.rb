@@ -2,10 +2,10 @@
 class Pigeon < Formula
   desc "Keep a group's files on its computers and say whether they are safe"
   homepage "https://github.com/dont-feed-the/pigeon"
-  url "https://github.com/dont-feed-the/pigeon/releases/download/v2.0.0-alpha.0/pigeon-v2.0.0-alpha.0-macos-arm64.tar.gz"
-  version "2.0.0-alpha.0"
-  version_scheme 0
-  sha256 "5a4b451d14ce8f8d4dadad05db1be5555cf572060bbca93f929cc7529f03b8df"
+  url "https://github.com/dont-feed-the/pigeon/releases/download/v0.5.12/pigeon-v0.5.12-macos-arm64.tar.gz"
+  version "0.5.12"
+  version_scheme 1
+  sha256 "36d5a4758957cf666c997477fb6e71a85eb22d552b41af07b2b11eb0cad06390"
   license any_of: ["MIT", "Apache-2.0"]
 
   depends_on :macos
@@ -13,8 +13,8 @@ class Pigeon < Formula
   depends_on "git"
 
   resource "git-annex-pigeon" do
-    url "https://github.com/dont-feed-the/pigeon/releases/download/v2.0.0-alpha.0/git-annex-pigeon-macos-arm64.tar.gz"
-    sha256 "1a6617b43cef3a5d16e4cbd3664a3d8757c200e082d1d189f7f9c0e49b539a8e"
+    url "https://github.com/dont-feed-the/pigeon/releases/download/v0.5.12/git-annex-pigeon-macos-arm64.tar.gz"
+    sha256 "21af1874605c17a087acdbd9f4befa168993484c9e9a2c44672c3d8a301204da"
   end
 
   def install

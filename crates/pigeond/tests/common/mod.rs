@@ -1,7 +1,7 @@
 //! What the multi-daemon tests share (13 §13.12): `pigeond` processes on
 //! one host, each with its own home, driven through the `pigeon` CLI with
 //! `--json`, and their logs for a failure's message. Every daemon's person
-//! is `ana` (`$USER`, 13 §13.12) unless an invitation names another.
+//! is `ana` (`$USER`, 13 §13.12) unless its join names another.
 #![allow(dead_code, reason = "each test binary uses a part")]
 #![allow(
     clippy::unwrap_used,
@@ -141,8 +141,16 @@ pub fn assert_crashed(d: &mut Daemon) {
     }
 }
 
-/// Each daemon's own log lines (not its libraries') and its output, for a
-/// failure's message.
+/// Per-connection lines, which fill the tail of a failure's logs and hide
+/// what the loops did; the kept directory has them all.
+const CHATTER: [&str; 3] = [
+    "\"message\":\"relay-ended\"",
+    "\"message\":\"connect-ended\"",
+    "\"message\":\"stream-admitted\"",
+];
+
+/// Each daemon's own log lines (not its libraries' nor per-connection ones)
+/// and its output, for a failure's message.
 pub fn logs(all: &[&Daemon]) -> String {
     let mut out = String::new();
     for d in all {
@@ -153,6 +161,7 @@ pub fn logs(all: &[&Daemon]) -> String {
             let lines: Vec<&str> = text
                 .lines()
                 .filter(|l| l.contains("\"target\":\"pigeond") || l.contains("\"WARN\""))
+                .filter(|l| !CHATTER.iter().any(|m| l.contains(m)))
                 .collect();
             for l in lines.iter().rev().take(80).rev() {
                 out.push_str(l);
@@ -235,10 +244,43 @@ pub fn until(lap: &Daemon, want: State, all: &[&Daemon]) -> StatusReport {
     }
 }
 
+/// The group's invitation, from the line `pigeon invite` prints on `d`.
+pub fn invitation(d: &Daemon) -> String {
+    let answer = pigeon(d, &["invite"]);
+    let line = said(&answer, "invitation", "command").unwrap_or_else(|| panic!("{answer:?}"));
+    pigeon_proto::join::invitation(&line)
+}
+
+/// The name of `d`'s person, as `pigeon people` lists it.
+pub fn person(d: &Daemon) -> String {
+    match pigeon(d, &["people"]).as_slice() {
+        [Response::People { people }] => people
+            .iter()
+            .find(|p| p.this_person)
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| panic!("no person of this computer: {people:?}")),
+        other => panic!("people: {other:?}"),
+    }
+}
+
+/// Joins `c` to `lap`'s group as a backup machine of `lap`'s person, named
+/// `c.name`.
 pub fn join(lap: &Daemon, c: &Daemon, all: &[&Daemon]) {
-    let answer = pigeon(lap, &["invite", "--backup-machine", c.name]);
-    let code = said(&answer, "invitation", "code").unwrap_or_else(|| panic!("{answer:?}"));
-    let joined = pigeon(c, &["join", "--backup-machine", &code]);
+    let code = invitation(lap);
+    let owner = person(lap);
+    let joined = pigeon(
+        c,
+        &[
+            "join",
+            "--backup-machine",
+            &code,
+            "--name",
+            c.name,
+            "--person",
+            &owner,
+            "--yes",
+        ],
+    );
     assert!(
         said(&joined, "joined", "group").is_some(),
         "{joined:?}\n{}",
@@ -259,10 +301,19 @@ pub static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
 /// A generated annex fixture: git-annex makes object directories read-only.
 /// Restore owner traversal/write permission before TempDir removes our tree;
 /// otherwise successful suites leak enough fixtures to hit the disk reserve.
+/// A failed test keeps it, with each daemon's full logs, and says where.
 pub struct FixtureDir(tempfile::TempDir);
 impl Drop for FixtureDir {
     fn drop(&mut self) {
         use std::os::unix::fs::PermissionsExt;
+        if std::thread::panicking() {
+            self.0.disable_cleanup(true);
+            eprintln!(
+                "kept the failed test's directory: {} (each daemon's logs in <name>/state/logs)",
+                self.0.path().display()
+            );
+            return;
+        }
         let mut dirs = vec![self.0.path().to_path_buf()];
         while let Some(dir) = dirs.pop() {
             let Ok(meta) = std::fs::symlink_metadata(&dir) else {

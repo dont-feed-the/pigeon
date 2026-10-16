@@ -1,8 +1,9 @@
 # Changelog
 
-All notable user-visible changes to pigeon are documented here. While the
-version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
-the second number, and every other pull request the third.
+All notable user-visible changes to pigeon are documented here. Changes
+not yet released are under *Unreleased*. While the version is 0.x, a
+release that completes a milestone of the [roadmap](docs/roadmap.md)
+increments the second number, and every other release the third.
 
 ## Unreleased
 
@@ -54,9 +55,8 @@ the second number, and every other pull request the third.
 - Preparing a recovery sheet first checks that a backup machine answers; if
   none does, it says which to turn on, and nothing is changed.
 - Times read as local times ("until 14:38", "expires tomorrow at 13:35")
-  and sizes as "29.3 GB" ("29,3 Go" in French). Pending invitations, held
-  deletions and the Space page name people, files and dates instead of
-  internal ids.
+  and sizes as "29.3 GB" ("29,3 Go" in French). Held deletions and the Space
+  page name files and dates instead of internal ids.
 - Settings shows only the pause action that applies. Copies opened with
   *Open a copy* are named in your language.
 - When the computer name you chose was taken, joining tells you the name it
@@ -65,6 +65,16 @@ the second number, and every other pull request the third.
   repeated button acts on. On phones, buttons, fields and menu links are
   easier to tap. A folder's page is titled with its name, shows names from
   that folder, and *Back* goes to the parent folder.
+- A computer is now in one group only. `pigeon create`, `pigeon join` and
+  `pigeon recover` (and joining or creating in the web interface) refuse a
+  second group, before writing anything, and say how to leave the first:
+  `pigeon leave`, or *Leave the group* in Settings in `pigeon open`. Before,
+  a second group was created, but `pigeon open` and the commands that take
+  no folder only ever showed the first one.
+- `pigeon leave` on a computer that is the only machine of its group leaves
+  it at once, even as the group's last admin computer; its files stay in
+  the folder. It used to refuse, so a group created by mistake could not be
+  left.
 
 ### Fixed
 
@@ -72,17 +82,82 @@ the second number, and every other pull request the third.
   saved meanwhile: each file's wait counts from when it was saved.
 - A computer removed from the group no longer says "Everything is safe": it
   says it was removed, that its files stay in its folder but are no longer
-  shared or backed up, and to ask for a new invitation.
+  shared or backed up, and to join again with the group's invitation line.
 - The Space page no longer warns of "less than 25% spare" whenever the
   group has exactly as many backup machines as it needs. It warns only when
   a storage limit is below one copy, and otherwise says, as information,
   that there is no spare backup machine.
 - A join that fails or cannot reach the inviter no longer leaves a
-  half-joined group: trying again in the same folder works, instead of
-  saying the invitation was already used.
+  half-joined group: trying again in the same folder works.
 - A recovery sheet whose page was closed while waiting no longer stays in
   the group unprinted: pages finish their work, or undo it, even when the
   browser leaves.
+- On Linux with a umask of 002, the default on Ubuntu and Fedora desktops,
+  pigeon thought every file might be in use: it delayed writing the group's
+  versions into your folder, `pigeon free` and *Free up space* deleted
+  nothing, and `pigeon restore` said the file was in use. Files are now
+  only held back when another user's program could really be writing them.
+- A computer that left its last group and then created or joined another
+  one, without restarting pigeon, no longer changes identity at the next
+  restart, which made the new group no longer recognise it.
+
+## 0.5.12 — 2026-10-16
+
+### Fixed
+
+- Existing shell startup files using `pigeon completions zsh`, `bash` or
+  `fish` work again, without the "not in this build" warning. They load
+  the current Tab completion, even when the daemon is stopped.
+- Diagnostic bundles hide the group's permanent invitation secret in both
+  this computer's information and parts shared by other computers. Sharing
+  diagnostics keeps the roster readable without sharing permission to join.
+
+## 0.5.11 — 2026-10-16
+
+### Changed
+
+- `pigeon create` now prints one line to share with everyone you want in the
+  group. Run on another computer, it installs or updates pigeon, then joins:
+  it asks which folder to use and your name in the group.
+  `pigeon invite` prints the same line again, on any computer of the group,
+  and People in the web interface shows it with a *Copy* button.
+- The line works for everyone and never expires. Whoever has it can join
+  under any name, with the rights of the person of that name, so share it
+  only with the group. Giving the name of someone already in the group adds
+  your computer to them, once you confirm (`--yes` confirms on the command
+  line). Add `--backup-machine` at the end of the line on a backup machine.
+- `pigeon join` asks for your name in the group (`--person NAME`) and, on a
+  terminal, for the folder.
+- A refounded group has its own line; the old one no longer works.
+
+### Removed
+
+- One-time invitations: `pigeon invite PERSON`, `--admin`,
+  `--backup-machine`, `--list` and `--cancel`, and the `pgn1-` codes. Groups
+  made by earlier releases cannot be read by this one: create the group
+  again.
+
+## 0.5.10 — 2026-10-16
+
+### Fixed
+
+- `pigeon update` on macOS no longer leaves pigeond stopped. It failed with
+  "Bootstrap failed: 5: Input/output error" when macOS had not yet finished
+  stopping the old pigeond; the update now waits for that, up to ten
+  seconds, before starting the new one.
+
+## 0.5.9 — 2026-10-16
+
+### Changed
+
+- Routine verification uses checked proofs for two more token hand-off
+  cases and for suggestion adoption permissions. Their large finite checks
+  remain available in the weekly audit and on request.
+
+### Fixed
+
+- Release validation waits for Free to finish before checking its final
+  protection status.
 
 ## 0.5.8 — 2026-10-16
 

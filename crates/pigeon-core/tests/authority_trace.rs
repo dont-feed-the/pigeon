@@ -9,7 +9,7 @@
 //! or rejects or withdraws a proposal the code keeps (a commit refused for
 //! folder rules alone); or adopts one whose base it holds, as
 //! `proposal::adoption` writes it or with a change dropped or one more; or
-//! decides some of its files (ADR 0075): one commit that holds the change
+//! decides some of its files (ADR 0076): one commit that holds the change
 //! of the files it accepts, `proposal::partial`, now and then with one
 //! more, and rejects the proposal.
 //! Who wrote each path is kept as the catalogue keeps it (ADR 0070): an
@@ -78,6 +78,7 @@ fn genesis() -> Roster {
     Roster {
         rules: 1,
         group: "g".into(),
+        invitation: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".into(),
         k: 1,
         retention_days: 30,
         telemetry_device: None,
@@ -365,7 +366,7 @@ fn decide(
 }
 
 /// A decision on some files of the proposal `x` on the accepted `parent`
-/// (ADR 0075): an ordinary commit that holds the change of the files it
+/// (ADR 0076): an ordinary commit that holds the change of the files it
 /// accepts, as `proposal::partial` writes it or with one change more, and
 /// rejects the proposal.
 #[allow(clippy::too_many_arguments, reason = "the history's parts")]

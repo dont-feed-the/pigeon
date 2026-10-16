@@ -139,6 +139,17 @@ where
         g.stop_remotedaemon().await;
         return Err(code);
     }
+    // The new group's roster names this device: its key must outlive a
+    // restart even after leaving the last group deleted it (09 §9.7).
+    if let Err(code) = d.keep_key() {
+        d.groups
+            .write()
+            .unwrap_or_else(|p| p.into_inner())
+            .retain(|live| !Arc::ptr_eq(live, &g));
+        drop(busy);
+        g.stop_remotedaemon().await;
+        return Err(code);
+    }
     let entry = GroupEntry {
         id: g.id.clone(),
         path: path.to_path_buf(),

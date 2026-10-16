@@ -64,24 +64,12 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         person: Option<String>,
     },
-    /// `pigeon invite [--admin] [--backup-machine] PERSON`.
-    Invite {
-        /// Who is invited.
-        person: String,
-        /// As an admin.
-        #[serde(default)]
-        admin: bool,
-        /// As a backup machine (custodian).
-        #[serde(default)]
-        custodian: bool,
-        /// The new backup machine's name in the roster, with `custodian`;
-        /// its person is then the inviter's (09 §9.6).
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        name: Option<String>,
-    },
-    /// `pigeon join INVITATION [FOLDER] [--name NAME]`.
+    /// `pigeon invite`: the line to share, which joins the group (09 §9.6).
+    Invite,
+    /// `pigeon join INVITATION [FOLDER] [--person NAME] [--name NAME]
+    /// [--backup-machine]`.
     Join {
-        /// The `pgn1-` invitation.
+        /// The `pgn2-` invitation.
         invitation: String,
         /// Where the folder goes; none on a backup machine.
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -89,10 +77,19 @@ pub enum Request {
         /// Keep the files on this computer.
         #[serde(default)]
         keep: bool,
-        /// This computer's name in the roster: over the invitation's, else
-        /// `<host name>-<6 hex digits of its device ID>`.
+        /// This computer's name in the roster, else `<host name>-<6 hex
+        /// digits of its device ID>`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         name: Option<String>,
+        /// The name its person gives, else the account's.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        person: Option<String>,
+        /// Whether it may join the person of the group with that name.
+        #[serde(default)]
+        existing: bool,
+        /// As a backup machine (custodian).
+        #[serde(default)]
+        custodian: bool,
     },
     /// `pigeon keep PATH`.
     Keep {
@@ -165,13 +162,6 @@ pub enum Request {
     Machines,
     /// `pigeon people`: the group's members, with their computers (04 §4.2).
     People,
-    /// `pigeon invite --list`: this computer's invitations not yet used.
-    Invitations,
-    /// `pigeon invite --cancel ID`: an invitation no one can use any more.
-    CancelInvitation {
-        /// Its ID, from `Invitations`.
-        invitation: String,
-    },
     /// `pigeon open`: a link to the web interface holding a single-use
     /// token (10 §10.3).
     OpenWeb,
@@ -272,7 +262,7 @@ pub enum Request {
     },
     /// `pigeon accept ID PATH…` · `pigeon decline ID PATH… [--note TEXT]`:
     /// one decision on every file of a proposal, the files named accepted
-    /// and the others declined, or the reverse (ADR 0075). A new request,
+    /// and the others declined, or the reverse (ADR 0076). A new request,
     /// so that an older `pigeond` refuses it rather than deciding the
     /// whole proposal.
     DecideFiles {
@@ -397,11 +387,6 @@ pub enum Response {
         /// Oldest first.
         held: Vec<HeldEntry>,
     },
-    /// The answer to `Invitations`.
-    Invitations {
-        /// Oldest first.
-        invitations: Vec<InvitationEntry>,
-    },
     /// The answer to `People`.
     People {
         /// The roster's persons.
@@ -417,7 +402,7 @@ pub enum Response {
         /// Oldest first.
         proposals: Vec<Suggestion>,
         /// This person's suggestions decided lately, newest first (ADR
-        /// 0075).
+        /// 0076).
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         decided: Vec<Outcome>,
         /// The group's folder on this computer, which the paths are in.
@@ -471,7 +456,7 @@ pub enum Response {
 /// Text for people: a message id of the Fluent bundles, and its arguments.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Message {
-    /// The id, such as `problem-invite-expired`.
+    /// The id, such as `problem-person-exists`.
     pub id: String,
     /// Named arguments.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -582,20 +567,6 @@ pub struct NotShared {
     pub path: String,
     /// Why, such as a symbolic link.
     pub reason: Message,
-}
-
-/// An invitation not yet used.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct InvitationEntry {
-    /// Its ID, for `CancelInvitation`.
-    pub id: String,
-    /// Whom it is for: a new person's name, or the person of a new
-    /// computer or backup machine.
-    pub who: String,
-    /// Whether it is for a backup machine.
-    pub custodian: bool,
-    /// When it expires, RFC 3339.
-    pub expires: String,
 }
 
 /// A person of the roster.
@@ -776,12 +747,12 @@ pub struct Suggestion {
     /// Whether it is this person's.
     #[serde(default)]
     pub mine: bool,
-    /// What it changes, file by file: a rename is one file (ADR 0075).
+    /// What it changes, file by file: a rename is one file (ADR 0076).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub files: Vec<SuggestedFile>,
 }
 
-/// What a suggestion changes in one file (ADR 0075).
+/// What a suggestion changes in one file (ADR 0076).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SuggestedFile {
     /// Its path in the group's folder; for a rename, the new one.
@@ -817,7 +788,7 @@ pub enum FileChange {
     Renamed,
 }
 
-/// A suggestion of this person that was decided (ADR 0075): which of its
+/// A suggestion of this person that was decided (ADR 0076): which of its
 /// files were accepted and which declined, by whom, and why.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Outcome {

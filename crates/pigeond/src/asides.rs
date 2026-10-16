@@ -20,8 +20,7 @@ pub const KEEP_SECONDS: i64 = 10 * 60;
 /// A complete-enough writer scan: unreadable processes are unsafe when
 /// another user could write the inode (07 §7.5 step 5).
 pub(crate) fn writers_clear(st: &pigeon_sys::fs::Stat) -> bool {
-    let scan = pigeon_sys::writers::scan(st.id);
-    scan.is_clear() && (scan.unreadable == 0 || st.mode & 0o022 == 0)
+    pigeon_sys::writers::scan(st.id).clear_for(st)
 }
 
 fn source(e: &Entry) -> Result<PathBuf, String> {

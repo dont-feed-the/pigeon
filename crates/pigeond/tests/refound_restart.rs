@@ -189,8 +189,7 @@ fn a_backup_rejoins_and_restarts_without_recopying_its_objects() {
         let answer = pigeon(&lap, &["refound", folder.to_str().unwrap(), "--yes"]);
         assert!(said(&answer, "refounded", "group").is_some(), "{answer:?}");
         let new = git(&folder, &["rev-list", "--max-parents=0", "main"]);
-        let answer = pigeon(&lap, &["invite", "--backup-machine", "vault"]);
-        let code = said(&answer, "invitation", "code").unwrap();
+        let code = invitation(&lap);
         let _ = pigeon(
             &vault,
             &[
@@ -198,13 +197,17 @@ fn a_backup_rejoins_and_restarts_without_recopying_its_objects() {
                 "--backup-machine",
                 &code,
                 path.to_str().unwrap(),
+                "--name",
+                "vault",
+                "--person",
+                "ana",
                 "--yes",
             ],
         );
         assert_crashed(&mut vault);
         assert!(path.join("pigeon/in-place.json").exists(), "{point}");
         drop(vault);
-        // No inviter is available during replay; a spent invitation is
+        // No admitter is available during replay; the invitation is
         // neither needed nor sent again by the restarted daemon.
         drop(lap);
         let vault = start(&root, sockets.path(), "vault");

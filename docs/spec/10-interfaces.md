@@ -17,15 +17,15 @@ result, progress events then a result, or a `Problem` (§10.6).
 | `Status {path?, not_shared}` | `pigeon status [PATH] [--not-shared]` | Home; the folder view's *Not shared* list | [06](06-status.md), [07 §7.9](07-capture-and-install.md) |
 | `Health` | — | Home's headline, current and older counts, timestamped capacity and queues, suggestions and repair epochs | [12 §12.2](12-observability.md) |
 | `Create {name, folder, k, device_name, person?}` | `pigeon create NAME [--person NAME]` | Welcome → Create (*Your name*) | [04 §4.1](04-roster-and-authority.md) |
-| `Invite {person, admin, custodian, name?}` | `pigeon invite [--admin] PERSON`, `pigeon invite --backup-machine [NAME]` | People → Invite someone | [09 §9.6](09-network-and-joining.md) |
-| `Join {invitation, folder, keep, name?}` | `pigeon join INVITATION [FOLDER] [--name NAME]` | Welcome → Join | [09 §9.6](09-network-and-joining.md) |
+| `Invite` | `pigeon invite` | People → Invite | [09 §9.6](09-network-and-joining.md) |
+| `Join {invitation, folder, keep, name?, person?, existing, custodian}` | `pigeon join INVITATION [FOLDER] [--person NAME] [--name NAME] [--backup-machine]` | Welcome → Join | [09 §9.6](09-network-and-joining.md) |
 | `Keep {folder}` · `Evict {folder, confirmed}` · `FreePreview {folder}` | `pigeon keep PATH` · `pigeon free PATH [--yes]` | Files → *Keep on this computer* · *Free up space*, confirmed | [08 §8.5](08-custody-loops.md) |
 | `Drop {path, confirmed}` | `pigeon free --without-checking PATH` | — (CLI only, ux.md §2.2) | [08 §8.7](08-custody-loops.md) |
 | `History {path}` | `pigeon history PATH` | a file's page | [05](05-catalogue-and-names.md) |
 | `View {path, version \| group}` | `pigeon view PATH [--version N \| --group]` | *Open a copy*, *Open Paul's version* | [07 §7.6](07-capture-and-install.md) |
 | `Restore {path, version \| at}` | `pigeon restore PATH [--version N \| --at TIME]` | *Restore this version*, Deleted files | [05 §5.1](05-catalogue-and-names.md) |
 | `Deleted {path?}` | `pigeon deleted [PATH]` | Files → Deleted files | [05 §5.1](05-catalogue-and-names.md) |
-| `Proposals` · `Accept {proposal, override?}` · `Reject {proposal, note?}` · `DecideFiles {proposal, paths, accept, note?, override?}` | `pigeon suggestions` · `pigeon accept ID [FILE…] [--override REASON]` · `pigeon decline ID [FILE…] [--note TEXT]` | Suggestions | [04 §4.5, §4.6](04-roster-and-authority.md), ADR 0075 |
+| `Proposals` · `Accept {proposal, override?}` · `Reject {proposal, note?}` · `DecideFiles {proposal, paths, accept, note?, override?}` | `pigeon suggestions` · `pigeon accept ID [FILE…] [--override REASON]` · `pigeon decline ID [FILE…] [--note TEXT]` | Suggestions | [04 §4.5, §4.6](04-roster-and-authority.md), ADR 0076 |
 | `Conflicts` · `Resolve {path, choice}` | `pigeon conflicts` · `pigeon resolve PATH --take-group \| --keep-copy DEST \| --suggest-again` | Suggestions → Yours, Home | [07 §7.6](07-capture-and-install.md) |
 | `People` · `Machines` | `pigeon people` · `pigeon machines` | People & machines | [04 §4.2](04-roster-and-authority.md) |
 | `RemoveDevice {name}` · `Leave` | `pigeon remove-computer NAME` · `pigeon leave` | *I lost a computer* · Settings | [09 §9.7](09-network-and-joining.md) |
@@ -48,8 +48,8 @@ result, progress events then a result, or a `Problem` (§10.6).
   verbs ux.md's (`free`, `erase`, `decline`); renaming either is an
   interface change. `Accept {override}` is Force, its reason the
   `Pigeon-Force:` trailer ([04 §4.6](04-roster-and-authority.md)) **[no ADR: verb]**.
-- `pigeon held`, `settings`, `leave`, `erase --cancel` and `invite --list |
-  --cancel ID` complete ux.md §7 **[no ADR: verbs]**.
+- `pigeon held`, `settings`, `leave` and `erase --cancel` complete ux.md §7
+  **[no ADR: verbs]**.
 - `pigeond` answers `Hello` with its version; a CLI of another version
   refuses with `version-mismatch`.
 
@@ -89,17 +89,21 @@ signed history. Evidence: [folder-rules-5](../reports/folder-rules-5.md).
   definitions. Result on stdout; messages and progress on stderr, headline
   then detail (ux.md §7); colour and bars only on a terminal, never alone.
 - **Completion.** `COMPLETE=SHELL pigeon` prints the script a shell's
-  startup file sources (zsh, bash, fish, elvish, PowerShell); the shell then
+  startup file sources (zsh, bash, fish, elvish, PowerShell).
+  `pigeon completions SHELL` prints the same script so startup files from
+  earlier versions continue to work; the shell then
   runs `pigeon` with `COMPLETE` set, and it answers from the same
   definitions, with the values `pigeond` lists: suggestions, held batches,
-  invitations, the group's other machines, settings and their choices. A
+  the group's other machines, settings and their choices. A
   daemon that does not answer within half a second gives no values.
 - **`--json`** on every command: the response on stdout, problems on stderr.
   Scripts rely on `--json` and problem codes, never on wording.
 - **Questions.** `erase`, `accept --override`, `refound`, `recover`, `free
   --without-checking`, `remove-computer`, `leave` and a held mass deletion
   ask first; without a terminal they need `--yes`; `--no-input` fails with
-  `needs-confirmation`.
+  `needs-confirmation`. `join` asks for what its line lacks (09 §9.6), and
+  whether to join a person of the group (`person-exists` without a
+  terminal; `--yes` joins them).
 - **Exit codes:** 0 success, 1 a `Problem`, 2 usage. `pigeon status` exits 0
   whatever the headline; scripts read `"level": "needs-you" | "not-safe" |
   "not-checked" | "working" | "safe"`.
@@ -116,9 +120,9 @@ in a task of its own that runs to its end even when the browser leaves, as
 on the socket, and an SSE headline; Files lists the top-level folders (`Folders`) with *Keep on this
 computer* or *Free up space*; Settings changes `language` and
 `notifications` (`GetSettings`, `SetSettings`, also `pigeon settings`), a
-new language showing at once; People & machines invites a person or a
-backup machine and removes a machine, asking again first; *Accept*,
-*Decline*, keep, free, *Save*, *Invite* and *Remove* are `POST`s carrying
+new language showing at once; People & machines shows the line that joins
+the group (`Invite`), with *Copy*, and removes a machine, asking again
+first; *Accept*, *Decline*, keep, free, *Save* and *Remove* are `POST`s carrying
 a per-session form token. A folder's page lists its files (`Files`), a file's page
 its versions (`History`) with *Restore this version* (`Restore`);
 Deleted files lists what `main` deleted (`Deleted`), each with *Restore*.
@@ -138,8 +142,6 @@ Times to come read as local times ("until 14:38", "expires tomorrow at
 09:00") and sizes as "29.3 GB", in the person's language.
 People & machines lists the people first (`People`, also `pigeon people`);
 `pigeon deleted` lists Deleted files.
-`pigeon invite --list` and `--cancel ID` (`Invitations`, `CancelInvitation`)
-show and withdraw the invitations not yet used.
 Home lists the held deletions (`Held`) with *Delete for everyone*, asked
 again, and *Bring them back* (`ReleaseHeld`); Settings has *Leave the
 group*, asked again (`Leave`).
@@ -218,14 +220,14 @@ An error that reaches a person is a **Problem**:
 
 ```json
 {
-  "code": "invite-expired",
-  "message": {"id": "problem-invite-expired", "args": {"until": "2026-10-12T14:10:00+02:00", "inviter": "Paul"}},
-  "hint": {"id": "hint-ask-new-invitation", "args": {"inviter": "Paul", "person": "Martine"}},
-  "details": "join: inviter answered Refused(invite-expired)"
+  "code": "inviter-offline",
+  "message": {"id": "problem-inviter-offline", "args": {"inviter": "Paul"}},
+  "hint": {"id": "hint-inviter-offline", "args": {"inviter": "Paul"}},
+  "details": "join: no admitter answered"
 }
 ```
 
-- `code`: stable, public kebab-case, shown as `P-INVITE-EXPIRED` (ux.md §7);
+- `code`: stable, public kebab-case, shown as `P-INVITER-OFFLINE` (ux.md §7);
   [`docs/problems.md`](../problems.md) documents each, with its English
   message and when it is raised (`docs_problems_lists_every_code`).
 - `message` and `hint`: Fluent ids and arguments rendered at the edge
@@ -234,8 +236,9 @@ An error that reaches a person is a **Problem**:
   operation, the object, a failed call's command, status and stderr tail.
 - Only the request layer of `pigeond` turns crate errors into Problems.
 
-Codes used: `invite-expired`, `invite-used`, `invite-unknown`,
-`invite-not-allowed`, `inviter-offline`, `not-in-group`, `not-allowed`,
+Codes used: `invite-unknown`, `already-in-group`, `in-another-group`,
+`person-exists`, `invite-not-allowed`, `inviter-offline`, `not-in-group`,
+`not-allowed`,
 `needs-confirmation`, `backup-machine-needs-linux` (§10.7), `disk-full`
 and `no-capacity` ([08 §8.9](08-custody-loops.md)), `commit-unsigned`,
 `commit-forged`, `commit-unknown-signer`, `commit-not-allowed`,
@@ -254,7 +257,7 @@ first build adds **[no ADR]**: `usage` (exit code 2), `unknown-computer`,
 
 ## 10.7 Checks before acting
 
-- `pigeon join` with a custodian invitation, and `pigeon create` for a
+- `pigeon join --backup-machine`, and `pigeon create` for a
   backup machine, are refused except on Linux with systemd
   (`backup-machine-needs-linux`, ADR 0032).
 - `pigeon doctor` checks and explains: `pigeond` running and supervised; git
@@ -281,7 +284,7 @@ outside the shared folder, or explains that the proposal deletes that path.
 Review does not adopt the proposal or replace accepted bytes. The web uses
 a checked POST before downloading the copy.
 
-The Suggestions page (ADR 0075) groups the suggestions this person
+The Suggestions page (ADR 0076) groups the suggestions this person
 decides, their own, and the others'. Each lists its files with what
 changes in each, in words and sizes, and *Review* for each file still
 there afterwards. On one this person decides every file has a checkbox,

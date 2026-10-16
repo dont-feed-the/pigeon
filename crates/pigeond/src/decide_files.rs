@@ -1,4 +1,4 @@
-//! Deciding a suggestion file by file (ADR 0075, 04 §4.5):
+//! Deciding a suggestion file by file (ADR 0076, 04 §4.5):
 //! `pigeon accept ID PATH…` accepts the files named and declines the
 //! others, `pigeon decline ID PATH…` the reverse, in one decision, which
 //! closes the proposal. Each path must be one of the proposal's; a rename
@@ -150,7 +150,7 @@ async fn chosen(
     Ok(out)
 }
 
-/// Commits the decision on some files of `p` (ADR 0075): `accepted` taken,
+/// Commits the decision on some files of `p` (ADR 0076): `accepted` taken,
 /// the others declined with `note`.
 async fn part_now(
     d: &Daemon,

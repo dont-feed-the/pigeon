@@ -51,8 +51,9 @@ pub fn archive(raw: &[u8]) -> Option<Archive> {
     })
 }
 
-/// A new group's roster, preserving the old group's folder boundaries.
-pub fn roster(old: &Roster, me: &DeviceId) -> Option<Roster> {
+/// A new group's roster, preserving the old group's folder boundaries,
+/// with its own `invitation`: the old one stays the old group's.
+pub fn roster(old: &Roster, me: &DeviceId, invitation: &str) -> Option<Roster> {
     let device = old.devices.get(me)?.clone();
     if device.role == Role::Recovery {
         return None;
@@ -80,6 +81,7 @@ pub fn roster(old: &Roster, me: &DeviceId) -> Option<Roster> {
         devices: BTreeMap::from([(me.clone(), device)]),
         removed: BTreeMap::new(),
         folders,
+        invitation: invitation.to_owned(),
         ..old.clone()
     };
     new.validate().ok()?;

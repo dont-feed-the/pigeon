@@ -34,13 +34,14 @@ fn no_sheet_is_signed_while_no_backup_machine_answers() {
             "Alice",
         ],
     );
-    let invitation = pigeon(&alice, &["invite", "Bob"]);
-    let ticket = said(&invitation, "invitation", "code").unwrap();
+    let ticket = invitation(&alice);
     pigeon(
         &bob,
         &[
             "join",
             &ticket,
+            "--person",
+            "Bob",
             root.join("bob-files").to_str().unwrap(),
             "--name",
             "Bob",

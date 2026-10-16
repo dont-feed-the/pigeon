@@ -175,8 +175,11 @@ fn every_problem_has_a_message_and_ids_are_kebab_case() {
             );
         }
     }
-    assert_eq!(ids::display_code("invite-expired"), "P-INVITE-EXPIRED");
-    assert_eq!(ids::hint_id("invite-expired"), Some("hint-invite-expired"));
+    assert_eq!(ids::display_code("inviter-offline"), "P-INVITER-OFFLINE");
+    assert_eq!(
+        ids::hint_id("inviter-offline"),
+        Some("hint-inviter-offline")
+    );
     assert_eq!(ids::hint_id("not-allowed"), None);
 }
 
@@ -220,7 +223,7 @@ fn a_failed_save_names_its_cause_in_plain_words() {
 
 #[test]
 fn a_problem_message_round_trips_as_json() {
-    let json = r#"{"id":"problem-invite-expired","args":{"until":"2026-10-12T14:10:00+02:00"}}"#;
+    let json = r#"{"id":"problem-person-exists","args":{"person":"Laurent"}}"#;
     let msg: Message = serde_json::from_str(json).unwrap();
     assert_eq!(check(&msg), Ok(()));
     assert_eq!(serde_json::to_string(&msg).unwrap(), json);
@@ -337,28 +340,6 @@ fn deadlines_ages_and_freed_files_read_as_words() {
     let now = pigeon_proto::time::parse_rfc3339("2026-10-16T10:00:00Z").unwrap();
     let r =
         render::Renderer::new(Catalogue::new(&"en".parse().unwrap(), false), now).with_offset(utc);
-    let invitation = pigeon_proto::api::InvitationEntry {
-        id: "inv-e838".into(),
-        who: "Ana".into(),
-        custodian: false,
-        expires: "2026-10-17T13:35:00Z".into(),
-    };
-    assert_eq!(
-        r.invitation(&invitation),
-        "Invitation for Ana, expires tomorrow at 13:35."
-    );
-    assert_eq!(
-        r.invitation_row(&invitation),
-        "inv-e838: for Ana, expires tomorrow at 13:35"
-    );
-    let expired = proto(
-        "problem-invite-expired",
-        &[("until", "2026-10-15T09:00:00Z")],
-    );
-    assert_eq!(
-        r.text(&expired),
-        "This invitation has expired (it was valid until 15 October at 09:00)."
-    );
     let held = pigeon_proto::api::HeldEntry {
         id: "h1".into(),
         reason: proto("held-top-folder", &[("folder", "Photos")]),

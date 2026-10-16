@@ -46,14 +46,15 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
         ],
     );
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
-    let invitation = pigeon(&lap, &["invite", "Bob"]);
-    let code = said(&invitation, "invitation", "code").unwrap();
+    let code = invitation(&lap);
     let other = root.join("bob-files");
     let joined = pigeon(
         &bob,
         &[
             "join",
             &code,
+            "--person",
+            "Bob",
             other.to_str().unwrap(),
             "--name",
             "bob-laptop",
@@ -206,13 +207,14 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
         "{selected:?}"
     );
     let cara = start(&root, sockets.path(), "cara");
-    let invited = pigeon(&lap, &["invite", "Cara"]);
-    let code = said(&invited, "invitation", "code").unwrap();
+    let code = invitation(&lap);
     let joined = pigeon(
         &cara,
         &[
             "join",
             &code,
+            "--person",
+            "Cara",
             root.join("cara-files").to_str().unwrap(),
             "--name",
             "cara-laptop",

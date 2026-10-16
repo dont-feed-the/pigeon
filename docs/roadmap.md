@@ -153,7 +153,7 @@ Exit: the budgets are measured in CI.
 - models-full stays green on both runners for seven nights in a row.
 - The lab passes a 72-hour soak.
 - Every v0.N upgrades with its data (ADR 0048).
-- Joining and signing get a security review (ADRs 0007, 0017).
+- Joining and signing get a security review (ADRs 0007, 0075).
 - The user guide, man pages and completions are written.
 - `v1.0.0-rc.1` is tagged. `v1.0.0` follows after two weeks of dogfood with
   no data loss and no unexplained *Needs you*.
@@ -166,7 +166,6 @@ These come in v1.1:
 - the status icon (ADR 0029);
 - macOS backup machines and NAS packages (ADR 0032);
 - phones as viewers;
-- short codes with a PAKE (ADR 0017);
 - a placement planner (ADR 0003);
 - per-file freeing (ADR 0031).
 

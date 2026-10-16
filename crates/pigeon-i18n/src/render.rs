@@ -245,40 +245,6 @@ impl Renderer {
         self.cat.format(&msg)
     }
 
-    /// A pending invitation: who it is for, and when it expires.
-    pub fn invitation(&self, i: &pigeon_proto::api::InvitationEntry) -> String {
-        let id = if i.custodian {
-            "invitation-for-backup"
-        } else {
-            "invitation-for"
-        };
-        let msg = crate::Message::new(id)
-            .arg("who", i.who.as_str())
-            .arg("expires", self.expires(&i.expires));
-        self.cat.format(&msg)
-    }
-
-    /// A pending invitation for `pigeon invite --list`: also its ID, which
-    /// `--cancel` takes.
-    pub fn invitation_row(&self, i: &pigeon_proto::api::InvitationEntry) -> String {
-        let id = if i.custodian {
-            "invitation-row-backup"
-        } else {
-            "invitation-row"
-        };
-        let msg = crate::Message::new(id)
-            .arg("id", i.id.as_str())
-            .arg("who", i.who.as_str())
-            .arg("expires", self.expires(&i.expires));
-        self.cat.format(&msg)
-    }
-
-    /// An expiry time as `expires` words it.
-    fn expires(&self, at: &str) -> String {
-        pigeon_proto::time::parse_rfc3339(at)
-            .map_or_else(|| at.to_owned(), |t| self.deadline("expires", t))
-    }
-
     /// A person of the roster, with their machines.
     pub fn person(&self, p: &pigeon_proto::api::PersonEntry) -> String {
         let role = if p.admin {
@@ -476,13 +442,6 @@ impl Renderer {
             Response::Machines { machines, .. } => {
                 (machines.iter().map(|m| self.machine(m)).collect(), false)
             }
-            Response::Invitations { invitations } if invitations.is_empty() => {
-                (vec![self.id("invitations-none")], false)
-            }
-            Response::Invitations { invitations } => (
-                invitations.iter().map(|i| self.invitation_row(i)).collect(),
-                false,
-            ),
             Response::Held { held } if held.is_empty() => (vec![self.id("held-none")], false),
             Response::Held { held } => (held.iter().map(|h| self.held(h)).collect(), false),
             Response::People { people } => (people.iter().map(|p| self.person(p)).collect(), false),

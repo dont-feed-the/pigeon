@@ -158,7 +158,7 @@ jobs:
             sudo journalctl -u pigeond -n 100 --no-pager
             exit 1
           }
-          test "$(stat -c %U /var/lib/pigeon/device-key)" = pigeon
+          test "$(sudo stat -c %U /var/lib/pigeon/device-key)" = pigeon
           sudo sh "$p/bin/pigeon-install" --system --prefix "$p" --uninstall
           test ! -d "$p/bin"
           sudo test -s /var/lib/pigeon/device-key

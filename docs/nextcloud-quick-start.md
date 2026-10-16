@@ -133,20 +133,19 @@ export CONTROL_SOCKET="$HOME/.pigeon/control/run/pigeond.sock"
 export CUSTODIAN_SOCKET="$HOME/.pigeon/custodian/run/pigeond.sock"
 ```
 
-Allow a few seconds for startup. Create the group through the control peer,
-then make a one-time invitation for its first custodian:
+Allow a few seconds for startup. Create the group through the control peer:
 
 ```sh
 PIGEON_SOCKET="$CONTROL_SOCKET" pigeon create Family "$HOME/.pigeon/control-files" --k 1 --name server-control
-PIGEON_SOCKET="$CONTROL_SOCKET" pigeon invite --backup-machine server-custodian
 ```
 
-The invitation prints a `pgn1-…` code. Copy that complete code into the command
-below, replacing `PASTE_THE_INVITATION_CODE`. Run it **on this same server**,
-this time addressing the custodian daemon:
+It prints the group's line to share, which ends with a `pgn2-…` code. Copy that
+complete code into the command below, replacing `PASTE_THE_INVITATION_CODE`.
+Run it **on this same server**, this time addressing the custodian daemon; it
+joins as a backup machine of your own person:
 
 ```sh
-PIGEON_SOCKET="$CUSTODIAN_SOCKET" pigeon join --backup-machine 'PASTE_THE_INVITATION_CODE' "$HOME/.pigeon/storage.git"
+PIGEON_SOCKET="$CUSTODIAN_SOCKET" pigeon join --backup-machine 'PASTE_THE_INVITATION_CODE' "$HOME/.pigeon/storage.git" --name server-custodian --person "$USER" --yes
 PIGEON_SOCKET="$CONTROL_SOCKET" pigeon machines
 ```
 
@@ -355,7 +354,7 @@ that uploaded it sees its own saved version while other clients see the accepted
 group version. Accept the suggestion to let the group receive the change.
 
 For each additional person, add a separate personal control peer on this server,
-join it to the group with an invitation for that person, and configure their own
+join it to the group with the group's line, giving that person's name, and configure their own
 bridge account. They can share this custodian through `storage_socket`. Sharing
 Alice's login would make everyone's apps Alice's Pigeon devices. See the
 [account setup reference](nextcloud-bridge.md#build-and-configure).
@@ -380,9 +379,9 @@ Keep your backup outside this server. If you move the content pool with
 `content_dir`, include it too. Save a recovery sheet securely using
 `PIGEON_SOCKET="$CONTROL_SOCKET" pigeon recovery-sheet`.
 
-To add a custodian on another machine later, make another invitation with
-`PIGEON_SOCKET="$CONTROL_SOCKET" pigeon invite --backup-machine` and use its
-join command on that machine. The [Pigeon user guide](guide.md#use-it-with-other-people)
+To add a custodian on another machine later, print the group's line with
+`PIGEON_SOCKET="$CONTROL_SOCKET" pigeon invite` and run it on that machine
+with `--backup-machine` at its end. The [Pigeon user guide](guide.md#use-it-with-other-people)
 describes ordinary peer and backup-machine setup.
 
 ## If something does not work

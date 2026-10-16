@@ -10,8 +10,8 @@ use hegel::TestCase;
 use hegel::generators as gs;
 use pigeon_proto::api::{
     Choice, DeletedFile, Divergence, FileChange, FileEntry, Folder, FreePreview, HeldChoice,
-    HeldEntry, InvitationEntry, Level, Machine, Outcome, PersonEntry, Setting, State, StatusReport,
-    SuggestedFile, Suggestion, VersionStatus,
+    HeldEntry, Level, Machine, Outcome, PersonEntry, Setting, State, StatusReport, SuggestedFile,
+    Suggestion, VersionStatus,
 };
 use pigeon_proto::stream::{Refusal, StreamAnswer, StreamHeader};
 use pigeon_proto::{Arg, Envelope, LineDecoder, Message, Problem, Request, Response, encode};
@@ -67,17 +67,15 @@ fn request(tc: &TestCase) -> Request {
             device_name: text(tc),
             person: maybe_text(tc),
         },
-        3 => Request::Invite {
-            person: text(tc),
-            admin: flag(tc),
-            custodian: flag(tc),
-            name: maybe_text(tc),
-        },
+        3 => Request::Invite,
         4 => Request::Join {
             invitation: text(tc),
             folder: maybe_text(tc),
             keep: flag(tc),
             name: maybe_text(tc),
+            person: maybe_text(tc),
+            existing: flag(tc),
+            custodian: flag(tc),
         },
         5 => Request::Keep { folder: text(tc) },
         6 => Request::Evict {
@@ -106,10 +104,6 @@ fn request(tc: &TestCase) -> Request {
         },
         31 => Request::Resume,
         32 => Request::People,
-        33 => Request::Invitations,
-        34 => Request::CancelInvitation {
-            invitation: text(tc),
-        },
         35 => Request::Leave,
         36 => Request::Held,
         41 => Request::AllowDebug { peer: text(tc) },
@@ -293,16 +287,6 @@ fn response(tc: &TestCase) -> Response {
                 })
                 .collect(),
             copies: flag(tc).then(|| tc.draw(gs::integers::<u32>())),
-        },
-        18 => Response::Invitations {
-            invitations: (0..tc.draw(gs::integers::<u8>().max_value(3)))
-                .map(|_| InvitationEntry {
-                    id: text(tc),
-                    who: text(tc),
-                    custodian: flag(tc),
-                    expires: text(tc),
-                })
-                .collect(),
         },
         19 => Response::Held {
             held: (0..tc.draw(gs::integers::<u8>().max_value(3)))

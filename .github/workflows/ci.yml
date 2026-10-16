@@ -179,12 +179,16 @@ jobs:
           restore-keys: rust-${{ matrix.os }}-
       - name: the pinned toolchain (rust-toolchain.toml)
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
+      - name: cargo-nextest at its pinned version
+        uses: ./.github/actions/nextest
       - name: formatted with rustfmt
         run: cargo fmt --all --check
       - name: clippy without warnings
         run: cargo clippy --workspace --all-targets --features pigeond/tokio-console --locked -- -D warnings
       - name: tests, laws and the git-annex contract tests (13 §13.6)
-        run: cargo test --workspace --locked --no-fail-fast
+        run: cargo nextest run --workspace --locked
+      - name: doc tests, which nextest does not run
+        run: cargo test --workspace --locked --doc
       - name: relay discovery and transfers on Linux
         if: runner.os == 'Linux'
         env:
@@ -283,6 +287,8 @@ jobs:
           restore-keys: rust-lab-${{ matrix.os }}-
       - name: the pinned toolchain (rust-toolchain.toml)
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
+      - name: cargo-nextest at its pinned version
+        uses: ./.github/actions/nextest
       - name: the first build of the slice, and the lab build's seams (13 §13.12)
         run: |
           cargo build -p pigeon -p git-annex-p2p-iroh --locked
@@ -291,23 +297,18 @@ jobs:
       - name: this shard's daemons-on-one-host tests
         env:
           SHARD: ${{ matrix.shard }}
-        # Seconds on ubuntu-24.04 (run 38843601664): held 386; suggestions
-        # 254, unsettled 21, restore 16, view 8, drop 7; people 198, resolve
-        # 152; slice 161, leave 85, refound 55; status_pending is newer. Every
-        # lab test is in a shard. Recovery, capacity and interface regressions
-        # join these shards rather than starting another workflow.
+        # The lab tests of pigeond are the test files that start with
+        # `#![cfg(feature = "lab")]`. nextest deals them out across the four
+        # shards one test at a time (`slice`, not `count`, which splits each
+        # test file on its own), so each runs in exactly one, and runs a
+        # shard's tests in parallel: they must pass under that load. The
+        # word splitting of `$lab` needs bash.
+        shell: bash
         run: |
-          case "$SHARD" in
-            0) tests="held recovery_print status_truth" ;;
-            1) tests="suggestions unsettled restore view drop status_pending capacity folder_rules restore_folder join_retry" ;;
-            2) tests="people resolve health debug_consent bridge suggestion_files" ;;
-            3) tests="slice leave refound backup_history refound_restart recovery_sheet invitation_resume shared" ;;
-          esac
-          all=$(grep -l '^#!\[cfg(feature = "lab")\]' crates/pigeond/tests/*.rs | xargs -n1 basename | sed 's/\.rs$//' | sort)
-          listed=$(echo held recovery_print status_truth suggestions unsettled restore view drop status_pending capacity folder_rules restore_folder join_retry people resolve health debug_consent bridge suggestion_files slice leave refound backup_history refound_restart recovery_sheet invitation_resume shared | tr ' ' '\n' | sort)
-          [ "$all" = "$listed" ] || { echo "::error::a lab test of pigeond is in no shard of ci.yml"; diff <(echo "$all") <(echo "$listed"); exit 1; }
-          args=(); for t in $tests; do args+=(--test "$t"); done
-          cargo test -p pigeond --features lab --locked --no-fail-fast "${args[@]}"
+          lab=$(grep -l '^#!\[cfg(feature = "lab")\]' crates/pigeond/tests/*.rs | xargs -n1 basename | sed 's/\.rs$//')
+          filter=$(printf 'binary(=%s) | ' $lab)
+          cargo nextest run -p pigeond --features lab --locked \
+            --partition "slice:$((SHARD + 1))/4" -E "${filter% | }"
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         if: matrix.shard == 3
         with:

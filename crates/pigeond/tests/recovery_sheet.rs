@@ -84,13 +84,14 @@ fn a_sheet_recovers_an_admin_from_someone_elses_backup() {
     );
     assert!(pigeon(&alice, &["people"]).iter().any(|a| matches!(a,
         Response::People { people } if people.iter().any(|p| p.this_person && p.recovery_recommended))));
-    let invited = pigeon(&alice, &["invite", "Bob"]);
-    let ticket = said(&invited, "invitation", "code").unwrap();
+    let ticket = invitation(&alice);
     let joined = pigeon(
         &bob,
         &[
             "join",
             &ticket,
+            "--person",
+            "Bob",
             fb.to_str().unwrap(),
             "--name",
             "bob-laptop",
