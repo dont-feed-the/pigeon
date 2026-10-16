@@ -310,5 +310,9 @@ fn a_backup_machine_back_from_a_stop_gets_the_new_version() {
     // As in lab S2, the rename precedes the journal/index transition.
     // Require the protected outcome once that in-flight deletion settles.
     until(&lap, State::Protected, &all);
-    assert!(!later.join("b.txt").exists(), "freed file reappeared");
+    assert!(
+        !later.join("b.txt").exists(),
+        "freed file reappeared\n{}",
+        logs(&all)
+    );
 }
