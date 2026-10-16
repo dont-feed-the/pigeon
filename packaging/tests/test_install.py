@@ -36,8 +36,8 @@ class Installation(unittest.TestCase):
         # Exercise both supervisors without starting a service on the test host.
         self.commands = self.root / "commands"
         self.commands.mkdir()
-        for name in ("systemctl", "launchctl"):
-            self.executable(self.commands / name, "exit 0")
+        self.executable(self.commands / "systemctl", "exit 0")
+        self.executable(self.commands / "launchctl", '[ "$1" != print ] || exit 113')
         self.env["PATH"] = f"{self.commands}:{os.environ['PATH']}"
         self.release("v0.3.2")
         self.release("v0.3.3")
@@ -187,6 +187,41 @@ class Installation(unittest.TestCase):
                      "StateDirectory=pigeon", "RuntimeDirectory=pigeon", "WantedBy=multi-user.target"):
             self.assertIn(line, result)
         self.assertNotIn("Nice=", result)
+
+    def launch_agent(self, launchctl):
+        """Install the macOS agent against a launchctl stand-in; time passes instantly."""
+        self.executable(self.commands / "uname", "echo Darwin")
+        self.executable(self.commands / "sleep", "exit 0")
+        self.executable(self.commands / "launchctl", launchctl)
+        return subprocess.run(
+            ["sh", str(PACKAGING / "pigeon-service"), "--prefix", "/opt/pigeon"],
+            env=self.env, capture_output=True, text=True, timeout=30,
+        )
+
+    def test_agent_waits_until_launchd_has_unloaded_the_old_job(self):
+        state = self.root / "launchd"
+        state.mkdir()
+        # launchd keeps the job for three more polls after bootout returns, and
+        # refuses to bootstrap it until then, as on a real Mac.
+        result = self.launch_agent(f"""
+            cd "{state}"
+            case $1 in
+              bootout) echo 3 > teardown ;;
+              print) n=$(cat teardown); [ "$n" -gt 0 ] || exit 113; echo $((n - 1)) > teardown ;;
+              bootstrap) [ "$(cat teardown)" = 0 ] || {{ echo "Bootstrap failed: 5: Input/output error" >&2; exit 5; }}
+                         touch bootstrapped ;;
+            esac""")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((state / "bootstrapped").exists())
+        agent = plistlib.loads((self.home / "Library/LaunchAgents/org.pigeon.pigeond.plist").read_bytes())
+        self.assertEqual(agent["ProgramArguments"], ["/opt/pigeon/bin/pigeond"])
+
+    def test_agent_gives_up_when_launchd_never_unloads_the_old_job(self):
+        bootstrapped = self.root / "bootstrapped"
+        result = self.launch_agent(f'[ "$1" != bootstrap ] || touch "{bootstrapped}"')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("still runs pigeond ten seconds after stopping it", result.stderr)
+        self.assertFalse(bootstrapped.exists())
 
 
 if __name__ == "__main__":

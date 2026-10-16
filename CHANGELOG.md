@@ -4,7 +4,7 @@ All notable user-visible changes to pigeon are documented here. While the
 version is 0.x, a milestone of the [roadmap](docs/roadmap.md) increments
 the second number, and every other pull request the third.
 
-## 0.5.10 — 2026-10-16
+## 0.5.11 — 2026-10-16
 
 ### Changed
 
@@ -28,6 +28,15 @@ the second number, and every other pull request the third.
   `--backup-machine`, `--list` and `--cancel`, and the `pgn1-` codes. Groups
   made by earlier releases cannot be read by this one: create the group
   again.
+
+## 0.5.10 — 2026-10-16
+
+### Fixed
+
+- `pigeon update` on macOS no longer leaves pigeond stopped. It failed with
+  "Bootstrap failed: 5: Input/output error" when macOS had not yet finished
+  stopping the old pigeond; the update now waits for that, up to ten
+  seconds, before starting the new one.
 
 ## 0.5.9 — 2026-10-16
 
