@@ -399,6 +399,7 @@ fn join_problem(code: &str, invitation: &str, person: Option<&str>) -> Response 
             problem(code, &[("person", text(&person))], None)
         }
         "join-history-unverified"
+        | "update-needed"
         | "invite-unknown"
         | "already-in-group"
         | "not-in-group"
