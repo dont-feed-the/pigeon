@@ -56,3 +56,26 @@ logging contracts, real annex transfer and idle corrupted-object scrub
 pass after integration. Native S2/S3 and their filesystem/roster trace checks
 also pass, as do all-target workspace Clippy and structural checks.
 Exact-head PR CI is separate; hardware budgets and elapsed gates remain open.
+
+The v0.6.12 candidate's original daemon shard 1 failed the backup-rejoin
+fixture while walking its absent annex object directory. Its retained
+artifact (12115173627, 7,247,737 bytes, SHA-256
+`63a2aa7d9c6f6fc73c7d1fcd6d86b93539112b1503e60bbd9ad34bd6999b8287`)
+shows both accepted main trees containing metadata only, one valid 37-byte
+laptop object and no backup object. Aggregate Protected had admitted the
+fixture before its named save appeared in accepted history. The exact
+concurrent scheduling interleaving is not controlled-reproduced.
+
+The backup-rejoin setup now waits for `kept.txt` explicitly Protected in
+the original 120 seconds before taking its object snapshot. Every object,
+inode, byte, identity, archive and crash-replay assertion remains unchanged;
+missing objects are still failures. This fixture-only correction is folded
+into the same PR before final validation. The immutable candidate retains
+its original failed result and allows one bounded shard retake; no tag,
+production status verdict or deadline is changed.
+
+The corrected named-file setup passes the native backup-rejoin check across
+all four crash/replay seams in 32.328 seconds, retaining its object inode
+and byte comparisons. Final all-target workspace Clippy and structural
+checks pass after the fixture correction. The earlier PR head's in-flight
+CI/bridge runs were canceled; its final replacement receives fresh checks.
