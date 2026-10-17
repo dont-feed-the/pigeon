@@ -25,6 +25,7 @@ pub mod priority;
 pub mod resources;
 pub mod signal;
 pub mod snapshot;
+pub mod volume;
 pub mod writers;
 
 pub use error::{Error, Result};

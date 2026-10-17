@@ -1,6 +1,6 @@
-//! The two seams of the lab build (13 §13.12), and nothing else: named crash
-//! points, and a root for a backup machine's system directories, so that
-//! several run on one host without mount namespaces (the macOS runners).
+//! Lab build identity and fault seams (13 §13.12): named crash points and
+//! a root for backup system directories. The daemon also permits overlayfs
+//! container fixtures in lab builds, without declaring that driver supported.
 //!
 //! Without the `lab` feature both are inert: [`crash_point`] does nothing and
 //! [`service_root`] is `None`, so a release build behaves as if this module

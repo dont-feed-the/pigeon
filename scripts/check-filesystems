@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Native ext4, btrfs and xfs fixtures check kernel identity, preflight and
+# install primitives using the daemon shard's existing binaries and cache.
+# Small sparse images are filesystem fixtures, never resource-budget data.
+set -euo pipefail
+
+if [[ $(uname -s) != Linux ]]; then
+    echo 'check-filesystems requires Linux loop mounts' >&2
+    exit 1
+fi
+for program in mkfs.ext4 mkfs.btrfs mkfs.xfs mountpoint; do
+    command -v "$program" >/dev/null || {
+        echo "missing native filesystem tool: $program" >&2
+        exit 1
+    }
+done
+root=$(mktemp -d)
+cleanup() {
+    result=$?
+    if mountpoint -q "$root/volume"; then
+        if ! sudo umount "$root/volume"; then
+            echo "could not unmount filesystem fixture; retained $root" >&2
+            exit 1
+        fi
+    fi
+    rm -rf -- "$root"
+    exit "$result"
+}
+trap cleanup EXIT
+mkdir "$root/volume"
+for driver in ext4 btrfs xfs; do
+    image="$root/$driver.img"
+    truncate -s 512M "$image"
+    case "$driver" in
+        ext4) mkfs.ext4 -q -F "$image" ;;
+        btrfs) mkfs.btrfs -q -f "$image" ;;
+        xfs) mkfs.xfs -q -f "$image" ;;
+    esac
+    sudo mount -o loop "$image" "$root/volume"
+    sudo chown "$(id -u):$(id -g)" "$root/volume"
+    echo "native filesystem checks: $driver"
+    TMPDIR="$root/volume" PIGEON_TEST_FILESYSTEM="$driver" \
+        cargo nextest run -p pigeond --test filesystem -p pigeon-sys --lib \
+        --features pigeond/lab --locked \
+        -E 'binary(=filesystem) | test(/^fs::tests::/)'
+    sudo umount "$root/volume"
+    rm "$image"
+done

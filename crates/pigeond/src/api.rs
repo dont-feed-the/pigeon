@@ -454,6 +454,8 @@ fn join_problem(code: &str, invitation: &str, person: Option<&str>) -> Response 
         | "not-allowed"
         | "join-incomplete"
         | "repository-busy"
+        | "file-system-unsupported"
+        | "file-system-unknown"
         | "folder-not-empty" => problem(code, &[], None),
         "not-in-this-build" => problem(code, &[("command", text("join"))], None),
         other => problem("internal-error", &[], Some(other.to_owned())),
@@ -484,6 +486,9 @@ async fn create(d: &Daemon, new: &New<'_>, folder: &Path) -> Response {
         let folder = folder.to_string_lossy();
         return problem("folder-not-absolute", &[("folder", text(&folder))], None);
     }
+    if let Err(code) = crate::filesystem::check(folder, pigeon_core::filter::Role::Laptop) {
+        return problem(code, &[], None);
+    }
     match create_inner(d, new, folder).await {
         Ok(g) => {
             let code = crate::invite::code(d, &g).unwrap_or_default();
@@ -503,6 +508,7 @@ async fn create_inner(d: &Daemon, new: &New<'_>, folder: &Path) -> Result<Arc<Gr
     let (name, k, device_name) = (new.name, new.k, new.device_name);
     std::fs::create_dir_all(folder).map_err(|e| e.to_string())?;
     let folder = std::fs::canonicalize(folder).map_err(|e| e.to_string())?;
+    crate::filesystem::check(&folder, pigeon_core::filter::Role::Laptop)?;
     if folder.join(".git").exists() {
         return Err("the folder already has a repository".into());
     }

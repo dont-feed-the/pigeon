@@ -10,7 +10,8 @@ publish.workspace = true
 
 [features]
 # The seams of the lab build (13 §13.12): named crash points and a root for a
-# backup machine's system directories. A release build never enables it.
+# backup machine's system directories, plus daemon overlayfs fixtures.
+# A release build never enables it.
 lab = []
 
 [dependencies]

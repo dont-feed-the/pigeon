@@ -539,3 +539,14 @@ Background macOS run 39051800511 targets this exact release. The preceding
 v0.6.2 run completed with every workspace, daemon, lab, random-crash and S5
 job green; only its old S3 restore-action assertion failed. Neither result
 is represented as current-source macOS completion or measured M6 budgets.
+
+## Filesystem preflight follow-up
+
+The [filesystem checkpoint](filesystems-7.md) records native volume identity,
+strict role/platform admission, create/join refusal before repository writes,
+doctor diagnostics, and the accepted English/French usability retakes.
+Fourteen focused native checks passed, including preservation of an existing
+binary file on refusal. CI adds actual ext4, btrfs and xfs fixtures to one
+existing daemon shard; their first results remain pending at this checkpoint.
+The reference-tree/HDD budgets, complete cross-group priority queue and
+remaining resource measurements still prevent M6 from closing.

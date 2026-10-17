@@ -41,6 +41,7 @@ pub mod erase_commit;
 pub mod erase_preview;
 pub mod erase_state;
 pub mod evict;
+mod filesystem;
 pub mod fold;
 mod folder_rules;
 pub mod folders;

@@ -676,6 +676,8 @@ problem-recovery-not-received = Aucune machine de sauvegarde n’a reçu la fich
 problem-join-incomplete = Le nouveau groupe a été vérifié, mais la récupération n’a pas pu se terminer. Redémarrez pigeon pour terminer l’opération enregistrée. Votre ancien historique est conservé.
 problem-repository-busy = Ce dépôt contient une mise à jour de fichier inachevée. Laissez pigeon la terminer, ou redémarrez pigeon avant de réessayer la récupération.
 problem-folder-not-empty = Ce dossier contient déjà des fichiers. Choisissez un dossier vide ou nouveau ; pour rejoindre un groupe refondé, choisissez le dossier de son dépôt existant.
+problem-file-system-unsupported = Le système de fichiers de ce dossier ne permet pas à pigeon de travailler en sécurité. Cette vérification ne modifie pas vos fichiers. Choisissez un dossier local sur ext4, btrfs ou xfs sous Linux, ou APFS sous macOS. Les machines de sauvegarde Linux peuvent aussi utiliser ZFS.
+problem-file-system-unknown = pigeon n’a pas pu vérifier le système de fichiers de ce dossier. Vérifiez que le dossier ou son parent est accessible, puis réessayez.
 # Group health from replicated state (ADR 0025).
 web-health = État du groupe
 web-health-current = Fichiers actuels

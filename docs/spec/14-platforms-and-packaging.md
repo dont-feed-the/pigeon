@@ -30,6 +30,14 @@ renames, hard links, and an atomic exclusive rename (`RENAME_NOREPLACE`,
 capture). A backup machine may use any local Linux file system git-annex
 supports (ext4, xfs, btrfs, ZFS): its repository is bare.
 
+Create and join inspect the target or its closest existing parent before
+creating directories or a repository, then recheck the canonical target.
+Linux uses the opened descriptor's native mount ID and its exact mountinfo
+record; macOS uses `fstatfs` and requires `MNT_LOCAL`. Unknown identities
+are refused, never inferred from a pathname. `doctor` checks existing group
+volumes too. The strict policy is `pigeon-core::filesystem`; lab-only
+exceptions are listed in [13 §13.12](13-verification.md).
+
 ## 14.3 git and git-annex (ADRs 0004, 0010, 0069)
 
 - **pigeon's git-annex** (ADR 0069): 10.20261006 with the patches of

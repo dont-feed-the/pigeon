@@ -337,7 +337,11 @@ give the details). The lab build (`--features lab`) adds named crash points
 (`PIGEON_LAB_CRASH=point:n`, as `kill -9`) and a root for a backup
 machine's system directories, which a release build ignores; it says so in
 `doctor`, and its status reports carry `lab = true`, which a release build
-never counts. On `ubuntu-24.04` each custodian has its own mount namespace
+never counts.
+Lab container fixtures may use Linux overlayfs, and simulated Mac custodians
+may use local APFS; these exceptions exist only with the lab feature and
+do not extend the supported release filesystem/role combinations (§14.2).
+On `ubuntu-24.04` each custodian has its own mount namespace
 and loop-mounted ext4 image, over 127.0.0.1 with direct addresses only; on
 `macos-latest` each device's disk is a sparse APFS image (custodians on
 macOS in the lab only, ADR 0032). These runners replace a run on real
@@ -440,6 +444,7 @@ the same way: `pigeond/tests/codecs.rs` and `net_laws.rs`,
 
 | Law | Module | Test | Model mirrored |
 |---|---|---|---|
+| unknown or lookalike drivers never admit; explicit remote evidence overrides listed drivers; exact platform, role and locality bound the supported set (14 §14.2) | `filesystem` | `tests/filesystem.rs` (1000 cases each) | — |
 | more presence observations never lower a state; a second entry for one custodian changes nothing; custodian order is irrelevant; protected exactly when K distinct custodians count (ADRs 0002, 0046); a new holder never lowers a state | `state` | `tests/state.rs` | — |
 | the join is a semilattice with *Safe* as identity and *Needs you* absorbing; the headline of a union is the join; adding an item never lowers it; a version only this computer holds is *Not safe yet* after the grace period, even unreachable | `headline` | `tests/headline.rs` | — |
 | a signed commit verifies to its signer; changing any byte of it never does; signing then cutting the signature off gives the commit back | `sig` | `tests/sig.rs` | — |
