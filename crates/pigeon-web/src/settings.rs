@@ -55,6 +55,7 @@ pub async fn settings(
             section class="card stack" aria-labelledby="settings-resources" {
                 h2 id="settings-resources" { (r.id("web-settings-resources")) }
                 p { (r.id("web-settings-resources-help")) }
+                p { (r.id("web-settings-resources-power-help")) }
                 @for s in rows.iter().filter(|s| s.key.starts_with("resources.")) { (setting(&r, s, &form.0)) }
             }
         }
@@ -117,6 +118,15 @@ pub async fn doctor(State(web): State<Arc<Web>>) -> Html<String> {
 /// the catalogue.
 fn label(r: &Renderer, key: &str, value: &str) -> String {
     match (key, value) {
+        ("resources.full_speed", "") => r.id("setting-none"),
+        (
+            "resources.upload"
+            | "resources.download"
+            | "resources.battery_percent"
+            | "resources.full_speed"
+            | "resources.scrub_window",
+            value,
+        ) => value.to_owned(),
         (_, "auto") => r.id("setting-auto"),
         ("telemetry-device", "off") => r.id("setting-off"),
         ("telemetry-device", name) => name.to_owned(),
@@ -285,6 +295,12 @@ pub async fn save(
             let message = pigeon_i18n::Message::new("web-setting-saved")
                 .arg("key", r.id(&setting_id(&f.key)))
                 .arg("value", label(&r, &f.key, &f.value));
+            vec![r.catalogue().format(&message)]
+        } else if f.key.starts_with("resources.") && matches!(a,
+            pigeon_proto::Response::Problem(problem) if problem.code == "setting-value") {
+            let message = pigeon_i18n::Message::new("web-resource-value-invalid")
+                .arg("key", r.id(&setting_id(&f.key)))
+                .arg("value", f.value.clone());
             vec![r.catalogue().format(&message)]
         } else {
             r.response(a).0

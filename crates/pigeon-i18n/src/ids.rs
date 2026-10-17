@@ -109,6 +109,9 @@ pub const PROBLEMS: &[&str] = &[
 
 /// Every message of the catalogue.
 pub const MESSAGES: &[Entry] = &[
+    e("web-settings-resources-power-help", &[]),
+    e("web-resource-value-invalid", &["key", "value"]),
+    e("setting-none", &[]),
     e("web-settings-resources", &[]),
     e("web-settings-resources-help", &[]),
     e("setting-resources-preset", &[]),

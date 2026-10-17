@@ -35,6 +35,8 @@ mod pause;
 mod people;
 #[path = "tests/recovery.rs"]
 mod recovery;
+#[path = "tests/resources.rs"]
+mod resources;
 #[path = "tests/setup.rs"]
 mod setup;
 #[path = "tests/suggestions.rs"]

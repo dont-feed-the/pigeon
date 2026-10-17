@@ -45,6 +45,12 @@ Queued content rechecks the existing erasure/admission filter at most every
 200 ms and immediately before forwarding. No new authorization rule or
 positive custody proof is introduced.
 
+macOS probes read IOKit power sources and NSProcessInfo low-power mode,
+with a serial Network.framework monitor for expensive/constrained paths.
+The native module and its lifecycle test cross-compile and pass all-target
+Clippy for Apple Silicon; they have not run on a Mac locally. Periodic
+macOS CI and real foreground budgets remain required evidence.
+
 Linux probes reuse D-Bus for UPower, power profiles and NetworkManager,
 with a two-second sampling deadline. Unknown observations use ADR 0037's
 fallback. Linux I/O pressure pauses pending content and subsequent scrub
@@ -59,8 +65,8 @@ without replacing Missing or Needs you; Resume remains a person's pause.
 
 ## Remaining
 
-- Finish macOS power/network probes; protect capture's progress and
-  pause/resume native heavy children safely, including active-time deadlines.
+- Protect capture's progress and pause/resume native heavy children safely,
+  including active-time deadlines.
 - Integrate file quiet/hot-path scheduling, native priorities and supervisor
   behavior. Validate foreground disk contention and read-latency feedback.
 - Measure the reference-tree idle/scan/memory budgets in CI and the E17
@@ -70,3 +76,28 @@ without replacing Missing or Needs you; Resume remains a person's pause.
 
 No 10-minute budget, 30-minute HDD run, 72-hour soak, seven-night result or
 two-week dogfood result is inferred from these finite tests.
+
+
+## Independent settings usability
+
+English and French sessions used real isolated daemon HTTP pages and forms,
+without reading implementation source. They found raw catalogue IDs in
+confirmations, ambiguous full-speed ceilings, missing automatic-resume
+explanation, and CLI-oriented validation errors. Focused router regressions
+cover the observed confirmations and localized validation errors. 99 web
+and translation checks pass after the fixes.
+
+Both focused retakes understood the preserved ceiling, automatic waits and
+web recovery; invalid values left prior settings intact. The remaining
+clock/window questions were clarified to name this computer's clock and
+retain power/metered waits during full-speed windows. These sessions did
+not test JavaScript presentation, visuals, hardware transitions or budgets.
+Original sessions and retakes are recorded in
+[m6-usability-english.md](m6-usability-english.md),
+[m6-usability-english-retake.md](m6-usability-english-retake.md),
+[m6-usability-french.md](m6-usability-french.md), and
+[m6-usability-french-retake.md](m6-usability-french-retake.md).
+
+Nine real git-annex integration tests also passed locally in 35.7 seconds:
+protection, free/keep, returning backup, restores and explicit erasure. This
+finite result does not establish the ten-minute resource budgets or E17.

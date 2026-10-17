@@ -912,7 +912,7 @@ headline-erased-restoration-missing =
 why-erased-restoration-missing = L’effacement précédent couvrait ce contenu. Votre demande de restauration reste enregistrée, mais aucune copie n’est connue pour le moment. Si vous trouvez une copie, réessayez la restauration.
 
 web-settings-resources = Utilisation de cet ordinateur
-web-settings-resources-help = Discret laisse le partage en arrière-plan. Vos réglages détaillés remplacent le préréglage. Les débits sont en octets par seconde ; séparez les plages HH:MM-HH:MM par des virgules.
+web-settings-resources-help = Discret laisse le partage en arrière-plan. Vos réglages détaillés remplacent le préréglage. Les débits sont en octets par seconde ; séparez les plages HH:MM-HH:MM selon l’heure locale de cet ordinateur par des virgules. Les plages à pleine vitesse désactivent le ralentissement automatique ; vos limites d’envoi et de réception restent applicables. Les attentes liées à la batterie et au réseau limité restent applicables pendant ces plages.
 setting-resources-preset = Préréglage
 setting-resources-upload = Envoi maximal (auto ou 2 MB/s)
 setting-resources-download = Réception maximale (auto ou 2 MB/s)
@@ -929,3 +929,8 @@ setting-continue = Continuer
 headline-resource-battery = En attente de courant : cet ordinateur utilise sa batterie.
 headline-resource-metered = En attente d’un réseau sans limite de consommation.
 headline-resource-disk = En attente pendant qu’un autre programme utilise le disque.
+
+setting-none = Aucune
+
+web-settings-resources-power-help = Avec Attendre, les transferts de fichiers attendent sous le seuil de batterie ou en mode économie d’énergie, puis reprennent automatiquement quand les conditions s’améliorent. Les attentes liées au réseau limité prennent aussi fin automatiquement. Reprendre le partage met fin à une pause que vous avez choisie.
+web-resource-value-invalid = « { $value } » ne convient pas pour { $key }. Rien n’a changé. Revenez en arrière et utilisez un choix proposé ou le format indiqué pour ce réglage.
