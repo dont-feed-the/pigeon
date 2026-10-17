@@ -5,7 +5,8 @@
 //! drops it from the machines; the leaver then forgets the group, keeps its
 //! files as plain files without `.git`, and, in no group any more, deletes
 //! its device key. A group whose roster is in a format this release no
-//! longer reads is left at once, as nobody could read its removal.
+//! longer reads still goes by its name, and is left at once, as nobody
+//! could read its removal.
 //!
 //! Needs what `tests/slice.rs` needs: git-annex, and `pigeon` and
 //! `git-annex-p2p-iroh` built next to `pigeond`.
@@ -15,13 +16,24 @@
 mod common;
 
 use common::{SERIAL, dirs, eventually_within, invitation, join, logs, pigeon, said, start, until};
-use pigeon_proto::Response;
 use pigeon_proto::api::State;
+use pigeon_proto::{Arg, Response};
 use std::path::Path;
 
 fn problem(rs: &[Response]) -> Option<String> {
     rs.iter().find_map(|r| match r {
         Response::Problem(p) => Some(p.code.clone()),
+        _ => None,
+    })
+}
+
+/// The group a refusal with `in-another-group` names.
+fn in_another_group(rs: &[Response]) -> Option<String> {
+    rs.iter().find_map(|r| match r {
+        Response::Problem(p) if p.code == "in-another-group" => match p.message.args.get("group") {
+            Some(Arg::Text(t)) => Some(t.clone()),
+            _ => None,
+        },
         _ => None,
     })
 }
@@ -60,8 +72,8 @@ fn a_laptop_leaves_once_a_peer_has_its_removal() {
     let other = root.join("other");
     let second = pigeon(&a1, &["create", "Other", other.to_str().unwrap()]);
     assert_eq!(
-        problem(&second).as_deref(),
-        Some("in-another-group"),
+        in_another_group(&second).as_deref(),
+        Some("Family"),
         "{second:?}"
     );
     assert!(!other.join(".git").exists(), "nothing was written");
@@ -299,7 +311,7 @@ fn in_an_earlier_format(folder: &Path) {
 }
 
 #[test]
-fn a_group_in_an_earlier_roster_format_is_left_at_once() {
+fn a_group_in_an_earlier_roster_format_is_named_and_left_at_once() {
     let _one = SERIAL
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -317,6 +329,14 @@ fn a_group_in_an_earlier_roster_format_is_left_at_once() {
     drop(a1);
     in_an_earlier_format(&fa);
     let a1 = start(&root, s, "a1");
+    let other = root.join("other");
+    let second = pigeon(&a1, &["create", "Other", other.to_str().unwrap()]);
+    assert_eq!(
+        in_another_group(&second).as_deref(),
+        Some("Family"),
+        "{second:?}\n{}",
+        logs(&[&a1])
+    );
     let left = pigeon(&a1, &["leave", "--yes"]);
     assert_eq!(
         said(&left, "left-unreadable", "group").as_deref(),

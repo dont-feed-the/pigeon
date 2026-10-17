@@ -166,3 +166,22 @@ afterward with the successful archives retained. Final Linux CI, lab,
 slice and release checks all passed. The next rollup removes the fixture's
 unnecessary working-index mutation rather than extending the retry or
 removing a lock. Full-model background checks remain separate evidence.
+
+
+## Additional runner capacity: 17 October
+
+The user reports a GitHub Teams limit of 60 concurrent runners. In the
+successful v0.5.16 slice run (38990943017), the serial non-S5 scenarios ran
+from 01:34:08 to 01:46:07 UTC: 11 minutes 59 seconds. The same partition
+blocked v0.6.0 while its other required Linux groups had finished; its
+failed S12/S13 diagnostic checks are recorded in the M5 report.
+
+The slice now divides the live lab catalogue into five disjoint partitions:
+core, crash fixtures, recovery, people and S5. Each partition still runs
+its scenario laws, model, isolation check, real executor and TLC traces.
+The selector checks complete coverage of the live manifest, rejects malformed
+or duplicate IDs, and includes new scenarios automatically. Linux can run all
+five independently; periodic macOS validation retains its serial limit.
+This is a targeted change to a measured serial step, not a measured speedup
+claim. The next actual publication will supply the before/after observation.
+The failed v0.6.0 candidate and the interruption remain in the KPI history.

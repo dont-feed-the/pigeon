@@ -564,3 +564,43 @@ checks before merging. The selection-verification checks also passed.
 The version is set only in this release commit; the final tag workflows
 remain publication gates. These are finite run results, not elapsed
 longitudinal evidence.
+
+
+## v0.6.0 publication stopped by diagnostic checks
+
+The immutable v0.6.0 candidate passed its full Linux CI, lab checks, both
+platform archive builds, S2 and all crash schedules. The remaining slice
+job failed S12 and S13: the CLI did not expose `no-capacity` or
+`commit-unknown-signer`. The actual backup logs recorded capacity deferral
+and refusal of the unknown signing key. This is a diagnostic regression,
+not evidence that the invalid commit was accepted. S13 also reproduced
+with the unchanged candidate on the local real-daemon executor.
+
+Doctor's newly added scrub observations were terminal `Said` responses.
+The CLI correctly stops at the first non-`Progress` answer, so those rows
+hid later findings. They now use continuing progress responses; actual
+problems and the final all-clear retain their existing meanings. The failed
+tag remains unchanged and unpublished. A corrected candidate needs its own
+complete release gates.
+
+
+The corrected diagnostic path then reached S13's later retention assertion.
+The laptop with a deliberately unaccepted local head now fails closed on
+membership, so it can report the previous file as Published while the real
+backups still retain it. S13 now checks both backups' actual annex objects,
+the laptop's exact original text, and that the save after the forgery never
+becomes Protected for the full existing 20-second observation. The original
+pre-forgery Protected check and both backups' signing-key refusals remain.
+The admission and transfer barriers are unchanged; the fixture does not
+require trusting an unaccepted local head to assess current membership.
+
+
+The first complete S13 trace attempt exposed an observer error after the
+content barrier closed: the filesystem observer was asking the production
+transfer-retention API for permission to read its metadata. That API correctly
+refused. The observer now counts only actual, locally present annex objects
+with hashes matching their keys while the barrier is closed. References
+alone do not prove stored bytes, and the observation cannot publish policy,
+fetch contents or permit deletion. The repeated native S13 and its real
+filesystem and roster traces now pass. The 20-second retention observation
+still runs in full; the original unsuccessful observations remain recorded.

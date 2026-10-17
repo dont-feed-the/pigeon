@@ -24,21 +24,28 @@ LINUX_JOBS = {
           | {f"TLA+ models (fast set, shard {n})" for n in range(3)},
     "lab": {f"{group} (ubuntu-24.04)" for group in
             ("E20 E21 E22", "E12-E13 E14 E23", "E15 E15b E18 E24", "E19")},
-    "slice": {f"slice (ubuntu-24.04, {part})" for part in ("rest", "S5")}
+    "slice": {f"slice (ubuntu-24.04, {part})" for part in ("core", "crashes", "recovery", "people", "S5")}
              | {f"S9, 25 random crash schedules (ubuntu-24.04, shard {n})" for n in range(2)},
 }
+
+LEGACY_SLICE = ({"slice (ubuntu-24.04, rest)", "slice (ubuntu-24.04, S5)"}
+                | {f"S9, 25 random crash schedules (ubuntu-24.04, shard {n})" for n in range(2)})
 
 
 def linux_state(name, jobs):
     relevant = [j for j in jobs if "macos" not in j["name"].lower()]
     names = {j["name"].split(" / ")[-1] for j in relevant}
+    required_names = LINUX_JOBS[name]
+    if (name == "slice" and "slice (ubuntu-24.04, rest)" in names
+            and not (names & (LINUX_JOBS["slice"] - LEGACY_SLICE))):
+        required_names = LEGACY_SLICE
     for job in relevant:
         if job["status"] != "completed":
             continue
-        required = job["name"].split(" / ")[-1] in LINUX_JOBS[name]
+        required = job["name"].split(" / ")[-1] in required_names
         if job["conclusion"] != "success" and (required or job["conclusion"] != "skipped"):
             raise RuntimeError(f"{name}'s Linux job failed: {job['name']} ({job['conclusion']})")
-    if not LINUX_JOBS[name] <= names:
+    if not required_names <= names:
         return "waiting for required Linux jobs"
     if any(job["status"] != "completed" for job in relevant):
         return "waiting for Linux jobs"

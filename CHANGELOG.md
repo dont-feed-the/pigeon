@@ -5,6 +5,16 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- `pigeon doctor` continues through backup integrity-check observations to
+  report problems such as unavailable capacity or a refused signing key.
+- A computer still in a group whose roster predates the supported format
+  is told which group when it tries to join, create or recover another:
+  *This computer is already in the group “48h”* instead of an empty name.
+
 ## 0.6.0 — 2026-10-17
 
 ### Added

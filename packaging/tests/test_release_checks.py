@@ -2,6 +2,8 @@
 
 import importlib.machinery
 import importlib.util
+import json
+import re
 import unittest
 from pathlib import Path
 
@@ -20,6 +22,29 @@ def run(name, **overrides):
 
 class Publication(unittest.TestCase):
     """Exact-tag Linux checks gate publication; macOS runs in the background."""
+
+    def test_each_new_slice_partition_is_mandatory_and_matches_the_workflow(self):
+        text = (SCRIPT.parents[1] / ".github/workflows/slice.yml").read_text()
+        partitions = json.loads(re.search(r"scenarios:.*\|\| '([^']+)'", text)[1])
+        expected = {f"slice (ubuntu-24.04, {part})" for part in partitions}
+        self.assertEqual({n for n in MODULE.LINUX_JOBS["slice"] if n.startswith("slice (")}, expected)
+        jobs = [{"name": n, "status": "completed", "conclusion": "success"}
+                for n in MODULE.LINUX_JOBS["slice"]]
+        self.assertEqual(MODULE.linux_state("slice", jobs), "passed")
+        for i in range(len(jobs)):
+            partial = jobs[:i] + jobs[i+1:]
+            self.assertNotEqual(MODULE.linux_state("slice", partial), "passed")
+            for conclusion in ("failure", "cancelled", "skipped"):
+                with self.assertRaisesRegex(RuntimeError, "Linux job failed"):
+                    MODULE.linux_state("slice", partial + [jobs[i] | {"conclusion": conclusion}])
+
+    def test_legacy_rest_is_complete_but_cannot_hide_missing_new_partitions(self):
+        jobs = [{"name": n, "status": "completed", "conclusion": "success"}
+                for n in MODULE.LEGACY_SLICE]
+        self.assertEqual(MODULE.linux_state("slice", jobs), "passed")
+        self.assertNotEqual(MODULE.linux_state("slice", jobs + [{
+            "name": "slice (ubuntu-24.04, core)", "status": "completed", "conclusion": "success"
+        }]), "passed")
 
     def test_old_tags_can_use_complete_linux_jobs_while_macos_is_queued_or_failed(self):
         runs = [run(n, id=i, status="queued", conclusion=None) for i, n in enumerate(sorted(MODULE.REQUIRED), 1)]
