@@ -15,7 +15,7 @@ use crate::group::Group;
 #[serde(deny_unknown_fields)]
 struct VerifiedFile {
     format: u32,
-    paths: BTreeMap<String, ([i128; 9], [String; 3])>,
+    paths: BTreeMap<String, ([i128; 9], [String; 4])>,
 }
 
 fn stamp(stat: Stat) -> [i128; 9] {
@@ -39,7 +39,7 @@ pub struct State {
     paths: Schedule<Stat>,
     due: Option<Instant>,
     near_install: BTreeMap<String, (Stat, Instant)>,
-    verified: BTreeMap<String, ([i128; 9], Entry, Instant)>,
+    verified: BTreeMap<String, ([i128; 9], Entry, String, Instant)>,
     verified_loaded: bool,
 }
 
@@ -53,14 +53,25 @@ impl State {
             .retain(|_, (_, at)| at.elapsed() < Duration::from_secs(3600));
         self.due = None;
         self.verified
-            .retain(|_, (_, _, seen)| seen.elapsed() < Duration::from_secs(3600));
+            .retain(|_, (_, _, _, seen)| seen.elapsed() < Duration::from_secs(3600));
     }
 
     pub(crate) fn verified(&mut self, path: &str, stat: Stat, entry: &Entry) -> bool {
-        let Some((before, version, seen)) = self.verified.get_mut(path) else {
+        let Some((before, version, _, seen)) = self.verified.get_mut(path) else {
             return false;
         };
         if *before != stamp(stat) || version != entry {
+            return false;
+        }
+        *seen = Instant::now();
+        true
+    }
+
+    pub(crate) fn suggested(&mut self, path: &str, stat: Stat, proposal: &str) -> bool {
+        let Some((before, _, captured, seen)) = self.verified.get_mut(path) else {
+            return false;
+        };
+        if captured.is_empty() || *before != stamp(stat) || captured != proposal {
             return false;
         }
         *seen = Instant::now();
@@ -122,42 +133,64 @@ pub(crate) fn load(g: &Group) {
     let Some(file) = std::fs::read(path)
         .ok()
         .and_then(|bytes| serde_json::from_slice::<VerifiedFile>(&bytes).ok())
-        .filter(|file| file.format == 1)
+        .filter(|file| file.format == 2)
     else {
         return;
     };
-    state.verified.extend(
-        file.paths
-            .into_iter()
-            .map(|(path, (stamp, [mode, kind, oid]))| {
-                (path, (stamp, Entry { mode, kind, oid }, Instant::now()))
-            }),
-    );
+    state.verified.extend(file.paths.into_iter().map(
+        |(path, (stamp, [mode, kind, oid, proposal]))| {
+            (
+                path,
+                (stamp, Entry { mode, kind, oid }, proposal, Instant::now()),
+            )
+        },
+    ));
 }
 
-fn save(g: &Group) {
+pub(crate) fn save(g: &Group) {
     let paths = g
         .lock()
         .capture_schedule
         .verified
         .iter()
-        .map(|(path, (stamp, entry, _))| {
+        .map(|(path, (stamp, entry, proposal, _))| {
             (
                 path.clone(),
                 (
                     *stamp,
-                    [entry.mode.clone(), entry.kind.clone(), entry.oid.clone()],
+                    [
+                        entry.mode.clone(),
+                        entry.kind.clone(),
+                        entry.oid.clone(),
+                        proposal.clone(),
+                    ],
                 ),
             )
         })
         .collect();
-    let result = serde_json::to_vec(&VerifiedFile { format: 1, paths })
+    let result = serde_json::to_vec(&VerifiedFile { format: 2, paths })
         .map_err(std::io::Error::other)
         .and_then(|bytes| {
             crate::util::write_private(&g.git_dir.join("pigeon/capture-verified.json"), &bytes)
         });
     if let Err(error) = result {
         tracing::warn!(group = %g.id, %error, "capture-observation-cache-unavailable");
+    }
+}
+
+/// Bind only an actual byte/stat observation to the exact signed entry.
+/// A crash before this binding leaves the suggestion conservatively dirty.
+pub(crate) fn bind_proposal(g: &Group, path: &str, proposal: &str, entry: &Entry) {
+    let Some(wt) = &g.worktree else { return };
+    let Ok(Some(stat)) = pigeon_sys::fs::lstat(&wt.join(path)) else {
+        return;
+    };
+    let mut known = g.lock();
+    let Some((before, captured, bound, _)) = known.capture_schedule.verified.get_mut(path) else {
+        return;
+    };
+    if *before == stamp(stat) && captured == entry {
+        *bound = proposal.to_owned();
     }
 }
 
@@ -177,6 +210,11 @@ pub(crate) async fn checked(g: &Group, paths: &[String], index: &pigeon_core::au
             .iter()
             .map(|path| pigeon_sys::fs::lstat(&wt.join(path)).ok().flatten())
             .collect();
+        // The observed ctime must already be older than a kernel tick
+        // before hashing, so a write during the read cannot reuse that tick.
+        let Ok(epoch) = pigeon_sys::clock::stat_epoch_ns() else {
+            continue;
+        };
         let files: Vec<_> = chunk.iter().map(|path| wt.join(path)).collect();
         let mut args = vec!["annex", "calckey", "--"];
         let Some(names) = files
@@ -194,16 +232,13 @@ pub(crate) async fn checked(g: &Group, paths: &[String], index: &pigeon_core::au
         if keys.len() != chunk.len() {
             continue;
         }
-        let Ok(Some(index_stat)) = pigeon_sys::fs::lstat(&g.git_dir.join("index")) else {
-            continue;
-        };
         for ((path, before), key) in chunk.iter().zip(before).zip(keys) {
             let Some(stat) = before else { continue };
             let Some(entry) = index.get(path) else {
                 continue;
             };
             if !stat.is_regular()
-                || stat.ctime_ns >= index_stat.mtime_ns
+                || stat.ctime_ns >= epoch
                 || (stat.mode & 0o111 != 0) != (entry.mode == "100755")
                 || pigeon_sys::fs::lstat(&wt.join(path)).ok().flatten() != Some(stat)
             {
@@ -217,7 +252,7 @@ pub(crate) async fn checked(g: &Group, paths: &[String], index: &pigeon_core::au
             }
             g.lock().capture_schedule.verified.insert(
                 path.to_owned(),
-                (stamp(stat), entry.clone(), Instant::now()),
+                (stamp(stat), entry.clone(), String::new(), Instant::now()),
             );
         }
     }
@@ -249,4 +284,62 @@ pub(crate) fn delay(groups: &[std::sync::Arc<Group>], interval: Duration) -> Dur
                 .max(Duration::from_millis(20))
         })
         .fold(interval, Duration::min)
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, reason = "native observation-fence regression")]
+    use super::*;
+
+    #[tokio::test]
+    async fn a_verified_observation_does_not_need_a_newer_index_timestamp() {
+        let temp = tempfile::tempdir().unwrap();
+        let env = pigeon_git::GitEnv::default();
+        let git = crate::git::Git::new(temp.path(), env.clone());
+        if git.run(&["annex", "version", "--raw"]).await.is_err() {
+            assert!(std::env::var_os("PIGEON_REQUIRE_GIT_ANNEX").is_none());
+            return;
+        }
+        git.run(&["init", "-q", "-b", "main"]).await.unwrap();
+        git.run(&["config", "user.name", "Observation fixture"])
+            .await
+            .unwrap();
+        git.run(&["config", "user.email", "observation@pigeon"])
+            .await
+            .unwrap();
+        git.run(&["annex", "init", "observation"]).await.unwrap();
+        let g = Group::open(&"a".repeat(40), temp.path(), &env)
+            .await
+            .unwrap();
+        crate::settings::check(&g).await;
+        let file = temp.path().join("notes.bin");
+        std::fs::write(&file, b"verified bytes\n").unwrap();
+        let trace = crate::trace::Tracer::new(temp.path().join("traces"), "observation");
+        crate::capture::capture(&g, "observation", &trace)
+            .await
+            .unwrap();
+        let index = g.git.index().await.unwrap();
+        let stat = pigeon_sys::fs::lstat(&file).unwrap().unwrap();
+        let stamp =
+            std::time::UNIX_EPOCH + Duration::from_nanos(u64::try_from(stat.ctime_ns).unwrap());
+        let index_file = g.git_dir.join("index");
+        std::fs::File::options()
+            .write(true)
+            .open(&index_file)
+            .unwrap()
+            .set_modified(stamp)
+            .unwrap();
+        g.lock().capture_schedule.verified.clear();
+        checked(&g, &["notes.bin".to_owned()], &index).await;
+        assert!(
+            g.lock()
+                .capture_schedule
+                .verified("notes.bin", stat, &index["notes.bin"])
+        );
+        assert_eq!(
+            std::fs::metadata(index_file).unwrap().modified().unwrap(),
+            stamp,
+            "the observation must not mutate the index to manufacture an age fence"
+        );
+    }
 }

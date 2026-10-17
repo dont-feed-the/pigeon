@@ -243,10 +243,23 @@ objects and executable modes.
 
 Annex's own temporary hardlink changes ctime during ingestion. Exact captured
 byte/stat/index observations are therefore made after ingestion with controlled
-calckey reads. Their private cache survives a restart, includes ctime and the
+calckey reads. A read-only kernel timestamp fence is read before hashing; only
+an older ctime and a complete unchanged stat are retained. Verification does
+not change the index timestamp to manufacture that fence. Native Git cache
+entries also require both their modification and change timestamps to predate
+the index; an old preserved mtime alone cannot clear a current-tick ctime.
+The focused native-cache regression failed before this check. Their private cache
+survives a restart, includes ctime and the
 exact staged pointer/mode, and is invalidated by later edits. Missing, malformed
-or future cache formats grant no shortcut. It authorizes no transfer, overwrite
-or deletion; install still proves displaced bytes and authority separately.
+or future cache formats grant no shortcut. An unchanged suggestion also binds
+that observation to its exact signed proposal, so a later same-size edit or
+executable-mode change cannot hide behind its old modification time. Rebuilding
+a missing observation restores the accepted index pointer without creating an
+empty proposal. The install-window classification uses ctime, retaining an
+application's original mtime without making a recent save look old or a later
+save look concurrent. These regressions were reproduced before the correction.
+The cache authorizes no transfer, overwrite or deletion; install still proves
+displaced bytes and authority separately.
 Only paths just installed receive a completion observation, so another path's
 unsettled save is left alone. Normal idle recovery, keep, thinning and metadata
 commits no longer refresh every working file as a side effect. The full native
@@ -266,9 +279,13 @@ those implementation failures were corrected. The next workspace run passed
 714 of 715 checks; its malformed-cache fixture had left a valid native Git stat
 cache in place. Clearing that independent cache without changing its pointer
 makes the intended fallback test meaningful, and the corrected fixture passes.
-All-target Clippy and repository checks pass. Real daemon trace validation and
-current-main integration still precede the PR. Native priorities, the complete
-work queue and the resource budgets remain outstanding.
+After integrating current main at `3f5e5ef`, the workspace checkpoint passed
+all 718 checks. A subsequent 69-check native run passed install, suggestions,
+restores and shared-pool regressions on the final pre-hash fence. The final
+native-cache ctime correction then passed both focused timestamp-fence checks;
+all-target Clippy and repository checks pass. Fresh driver/model validation
+and exact-head CI remain required before merging this continuation. Native
+priorities, the complete work queue and the resource budgets remain outstanding.
 
 ## Periodic macOS failures
 
@@ -287,9 +304,12 @@ suffix. Existing and outer-alias root-link regressions pass. Three bridge
 lifecycle fixtures now use the established short `/tmp` socket root.
 
 The Linux-only scrub fixture's entire module is now conditional, avoiding
-unused imports under macOS Clippy. The separate periodic mass-deletion
-protection timeout is still open; neither change establishes a passing
-macOS runtime suite.
+unused imports under macOS Clippy. The subsequent periodic run
+[39037709329](https://github.com/dont-feed-the/pigeon/actions/runs/39037709329)
+on v0.6.2 passed workspace CI and all four native daemon shards, including the
+previously failing mass-deletion case, and advanced through lab to slice.
+The whole periodic suite is not yet reported complete. This does not establish
+the newer file scheduler's Mac runtime or foreground HDD budgets.
 
 
 ## Independent settings usability

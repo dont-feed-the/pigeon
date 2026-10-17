@@ -84,9 +84,24 @@ pub async fn plan(
                 }
                 None => (head.to_owned(), main.clone()),
             };
+            let tree = applied(&base, &part);
+            if tree == base {
+                // A missing stat observation may require rereading an already
+                // suggested version. Rebind it without an empty chain link.
+                for (path, entry) in &part {
+                    // Hashing staged the private pointer. Keep the accepted
+                    // index baseline exactly as recording a suggestion does.
+                    restore_index(g, path, main.get(path)).await?;
+                    if let Some(entry) = entry {
+                        crate::capture_schedule::bind_proposal(g, path, &parent, entry);
+                    }
+                }
+                crate::capture_schedule::save(g);
+                continue;
+            }
             out.push(Proposal {
                 parent,
-                tree: applied(&base, &part),
+                tree,
                 paths: part.into_keys().collect(),
             });
         }
@@ -96,6 +111,23 @@ pub async fn plan(
 
 async fn key_of(g: &Group, e: Option<&Entry>) -> Option<String> {
     pointer_key(&g.git.object(&e?.oid).await.ok()?)
+}
+
+async fn restore_index(g: &Group, path: &str, entry: Option<&Entry>) -> Result<(), Error> {
+    match entry {
+        Some(entry) => {
+            let info = format!("{},{},{path}", entry.mode, entry.oid);
+            g.git
+                .run(&["update-index", "--add", "--cacheinfo", &info])
+                .await?;
+        }
+        None => {
+            g.git
+                .run(&["update-index", "--force-remove", "--", path])
+                .await?;
+        }
+    }
+    Ok(())
 }
 
 /// Records that `commit` suggests `paths`: each becomes a waiting
@@ -129,26 +161,18 @@ pub async fn record(
             told: old.is_some_and(|d| d.told),
         };
         table.paths.insert(p.clone(), entry);
-        match main.get(p) {
-            Some(e) => {
-                let info = format!("{},{},{p}", e.mode, e.oid);
-                g.git
-                    .run(&["update-index", "--add", "--cacheinfo", &info])
-                    .await?;
-            }
-            None => {
-                g.git
-                    .run(&["update-index", "--force-remove", "--", p])
-                    .await?;
-            }
+        restore_index(g, p, main.get(p)).await?;
+        if let Some(Some(entry)) = changes.get(p) {
+            crate::capture_schedule::bind_proposal(g, p, commit, entry);
         }
     }
+    crate::capture_schedule::save(g);
     Ok(())
 }
 
 /// Whether `path`, saved as `table` says it was suggested, is unchanged
 /// since: the same file, or still gone.
-pub fn unchanged(worktree: &Path, table: &Table, path: &str, gone: bool) -> bool {
+pub fn unchanged(g: &Group, table: &Table, path: &str, gone: bool) -> bool {
     let Some(d) = table.paths.get(path) else {
         return false;
     };
@@ -158,7 +182,12 @@ pub fn unchanged(worktree: &Path, table: &Table, path: &str, gone: bool) -> bool
     if gone {
         return d.mine.is_none();
     }
-    let stat = crate::evict::stat_of(&worktree.join(path));
+    let Some(wt) = &g.worktree else { return false };
+    let Ok(Some(stat)) = pigeon_sys::fs::lstat(&wt.join(path)) else {
+        return false;
+    };
     d.mine.is_some()
-        && stat.map(|s| [s.dev.into(), s.ino.into(), s.size.into(), s.mtime_ns]) == d.mine_stat
+        && d.proposal
+            .as_deref()
+            .is_some_and(|proposal| g.lock().capture_schedule.suggested(path, stat, proposal))
 }

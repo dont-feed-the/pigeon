@@ -13,7 +13,8 @@ increments the second number, and every other release the third.
   captures of frequently saved files, while other stable files keep progressing.
 - Status and install checks leave another file's unsettled save alone. Capture
   recognizes same-size edits even when an application preserves the file's
-  modification time.
+  modification time. Pending suggestions also detect later byte and executable
+  mode changes, and rebuilding their cache keeps the accepted version intact.
 
 ## 0.6.3 — 2026-10-17
 

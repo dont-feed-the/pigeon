@@ -6,6 +6,93 @@ use super::*;
 use std::time::Duration;
 
 #[tokio::test]
+async fn preserved_timestamps_do_not_hide_new_suggestion_bytes_or_mode() {
+    use std::os::unix::fs::PermissionsExt;
+    let Some(l) = laptop().await else { return };
+    let mut doc = l.g.roster().unwrap();
+    doc.roster
+        .persons
+        .get_mut(&PersonId("ana".into()))
+        .unwrap()
+        .admin = false;
+    let base = pigeond::change::commit_roster(&l.g, &doc, "retire Ana", &l.t)
+        .await
+        .unwrap();
+    let mut tree = l.git.tree(&base).await.unwrap();
+    tree.insert(
+        "foreign.txt".into(),
+        version(&l, "foreign.txt", b"Ben's version\n", true).await,
+    );
+    bens(&l, &tree, &base, 60).await;
+    install::incoming(&l.g, &dev(1).0, &l.t).await.unwrap();
+    l.g.lock().installed.clear();
+    write(&l, "foreign.txt", b"private one\n");
+    assert_eq!(
+        capture::capture(&l.g, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .suggested,
+        1
+    );
+    let old = pigeond::conflicts_file::read(&l.g).unwrap().paths["foreign.txt"].clone();
+    let file = l.wt.join("foreign.txt");
+    let modified = std::fs::metadata(&file).unwrap().modified().unwrap();
+    write(&l, "foreign.txt", b"private two\n");
+    std::fs::File::options()
+        .write(true)
+        .open(&file)
+        .unwrap()
+        .set_modified(modified)
+        .unwrap();
+    assert_eq!(
+        capture::capture(&l.g, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .suggested,
+        1
+    );
+    let new = pigeond::conflicts_file::read(&l.g).unwrap().paths["foreign.txt"].clone();
+    assert_ne!(new.mine, old.mine);
+    let object = pigeond::custody::present(&l.g, new.mine.as_deref().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(std::fs::read(object).unwrap(), b"private two\n");
+    let object = pigeond::custody::present(&l.g, old.mine.as_deref().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(std::fs::read(object).unwrap(), b"private one\n");
+    // Rebuilding a missing observation cache must not stack an empty proposal.
+    let refs = pigeond::proposal::kept(&l.git).await;
+    std::fs::remove_file(l.g.git_dir.join("pigeon/capture-verified.json")).unwrap();
+    let reopened = Group::open(&l.g.id, &l.wt, &GitEnv::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        capture::capture(&reopened, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .suggested,
+        0
+    );
+    assert_eq!(pigeond::proposal::kept(&l.git).await, refs);
+    assert_eq!(
+        l.git.index().await.unwrap()["foreign.txt"],
+        tree["foreign.txt"]
+    );
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(
+        capture::capture(&reopened, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .suggested,
+        1
+    );
+    let d = pigeond::conflicts_file::read(&reopened).unwrap().paths["foreign.txt"].clone();
+    let tree = l.git.tree(d.proposal.as_deref().unwrap()).await.unwrap();
+    assert_eq!(tree["foreign.txt"].mode, "100755");
+}
+
+#[tokio::test]
 async fn verifying_unchanged_foreign_bytes_never_creates_an_empty_suggestion() {
     let Some(l) = laptop().await else { return };
     let mut doc = l.g.roster().unwrap();
@@ -417,6 +504,12 @@ async fn settling_preserves_a_save_observed_soon_after_install() {
     );
     l.g.lock().installed.get_mut("a.txt").unwrap().0 = pigeond::util::now_ns();
     write(&l, "a.txt", b"old application's later save\n");
+    std::fs::File::options()
+        .write(true)
+        .open(l.wt.join("a.txt"))
+        .unwrap()
+        .set_modified(std::time::UNIX_EPOCH + Duration::from_secs(86_400))
+        .unwrap();
     assert_eq!(
         capture::background(&l.g, &dev(1).0, &l.t)
             .await
@@ -446,6 +539,57 @@ async fn settling_preserves_a_save_observed_soon_after_install() {
     assert_eq!(
         std::fs::read(object).unwrap(),
         b"old application's later save\n"
+    );
+}
+
+#[tokio::test]
+async fn a_late_save_cannot_look_concurrent_by_preserving_the_install_mtime() {
+    let Some(l) = laptop().await else { return };
+    write(&l, "a.txt", b"original version\n");
+    let first = capture::capture(&l.g, &dev(1).0, &l.t)
+        .await
+        .unwrap()
+        .commit
+        .unwrap();
+    let mut tree = l.git.tree(&first).await.unwrap();
+    let theirs = version(&l, "a.txt", b"incoming version\n", true).await;
+    tree.insert("a.txt".into(), theirs.clone());
+    bens(&l, &tree, &first, 60).await;
+    assert_eq!(
+        install::incoming(&l.g, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .written,
+        1
+    );
+    let hint = pigeond::util::now_ns() - 45_000_000_000;
+    l.g.lock().installed.get_mut("a.txt").unwrap().0 = hint;
+    write(&l, "a.txt", b"a later independent edit\n");
+    std::fs::File::options()
+        .write(true)
+        .open(l.wt.join("a.txt"))
+        .unwrap()
+        .set_modified(std::time::UNIX_EPOCH + Duration::from_nanos(u64::try_from(hint).unwrap()))
+        .unwrap();
+    let done = capture::capture(&l.g, &dev(1).0, &l.t).await.unwrap();
+    let tree = l.git.tree(&done.commit.unwrap()).await.unwrap();
+    assert_ne!(tree.get("a.txt"), Some(&theirs));
+    assert!(
+        !tree
+            .keys()
+            .any(|path| pigeon_core::names::is_copy_of(path, "a.txt"))
+    );
+    let keys = l
+        .git
+        .keys(&l.git.rev("refs/heads/main").await.unwrap())
+        .await
+        .unwrap();
+    let object = pigeond::custody::present(&l.g, &keys["a.txt"])
+        .await
+        .unwrap();
+    assert_eq!(
+        std::fs::read(object).unwrap(),
+        b"a later independent edit\n"
     );
 }
 

@@ -34,13 +34,13 @@ pub const STALE_SAVE_NS: i64 = 10_000_000_000;
 /// the file in, then records.
 const STALE_SLACK_NS: i64 = 2_000_000_000;
 
-/// Whether `path`, modified at `mtime_ns`, was saved within
+/// Whether `path`, changed at `changed_ns`, was saved within
 /// [`STALE_SAVE_NS`] of an install of it.
-pub(crate) fn soon_after_install(g: &Group, path: &str, mtime_ns: i64) -> bool {
+pub(crate) fn soon_after_install(g: &Group, path: &str, changed_ns: i64) -> bool {
     g.lock()
         .installed
         .get(path)
-        .is_some_and(|(at, _)| (at - STALE_SLACK_NS..=at + STALE_SAVE_NS).contains(&mtime_ns))
+        .is_some_and(|(at, _)| (at - STALE_SLACK_NS..=at + STALE_SAVE_NS).contains(&changed_ns))
 }
 
 /// Where each save of `soon` goes (ADR 0071): its first free conflict name
@@ -165,7 +165,7 @@ pub(crate) async fn pending(g: &Group, prefix: &str) -> Result<BTreeSet<String>,
             (*y != '.' || std::fs::symlink_metadata(worktree.join(path)).is_ok())
                 && !is_pigeon_path(path)
                 && crate::evict::under(path, prefix)
-                && !crate::suggest::unchanged(worktree, &table, path, *y == 'D')
+                && !crate::suggest::unchanged(g, &table, path, *y == 'D')
                 && (*y == 'D' || kind(worktree, path).is_none())
         })
         .map(|(_, _, path)| path)
@@ -243,13 +243,7 @@ async fn capture_inner(
             behind |= x != '.';
             continue;
         }
-        if crate::suggest::unchanged(&worktree, &table, &path, y == 'D')
-            || g.shared.is_some()
-                && table.paths.get(&path).is_some_and(|d| {
-                    d.kind == crate::conflicts_file::Kind::Suggestion
-                        && crate::shared::unchanged(g, &path, d)
-                })
-        {
+        if crate::suggest::unchanged(g, &table, &path, y == 'D') {
             continue;
         }
         let lagging = match x {
@@ -283,7 +277,7 @@ async fn capture_inner(
                 if !scheduled {
                     g.lock().capture_schedule.explicit(&path, st);
                 }
-                let mut concurrent = x == '.' && soon_after_install(g, &path, st.mtime_ns);
+                let mut concurrent = x == '.' && soon_after_install(g, &path, st.ctime_ns);
                 if scheduled && x == '.' {
                     concurrent = g
                         .lock()

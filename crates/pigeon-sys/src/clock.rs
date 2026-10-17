@@ -10,6 +10,31 @@ pub fn continuous_millis() -> std::io::Result<u64> {
     // CLOCK_UPTIME_RAW is the clock that excludes it (clock_gettime(3)).
     #[cfg(target_vendor = "apple")]
     let clock = libc::CLOCK_MONOTONIC_RAW;
+    let reading = read(clock)?;
+    let seconds = u64::try_from(reading.tv_sec).map_err(std::io::Error::other)?;
+    let nanos = u64::try_from(reading.tv_nsec).map_err(std::io::Error::other)?;
+    Ok(seconds
+        .saturating_mul(1000)
+        .saturating_add(nanos / 1_000_000))
+}
+
+/// A conservative wall-clock fence for native local-filesystem timestamps.
+/// Linux's coarse clock is no finer than the tick used by inode timestamps;
+/// APFS uses Darwin's nanosecond calendar clock. Read the fence before hashing;
+/// retain only an older ctime and a completely unchanged stat afterward.
+pub fn stat_epoch_ns() -> std::io::Result<i64> {
+    #[cfg(target_os = "linux")]
+    let clock = libc::CLOCK_REALTIME_COARSE;
+    #[cfg(target_vendor = "apple")]
+    let clock = libc::CLOCK_REALTIME;
+    let value = read(clock)?;
+    Ok(value
+        .tv_sec
+        .saturating_mul(1_000_000_000)
+        .saturating_add(value.tv_nsec))
+}
+
+fn read(clock: libc::clockid_t) -> std::io::Result<libc::timespec> {
     let mut reading = std::mem::MaybeUninit::<libc::timespec>::uninit();
     // SAFETY: reading is writable for one timespec; the platform clock id
     // is supported on pigeon's minimum Linux and macOS versions.
@@ -17,12 +42,7 @@ pub fn continuous_millis() -> std::io::Result<u64> {
         return Err(std::io::Error::last_os_error());
     }
     // SAFETY: the successful call initialized the complete timespec.
-    let reading = unsafe { reading.assume_init() };
-    let seconds = u64::try_from(reading.tv_sec).map_err(std::io::Error::other)?;
-    let nanos = u64::try_from(reading.tv_nsec).map_err(std::io::Error::other)?;
-    Ok(seconds
-        .saturating_mul(1000)
-        .saturating_add(nanos / 1_000_000))
+    Ok(unsafe { reading.assume_init() })
 }
 
 /// Minutes east of UTC of the local time zone at `utc`, in seconds since

@@ -37,7 +37,8 @@ impl Index {
             return Ok(false);
         };
         let cached_time = i64::from(c[2]) * 1_000_000_000 + i64::from(c[3]);
-        Ok(cached_time < self.mtime
+        let cached_change = i64::from(c[0]) * 1_000_000_000 + i64::from(c[1]);
+        Ok(cached_time.max(cached_change) < self.mtime
             && u64::from(c[0]) == stat.ctime() as u64
             && u64::from(c[1]) == stat.ctime_nsec() as u64
             && u64::from(c[2]) == stat.mtime() as u64
@@ -185,4 +186,47 @@ fn read_selected(g: &Group, wanted: Option<&str>) -> Result<BTreeMap<String, Ind
         return Err("invalid index extension length".into());
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preserved_mtime_does_not_make_a_racy_ctime_clean() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let temp = tempfile::tempdir()?;
+        let file = temp.path().join("saved.txt");
+        std::fs::write(&file, b"captured bytes")?;
+        std::fs::File::options()
+            .write(true)
+            .open(&file)?
+            .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1))?;
+        let stat = std::fs::symlink_metadata(&file)?;
+        let ctime = stat.ctime() * 1_000_000_000 + stat.ctime_nsec();
+        let mut index = Index {
+            oid: Some("a".repeat(40)),
+            hidden: false,
+            cache: Some([
+                stat.ctime() as u32,
+                stat.ctime_nsec() as u32,
+                stat.mtime() as u32,
+                stat.mtime_nsec() as u32,
+                stat.dev() as u32,
+                stat.ino() as u32,
+                stat.mode(),
+                stat.uid(),
+                stat.gid(),
+                stat.size() as u32,
+            ]),
+            mtime: ctime,
+        };
+        assert!(
+            !index.clean(&file)?,
+            "a later same-tick save can preserve the cached old mtime and ctime"
+        );
+        index.mtime = ctime + 1;
+        assert!(index.clean(&file)?, "an older complete stat remains usable");
+        Ok(())
+    }
 }
