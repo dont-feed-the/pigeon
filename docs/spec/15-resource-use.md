@@ -39,7 +39,10 @@ back-off of §15.4 protects, and `pigeon doctor` says so for a hard disk.
 - Normative: `pigeon-core::queue` and its laws (`tests/queue.rs`):
   `compare_is_a_total_order` (ties broken by key, path, peer),
   `a_higher_class_goes_first`, `order_does_not_depend_on_arrival`,
-  `fewer_custody_copies_never_wait_behind_more`. Repair is in class 3, so a
+  `fewer_custody_copies_never_wait_behind_more`, and
+  `newer_equal_risk_work_precedes_older_smaller_work` (`tests/queue_recency.rs`).
+  Shared bytes use their latest retained reference birth for recency; inheriting
+  a parent's pointer in a merge does not introduce it again. Repair is in class 3, so a
   custodian spends its last space on the fewest-copy keys **[no ADR]**
   (issue #13, [16 §16.2](16-open-questions.md)).
 - A higher class preempts a lower one between keys; a transfer in progress

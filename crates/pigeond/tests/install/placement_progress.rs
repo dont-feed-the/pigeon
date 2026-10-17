@@ -72,7 +72,7 @@ async fn a_cold_location_probe_leaves_capture_available_before_it_finishes() {
     let real = String::from_utf8(real.stdout).unwrap();
     assert!(real.trim().starts_with('/'));
     let script = format!(
-        "#!/bin/sh\nif [ \"$1\" = annex ] && [ \"$2\" = whereis ]; then\n : >\"${{0%/*}}/started\"\n while [ ! -e \"${{0%/*}}/release\" ]; do sleep 0.01; done\nfi\nexec '{}' \"$@\"\n",
+        "#!/bin/sh\nif [ \"$1\" = annex ] && [ \"$2\" = copy ]; then : >\"${{0%/*}}/copy-started\"; exit 1; fi\nif [ \"$1\" = annex ] && [ \"$2\" = whereis ]; then\n : >\"${{0%/*}}/started\"\n while [ ! -e \"${{0%/*}}/release\" ]; do sleep 0.01; done\nfi\nexec '{}' \"$@\"\n",
         real.trim().replace('\'', "'\\''")
     );
     let helper = tools.join("git");
@@ -131,9 +131,17 @@ async fn a_cold_location_probe_leaves_capture_available_before_it_finishes() {
     };
     let waiting = !task.is_finished();
     std::fs::write(tools.join("release"), b"released").unwrap();
-    task.abort();
-    let _ = task.await;
+    let completed = tokio::time::timeout(Duration::from_secs(10), task).await;
     daemon.node.close().await;
+    assert!(
+        completed.is_ok(),
+        "the changed plan did not finish after the probe was released"
+    );
+    assert_eq!(completed.unwrap().unwrap(), 0);
+    assert!(
+        !tools.join("copy-started").exists(),
+        "a stale protection plan began a transfer after a new capture"
+    );
     assert!(
         blocked,
         "the cold location probe never reached its controlled wait"
