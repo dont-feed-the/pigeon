@@ -17,11 +17,9 @@ use crate::{FormToken, Web};
 /// The form of *Leave the group*.
 pub fn form(r: &Renderer, form: &str) -> Markup {
     html! {
-        article {
-            form method="post" action=(r.url("/leave")) {
-                input type="hidden" name="form" value=(form);
-                button type="submit" { (r.id("web-leave")) }
-            }
+        form method="post" action=(r.url("/leave")) {
+            input type="hidden" name="form" value=(form);
+            button type="submit" class="danger" { (r.id("web-leave")) }
         }
     }
 }
@@ -48,12 +46,14 @@ pub async fn leave(
     let r = web.renderer();
     if !f.yes {
         let body = html! {
-            form method="post" action=(r.url("/leave")) {
-                input type="hidden" name="form" value=(f.form);
-                input type="hidden" name="yes" value="true";
-                button type="submit" { (r.id("web-leave")) }
+            div class="card inline-forms" {
+                form method="post" action=(r.url("/leave")) {
+                    input type="hidden" name="form" value=(f.form);
+                    input type="hidden" name="yes" value="true";
+                    button type="submit" class="danger" { (r.id("web-leave")) }
+                }
+                a class="btn" href=(r.url("/settings")) { (r.id("web-back")) }
             }
-            p { a href=(r.url("/settings")) { (r.id("web-back")) } }
         };
         return page(&r, "/settings", &r.id("web-leave-confirm"), &body).into_response();
     }

@@ -208,10 +208,13 @@ def run(provider="custodian", out=None):
                 bodies = [b"desktop concurrent save\n", b"phone concurrent save\n"]
                 def save(i):
                     return dav(clients[i], "PUT", "concurrent.txt", bodies[i],
-                               {"If-Match": validators[i]})[0]
+                               {"If-Match": validators[i]})
                 with ThreadPoolExecutor(max_workers=2) as executor:
-                    outcomes = list(executor.map(save, range(2)))
-                assert all(s in {204, 412, 503} for s in outcomes), outcomes
+                    responses = list(executor.map(save, range(2)))
+                outcomes = [response[0] for response in responses]
+                assert all(s in {204, 412, 503} for s in outcomes), [
+                    (status, body[:1024]) for status, _, body in responses
+                ]
                 def pooled(body):
                     digest = hashlib.sha256(body).hexdigest()
                     return root / "bridge/content" / group / digest[:2] / digest

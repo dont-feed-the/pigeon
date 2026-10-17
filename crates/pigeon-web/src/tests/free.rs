@@ -61,11 +61,15 @@ impl Backend for Freeing {
                         path: "Photos/a.jpg".into(),
                         state: State::Protected,
                         freed: true,
+                        size: None,
+                        modified: None,
                     },
                     FileEntry {
                         path: "Photos/b.jpg".into(),
                         state: State::Protected,
                         freed: false,
+                        size: None,
+                        modified: None,
                     },
                 ],
             }],
@@ -126,12 +130,24 @@ async fn freeing_asks_first_then_again_while_the_backups_are_quiet() {
             .unwrap(),
     )
     .await;
-    // The folder page names its files from that folder.
+    // Names and states are separate columns; each freed state stays in its own row.
+    let row = |name: &str| {
+        folder
+            .split(&format!("data-name=\"{name}\""))
+            .nth(1)
+            .unwrap()
+            .split("</tr>")
+            .next()
+            .unwrap()
+    };
     assert!(
-        folder.contains(">a.jpg: Safe, not on this computer<"),
+        row("a.jpg").contains("Safe, not on this computer"),
         "{folder}"
     );
-    assert!(folder.contains(">b.jpg: Safe<"), "{folder}");
+    assert!(
+        row("b.jpg").contains("Safe") && !row("b.jpg").contains("not on this computer"),
+        "{folder}"
+    );
     let file = body(
         app.clone()
             .oneshot(get("/file?path=%2Fg%2FPhotos%2Fa.jpg", HOST, Some(&cookie)))

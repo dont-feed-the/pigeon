@@ -1,4 +1,4 @@
-//! A suggestion decided file by file (ADR 0077, 04 §4.5, 07 §7.6), with
+//! A suggestion decided file by file (ADR 0078, 04 §4.5, 07 §7.6), with
 //! real daemons: Ana, an admin, creates the group with a backup machine and
 //! invites Cid, who is not one. Cid edits three of Ana's files, one
 //! suggestion. Ana sees what changes in each and accepts two of them with

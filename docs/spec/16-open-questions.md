@@ -54,6 +54,7 @@ asks for none. Grouped by file, so that a few ADRs could cover them.
 | 09 | the join exchange carries a custodian's direct addresses, the welcome the admitter's git-annex UUID; default `maxsize` free space minus 10 %; device names made unique with `-2`, `-3`…; the safety words (§9.6); `pigeon leave` (§9.7) |
 | [10](10-interfaces.md) | force as `accept --override`; the verbs `held`, `settings`, `leave`, `erase --cancel` (§10.1); one notification per kind and day (§10.4) |
 | 10 | isolation marks around arguments, an unknown message id rendered as itself (§10.5); the clock-skew warning at 5 minutes (§10.7) |
+| 10 | the web's sidebar, the Files browser's table, details panel and README rules, and its 128 KiB `ReadText` cap (§10.3) |
 | 10 | problem codes as `P-` and capitals; the first build's `usage`, `unknown-computer`, `receiving`, `not-a-pigeon-repository`, `peer-unreachable`, `peer-refused`, `internal-error` (§10.6) |
 | [11](11-local-state.md) | `toml_edit` for writing `config.toml`, its `[network]` and `[loops]` tables (§11.2) |
 | [12](12-observability.md) | telemetry bounded to 50 MB; `debug bundle` asks each peer's person; the `PIGEON_TRACE` switch (§12.2, §12.3) |

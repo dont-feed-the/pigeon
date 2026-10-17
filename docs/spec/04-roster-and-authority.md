@@ -190,7 +190,7 @@ adoption and concurrent decisions are ADR 0051, checked by `Authority.tla`
 | revisions | a decision names one commit: adopting it adopts its ancestors in the chain; rejecting it leaves later ones pending |
 | state (computed) | the first that holds: *accepted* (an accepted commit descends), *rejected* or *withdrawn* (a decision, [07 §7.6](07-capture-and-install.md)), *superseded*, *pending*; revoked commits alike |
 | accept | on a `main` holding all it builds on, merge (`main`, proposal) with its change; a path changed meanwhile keeps both, the proposal's under its conflict name ([05 §5.2–5.3](05-catalogue-and-names.md)) |
-| some files (ADR 0077) | one commit on `main`, not a merge, signed by a decider: its tree holds the adoption's change of the accepted paths only (`proposal::partial`), with Force as for the adoption, and adds the decision `rejected` for the rest; a `Pigeon-Accepted: "path"` trailer names each accepted path, believed only where the tree holds its change (`proposal::holds`). It closes the proposal; a rename is decided as one file |
+| some files (ADR 0078) | one commit on `main`, not a merge, signed by a decider: its tree holds the adoption's change of the accepted paths only (`proposal::partial`), with Force as for the adoption, and adds the decision `rejected` for the rest; a `Pigeon-Accepted: "path"` trailer names each accepted path, believed only where the tree holds its change (`proposal::holds`). It closes the proposal; a rename is decided as one file |
 | concurrency | an adoption wins over a rejection; the proposal stays the author's **submission**, the adoption the decider's **authorised change**, so rights never widen |
 | content | replicates like any version: *protected* only once K custodians hold it (ADR 0034, [06 §6.2](06-status.md)) |
 
@@ -218,7 +218,7 @@ wait when this device does not keep the proposal
 (`a_decision_is_accepted_iff_its_signer_may_make_it`; `commit::about`).
 `pigeon resolve` writes a withdrawal (07 §7.6, `pigeond::resolve`).
 `pigeon accept ID FILE…` and `pigeon decline ID FILE… [--note TEXT]`
-(`DecideFiles`, ADR 0077) decide some files: the files named are accepted
+(`DecideFiles`, ADR 0078) decide some files: the files named are accepted
 and the others declined, or the reverse, in one decision
 (`pigeond::decide_files`; laws in `tests/proposal.rs`: a partial decision
 is the adoption on the paths it accepts and `main` elsewhere; models

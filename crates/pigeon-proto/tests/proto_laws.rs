@@ -29,7 +29,11 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(51)) {
+    match tc.draw(gs::integers::<u8>().max_value(52)) {
+        52 => Request::ReadText {
+            path: text(tc),
+            limit: tc.draw(gs::integers::<u64>()),
+        },
         51 => Request::Paused,
         50 => Request::FreePreview { folder: text(tc) },
         49 => Request::ForgetChoice { folder: text(tc) },
@@ -228,8 +232,8 @@ fn version(tc: &TestCase) -> VersionStatus {
 }
 
 fn response(tc: &TestCase) -> Response {
-    match tc.draw(gs::integers::<u8>().max_value(22)) {
-        22 => Response::FreePreview(FreePreview {
+    match tc.draw(gs::integers::<u8>().max_value(23)) {
+        23 => Response::FreePreview(FreePreview {
             files: tc.draw(gs::integers::<u64>()),
             safe: tc.draw(gs::integers::<u64>()),
             backups: (0..tc.draw(gs::integers::<u8>().max_value(2)))
@@ -248,6 +252,11 @@ fn response(tc: &TestCase) -> Response {
                     others: tc.draw(gs::booleans()).then(|| text(tc)),
                 })
                 .collect(),
+        },
+        22 => Response::Text {
+            text: text(tc),
+            size: tc.draw(gs::integers::<u64>()),
+            truncated: flag(tc),
         },
         20 => Response::FolderRules(Box::new(pigeon_proto::policy::Report {
             root: text(tc),
@@ -405,6 +414,7 @@ fn response(tc: &TestCase) -> Response {
                     state: state(tc),
                     freed: flag(tc),
                     arriving: tc.draw(gs::integers::<u64>()),
+                    size: flag(tc).then(|| tc.draw(gs::integers::<u64>())),
                 })
                 .collect(),
         },
@@ -414,6 +424,8 @@ fn response(tc: &TestCase) -> Response {
                 .map(|_| FileEntry {
                     path: text(tc),
                     state: state(tc),
+                    size: flag(tc).then(|| tc.draw(gs::integers::<u64>())),
+                    modified: maybe_text(tc),
                     freed: flag(tc),
                 })
                 .collect(),

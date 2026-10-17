@@ -1,4 +1,4 @@
-# 0077. A suggestion is decided file by file, in one decision
+# 0078. A suggestion is decided file by file, in one decision
 
 - **Status:** Proposed, 16 October 2026, by the agent, for the usability
   study's finding "a suggestion of several files can only be accepted or

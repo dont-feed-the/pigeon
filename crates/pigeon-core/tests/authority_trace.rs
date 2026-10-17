@@ -9,7 +9,7 @@
 //! or rejects or withdraws a proposal the code keeps (a commit refused for
 //! folder rules alone); or adopts one whose base it holds, as
 //! `proposal::adoption` writes it or with a change dropped or one more; or
-//! decides some of its files (ADR 0077): one commit that holds the change
+//! decides some of its files (ADR 0078): one commit that holds the change
 //! of the files it accepts, `proposal::partial`, now and then with one
 //! more, and rejects the proposal.
 //! Who wrote each path is kept as the catalogue keeps it (ADR 0070): an
@@ -368,7 +368,7 @@ fn decide(
 }
 
 /// A decision on some files of the proposal `x` on the accepted `parent`
-/// (ADR 0077): an ordinary commit that holds the change of the files it
+/// (ADR 0078): an ordinary commit that holds the change of the files it
 /// accepts, as `proposal::partial` writes it or with one change more, and
 /// rejects the proposal.
 #[allow(clippy::too_many_arguments, reason = "the history's parts")]

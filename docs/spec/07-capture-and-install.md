@@ -165,7 +165,7 @@ catalogue's version and from pigeon's last install. The **divergence table**
 
 *waiting* ends when the proposal is accepted (only the index changes,
 `Decide`) and becomes *conflict* when it is rejected or `current(p)` moves;
-a decision on some files (ADR 0077) ends each path `main` now holds as
+a decision on some files (ADR 0078) ends each path `main` now holds as
 the person saved it and makes the others conflicts, path by path:
 the person is told **once**, and Home keeps a *Needs you* item. It also
 ends when the file is clean again, the person having put a version back;

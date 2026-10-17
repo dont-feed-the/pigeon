@@ -13,8 +13,12 @@ use crate::{Answer, Backend, Web};
 
 #[path = "tests/a11y.rs"]
 mod a11y;
+#[path = "tests/browse.rs"]
+mod browse;
 #[path = "tests/conflicts.rs"]
 mod conflicts;
+#[path = "tests/demo.rs"]
+mod demo;
 #[path = "tests/doctor.rs"]
 mod doctor;
 #[path = "tests/folder_rules.rs"]
@@ -35,6 +39,8 @@ mod recovery;
 mod setup;
 #[path = "tests/suggestions.rs"]
 mod suggestions;
+#[path = "tests/sync.rs"]
+mod sync;
 #[path = "tests/usability.rs"]
 mod usability;
 
@@ -533,11 +539,9 @@ async fn the_line_that_joins_the_group_is_shown_with_copy() {
         "{page}"
     );
     assert!(page.contains("data-copy=\"invitation-line\""), "{page}");
-    assert!(page.contains("src=\"/copy.js\""), "{page}");
-    let script = app
-        .oneshot(get("/copy.js", HOST, Some(&cookie)))
-        .await
-        .unwrap();
+    let script = format!("/assets/{}", crate::assets::SCRIPT.name);
+    assert!(page.contains(&format!("src=\"{script}\"")), "{page}");
+    let script = app.oneshot(get(&script, HOST, None)).await.unwrap();
     assert_eq!(script.status(), StatusCode::OK);
     assert!(body(script).await.contains("clipboard"));
 }
@@ -669,7 +673,7 @@ async fn a_version_is_opened_as_a_read_only_download() {
         .await
         .unwrap();
     let page = body(page).await;
-    assert_eq!(page.matches("Open a copy").count(), 2, "{page}");
+    assert_eq!(page.matches("Download a copy").count(), 2, "{page}");
     assert_eq!(page.matches("Restore this version").count(), 1, "{page}");
     let form = form_of(&page);
     let forged = app
@@ -737,6 +741,35 @@ async fn the_pages_are_written_for_axe() {
     ];
     for lang in ["en", "fr"] {
         folder_rules::write_pages(&dir, lang).await;
+        let demo = Web::new(Arc::new(demo::Demo), lang.parse().unwrap(), 4321);
+        let demo_app = demo.router();
+        let demo_cookie = logged_in(&demo_app, &demo).await;
+        let photos = form_urlencoded::byte_serialize(format!("{}/Photos", demo::ROOT).as_bytes())
+            .collect::<String>();
+        let budget =
+            form_urlencoded::byte_serialize(format!("{}/budget-2026.xlsx", demo::ROOT).as_bytes())
+                .collect::<String>();
+        for (name, path) in [
+            ("demo-files", "/files".to_owned()),
+            ("demo-folder", format!("/folder?path={photos}")),
+            ("demo-details-file", format!("/files?selected={budget}")),
+            (
+                "demo-details-folder",
+                format!("/files?sort=size&selected={photos}"),
+            ),
+            ("demo-file", format!("/file?path={budget}")),
+            ("demo-deleted", "/deleted".to_owned()),
+            ("demo-machines", "/machines".to_owned()),
+            ("demo-folders", "/folders".to_owned()),
+        ] {
+            let r = demo_app
+                .clone()
+                .oneshot(get(&path, HOST, Some(&demo_cookie)))
+                .await
+                .unwrap();
+            assert_eq!(r.status(), StatusCode::OK, "{path}");
+            std::fs::write(dir.join(format!("{lang}-{name}.html")), body(r).await).unwrap();
+        }
         free::write_pages(&dir, lang).await;
         pause::write_pages(&dir, lang).await;
         let w = Web::new(Arc::new(Fixed), lang.parse().unwrap(), 4321);

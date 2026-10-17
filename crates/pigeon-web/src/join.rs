@@ -30,25 +30,31 @@ pub async fn setup(
 fn forms(r: &Renderer, token: &str, join: &JoinForm, create: &CreateForm) -> Markup {
     let k = if create.k.is_empty() { "2" } else { &create.k };
     html! {
-        p { (r.id("web-setup-help")) }
-        h2 { (r.id("web-join")) }
-        form method="post" action=(r.url("/join")) {
+        p class="lead" { (r.id("web-setup-help")) }
+        div class="cards" {
+        section class="card" aria-labelledby="join-title" {
+        h2 id="join-title" { (r.id("web-join")) }
+        form method="post" action=(r.url("/join")) class="stack" {
             input type="hidden" name="form" value=(token);
             p { label for="invitation" { (r.id("web-invitation")) } " " input id="invitation" name="invitation" required autocomplete="off" value=(&join.invitation); }
             p { label for="join-person" { (r.id("web-your-name")) } " " input id="join-person" name="person" value=(&join.person); }
             p { label for="join-folder" { (r.id("web-local-folder")) } " " input id="join-folder" name="folder" value=(&join.folder); }
             p { label for="join-name" { (r.id("web-computer-name")) } " " input id="join-name" name="name" value=(&join.name); }
-            button type="submit" { (r.id("web-join")) }
+            button type="submit" class="primary" { (r.id("web-join")) }
         }
-        h2 { (r.id("web-create")) }
-        form method="post" action=(r.url("/create")) {
+        }
+        section class="card" aria-labelledby="create-title" {
+        h2 id="create-title" { (r.id("web-create")) }
+        form method="post" action=(r.url("/create")) class="stack" {
             input type="hidden" name="form" value=(token);
             p { label for="group-name" { (r.id("web-group-name")) } " " input id="group-name" name="group" required value=(&create.group); }
             p { label for="create-folder" { (r.id("web-local-folder")) } " " input id="create-folder" name="folder" required value=(&create.folder); }
             p { label for="create-name" { (r.id("web-computer-name")) } " " input id="create-name" name="name" required value=(&create.name); }
             p { label for="create-person" { (r.id("web-your-name")) } " " input id="create-person" name="person" autocomplete="name" value=(&create.person); }
             p { label for="copies" { (r.id("web-backup-copies")) } " " input id="copies" type="number" name="k" value=(k) min="1" required; }
-            button type="submit" { (r.id("web-create")) }
+            button type="submit" class="primary" { (r.id("web-create")) }
+        }
+        }
         }
     }
 }

@@ -5,7 +5,7 @@
 //! changed meanwhile keeps `main`'s version, and the proposal's goes beside
 //! it under a conflict name of its author (05 §5.3), or, for a deletion, is
 //! dropped. [`adopts`] is rule 7's "`tree(c)` holds its change". A
-//! decision on some files (ADR 0077) applies the change of those paths
+//! decision on some files (ADR 0078) applies the change of those paths
 //! alone, the same way: [`partial`]; [`holds`] says whether a tree holds
 //! the change of one path. Laws (`tests/proposal.rs`): an adoption holds
 //! its proposal's change, keeps every version `main` changed and every
@@ -26,7 +26,7 @@ pub fn adoption(base: &Tree, proposal: &Tree, main: &Tree, who: &str, when: Stam
 
 /// The tree, on `main`'s tree, of a decision that accepts the change of
 /// the proposal `proposal` on `base` for the paths `accepted` only, as
-/// [`adoption`] makes it (ADR 0077): every other path keeps `main`'s
+/// [`adoption`] makes it (ADR 0078): every other path keeps `main`'s
 /// version.
 pub fn partial(
     base: &Tree,

@@ -19,7 +19,7 @@ use pigeon_i18n::Message;
 use pigeon_proto::Request;
 use pigeon_proto::api::{Choice, Divergence};
 
-use crate::files::enc;
+use crate::browse::enc;
 use crate::machines::expired;
 use crate::{FormToken, Web, pages};
 

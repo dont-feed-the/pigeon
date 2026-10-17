@@ -357,6 +357,8 @@ fn deadlines_ages_and_freed_files_read_as_words() {
         path: "Photos/a.jpg".into(),
         state: pigeon_proto::api::State::Protected,
         freed: true,
+        size: None,
+        modified: None,
     };
     assert_eq!(r.file(&file), "Photos/a.jpg: Safe, not on this computer");
     file.freed = false;

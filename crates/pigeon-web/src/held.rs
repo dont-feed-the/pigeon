@@ -29,7 +29,7 @@ pub async fn section(web: &Web, r: &Renderer, form: &str) -> Markup {
     html! {
         @if !held.is_empty() {
             h2 { (r.id("web-held")) }
-            @for h in &held { (batch(r, h, form)) }
+            div class="stack" { @for h in &held { (batch(r, h, form)) } }
         }
     }
 }
@@ -37,7 +37,7 @@ pub async fn section(web: &Web, r: &Renderer, form: &str) -> Markup {
 fn batch(r: &Renderer, h: &HeldEntry, form: &str) -> Markup {
     if h.reason.id.starts_with("held-name") {
         return html! {
-            article {
+            article class="card stack" {
                 p { (row(r, h)) }
                 @if let Some(s) = &h.suggested {
                     form method="post" action=(r.url("/held/rename")) {
@@ -52,8 +52,9 @@ fn batch(r: &Renderer, h: &HeldEntry, form: &str) -> Markup {
         };
     }
     html! {
-        article {
+        article class="card stack" {
             p { (row(r, h)) }
+            div class="inline-forms" {
             form method="post" action=(r.url("/held/share")) {
                 input type="hidden" name="form" value=(form);
                 input type="hidden" name="batch" value=(h.id);
@@ -62,7 +63,8 @@ fn batch(r: &Renderer, h: &HeldEntry, form: &str) -> Markup {
             form method="post" action=(r.url("/held/bring-back")) {
                 input type="hidden" name="form" value=(form);
                 input type="hidden" name="batch" value=(h.id);
-                button type="submit" { (r.id("web-held-bring-back")) }
+                button type="submit" class="primary" { (r.id("web-held-bring-back")) }
+            }
             }
         }
     }
@@ -119,13 +121,15 @@ pub async fn share(
                 .arg("paths", paths),
         );
         let body = html! {
-            form method="post" action=(r.url("/held/share")) {
-                input type="hidden" name="form" value=(f.form);
-                input type="hidden" name="batch" value=(f.batch);
-                input type="hidden" name="yes" value="true";
-                button type="submit" { (r.id("web-held-share")) }
+            div class="card inline-forms" {
+                form method="post" action=(r.url("/held/share")) {
+                    input type="hidden" name="form" value=(f.form);
+                    input type="hidden" name="batch" value=(f.batch);
+                    input type="hidden" name="yes" value="true";
+                    button type="submit" class="danger" { (r.id("web-held-share")) }
+                }
+                a class="btn" href=(r.url("/")) { (r.id("web-back")) }
             }
-            p { a href=(r.url("/")) { (r.id("web-back")) } }
         };
         return page(&r, "/", &question, &body).into_response();
     }

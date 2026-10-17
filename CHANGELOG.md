@@ -39,6 +39,33 @@ increments the second number, and every other release the third.
 - A printed recovery sheet shows its own name, and People & machines lists
   it as "paper recovery sheet printed on <date>".
 - Every page starts with a "Skip to content" link for keyboard users.
+- `pigeon open` looks and works like a file manager. A sidebar holds the
+  sections and, on every page, whether your files are safe. **Files** shows
+  the folder you are in as a table, folders first, each with an icon by
+  kind, its state ("All safe", "2 not safe yet", "Only on this computer"),
+  its size and when it last changed; click a column to sort, type in the
+  box to filter by name, and follow the trail at the top to go back up.
+  Select a row (or its ⓘ) to see its details beside the table: its state,
+  who can change it, and a file's latest versions, each with *Open a copy*
+  and *Restore this version*, or a folder's *Keep on this computer* and
+  *Free up space*. Actions now run without leaving the page and say their
+  result in a message at the bottom. Dates show in your own time zone, and
+  the interface follows your system's light or dark mode.
+- Choose which folders are on this computer in `pigeon open`: every folder
+  in **Files** says whether it is on this computer, and whose it is when it
+  is someone else's folder ("Robin’s folder, not on this computer"), with
+  *Keep on this computer* or *Free up space*; a folder you chose says
+  "Your choice", with *Use the default*. **Folders on this computer**, under
+  Files, shows all the group's folders as a tree with a box each: tick or
+  untick them, folders inside following, and *Apply*. Folders not on this
+  computer stay safe on the backup machines, and freeing one waits until
+  its files are safe there.
+- A folder's README shows under its files, as on code-hosting sites:
+  `README.md` (or `README.markdown`) as formatted text, else `README` or
+  `README.txt` as plain text. Its links to files and folders of the group
+  open them in pigeon; pictures and links elsewhere are shown as links,
+  never loaded. A README whose folder is not on this computer, or longer
+  than 128 KB, says so, with a link to its page.
 
 ### Changed
 
@@ -65,9 +92,18 @@ increments the second number, and every other release the third.
   repeated button acts on. On phones, buttons, fields and menu links are
   easier to tap. A folder's page is titled with its name, shows names from
   that folder, and *Back* goes to the parent folder.
+- Building pigeon from source now also needs Node.js 22.12 or later with
+  npm, which build the web interface's script; `pigeon update --main` and
+  `scripts/install-local` say so before building if it is missing. The
+  released programs need nothing new.
 
 ### Fixed
 
+- A Mac that runs `pigeon join` without `--name` is listed under its own
+  name, such as "Robin’s MacBook Air-49d313", instead of "backup-49d313",
+  which made a laptop look like a backup machine; `pigeon create` names it
+  "Robin’s MacBook Air" instead of "computer". On a Mac pigeon takes the
+  name of System Settings → General → Sharing, elsewhere the host name.
 - "Sending…" no longer outlasts its ten minutes because other files were
   saved meanwhile: each file's wait counts from when it was saved.
 - A computer removed from the group no longer says "Everything is safe": it
@@ -82,6 +118,11 @@ increments the second number, and every other release the third.
 - A recovery sheet whose page was closed while waiting no longer stays in
   the group unprinted: pages finish their work, or undo it, even when the
   browser leaves.
+- The file manager's script, stylesheet and icon load when it is opened
+  through a bridge client's own pages.
+- A slow or unavailable computer no longer delays accepting new versions
+  from the group’s reachable computers, or installing their contents when
+  those are already on this computer.
 
 ## 0.5.14 — 2026-10-16
 

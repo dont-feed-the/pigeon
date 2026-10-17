@@ -1,7 +1,7 @@
 //! Laws of adopting a proposal (04 §4.4 rule 7, 04 §4.5; pigeon-core
 //! `proposal`), on random trees of a few paths: a base, a proposal that
 //! changes some of its paths, and a `main` that changed some meanwhile;
-//! and of a decision that accepts some of its files (ADR 0077).
+//! and of a decision that accepts some of its files (ADR 0078).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod common;
 

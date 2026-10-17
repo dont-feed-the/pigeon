@@ -298,6 +298,7 @@ pub(crate) async fn handle(d: &Arc<Daemon>, request: Request) -> Vec<Response> {
         Request::Resume => crate::pause::resume(d),
         Request::Paused => crate::pause::state(d),
         Request::History { path } => crate::history::history(d, Path::new(&path)).await,
+        Request::ReadText { path, limit } => crate::view::text(d, Path::new(&path), limit).await,
         Request::ViewSuggestion { proposal, path } => {
             crate::view::suggestion(d, &proposal, Path::new(&path)).await
         }

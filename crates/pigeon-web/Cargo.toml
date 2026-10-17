@@ -14,15 +14,19 @@ form_urlencoded.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true
 maud.workspace = true
+pulldown-cmark = { workspace = true }
 pigeon-i18n.workspace = true
 pigeon-proto.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["fs"] }
 
+[build-dependencies]
+serde_json.workspace = true
+
 [dev-dependencies]
 data-encoding.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true, features = ["net", "rt-multi-thread"] }
 tower.workspace = true
 
 [lints]

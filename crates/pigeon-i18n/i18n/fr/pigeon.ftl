@@ -397,6 +397,8 @@ problem-receiving = Une copie de ce dossier est encore en train d'arriver.
 problem-no-such-version = { $path } n'a pas de version { $version }.
 problem-sheet-unreadable = Ce n'est pas une fiche de récupération, ou elle a été mal recopiée.
 hint-receiving = Réessayez dans un instant.
+problem-content-not-here = Le contenu de { $path } n'est pas sur cet ordinateur.
+hint-content-not-here = Gardez son dossier sur cet ordinateur pour le lire ici, ou ouvrez une copie depuis sa page.
 problem-unknown-computer = Le groupe n'a aucun ordinateur nommé { $name }.
 hint-unknown-computer = Voyez les noms avec : pigeon machines
 problem-usage = « { $command } » a reçu de mauvais arguments.
@@ -447,7 +449,6 @@ web-file-suggestion-waiting = Votre modification de ce fichier, enregistrée { $
 web-back = Retour
 web-form-expired = Cette page n'est plus à jour. Rechargez-la et réessayez.
 web-nav-files = Fichiers
-web-root-files = Fichiers dans le dossier partagé
 web-setup = Rejoindre ou créer un groupe
 web-setup-help = Demandez une invitation à un membre du groupe, ou créez un groupe pour votre famille ou votre équipe. Choisissez un chemin de dossier absolu sur cet ordinateur. Un ordinateur de sauvegarde n'a pas besoin de dossier partagé.
 web-join = Rejoindre le groupe
@@ -555,7 +556,7 @@ sync-others = (dossier de { $owner }, gardé seulement si vous le choisissez : p
 sync-default-result = { $folder } suit de nouveau son choix par défaut sur cet ordinateur.
 file-row = { $path } : { $state }
 web-restore = Restaurer cette version
-web-view = Ouvrir une copie
+web-view = Télécharger une copie
 web-versions = Versions
 web-version-current = version actuelle
 web-version-group-current = version actuelle du groupe
@@ -713,7 +714,6 @@ problem-rules-raise = Cette règle de partage demande les règles { $rules } du 
 hint-rules-raise = Mettez d’abord ces ordinateurs à jour si possible, puis confirmez, ou relancez avec --yes.
 confirm-rules-raise = Passer le groupe à ces règles et enregistrer cette règle de partage ? [o/N]
 web-folder-rule = Règle de partage du dossier
-web-subfolders = Sous-dossiers
 web-folder-rule-help = Choisissez qui peut modifier ce dossier. Les autres peuvent suggérer des modifications. Les sous-dossiers héritent de cette règle sauf s’ils ont la leur.
 web-folder-rule-admin = Un administrateur peut modifier cette règle de partage.
 web-folder-rule-owner = Une seule personne peut le modifier
@@ -769,3 +769,83 @@ web-join-existing = { $person } fait déjà partie de « { $group } ». Cliquez 
 web-copy = Copier
 web-invite-help = Pour ajouter quelqu'un à « { $group } », un autre ordinateur ou une machine de sauvegarde, partagez cette ligne ; elle installe pigeon et rejoint le groupe. Sur une machine de sauvegarde, ajoutez --backup-machine à la fin. Quiconque l'a peut rejoindre, avec les droits de la personne qu'il dit être.
 progress-join = Adhésion : en attente de la réponse de l'ordinateur d'un administrateur du groupe…
+web-sections = Sections
+web-status = État :
+web-breadcrumb = Emplacement
+web-size-b = { $size } o
+web-size-kb = { $size } ko
+web-size-mb = { $size } Mo
+web-size-gb = { $size } Go
+web-size-tb = { $size } To
+web-decimal-separator = {","}
+web-folder-all-safe = Tout est en sécurité
+web-folder-not-safe =
+    { $count ->
+        [one] 1 pas encore en sécurité
+       *[other] { $count } pas encore en sécurité
+    }
+web-folder-files =
+    { $files ->
+        [one] 1 fichier
+       *[other] { $files } fichiers
+    }
+web-files-lead = Votre dossier partagé sur cet ordinateur : { $folder }
+web-files-empty-help = Les fichiers que vous mettez dans { $folder } apparaissent ici dès que pigeon les a vus.
+web-folder-freed-note = Ce dossier n'est pas sur cet ordinateur : ses fichiers sont gardés en sécurité sur les machines de sauvegarde. Gardez-le sur cet ordinateur pour le récupérer, complet.
+web-filter = Filtrer par nom
+web-filter-placeholder = Filtrer par nom…
+web-filter-none = Aucun nom ici ne contient ce que vous avez tapé.
+web-files-caption = Dossiers et fichiers, avec leur état, leur taille et leur dernière modification
+web-col-kind = Type
+web-col-name = Nom
+web-col-state = État
+web-col-size = Taille
+web-col-modified = Modifié
+web-col-deleted = Supprimé
+web-col-actions = Actions
+web-not-here = Pas sur cet ordinateur
+web-kept-here = Gardé sur cet ordinateur
+web-details = Détails
+web-details-of = Détails de { $name }
+web-details-close = Fermer les détails de { $name }
+web-versions-of = Versions de { $name }
+web-version-number = Version { $number }
+web-saved = Enregistrée
+web-current-version = version actuelle
+web-detail-files = Contient
+web-detail-here = Sur cet ordinateur
+web-detail-rule = Qui peut le modifier
+web-open-folder = Ouvrir
+web-all-versions = Toutes les versions
+web-readme-too-long = { $name } est trop long pour être affiché ici ({ $size }).
+web-readme-not-here = { $name } n'est pas sur cet ordinateur, il n'est donc pas affiché ici. Gardez ce dossier sur cet ordinateur pour le lire ici.
+web-readme-open = Voir ses versions et en ouvrir une copie
+web-task-done = Fait :
+web-task-open = À faire :
+web-deleted-lead = Les fichiers supprimés restent en sécurité : restaurez-en un pour retrouver sa dernière version, avec son historique.
+web-suggestions-empty-help = Quand quelqu'un modifie un fichier dont vous décidez, sa modification vous attend ici.
+web-people = Personnes
+web-machines = Ordinateurs et machines de sauvegarde
+web-copied = Copié
+web-settings-computer = Cet ordinateur
+web-settings-sharing = Partage
+web-leave-help = Cet ordinateur arrête de partager ; ses fichiers restent dans le dossier.
+web-rule-owned = Seulement { $owner } ; les modifications des autres deviennent des suggestions
+web-rule-add-only = Tout le monde peut ajouter ; les autres modifications sont décidées par { $stewards }
+web-rule-per-person = Chaque dossier qu'il contient appartient à la personne dont il porte le nom
+web-shortcuts = Aller à
+web-here-others = Dossier de { $owner }, pas sur cet ordinateur
+web-here-chosen = Votre choix
+web-forget = Revenir au choix par défaut
+web-folder-others-note = C'est le dossier de { $owner } : il n'est pas sur cet ordinateur, sauf si vous le gardez. Ses fichiers restent en sécurité sur les machines de sauvegarde.
+web-sync-title = Dossiers sur cet ordinateur
+web-sync-lead = Cochez les dossiers à garder sur cet ordinateur. Un dossier coché ou décoché entraîne les dossiers qu'il contient ; vous pouvez encore choisir pour chacun d'eux.
+web-sync-help = Les fichiers d'un dossier qui n'est pas sur cet ordinateur restent en sécurité sur les machines de sauvegarde, et pigeon les montre toujours. Libérer un dossier attend que chacun de ses fichiers y soit en sécurité ; le garder à nouveau le télécharge, complet.
+web-sync-partly = certains de ses dossiers ne sont pas sur cet ordinateur
+web-sync-inside =
+    { $count ->
+        [one] 1 dossier dans { $name }
+       *[other] { $count } dossiers dans { $name }
+    }
+web-sync-apply = Appliquer
+web-sync-unchanged = Rien à changer : chaque dossier est déjà comme coché.

@@ -1,136 +1,42 @@
 //! The pages (10 §10.3, ux.md §6): each opens with its one-line answer,
-//! under the five sections' navigation. Every word comes from the
-//! catalogue (ADR 0028). Minimal event handlers update Home's headline
-//! and health facts through text nodes; action results remain static.
+//! in the frame of `shell.rs`. Every word comes from the catalogue (ADR
+//! 0028). Home's headline card and the sidebar's status follow the server's
+//! events through the client script; action results stay static.
 
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
 
 use crate::Renderer;
+use crate::icons::icon;
+use crate::shell::{Head, document};
 use axum::Extension;
 use axum::extract::State;
 use axum::response::Html;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use futures_util::StreamExt;
 use futures_util::stream::{self, Stream};
-use maud::{DOCTYPE, Markup, html};
+use maud::{Markup, html};
+use pigeon_i18n::Message;
+use pigeon_proto::api::Level;
 use pigeon_proto::{Request, Response};
 
 use crate::{FormToken, Web};
 
-/// The sections, as (path, message id); Settings comes later.
-const SECTIONS: &[(&str, &str)] = &[
-    ("/", "web-nav-home"),
-    ("/files", "web-nav-files"),
-    ("/suggestions", "web-nav-suggestions"),
-    ("/machines", "web-nav-machines"),
-    ("/settings", "web-nav-settings"),
-    ("/join", "web-setup"),
-];
-
-const STYLE: &str = "body{font-family:system-ui,sans-serif;max-width:46rem;margin:2rem auto;\
-padding:0 1rem;line-height:1.5;color:#1b1b1b;background:#fff}main{overflow-wrap:anywhere}\
-nav a{margin-right:1.2rem;display:inline-block}\
-nav a[aria-current]{font-weight:bold}h1{font-size:1.5rem}li{margin:.3rem 0}\
-article{border-top:1px solid #ccc;padding:.5rem 0}form{display:inline-block;margin:0 1rem .75rem 0}\
-.visually-hidden,.skip:not(:focus){position:absolute;width:1px;height:1px;margin:-1px;padding:0;\
-overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}\
-.skip:focus{display:inline-block;padding:.5rem 0}\
-@media (max-width:40rem){button,select,input:not([type=checkbox]):not([type=radio]),nav a{min-height:44px;\
-box-sizing:border-box}nav a{display:inline-flex;align-items:center;margin-right:1rem}\
-input[type=checkbox],input[type=radio]{width:1.5rem;height:1.5rem;vertical-align:middle}}\
-.capacity-details{overflow-wrap:anywhere}\
-.pause-banner{border:2px solid #b8860b;border-radius:.3rem;padding:.25rem 1rem .75rem;margin:1rem 0}\
-textarea{max-width:100%;box-sizing:border-box}\
-.recovery-instructions{overflow-wrap:anywhere}.recovery-instructions p{margin:.25rem 0}\
-.recovery-code{overflow-wrap:anywhere;white-space:pre-wrap;font-size:.7rem}\
-.recovery-qr svg{width:100%;max-width:32rem;height:auto}\
-@media (prefers-color-scheme:dark){:root{color-scheme:dark}body{color:#e6e6e6;background:#161616}\
-article{border-color:#444}}\
-@media print{nav,.no-print{display:none}body{margin:0;max-width:none}.recovery-qr svg{max-width:12cm}}";
-
-/// Puts each `headline` event's text in the page's headline.
-const SCRIPT: &str = "const s=new EventSource(document.getElementById('live').dataset.events);\
-s.addEventListener('headline',e=>{const h=document.getElementById('headline');\
-if(h.textContent!==e.data)h.textContent=e.data});\
-s.addEventListener('health',e=>{const p=JSON.parse(e.data),h=document.getElementById('health');\
-if(!h||h.dataset.membership!==p.membership){location.reload();return}\
-for(const [id,value] of Object.entries(p.values)){const n=document.getElementById(id);\
-if(n&&n.textContent!==value)n.textContent=value}\
-const l=document.getElementById('health-explanations');\
-if(l&&JSON.stringify([...l.children].map(n=>n.textContent))!==JSON.stringify(p.explanations)){\
-l.replaceChildren(...p.explanations.map(text=>{const n=document.createElement('li');n.textContent=text;return n}))}})";
-
-/// An external same-origin script also works under the bridge's strict CSP.
-pub async fn script() -> impl axum::response::IntoResponse {
-    (
-        [(
-            axum::http::header::CONTENT_TYPE,
-            "text/javascript; charset=utf-8",
-        )],
-        SCRIPT,
-    )
+/// A page of section `here` that opens with `title` as its heading.
+pub(crate) fn page(r: &Renderer, here: &str, title: &str, body: &Markup) -> Html<String> {
+    Html(document(r, here, title, body, Head::Title))
 }
 
-pub(crate) fn page(r: &Renderer, here: &str, headline: &str, body: &Markup) -> Html<String> {
-    document(r, here, headline, body, here == "/")
-}
-
-fn document(r: &Renderer, here: &str, headline: &str, body: &Markup, live: bool) -> Html<String> {
-    let lang = r.catalogue().lang().to_string();
-    Html(
-        html! {
-            (DOCTYPE)
-            html lang=(lang) {
-                head {
-                    meta charset="utf-8";
-                    meta name="viewport" content="width=device-width, initial-scale=1";
-                    title {
-                        @if !live { (headline) " – " }
-                        (r.id("web-title"))
-                    }
-                    style { (STYLE) }
-                }
-                body {
-                    a class="skip" href="#main" { (r.id("web-skip")) }
-                    @if let Some(mount) = &r.mount {
-                        p class="no-print" { a href=(&mount.back) { (&mount.label) } }
-                        @if !mount.storage_controls { p { (r.id("web-managed-client")) } }
-                    }
-                    (pause_banner(r, headline, live))
-                    nav aria-label=(r.id("web-title")) {
-                        @for (path, id) in SECTIONS {
-                            @if r.mount.is_none() || *path != "/join" {
-                                @if *path == here {
-                                    a href=(r.url(path)) aria-current="page" { (r.id(id)) }
-                                } @else {
-                                    a href=(r.url(path)) { (r.id(id)) }
-                                }
-                            }
-                        }
-                    }
-                    main id="main" tabindex="-1" {
-                        @if live {
-                            h1 id="headline" aria-live="polite" { (headline) }
-                            noscript { p { (r.id("web-noscript")) } }
-                        } @else {
-                            h1 id="title" { (headline) }
-                        }
-                        (body)
-                    }
-                    @if live { script id="live" src=(r.url("/live.js")) data-events=(r.url("/events")) {} }
-                }
-            }
-        }
-        .into_string(),
-    )
+/// A page whose `body` has its own heading; `title` names it in the tab.
+pub(crate) fn bare(r: &Renderer, here: &str, title: &str, body: &Markup) -> Html<String> {
+    Html(document(r, here, title, body, Head::Own))
 }
 
 /// The pause in force, on every page, with *Share again*, even when
 /// something else needs the person (15 §15.6). Home's headline may say it
 /// already; there the banner keeps only the button.
-fn pause_banner(r: &Renderer, headline: &str, live: bool) -> Markup {
+pub(crate) fn pause_banner(r: &Renderer, headline: &str, live: bool) -> Markup {
     let Some(banner) = &r.banner else {
         return html! {};
     };
@@ -148,17 +54,7 @@ fn pause_banner(r: &Renderer, headline: &str, live: bool) -> Markup {
 
 /// A page that says only why the request was refused.
 pub fn refused(web: &Web, id: &str) -> Html<String> {
-    let r = web.renderer();
-    Html(
-        html! {
-            (DOCTYPE)
-            html lang=(r.catalogue().lang().to_string()) {
-                head { meta charset="utf-8"; title { (r.id("web-title")) } style { (STYLE) } }
-                body { main { p { (r.id(id)) } } }
-            }
-        }
-        .into_string(),
-    )
+    Html(crate::shell::refused(&web.renderer(), id))
 }
 
 /// The lines of the answers to `request`: a problem's, or the result's.
@@ -172,28 +68,33 @@ pub async fn lines(web: &Web, r: &Renderer, request: Request) -> Vec<String> {
     out
 }
 
+/// What `pigeon status` says, for Home and the live status.
+struct Status {
+    headline: String,
+    rest: Vec<String>,
+    level: Option<Level>,
+    no_group: bool,
+    health: Option<Box<pigeon_proto::health::HealthReport>>,
+    denied: bool,
+}
+
 /// The headline and the lines under it of `pigeon status`.
-async fn status(
-    web: &Web,
-    r: &Renderer,
-) -> (
-    String,
-    Vec<String>,
-    bool,
-    Option<Box<pigeon_proto::health::HealthReport>>,
-    bool,
-) {
+async fn status(web: &Web, r: &Renderer) -> Status {
     let answers = web.ask(Request::Health).await;
     let health = answers.iter().find_map(|answer| match answer {
         Response::Health(report) => Some(report.clone()),
         _ => None,
     });
-    let no_group = answers
-        .iter()
-        .any(|a| matches!(a, Response::Problem(p) if p.code == "not-in-group"));
-    let denied = answers
-        .iter()
-        .any(|a| matches!(a, Response::Problem(p) if p.code == "web-forbidden"));
+    let level = answers.iter().find_map(|answer| match answer {
+        Response::Health(report) => Some(report.status.level),
+        Response::Status(s) => Some(s.level),
+        _ => None,
+    });
+    let problem = |code: &str| {
+        answers
+            .iter()
+            .any(|a| matches!(a, Response::Problem(p) if p.code == code))
+    };
     let mut all: Vec<String> = answers
         .iter()
         .filter(|a| !matches!(a, Response::Progress { .. }))
@@ -204,13 +105,36 @@ async fn status(
     } else {
         all.split_off(1)
     };
-    (
-        all.pop().unwrap_or_default(),
+    Status {
+        headline: all.pop().unwrap_or_default(),
         rest,
-        no_group,
+        level,
+        no_group: problem("not-in-group"),
         health,
-        denied,
-    )
+        denied: problem("web-forbidden"),
+    }
+}
+
+/// A level as the client and the stylesheet name it.
+fn level_name(level: Level) -> &'static str {
+    match level {
+        Level::NeedsYou => "needs-you",
+        Level::NotSafe => "not-safe",
+        Level::NotChecked => "not-checked",
+        Level::Working => "working",
+        Level::Safe => "safe",
+    }
+}
+
+/// The icon of a headline's level.
+fn level_icon(level: Option<Level>) -> &'static str {
+    match level {
+        Some(Level::Safe) => "safe",
+        Some(Level::Working) => "working",
+        Some(Level::NotSafe) => "clock",
+        Some(Level::NeedsYou) => "alert",
+        Some(Level::NotChecked) | None => "question",
+    }
 }
 
 /// Text for screen readers only, after a button's short visible label:
@@ -223,15 +147,15 @@ pub(crate) fn list(items: &[String]) -> Markup {
     html! { ul { @for i in items { li { (i.trim()) } } } }
 }
 
-/// Home: the headline, what is not safe yet and why, and the deletions
-/// pigeon holds (`held.rs`).
+/// Home: the headline, what is not safe yet and why, the deletions pigeon
+/// holds (`held.rs`) and the group's health.
 pub async fn home(
     State(web): State<Arc<Web>>,
     Extension(form): Extension<FormToken>,
 ) -> Html<String> {
     let r = web.renderer();
-    let (headline, rest, no_group, health, _) = status(&web, &r).await;
-    let (conflicts, held) = if no_group {
+    let s = status(&web, &r).await;
+    let (conflicts, held) = if s.no_group {
         (html! {}, html! {})
     } else {
         (
@@ -239,22 +163,47 @@ pub async fn home(
             crate::held::section(&web, &r, &form.0).await,
         )
     };
+    let class = s.level.map_or("headline-card".to_owned(), |l| {
+        format!("headline-card lv-{}", level_name(l))
+    });
     let body = html! {
-        ul id="health-explanations" { @for line in &rest { li { (line.trim()) } } }
+        section id="headline-card" class=(class) aria-labelledby="headline" {
+            (icon(level_icon(s.level), ""))
+            div {
+                h1 id="headline" aria-live="polite" { (s.headline) }
+                ul id="health-explanations" class="plain-list" { @for line in &s.rest { li { (line.trim()) } } }
+                noscript { p class="lead" { (r.id("web-noscript")) } }
+            }
+        }
+        @if !s.no_group {
+            nav class="shortcuts" aria-label=(r.id("web-shortcuts")) {
+                @for (path, id, symbol) in [("/files", "web-nav-files", "folder"), ("/deleted", "web-deleted", "trash"), ("/suggestions", "web-nav-suggestions", "suggest"), ("/machines", "web-nav-machines", "people")] {
+                    a href=(r.url(path)) { (icon(symbol, "")) span { (r.id(id)) } }
+                }
+            }
+        }
         (conflicts)
         (held)
-        @if let Some(health) = &health { (crate::health::section(&r, health)) }
-        @if no_group && r.mount.is_none() {
-            p { (r.id("web-setup-help")) }
-            p { a href=(r.url("/join")) { (r.id("web-setup")) } }
+        @if let Some(health) = &s.health { (crate::health::section(&r, health)) }
+        @if s.no_group && r.mount.is_none() {
+            div class="card stack" {
+                p { (r.id("web-setup-help")) }
+                p { a class="btn primary" href=(r.url("/join")) { (icon("plus", "")) (r.id("web-setup")) } }
+            }
         }
     };
-    page(&r, "/", &headline, &body)
+    bare(&r, "/", &s.headline, &body)
 }
 
 /// The result of an action: its first line as the title, the rest under
-/// it, and the way back to `here`.
+/// it, and the way back to `here`. A problem's result says so, for the
+/// client's toast.
 pub fn result(r: &Renderer, here: &str, mut lines: Vec<String>) -> Html<String> {
+    let code = r
+        .catalogue()
+        .format(&Message::new("problem-code").arg("code", "\u{0}"));
+    let code = code.split('\u{0}').next().unwrap_or_default().to_owned();
+    let problem = !code.is_empty() && lines.iter().any(|l| l.starts_with(&code));
     let rest = if lines.is_empty() {
         Vec::new()
     } else {
@@ -262,12 +211,14 @@ pub fn result(r: &Renderer, here: &str, mut lines: Vec<String>) -> Html<String> 
     };
     let title = lines.pop().unwrap_or_default();
     let body = html! {
-        (list(&rest))
-        p { a href=(r.url(here)) { (r.id("web-back")) } }
+        div class="card stack" data-result {
+            @if problem { span data-problem hidden {} }
+            (list(&rest))
+            p { a class="btn" href=(r.url(here)) { (icon("back", "")) (r.id("web-back")) } }
+        }
     };
-    // An action result must keep its own title. Home's live status would
-    // replace a join refusal with "not in a group" after five seconds.
-    document(r, here, &title, &body, false)
+    // An action result keeps its own title; only Home's headline is live.
+    page(r, here, &title, &body)
 }
 
 /// Any other path: a page that says there is none, with the navigation.
@@ -276,11 +227,12 @@ pub async fn not_found(State(web): State<Arc<Web>>) -> (axum::http::StatusCode, 
     let body = html! { p { a href=(r.url("/")) { (r.id("web-nav-home")) } } };
     (
         axum::http::StatusCode::NOT_FOUND,
-        document(&r, "", &r.id("web-not-found"), &body, false),
+        page(&r, "", &r.id("web-not-found"), &body),
     )
 }
 
-/// The headline every 5 seconds, as `headline` events.
+/// The headline and its level every 5 seconds, as `headline` and `level`
+/// events, and Home's health facts as `health`.
 pub async fn events(
     State(web): State<Arc<Web>>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
@@ -289,13 +241,16 @@ pub async fn events(
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
         let r = web.renderer();
-        let (headline, _, _, health, denied) = status(&web, &r).await;
-        if denied {
+        let s = status(&web, &r).await;
+        if s.denied {
             return None;
         }
         let mut events: Vec<Result<Event, Infallible>> =
-            vec![Ok(Event::default().event("headline").data(headline))];
-        if let Some(health) = health {
+            vec![Ok(Event::default().event("headline").data(s.headline))];
+        if let Some(level) = s.level {
+            events.push(Ok(Event::default().event("level").data(level_name(level))));
+        }
+        if let Some(health) = s.health {
             events.push(Ok(Event::default()
                 .event("health")
                 .data(crate::health::event(&r, &health))));
@@ -304,4 +259,9 @@ pub async fn events(
     })
     .flat_map(stream::iter);
     Sse::new(s).keep_alive(KeepAlive::default())
+}
+
+/// The first letter of a person’s name, for their avatar.
+pub(crate) fn initial(name: &str) -> String {
+    name.chars().next().map(String::from).unwrap_or_default()
 }

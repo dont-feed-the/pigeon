@@ -19,6 +19,8 @@ impl Backend for Nested {
                             path: path.into(),
                             state: State::Protected,
                             freed: false,
+                            size: None,
+                            modified: None,
                         })
                         .collect(),
                 }]
@@ -39,9 +41,15 @@ async fn the_first_link_skips_to_the_content_in_both_languages() {
     for (lang, text) in [("en", "Skip to content"), ("fr", "Aller au contenu")] {
         let w = Web::new(Arc::new(Fixed), lang.parse().unwrap(), 4321);
         let page = page_of(&w, "/files").await;
-        let first = page.split("<body>").nth(1).unwrap();
+        let first = page
+            .split("<body")
+            .nth(1)
+            .unwrap()
+            .split("<a ")
+            .nth(1)
+            .unwrap();
         assert!(
-            first.starts_with(&format!("<a class=\"skip\" href=\"#main\">{text}</a>")),
+            first.starts_with(&format!("class=\"skip\" href=\"#main\">{text}</a>")),
             "{first}"
         );
         assert!(page.contains("<main id=\"main\""), "{page}");
@@ -55,7 +63,7 @@ async fn repeated_buttons_say_which_row_they_act_on() {
     for n in [1, 2] {
         assert!(
             file.contains(&format!(
-                "Open a copy<span class=\"visually-hidden\"> — version {n}, saved"
+                "Download a copy<span class=\"visually-hidden\"> — version {n}, saved"
             )),
             "{file}"
         );
@@ -85,17 +93,13 @@ async fn a_folder_page_is_named_and_navigated_from_that_folder() {
     let w = Web::new(Arc::new(Nested), "en".parse().unwrap(), 4321);
     let page = page_of(&w, "/folder?path=%2FFamily%2FPhotos%2FEnfant").await;
     assert!(page.contains("<h1 id=\"title\">Enfant</h1>"), "{page}");
-    assert!(page.contains("<p>/Family/Photos/Enfant</p>"), "{page}");
-    assert!(page.contains(">graine.txt: "), "{page}");
-    assert!(page.contains(">deep/note.txt: "), "{page}");
+    assert!(page.contains("data-name=\"graine.txt\""), "{page}");
+    assert!(page.contains("data-name=\"deep\""), "{page}");
     assert!(
-        page.contains("href=\"/folder?path=%2FFamily%2FPhotos\">Back</a>"),
+        page.contains("href=\"/folder?path=%2FFamily%2FPhotos\">Photos</a>"),
         "{page}"
     );
-    assert!(
-        page.contains("Free up space<span class=\"visually-hidden\"> — Enfant</span>"),
-        "{page}"
-    );
+    assert!(page.contains("href=\"/files\""), "{page}");
     let top = page_of(&w, "/folder?path=%2FFamily%2FPhotos").await;
-    assert!(top.contains("href=\"/files\">Back</a>"), "{top}");
+    assert!(top.contains("href=\"/files\""), "{top}");
 }
