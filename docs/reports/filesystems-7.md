@@ -100,5 +100,11 @@ completed successfully on 17 October. It validated v0.6.4 source
 workspace, four native daemon shards, lab, fixed slice and random schedules.
 That source predates this filesystem-admission checkpoint, so the passing
 baseline does not establish its native APFS adapter or the later scheduling
-changes. Latest-source v0.6.9 background run 39066233321 remains pending.
+changes. Latest-source v0.6.9 background run 39066233321 has completed
+its workspace with 690 passes, two failures and one skip; other native shards
+remain pending. Both failures are telemetry fixtures requesting Mac backup
+roles in a normal build, correctly refused with `backup-machine-needs-linux`.
+Those multi-daemon fixtures now require the lab feature and are selected by
+the existing native daemon shards. Production role admission is unchanged;
+the unchanged failing Mac workspace is not retried as a timing miss.
 ZFS runtime and measured reference-tree/HDD budgets remain open.

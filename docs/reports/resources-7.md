@@ -792,7 +792,8 @@ Git repository and local QUIC node: valid changes apply, equal readings keep
 the same snapshot, an invalid value preserves it, and the next valid edit
 applies without restart. Both runtime/configuration retakes pass. All-target
 workspace Clippy passes with lab, trace and console features. The broad
-783-check run precedes only that final runtime test and guide additions.
+783-check run precedes the final runtime test, guide, HTTP diagnostic and
+subsequent telemetry fixture-tier additions.
 
 An English simulated task review identified a two-group insertion ambiguity
 in the guide. The focused retake accepts explicit placement after the
@@ -810,8 +811,8 @@ results remain periodic background evidence under the user's release policy.
 The seven real Linux nights are still required.
 
 The complete parallel workspace run passed all 783 selected checks (two
-skipped); its source predates only the final runtime-only fixture, guide
-and HTTP-status diagnostic additions. The subsequent production-loop
+skipped); its source predates the final runtime-only fixture, guide,
+HTTP-status diagnostic and later telemetry fixture-tier additions. The subsequent production-loop
 retake passed both runtime/configuration checks, and final all-target
 Clippy and repository structural/ADR/spec checks pass before committing.
 Current-main integration and exact-head CI still precede merging.
@@ -821,3 +822,21 @@ validation. Compared with its tested queue parent, main changes only the
 version, lockfile and release reports. Affected queue/history/configuration
 and live-reload checks pass again after integration, with all-target Clippy
 and repository checks. No PR version bump is introduced.
+
+## Mac telemetry fixture correction before revalidation
+
+The v0.6.9 periodic Mac workspace (job 117496213933) passed 690 of
+692 checks, with one skip. Both telemetry multi-daemon fixtures failed
+because the normal build correctly refuses Mac backup roles. They now
+require the lab feature, matching the other simulated backup scenarios and
+the existing native-shard selection. No production role or filesystem rule
+is relaxed. The original assertion remains retained; this deterministic
+fixture-tier error is not retried on unchanged source. PR #79's earlier
+head is superseded so the correction and folder priorities validate together.
+
+Normal-build test discovery now finds zero telemetry multi-daemon fixtures;
+lab discovery finds both, and the unchanged native-shard selector includes
+that file. Both lab tests pass again with the corrected tier. Final
+all-target workspace Clippy and structural/ADR/spec checks pass. Normal Mac
+backup refusal stays required; a future periodic source run supplies the
+Mac retake, separate from these Linux observations.
