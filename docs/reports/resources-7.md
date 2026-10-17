@@ -164,6 +164,35 @@ never retries automatically. Atomic `read-tree` uses the existing one-second,
 caller-deadline-bounded index retry. Real Git fixtures show a short owner-held
 lock succeeds after its owner removes it and a persistent lock stays exact.
 
+## Native transfer batches and local-content observations
+
+The next head (`47974c5`) again missed initial 102-file protection in CI.
+Its checksum-verified saved fixture holds 102 correct laptop objects but
+only 80 on the backup, unlike the previous stale-metadata fixture. Logs
+show duplicate transfer-lock conflicts and interrupted fetches. Status calls
+also spend 1–4 seconds starting per-key local-content queries.
+
+Placement now reuses native `get` and per-peer `copy` batches, feeding only
+one key after revalidating its current authority. Batches use the same owned
+process-group controller and active clock as one-shot operations. Cancelling
+an exchange kills its process tree and discards the session, so the next key
+cannot consume a stale answer. Native process tests cover reuse, an 800 ms
+deliberate pause within a 600 ms active budget, real timeout and cancellation
+of stopped descendants. All 21 selected checks pass locally, including the
+102-file lifecycle in 28.5 seconds before batching local-content observations.
+That timing is finite local evidence, not a controlled CI speedup.
+
+Local presence observations now use bounded 64-key `contentlocation --batch`
+queries, preserving blank answers and rejecting incomplete batches. Unusual
+encoded key names use the scalar query. Upstream `Command/ContentLocation.hs`
+declares the command batchable and checks the native object exists. Location
+claims remain separate from durable positive-copy proofs and erasure authority.
+With both batches integrated, 65 selected native checks pass, including full
+install/crash recovery, protection/free/keep, a returning backup, content
+erasure barriers and controlled process lifetimes. The 102-file lifecycle
+took 30.5 seconds in that concurrent run. The real 67-key/missing-key fixture
+also checks batched local-presence answers across the boundary.
+
 ## Repeated-save safety regression found during scheduling
 
 A new native hot-file fixture exposed a pre-existing problem on `a30376d`:

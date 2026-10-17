@@ -22,7 +22,7 @@ use pigeon_core::state::{Custodian, Settings, State, Version, rank, state};
 use pigeon_core::time::{Span, Time};
 use pigeon_proto::api::{self, Arg, Message, StatusReport, VersionStatus};
 
-use crate::custody::{holders_for, present};
+use crate::custody::{holders_for, present_for};
 use crate::group::Group;
 use crate::status_why::Silent;
 use crate::util::rfc3339;
@@ -277,6 +277,7 @@ async fn observe_at(
         .map(|(_, key)| key.clone())
         .collect();
     let locations = holders_for(&g.git, &wanted_keys).await;
+    let objects = present_for(&g.git, &wanted_keys).await;
     let mut out = Vec::new();
     for (path, key) in keys {
         if !(prefix.is_empty() || path == prefix || path.starts_with(&format!("{prefix}/"))) {
@@ -289,7 +290,7 @@ async fn observe_at(
                     .iter()
                     .any(|m| m.get(id).and_then(|k| k.get(&path)) == Some(&key))
         };
-        let local = present(g, &key).await.is_some();
+        let local = objects.contains_key(&key);
         let version = Version {
             custodians: custodians
                 .iter()

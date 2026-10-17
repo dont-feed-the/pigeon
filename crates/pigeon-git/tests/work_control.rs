@@ -229,3 +229,127 @@ async fn cancellation_of_a_stopped_operation_leaves_no_running_descendant() {
         )
     );
 }
+
+fn batch_fixture() -> (tempfile::TempDir, Repo, Arc<Policy>) {
+    let (dir, repo, policy) = fixture(true);
+    std::fs::write(
+        dir.path().join("git"),
+        r#"#!/bin/sh
+echo $$ > parent.pid
+while IFS= read -r key; do
+    if [ "$key" = wait ]; then
+        (while :; do printf c >> child.beats; sleep 0.01; done) &
+        worker=$!
+        echo "$worker" > child.pid
+        trap 'kill "$worker" 2>/dev/null; wait "$worker" 2>/dev/null; exit 143' TERM
+        while [ ! -e finish ]; do printf p >> parent.beats; sleep 0.01; done
+        kill "$worker"
+        wait "$worker" 2>/dev/null
+    fi
+    printf '{"key":"%s","success":true}\n' "$key"
+done
+"#,
+    )
+    .unwrap();
+    (dir, repo, policy)
+}
+
+#[tokio::test]
+async fn a_batch_reuses_its_process_and_excludes_deliberate_group_suspension() {
+    let (dir, repo, policy) = batch_fixture();
+    let mut batch = repo
+        .batch(&["annex", "get", "--batch-keys", "--json"])
+        .unwrap();
+    let task = tokio::spawn(async move {
+        let answer = batch.call("wait", Duration::from_millis(600)).await;
+        (batch, answer)
+    });
+    eventually(|| beats(dir.path(), "parent.beats") >= 2).await;
+    policy.run.store(false, Ordering::Relaxed);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let before = (
+        beats(dir.path(), "parent.beats"),
+        beats(dir.path(), "child.beats"),
+    );
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    assert_eq!(
+        before,
+        (
+            beats(dir.path(), "parent.beats"),
+            beats(dir.path(), "child.beats")
+        )
+    );
+    assert!(!task.is_finished());
+    std::fs::write(dir.path().join("finish"), b"finish").unwrap();
+    policy.run.store(true, Ordering::Relaxed);
+    let (mut batch, answer) = task.await.unwrap();
+    assert!(answer.unwrap().contains("wait"));
+    for key in ["next", "last"] {
+        let answer: pigeon_git::annex::Answer = batch
+            .call_json(key, Duration::from_secs(2))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(answer.key.as_deref(), Some(key));
+    }
+    assert_eq!(batch.starts, 1);
+    assert_eq!(policy.active.load(Ordering::Relaxed), 0);
+    assert!(batch.stop(Duration::from_secs(2)).await);
+    eventually(|| dead(dir.path(), "parent.pid") && dead(dir.path(), "child.pid")).await;
+}
+
+#[tokio::test]
+async fn cancelling_a_stopped_batch_kills_descendants_and_cannot_reuse_a_stale_answer() {
+    let (dir, repo, policy) = batch_fixture();
+    let batch = Arc::new(tokio::sync::Mutex::new(
+        repo.batch(&["annex", "get", "--batch-keys", "--json"])
+            .unwrap(),
+    ));
+    let other = batch.clone();
+    let task = tokio::spawn(async move {
+        other
+            .lock()
+            .await
+            .call("wait", Duration::from_secs(5))
+            .await
+    });
+    eventually(|| beats(dir.path(), "parent.beats") >= 2).await;
+    policy.run.store(false, Ordering::Relaxed);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    task.abort();
+    assert!(task.await.unwrap_err().is_cancelled());
+    assert_eq!(policy.active.load(Ordering::Relaxed), 0);
+    eventually(|| dead(dir.path(), "parent.pid") && dead(dir.path(), "child.pid")).await;
+    policy.run.store(true, Ordering::Relaxed);
+    let mut batch = batch.lock().await;
+    let answer: pigeon_git::annex::Answer = batch
+        .call_json("fresh", Duration::from_secs(2))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(answer.key.as_deref(), Some("fresh"));
+    assert_eq!(batch.starts, 2);
+    assert!(batch.stop(Duration::from_secs(2)).await);
+}
+
+#[tokio::test]
+async fn an_active_batch_deadline_kills_the_group_and_the_next_key_starts_fresh() {
+    let (dir, repo, policy) = batch_fixture();
+    let mut batch = repo
+        .batch(&["annex", "get", "--batch-keys", "--json"])
+        .unwrap();
+    assert!(matches!(
+        batch.call("wait", Duration::from_millis(60)).await,
+        Err(Error::Timeout { .. })
+    ));
+    assert_eq!(policy.active.load(Ordering::Relaxed), 0);
+    eventually(|| dead(dir.path(), "parent.pid") && dead(dir.path(), "child.pid")).await;
+    let answer: pigeon_git::annex::Answer = batch
+        .call_json("fresh", Duration::from_secs(2))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(answer.key.as_deref(), Some("fresh"));
+    assert_eq!(batch.starts, 2);
+    assert!(batch.stop(Duration::from_secs(2)).await);
+}

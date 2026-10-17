@@ -117,11 +117,13 @@ pub async fn items(g: &Group, me: &str, keys: &BTreeSet<String>) -> Vec<(Work, V
     endangered.retain(|key| keys.contains(key));
     let mut out = Vec::new();
     let locations = holders_for(&g.git, keys).await;
+    let local = if g.role == Role::Custodian {
+        crate::custody::present_for(&g.git, keys).await
+    } else {
+        Default::default()
+    };
     for key in keys {
-        if g.role == Role::Custodian
-            && !endangered.contains(key)
-            && crate::custody::present(g, key).await.is_some()
-        {
+        if g.role == Role::Custodian && !endangered.contains(key) && local.contains_key(key) {
             continue;
         }
         let have = locations.get(key).cloned().unwrap_or_default();

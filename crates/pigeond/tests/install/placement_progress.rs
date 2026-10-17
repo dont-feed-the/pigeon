@@ -35,12 +35,16 @@ async fn bounded_location_batches_match_real_keys_across_the_batch_boundary() {
     let locations = pigeond::custody::holders_for(&l.git, &keys).await;
     assert_eq!(locations.len(), 68);
     assert!(locations[&unknown].is_empty());
+    let objects = pigeond::custody::present_for(&l.git, &keys).await;
+    assert_eq!(objects.len(), 67);
+    assert!(!objects.contains_key(&unknown));
     let own = l.git.config("annex.uuid").await.unwrap();
     for key in keys.iter().filter(|key| **key != unknown) {
         assert!(
             locations[key].contains(&own),
             "the actual local object lost its location: {key}"
         );
+        assert!(objects[key].is_file());
     }
 }
 

@@ -380,9 +380,74 @@ fn read_holders_batch(
 
 /// Where `key`'s content is in this repository, if it is present.
 pub async fn present(g: &Group, key: &str) -> Option<std::path::PathBuf> {
-    let out = g.git.run(&["annex", "contentlocation", key]).await.ok()?;
+    present_one(&g.git, key).await
+}
+
+async fn present_one(git: &Git, key: &str) -> Option<std::path::PathBuf> {
+    let out = git.run(&["annex", "contentlocation", key]).await.ok()?;
     let rel = out.trim();
-    (!rel.is_empty()).then(|| g.git.repo.dir.join(rel))
+    (!rel.is_empty()).then(|| git.repo.dir.join(rel))
+}
+
+/// Local content observations in bounded native batches. A blank answer
+/// means absent; missing/extra lines fail closed. Special encoded key names
+/// use the scalar query rather than guessing their filesystem spelling.
+pub async fn present_for(
+    git: &Git,
+    keys: &BTreeSet<String>,
+) -> BTreeMap<String, std::path::PathBuf> {
+    let keys: Vec<_> = keys
+        .iter()
+        .filter(|key| !key.is_empty() && !key.contains(['\n', '\r', '\0']))
+        .collect();
+    let mut all = BTreeMap::new();
+    for batch in keys.chunks(64) {
+        let input = batch
+            .iter()
+            .map(|key| format!("{key}\n"))
+            .collect::<String>();
+        let Ok((Some(0 | 1), output)) = git
+            .repo
+            .run_status(
+                &["annex", "contentlocation", "--batch"],
+                Some(input.as_bytes()),
+                pigeon_git::DEFAULT_TIMEOUT,
+            )
+            .await
+        else {
+            continue;
+        };
+        let Some(lines) = output.stdout.strip_suffix(b"\n") else {
+            continue;
+        };
+        let lines: Vec<_> = lines.split(|b| *b == b'\n').collect();
+        if lines.len() != batch.len() {
+            continue;
+        }
+        for (key, line) in batch.iter().zip(lines) {
+            if line.is_empty() {
+                continue;
+            }
+            let Ok(path) = std::str::from_utf8(line) else {
+                continue;
+            };
+            let path = std::path::Path::new(path);
+            let object = if path.file_name().is_some_and(|name| name == key.as_str())
+                && path
+                    .parent()
+                    .and_then(std::path::Path::file_name)
+                    .is_some_and(|name| name == key.as_str())
+            {
+                Some(git.repo.dir.join(path))
+            } else {
+                present_one(git, key).await
+            };
+            if let Some(object) = object.filter(|p| p.is_file()) {
+                all.insert((*key).clone(), object);
+            }
+        }
+    }
+    all
 }
 
 /// One round of place, in queue order (15 §15.2): answers how many copies
@@ -434,6 +499,7 @@ async fn place_inner(
     let mut made = 0;
     let mut left = 0;
     let mut validation = crate::placement::Validation::default();
+    let mut transfers = crate::custody_transfer::Pool::default();
     match g.role {
         Role::Laptop => {
             let mut failed = g.lock().unreachable.clone();
@@ -457,16 +523,7 @@ async fn place_inner(
                         left += size;
                         continue;
                     }
-                    let args = [
-                        "annex",
-                        "copy",
-                        "--json",
-                        "--to",
-                        id.as_str(),
-                        "--key",
-                        key.as_str(),
-                    ];
-                    match g.git.run_for(&args, TRANSFER_TIMEOUT).await {
+                    match transfers.copy(&g.git, &id, &key, TRANSFER_TIMEOUT).await {
                         Ok(_) => made += 1,
                         Err(e) => {
                             tracing::debug!(group = %g.id, peer = %id, error = %e, "copy-failed");
@@ -508,8 +565,7 @@ async fn place_inner(
                     made += 1;
                     continue;
                 }
-                let args = ["annex", "get", "--json", "--key", key.as_str()];
-                match g.git.run_for(&args, TRANSFER_TIMEOUT).await {
+                match transfers.get(&g.git, &key, TRANSFER_TIMEOUT).await {
                     Ok(_) => {
                         if let Some(object) = present(g, &key).await {
                             let _ = crate::net::sync::sync_object(&object);
@@ -525,6 +581,7 @@ async fn place_inner(
             }
         }
     }
+    transfers.stop().await;
     g.lock().queue_bytes = left;
     if made > 0 {
         tracing::info!(group = %g.id, copies = made, "placed");
