@@ -18,6 +18,7 @@ pub mod error;
 pub mod run;
 pub mod status;
 pub mod version;
+pub mod work;
 
 pub use env::GitEnv;
 pub use error::{Error, Result};

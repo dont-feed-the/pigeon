@@ -347,6 +347,27 @@ pub async fn present(g: &Group, key: &str) -> Option<std::path::PathBuf> {
 /// laptop sends each key to the custodians lacking it, whose own reserve
 /// refuses what does not fit (E22).
 pub async fn place(g: &Group, me: &str) -> usize {
+    place_inner(g, me, None).await
+}
+
+pub(crate) async fn place_worker(
+    g: &Group,
+    me: &str,
+    d: &std::sync::Weak<crate::daemon::Daemon>,
+) -> usize {
+    place_inner(g, me, Some(d)).await
+}
+
+async fn place_inner(
+    g: &Group,
+    me: &str,
+    d: Option<&std::sync::Weak<crate::daemon::Daemon>>,
+) -> usize {
+    let planning = if d.is_some() {
+        Some(g.busy.lock().await)
+    } else {
+        None
+    };
     if crate::membership::pending(g, me) || g.lock().admission_error.is_some() {
         return 0;
     }
@@ -362,15 +383,22 @@ pub async fn place(g: &Group, me: &str) -> usize {
     }
     let mut made = 0;
     let mut left = 0;
+    let mut validation = crate::placement::Validation::default();
     match g.role {
         Role::Laptop => {
             let mut failed = g.lock().unreachable.clone();
             let items = crate::admission::items(g, me, &keys).await;
+            drop(planning);
             let mut queue = crate::telemetry::Queue::start(&g.id, "protect", "send", items.len());
             for (work, lacking) in items {
                 let Work::Protect { key, size, .. } = work else {
                     continue;
                 };
+                if let Some(d) = d
+                    && !validation.allows(d, g, &key).await
+                {
+                    break;
+                }
                 if g.shared.is_some() && crate::restore::bring(g, &key).await.is_err() {
                     left += size;
                     continue;
@@ -403,6 +431,7 @@ pub async fn place(g: &Group, me: &str) -> usize {
         }
         Role::Custodian => {
             let plan = crate::admission::plan(g, me, &keys).await;
+            drop(planning);
             let mut queue =
                 crate::telemetry::Queue::start(&g.id, "protect", "receive", plan.admitted.len());
             left = plan
@@ -417,6 +446,11 @@ pub async fn place(g: &Group, me: &str) -> usize {
                 let Work::Protect { key, size, .. } = work else {
                     continue;
                 };
+                if let Some(d) = d
+                    && !validation.allows(d, g, &key).await
+                {
+                    break;
+                }
                 if crate::shared::provider_hydrate(g, &key)
                     .await
                     .is_ok_and(|here| here)

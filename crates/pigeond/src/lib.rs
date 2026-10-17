@@ -66,6 +66,7 @@ pub mod merge;
 pub mod net;
 pub mod notices;
 pub mod pause;
+mod placement;
 pub mod prefs;
 pub mod proposal;
 pub mod purge;

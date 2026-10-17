@@ -374,7 +374,12 @@ impl Node {
                 samples.push(crate::resource_control::PathSample {
                     id: (
                         connection.stable_id(),
-                        format!("{:?}:{:?}", path.id(), path.remote_addr()),
+                        format!(
+                            "{}:{:?}:{:?}",
+                            connection.remote_id(),
+                            path.id(),
+                            path.remote_addr()
+                        ),
                     ),
                     rtt_ms: ms,
                     capacity: stats.cwnd.saturating_mul(1000) / ms.max(1),

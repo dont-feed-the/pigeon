@@ -147,6 +147,7 @@ pub struct Group {
     pub known: Mutex<Known>,
     /// Incremental purge scan; cold history work does not hold `busy`.
     pub purge: tokio::sync::Mutex<crate::purge::State>,
+    pub(crate) placement: tokio::sync::Mutex<Option<crate::placement::Task>>,
     /// Held by whatever changes the repository: a round of the loops, or a
     /// request.
     pub busy: tokio::sync::Mutex<()>,
@@ -214,6 +215,7 @@ impl Group {
             shared: None,
             known: Mutex::new(Known::default()),
             purge: Default::default(),
+            placement: Default::default(),
             busy: tokio::sync::Mutex::new(()),
             daemon: tokio::sync::Mutex::new(None),
             syncing: Arc::new(Mutex::new(BTreeMap::new())),
@@ -268,6 +270,7 @@ impl Group {
             files: self.files.clone(),
             known: Mutex::new(Known::default()),
             purge: Default::default(),
+            placement: Default::default(),
             busy: tokio::sync::Mutex::new(()),
             daemon: tokio::sync::Mutex::new(None),
             syncing: Arc::new(Mutex::new(BTreeMap::new())),
@@ -472,6 +475,9 @@ impl Group {
     /// Stops remotedaemon and what it started: it leads its own process
     /// group, so a fetch it left hanging stops too.
     pub async fn stop_remotedaemon(&self) {
+        if let Some(job) = self.placement.lock().await.take() {
+            job.stop().await;
+        }
         if let Some(mut child) = self.daemon.lock().await.take() {
             if let Some(pid) = child.id() {
                 use pigeon_sys::signal::{Action, send_group};

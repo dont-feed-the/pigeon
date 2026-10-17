@@ -166,14 +166,26 @@ fn preparation_confirmation_and_cancellation_preserve_current_and_retained_bytes
     assert!(!decisions[0].completed);
     assert_eq!(decisions[0].waiting.len(), 1);
     assert!(!decisions[0].waiting[0].name.is_empty());
-    let cancelled = answer(pigeon(
-        &alice,
-        &["erase", "--cancel", &decisions[0].id, "--yes"],
-    ))
-    .unwrap();
-    assert!(
-        matches!(cancelled, Answer::Cancelled { .. }),
-        "{cancelled:?}"
+    eventually_within(
+        60,
+        || {
+            let responses = pigeon(&alice, &["erase", "--cancel", &decisions[0].id, "--yes"]);
+            if matches!(answer(responses.clone()), Some(Answer::Cancelled { .. })) {
+                return true;
+            }
+            // An arriving preparation acknowledgement can change main
+            // between review and cancellation. Perform a fresh CLI review
+            // and explicit confirmation; never reuse the previous token.
+            assert!(
+                responses
+                    .iter()
+                    .any(|r| matches!(r, Response::Problem(p) if p.code == "erase-stale")),
+                "{responses:?}"
+            );
+            false
+        },
+        "freshly reviewed cancellation was not accepted",
+        &all,
     );
     assert!(
         !file.exists(),

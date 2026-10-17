@@ -2994,6 +2994,7 @@ dependencies = [
 name = "pigeon-git"
 version = "0.6.1"
 dependencies = [
+ "pigeon-core",
  "pigeon-sys",
  "pigeon-telemetry",
  "rustix",

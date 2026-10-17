@@ -430,7 +430,11 @@ async fn lost_the_name(g: &Group, me: &str, main: &str, path: &str, mine: &Entry
 /// One round of install: every path whose index entry is not `main`'s,
 /// but those of the divergence table (`conflicts.json`), which it updates.
 pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Error> {
-    incoming_at(g, me, t, None, None).await
+    incoming_at(g, me, t, None, None, true).await
+}
+
+pub(crate) async fn incoming_ready(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Error> {
+    incoming_at(g, me, t, None, None, false).await
 }
 
 /// An explicit erasure did not capture private staged paths first. Install
@@ -443,7 +447,7 @@ pub(crate) async fn incoming_erasure(
     after: &str,
     paths: &BTreeSet<String>,
 ) -> Result<Installed, Error> {
-    incoming_at(g, me, t, Some(after), Some(paths)).await
+    incoming_at(g, me, t, Some(after), Some(paths), true).await
 }
 
 async fn incoming_at(
@@ -452,6 +456,7 @@ async fn incoming_at(
     t: &Tracer,
     after: Option<&str>,
     scope: Option<&BTreeSet<String>>,
+    receive: bool,
 ) -> Result<Installed, Error> {
     let mut done = Installed::default();
     if g.worktree.is_none() || crate::capture_file::pending(g) || crate::evict::unsettled(g) {
@@ -566,7 +571,12 @@ async fn incoming_at(
                     done.deferred += 1;
                     continue;
                 };
-                if crate::restore::bring(g, &key).await.is_err() {
+                let available = if receive {
+                    crate::restore::bring(g, &key).await.is_ok()
+                } else {
+                    crate::restore::available(g, &key).await.unwrap_or(false)
+                };
+                if !available {
                     done.receiving += 1;
                     continue;
                 }

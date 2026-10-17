@@ -17,9 +17,9 @@ reservations are refused for splitting rather than silently undercharged.
 Fourteen hegel laws run 1000 cases each, including extreme integer clock/rate
 ranges. The active-time clock separately proves that arbitrary pauses spend no
 operation budget, backwards clocks refund nothing, and splitting an active
-interval changes no charge. Native child deadlines are not wired to that
-clock yet. These are pure controller laws, not measurements of foreground
-workload interference, real network delay or native process pausing.
+interval changes no charge. The next native scheduling checkpoint wires that
+clock into heavy one-shot children. These are pure controller laws, not
+measurements of foreground workload interference or real network delay.
 
 The P2P filter can distinguish content DATA bodies from protocol and Git
 history bytes without changing their order or bytes. Two more 1000-case
@@ -53,8 +53,12 @@ positive custody proof is introduced.
 macOS probes read IOKit power sources and NSProcessInfo low-power mode,
 with a serial Network.framework monitor for expensive/constrained paths.
 The native module and its lifecycle test cross-compile and pass all-target
-Clippy for Apple Silicon; they have not run on a Mac locally. Periodic
-macOS CI and real foreground budgets remain required evidence.
+Clippy for Apple Silicon. The actual periodic Apple Silicon run
+[39029055613](https://github.com/dont-feed-the/pigeon/actions/runs/39029055613)
+also passed workspace Clippy and `monitor_moves_between_threads_and_samples_native_apis`.
+That workspace run had 599 passes and four failures: three overly long
+bridge socket fixtures and the root-link path guard below. It is not a
+passing macOS suite or a foreground resource-budget measurement.
 
 Linux probes reuse D-Bus for UPower, power profiles and NetworkManager,
 with a two-second sampling deadline. Unknown observations use ADR 0037's
@@ -70,8 +74,8 @@ without replacing Missing or Needs you; Resume remains a person's pause.
 
 ## Remaining
 
-- Protect capture's progress and pause/resume native heavy children safely,
-  including active-time deadlines.
+- Extend the staged work queue and validate native pausing against the
+  foreground HDD workload, including explicit request paths.
 - Integrate file quiet/hot-path scheduling, native priorities and supervisor
   behavior. Validate foreground disk contention and read-latency feedback.
 - Measure the reference-tree idle/scan/memory budgets in CI and the E17
@@ -82,6 +86,59 @@ without replacing Missing or Needs you; Resume remains a person's pause.
 No 10-minute budget, 30-minute HDD run, 72-hour soak, seven-night result or
 two-week dogfood result is inferred from these finite tests.
 
+## Native child scheduling checkpoint
+
+Heavy one-shot annex commands use owned process groups, STOP/CONT and active
+deadlines. Cancellation resumes and kills the whole unreaped group; after
+waiting reaps the leader, the guard disarms before another suspension point
+to avoid signalling a reused PID. Metadata calls bypass the controller.
+Capture ignores power/network waits and keeps its disk share. Each group's
+local stream waits exclude time only from that group's transfer budget.
+
+Twenty-eight selected driver and native checks pass, including real parent
+and helper heartbeats frozen beyond the ordinary deadline, exact output
+after resuming, dead-descendant assertions after cancellation and genuine
+timeout, and independent groups' deadline accounting. These finite process
+tests do not establish the HDD workload budget.
+
+The first integration check found a real scheduling gap: content work held
+the group lock and the round while waiting, blocking later capture. A native
+256 KiB transfer capped at 1 B/s reproduced the failure; a first 64 KiB
+fixture was insufficient because the allowed initial burst completed it.
+Placement now plans under the lock and executes key-only transfers outside
+it. Normal install and keep passes use available local/provider objects;
+kept current-version downloads follow protection work outside the lock.
+Every key rechecks group identity, membership and retained authority, sharing
+only a complete revision-bound retained-key cache. Active stream filtering
+remains unchanged. Stopping or moving a group aborts and joins its worker.
+
+The first integrated driver/native run passed 37 checks, including the live
+capture/history regression, erasure lifecycle and refounding. This is not
+the complete cross-group priority queue or a measured HDD budget.
+Explicit user-request download paths still need scheduling review.
+
+The broader run passed 45 checks, including free/keep, returning backup,
+absent restores, queued erasure and the existing positive-answer barrier.
+Native S2 (11 checks) and S13 (7 checks) passed; their filesystem and roster
+traces were accepted by TLC. A final 12-check pass covers the alias/root-link
+guards, shortened bridge fixtures, child pause policy and a live later-save
+capture during a person's pause. These are finite observations.
+
+Upstream `Annex/Transfer.hs` chooses an independently grouped transferrer
+when explicit stall detection is enabled (`Annex/TransferrerPool.hs`).
+Managed repositories and peers now disable all three stall options; the
+driver retains its bounded active deadline. `Types/StallDetection.hs`
+defines `false` as disabled. The source tarball was checked against the
+repository's pinned SHA-256. E17 remains required for real transfer-tree
+pausing under disk contention.
+
+PR #70's first CI also found a cancellation preview invalidated by incoming
+metadata and `read-tree` racing an index lock during refounding. The fixture
+performs a fresh explicit review only for `erase-stale`; production consent
+never retries automatically. Atomic `read-tree` uses the existing one-second,
+caller-deadline-bounded index retry. Real Git fixtures show a short owner-held
+lock succeeds after its owner removes it and a persistent lock stays exact.
+
 ## Periodic macOS failures
 
 The v0.6.0 periodic run found a missing-file history lookup through macOS's
@@ -91,6 +148,12 @@ missing paths; shared-path validation resolves an alias of the worktree
 while retaining and checking every component below it. Dangling links,
 non-directories and ambiguous missing `..` paths are refused. The native
 migration/history regression and folder-restore checks pass locally.
+
+The broader workspace check caught an in-tree link back to the root, which
+the first alias change mistakenly treated as a new root alias. Resolution
+now chooses the outermost root spelling and retains that link in the checked
+suffix. Existing and outer-alias root-link regressions pass. Three bridge
+lifecycle fixtures now use the established short `/tmp` socket root.
 
 The Linux-only scrub fixture's entire module is now conditional, avoiding
 unused imports under macOS Clippy. The separate periodic mass-deletion

@@ -3,6 +3,7 @@
 //! callers re-check their content authority before and after every wait.
 
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -40,6 +41,7 @@ struct State {
     buckets: [Bucket; 2],
     last_tick: u64,
     pending: usize,
+    group_waits: BTreeMap<String, usize>,
 }
 
 /// Shared across every group and content stream, never one bucket per peer.
@@ -47,6 +49,8 @@ struct State {
 pub struct Controller {
     epoch: Instant,
     inner: Mutex<State>,
+    children: AtomicUsize,
+    person_paused: AtomicBool,
 }
 
 impl Default for Controller {
@@ -67,6 +71,8 @@ impl Controller {
     pub fn new(settings: Effective) -> Self {
         Self {
             epoch: Instant::now(),
+            children: AtomicUsize::new(0),
+            person_paused: AtomicBool::new(false),
             inner: Mutex::new(State {
                 settings,
                 conditions: Conditions::default(),
@@ -76,6 +82,7 @@ impl Controller {
                 buckets: [Bucket::new(0, CHUNK as u64, 16_384); 2],
                 last_tick: 0,
                 pending: 0,
+                group_waits: BTreeMap::new(),
             }),
         }
     }
@@ -93,6 +100,12 @@ impl Controller {
         self.lock().settings = settings;
     }
 
+    /// A person's pause suspends initiated heavy work while the serving
+    /// side remains available to peers, as in 15 §15.6.
+    pub fn set_person_paused(&self, paused: bool) {
+        self.person_paused.store(paused, Ordering::Relaxed);
+    }
+
     #[cfg(test)]
     pub(crate) fn pending(&self) -> usize {
         self.lock().pending
@@ -102,7 +115,7 @@ impl Controller {
     pub fn observe(&self, conditions: Conditions, io_pressure: bool) {
         let mut s = self.lock();
         s.conditions = conditions;
-        let busy = io_pressure && s.pending > 0;
+        let busy = io_pressure && (s.pending > 0 || self.children.load(Ordering::Relaxed) > 0);
         s.disk.observe(self.now(), busy);
     }
 
@@ -130,6 +143,18 @@ impl Controller {
         )
         .is_some()
             || now % 1_000 >= u64::from(share) * 10
+    }
+
+    /// A repository shares the controller but excludes only its own stream
+    /// waits from child deadlines; another group's shaper cannot extend it.
+    pub fn for_group(
+        self: &std::sync::Arc<Self>,
+        group: String,
+    ) -> std::sync::Arc<dyn pigeon_git::work::Control> {
+        std::sync::Arc::new(ChildControl {
+            controller: self.clone(),
+            group,
+        })
     }
 
     /// Update delay feedback at most once per 200 ms, with a rolling ten
@@ -183,18 +208,30 @@ impl Controller {
     /// the filter's existing active-key check, not a second authorization rule.
     pub async fn acquire(
         &self,
+        group: &str,
         direction: Direction,
         bytes: usize,
         mut authorized: impl FnMut() -> std::io::Result<()>,
     ) -> std::io::Result<()> {
-        struct Pending<'a>(&'a Controller);
+        struct Pending<'a>(&'a Controller, &'a str);
         impl Drop for Pending<'_> {
             fn drop(&mut self) {
-                self.0.lock().pending -= 1;
+                let mut state = self.0.lock();
+                state.pending -= 1;
+                if let Some(count) = state.group_waits.get_mut(self.1) {
+                    *count -= 1;
+                    if *count == 0 {
+                        state.group_waits.remove(self.1);
+                    }
+                }
             }
         }
-        self.lock().pending += 1;
-        let _pending = Pending(self);
+        {
+            let mut state = self.lock();
+            state.pending += 1;
+            *state.group_waits.entry(group.to_owned()).or_default() += 1;
+        }
+        let _pending = Pending(self, group);
         loop {
             authorized()?;
             let delay = if self.content_blocked() {
@@ -216,6 +253,54 @@ impl Controller {
     }
 }
 
+#[derive(Debug)]
+struct ChildControl {
+    controller: std::sync::Arc<Controller>,
+    group: String,
+}
+
+impl pigeon_git::work::Control for ChildControl {
+    fn began(&self, _: pigeon_git::work::Class) {
+        self.controller.children.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn ended(&self, _: pigeon_git::work::Class) {
+        self.controller.children.fetch_sub(1, Ordering::Relaxed);
+    }
+
+    fn running(&self, class: pigeon_git::work::Class) -> bool {
+        let capture = class == pigeon_git::work::Class::Capture;
+        let state = self.controller.lock();
+        if !capture
+            && (self.controller.person_paused.load(Ordering::Relaxed)
+                || resources::external_wait(
+                    state.conditions,
+                    state.settings.battery_below,
+                    state.settings.avoid_metered,
+                )
+                .is_some())
+        {
+            return false;
+        }
+        let now = self.controller.now();
+        let share = state.disk.share(now, state.settings.preset, capture);
+        let window = u64::from(share) * 10;
+        // Leave one observation's margin so discretizing a 50 ms capture
+        // floor into child polls cannot reduce it to two 20 ms slices.
+        let window = if capture {
+            (window + pigeon_git::work::POLL_MS).min(1_000)
+        } else {
+            window
+        };
+        now % 1_000 < window
+    }
+
+    fn charging(&self, class: pigeon_git::work::Class) -> bool {
+        class != pigeon_git::work::Class::Transfer
+            || !self.controller.lock().group_waits.contains_key(&self.group)
+    }
+}
+
 /// Tick feedback separately from slow native probes. A D-Bus timeout cannot
 /// delay authorization refresh or the shared stream budget.
 pub async fn run(d: std::sync::Arc<crate::daemon::Daemon>) {
@@ -226,6 +311,9 @@ pub async fn run(d: std::sync::Arc<crate::daemon::Daemon>) {
         tick.tick().await;
         if reload.elapsed() >= Duration::from_secs(2) {
             reload = Instant::now();
+            d.node
+                .resources
+                .set_person_paused(crate::pause::now(&d).is_some());
             match crate::config::load(&d.dirs.config_file()).and_then(|c| {
                 c.resources
                     .effective()
@@ -285,5 +373,77 @@ pub fn tell(d: &crate::daemon::Daemon, report: &mut pigeon_proto::api::StatusRep
             Wait::DiskBusy => "headline-resource-disk",
         };
         report.headline = crate::api::message(id, &[]);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pigeon_git::work::Class;
+
+    #[test]
+    fn power_and_network_waits_leave_capture_running_and_heavy_reads_observe_pressure() {
+        let controller = std::sync::Arc::new(Controller::default());
+        let child = controller.for_group("a".into());
+        controller.observe(
+            Conditions {
+                battery: Some(1),
+                low_power: true,
+                metered: true,
+            },
+            false,
+        );
+        assert!(child.running(Class::Capture));
+        assert!(!child.running(Class::Transfer));
+        assert!(!child.running(Class::Scrub));
+        child.began(Class::Capture);
+        controller.observe(Conditions::default(), true);
+        assert_eq!(controller.waiting(), Some(Wait::DiskBusy));
+        assert!(!child.running(Class::Transfer));
+        child.ended(Class::Capture);
+        assert_eq!(controller.children.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn a_persons_pause_suspends_initiated_children_but_never_capture() {
+        let controller = std::sync::Arc::new(Controller::default());
+        let child = controller.for_group("a".into());
+        controller.set_person_paused(true);
+        assert!(child.running(Class::Capture));
+        assert!(!child.running(Class::Transfer));
+        assert!(!child.running(Class::Scrub));
+        controller.set_person_paused(false);
+        assert!(child.running(Class::Transfer));
+        assert!(child.running(Class::Scrub));
+    }
+
+    #[tokio::test]
+    #[allow(clippy::unwrap_used, reason = "bounded live stream-wait fixture")]
+    async fn a_stream_wait_extends_only_its_own_groups_transfer_budget() {
+        let controller = std::sync::Arc::new(Controller::default());
+        let a = controller.for_group("a".into());
+        let b = controller.for_group("b".into());
+        let queued = controller.clone();
+        let task = tokio::spawn(async move {
+            queued
+                .acquire("a", Direction::Upload, CHUNK, || Ok(()))
+                .await
+        });
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while controller.pending() == 0 {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(!a.charging(Class::Transfer));
+        assert!(b.charging(Class::Transfer));
+        assert!(a.charging(Class::Capture));
+        assert!(a.charging(Class::Scrub));
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        assert_eq!(controller.pending(), 0);
+        assert!(controller.lock().group_waits.is_empty());
+        assert!(a.charging(Class::Transfer));
     }
 }

@@ -229,22 +229,35 @@ fn fits(g: &Group, key: &str) -> bool {
 /// Makes `key`'s content present here: answers a problem code if it does
 /// not fit above the reserve, or cannot be received.
 pub(crate) async fn bring(g: &Group, key: &str) -> Result<(), &'static str> {
+    if available(g, key).await? {
+        return Ok(());
+    }
+    if !fits(g, key) {
+        return Err("disk-full");
+    }
+    receive(g, key).await
+}
+
+/// Resolve local/provider objects without waiting on a network transfer
+/// while a daemon round holds the worktree lock.
+pub(crate) async fn available(g: &Group, key: &str) -> Result<bool, &'static str> {
     if crate::custody::present(g, key).await.is_some() {
         crate::shared::adopt(g, key)
             .await
             .map_err(|_| "receiving")?;
-        return Ok(());
+        return Ok(true);
     }
     if g.shared.is_some()
         && crate::shared::hydrate(g, key)
             .await
             .map_err(|_| "receiving")?
     {
-        return Ok(());
+        return Ok(true);
     }
-    if !fits(g, key) {
-        return Err("disk-full");
-    }
+    Ok(false)
+}
+
+async fn receive(g: &Group, key: &str) -> Result<(), &'static str> {
     let args = ["annex", "get", "--json", "--key", key];
     let (status, output) = g
         .git

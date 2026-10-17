@@ -232,3 +232,14 @@ rebuild the programs. Every selected build, execution and trace check still
 must succeed. The real laptop-storage check passed locally using an
 extracted bundle. This is preparation for a measured improvement, not a
 reported reduction in CI or publication time.
+
+The first actual parallel workflow,
+[39029050268](https://github.com/dont-feed-the/pigeon/actions/runs/39029050268),
+passed all selected checks on `879fad0`. It ran from 11:31:54 to 11:43:25
+UTC: **11 minutes 31 seconds**, including selection. The shared build took
+4m33s; the laptop, custodian and real-client jobs then took 2m04s, 4m37s and
+6m40s respectively, starting together. This is an observed reduction from
+the prior 23m59s serial bridge job, with different cache/build conditions
+and content-controller changes; it is not a controlled attribution or an
+actual publication. Other PR CI exposed two failures, recorded in the M6
+report, so this head was not merged or tagged.

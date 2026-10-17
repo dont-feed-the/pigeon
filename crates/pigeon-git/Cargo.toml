@@ -9,6 +9,7 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+pigeon-core.workspace = true
 pigeon-sys.workspace = true
 pigeon-telemetry.workspace = true
 rustix.workspace = true

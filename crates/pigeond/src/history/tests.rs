@@ -51,6 +51,14 @@ async fn sparse_catalogue_paths_allow_absent_parents_without_following_links_or_
     }
     std::os::unix::fs::symlink(dir.path(), root.join("link")).unwrap();
     assert_eq!(relative(&g, &root.join("link/missing/file.txt")), None);
+    let alias_dir = tempfile::tempdir().unwrap();
+    let alias = alias_dir.path().join("files");
+    std::os::unix::fs::symlink(root, &alias).unwrap();
+    assert_eq!(
+        relative(&g, &alias.join("missing/file.txt")).as_deref(),
+        Some("missing/file.txt")
+    );
+    assert_eq!(relative(&g, &alias.join("link/missing/file.txt")), None);
     std::fs::create_dir_all(root.join("nested/.git")).unwrap();
     assert_eq!(relative(&g, &root.join("nested/missing/file.txt")), None);
 }

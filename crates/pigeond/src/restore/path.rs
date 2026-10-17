@@ -9,9 +9,12 @@ pub(crate) fn relative(g: &Group, path: &Path) -> Option<String> {
     let path = std::path::absolute(path).ok()?;
     // Resolve aliases of the worktree itself (/tmp on macOS), retaining
     // every component below it so parents_clear still rejects links there.
+    // Use the outermost matching root: an in-tree link back to the root
+    // must remain part of the checked suffix, not become another root alias.
     let alias = path
         .ancestors()
-        .find(|ancestor| std::fs::canonicalize(ancestor).is_ok_and(|resolved| resolved == *root))?;
+        .filter(|ancestor| std::fs::canonicalize(ancestor).is_ok_and(|resolved| resolved == *root))
+        .last()?;
     let rel = path.strip_prefix(alias).ok()?;
     let parts: Option<Vec<_>> = rel
         .components()

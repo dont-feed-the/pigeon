@@ -12,9 +12,16 @@ use crate::{
 
 const COOKIE: &[(&str, &str)] = &[("Cookie", "pigeon-bridge-session=browser")];
 
+fn short_temp() -> tempfile::TempDir {
+    tempfile::Builder::new()
+        .prefix("pgnbridge-")
+        .tempdir_in("/tmp")
+        .unwrap()
+}
+
 #[tokio::test]
 async fn revocation_sends_the_exact_key_when_two_clients_share_a_name() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = short_temp();
     let config = config(temp.path());
     let a = client("a", "alice", "app-a");
     let mut c = client("c", "alice", "app-c");
@@ -41,7 +48,7 @@ async fn revocation_sends_the_exact_key_when_two_clients_share_a_name() {
 
 #[tokio::test]
 async fn identities_routes_and_revocation_survive_restart_when_roster_is_offline() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = short_temp();
     let config = config(temp.path());
     let a = client("a", "alice", "app-a");
     let c = client("c", "alice", "app-c");
@@ -143,7 +150,7 @@ async fn queued_legacy_portal_requests_recheck_after_revocation() {
         ("GET", "/file?path=a.txt", ""),
         ("POST", "/resolve", "csrf=alice-form&path=a.txt&choice=ours"),
     ] {
-        let temp = tempfile::tempdir().unwrap();
+        let temp = short_temp();
         let config = config(temp.path());
         let a = client("a", "alice", "app-a");
         let mut saved = store::Store::load(&config.state_dir).unwrap();
