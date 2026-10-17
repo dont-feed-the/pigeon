@@ -9,6 +9,8 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Diagnostic output also hides pasted join invitations, partial socket messages, Git object contents and extra child-environment values.
+
 - Removing a computer or backup machine now explains in English and French that its existing invitation still lets its holder join as a new computer.
 
 - Diagnostic output hides recovery keys, stored invitation and authentication tokens, protocol data and private API messages.
