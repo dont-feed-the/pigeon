@@ -55,13 +55,17 @@ pub(crate) async fn queue(d: &Arc<Daemon>, g: &Arc<Group>) -> usize {
     let me = d.device.clone();
     let wake = d.wake.clone();
     let task = tokio::spawn(async move {
+        let revision = group.git.purge_gate.revision();
         let made = crate::custody::place_worker(&group, &me, &daemon).await;
-        let received = if authorized(&daemon, &group).await {
-            downloads(&daemon, &group).await
+        let received = if let Some(revision) = revision
+            && authorized(&daemon, &group).await
+            && group.git.purge_gate.revision() == Some(revision)
+        {
+            downloads(&daemon, &group, revision).await
         } else {
             0
         };
-        if made > 0 || received > 0 {
+        if made > 0 || received > 0 || group.git.purge_gate.revision() != revision {
             wake.notify_one();
         }
         made
@@ -136,12 +140,15 @@ impl Validation {
 
 /// Kept current versions are fetched after protection work. Install and keep
 /// only use locally available objects while holding the worktree lock.
-async fn downloads(d: &Weak<Daemon>, g: &Group) -> usize {
+async fn downloads(d: &Weak<Daemon>, g: &Group, revision: u64) -> usize {
     if g.worktree.is_none() {
         return 0;
     }
     let keys = {
         let _busy = g.busy.lock().await;
+        if g.git.purge_gate.revision() != Some(revision) {
+            return 0;
+        }
         let Some(main) = g.git.rev("refs/heads/main").await else {
             return 0;
         };
@@ -157,6 +164,9 @@ async fn downloads(d: &Weak<Daemon>, g: &Group) -> usize {
     let mut made = 0;
     let mut validation = Validation::default();
     for key in keys {
+        if g.git.purge_gate.revision() != Some(revision) {
+            break;
+        }
         if crate::custody::present(g, &key).await.is_some() {
             continue;
         }

@@ -102,6 +102,8 @@ pub struct Known {
     /// The bytes place left to send (a laptop) or to receive (a custodian)
     /// in its last round.
     pub queue_bytes: u64,
+    /// Derived, immutable introduction dates used only for queue ordering.
+    pub(crate) protection_dates: Arc<tokio::sync::Mutex<crate::queue_history::Cache>>,
     /// Bounded, per-process diagnostic observations; never safety state.
     pub telemetry_latency: pigeon_core::latency::Ledger<String>,
     /// Current versions observed before protection, at most 4096 identities.

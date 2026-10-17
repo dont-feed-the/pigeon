@@ -465,3 +465,33 @@ archives; the tag and source stayed immutable. No deadline, safety verdict or
 required gate was waived. This repeats the same two fixture families that
 blocked v0.6.7's first run. Pressure diagnostics in the next M6 follow-up target
 that evidence gap; a reduction in failures remains unmeasured.
+
+## v0.6.9 observation
+
+[v0.6.9](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.9)
+published at 2026-10-17T20:18:40Z from `cca9f52c289528fb83f256e4a0b2e6314d7b5482`. Six assets,
+four archive checksums, native Linux installation, pinned annex, completions
+and latest redirect passed independent verification. Candidate lead was
+**1388 seconds**, publication gap **2712 seconds**; both targets were met.
+There are 18 lead and
+17 completed-gap samples. No
+percentile or sustained failure-rate reduction is inferred.
+
+All daemon CI shards passed their first attempt. The first core slice passed
+S1/S2/S3/S4/S6/S7 but failed S8's absence assertion after a disk-full refusal.
+Artifact 12113236151 is 79430 bytes, SHA-256
+`70b7cb6fb96d511addba00899ddb73eec286a08ce7db0ab0e0e9e00032de4418`.
+The retained stream shows a thinning move-aside and rename-in rather than
+completed freeing. One bounded core-slice retry passed all seven scenarios,
+including 15 S8 checks, and all filesystem/roster traces. A publication-only
+retry reused both archives. No tag, deadline, model verdict or gate changed.
+The next follow-up strengthens absence observations using journal boundaries;
+its effect on recurrence remains unmeasured.
+
+The actual v0.6.4 macOS background run 39051800511 completed successfully;
+one v0.6.9 background run, 39066233321, is queued for the combined native
+priority/repair changes. Neither is a measured resource budget or a seven-night
+streak. The remaining four old v0.6.8 background S9 shards were canceled in
+favor of v0.6.9; nine completed jobs were retained, not represented as a
+completed full v0.6.8 model run. Active main cache producers saved before
+obsolete main workflows were canceled.

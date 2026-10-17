@@ -482,6 +482,9 @@ async fn place_inner(
     if crate::membership::pending(g, me) || g.lock().admission_error.is_some() {
         return 0;
     }
+    let Some(revision) = g.git.purge_gate.revision() else {
+        return 0;
+    };
     let keys = match crate::retention::keys(g).await {
         Ok(keys) => keys,
         Err(e) => {
@@ -506,6 +509,9 @@ async fn place_inner(
             let items = crate::admission::items(g, me, &keys).await;
             let mut queue = crate::telemetry::Queue::start(&g.id, "protect", "send", items.len());
             for (work, lacking) in items {
+                if g.git.purge_gate.revision() != Some(revision) {
+                    break;
+                }
                 let Work::Protect { key, size, .. } = work else {
                     continue;
                 };
@@ -519,6 +525,9 @@ async fn place_inner(
                     continue;
                 }
                 for id in lacking {
+                    if g.git.purge_gate.revision() != Some(revision) {
+                        break;
+                    }
                     if failed.contains(&id) {
                         left += size;
                         continue;
@@ -548,6 +557,9 @@ async fn place_inner(
                 })
                 .sum();
             for work in plan.admitted {
+                if g.git.purge_gate.revision() != Some(revision) {
+                    break;
+                }
                 let Work::Protect { key, size, .. } = work else {
                     continue;
                 };

@@ -85,6 +85,7 @@ mod purge_missing;
 pub mod purge_proofs;
 pub mod purge_receipts;
 pub mod purge_state;
+mod queue_history;
 pub mod recovery;
 mod recovery_advice;
 mod recovery_exchange;

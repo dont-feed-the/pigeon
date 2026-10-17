@@ -10,6 +10,7 @@
 //! merged for the projection check and for TLC.
 //! Lab devices use one-second rounds; scenario deadlines still bound waits.
 
+mod absence;
 pub mod cli;
 mod forge;
 pub mod host;
@@ -507,8 +508,17 @@ impl Exec {
             Condition::Absent { on, file } => {
                 let p = self.path(*on, file, w);
                 yes(
-                    fs::symlink_metadata(&p).is_err(),
-                    format!("{} exists", p.display()),
+                    absence::settled(
+                        &p,
+                        &self.devs[on.0 as usize]
+                            .tree
+                            .join(".git/pigeon/install.ndjson"),
+                        &w.path(file),
+                    ),
+                    format!(
+                        "{} is present or has an unsettled filesystem transition",
+                        p.display()
+                    ),
                 )
             }
             Condition::NoPointers { on, folder } => {

@@ -643,3 +643,77 @@ final all-target Clippy include it. The three 1000-case priority laws, twelve
 focused controller/process/QUIC checks, original failing fixtures and accepted
 English/French simulated wording retakes remain distinct evidence. Main cache
 producers saved before tagging. No elapsed or measured M6/M7 gate is inferred.
+
+## Protection queue dates and revision checkpoints
+
+Protection planning previously assigned every key time zero. A native signed
+history with an older one-byte key and a newer 40-byte key reproduced the
+result: with equal copy risks, size placed the older key first. The adapter
+now uses the latest retained reference birth for each key. The existing birth
+index distinguishes a new path/key reference from a merge inheriting any
+parent's pointer. Commit dates are read in bounded batches and cached with
+exact retained tips; unchanged readings share an immutable date map rather
+than cloning every key on each planning pass. Removed proposal tips cannot
+keep stale priority.
+These dates are scheduling hints, never content or release authority.
+Unreadable readings retain the original zero-date fallback and do not replace
+a completed cache entry with invented recent dates.
+
+The recency law runs 1000 cases over signed-integer date ranges and equal
+custody/laptop counts and endangered status, before size and lexical key.
+Three native history checks pass: newer data before the older small key;
+merge inheritance, genuine new references and removed proposals; and a missing
+new commit restored after an unsuccessful reading. These fixtures use explicit
+signed dates, not elapsed age or a retention-period measurement.
+
+A strengthened native cold-probe regression also reproduced a stale plan
+starting a transfer after a later capture. Workers now stop their old plan
+between completed key/peer requests when retained-reference revisions change.
+The enclosing job wakes a fresh round and gives protection another pass
+before kept-content downloads. In-progress requests retain their existing
+controller and authority checks. All five focused history, recency and native
+probe checks pass. This does not implement the complete cross-group/key/folder
+queue or establish the reference-tree/HDD budgets.
+
+
+## Native absence observations after the S8 miss
+
+v0.6.9's first core slice passed S1/S2/S3/S4/S6/S7 but failed S8 after a
+correct disk-full refusal: the file was present again. Original artifact
+12113236151 is 79430 bytes, SHA-256
+`70b7cb6fb96d511addba00899ddb73eec286a08ce7db0ab0e0e9e00032de4418`.
+The [retained thinning stream](evidence/v069-s8-thinning-gap.ndjson) shows
+move-aside followed by rename-in, with no completed free transaction in the
+original complete trace. All original filesystem/roster streams passed TLC;
+the physical absence assertion still failed and remains required.
+
+The native observer previously accepted any failed stat as absence, including
+the middle of a journalled move-aside. New native-file fixtures reproduced
+that false positive and acceptance of unreadable/torn metadata. Absence now
+requires NotFound, stable journal readings around the observation, no open
+transaction for that path, and a second NotFound check. Other paths do not
+block it, and a dangling pointer remains present. A controlled transition
+between the first journal read and the stat must also fail the observation.
+There is no added sleep, widened deadline or changed model verdict.
+
+The three initial observer retakes pass. Local S8 explicitly skips because
+this environment has no sized-disk isolation; it is not local end-to-end S8
+evidence. The unchanged v0.6.9 candidate has one bounded core-slice retry;
+its outcome and the future source's namespace validation remain separate.
+The 775-check implementation run and current-version 24-check/S2/S3 retakes
+precede this observer-only addition.
+
+The final stricter observer passes four native regressions, including duplicate
+entry IDs and unmatched completions. Native S2 (11 checks) and S3 (14) pass
+with that exact observer, and TLC accepts their filesystem and roster streams.
+Model S2/S3/S8 pass. The v0.6.9 core retake passed all seven original scenarios,
+including 15 S8 checks, before its verified publication. The original failed
+assertion and retained trace are not replaced by the retake.
+
+An early broad queue run was deliberately interrupted to replace full date-map
+copies with immutable snapshots; its partial log is not passing-suite evidence.
+The final queue implementation passed 775 parallel checks (two skipped), then
+24 affected checks after version-only integration of v0.6.9 main. The later
+observer addition has its separate native regressions and S2/S3 retakes above.
+Final all-target Clippy and repository checks precede committing; exact-head
+CI still precedes merging. M6 budgets and the complete queue remain open.

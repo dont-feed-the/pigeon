@@ -10,8 +10,8 @@
 //! do (08 §8.4): repair records the keys a custodian held as it marks it
 //! dead, in `endangered.json`, and a key leaves once K custodians hold it.
 //! What a custodian defers is its shortfall, which `doctor` and `status`
-//! report as `no-capacity`. Introduction times are not read yet: every item
-//! counts as introduced at once, so among equals the smallest goes first.
+//! report as `no-capacity`. Introduction dates are scheduling hints from
+//! immutable retained reference births, never copy or release authority.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -116,6 +116,12 @@ pub async fn items(g: &Group, me: &str, keys: &BTreeSet<String>) -> Vec<(Work, V
     let recorded = endangered.len();
     endangered.retain(|key| keys.contains(key));
     let mut out = Vec::new();
+    let introductions = crate::queue_history::introductions(g)
+        .await
+        .unwrap_or_else(|error| {
+            tracing::warn!(group = %g.id, %error, "protection-order-dates-unreadable");
+            Default::default()
+        });
     let locations = holders_for(&g.git, keys).await;
     let local = if g.role == Role::Custodian {
         crate::custody::present_for(&g.git, keys).await
@@ -149,7 +155,7 @@ pub async fn items(g: &Group, me: &str, keys: &BTreeSet<String>) -> Vec<(Work, V
             laptop_copies: u32::try_from(laptops.iter().filter(|(_, u)| have.contains(u)).count())
                 .unwrap_or(u32::MAX),
             endangered: endangered.contains(key),
-            introduced: Time(0),
+            introduced: introductions.get(key).copied().unwrap_or(Time(0)),
             size: key_size(key).unwrap_or(0),
         };
         out.push((work, lacking));
