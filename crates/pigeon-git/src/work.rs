@@ -1,4 +1,4 @@
-//! Scheduling of heavy one-shot children (ADR 0037, 15 §15.4). The
+//! Scheduling of heavy native children (ADR 0037, 15 §15.4). The
 //! adapter supplies nonblocking permissions; active deadlines exclude
 //! deliberate waits. Metadata calls never ask this controller to run.
 
@@ -11,16 +11,8 @@ use rustix::process::{Pid, Signal, kill_process_group};
 /// Maximum ordinary policy-observation interval for an active child.
 pub const POLL_MS: u64 = 20;
 
-/// Heavy work with different progress and external-wait policies.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Class {
-    /// Capture keeps a floor even while the disk is busy.
-    Capture,
-    /// Network contents may wait for power, network or disk conditions.
-    Transfer,
-    /// Background integrity work may wait indefinitely for a good moment.
-    Scrub,
-}
+/// Heavy work with shared cross-group priority and progress policies.
+pub use pigeon_core::resources::WorkClass as Class;
 
 /// A nonblocking view of the daemon's resource policy.
 pub trait Control: std::fmt::Debug + Send + Sync {

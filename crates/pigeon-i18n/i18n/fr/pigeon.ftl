@@ -931,6 +931,7 @@ setting-continue = Continuer
 headline-resource-battery = En attente de courant : cet ordinateur utilise sa batterie.
 headline-resource-metered = En attente d’un réseau sans limite de consommation.
 headline-resource-disk = En attente pendant qu’un autre programme utilise le disque.
+headline-resource-saving = Les transferts attendent pendant l’enregistrement des dernières modifications. Ils reprendront automatiquement.
 
 setting-none = Aucune
 

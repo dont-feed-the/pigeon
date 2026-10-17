@@ -1,7 +1,32 @@
 //! Resource decisions (ADR 0037, 15 §15.3–15.6), using monotonic milliseconds
 //! supplied by the adapter. Unknown power/network observations do not pause
 //! work. Capture retains a progress floor under contention; control traffic
-//! never uses the content limiter. Laws live in `tests/resources.rs`.
+//! never uses the content limiter. Laws live in `tests/resources.rs` and
+//! `tests/work_priority.rs`.
+
+/// Priority among heavy one-shot children across all groups. History and
+/// status do not enter this controller. Transfer sub-priorities and the full
+/// placement queue are separate from these three existing child classes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkClass {
+    /// Saving local changes takes precedence over content and maintenance.
+    Capture,
+    /// Content movement takes precedence over background integrity checks.
+    Transfer,
+    /// Integrity work waits while either higher class has pending work.
+    Scrub,
+}
+
+impl WorkClass {
+    /// Classes in decreasing priority, matching their counter indices.
+    pub const ALL: [Self; 3] = [Self::Capture, Self::Transfer, Self::Scrub];
+
+    /// Same-class work may run together; only a higher pending class holds
+    /// this class. Counts include work that has not started or is suspended.
+    pub fn admitted(self, pending: [u64; 3]) -> bool {
+        pending[..self as usize].iter().all(|count| *count == 0)
+    }
+}
 
 /// A single QUIC path's rolling base RTT. Paths keep separate baselines:
 /// joining a distant peer must not turn propagation into queuing delay.
@@ -84,6 +109,8 @@ pub struct Conditions {
 /// One visible reason why content and maintenance wait.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Wait {
+    /// Saving local changes currently takes precedence over content work.
+    Saving,
     /// Battery is below the configured threshold or low-power mode is on.
     Battery,
     /// The current network is metered and the local policy avoids it.

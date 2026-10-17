@@ -1,7 +1,8 @@
 # M6 resource-control progress
 
-M6 is not complete or released. This branch contains controller components,
-configuration validation and native content shaping. No resource budget
+M6 is not complete. Its controller components, configuration validation and
+native content shaping ship incrementally in v0.6.x patches; the milestone
+release remains v0.7.0. No reference-tree or foreground HDD resource budget
 has been claimed to pass.
 
 ## Controller components
@@ -63,8 +64,9 @@ passing macOS suite or a foreground resource-budget measurement.
 Linux probes reuse D-Bus for UPower, power profiles and NetworkManager,
 with a two-second sampling deadline. Unknown observations use ADR 0037's
 fallback. Linux I/O pressure pauses pending content and subsequent scrub
-slices, with quiet recovery. Mid-file child pausing and own-read latency
-measurement are still outstanding; this is not the full disk controller.
+slices, with quiet recovery. The later native scheduling checkpoint adds mid-file child pausing.
+Own-read latency measurement remains outstanding; this is not the full disk
+controller.
 
 137 selected law/native/UI/configuration tests passed locally, including a real
 QUIC regression that queues bytes waiting for power, then erases their key:
@@ -212,7 +214,7 @@ later saves, index refresh and a pending-status observation.
 It passes with the fix, alongside 79 selected native install, contract,
 recovery, thinning and driver checks. Full all-target Clippy passes locally.
 
-## File scheduling continuation (not yet released)
+## File scheduling checkpoint
 
 The native background capture adapter uses monotonic elapsed time, two equal
 stat observations and the size-dependent 2–60 second quiet period. Seven
@@ -550,3 +552,84 @@ binary file on refusal. CI adds actual ext4, btrfs and xfs fixtures to one
 existing daemon shard; their first results remain pending at this checkpoint.
 The reference-tree/HDD budgets, complete cross-group priority queue and
 remaining resource measurements still prevent M6 from closing.
+
+
+## Cross-group heavy-work priority checkpoint
+
+The three existing native child classes now share daemon-wide admission:
+capture precedes transfer, which precedes scrub. Pending operations count
+before launch and during suspension; same-class operations may run together.
+Registration is released on success, refusal, failure and cancellation.
+The existing process-group controller observes priority within its normal
+20 ms poll and excludes deliberate suspension from active deadlines. Capture
+retains its existing disk floor and power/network exception; metadata and
+history calls still bypass heavy-work admission.
+
+Content DATA waits behind capture through the existing shared controller.
+Its ordinary erasure/admission check still runs during the wait and before
+forwarding. Priority neither grants content authority nor proves custody.
+This checkpoint orders three native classes, not all six placement classes,
+individual keys or folders in the complete queue.
+Review found that serving-side `AnnexSyncer` constructed an independent
+repository for repair. It now shares the daemon's child controller and
+native environment; metadata lookups remain unshaped and the durable/hash
+positive-answer barrier is unchanged. Its own hash reads are not yet
+latency-controlled, so this is not the complete read/child queue.
+
+Three hegel laws run 1000 cases each: no pending count denies capture,
+nonempty higher classes hold lower classes, and releasing higher work restores
+admission independently of same/lower counts. The direct controller regression
+failed before priority was connected. Eleven focused controller/native/QUIC
+checks pass after the change. Real owned shell-process groups demonstrate
+cross-group capture/transfer and transfer/scrub suspension for 2.2 seconds
+against a two-second active budget, higher-child progress, exact output after
+resumption, metadata availability, cancellation release and concurrent
+same-class progress. These use controlled child fixtures, not an HDD workload.
+The first fixtures used annex argument forms the production allow-list refused;
+the fixtures were corrected, and the allow-list remains unchanged.
+
+A real QUIC fixture registers capture in another group, observes the production
+payload wait, then erases the key. No queued bytes reach the receiver. Its
+capture registration is controlled; it is separate evidence from the native
+process-group fixtures. Existing active-release and power-wait erasure checks
+also pass.
+
+English and French simulated wording retakes accept explicit waiting, saving
+as the reason, and automatic resumption without manual action or a claim of
+protection. The first shorter headlines left waiting/resumption implicit;
+both catalogues now explain them. These are wording reviews, not native macOS
+or foreground-performance measurements. Full workspace and current-main CI
+results still precede merging this checkpoint.
+
+The serving-side regression reproduces native repair starting despite low
+battery before the controller was connected. An earlier counter-checkpoint
+fixture also failed; the stronger heartbeat fixture records actual execution
+instead. The retake covers power wait, another group's capture, metadata
+availability, eventual repair and cancellation before launch. These controlled
+child fixtures do not measure real-media repair performance.
+The combined controller/process/QUIC retake passes all twelve selected
+checks, including queued-repair cancellation with no stale registration.
+
+The v0.6.8 candidate repeated the held-file/capacity timeouts seen on v0.6.7.
+Its saved held fixture contains 102 valid laptop objects but 36 backup
+objects; no absent copy counted as protection. The original logs show the
+disk-wait headline, but contain no pressure readings and do not establish
+the cause. The follow-up records the observed Linux pressure average and
+pending content/child counts when a high-pressure reading or outstanding-work
+state changes. Sampling frequency, the 10% threshold, unknown-reading fallback,
+back-off and progress floors are unchanged. These diagnostics do not establish
+per-device pressure, read-latency feedback or a measured failure-rate reduction.
+
+After integrating the version-only v0.6.8 main commit, the combined priority
+and serving-repair source passed all 771 parallel workspace checks (two
+skipped). The earlier pre-serving run passed 770. The pressure diagnostics
+were added after the 771-check run; native S2 then passed all 11 checks and
+S3 all 14 using that source, with TLC accepting their filesystem and roster
+streams. These finite scenarios do not close the measured M6 budgets.
+The first combined all-target check found the external transport fixture
+naming an indirect dependency; its constructor now infers the default native
+environment without adding a dependency.
+
+Final source, including the pressure diagnostics, passes all-target workspace
+Clippy with the lab, trace and console features and the repository structural,
+ADR-index and spec-reference checks. Exact-head CI still precedes merging.

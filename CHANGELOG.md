@@ -5,6 +5,14 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Saving new changes takes priority over transfers and integrity checks
+  across groups. Transfers explain the wait and resume automatically.
+- Repairing damaged contents also follows this computer’s resource settings.
+
 ## 0.6.8 — 2026-10-17
 
 ### Fixed

@@ -706,7 +706,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
         node: node.clone(),
         directory: daemon.clone(),
         listeners: Listeners::default(),
-        syncer: Arc::new(AnnexSyncer),
+        syncer: Arc::new(AnnexSyncer::new(node.resources.clone(), daemon.env.clone())),
         socket_path: socket.clone(),
         loops: Some(Arc::new(crate::api::Api(daemon.clone()))),
     });

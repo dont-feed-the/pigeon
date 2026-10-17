@@ -439,3 +439,29 @@ matching their sizes and SHA-256 keys; incomplete transfer was not silently
 counted as protection. One bounded failed-shard retry and publication-only
 retry kept the original tag and source. No deadline, safety verdict or gate
 was waived. Both archives and the other Linux gates were retained.
+
+## v0.6.8 observation
+
+[v0.6.8](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.8)
+published at 2026-10-17T19:33:28Z from `67db09aaa00eeef134d053b7b762fb5bf50071d1`. Independent
+verification passed all six assets, four archive checksums, Linux installation,
+the pinned annex, completions and latest redirect. Candidate lead was
+**1080 seconds** and publication gap **2151 seconds**, meeting the one-hour
+and two-hour targets. The collector retains 17 lead
+and 16 completed-gap samples;
+no percentile or sustained failure-rate improvement is inferred.
+
+The original CI shard 3 passed 10 tests and timed out in held-file protection
+and replacement installation. The held fixture's disk-wait headline and 102
+valid laptop objects versus 36 backup objects show incomplete transfer, not
+protection. The original artifact 12112021417 is 15261155 bytes, SHA-256
+`73aae0e2ff0f8a6ff293a854cefe0ca118fef63d3397f40d49ace97c3960c73d`.
+All present annex objects matched their sizes and SHA-256 keys. The original
+logs do not contain pressure readings, so they do not establish the cause.
+
+One bounded failed-shard retry passed all 12 daemon checks and the positive
+and negative storage-trace checks. A publication-only retry reused both green
+archives; the tag and source stayed immutable. No deadline, safety verdict or
+required gate was waived. This repeats the same two fixture families that
+blocked v0.6.7's first run. Pressure diagnostics in the next M6 follow-up target
+that evidence gap; a reduction in failures remains unmeasured.

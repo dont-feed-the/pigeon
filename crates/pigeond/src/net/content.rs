@@ -196,16 +196,29 @@ mod tests {
 
     #[tokio::test]
     async fn a_local_release_stops_an_older_peers_active_content_stream() {
-        release_stream(false).await;
+        release_stream(Hold::None).await;
     }
 
     #[tokio::test]
     async fn erasing_while_payload_waits_for_power_forwards_no_queued_bytes() {
-        release_stream(true).await;
+        release_stream(Hold::Power).await;
     }
 
-    async fn release_stream(waiting: bool) {
+    #[tokio::test]
+    async fn erasing_while_payload_waits_for_capture_forwards_no_queued_bytes() {
+        release_stream(Hold::Capture).await;
+    }
+
+    #[derive(Clone, Copy)]
+    enum Hold {
+        None,
+        Power,
+        Capture,
+    }
+
+    async fn release_stream(hold: Hold) {
         tokio::time::timeout(Duration::from_secs(20), async {
+            let waiting = !matches!(hold, Hold::None);
             async fn node(n: u8) -> Node {
                 Node::bind(&NetConfig {
                     secret_key: [n; 32],
@@ -222,7 +235,10 @@ mod tests {
                 node: a.clone(),
                 directory: directory.clone(),
                 listeners: Default::default(),
-                syncer: Arc::new(crate::net::sync::AnnexSyncer),
+                syncer: Arc::new(crate::net::sync::AnnexSyncer::new(
+                    a.resources.clone(),
+                    pigeon_git::GitEnv::default(),
+                )),
                 socket_path: "/unused-content-fixture".into(),
                 loops: None,
             });
@@ -267,14 +283,19 @@ mod tests {
             let mut first = vec![0; b"DATA 8\nfirst".len()];
             client.read_exact(&mut first).await.unwrap();
             assert_eq!(first, b"DATA 8\nfirst");
+            let capture = net.node.resources.for_group("another-group".into());
             if waiting {
-                net.node.resources.observe(
-                    pigeon_core::resources::Conditions {
-                        battery: Some(1),
-                        ..Default::default()
-                    },
-                    false,
-                );
+                match hold {
+                    Hold::Power => net.node.resources.observe(
+                        pigeon_core::resources::Conditions {
+                            battery: Some(1),
+                            ..Default::default()
+                        },
+                        false,
+                    ),
+                    Hold::Capture => capture.began(pigeon_git::work::Class::Capture),
+                    Hold::None => {}
+                }
                 continued.take().unwrap().send(()).unwrap();
                 // Observe entry to the real relay's payload wait before
                 // changing authority, without a guessed scheduling sleep.
@@ -294,6 +315,9 @@ mod tests {
             }
             let error = gate.await.unwrap().unwrap_err();
             assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+            if matches!(hold, Hold::Capture) {
+                capture.ended(pigeon_git::work::Class::Capture);
+            }
             let mut extra = Vec::new();
             let _ = client.read_to_end(&mut extra).await;
             assert!(
