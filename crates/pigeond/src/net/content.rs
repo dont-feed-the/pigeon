@@ -13,6 +13,9 @@ use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 use super::socket::Net;
 
 async fn forward(
+    net: &Net,
+    target: (&str, &str),
+    filter: &mut Filter,
     actions: Vec<Action>,
     send: &mut SendStream,
     writer: &mut OwnedWriteHalf,
@@ -20,11 +23,39 @@ async fn forward(
 ) -> io::Result<()> {
     for action in actions {
         match action {
-            Action::ToServer(bytes) | Action::ContentToServer(bytes) => {
+            Action::ContentToServer(bytes) => {
+                for chunk in bytes.chunks(crate::resource_control::CHUNK) {
+                    permit(
+                        net,
+                        target,
+                        filter,
+                        crate::resource_control::Direction::Upload,
+                        chunk.len(),
+                    )
+                    .await?;
+                    send.write_all(chunk).await.map_err(io::Error::other)?;
+                    counts.0 = counts.0.saturating_add(chunk.len() as u64);
+                }
+            }
+            Action::ToServer(bytes) => {
                 send.write_all(&bytes).await.map_err(io::Error::other)?;
                 counts.0 = counts.0.saturating_add(bytes.len() as u64);
             }
-            Action::ToClient(bytes) | Action::ContentToClient(bytes) => {
+            Action::ContentToClient(bytes) => {
+                for chunk in bytes.chunks(crate::resource_control::CHUNK) {
+                    permit(
+                        net,
+                        target,
+                        filter,
+                        crate::resource_control::Direction::Download,
+                        chunk.len(),
+                    )
+                    .await?;
+                    writer.write_all(chunk).await?;
+                    counts.1 = counts.1.saturating_add(chunk.len() as u64);
+                }
+            }
+            Action::ToClient(bytes) => {
                 writer.write_all(&bytes).await?;
                 counts.1 = counts.1.saturating_add(bytes.len() as u64);
             }
@@ -43,6 +74,35 @@ async fn forward(
         }
     }
     Ok(())
+}
+
+/// Continue waiting only while the existing filter still authorizes its
+/// active content. Empty input checks authority without advancing framing.
+pub(super) async fn permit(
+    net: &Net,
+    (group, peer): (&str, &str),
+    filter: &mut Filter,
+    direction: crate::resource_control::Direction,
+    bytes: usize,
+) -> io::Result<()> {
+    net.node
+        .resources
+        .acquire(direction, bytes, || {
+            filter.set_content_policy(net.directory.peer_content_policy(group, peer));
+            if filter
+                .from_client(&[])
+                .iter()
+                .any(|a| matches!(a, Action::Close(_)))
+            {
+                Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "content authority changed while waiting",
+                ))
+            } else {
+                Ok(())
+            }
+        })
+        .await
 }
 
 /// Relay an authenticated outgoing session, including protocol bytes that
@@ -67,10 +127,15 @@ pub async fn outgoing(
         },
         false,
     );
+    filter.classify_payloads();
     let mut counts = (0, 0);
     filter.set_content_policy(net.directory.peer_content_policy(group, peer));
+    let initial = filter.from_client(initial);
     forward(
-        filter.from_client(initial),
+        net,
+        target,
+        &mut filter,
+        initial,
         &mut send,
         &mut writer,
         &mut counts,
@@ -98,7 +163,16 @@ pub async fn outgoing(
                 filter.from_server(&down[..n])
             }
         };
-        forward(actions, &mut send, &mut writer, &mut counts).await?;
+        forward(
+            net,
+            target,
+            &mut filter,
+            actions,
+            &mut send,
+            &mut writer,
+            &mut counts,
+        )
+        .await?;
     }
     let _ = send.finish();
     writer.shutdown().await?;
@@ -122,6 +196,15 @@ mod tests {
 
     #[tokio::test]
     async fn a_local_release_stops_an_older_peers_active_content_stream() {
+        release_stream(false).await;
+    }
+
+    #[tokio::test]
+    async fn erasing_while_payload_waits_for_power_forwards_no_queued_bytes() {
+        release_stream(true).await;
+    }
+
+    async fn release_stream(waiting: bool) {
         tokio::time::timeout(Duration::from_secs(20), async {
             async fn node(n: u8) -> Node {
                 Node::bind(&NetConfig {
@@ -144,6 +227,7 @@ mod tests {
                 loops: None,
             });
             let (continued, resume) = tokio::sync::oneshot::channel();
+            let mut continued = Some(continued);
             let peer = b.clone();
             let server = tokio::spawn(async move {
                 let connection = peer.endpoint().accept().await.unwrap().await.unwrap();
@@ -183,6 +267,21 @@ mod tests {
             let mut first = vec![0; b"DATA 8\nfirst".len()];
             client.read_exact(&mut first).await.unwrap();
             assert_eq!(first, b"DATA 8\nfirst");
+            if waiting {
+                net.node.resources.observe(
+                    pigeon_core::resources::Conditions {
+                        battery: Some(1),
+                        ..Default::default()
+                    },
+                    false,
+                );
+                continued.take().unwrap().send(()).unwrap();
+                // Observe entry to the real relay's payload wait before
+                // changing authority, without a guessed scheduling sleep.
+                while net.node.resources.pending() == 0 {
+                    tokio::task::yield_now().await;
+                }
+            }
             directory.set_content_policy(
                 "group",
                 ContentPolicy {
@@ -190,7 +289,9 @@ mod tests {
                     released: ["old-key".into()].into(),
                 },
             );
-            continued.send(()).unwrap();
+            if !waiting {
+                continued.take().unwrap().send(()).unwrap();
+            }
             let error = gate.await.unwrap().unwrap_err();
             assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
             let mut extra = Vec::new();

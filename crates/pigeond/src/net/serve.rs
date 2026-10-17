@@ -145,6 +145,7 @@ async fn stream(
         return;
     }
     tracing::info!(peer = %device, group = %header.group, "stream-admitted");
+    net.node.note_connection(&connection);
     super::observe_path(&connection, &header.group, &device, "incoming");
     let addresses = header
         .addresses
@@ -183,6 +184,7 @@ pub async fn relay(
         peer_custodian: admitted.custodian,
     };
     let mut filter = Filter::new(config, repository.checking);
+    filter.classify_payloads();
     let (mut from_server, mut to_server) = server.into_split();
     let mut syncs: JoinSet<(u64, std::io::Result<bool>)> = JoinSet::new();
     let mut client_buf = vec![0u8; 64 * 1024];
@@ -225,12 +227,46 @@ pub async fn relay(
         };
         for action in actions {
             match action {
-                Action::ToServer(bytes) | Action::ContentToServer(bytes) => {
+                Action::ContentToServer(bytes) => {
+                    for chunk in bytes.chunks(crate::resource_control::CHUNK) {
+                        if super::content::permit(
+                            net,
+                            (&repository.group, device),
+                            &mut filter,
+                            crate::resource_control::Direction::Download,
+                            chunk.len(),
+                        )
+                        .await
+                        .is_err()
+                            || to_server.write_all(chunk).await.is_err()
+                        {
+                            break 'session;
+                        }
+                    }
+                }
+                Action::ToServer(bytes) => {
                     if to_server.write_all(&bytes).await.is_err() {
                         break 'session;
                     }
                 }
-                Action::ToClient(bytes) | Action::ContentToClient(bytes) => {
+                Action::ContentToClient(bytes) => {
+                    for chunk in bytes.chunks(crate::resource_control::CHUNK) {
+                        if super::content::permit(
+                            net,
+                            (&repository.group, device),
+                            &mut filter,
+                            crate::resource_control::Direction::Upload,
+                            chunk.len(),
+                        )
+                        .await
+                        .is_err()
+                            || send.write_all(chunk).await.is_err()
+                        {
+                            break 'session;
+                        }
+                    }
+                }
+                Action::ToClient(bytes) => {
                     if send.write_all(&bytes).await.is_err() {
                         break 'session;
                     }

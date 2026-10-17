@@ -1,9 +1,9 @@
 # M5 implementation progress
 
-M5 is not complete or tagged. Its branch leaves the published version unchanged.
-Erase is implemented in the CLI and web interface. The local protocol,
-recovery and usability evidence below still needs current-main CI and an
-actual v0.6 publication.
+Erase and the periodic integrity scrub are implemented for the v0.6.0
+candidate. This report records the local evidence and its limits. The
+release workflow requires the tag’s complete Linux CI, lab and slice and
+both platforms’ archives before actual publication.
 
 ## Implemented and checked locally
 
@@ -86,8 +86,8 @@ skip the configured month or claim physical purge completion.
 
 ## Remaining before release
 
-- Integrate current main, finish Linux release validation and both platforms'
-  archive builds, then publish v0.6. macOS tests provide periodic background
+- Finish tag validation and both platforms' archive builds, then publish
+  v0.6. macOS tests provide periodic background
   evidence. No longitudinal test claim is made at this milestone.
 
 ## Known limits of this evidence
@@ -552,3 +552,55 @@ The first PR CI attempt reached the new native Purge step without
 `cargo-nextest` installed in that job. The earlier trace and mutation checks
 had passed; this was missing runner setup, not a Purge verdict. The job now
 uses the repository's pinned nextest action before generating the traces.
+
+
+## Exact-head PR validation for v0.6.0
+
+PR #68's integrated head `d211890edcfc15348064d0338a6cfbe1fdd6409d` passed its complete selected
+[Linux CI](https://github.com/dont-feed-the/pigeon/actions/runs/38992529939),
+[lab](https://github.com/dont-feed-the/pigeon/actions/runs/38992529910), and
+[real Nextcloud bridge](https://github.com/dont-feed-the/pigeon/actions/runs/38992529922)
+checks before merging. The selection-verification checks also passed.
+The version is set only in this release commit; the final tag workflows
+remain publication gates. These are finite run results, not elapsed
+longitudinal evidence.
+
+
+## v0.6.0 publication stopped by diagnostic checks
+
+The immutable v0.6.0 candidate passed its full Linux CI, lab checks, both
+platform archive builds, S2 and all crash schedules. The remaining slice
+job failed S12 and S13: the CLI did not expose `no-capacity` or
+`commit-unknown-signer`. The actual backup logs recorded capacity deferral
+and refusal of the unknown signing key. This is a diagnostic regression,
+not evidence that the invalid commit was accepted. S13 also reproduced
+with the unchanged candidate on the local real-daemon executor.
+
+Doctor's newly added scrub observations were terminal `Said` responses.
+The CLI correctly stops at the first non-`Progress` answer, so those rows
+hid later findings. They now use continuing progress responses; actual
+problems and the final all-clear retain their existing meanings. The failed
+tag remains unchanged and unpublished. A corrected candidate needs its own
+complete release gates.
+
+
+The corrected diagnostic path then reached S13's later retention assertion.
+The laptop with a deliberately unaccepted local head now fails closed on
+membership, so it can report the previous file as Published while the real
+backups still retain it. S13 now checks both backups' actual annex objects,
+the laptop's exact original text, and that the save after the forgery never
+becomes Protected for the full existing 20-second observation. The original
+pre-forgery Protected check and both backups' signing-key refusals remain.
+The admission and transfer barriers are unchanged; the fixture does not
+require trusting an unaccepted local head to assess current membership.
+
+
+The first complete S13 trace attempt exposed an observer error after the
+content barrier closed: the filesystem observer was asking the production
+transfer-retention API for permission to read its metadata. That API correctly
+refused. The observer now counts only actual, locally present annex objects
+with hashes matching their keys while the barrier is closed. References
+alone do not prove stored bytes, and the observation cannot publish policy,
+fetch contents or permit deletion. The repeated native S13 and its real
+filesystem and roster traces now pass. The 20-second retention observation
+still runs in full; the original unsuccessful observations remain recorded.

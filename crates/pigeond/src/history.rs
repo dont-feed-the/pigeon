@@ -452,7 +452,15 @@ pub async fn doctor(d: &Daemon, _details: bool) -> Vec<Response> {
         }
         None => {}
     }
-    out
+    // The CLI stops at its first non-Progress answer. Scrub observations
+    // are context, not a completed diagnostic; the actual problem (or the
+    // final doctor-ok) must remain reachable on this same request.
+    out.into_iter()
+        .map(|response| match response {
+            Response::Said { message } if message.id.starts_with("scrub-") => progress(message),
+            other => other,
+        })
+        .collect()
 }
 
 fn progress(message: api::Message) -> Response {

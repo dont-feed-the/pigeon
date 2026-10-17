@@ -19,6 +19,9 @@ libc.workspace = true
 rustix.workspace = true
 thiserror.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus.workspace = true
+
 [target.'cfg(target_vendor = "apple")'.dependencies]
 core-foundation.workspace = true
 system-configuration-sys.workspace = true

@@ -9,6 +9,25 @@ increments the second number, and every other release the third.
 
 ### Added
 
+- Settings → Use of this computer and `pigeon settings resources.*` offer
+  Gentle, Balanced and Fast presets, upload/download ceilings, power and
+  metered-network choices, and local full-speed/integrity-check windows.
+- Content transfers share adaptive upload/download limits across groups.
+  Linux laptops wait for power or a non-metered network when their settings
+  call for it; history and capture continue, and status explains the wait.
+
+### Fixed
+
+- `pigeon doctor` continues through backup integrity-check observations to
+  report problems such as unavailable capacity or a refused signing key.
+- A computer still in a group whose roster predates the supported format
+  is told which group when it tries to join, create or recover another:
+  *This computer is already in the group “48h”* instead of an empty name.
+
+## 0.6.0 — 2026-10-17
+
+### Added
+
 - Review the exact versions covered by `pigeon erase PATH` or
   `pigeon erase --suggestion ID`, including content still needed elsewhere.
   The command and web pages show preparation, confirmation, waiting backup
@@ -19,8 +38,6 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
-- Invalid resource presets, byte rates and maintenance time windows are
-  refused as a whole when reading this computer's configuration.
 - Erasure keeps bytes still named by a private staged file on this computer,
   including a staged copy whose working file is absent.
 - While saved history is being verified after a change, status explains

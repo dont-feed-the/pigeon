@@ -48,8 +48,15 @@ pub async fn settings(
         (list(&other))
         section class="card stack" aria-labelledby="settings-computer" {
             h2 id="settings-computer" { (icon("laptop", "")) " " (r.id("web-settings-computer")) }
-            @for s in &rows { (setting(&r, s, &form.0)) }
+            @for s in rows.iter().filter(|s| !s.key.starts_with("resources.")) { (setting(&r, s, &form.0)) }
             p class="lead" { (r.id("status-freshness")) }
+        }
+        @if rows.iter().any(|s| s.key.starts_with("resources.")) {
+            section class="card stack" aria-labelledby="settings-resources" {
+                h2 id="settings-resources" { (r.id("web-settings-resources")) }
+                p { (r.id("web-settings-resources-help")) }
+                @for s in rows.iter().filter(|s| s.key.starts_with("resources.")) { (setting(&r, s, &form.0)) }
+            }
         }
         section class="card stack" aria-labelledby="settings-pause" {
             h2 id="settings-pause" { (icon("clock", "")) " " (r.id("web-settings-sharing")) }
@@ -118,19 +125,27 @@ fn label(r: &Renderer, key: &str, value: &str) -> String {
     }
 }
 
+fn setting_id(key: &str) -> String {
+    format!("setting-{}", key.replace(['.', '_'], "-"))
+}
+
 /// One setting, and the form that changes it.
 fn setting(r: &Renderer, s: &Setting, form: &str) -> Markup {
-    let id = format!("setting-{}", s.key);
+    let id = setting_id(&s.key);
     html! {
         div {
             form method="post" action=(r.url("/settings")) class="setting-row" data-inline[s.key != "language"] {
                 input type="hidden" name="form" value=(form);
                 input type="hidden" name="key" value=(s.key);
                 label for=(id) { (r.id(&id)) " " }
+                @if s.choices.is_empty() {
+                    input id=(id) name="value" value=(&s.value) type="text";
+                } @else {
                 select id=(id) name="value" {
                     @for c in &s.choices {
                         option value=(c) selected[*c == s.value] { (label(r, &s.key, c)) }
                     }
+                }
                 }
                 " "
                 button type="submit" { (r.id("web-save")) }
@@ -268,7 +283,7 @@ pub async fn save(
     let lines = answers.iter().flat_map(|a| {
         if matches!(a, pigeon_proto::Response::Said { message } if message.id == "setting-changed") {
             let message = pigeon_i18n::Message::new("web-setting-saved")
-                .arg("key", r.id(&format!("setting-{}", f.key)))
+                .arg("key", r.id(&setting_id(&f.key)))
                 .arg("value", label(&r, &f.key, &f.value));
             vec![r.catalogue().format(&message)]
         } else {

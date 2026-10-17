@@ -147,3 +147,41 @@ percentile estimate.
 Linux CI and lab completed before slice, which finished at 00:26:53 UTC.
 Publication followed 13 seconds later. The increased runner allowance did
 not waive any release check or the macOS archive requirement.
+
+
+## v0.5.16 observation
+
+[v0.5.16](https://github.com/dont-feed-the/pigeon/releases/tag/v0.5.16)
+was published on 17 October at 01:48:22 UTC. All six assets, archive
+checksums, small downloads and the public latest-release redirect were
+verified. Candidate lead time was **20 minutes 45 seconds**; the completed
+publication interval was **1 hour 21 minutes 16 seconds**. Both targets
+were met. Nine lead-time samples and eight completed intervals still do
+not establish a reliable percentile; earlier misses remain recorded.
+
+The first tag CI attempt hit an `index.lock` race in the old-roster leave
+fixture beyond its existing bounded retry. Only that failed shard and its
+dependent selection check were rerun. The publication job was retried
+afterward with the successful archives retained. Final Linux CI, lab,
+slice and release checks all passed. The next rollup removes the fixture's
+unnecessary working-index mutation rather than extending the retry or
+removing a lock. Full-model background checks remain separate evidence.
+
+
+## Additional runner capacity: 17 October
+
+The user reports a GitHub Teams limit of 60 concurrent runners. In the
+successful v0.5.16 slice run (38990943017), the serial non-S5 scenarios ran
+from 01:34:08 to 01:46:07 UTC: 11 minutes 59 seconds. The same partition
+blocked v0.6.0 while its other required Linux groups had finished; its
+failed S12/S13 diagnostic checks are recorded in the M5 report.
+
+The slice now divides the live lab catalogue into five disjoint partitions:
+core, crash fixtures, recovery, people and S5. Each partition still runs
+its scenario laws, model, isolation check, real executor and TLC traces.
+The selector checks complete coverage of the live manifest, rejects malformed
+or duplicate IDs, and includes new scenarios automatically. Linux can run all
+five independently; periodic macOS validation retains its serial limit.
+This is a targeted change to a measured serial step, not a measured speedup
+claim. The next actual publication will supply the before/after observation.
+The failed v0.6.0 candidate and the interruption remain in the KPI history.

@@ -92,6 +92,8 @@ pub mod report;
 pub mod report_file;
 pub mod resolve;
 pub mod resource_config;
+pub mod resource_control;
+pub mod resource_prefs;
 pub mod restore;
 pub mod retention;
 pub mod roster_file;

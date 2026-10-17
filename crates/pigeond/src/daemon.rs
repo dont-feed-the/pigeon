@@ -617,6 +617,8 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
         .parse()
         .map_err(|e| format!("[network] bind: {e}"))?;
     let node = bind_node(&dirs, secret, bind, &config.network).await?;
+    node.resources
+        .configure(config.resources.effective().map_err(|e| e.to_string())?);
     let socket = std::env::var_os("PIGEON_SOCKET")
         .filter(|s| !s.is_empty())
         .map_or_else(|| dirs.socket(), PathBuf::from);
@@ -700,6 +702,8 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     tokio::spawn(accept_loop(net.clone()));
     tokio::spawn(crate::telemetry::collect(daemon.clone()));
     tokio::spawn(crate::scrub::run(daemon.clone()));
+    tokio::spawn(crate::resource_control::run(daemon.clone()));
+    tokio::spawn(crate::resource_control::probe(daemon.clone()));
     tracing::info!(device = %device, socket = %socket.display(), "started");
     for (g, busy) in groups.iter().zip(held) {
         crate::evict::recover(g, &daemon.tracer).await;

@@ -32,6 +32,9 @@ pub struct Known {
     pub bootstrap_peer: Option<(String, String)>,
     /// The roster of `main`.
     pub roster: Option<RosterDoc>,
+    /// What the roster of `main` declares of itself, read whatever its
+    /// format: it names a group whose roster this release does not read.
+    pub declared: roster_file::Declared,
     /// The commit that roster was read from.
     pub roster_commit: Option<String>,
     /// A durable roster change still needs its metadata index refreshed.
@@ -356,22 +359,33 @@ impl Group {
         if self.lock().roster_commit.as_deref() == Some(main.as_str()) {
             return;
         }
-        let blob = self.git.blob(&format!("{main}:.pigeon/roster.toml")).await;
-        let parsed = blob.map(|b| roster_file::parse(&String::from_utf8_lossy(&b)));
-        match parsed {
-            Some(Ok(doc)) => {
-                let mut k = self.lock();
-                k.roster = Some(doc);
-                k.roster_commit = Some(main);
-            }
-            Some(Err(why)) => tracing::warn!(group = %self.id, %why, "roster-unreadable"),
-            None => tracing::warn!(group = %self.id, "roster-unreadable"),
+        let Some(blob) = self.git.blob(&format!("{main}:.pigeon/roster.toml")).await else {
+            tracing::warn!(group = %self.id, "roster-unreadable");
+            return;
+        };
+        let text = String::from_utf8_lossy(&blob);
+        let declared = roster_file::declared(&text);
+        let parsed = roster_file::parse(&text);
+        if let Err(why) = &parsed {
+            tracing::warn!(group = %self.id, %why, "roster-unreadable");
+        }
+        let mut k = self.lock();
+        k.declared = declared;
+        if let Ok(doc) = parsed {
+            k.roster = Some(doc);
+            k.roster_commit = Some(main);
         }
     }
 
     /// The roster, if one was read.
     pub fn roster(&self) -> Option<RosterDoc> {
         self.lock().roster.clone()
+    }
+
+    /// The group's name, as the roster of `main` declares it, whether or
+    /// not this release reads that roster; empty if it declares none.
+    pub fn name(&self) -> String {
+        self.lock().declared.group.clone().unwrap_or_default()
     }
 
     /// The repository, as the network serves it.

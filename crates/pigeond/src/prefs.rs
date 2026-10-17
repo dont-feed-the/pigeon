@@ -58,7 +58,7 @@ pub fn get(d: &Daemon, key: Option<&str>) -> Vec<Response> {
         Ok(c) => c,
         Err(e) => return vec![problem("internal-error", &[], Some(e.to_string()))],
     };
-    let settings = vec![
+    let mut settings = vec![
         Setting {
             key: "language".to_owned(),
             value: c.language.unwrap_or_else(|| "auto".to_owned()),
@@ -70,6 +70,9 @@ pub fn get(d: &Daemon, key: Option<&str>) -> Vec<Response> {
             choices: yes_no(),
         },
     ];
+    if let Ok(rows) = crate::resource_prefs::rows(&c.resources) {
+        settings.extend(rows);
+    }
     match key {
         None => vec![Response::Settings { settings }],
         Some(k) => match settings.into_iter().find(|s| s.key == k) {
@@ -86,6 +89,32 @@ pub fn get(d: &Daemon, key: Option<&str>) -> Vec<Response> {
 /// `SetSettings`: one key, to one of its values.
 pub fn set(d: &Daemon, key: &str, value: &str) -> Vec<Response> {
     let value = value.trim();
+    if let Some(detail) = key.strip_prefix("resources.") {
+        return match crate::resource_prefs::set(&d.dirs.config_file(), detail, value) {
+            Ok(()) => {
+                if let Ok(config) = config::load(&d.dirs.config_file())
+                    && let Ok(settings) = config.resources.effective()
+                {
+                    d.node.resources.configure(settings);
+                }
+                vec![crate::api::said(
+                    "setting-changed",
+                    &[
+                        ("key", Arg::Text(key.into())),
+                        ("value", Arg::Text(value.into())),
+                    ],
+                )]
+            }
+            Err(error) => vec![problem(
+                "setting-value",
+                &[
+                    ("key", Arg::Text(key.into())),
+                    ("value", Arg::Text(value.into())),
+                ],
+                Some(error),
+            )],
+        };
+    }
     let new = match key {
         "language" if languages().iter().any(|l| l == value) => toml_edit::Value::from(value),
         "notifications" if yes_no().iter().any(|v| v == value) => {

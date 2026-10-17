@@ -251,7 +251,7 @@ pub async fn run(d: Arc<Daemon>) {
             Ok(config) => match in_window(&config.resources.scrub_window, crate::util::now()) {
                 Ok(true) if crate::pause::now(&d).is_none() => {
                     for g in d.groups() {
-                        if crate::pause::now(&d).is_some() {
+                        if crate::pause::now(&d).is_some() || d.node.resources.waiting().is_some() {
                             break;
                         }
                         if crate::membership::pending(&g, &d.device)

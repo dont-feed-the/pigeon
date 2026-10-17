@@ -910,3 +910,22 @@ headline-erased-restoration-missing =
        *[other] La restauration de { $files } fichiers n’a pas pu se terminer : leur contenu manque. Essayez d’autres versions enregistrées ou récupérez des copies à part.
     }
 why-erased-restoration-missing = L’effacement précédent couvrait ce contenu. Votre demande de restauration reste enregistrée, mais aucune copie n’est connue pour le moment. Si vous trouvez une copie, réessayez la restauration.
+
+web-settings-resources = Utilisation de cet ordinateur
+web-settings-resources-help = Discret laisse le partage en arrière-plan. Vos réglages détaillés remplacent le préréglage. Les débits sont en octets par seconde ; séparez les plages HH:MM-HH:MM par des virgules.
+setting-resources-preset = Préréglage
+setting-resources-upload = Envoi maximal (auto ou 2 MB/s)
+setting-resources-download = Réception maximale (auto ou 2 MB/s)
+setting-resources-on-battery = Quand la batterie est faible
+setting-resources-battery-percent = Seuil de batterie faible (%)
+setting-resources-on-metered = Sur un réseau à consommation limitée
+setting-resources-full-speed = Plages à pleine vitesse (vide : aucune)
+setting-resources-scrub-window = Plage de vérification
+setting-gentle = Discret
+setting-balanced = Équilibré
+setting-fast = Rapide
+setting-pause = Attendre
+setting-continue = Continuer
+headline-resource-battery = En attente de courant : cet ordinateur utilise sa batterie.
+headline-resource-metered = En attente d’un réseau sans limite de consommation.
+headline-resource-disk = En attente pendant qu’un autre programme utilise le disque.

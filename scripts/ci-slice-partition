@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""Partition the lab's complete live scenario list without omitting future IDs.
+
+Each runner checks the same manifest before selecting its partition. S5 keeps
+its own disk-isolation job; independent scenario groups use separate runners.
+"""
+import argparse
+from pathlib import Path
+import re
+
+PARTITIONS = ("core", "crashes", "recovery", "people", "S5")
+
+
+def partition(names):
+    if not names or len(names) != len(set(names)):
+        raise ValueError("empty or duplicate scenario manifest")
+    groups = {name: [] for name in PARTITIONS}
+    for name in names:
+        match = re.fullmatch(r"S([1-9][0-9]*)(?:-[a-z0-9]+)*", name)
+        if not match:
+            raise ValueError(f"invalid scenario ID: {name}")
+        number = int(match[1])
+        group = ("S5" if number == 5 else "core" if number < 9 else
+                 "crashes" if number == 9 else "recovery" if number <= 13 else "people")
+        groups[group].append(name)
+    flattened = [name for group in groups.values() for name in group]
+    if len(flattened) != len(names) or set(flattened) != set(names):
+        raise ValueError("scenario coverage mismatch")
+    return groups
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("group", choices=PARTITIONS)
+    parser.add_argument("manifest", type=Path, help="unfiltered pigeon-lab list output")
+    args = parser.parse_args()
+    try:
+        lines = args.manifest.read_text().splitlines()
+        names = [line.split()[0] for line in lines if line.strip()]
+        groups = partition(names)
+        selected = groups[args.group]
+        if not selected:
+            raise ValueError("empty selected partition")
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
+    print(" ".join(selected))
+
+
+if __name__ == "__main__":
+    main()
