@@ -16,6 +16,9 @@ async fn an_admitted_peer_is_reenabled_after_an_initial_probe_ignored_it() {
     git.run(&["config", "remote.unrelated.annex-ignore", "true"])
         .await
         .unwrap();
+    git.run(&["config", "remote.unrelated.annex-stalldetection", "true"])
+        .await
+        .unwrap();
     // Both the retained CI failure (ignore alone) and the automatic
     // initialization state must recover on subsequent configuration rounds.
     for automatic in [false, true] {
@@ -25,9 +28,36 @@ async fn an_admitted_peer_is_reenabled_after_an_initial_probe_ignored_it() {
         if automatic {
             git.run(&["config", &auto, "true"]).await.unwrap();
         }
+        for option in [
+            "annex-stalldetection",
+            "annex-stalldetection-upload",
+            "annex-stalldetection-download",
+        ] {
+            git.run(&["config", &format!("remote.{device}.{option}"), "true"])
+                .await
+                .unwrap();
+        }
         ensure_remote(&git, &device, uuid).await.unwrap();
         assert_eq!(git.config(&ignored).await.as_deref(), Some("false"));
         assert_eq!(git.config(&auto).await.as_deref(), Some("false"));
+        for option in [
+            "annex-stalldetection",
+            "annex-stalldetection-upload",
+            "annex-stalldetection-download",
+        ] {
+            assert_eq!(
+                git.config(&format!("remote.{device}.{option}"))
+                    .await
+                    .as_deref(),
+                Some("false")
+            );
+        }
+        assert_eq!(
+            git.config("remote.unrelated.annex-stalldetection")
+                .await
+                .as_deref(),
+            Some("true")
+        );
         assert_eq!(
             git.config("remote.unrelated.annex-ignore").await.as_deref(),
             Some("true")

@@ -3,7 +3,9 @@
 > Mission: background work out of the person's way (CPU, disk, memory,
 > network), with defaults nobody touches (ADR 0037). Reference case,
 > Guillaume's: a large folder on a hard disk syncs while a video is edited
-> from it. Only the queue (§15.2) is coded; the rest is the plan.
+> from it. The queue, content controller, native probes and settings are
+> implemented in stages; [the M6 report](../reports/resources-7.md) records
+> actual coverage and the resource budgets still to measure.
 
 Capture (P2) never waits for a good moment; transfers, repair and scrubs
 can, and every wait is a reason in the status ([06 §6.4](06-status.md)).
@@ -82,8 +84,14 @@ busy **[no ADR: timings]**: heavy children (hashing, transfers, `fsck`) get
 `SIGSTOP`, later `SIGCONT`, and pigeon's reads pause; capture keeps a
 **progress floor** of 5 % of the time, so P2 never starves; work resumes
 after 5 s of quiet, at full rate over 30 s; transfers, repair and scrubs
-show `paused(disk-busy)`; `annex.stalldetection` exceeds the longest pause,
-so git-annex abandons no paused transfer (E17).
+show `paused(disk-busy)`. Managed repositories and peers disable
+`annex.stalldetection` and its directional overrides: intentional power or
+disk waits have no finite maximum. Pigeon's operation deadline counts active
+time and excludes its own stream waits. This also keeps transfers in the
+owned process group; explicit annex stall detection otherwise creates a
+separately grouped transferrer (`Annex/Transfer.hs`,
+`Annex/TransferrerPool.hs`, git-annex 10.20261006). Genuine active stalls
+still time out; E17 must verify that deliberate pauses abandon no transfer.
 
 **Space:** `annex.diskreserve`; `ENOSPC` pauses every writer on that file
 system (`disk-full`, [08 §8.9](08-custody-loops.md)). **Page cache:** pigeon's

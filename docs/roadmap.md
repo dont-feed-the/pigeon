@@ -134,7 +134,7 @@ The [publication KPI](release-kpi.md) records the actual releases and gaps.
 Exit: the purge laws hold, the model checks, and scenarios of a purge racing
 a restore and of an offline peer returning pass.
 
-Implementation, native trace conformance, usability and candidate release
+Completed in published v0.6.1. Implementation, native trace conformance, usability and release
 evidence: [M5 report](reports/deletion-6.md).
 
 ## M6. Resources and content: v0.7

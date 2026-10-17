@@ -89,6 +89,7 @@ pub fn pause(d: &Daemon, duration_text: Option<&str>) -> Vec<Response> {
     if let Err(e) = config::set_resource(&d.dirs.config_file(), KEY, Some(value)) {
         return vec![problem("internal-error", &[], Some(e.to_string()))];
     }
+    d.node.resources.set_person_paused(now(d).is_some());
     tracing::info!(until = ?now(d), "paused");
     vec![answer(now(d))]
 }
@@ -98,6 +99,7 @@ pub fn resume(d: &Daemon) -> Vec<Response> {
     if let Err(e) = config::set_resource(&d.dirs.config_file(), KEY, None) {
         return vec![problem("internal-error", &[], Some(e.to_string()))];
     }
+    d.node.resources.set_person_paused(false);
     tracing::info!("resumed");
     crate::api::wake_soon(d);
     vec![said("resumed", &[])]

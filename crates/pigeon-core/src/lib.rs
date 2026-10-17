@@ -30,6 +30,7 @@ pub mod purge;
 pub mod queue;
 pub mod refound;
 pub mod report;
+pub mod resources;
 pub mod restore;
 pub mod roster;
 pub mod scrub;

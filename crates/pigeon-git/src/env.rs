@@ -1,17 +1,25 @@
 //! The environment of every git and git-annex process (03 §3.7, spec 03 §3.7):
 //! no inherited `GIT_*` variable, no system or global configuration, no
 //! system attributes, no prompt, and a UTF-8 character type. git then reads
-//! only the repository's `.git/config`, which pigeon writes.
+//! only the repository's `.git/config`, which pigeon writes, plus the
+//! immutable-copy override inherited by Git's annex clean-filter children.
 
 use std::ffi::OsString;
 use std::path::PathBuf;
 
 /// The variables pigeon sets on every child.
-pub const FIXED: [(&str, &str); 4] = [
+pub const FIXED: [(&str, &str); 7] = [
     ("GIT_CONFIG_NOSYSTEM", "1"),
     ("GIT_CONFIG_GLOBAL", "/dev/null"),
     ("GIT_ATTR_NOSYSTEM", "1"),
     ("GIT_TERMINAL_PROMPT", "0"),
+    // Even a status or index refresh can invoke annex's clean filter.
+    // Command.Smudge.clean' -> Annex.Ingest.ingest' uses annex.thin;
+    // every managed child must copy until pigeon explicitly re-thins a
+    // protected object. A per-add override alone misses those children.
+    ("GIT_CONFIG_COUNT", "1"),
+    ("GIT_CONFIG_KEY_0", "annex.thin"),
+    ("GIT_CONFIG_VALUE_0", "false"),
 ];
 
 /// How children are started.

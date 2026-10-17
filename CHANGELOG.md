@@ -5,6 +5,31 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Added
+
+- Settings → Use of this computer and `pigeon settings resources.*` offer
+  Gentle, Balanced and Fast presets, upload/download ceilings, power and
+  metered-network choices, and local full-speed/integrity-check windows.
+- Content transfers share adaptive upload/download limits across groups.
+  Linux laptops wait for power or a non-metered network when their settings
+  call for it; history and capture continue, and status explains the wait.
+
+### Fixed
+
+- Repeated in-place saves keep each captured version intact while it awaits
+  backup, including when status checks or index refreshes inspect the file.
+- Status checks and protection planning finish sooner for folders with many
+  small files, and slow copy-location checks leave new saves available.
+- A slow content transfer leaves later saves and history requests available;
+  normal background downloads no longer keep the group's worktree locked.
+- Heavy native commands can be suspended and resumed by resource policy
+  without spending their active operation timeout. Cancelling a suspended
+  command also stops its helpers.
+- History and saved copies of absent files work when the shared folder's
+  location uses a path alias, including `/tmp` on macOS.
+
 ## 0.6.1 — 2026-10-17
 
 ### Fixed

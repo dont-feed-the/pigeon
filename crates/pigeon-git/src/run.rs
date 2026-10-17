@@ -41,6 +41,7 @@ pub struct Repo {
     pub dir: PathBuf,
     /// How children are started.
     pub env: GitEnv,
+    control: std::sync::Arc<std::sync::RwLock<Option<std::sync::Arc<dyn crate::work::Control>>>>,
 }
 
 /// What a successful call printed.
@@ -80,7 +81,25 @@ impl Repo {
         Repo {
             dir: dir.into(),
             env,
+            control: Default::default(),
         }
+    }
+
+    /// Attach the daemon's policy to this repository and its clones.
+    pub fn set_work_control(&self, control: std::sync::Arc<dyn crate::work::Control>) {
+        *self.control.write().unwrap_or_else(|p| p.into_inner()) = Some(control);
+    }
+
+    /// A one-key-at-a-time batch sharing this repository's resource policy.
+    pub fn batch(&self, args: &[&str]) -> Result<crate::batch::Batch> {
+        let mut batch = crate::batch::Batch::new(&self.dir, self.env.clone(), args)?;
+        batch.set_work_control(
+            self.control
+                .read()
+                .unwrap_or_else(|p| p.into_inner())
+                .clone(),
+        );
+        Ok(batch)
     }
 
     /// Runs `git args…` to completion within `timeout`, writing `input` to
@@ -102,13 +121,15 @@ impl Repo {
             }
             let stderr_tail = tail(&out.1.stderr);
             let delay = Duration::from_millis(50);
-            // Both commands acquire the index lock before publishing their
+            // These commands acquire the index lock before publishing their
             // atomic index change. Git housekeeping can own it despite the
             // daemon's worktree lock. Never retry ref updates, annex commands,
             // other exit failures, or remove a lock. Share the old write-tree
             // retry policy, bounded by one second and the caller's deadline.
-            if matches!(args.first(), Some(&"write-tree" | &"update-index"))
-                && out.0 == Some(128)
+            if matches!(
+                args.first(),
+                Some(&"write-tree" | &"update-index" | &"read-tree")
+            ) && out.0 == Some(128)
                 && stderr_tail.contains("Unable to create '")
                 && stderr_tail.contains("index.lock': File exists.")
                 && waits < 20
@@ -185,6 +206,19 @@ impl Repo {
             .then(|| pigeon_telemetry::AnnexCall::start(args.get(1).copied().unwrap_or("unknown")));
         let argv: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
         let mut cmd = command(&self.dir, &self.env, &argv)?;
+        let control = self
+            .control
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone();
+        let controlled = control.as_deref().zip(crate::work::class(args));
+        let _registration = controlled.map(|(control, class)| {
+            control.began(class);
+            crate::work::Registration(control, class)
+        });
+        while controlled.is_some_and(|(control, class)| !control.running(class)) {
+            tokio::time::sleep(Duration::from_millis(crate::work::POLL_MS)).await;
+        }
         if idle {
             pigeon_sys::priority::idle_on_spawn(cmd.as_std_mut());
         }
@@ -194,7 +228,8 @@ impl Repo {
             Stdio::null()
         })
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stderr(Stdio::piped())
+        .process_group(0);
         let mut child = cmd.spawn().map_err(|source| Error::Spawn {
             argv: argv.clone(),
             source,
@@ -210,6 +245,7 @@ impl Repo {
             .id()
             .and_then(|p| i32::try_from(p).ok())
             .and_then(rustix::process::Pid::from_raw);
+        let group = crate::work::Group::new(pid.ok_or_else(no_pipe)?);
         let work = async {
             let feed = async {
                 if let (Some(mut pipe), Some(bytes)) = (stdin, input) {
@@ -229,6 +265,7 @@ impl Repo {
             // Reap only after all I/O completes, so timeout signalling still
             // refers to this child rather than a potentially reused PID.
             let status = child.wait().await?;
+            group.reaped();
             Ok::<_, std::io::Error>(std::process::Output {
                 status,
                 stdout: out,
@@ -238,27 +275,25 @@ impl Repo {
         tokio::pin!(work);
         // A call still running after SLOW is named in the log, so that a
         // hang shows before its deadline ends it.
-        let done = match tokio::time::timeout(SLOW.min(timeout), &mut work).await {
-            Err(_) if timeout > SLOW => {
-                tracing::info!(argv = %shown(&argv), secs = SLOW.as_secs(), "git-slow");
-                tokio::time::timeout(timeout - SLOW, &mut work).await
-            }
-            done => done,
-        };
+        let done =
+            crate::work::deadline(&mut work, &group, controlled, timeout, SLOW, &shown(&argv))
+                .await
+                .map_err(|source| Error::Pipe {
+                    argv: argv.clone(),
+                    source,
+                })?;
         let out = match done {
-            Err(_) => {
+            None => {
                 // Not yet waited for, so the pid is still the child's.
-                if let Some(pid) = pid {
-                    let _ = rustix::process::kill_process(pid, rustix::process::Signal::TERM);
-                }
+                group.terminate();
                 let _ = tokio::time::timeout(GRACE, &mut work).await;
                 return Err(Error::Timeout {
                     argv,
                     after: timeout,
                 });
             }
-            Ok(Err(source)) => return Err(Error::Pipe { argv, source }),
-            Ok(Ok(out)) => out,
+            Some(Err(source)) => return Err(Error::Pipe { argv, source }),
+            Some(Ok(out)) => out,
         };
         if out.status.success()
             && let Some(timer) = &mut timer

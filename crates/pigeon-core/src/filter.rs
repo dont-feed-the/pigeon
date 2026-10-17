@@ -96,6 +96,10 @@ pub enum Action {
     ToServer(Vec<u8>),
     /// Write these bytes to the peer.
     ToClient(Vec<u8>),
+    /// Content payload for git-annex, eligible for resource throttling.
+    ContentToServer(Vec<u8>),
+    /// Content payload for the peer, eligible for resource throttling.
+    ContentToClient(Vec<u8>),
     /// Sync the object of `key` and its directories to disk and, if `hash`,
     /// check its SHA-256 against the key; then call [`Filter::synced`] with
     /// `ticket` and whether the hash matched.
@@ -279,6 +283,7 @@ enum Awaiting {
 struct Segment {
     ticket: Option<u64>,
     bytes: Vec<u8>,
+    content: bool,
 }
 
 /// What a held answer is, so that its sync's outcome can complete it.
@@ -303,6 +308,7 @@ pub struct Filter {
     checking: bool,
     closed: bool,
     relaying: bool,
+    classify_payloads: bool,
     version: u64,
     client: Framer,
     server: Framer,
@@ -324,6 +330,7 @@ impl Filter {
             checking,
             closed: false,
             relaying: false,
+            classify_payloads: false,
             version: 0,
             client: Framer::default(),
             server: Framer::default(),
@@ -337,6 +344,12 @@ impl Filter {
     /// Whether the session is closed; then every call returns nothing.
     pub fn is_closed(&self) -> bool {
         self.closed
+    }
+
+    /// Mark content payload separately from control/history bytes, without
+    /// changing framing or ordering. Existing adapters may leave this off.
+    pub fn classify_payloads(&mut self) {
+        self.classify_payloads = true;
     }
 
     /// The repository starts or ends being re-checked (ADR 0046).
@@ -484,14 +497,27 @@ impl Filter {
 
     /// Bytes for the peer, after anything that waits for a sync.
     fn send_client(&mut self, bytes: Vec<u8>, out: &mut Vec<Action>) {
+        self.send_client_class(bytes, false, out);
+    }
+
+    fn send_client_class(&mut self, bytes: Vec<u8>, content: bool, out: &mut Vec<Action>) {
         if self.outbox.is_empty() {
-            out.push(Action::ToClient(bytes));
-        } else if let Some(last) = self.outbox.back_mut().filter(|s| s.ticket.is_none()) {
+            out.push(if content {
+                Action::ContentToClient(bytes)
+            } else {
+                Action::ToClient(bytes)
+            });
+        } else if let Some(last) = self
+            .outbox
+            .back_mut()
+            .filter(|s| s.ticket.is_none() && s.content == content)
+        {
             last.bytes.extend_from_slice(&bytes);
         } else {
             self.outbox.push_back(Segment {
                 ticket: None,
                 bytes,
+                content,
             });
         }
     }
@@ -509,13 +535,18 @@ impl Filter {
         self.outbox.push_back(Segment {
             ticket: Some(ticket),
             bytes,
+            content: false,
         });
     }
 
     fn release(&mut self, out: &mut Vec<Action>) {
         while self.outbox.front().is_some_and(|s| s.ticket.is_none()) {
             if let Some(segment) = self.outbox.pop_front() {
-                out.push(Action::ToClient(segment.bytes));
+                out.push(if segment.content {
+                    Action::ContentToClient(segment.bytes)
+                } else {
+                    Action::ToClient(segment.bytes)
+                });
             }
         }
     }
@@ -543,7 +574,11 @@ impl Filter {
     fn client_frame(&mut self, frame: Frame, out: &mut Vec<Action>) -> Result<(), Closed> {
         let line = match frame {
             Frame::Payload(bytes) => {
-                out.push(Action::ToServer(bytes));
+                out.push(if self.classify_payloads && !self.relaying {
+                    Action::ContentToServer(bytes)
+                } else {
+                    Action::ToServer(bytes)
+                });
                 return Ok(());
             }
             Frame::PayloadEnd => return Ok(()),
@@ -680,7 +715,7 @@ impl Filter {
     fn server_frame(&mut self, frame: Frame, out: &mut Vec<Action>) -> Result<(), Closed> {
         let line = match frame {
             Frame::Payload(bytes) => {
-                self.send_client(bytes, out);
+                self.send_client_class(bytes, self.classify_payloads && !self.relaying, out);
                 return Ok(());
             }
             Frame::PayloadEnd => {

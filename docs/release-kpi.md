@@ -185,3 +185,77 @@ five independently; periodic macOS validation retains its serial limit.
 This is a targeted change to a measured serial step, not a measured speedup
 claim. The next actual publication will supply the before/after observation.
 The failed v0.6.0 candidate and the interruption remain in the KPI history.
+
+## v0.6.1 observation
+
+[v0.6.1](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.1)
+published at 09:07:42 UTC on 17 October with all six assets. Archive
+checksums, asset digests, the native Linux installer, completions, pinned
+annex and public latest redirect were verified. Candidate lead time was
+**15 minutes 49 seconds**, meeting the one-hour target. The interval from
+v0.5.16 was **7 hours 19 minutes 20 seconds**, missing the two-hour target;
+the failed v0.6.0 candidate and interruption remain visible. The two-day
+collection has ten lead-time samples and nine completed intervals, still
+insufficient for a reliable percentile.
+
+All five Linux slice partitions and both random crash shards passed.
+Their total job durations, including setup/build/trace checking, were
+10m24s (core), 9m06s (crashes), 9m38s (recovery), 8m18s (people) and 6m55s
+(S5). Random shard 1 was the final release gate at 09:07:27; publication
+followed 15 seconds later. These measurements show the new partitions
+completed independently; differing histories and runner conditions prevent
+attributing the whole candidate improvement to partitioning.
+
+Completed workflow elapsed time now stops at completion. Its separate
+candidate age and the actual publication gap continue to grow. Previously
+the readable report mislabeled a completed candidate's growing age as its
+elapsed execution, even though its publication lead-time measure was right.
+
+
+## Bridge integration baseline: 17 October
+
+The successful PR #69 bridge job
+[117352256007](https://github.com/dont-feed-the/pigeon/actions/runs/39017382261/job/117352256007)
+ran from 08:27:07 to 08:51:06 UTC: **23 minutes 59 seconds**. Its serial
+phases included 2m15s restoring the Rust cache, 35s building the native
+programs, 3m12s checking laptop storage, 33s checking delayed decisions,
+3m48s checking custodian storage, 2m37s checking native traces and 10m23s
+exercising the portal and real Nextcloud client. Full CI and lab were
+already green while this final PR check continued.
+
+The next rollup builds and tests the matching programs once, then gives
+laptop, custodian and real-client execution independent runners. Programs
+travel as a compressed, checksummed archive with the immutable workflow
+source recorded and verified before extraction. Executable permissions
+survive the archive; execution jobs do not restore the large Rust cache or
+rebuild the programs. Every selected build, execution and trace check still
+must succeed. The real laptop-storage check passed locally using an
+extracted bundle. This is preparation for a measured improvement, not a
+reported reduction in CI or publication time.
+
+The first actual parallel workflow,
+[39029050268](https://github.com/dont-feed-the/pigeon/actions/runs/39029050268),
+passed all selected checks on `879fad0`. It ran from 11:31:54 to 11:43:25
+UTC: **11 minutes 31 seconds**, including selection. The shared build took
+4m33s; the laptop, custodian and real-client jobs then took 2m04s, 4m37s and
+6m40s respectively, starting together. This is an observed reduction from
+the prior 23m59s serial bridge job, with different cache/build conditions
+and content-controller changes; it is not a controlled attribution or an
+actual publication. Other PR CI exposed two failures, recorded in the M6
+report, so this head was not merged or tagged.
+
+## PR #70 follow-up observations
+
+The subsequent `47974c5` head passed lab and the whole bridge workflow, but
+again failed the 102-file protection deadline. Its retained fixture holds
+102 verified laptop objects and 80 backup objects; transfer-lock conflicts
+and per-key process launches are recorded in the M6 report. Placement now
+reuses controlled batches, and local-content observations use bounded batches.
+The rolled-up native run passes 65 checks, with that lifecycle taking 30.5 s.
+CI and an actual publication are still required; this is no published result.
+
+The preceding bridge build job 117396374972 restored an 8,463,386,667-byte
+Rust cache from 12:30:01 to 12:34:30 UTC on 17 October: about 4m29s before
+building. Download completed at 12:30:58; unpacking accounts for most of the
+remaining time. Reducing cached build contents is the next measured CI target,
+with first-build and warm-cache times to compare before claiming an improvement.

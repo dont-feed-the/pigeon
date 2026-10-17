@@ -387,6 +387,14 @@ pub(crate) fn truncate_if_done(g: &Group) {
 /// many came back. A key that cannot be received yet waits for the next
 /// round, and the folder stays hidden meanwhile (08 §8.5, keep step 1).
 pub async fn keep(g: &Group, t: &Tracer) -> Result<usize, String> {
+    keep_inner(g, t, true).await
+}
+
+pub(crate) async fn keep_ready(g: &Group, t: &Tracer) -> Result<usize, String> {
+    keep_inner(g, t, false).await
+}
+
+async fn keep_inner(g: &Group, t: &Tracer, receive: bool) -> Result<usize, String> {
     if crate::capture_file::pending(g) || unsettled(g) {
         return Err("capture-or-install-pending".to_owned());
     }
@@ -418,6 +426,9 @@ pub async fn keep(g: &Group, t: &Tracer) -> Result<usize, String> {
             continue;
         }
         if crate::custody::present(g, key).await.is_none() {
+            if !receive {
+                return Err("receiving".to_owned());
+            }
             let args = ["annex", "get", "--json", "--key", key.as_str()];
             g.git
                 .run_for(&args, Duration::from_secs(600))

@@ -1,7 +1,8 @@
 # M5 implementation progress
 
-Erase and the periodic integrity scrub are implemented for the v0.6.0
-candidate. This report records the local evidence and its limits. The
+Erase and the periodic integrity scrub shipped in v0.6.1. This report
+records the implementation evidence, the failed v0.6.0 candidate and its
+corrected publication. The
 release workflow requires the tag’s complete Linux CI, lab and slice and
 both platforms’ archives before actual publication.
 
@@ -84,11 +85,25 @@ merge can invalidate a preview; this is reported as `erase-stale` and the
 test explicitly performs a fresh review/confirmation. The test does not
 skip the configured month or claim physical purge completion.
 
-## Remaining before release
+## Publication
 
-- Finish tag validation and both platforms' archive builds, then publish
-  v0.6. macOS tests provide periodic background
-  evidence. No longitudinal test claim is made at this milestone.
+[v0.6.1](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.1)
+was published on 17 October at 09:07:42 UTC from
+`be2e4ffa3be8e651becf711842f460a0ff15aac2`. Its complete
+[Linux CI](https://github.com/dont-feed-the/pigeon/actions/runs/39018960470),
+[lab](https://github.com/dont-feed-the/pigeon/actions/runs/39018960488),
+[slice and crash schedules](https://github.com/dont-feed-the/pigeon/actions/runs/39018960452),
+and [release](https://github.com/dont-feed-the/pigeon/actions/runs/39018960498)
+passed. The separate finite
+[models-full](https://github.com/dont-feed-the/pigeon/actions/runs/39018960486)
+run also passed. No longitudinal test claim is made at this milestone.
+
+All six published assets, four archive checksums and asset digests were
+verified after publication. The native Linux installer reported 0.6.1,
+installed the pinned `10.20261006-pigeon1` annex, and generated completions
+for bash, zsh and fish. The public latest-release download redirected to
+v0.6.1. Both application archives contain executable programs. macOS tests
+remain periodic background evidence; its archive build passed.
 
 ## Known limits of this evidence
 

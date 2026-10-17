@@ -9,9 +9,40 @@
 
 use std::io::{self, Write};
 use std::os::unix::fs::OpenOptionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
+
+/// Resolve aliases above an absent file, retaining only ordinary missing
+/// names. A dangling link, inaccessible ancestor or non-directory is an
+/// error, rather than permission to reinterpret the path lexically.
+pub fn canonicalize_missing(path: &Path) -> io::Result<PathBuf> {
+    let absolute = std::path::absolute(path)?;
+    let mut existing = absolute.as_path();
+    let mut missing = Vec::new();
+    loop {
+        match std::fs::canonicalize(existing) {
+            Ok(mut resolved) => {
+                resolved.extend(missing.iter().rev());
+                return Ok(resolved);
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                // canonicalize also returns NotFound for a dangling link.
+                match std::fs::symlink_metadata(existing) {
+                    Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+                    _ => return Err(error),
+                }
+                let Some(std::path::Component::Normal(name)) = existing.components().next_back()
+                else {
+                    return Err(error);
+                };
+                missing.push(name.to_owned());
+                existing = existing.parent().ok_or(error)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
 
 /// Lowercase hex.
 pub fn hex(bytes: &[u8]) -> String {

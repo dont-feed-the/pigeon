@@ -285,6 +285,9 @@ pub struct NetConfig {
 #[derive(Clone, Debug)]
 pub struct Node {
     endpoint: Endpoint,
+    /// Content limits shared across all streams of this daemon.
+    pub resources: Arc<crate::resource_control::Controller>,
+    observed: Arc<Mutex<HashMap<PublicKey, Connection>>>,
     /// How it was set up to reach peers.
     reach: Reach,
     /// The relays it began with: n0's, under [`Reach::N0`].
@@ -341,12 +344,49 @@ impl Node {
             .map_err(|e| NetError::Bind(e.to_string()))?;
         Ok(Node {
             endpoint,
+            resources: Arc::default(),
+            observed: Arc::default(),
             reach: config.reach.clone(),
             relays: Arc::new(tokio::sync::Mutex::new(defaults.clone())),
             defaults,
             connections: Arc::default(),
             refused: Arc::default(),
         })
+    }
+
+    /// Observe only an authenticated, admitted peer connection.
+    pub(crate) fn note_connection(&self, connection: &Connection) {
+        let mut observed = self.observed.lock().unwrap_or_else(|p| p.into_inner());
+        observed.retain(|_, c| c.close_reason().is_none());
+        observed.insert(connection.remote_id(), connection.clone());
+    }
+
+    /// Selected-path RTTs and capacity estimates, with independent identities.
+    /// No path means a conservative initial rate, not a guessed fast link.
+    pub(crate) fn resource_sample(&self) -> Vec<crate::resource_control::PathSample> {
+        let mut observed = self.observed.lock().unwrap_or_else(|p| p.into_inner());
+        observed.retain(|_, c| c.close_reason().is_none());
+        let mut samples = Vec::new();
+        for connection in observed.values() {
+            for path in connection.paths().iter().filter(|p| p.is_selected()) {
+                let stats = path.stats();
+                let ms = stats.rtt.as_millis().min(u128::from(u64::MAX)) as u64;
+                samples.push(crate::resource_control::PathSample {
+                    id: (
+                        connection.stable_id(),
+                        format!(
+                            "{}:{:?}:{:?}",
+                            connection.remote_id(),
+                            path.id(),
+                            path.remote_addr()
+                        ),
+                    ),
+                    rtt_ms: ms,
+                    capacity: stats.cwnd.saturating_mul(1000) / ms.max(1),
+                });
+            }
+        }
+        samples
     }
 
     /// This device's ID.
@@ -408,6 +448,7 @@ impl Node {
             let admitted = Self::admit(&connection, group, &own);
             match tokio::time::timeout(CONNECT_TIMEOUT, admitted).await {
                 Ok(Ok(pair)) => {
+                    self.note_connection(&connection);
                     observe_path(&connection, group, device, "outgoing");
                     self.note(key, group, None);
                     return Ok(pair);

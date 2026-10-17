@@ -39,6 +39,12 @@ pub fn wanted_config(role: Role, empty_file: &str, reserve: u64) -> Vec<(String,
         ("annex.resolvemerge", "false".into()),
         ("annex.dotfiles", "true".into()),
         ("annex.backend", "SHA256E".into()),
+        // Transfer.hs uses the in-process path when disabled; enabling
+        // stall detection creates an independently grouped transferrer
+        // (TransferrerPool.hs). Pigeon's active deadline owns cancellation.
+        ("annex.stalldetection", "false".into()),
+        ("annex.stalldetection-upload", "false".into()),
+        ("annex.stalldetection-download", "false".into()),
         ("core.attributesFile", empty_file.to_owned()),
         ("core.excludesFile", empty_file.to_owned()),
         ("core.fsync", "objects,reference".into()),
@@ -155,23 +161,33 @@ pub async fn init_annex(
 /// 10.20261006 can persist ignore flags after an unsuccessful first probe.
 /// The remote is named by the device ID.
 pub async fn ensure_remote(git: &Git, device: &str, uuid: &str) -> Result<(), Error> {
+    // One snapshot avoids spawning Git once per option, every round and
+    // peer. Each field still repairs independently.
+    let current = local_config(git).await;
+    let value = |key: &str| current.get(&key.to_ascii_lowercase()).map(String::as_str);
     let url = format!("p2p-annex::iroh:{device}");
     let key = format!("remote.{device}.url");
-    if git.config(&key).await.as_deref() != Some(url.as_str()) {
+    if value(&key) != Some(url.as_str()) {
         git.run(&["remote", "add", device, &url]).await?;
     }
     let key = format!("remote.{device}.annex-uuid");
-    if git.config(&key).await.as_deref() != Some(uuid) {
+    if value(&key) != Some(uuid) {
         git.run(&["config", &key, uuid]).await?;
     }
     let key = format!("remote.{device}.fetch");
     let spec = peer_refspec(device);
-    if git.config(&key).await.as_deref() != Some(spec.as_str()) {
+    if value(&key) != Some(spec.as_str()) {
         git.run(&["config", &key, &spec]).await?;
     }
-    for option in ["annex-ignore", "annex-ignore-auto"] {
+    for option in [
+        "annex-ignore",
+        "annex-ignore-auto",
+        "annex-stalldetection",
+        "annex-stalldetection-upload",
+        "annex-stalldetection-download",
+    ] {
         let key = format!("remote.{device}.{option}");
-        if git.config(&key).await.as_deref() != Some("false") {
+        if value(&key) != Some("false") {
             git.run(&["config", &key, "false"]).await?;
         }
     }

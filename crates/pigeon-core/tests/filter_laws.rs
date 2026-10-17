@@ -105,8 +105,8 @@ fn collect(actions: Vec<Action>, out: &mut Outputs) {
     for a in actions {
         assert!(out.closed.is_none(), "an action after Close: {a:?}");
         match a {
-            Action::ToServer(b) => out.to_server.extend(b),
-            Action::ToClient(b) => out.to_client.extend(b),
+            Action::ToServer(b) | Action::ContentToServer(b) => out.to_server.extend(b),
+            Action::ToClient(b) | Action::ContentToClient(b) => out.to_client.extend(b),
             Action::Refused { rule, line } => out.refused.push((rule, line)),
             Action::Close(why) => out.closed = Some(why),
             Action::Sync { .. } | Action::Repair { .. } => {}
@@ -263,8 +263,8 @@ impl Session<'_> {
     fn apply(&mut self, actions: Vec<Action>) {
         for a in actions {
             match a {
-                Action::ToServer(b) => self.to_server.extend(b),
-                Action::ToClient(b) => self.to_client.extend(b),
+                Action::ToServer(b) | Action::ContentToServer(b) => self.to_server.extend(b),
+                Action::ToClient(b) | Action::ContentToClient(b) => self.to_client.extend(b),
                 Action::Sync { ticket, key, hash } => {
                     self.pending.push(ticket);
                     self.tickets.push((ticket, key, hash));

@@ -15,6 +15,7 @@ use crate::env::GitEnv;
 use crate::error::{Error, Result};
 
 struct Running {
+    group: crate::work::Group,
     child: Child,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
@@ -26,6 +27,7 @@ pub struct Batch {
     env: GitEnv,
     argv: Vec<String>,
     running: Option<Running>,
+    control: Option<std::sync::Arc<dyn crate::work::Control>>,
     /// How many times the process was started.
     pub starts: u32,
 }
@@ -44,8 +46,16 @@ impl Batch {
             env,
             argv,
             running: None,
+            control: None,
             starts: 0,
         })
+    }
+
+    pub(crate) fn set_work_control(
+        &mut self,
+        control: Option<std::sync::Arc<dyn crate::work::Control>>,
+    ) {
+        self.control = control;
     }
 
     fn start(&mut self) -> Result<&mut Running> {
@@ -53,7 +63,8 @@ impl Batch {
             let mut cmd = crate::run::command(&self.dir, &self.env, &self.argv)?;
             cmd.stdin(Stdio::piped())
                 .stdout(Stdio::piped())
-                .stderr(Stdio::null());
+                .stderr(Stdio::null())
+                .process_group(0);
             let mut child = cmd.spawn().map_err(|source| Error::Spawn {
                 argv: self.argv.clone(),
                 source,
@@ -66,7 +77,13 @@ impl Batch {
             let stdin = child.stdin.take().ok_or_else(|| pipe_err(broken()))?;
             let stdout = BufReader::new(child.stdout.take().ok_or_else(|| pipe_err(broken()))?);
             self.starts += 1;
+            let pid = child
+                .id()
+                .and_then(|p| i32::try_from(p).ok())
+                .and_then(rustix::process::Pid::from_raw)
+                .ok_or_else(|| pipe_err(broken()))?;
             self.running = Some(Running {
+                group: crate::work::Group::new(pid),
                 child,
                 stdin,
                 stdout,
@@ -82,38 +99,68 @@ impl Batch {
     /// newline (empty for a blank answer). On a deadline, an I/O error or the
     /// end of the process, the process is killed and the error returned.
     pub async fn call(&mut self, line: &str, timeout: Duration) -> Result<String> {
-        if line.contains('\n') {
+        if line.contains(['\n', '\r', '\0']) {
             return Err(Error::Refused {
                 argv: self.argv.clone(),
                 rule: "one line per input",
             });
         }
         let argv = self.argv.clone();
-        let running = self.start()?;
-        let exchange = async {
-            running
-                .stdin
-                .write_all(format!("{line}\n").as_bytes())
-                .await?;
-            running.stdin.flush().await?;
-            let mut answer = String::new();
-            let n = running.stdout.read_line(&mut answer).await?;
-            if n == 0 {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::UnexpectedEof,
-                    "process ended",
-                ));
-            }
-            Ok(answer.trim_end_matches('\n').to_owned())
+        let control = self.control.clone();
+        let args: Vec<_> = argv.iter().map(String::as_str).collect();
+        let controlled = control.as_deref().zip(crate::work::class(&args));
+        let _registration = controlled.map(|(control, class)| {
+            control.began(class);
+            crate::work::Registration(control, class)
+        });
+        while controlled.is_some_and(|(control, class)| !control.running(class)) {
+            tokio::time::sleep(Duration::from_millis(crate::work::POLL_MS)).await;
+        }
+        self.start()?;
+        // The exchange owns its process. Cancelling a partially written or
+        // read call must kill it, never hand a stale answer to the next key.
+        let Some(mut running) = self.running.take() else {
+            return Err(Error::Pipe {
+                argv,
+                source: std::io::Error::other("not running"),
+            });
         };
-        let result = tokio::time::timeout(timeout, exchange).await;
+        let result = {
+            let exchange = async {
+                running
+                    .stdin
+                    .write_all(format!("{line}\n").as_bytes())
+                    .await?;
+                running.stdin.flush().await?;
+                let mut answer = String::new();
+                let n = running.stdout.read_line(&mut answer).await?;
+                if n == 0 {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::UnexpectedEof,
+                        "process ended",
+                    ));
+                }
+                Ok(answer.trim_end_matches('\n').to_owned())
+            };
+            tokio::pin!(exchange);
+            crate::work::deadline(
+                &mut exchange,
+                &running.group,
+                controlled,
+                timeout,
+                Duration::from_secs(20),
+                &argv.join(" "),
+            )
+            .await
+        };
+        self.running = Some(running);
         match result {
-            Ok(Ok(answer)) => Ok(answer),
-            Ok(Err(source)) => {
+            Ok(Some(Ok(answer))) => Ok(answer),
+            Err(source) | Ok(Some(Err(source))) => {
                 self.kill().await;
                 Err(Error::Pipe { argv, source })
             }
-            Err(_) => {
+            Ok(None) => {
                 self.kill().await;
                 Err(Error::Timeout {
                     argv,
@@ -149,21 +196,27 @@ impl Batch {
         let Some(mut running) = self.running.take() else {
             return true;
         };
+        let _ = running.group.running(true);
         drop(running.stdin);
         let ended = tokio::time::timeout(grace, running.child.wait()).await;
         if matches!(ended, Ok(Ok(_))) {
+            running.group.reaped();
             return true;
         }
-        let _ = running.child.start_kill();
-        let _ = running.child.wait().await;
+        running.group.kill();
+        if running.child.wait().await.is_ok() {
+            running.group.reaped();
+        }
         false
     }
 
     /// Kills the process at once, for one past its deadline.
     async fn kill(&mut self) {
         if let Some(mut running) = self.running.take() {
-            let _ = running.child.start_kill();
-            let _ = running.child.wait().await;
+            running.group.kill();
+            if running.child.wait().await.is_ok() {
+                running.group.reaped();
+            }
         }
     }
 

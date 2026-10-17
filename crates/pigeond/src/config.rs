@@ -54,25 +54,7 @@ pub struct BridgeStorage {
     pub source_socket: PathBuf,
 }
 
-/// `[resources]` maintenance settings, read again before each scrub slice.
-#[derive(Clone, Debug, Deserialize)]
-pub struct Resources {
-    /// Half-open local time window; the default is 01:00-06:00.
-    #[serde(default = "default_scrub_window")]
-    pub scrub_window: String,
-}
-
-fn default_scrub_window() -> String {
-    "01:00-06:00".into()
-}
-
-impl Default for Resources {
-    fn default() -> Self {
-        Self {
-            scrub_window: default_scrub_window(),
-        }
-    }
-}
+pub use crate::resource_config::Resources;
 
 /// `[telemetry]`: configured locally, never learned from another member.
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -188,7 +170,12 @@ pub enum ConfigError {
 /// Reads `path`; a missing file is the defaults.
 pub fn load(path: &Path) -> Result<Config, ConfigError> {
     match std::fs::read_to_string(path) {
-        Ok(text) => toml_edit::de::from_str(&text).map_err(|e| ConfigError::Invalid(e.to_string())),
+        Ok(text) => {
+            let config: Config =
+                toml_edit::de::from_str(&text).map_err(|e| ConfigError::Invalid(e.to_string()))?;
+            config.resources.effective().map_err(ConfigError::Invalid)?;
+            Ok(config)
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config {
             format: 1,
             ..Config::default()

@@ -27,7 +27,7 @@ RUNTIME_CRATES = {"pigeon", "pigeond", "pigeon-core", "pigeon-git", "pigeon-sys"
 JOBS = {"proofs": "proofs", "catalogue": "catalogue", "packaging": "packaging", "models": "models",
         "rust": "rust", "daemons": "daemons", "code-traces": "code_traces", "driver-traces": "driver_traces"}
 SCOPES = {"ci": JOBS, "lab": {"lab": "lab"},
-          "bridge": {"bridge": "bridge", "catalogue-traces": "bridge_traces"}}
+          "bridge": {"bridge-build": "bridge", "bridge": "bridge", "catalogue-traces": "bridge_traces"}}
 
 
 def git(*args):

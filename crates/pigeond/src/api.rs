@@ -192,6 +192,7 @@ pub(crate) async fn handle(d: &Arc<Daemon>, request: Request) -> Vec<Response> {
             // A pause the person chose says so, in the headline unless
             // something needs them (15 §15.6, ADR 0027).
             crate::pause::tell(d, &mut report);
+            crate::resource_control::tell(d, &mut report);
             vec![Response::Status(report)]
         }
         Request::Invite => {

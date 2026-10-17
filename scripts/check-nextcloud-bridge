@@ -250,8 +250,8 @@ def run():
             print("PASS: regular peer pages, sparse downloads, and settings stay scoped to each client", flush=True)
 
             until(lambda: dav(b, "GET", "Docs/review.txt")[2] == b"Alice's original\n", "Bob did not receive the original")
-            status, headers, _ = dav(b, "PUT", "Docs/review.txt", b"Bob's suggestion\n")
-            assert status == 204 and headers["x-pigeon-suggested"] == "1"
+            status, headers, body = dav(b, "PUT", "Docs/review.txt", b"Bob's suggestion\n")
+            assert status == 204 and headers.get("x-pigeon-suggested") == "1", (status, headers, body)
             assert dav(b, "GET", "Docs/review.txt")[2] == b"Bob's suggestion\n"
             assert dav(a, "GET", "Docs/review.txt")[2] == b"Alice's original\n"
             assert os.path.samefile(peer_roots["Bob phone"] / "Docs/review.txt", pooled(b"Bob's suggestion\n"))

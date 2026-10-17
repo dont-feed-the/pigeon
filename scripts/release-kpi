@@ -135,6 +135,9 @@ def build_report(releases, runs, now, gap_target=7200, lead_target=3600, jobs=No
         "lead_time_sample_count": len(lead_times),
         "latest_candidate": {"tag": candidate(latest_run), "run_id": latest_run["id"],
                              "age_seconds": seconds(now, latest_run["created_at"]),
+                             "elapsed_seconds": seconds(instant(latest_run["updated_at"])
+                                                        if latest_run["status"] == "completed" else now,
+                                                        latest_run["created_at"]),
                              "state": latest_run.get("conclusion") or latest_run["status"],
                              "url": latest_run["html_url"]} if latest_run else None,
         "latest_candidate_jobs_needing_attention": findings,
@@ -164,7 +167,7 @@ def markdown(report):
         rows.append(f"- {gap['previous_tag']} → {gap['tag']}: {duration(gap['seconds'])}; target {result}.")
     candidate_run = report["latest_candidate"]
     if candidate_run:
-        rows += ["", f"Latest candidate: [{candidate_run['tag']}]({candidate_run['url']}), {candidate_run['state']}, elapsed {duration(candidate_run['age_seconds'])}."]
+        rows += ["", f"Latest candidate: [{candidate_run['tag']}]({candidate_run['url']}), {candidate_run['state']}, elapsed {duration(candidate_run['elapsed_seconds'])}."]
     attempts = report["unpublished_candidates_since_last_publication"]
     rows += ["", f"Unpublished candidates since the last publication: **{len(attempts)}**."]
     for attempt in attempts:

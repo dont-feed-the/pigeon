@@ -22,6 +22,7 @@ pub mod lab;
 pub mod paths;
 pub mod pressure;
 pub mod priority;
+pub mod resources;
 pub mod signal;
 pub mod snapshot;
 pub mod writers;

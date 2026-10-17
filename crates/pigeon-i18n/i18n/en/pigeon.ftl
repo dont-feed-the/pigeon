@@ -902,3 +902,27 @@ headline-erased-restoration-missing =
        *[other] Restoring { $files } files could not finish: their contents are missing. Try other saved versions or recover separate copies.
     }
 why-erased-restoration-missing = The earlier erasure covered these contents. Your restore request remains recorded, but no copy is currently known. If you find a copy, try the restore again.
+
+web-settings-resources = Use of this computer
+web-settings-resources-help = Gentle keeps sharing in the background. Details you set override the preset. Rates use bytes per second; full-speed windows use this computer’s local time HH:MM-HH:MM, separated by commas. Full-speed windows turn off automatic slowing; your upload and download limits still apply. Power and metered-network waits still apply during full-speed windows.
+setting-resources-preset = Preset
+setting-resources-upload = Maximum upload (auto or 2 MB/s)
+setting-resources-download = Maximum download (auto or 2 MB/s)
+setting-resources-on-battery = When low on battery
+setting-resources-battery-percent = Low battery threshold (%)
+setting-resources-on-metered = On a metered network
+setting-resources-full-speed = Full-speed windows (empty for none)
+setting-resources-scrub-window = Integrity-check window
+setting-gentle = Gentle
+setting-balanced = Balanced
+setting-fast = Fast
+setting-pause = Wait
+setting-continue = Continue
+headline-resource-battery = Waiting for power: this computer is on battery.
+headline-resource-metered = Waiting for a non-metered network.
+headline-resource-disk = Waiting while another program uses the disk.
+
+setting-none = None
+
+web-settings-resources-power-help = When set to Wait, file transfers wait below the battery threshold or in low-power mode, then resume automatically when conditions improve. Metered-network waits also end automatically. Share again resumes a pause you chose.
+web-resource-value-invalid = “{ $value }” is not valid for { $key }. Nothing changed. Go back and use a listed choice or the format shown for that setting.

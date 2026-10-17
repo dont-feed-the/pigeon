@@ -13,7 +13,7 @@
 //! laptop, install then writes the new versions into the folder
 //! (`install`, 07 §7.5).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
 use pigeon_core::filter::Role;
@@ -313,33 +313,141 @@ async fn judged(g: &Group, peer: &str, ours: Option<&str>, theirs: &str) -> Opti
 
 /// The annex UUIDs git-annex knows to hold `key`.
 pub async fn holders(git: &Git, key: &str) -> BTreeSet<String> {
-    let out = git
-        .repo
-        .run_status(
-            &["annex", "whereis", "--json", "--key", key],
-            None,
-            pigeon_git::DEFAULT_TIMEOUT,
-        )
-        .await;
-    let Ok((_, out)) = out else {
-        return BTreeSet::new();
-    };
-    let Ok(v) = serde_json::from_slice::<serde_json::Value>(&out.stdout) else {
-        return BTreeSet::new();
-    };
-    ["whereis", "untrusted"]
+    holders_for(git, &BTreeSet::from([key.to_owned()]))
+        .await
+        .remove(key)
+        .unwrap_or_default()
+}
+
+/// Read location-log claims in bounded native batches. Starting one annex
+/// and external helper per key makes a small-file round needlessly slow.
+/// These remain claims, not positive storage proofs or deletion authority.
+pub async fn holders_for(git: &Git, keys: &BTreeSet<String>) -> BTreeMap<String, BTreeSet<String>> {
+    let keys: Vec<_> = keys
         .iter()
-        .filter_map(|list| v.get(list)?.as_array())
-        .flatten()
-        .filter_map(|l| Some(l.get("uuid")?.as_str()?.to_owned()))
-        .collect()
+        .filter(|key| !key.is_empty() && !key.contains(['\n', '\r', '\0']))
+        .collect();
+    let mut all = BTreeMap::new();
+    for batch in keys.chunks(64) {
+        let input = batch
+            .iter()
+            .map(|key| format!("{key}\n"))
+            .collect::<String>();
+        let output = git
+            .repo
+            .run_status(
+                &["annex", "whereis", "--batch-keys", "--json"],
+                Some(input.as_bytes()),
+                pigeon_git::DEFAULT_TIMEOUT,
+            )
+            .await;
+        if let Ok((Some(0 | 1), output)) = output
+            && let Some(locations) = read_holders_batch(&output.stdout, batch)
+        {
+            all.extend(locations);
+        }
+    }
+    all
+}
+
+fn read_holders_batch(
+    bytes: &[u8],
+    expected: &[&String],
+) -> Option<BTreeMap<String, BTreeSet<String>>> {
+    let mut all = BTreeMap::new();
+    for line in bytes
+        .split(|byte| *byte == b'\n')
+        .filter(|line| !line.is_empty())
+    {
+        let answer: pigeon_git::annex::Whereis = serde_json::from_slice(line).ok()?;
+        let key = answer.answer.key?;
+        if !expected.iter().any(|expected| **expected == key) || all.contains_key(&key) {
+            return None;
+        }
+        all.insert(
+            key,
+            answer
+                .whereis
+                .into_iter()
+                .chain(answer.untrusted)
+                .filter(|location| !location.uuid.is_empty())
+                .map(|location| location.uuid)
+                .collect(),
+        );
+    }
+    (all.len() == expected.len()).then_some(all)
 }
 
 /// Where `key`'s content is in this repository, if it is present.
 pub async fn present(g: &Group, key: &str) -> Option<std::path::PathBuf> {
-    let out = g.git.run(&["annex", "contentlocation", key]).await.ok()?;
+    present_one(&g.git, key).await
+}
+
+async fn present_one(git: &Git, key: &str) -> Option<std::path::PathBuf> {
+    let out = git.run(&["annex", "contentlocation", key]).await.ok()?;
     let rel = out.trim();
-    (!rel.is_empty()).then(|| g.git.repo.dir.join(rel))
+    (!rel.is_empty()).then(|| git.repo.dir.join(rel))
+}
+
+/// Local content observations in bounded native batches. A blank answer
+/// means absent; missing/extra lines fail closed. Special encoded key names
+/// use the scalar query rather than guessing their filesystem spelling.
+pub async fn present_for(
+    git: &Git,
+    keys: &BTreeSet<String>,
+) -> BTreeMap<String, std::path::PathBuf> {
+    let keys: Vec<_> = keys
+        .iter()
+        .filter(|key| !key.is_empty() && !key.contains(['\n', '\r', '\0']))
+        .collect();
+    let mut all = BTreeMap::new();
+    for batch in keys.chunks(64) {
+        let input = batch
+            .iter()
+            .map(|key| format!("{key}\n"))
+            .collect::<String>();
+        let Ok((Some(0 | 1), output)) = git
+            .repo
+            .run_status(
+                &["annex", "contentlocation", "--batch"],
+                Some(input.as_bytes()),
+                pigeon_git::DEFAULT_TIMEOUT,
+            )
+            .await
+        else {
+            continue;
+        };
+        let Some(lines) = output.stdout.strip_suffix(b"\n") else {
+            continue;
+        };
+        let lines: Vec<_> = lines.split(|b| *b == b'\n').collect();
+        if lines.len() != batch.len() {
+            continue;
+        }
+        for (key, line) in batch.iter().zip(lines) {
+            if line.is_empty() {
+                continue;
+            }
+            let Ok(path) = std::str::from_utf8(line) else {
+                continue;
+            };
+            let path = std::path::Path::new(path);
+            let object = if path.file_name().is_some_and(|name| name == key.as_str())
+                && path
+                    .parent()
+                    .and_then(std::path::Path::file_name)
+                    .is_some_and(|name| name == key.as_str())
+            {
+                Some(git.repo.dir.join(path))
+            } else {
+                present_one(git, key).await
+            };
+            if let Some(object) = object.filter(|p| p.is_file()) {
+                all.insert((*key).clone(), object);
+            }
+        }
+    }
+    all
 }
 
 /// One round of place, in queue order (15 §15.2): answers how many copies
@@ -347,6 +455,30 @@ pub async fn present(g: &Group, key: &str) -> Option<std::path::PathBuf> {
 /// laptop sends each key to the custodians lacking it, whose own reserve
 /// refuses what does not fit (E22).
 pub async fn place(g: &Group, me: &str) -> usize {
+    place_inner(g, me, None).await
+}
+
+/// Run queued placement without a caller-held worktree lock. Retaining
+/// references are read under that lock; cold probes run outside it, and
+/// current identity, membership and retention are rechecked before each key.
+pub async fn place_worker(
+    g: &Group,
+    me: &str,
+    d: &std::sync::Weak<crate::daemon::Daemon>,
+) -> usize {
+    place_inner(g, me, Some(d)).await
+}
+
+async fn place_inner(
+    g: &Group,
+    me: &str,
+    d: Option<&std::sync::Weak<crate::daemon::Daemon>>,
+) -> usize {
+    let planning = if d.is_some() {
+        Some(g.busy.lock().await)
+    } else {
+        None
+    };
     if crate::membership::pending(g, me) || g.lock().admission_error.is_some() {
         return 0;
     }
@@ -357,11 +489,17 @@ pub async fn place(g: &Group, me: &str) -> usize {
             return 0;
         }
     };
+    // Only the retained reference snapshot needs the worktree lock. Cold
+    // location/capacity probes can take a whole round per hundred keys;
+    // every key is revalidated again before its actual transfer.
+    drop(planning);
     if keys.is_empty() {
         return 0;
     }
     let mut made = 0;
     let mut left = 0;
+    let mut validation = crate::placement::Validation::default();
+    let mut transfers = crate::custody_transfer::Pool::default();
     match g.role {
         Role::Laptop => {
             let mut failed = g.lock().unreachable.clone();
@@ -371,6 +509,11 @@ pub async fn place(g: &Group, me: &str) -> usize {
                 let Work::Protect { key, size, .. } = work else {
                     continue;
                 };
+                if let Some(d) = d
+                    && !validation.allows(d, g, &key).await
+                {
+                    break;
+                }
                 if g.shared.is_some() && crate::restore::bring(g, &key).await.is_err() {
                     left += size;
                     continue;
@@ -380,16 +523,7 @@ pub async fn place(g: &Group, me: &str) -> usize {
                         left += size;
                         continue;
                     }
-                    let args = [
-                        "annex",
-                        "copy",
-                        "--json",
-                        "--to",
-                        id.as_str(),
-                        "--key",
-                        key.as_str(),
-                    ];
-                    match g.git.run_for(&args, TRANSFER_TIMEOUT).await {
+                    match transfers.copy(&g.git, &id, &key, TRANSFER_TIMEOUT).await {
                         Ok(_) => made += 1,
                         Err(e) => {
                             tracing::debug!(group = %g.id, peer = %id, error = %e, "copy-failed");
@@ -417,6 +551,11 @@ pub async fn place(g: &Group, me: &str) -> usize {
                 let Work::Protect { key, size, .. } = work else {
                     continue;
                 };
+                if let Some(d) = d
+                    && !validation.allows(d, g, &key).await
+                {
+                    break;
+                }
                 if crate::shared::provider_hydrate(g, &key)
                     .await
                     .is_ok_and(|here| here)
@@ -426,8 +565,7 @@ pub async fn place(g: &Group, me: &str) -> usize {
                     made += 1;
                     continue;
                 }
-                let args = ["annex", "get", "--json", "--key", key.as_str()];
-                match g.git.run_for(&args, TRANSFER_TIMEOUT).await {
+                match transfers.get(&g.git, &key, TRANSFER_TIMEOUT).await {
                     Ok(_) => {
                         if let Some(object) = present(g, &key).await {
                             let _ = crate::net::sync::sync_object(&object);
@@ -443,9 +581,35 @@ pub async fn place(g: &Group, me: &str) -> usize {
             }
         }
     }
+    transfers.stop().await;
     g.lock().queue_bytes = left;
     if made > 0 {
         tracing::info!(group = %g.id, copies = made, "placed");
     }
     made
+}
+
+#[cfg(test)]
+mod location_tests {
+    #[test]
+    fn native_batch_claims_are_bound_to_all_requested_keys_without_duplicates() {
+        let a = String::from("a");
+        let b = String::from("b");
+        let valid = b"{\"key\":\"a\",\"whereis\":[{\"uuid\":\"one\"}]}\n{\"key\":\"b\",\"untrusted\":[{\"uuid\":\"two\"}]}\n";
+        let claims = super::read_holders_batch(valid, &[&a, &b]);
+        assert!(
+            claims
+                .as_ref()
+                .is_some_and(|m| m.len() == 2 && m[&a].contains("one") && m[&b].contains("two"))
+        );
+        for invalid in [
+            b"{\"key\":\"a\"}\n".as_slice(),
+            b"{\"key\":\"a\"}\n{\"key\":\"a\"}\n",
+            b"{\"key\":\"a\"}\n{\"key\":\"other\"}\n",
+            b"{\"key\":\"a\"}\nnot JSON\n",
+            b"{\"key\":\"a\"}\n{\"whereis\":[{\"uuid\":\"two\"}]}\n",
+        ] {
+            assert!(super::read_holders_batch(invalid, &[&a, &b]).is_none());
+        }
+    }
 }
