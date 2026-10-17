@@ -587,3 +587,31 @@ that key. Active main producers remain protected before cancellation.
 Subsequent periodic Mac matrices use two jobs each, bounded at four
 background jobs in CI/slice; publication remains Linux-gated with both
 platform archives. Actual background-time savings await a completed run.
+
+## v0.6.14 observation
+
+[v0.6.14](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.14)
+published at 2026-10-17T22:55:55Z, source
+`5fc77893e687d30efe6fcb855535b2b0701dcbc9`. All six assets, four archive
+checksums, native Linux installation, pinned annex, completions and latest
+redirect passed independent verification. Candidate lead was
+**743 seconds**; completed gap was **1858 seconds**.
+The collector retains 23 lead and 22 completed-gap samples.
+No percentile or sustained failure-rate claim is inferred. Its four
+required workflow runs succeeded without a retry: CI 39076223796,
+lab 39076223634, slice 39076223643 and release 39076223660.
+The original PR workspace miss was the obsolete removal sentence, fixed
+and revalidated before merging; it is separate from these candidate gates.
+
+## v0.6.15 observation
+
+[v0.6.15](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.15)
+published on 17 October at 23:22:55 UTC, source
+`c51af44c4e80fad8fd1a89e8ea8185b775028428`. Independent verification
+checks all six assets, four archive checksums, native Linux installation,
+pinned annex, completions and the latest-release redirect. Candidate lead
+was **667 seconds (11 minutes 7 seconds)**; completed publication gap was
+**1620 seconds (27 minutes)**. The collector retains 24 lead and 23
+completed-gap samples. This observation alone establishes no sustained
+rate improvement. The required tag runs passed: CI 39078073966, lab
+39078073927, slice 39078073958 and release 39078073983.

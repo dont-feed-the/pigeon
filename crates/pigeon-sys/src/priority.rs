@@ -1,6 +1,6 @@
-//! Idle maintenance children (ADR 0037, 15 §15.1). On Linux an fsck child
-//! enters the idle I/O class and nice 19 before exec; the daemon's own
-//! priority is unchanged. Failure prevents the maintenance child starting.
+//! Maintenance children (ADR 0037, 15 §15.1). An fsck child enters nice 19
+//! and Linux's idle I/O class or Darwin's throttled disk policy before exec.
+//! The daemon's priority is unchanged. Failure prevents the child starting.
 
 use std::process::Command;
 
@@ -32,12 +32,40 @@ fn idle_current() -> std::io::Result<()> {
     Ok(())
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
+fn idle_current() -> std::io::Result<()> {
+    // SAFETY: only the calling process is selected, with scalar priorities.
+    if unsafe { libc::setpriority(libc::PRIO_PROCESS, 0, 19) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    // Darwin sys/resource.h: disk=0, process=0, throttle=3. The policy is
+    // inherited across exec; the native child fixture checks that boundary.
+    // SAFETY: this libc wrapper receives only documented scalar constants.
+    if unsafe { apple::setiopolicy_np(0, 0, 3) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+mod apple {
+    unsafe extern "C" {
+        pub(super) fn setiopolicy_np(
+            kind: libc::c_int,
+            scope: libc::c_int,
+            policy: libc::c_int,
+        ) -> libc::c_int;
+        #[cfg(test)]
+        pub(super) fn getiopolicy_np(kind: libc::c_int, scope: libc::c_int) -> libc::c_int;
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 fn idle_current() -> std::io::Result<()> {
     Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
 }
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 mod tests {
     use super::*;
 
@@ -50,11 +78,14 @@ mod tests {
         // SAFETY: getpriority and ioprio_get only read scalar scheduling
         // state of the calling process, and receive valid API constants.
         let nice = unsafe { libc::getpriority(libc::PRIO_PROCESS, 0) };
-        // SAFETY: IOPRIO_WHO_PROCESS=1 and pid=0 select this process.
-        let io = unsafe { libc::syscall(libc::SYS_ioprio_get, 1, 0) };
+        let io = disk_policy();
+        assert!(io >= 0, "native disk policy must be readable");
         if std::env::var_os("PIGEON_PRIORITY_TEST_CHILD").is_some() {
             assert_eq!(nice, 19);
+            #[cfg(target_os = "linux")]
             assert_eq!(io >> 13, 3);
+            #[cfg(target_os = "macos")]
+            assert_eq!(io, 3);
             return;
         }
         let mut command = Command::new(std::env::current_exe().unwrap());
@@ -64,7 +95,15 @@ mod tests {
         assert!(command.status().unwrap().success());
         // SAFETY: the same read-only scheduling calls as above.
         assert_eq!(unsafe { libc::getpriority(libc::PRIO_PROCESS, 0) }, nice);
-        // SAFETY: scalar ioprio_get arguments select this process again.
-        assert_eq!(unsafe { libc::syscall(libc::SYS_ioprio_get, 1, 0) }, io);
+        assert_eq!(disk_policy(), io);
+    }
+
+    fn disk_policy() -> i64 {
+        #[cfg(target_os = "linux")]
+        // SAFETY: IOPRIO_WHO_PROCESS=1 and pid=0 select this process.
+        return unsafe { libc::syscall(libc::SYS_ioprio_get, 1, 0) };
+        #[cfg(target_os = "macos")]
+        // SAFETY: documented disk/process selectors only read current policy.
+        return i64::from(unsafe { apple::getiopolicy_np(0, 0) });
     }
 }

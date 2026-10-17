@@ -93,7 +93,12 @@ after 5 s of quiet, at full rate over 30 s; transfers, repair and scrubs
 show `paused(disk-busy)`. Managed repositories and peers disable
 `annex.stalldetection` and its directional overrides: intentional power or
 disk waits have no finite maximum. Pigeon's operation deadline counts active
-time and excludes its own stream waits. This also keeps transfers in the
+time and excludes its own stream waits. Keyed `get` and `copy` use active
+inactivity time: only increasing git-annex JSON byte progress for that
+command and key renews the budget. Another key, repeated counts and final
+answers cannot renew it. Capture, scrub and metadata retain their finite
+active-time budgets; success and durable custody still require their usual
+answers and verification. This also keeps transfers in the
 owned process group; explicit annex stall detection otherwise creates a
 separately grouped transferrer (`Annex/Transfer.hs`,
 `Annex/TransferrerPool.hs`, git-annex 10.20261006). Genuine active stalls

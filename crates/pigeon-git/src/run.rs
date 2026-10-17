@@ -220,7 +220,11 @@ impl Repo {
     ) -> Result<(Option<i32>, Output)> {
         let mut timer = (args.first() == Some(&"annex"))
             .then(|| pigeon_telemetry::AnnexCall::start(args.get(1).copied().unwrap_or("unknown")));
-        let argv: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
+        let progress = crate::progress::Progress::one_shot(args);
+        let mut argv: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
+        if progress.is_some() && !args.contains(&"--json-progress") {
+            argv.push("--json-progress".into());
+        }
         let mut cmd = command(&self.dir, &self.env, &argv)?;
         let control = self
             .control
@@ -275,7 +279,7 @@ impl Repo {
             // consumes all its input. Drain both streams while feeding it.
             tokio::try_join!(
                 feed,
-                stdout.read_to_end(&mut out),
+                crate::progress::drain(&mut stdout, progress.as_ref(), &mut out),
                 stderr.read_to_end(&mut err)
             )?;
             // Reap only after all I/O completes, so timeout signalling still
@@ -291,13 +295,20 @@ impl Repo {
         tokio::pin!(work);
         // A call still running after SLOW is named in the log, so that a
         // hang shows before its deadline ends it.
-        let done =
-            crate::work::deadline(&mut work, &group, controlled, timeout, SLOW, &shown(&argv))
-                .await
-                .map_err(|source| Error::Pipe {
-                    argv: argv.clone(),
-                    source,
-                })?;
+        let done = crate::work::deadline(
+            &mut work,
+            &group,
+            controlled,
+            progress.as_ref(),
+            timeout,
+            SLOW,
+            &shown(&argv),
+        )
+        .await
+        .map_err(|source| Error::Pipe {
+            argv: argv.clone(),
+            source,
+        })?;
         let out = match done {
             None => {
                 // Not yet waited for, so the pid is still the child's.

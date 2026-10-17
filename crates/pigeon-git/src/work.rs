@@ -117,6 +117,7 @@ pub(crate) async fn deadline<F: std::future::Future + Unpin>(
     work: &mut F,
     group: &Group,
     control: Option<(&dyn Control, Class)>,
+    progress: Option<&crate::progress::Progress>,
     timeout: Duration,
     slow: Duration,
     argv: &str,
@@ -128,6 +129,7 @@ pub(crate) async fn deadline<F: std::future::Future + Unpin>(
         control.is_none_or(|(c, k)| c.running(k) && c.charging(k)),
     );
     let mut named = false;
+    let mut last_progress = progress.map_or(0, crate::progress::Progress::bytes);
     loop {
         let running = control.is_none_or(|(c, k)| c.running(k));
         group.running(running)?;
@@ -135,6 +137,16 @@ pub(crate) async fn deadline<F: std::future::Future + Unpin>(
             ms(epoch.elapsed()),
             running && control.is_none_or(|(c, k)| c.charging(k)),
         );
+        if let Some(progress) = progress {
+            let bytes = progress.bytes();
+            if bytes > last_progress {
+                last_progress = bytes;
+                budget = ActiveClock::new(
+                    ms(epoch.elapsed()),
+                    running && control.is_none_or(|(c, k)| c.charging(k)),
+                );
+            }
+        }
         if budget.used() >= ms(timeout) {
             return Ok(None);
         }
