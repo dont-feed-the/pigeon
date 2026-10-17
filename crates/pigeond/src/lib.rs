@@ -25,6 +25,7 @@ pub mod clock_file;
 pub mod config;
 pub mod conflicts_file;
 pub mod custody;
+mod custody_transfer;
 pub mod daemon;
 pub mod debug;
 pub mod decide;

@@ -90,6 +90,18 @@ impl Repo {
         *self.control.write().unwrap_or_else(|p| p.into_inner()) = Some(control);
     }
 
+    /// A one-key-at-a-time batch sharing this repository's resource policy.
+    pub fn batch(&self, args: &[&str]) -> Result<crate::batch::Batch> {
+        let mut batch = crate::batch::Batch::new(&self.dir, self.env.clone(), args)?;
+        batch.set_work_control(
+            self.control
+                .read()
+                .unwrap_or_else(|p| p.into_inner())
+                .clone(),
+        );
+        Ok(batch)
+    }
+
     /// Runs `git args…` to completion within `timeout`, writing `input` to
     /// its stdin. A non-zero exit is [`Error::Failed`].
     pub async fn run(

@@ -98,14 +98,18 @@ impl Group {
             let _ = kill_process_group(self.pid, Signal::TERM);
         }
     }
-}
 
-impl Drop for Group {
-    fn drop(&mut self) {
+    pub(crate) fn kill(&self) {
         if self.armed.load(Ordering::Acquire) {
             self.terminate();
             let _ = kill_process_group(self.pid, Signal::KILL);
         }
+    }
+}
+
+impl Drop for Group {
+    fn drop(&mut self) {
+        self.kill();
     }
 }
 

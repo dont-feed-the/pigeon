@@ -243,3 +243,19 @@ the prior 23m59s serial bridge job, with different cache/build conditions
 and content-controller changes; it is not a controlled attribution or an
 actual publication. Other PR CI exposed two failures, recorded in the M6
 report, so this head was not merged or tagged.
+
+## PR #70 follow-up observations
+
+The subsequent `47974c5` head passed lab and the whole bridge workflow, but
+again failed the 102-file protection deadline. Its retained fixture holds
+102 verified laptop objects and 80 backup objects; transfer-lock conflicts
+and per-key process launches are recorded in the M6 report. Placement now
+reuses controlled batches, and local-content observations use bounded batches.
+The rolled-up native run passes 65 checks, with that lifecycle taking 30.5 s.
+CI and an actual publication are still required; this is no published result.
+
+The preceding bridge build job 117396374972 restored an 8,463,386,667-byte
+Rust cache from 12:30:01 to 12:34:30 UTC on 17 October: about 4m29s before
+building. Download completed at 12:30:58; unpacking accounts for most of the
+remaining time. Reducing cached build contents is the next measured CI target,
+with first-build and warm-cache times to compare before claiming an improvement.
