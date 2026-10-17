@@ -164,6 +164,25 @@ never retries automatically. Atomic `read-tree` uses the existing one-second,
 caller-deadline-bounded index retry. Real Git fixtures show a short owner-held
 lock succeeds after its owner removes it and a persistent lock stays exact.
 
+## Repeated-save safety regression found during scheduling
+
+A new native hot-file fixture exposed a pre-existing problem on `a30376d`:
+four ordinary in-place saves followed by another write lost or changed
+unprotected captured objects. The regression failed locally in 0.85 seconds
+without the new scheduler. Automatic merge and release preparation were
+stopped before any tag was created.
+
+Git status and index refresh can run the annex clean filter before capture's
+explicit `annex add`. Upstream `Command.Smudge.clean'` calls
+`Annex.Ingest.ingest'`, whose `linkToAnnex` honors `annex.thin`. A per-add
+`annex.thin=false` override therefore misses the earlier ingestion. All
+managed Git/annex children now inherit the immutable-copy override, including
+their filter children; the existing explicit re-thinning step still requires
+protection. The regression checks every captured object's exact bytes after
+later saves, index refresh and a pending-status observation.
+It passes with the fix, alongside 79 selected native install, contract,
+recovery, thinning and driver checks. Full all-target Clippy passes locally.
+
 ## Periodic macOS failures
 
 The v0.6.0 periodic run found a missing-file history lookup through macOS's

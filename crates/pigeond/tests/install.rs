@@ -36,6 +36,9 @@ use pigeond::roster_file::{self, RosterDoc};
 use pigeond::trace::Tracer;
 use pigeond::{capture, install, merge};
 
+#[path = "install/capture_immutability.rs"]
+mod capture_immutability;
+
 const T0: i64 = 1_791_892_800;
 
 fn key(i: u8) -> [u8; 32] {

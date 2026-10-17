@@ -18,6 +18,8 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Repeated in-place saves keep each captured version intact while it awaits
+  backup, including when status checks or index refreshes inspect the file.
 - Status checks and protection planning finish sooner for folders with many
   small files, and slow copy-location checks leave new saves available.
 - A slow content transfer leaves later saves and history requests available;
