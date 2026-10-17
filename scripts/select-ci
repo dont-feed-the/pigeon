@@ -113,7 +113,7 @@ def classify(paths, ignored=()):
             groups = {"bridge_traces"}
         elif path in {"scripts/check-bridge-lifecycle-traces", "scripts/check-bridge-sync-traces"}:
             groups = {"bridge", "bridge_traces"}
-        elif path in {"scripts/check-code-traces", "scripts/check-driver-traces"}:
+        elif path in {"scripts/check-code-traces", "scripts/check-driver-traces", "scripts/check-purge-traces"}:
             groups = FORMAL
         elif path.startswith("scripts/tests/test_proof_"):
             groups = {"proofs", "models"}

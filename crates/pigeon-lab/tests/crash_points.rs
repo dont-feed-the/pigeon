@@ -54,6 +54,13 @@ fn the_crash_points_are_pigeonds() {
         assert!(driver.contains(&format!("\"{point}\"")));
         ours.insert(point.to_owned());
     }
+    // Erasure has a separate real SIGKILL workload on both sides of its
+    // main CAS. S9's free/keep commands cannot reach these transitions.
+    let erasure = std::fs::read_to_string(src.join("../tests/purge/restart.rs")).unwrap();
+    for point in ["erase.before-main", "erase.after-main"] {
+        assert!(erasure.contains(&format!("\"{point}\"")));
+        ours.insert(point.to_owned());
+    }
     // Refounding needs its own invitation/history workload. These are
     // exercised with real SIGKILLs by pigeond/tests/refound_restart.rs;
     // adding them to CrashPoint::ALL would arm unreachable points in S9.

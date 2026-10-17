@@ -23,7 +23,9 @@ use crate::group::Group;
 use crate::install::Put;
 
 mod folder;
+mod guard;
 pub(crate) mod path;
+mod reference;
 
 fn text(s: &str) -> Arg {
     Arg::Text(s.to_owned())
@@ -75,12 +77,12 @@ pub async fn restore(
     let Some(rel) = self::path::relative(&g, path) else {
         return vec![problem("not-in-group", &[], None)];
     };
-    let _busy = g.busy.lock().await;
+    let busy = g.busy.lock().await;
     if let Err(e) = crate::capture::capture(&g, &d.device, &d.tracer).await {
         return vec![problem("internal-error", &[], Some(e.to_string()))];
     }
     if folder::is_folder(&g, &rel).await {
-        return folder::restore(d, &g, &rel, version, at).await;
+        return folder::restore(d, &g, &rel, version, at, busy).await;
     }
     let mut versions = crate::history::versions(&g, &rel).await;
     versions.reverse();
@@ -113,33 +115,96 @@ pub async fn restore(
         let me = crate::status::this_name(&g, &d.device);
         return vec![problem("disk-full", &[("machine", text(&me))], None)];
     }
+    // A prior missing-content request already has a new history entry but
+    // has not changed the visible file. Freeze capture's actual index here.
+    let current = match g.git.index().await {
+        Ok(index) => match index.get(&rel) {
+            Some(entry) => match g.git.object(&entry.oid).await {
+                Ok(bytes) => crate::git::pointer_key(&bytes),
+                Err(e) => return vec![problem("internal-error", &[], Some(e.to_string()))],
+            },
+            None => None,
+        },
+        Err(e) => return vec![problem("internal-error", &[], Some(e.to_string()))],
+    };
+    let entry = g
+        .git
+        .tree(&commit)
+        .await
+        .ok()
+        .and_then(|t| t.get(&rel).cloned());
+    let Some(entry) = entry else {
+        return vec![problem("internal-error", &[], None)];
+    };
+    if !self::path::parents_clear(&g, &rel) {
+        return vec![problem("restore-in-use", &[("path", text(&rel))], None)];
+    }
+    let absent = crate::custody::present(&g, &key).await.is_none();
+    let (intent, before) = {
+        let Some(worktree) = &g.worktree else {
+            return vec![problem("not-in-group", &[], None)];
+        };
+        let file = worktree.join(&rel);
+        let Some(before) =
+            guard::Before::saved(&g, &d.device, &rel, current.as_deref(), &key).await
+        else {
+            return vec![problem("restore-in-use", &[("path", text(&rel))], None)];
+        };
+        if !before.clear(&file) {
+            return vec![problem("restore-in-use", &[("path", text(&rel))], None)];
+        }
+        if crate::capture_file::pending(&g) || crate::evict::unsettled(&g) {
+            return vec![problem("receiving", &[], None)];
+        }
+        match reference::retain(&g, &d.device, [(rel.clone(), Some(entry.clone()))].into()).await {
+            Ok(intent) => (intent, before),
+            Err(e) => return vec![problem("internal-error", &[], Some(e.to_string()))],
+        }
+    };
+    // Complete the new exact reference reading without blocking other
+    // worktree requests on a cold scan. Refounding may replace this group.
+    drop(busy);
+    crate::purge::prepare(&g).await;
+    let _busy = g.busy.lock().await;
+    if !d.current_group(&g).await {
+        return vec![problem("not-in-group", &[], None)];
+    }
+    crate::purge::round(&g, &d.device, false).await;
     match bring(&g, &key).await {
         Ok(()) => {}
         Err("disk-full") => {
             let me = crate::status::this_name(&g, &d.device);
             return vec![problem("disk-full", &[("machine", text(&me))], None)];
         }
+        Err("receiving") if absent => {
+            d.wake.notify_one();
+            return vec![problem("restore-waiting", &[("path", text(&rel))], None)];
+        }
         Err(code) => return vec![problem(code, &[], None)],
     }
-    let current = versions.last().map(|(_, k)| k.clone());
-    let mode = g
-        .git
-        .tree(&commit)
-        .await
-        .ok()
-        .and_then(|t| t.get(&rel).map(|e| e.mode.clone()));
-    let Some(mode) = mode else {
-        return vec![problem("internal-error", &[], None)];
-    };
     if !self::path::parents_clear(&g, &rel) {
         return vec![problem("restore-in-use", &[("path", text(&rel))], None)];
     }
-    match crate::install::put_restore(&g, &rel, &key, current.as_deref(), &mode, &d.tracer).await {
-        Ok(Put::Done(_)) => {}
-        Ok(Put::InUse | Put::Raced) => {
-            return vec![problem("restore-in-use", &[("path", text(&rel))], None)];
+    // Another round may have completed this exact request. Otherwise put
+    // must compare with the original file, even if capture indexed a newer
+    // save while the cold scan ran. Never bless a newly read index baseline.
+    let already = g
+        .worktree
+        .as_ref()
+        .is_some_and(|w| guard::verified(&w.join(&rel), &key, &entry.mode).is_some());
+    if !already {
+        match crate::install::put_restore(&g, &rel, &key, before.source(), &entry.mode, &d.tracer)
+            .await
+        {
+            Ok(Put::Done(_)) => {}
+            Ok(Put::InUse | Put::Raced) => {
+                return vec![problem("restore-in-use", &[("path", text(&rel))], None)];
+            }
+            Err(e) => return vec![problem("internal-error", &[], Some(e))],
         }
-        Err(e) => return vec![problem("internal-error", &[], Some(e))],
+    }
+    if let Err(e) = intent.installed(&g, &d.device, &[rel.clone()].into()).await {
+        return vec![problem("internal-error", &[], Some(e.to_string()))];
     }
     if let Err(e) = crate::capture::capture(&g, &d.device, &d.tracer).await {
         tracing::warn!(group = %g.id, error = %e, "capture-failed");

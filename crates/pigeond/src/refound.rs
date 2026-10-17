@@ -128,6 +128,9 @@ pub async fn refound(d: &Daemon, repository: Option<&Path>) -> Vec<Response> {
     if crate::evict::unsettled(&g) || crate::capture_file::pending(&g) {
         return vec![problem("repository-busy", &[], None)];
     }
+    if let Err(e) = crate::erase_commit::recover(&g, &d.device, &d.tracer).await {
+        return vec![problem("repository-busy", &[], Some(e.to_string()))];
+    }
     let position = d
         .groups()
         .iter()
@@ -162,6 +165,27 @@ async fn genesis(
     g: &std::sync::Arc<Group>,
 ) -> Result<(String, String, String), String> {
     let me = DeviceId(d.device.clone());
+    let main = g.git.rev("refs/heads/main").await.ok_or("no main")?;
+    crate::merge::judge_history(g, std::slice::from_ref(&main))
+        .await
+        .map_err(|e| e.to_string())?;
+    if !g.lock().engine.accepted(&main) {
+        return Err("refounding requires an accepted snapshot".into());
+    }
+    // Root every complete local epoch before selecting the archived tip.
+    // Pending requests stay in that old authority domain, not the new one.
+    let count = crate::purge_state::active(g, &main)
+        .await
+        .map_err(|e| e.to_string())?
+        .len();
+    for _ in 0..count {
+        if !crate::purge_epoch::close(g)
+            .await
+            .map_err(|e| e.to_string())?
+        {
+            break;
+        }
+    }
     let doc = g.roster().ok_or("no roster")?;
     let roster = new_roster(&doc.roster, &me).ok_or("this device is not in the roster")?;
     let person = roster
@@ -171,22 +195,8 @@ async fn genesis(
         .map(|p| p.name.clone())
         .unwrap_or_default();
     let old_main = g.git.rev("refs/heads/main").await.ok_or("no main")?;
-    let text = crate::roster_file::render(&RosterDoc { roster })?;
     let fail = |e: crate::git::Error| e.to_string();
-    let blob = g
-        .git
-        .run_in(&["hash-object", "-w", "--stdin"], text.as_bytes())
-        .await
-        .map_err(fail)?;
-    let mut tree = g.git.tree(&old_main).await.map_err(fail)?;
-    tree.insert(
-        authority::ROSTER.to_owned(),
-        authority::Entry {
-            mode: "100644".to_owned(),
-            kind: "blob".to_owned(),
-            oid: blob.trim().to_owned(),
-        },
-    );
+    let tree = new_tree(g, &old_main, &me).await?;
     let oid = crate::merge::write_tree(&g.git, &tree)
         .await
         .map_err(fail)?;
@@ -222,6 +232,37 @@ async fn genesis(
     crate::join_transition::finish(g, &d.dirs.config_file()).await?;
     tracing::info!(old = %g.id, group = %new, "refounded");
     Ok((new, name, person))
+}
+
+/// New authority-domain tree (proposed ADR 0079). Current files and other
+/// settings survive. Old votes and erasure identities stay in their signed
+/// archive; completed epochs are consumed there, with their original judge.
+pub async fn new_tree(g: &Group, main: &str, me: &DeviceId) -> Result<authority::Tree, String> {
+    let old = crate::membership::roster(g, main)
+        .await
+        .map_err(|e| e.to_string())?;
+    let roster = new_roster(&old, me).ok_or("this device cannot refound")?;
+    let text = crate::roster_file::render(&RosterDoc { roster })?;
+    let blob = g
+        .git
+        .run_in(&["hash-object", "-w", "--stdin"], text.as_bytes())
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut tree = g.git.tree(main).await.map_err(|e| e.to_string())?;
+    tree.retain(|path, _| {
+        !path.starts_with(crate::admission_file::PREFIX)
+            && !path.starts_with(crate::purge_file::PREFIX)
+            && !path.starts_with(crate::purge_epoch::PREFIX)
+    });
+    tree.insert(
+        authority::ROSTER.into(),
+        authority::Entry {
+            mode: "100644".into(),
+            kind: "blob".into(),
+            oid: blob.trim().into(),
+        },
+    );
+    Ok(tree)
 }
 
 /// Serves the repository of `old` as the group `new`.

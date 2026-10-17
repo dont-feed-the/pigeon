@@ -394,6 +394,7 @@ async fn browse(web: &Web, r: &Renderer, form: &str, q: Browse) -> Html<String> 
             }
             span class="spacer" {}
             @if !prefix.is_empty() {
+                a class="btn" href=(r.url(&format!("/erase?path={}", enc(&folder)))) { (r.id("web-erase-title")) }
                 a class="btn" href=(r.url(&format!("/folder-rule?path={}", enc(&folder)))) { (icon("rule", "")) (r.id("web-folder-rule")) }
                 @if r.storage_controls() && !listed.is_empty() {
                     @if here_sync.is_some_and(|f| f.chosen) { (crate::sync::forget(r, form, &folder, "")) }

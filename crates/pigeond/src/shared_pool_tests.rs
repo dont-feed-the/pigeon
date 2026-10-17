@@ -113,3 +113,27 @@ fn concurrent_pool_writers_converge_and_corruption_is_never_blessed() {
     assert!(path(&store, "../other", &key).is_err());
     assert!(path(&store, &group, "../../outside").is_err());
 }
+
+#[test]
+fn erasure_releases_only_the_qualified_group_name_and_allows_a_fresh_birth() {
+    let temp = tempfile::tempdir().unwrap();
+    let (source, key) = source(temp.path(), "retained", b"same bytes", true);
+    let store = temp.path().join("pool");
+    let group = "a".repeat(40);
+    let other = "b".repeat(40);
+    let target = retain(&store, &group, &key, &source, true).unwrap();
+    let independent = retain(&store, &other, &key, &source, true).unwrap();
+    let reader = temp.path().join("active-reader");
+    std::fs::hard_link(&target, &reader).unwrap();
+    let locks = target.with_extension("lock");
+    let inode = locks.metadata().unwrap().ino();
+    release(&store, &group, &key).unwrap();
+    release(&store, &group, &key).unwrap();
+    assert!(!target.exists());
+    assert_eq!(locks.metadata().unwrap().ino(), inode);
+    assert_eq!(std::fs::read(&independent).unwrap(), b"same bytes");
+    assert_eq!(std::fs::read(&reader).unwrap(), b"same bytes");
+    // No sticky tombstone may defeat a later uncovered restore/reference.
+    assert_eq!(retain(&store, &group, &key, &source, true).unwrap(), target);
+    verify(&target, &key).unwrap();
+}

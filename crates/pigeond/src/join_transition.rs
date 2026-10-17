@@ -87,6 +87,7 @@ async fn import(g: &Group, plan: &Plan) -> Result<(), String> {
             "-q",
             "--no-tags",
             "--no-write-fetch-head",
+            "--refmap=",
             &stage.to_string_lossy(),
             &spec,
         ])

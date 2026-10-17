@@ -94,6 +94,9 @@ pub fn version(
     names: &BTreeMap<String, String>,
     removed: bool,
 ) -> Option<Message> {
+    if o.erased_restoration && !removed {
+        return Some(msg("why-erased-restoration-missing", &[]));
+    }
     let r = match &o.state {
         State::Local(r) | State::Published(r) => r,
         _ => return None,
@@ -307,6 +310,7 @@ mod tests {
             state: State::Local(Reason::Sending),
             level: pigeon_core::headline::Level::Working,
             since: 0,
+            erased_restoration: false,
             silent: Some(Silent {
                 devices: BTreeSet::from(["nas".to_owned()]),
                 since: Some(5),

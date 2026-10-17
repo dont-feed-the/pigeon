@@ -54,6 +54,8 @@ pub struct Observed {
     pub state: State<String>,
     /// Its level.
     pub level: Level,
+    /// An earlier erasure covered these unavailable contents before a new reference.
+    pub erased_restoration: bool,
     /// When this computer first saw it, while it was not safe yet; for a
     /// safe version, at most the time of the `main` it was observed in.
     pub since: i64,
@@ -188,6 +190,15 @@ async fn observe_at(
             .collect();
         (k.heard.clone(), k.lost.clone(), mains, checking)
     };
+    if let Some(doc) = &doc {
+        checking.extend(
+            doc.roster
+                .devices
+                .keys()
+                .filter(|id| crate::membership::pending(g, &id.0))
+                .map(|id| id.0.clone()),
+        );
+    }
     lost.extend(crate::report::lost(g));
     if g.role == pigeon_core::filter::Role::Custodian
         && crate::health::own_report(g, me)
@@ -233,6 +244,31 @@ async fn observe_at(
         // The backup machines refuse this computer: none counts here.
         custodians.clear();
     }
+    let renewed = if g.git.purge_gate.policy().waiting {
+        BTreeSet::new()
+    } else {
+        g.lock()
+            .renewed_after_erasure
+            .as_ref()
+            .filter(|(observed, _)| observed == main)
+            .map(|(_, keys)| keys.clone())
+            .unwrap_or_default()
+    };
+    let writers = if renewed.is_empty() {
+        Default::default()
+    } else {
+        g.lock()
+            .engine
+            .catalogue(&[main.to_owned()])
+            .writers
+            .clone()
+    };
+    let person = doc.as_ref().and_then(|d| {
+        d.roster
+            .devices
+            .get(&pigeon_core::roster::DeviceId(me.to_owned()))
+            .map(|d| d.person.clone())
+    });
     let mut out = Vec::new();
     for (path, key) in keys {
         if !(prefix.is_empty() || path == prefix || path.starts_with(&format!("{prefix}/"))) {
@@ -266,13 +302,32 @@ async fn observe_at(
             erased: false,
         };
         let st = state(&version, &s, Time(now));
+        let erased_restoration = renewed.contains(&key)
+            && matches!(
+                st,
+                State::Missing(pigeon_core::state::Missing::ContentMissing)
+            );
+        let decider = erased_restoration
+            && doc
+                .as_ref()
+                .zip(person.as_ref())
+                .is_some_and(|(doc, person)| {
+                    pigeon_core::authority::deciders(&doc.roster, &writers, &[(&path, false)])
+                        .0
+                        .contains(person)
+                });
         let silent = crate::status_why::silent(&version.custodians, Time(now));
         out.push(Observed {
             path,
             key,
             local: version.this_device_holds,
+            erased_restoration,
             state: st,
-            level: Level::Safe,
+            level: if erased_restoration && decider {
+                Level::NeedsYou
+            } else {
+                Level::Safe
+            },
             since: now,
             silent,
         });
@@ -286,7 +341,13 @@ async fn observe_at(
     let since = ages(&mut g.lock().first_seen, &states, seed, prefix.is_empty());
     for (o, since) in out.iter_mut().zip(since) {
         o.since = since;
-        o.level = version_level(&o.state, Span(now - since), GRACE, &s, Time(now));
+        o.level = o.level.join(version_level(
+            &o.state,
+            Span(now - since),
+            GRACE,
+            &s,
+            Time(now),
+        ));
     }
     Ok(out)
 }
@@ -352,6 +413,10 @@ pub(crate) async fn inventory_report(
         let unreadable = observed.is_err();
         (observed.unwrap_or_default(), Ok(Vec::new()), unreadable)
     };
+    let history_waiting = retained
+        .as_ref()
+        .err()
+        .is_some_and(crate::retention::waiting);
     let history_unreadable = retained.is_err();
     let retained = retained.unwrap_or_default();
     let k = settings(g).k;
@@ -431,8 +496,13 @@ pub(crate) async fn inventory_report(
         level
     };
     let name = |d: &str| Arg::Text(names.get(d).cloned().unwrap_or_else(|| d.to_owned()));
+    let erased_missing = observed
+        .iter()
+        .filter(|o| o.erased_restoration && o.level == Level::NeedsYou)
+        .count();
     let headline = match (level, &shortfall) {
         _ if removed => msg("headline-removed", &[]),
+        _ if !current_unreadable && history_waiting => msg("headline-history-waiting", &[]),
         _ if current_unreadable || history_unreadable => msg("headline-inventory-unreadable", &[]),
         _ if pending_unreadable => msg("headline-checking", &[]),
         _ if full => msg("headline-disk-full", &[]),
@@ -469,6 +539,13 @@ pub(crate) async fn inventory_report(
                 )
             }
         },
+        _ if erased_missing > 0 => msg(
+            "headline-erased-restoration-missing",
+            &[(
+                "files",
+                Arg::Number(i64::try_from(erased_missing).unwrap_or(i64::MAX)),
+            )],
+        ),
         _ if !pending.is_empty() && level != Level::NeedsYou => msg(
             "headline-capturing",
             &[(

@@ -57,6 +57,9 @@ pub(crate) async fn export(
         return Err("A managed client cannot be a content provider".into());
     }
     let _busy = g.busy.lock().await;
+    if !content_allowed(&g, key) {
+        return Err("Content waits for verified erasure and membership state".into());
+    }
     if !g
         .roster()
         .is_some_and(|r| r.roster.devices.contains_key(&DeviceId(d.device.clone())))
@@ -129,6 +132,9 @@ pub(crate) async fn register(d: &Daemon, group: &str, store: &Path) -> Result<Re
 /// Makes a cached/source version available to this client's annex without
 /// copying its bytes. The client's untrusted laptop UUID remains independent.
 pub(crate) async fn hydrate(g: &Group, key: &str) -> Result<bool, String> {
+    if !content_allowed(g, key) {
+        return Err("Content is released or awaiting verification".into());
+    }
     let Some(storage) = &g.shared else {
         return Ok(false);
     };
@@ -187,6 +193,9 @@ async fn attach(g: &Group, key: &str, target: &Path) -> Result<(), String> {
 /// Normal custodian admission still chooses the keys to retain. An admitted
 /// key already in the pool can be pinned without receiving another byte copy.
 pub(crate) async fn provider_hydrate(g: &Group, key: &str) -> Result<bool, String> {
+    if !content_allowed(g, key) {
+        return Err("Content is released or awaiting verification".into());
+    }
     if g.role != Role::Custodian {
         return Ok(false);
     }
@@ -204,6 +213,9 @@ pub(crate) async fn provider_hydrate(g: &Group, key: &str) -> Result<bool, Strin
 /// Reconcile versions received before the pool was registered as well. A
 /// registered laptop no longer re-thins objects into writable worktree links.
 pub(crate) async fn provider_compact(g: &Group) -> Result<(), String> {
+    if g.git.purge_gate.policy().waiting {
+        return Ok(());
+    }
     if g.role == Role::Laptop && (crate::evict::unsettled(g) || crate::capture_file::pending(g)) {
         return Ok(());
     }
@@ -215,6 +227,7 @@ pub(crate) async fn provider_compact(g: &Group) -> Result<(), String> {
         store,
         g.id.clone(),
         g.role == Role::Laptop,
+        g.git.purge_gate.clone(),
     )
     .await
 }
@@ -224,6 +237,12 @@ pub(crate) async fn adopt(g: &Group, key: &str) -> Result<(), String> {
     let Some(storage) = &g.shared else {
         return Ok(());
     };
+    // This only deduplicates bytes already in this annex. A fresh metadata
+    // scan must not prevent an explicit local restore. Skip publication
+    // into the pool while transfers are fenced; hydrate/export still wait.
+    if !content_allowed(g, key) {
+        return Ok(());
+    }
     let source = crate::custody::present(g, key)
         .await
         .ok_or("Content unavailable")?;
@@ -270,6 +289,9 @@ fn local_objects(
 /// Deduplicates retained annex versions, including history and proposals, then
 /// reduces the working tree to this peer's pending changes. Never drops a key.
 pub(crate) async fn compact(g: &Group) -> Result<(), String> {
+    if g.git.purge_gate.policy().waiting {
+        return Ok(());
+    }
     let Some(storage) = &g.shared else {
         return Ok(());
     };
@@ -281,7 +303,7 @@ pub(crate) async fn compact(g: &Group) -> Result<(), String> {
         storage.store.clone(),
         g.id.clone(),
     );
-    compact_objects(directory, store, group, false).await?;
+    compact_objects(directory, store, group, false, g.git.purge_gate.clone()).await?;
     crate::shared_overlay::compact(g).await
 }
 
@@ -290,11 +312,16 @@ async fn compact_objects(
     store: PathBuf,
     group: String,
     laptop_provider: bool,
+    gate: std::sync::Arc<crate::purge_gate::Gate>,
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || -> std::io::Result<()> {
         let mut objects = Vec::new();
         local_objects(&directory, &mut objects, 0)?;
         for (key, object) in objects {
+            let policy = gate.policy();
+            if policy.waiting || policy.released.contains(&key) {
+                continue;
+            }
             let target = pool::path(&store, &group, &key)?;
             if pool::same_inode(&object, &target) {
                 continue;
@@ -334,3 +361,37 @@ pub(crate) fn unchanged(
 #[cfg(test)]
 #[path = "shared_objects_tests.rs"]
 mod tests;
+
+/// The same local content barrier used by peer transport also applies to
+/// pool shortcuts. A local cache cannot bypass released-key decisions.
+pub(crate) fn content_allowed(g: &Group, key: &str) -> bool {
+    let policy = g.git.purge_gate.policy();
+    let clear = g.lock().admission_error.is_none();
+    !policy.waiting
+        && !policy.released.contains(key)
+        && clear
+        && crate::git::signer_device().is_none_or(|me| !crate::membership::pending(g, &me))
+}
+
+/// Caller holds the physical-erasure lease and has checked reference
+/// aliases sharing this hash. Delete the pool name even when annex no
+/// longer has its own link (for example after an interrupted earlier drop).
+pub(crate) async fn release(g: &Group, key: &str) -> Result<(), String> {
+    let mut stores = std::collections::BTreeSet::new();
+    if let Some(storage) = &g.shared {
+        stores.insert(storage.store.clone());
+    }
+    if let Some(store) = pool::registration(&g.git_dir).map_err(|e| e.to_string())? {
+        stores.insert(store);
+    }
+    let (group, key) = (g.id.clone(), key.to_owned());
+    tokio::task::spawn_blocking(move || -> std::io::Result<()> {
+        for store in stores {
+            pool::release(&store, &group, &key)?;
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())
+}

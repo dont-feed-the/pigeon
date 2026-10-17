@@ -1,12 +1,18 @@
 //! Retained content (05 §5.1, 08 §8.3–8.4): placement and repair use every
 //! key in accepted, proposal and archived history (ADR 0047), including
 //! overwritten/deleted files.
-//! Purge is not implemented, so no reachable reference is released here.
+//! A complete purge policy excludes released keys. Incomplete reference
+//! readings pause content rather than refetching previously erased data.
 
 use std::collections::BTreeSet;
 
 use crate::git::Error;
 use crate::group::Group;
+
+/// A deliberate content barrier is distinct from unreadable Git history.
+pub(crate) fn waiting(error: &Error) -> bool {
+    matches!(error, Error::Parse { argv, .. } if argv == &["retained history waiting"])
+}
 
 /// One reading of accepted and proposal refs, shared by both status views.
 pub(crate) struct Snapshot {
@@ -64,7 +70,16 @@ pub async fn tips(g: &Group) -> Result<Vec<String>, Error> {
 
 /// Every key this repository must retain, including historical references.
 pub async fn keys(g: &Group) -> Result<BTreeSet<String>, Error> {
-    g.git.retained_keys(&tips(g).await?).await
+    let policy = g.git.purge_gate.policy();
+    if policy.waiting {
+        return Err(Error::Parse {
+            argv: vec!["retained keys".into()],
+            detail: "content waits for a complete purge reference reading".into(),
+        });
+    }
+    let mut keys = g.git.retained_keys(&tips(g).await?).await?;
+    keys.retain(|key| !policy.released.contains(key));
+    Ok(keys)
 }
 
 /// States of retained keys outside the current tree, for the group
@@ -86,7 +101,14 @@ pub async fn states(
         keys.extend(retained.iter().cloned());
         by_tip.push((tip, retained));
     }
-    keys.retain(|k| !current.contains(k));
+    let policy = g.git.purge_gate.policy();
+    if policy.waiting {
+        return Err(Error::Parse {
+            argv: vec!["retained history waiting".into()],
+            detail: "historical content waits for complete purge metadata".into(),
+        });
+    }
+    keys.retain(|k| !current.contains(k) && !policy.released.contains(k));
     if keys.is_empty() {
         return Ok(Vec::new());
     }
@@ -100,6 +122,15 @@ pub async fn states(
             .collect();
         (k.heard.clone(), k.lost.clone(), checking)
     };
+    if let Some(doc) = g.roster() {
+        checking.extend(
+            doc.roster
+                .devices
+                .keys()
+                .filter(|id| crate::membership::pending(g, &id.0))
+                .map(|id| id.0.clone()),
+        );
+    }
     lost.extend(crate::report::lost(g));
     if g.role == pigeon_core::filter::Role::Custodian
         && crate::health::own_report(g, me)

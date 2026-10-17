@@ -179,6 +179,8 @@ fn known_rosters() -> Vec<(&'static str, Roster)> {
     rules2.rules = 2;
     let mut rules3 = g.clone();
     rules3.rules = 3;
+    let mut rules4 = g.clone();
+    rules4.rules = 4;
     // Work/<person ID>/… is that person's (rules 2).
     let mut per_person = rules2.clone();
     per_person.folders.push(Folder {
@@ -201,6 +203,7 @@ fn known_rosters() -> Vec<(&'static str, Roster)> {
         ("group-relay.toml", relay),
         ("group-rules-2.toml", rules2),
         ("group-rules-3.toml", rules3),
+        ("group-rules-4.toml", rules4),
         ("group-per-person.toml", per_person),
         ("group-per-person-rules-1.toml", per_person_rules1),
         ("minimal.toml", minimal),
@@ -262,6 +265,7 @@ fn report(device: u8, custodian: bool) -> Status {
             keys_failed: 0,
         }),
         purge: vec![],
+        acknowledgements: Vec::new(),
         queue: Queue {
             bytes_to_send: if custodian { 0 } else { 3_500_000 },
             admits: "all".into(),
@@ -438,6 +442,8 @@ fn commit_cases_get_their_verdicts() {
             blobs: &blobs,
             new_roster: new_roster.as_ref(),
             decisions: &BTreeMap::new(),
+            purges: &BTreeMap::new(),
+            witnesses: &BTreeMap::new(),
         });
         let want = case["verdict"].as_str().unwrap();
         assert_eq!(verdict(&v), want, "commits/{name}: {v:?}");

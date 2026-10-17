@@ -149,3 +149,6 @@ passes; 16 §16.3 lists where each rule now lives.
 | [0076](0076-pigeon-updates-itself-from-the-latest-release.md) | pigeon updates itself from the latest release, daily and when a peer is newer | Accepted |
 | [0077](0077-the-web-interface-ships-a-bundled-typescript-client.md) | The web interface ships a bundled TypeScript client, built with Node | Accepted |
 | [0078](0078-a-suggestion-is-decided-file-by-file-in-one-decision.md) | A suggestion is decided file by file, in one decision | Proposed |
+| [0079](0079-refounding-keeps-completed-erasure-in-its-signed-archive.md) | Refounding keeps completed erasure in its signed archive | Proposed |
+| [0080](0080-purge-waits-survive-restarts-and-delayed-approval.md) | Purge waits survive restarts and delayed approval | Proposed |
+| [0081](0081-completed-purge-epochs-fence-custodian-membership.md) | Completed purge epochs fence custodian membership | Proposed |

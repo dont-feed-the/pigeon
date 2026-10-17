@@ -66,6 +66,9 @@ pub struct MachineHealth {
     pub repository_lost: bool,
     /// Work reported by that computer, if known.
     pub queue: Option<Queue>,
+    /// Last integrity pass from its signed report; local progress when known.
+    #[serde(default)]
+    pub scrub: Option<Scrub>,
 }
 
 /// Disk capacity in bytes, from one signed report snapshot.
@@ -107,4 +110,20 @@ pub struct RepairEpoch {
     pub name: String,
     /// Commit author time, RFC 3339.
     pub started_at: String,
+}
+
+/// Integrity evidence. Pending counts describe this local daemon only;
+/// absent remote progress never means that a pass is complete.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Scrub {
+    /// Last durably completed pass, not the start of the current pass.
+    pub last_pass_completed: Option<String>,
+    /// Findings in that completed pass, not a claim about current corruption.
+    pub keys_failed: u64,
+    /// Keys left in an active local pass, when locally observed.
+    pub remaining: Option<u64>,
+    /// Findings in the active local pass, when locally observed.
+    pub current_failures: Option<u64>,
+    /// A local progress-reading problem, without raw filesystem diagnostics.
+    pub problem: Option<crate::Message>,
 }

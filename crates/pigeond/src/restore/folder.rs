@@ -82,10 +82,11 @@ async fn snapshot(
 
 pub(super) async fn restore(
     d: &Daemon,
-    g: &Group,
+    g: &std::sync::Arc<Group>,
     rel: &str,
     version: Option<u64>,
     at: Option<&str>,
+    busy: tokio::sync::MutexGuard<'_, ()>,
 ) -> Vec<Response> {
     if version.is_some() {
         return vec![problem("restore-folder-version", &[], None)];
@@ -122,15 +123,25 @@ pub(super) async fn restore(
         Err(error) => return vec![problem("internal-error", &[], Some(error))],
     };
     let files = pigeon_core::restore::files(&selected, rel);
-    let Some(main) = g.git.rev("refs/heads/main").await else {
-        return vec![problem("internal-error", &[], None)];
-    };
-    let current = match g.git.keys(&main).await {
-        Ok(current) => current,
+    let index = match g.git.index().await {
+        Ok(index) => index,
         Err(error) => return vec![problem("internal-error", &[], Some(error.to_string()))],
     };
+    let mut current = std::collections::BTreeMap::new();
+    for path in files.keys() {
+        if let Some(entry) = index.get(path) {
+            let bytes = match g.git.object(&entry.oid).await {
+                Ok(bytes) => bytes,
+                Err(e) => return vec![problem("internal-error", &[], Some(e.to_string()))],
+            };
+            if let Some(key) = crate::git::pointer_key(&bytes) {
+                current.insert(path.clone(), key);
+            }
+        }
+    }
     let mut needed = crate::settings::reserve_bytes(g.role, &g.git_dir);
     let mut downloads = BTreeSet::new();
+    let mut absent = false;
     for (path, (key, _)) in &files {
         if !super::path::parents_clear(g, path) {
             return vec![problem("restore-in-use", &[("path", text(path))], None)];
@@ -140,6 +151,7 @@ pub(super) async fn restore(
         };
         needed = needed.saturating_add(size);
         if downloads.insert(key) && crate::custody::present(g, key).await.is_none() {
+            absent = true;
             needed = needed.saturating_add(size);
         }
     }
@@ -150,34 +162,95 @@ pub(super) async fn restore(
             None,
         )];
     }
+    let Some(worktree) = &g.worktree else {
+        return vec![problem("not-in-group", &[], None)];
+    };
+    let mut before = std::collections::BTreeMap::new();
+    for (path, (key, _)) in &files {
+        let Some(observed) = super::guard::Before::saved(
+            g,
+            &d.device,
+            path,
+            current.get(path).map(String::as_str),
+            key,
+        )
+        .await
+        else {
+            return vec![problem("restore-in-use", &[("path", text(path))], None)];
+        };
+        before.insert(path.clone(), observed);
+    }
+    let intent = if absent {
+        // A reference is an explicit request even if fetching later fails.
+        // Refuse obvious private/writer obstructions before publishing it.
+        for path in files.keys() {
+            let file = worktree.join(path);
+            if !before[path].clear(&file) {
+                return vec![problem("restore-in-use", &[("path", text(path))], None)];
+            }
+        }
+        if crate::capture_file::pending(g) || crate::evict::unsettled(g) {
+            return vec![problem("receiving", &[], None)];
+        }
+        let tree = match g.git.tree(&selected.commit).await {
+            Ok(tree) => tree,
+            Err(e) => return vec![problem("internal-error", &[], Some(e.to_string()))],
+        };
+        let changes = files
+            .keys()
+            .map(|p| (p.clone(), tree.get(p).cloned()))
+            .collect();
+        match super::reference::retain(g, &d.device, changes).await {
+            Ok(intent) => intent,
+            Err(e) => return vec![problem("internal-error", &[], Some(e.to_string()))],
+        }
+    } else {
+        super::reference::Intent::default()
+    };
+    drop(busy);
+    crate::purge::prepare(g).await;
+    let _busy = g.busy.lock().await;
+    if !d.current_group(g).await {
+        return vec![problem("not-in-group", &[], None)];
+    }
+    crate::purge::round(g, &d.device, false).await;
     for key in downloads {
         if let Err(code) = super::bring(g, key).await {
+            if code == "receiving" && absent {
+                d.wake.notify_one();
+                return vec![problem("restore-waiting", &[("path", text(rel))], None)];
+            }
             return vec![problem(code, &[], None)];
         }
     }
     let mut restored = 0i64;
+    let mut installed = BTreeSet::new();
     let mut errors = Vec::new();
     for (path, (key, mode)) in &files {
         if !super::path::parents_clear(g, path) {
             errors.push(problem("restore-in-use", &[("path", text(path))], None));
             continue;
         }
-        match crate::install::put_restore(
-            g,
-            path,
-            key,
-            current.get(path).map(String::as_str),
-            mode,
-            &d.tracer,
-        )
-        .await
+        if super::guard::verified(&worktree.join(path), key, mode).is_some() {
+            restored += 1;
+            installed.insert(path.clone());
+            continue;
+        }
+        match crate::install::put_restore(g, path, key, before[path].source(), mode, &d.tracer)
+            .await
         {
-            Ok(Put::Done(_)) => restored += 1,
+            Ok(Put::Done(_)) => {
+                restored += 1;
+                installed.insert(path.clone());
+            }
             Ok(Put::Raced | Put::InUse) => {
                 errors.push(problem("restore-in-use", &[("path", text(path))], None))
             }
             Err(error) => errors.push(problem("internal-error", &[], Some(error))),
         }
+    }
+    if let Err(error) = intent.installed(g, &d.device, &installed).await {
+        errors.push(problem("internal-error", &[], Some(error.to_string())));
     }
     if let Err(error) = crate::capture::capture(g, &d.device, &d.tracer).await {
         errors.push(problem("internal-error", &[], Some(error.to_string())));

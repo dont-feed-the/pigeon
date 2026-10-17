@@ -187,7 +187,10 @@ pub(crate) async fn pending(g: &Group, prefix: &str) -> Result<BTreeSet<String>,
         .into_iter()
         .filter_map(letters)
         .filter(|(_, y, path)| {
-            !is_pigeon_path(path)
+            // Incoming main can lead an absent index path while contents
+            // wait. Actual private files still count, even when staged.
+            (*y != '.' || std::fs::symlink_metadata(worktree.join(path)).is_ok())
+                && !is_pigeon_path(path)
                 && crate::evict::under(path, prefix)
                 && !crate::suggest::unchanged(worktree, &table, path, *y == 'D')
                 && (*y == 'D' || kind(worktree, path).is_none())
@@ -225,6 +228,7 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
         return Ok(done);
     }
     recover(g).await?;
+    crate::erase_commit::recover(g, me, tracer).await?;
     let now = crate::util::now_ns();
     g.lock()
         .installed

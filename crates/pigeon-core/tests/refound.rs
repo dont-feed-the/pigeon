@@ -12,6 +12,11 @@ use pigeon_core::{
 
 fn input(tc: &TestCase) -> (Roster, DeviceId) {
     let mut old = genesis();
+    old.rules = tc.draw(
+        gs::integers::<u32>()
+            .min_value(1)
+            .max_value(pigeon_core::purge::RULES),
+    );
     old.k = tc.draw(gs::integers::<u32>().min_value(1).max_value(9));
     old.retention_days = tc.draw(gs::integers::<u32>().min_value(1).max_value(365));
     old.relay = tc
@@ -19,7 +24,9 @@ fn input(tc: &TestCase) -> (Roster, DeviceId) {
         .then(|| "https://relay.example".into());
     for i in 0..tc.draw(gs::integers::<usize>().max_value(12)) {
         let owner = tc.draw(gs::integers::<usize>().min_value(1).max_value(NP));
-        let rule = if tc.draw(gs::booleans()) {
+        let rule = if old.rules >= 2 && tc.draw(gs::booleans()) {
+            Rule::PerPerson
+        } else if tc.draw(gs::booleans()) {
             Rule::Owned(pid(owner))
         } else {
             Rule::AddOnly(
@@ -69,17 +76,27 @@ fn folder_boundaries_and_group_settings_survive(tc: TestCase) {
             new.k,
             new.retention_days,
             &new.relay,
-            &new.telemetry_device,
-            new.rules
+            &new.telemetry_device
         ),
         (
             &old.group,
             old.k,
             old.retention_days,
             &old.relay,
-            &old.telemetry_device,
-            old.rules
+            &old.telemetry_device
         )
+    );
+    assert!(
+        new.rules < pigeon_core::purge::RULES,
+        "new custody requires its own preparation"
+    );
+    assert_eq!(
+        new.rules,
+        if old.folders.iter().any(|f| f.rule == Rule::PerPerson) {
+            2
+        } else {
+            1
+        }
     );
     assert_eq!(new.folders.len(), old.folders.len());
     for (a, b) in old.folders.iter().zip(&new.folders) {

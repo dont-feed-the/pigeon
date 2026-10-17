@@ -110,6 +110,7 @@ pub async fn file_page(
                 @for v in &rows { (crate::details::version(&r, &at.path, v, (Some(v.number) == newest).then_some(current.as_str()), &form.0)) }
             }
         }
+        p { a class="btn" href=(r.url(&format!("/erase?path={}", enc(&at.path)))) { (r.id("web-erase-title")) } }
         p { a class="btn" href=(r.url("/files")) { (icon("back", "")) (r.id("web-back")) } }
     };
     bare(&r, "/files", &name, &body)
@@ -218,7 +219,10 @@ pub async fn deleted_page(
                             td class="col-icon" { (file_icon(&f.path)) }
                             td class="col-name" { (f.path) }
                             td class="when col-when" { (when(&r, &f.deleted_at)) }
-                            td class="col-actions" { (restore(&f.path, "web-restore-deleted")) }
+                            td class="col-actions" {
+                                (restore(&f.path, "web-restore-deleted"))
+                                a href=(r.url(&format!("/erase?path={}", enc(&std::path::Path::new(&root).join(&f.path).to_string_lossy())))) { (r.id("web-erase-title")) }
+                            }
                         }
                     }
                 }

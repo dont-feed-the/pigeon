@@ -48,6 +48,10 @@ pub struct Commit<'a> {
     pub new_roster: Option<&'a Result<Roster, Unread>>,
     /// As [`Step::decisions`].
     pub decisions: &'a BTreeMap<String, Result<Decision, Unread>>,
+    /// Parsed purge additions and their verified historical scope.
+    pub purges: &'a BTreeMap<String, Result<authority::PurgeCheck, Unread>>,
+    /// Independently checked immutable proof documents.
+    pub witnesses: &'a BTreeMap<String, Result<(), Unread>>,
     /// Each parent outside A(c).
     pub adopted: &'a [Adopted<'a>],
 }
@@ -61,7 +65,19 @@ pub fn judge(c: &Commit<'_>) -> Verdict {
         if !matches!(x.verdict, Verdict::Refused(Refusal::NotAllowed(_))) {
             return Verdict::Unknown("parent");
         }
-        if let Err(path) = proposal::adopts(x.base, x.tree, c.before, c.after) {
+        // Approval can happen long after a purge request. Its sole
+        // permitted metadata adjustment extends the same scope's wait;
+        // admission independently checked those original blob identities.
+        let mut after = c.after.clone();
+        for (path, check) in c.purges {
+            if path.starts_with(".pigeon/decisions/purge-")
+                && let (Ok(check), Some(original)) = (check, x.tree.get(path))
+                && check.adoption_blobs.contains(&original.oid)
+            {
+                after.insert(path.clone(), original.clone());
+            }
+        }
+        if let Err(path) = proposal::adopts(x.base, x.tree, c.before, &after) {
             return Verdict::Refused(Refusal::NotAllowed(path));
         }
     }
@@ -90,6 +106,8 @@ pub fn judge(c: &Commit<'_>) -> Verdict {
                 blobs: c.blobs,
                 new_roster: c.new_roster,
                 decisions: c.decisions,
+                purges: c.purges,
+                witnesses: c.witnesses,
             })
         })
         .collect();

@@ -117,6 +117,9 @@ async fn exact_key_revocation_does_not_interpret_a_key_as_a_computer_name() {
     .unwrap();
     let daemon = Daemon {
         dirs: dirs_under(&temp.path().join("home")),
+        admissions: pigeond::admission_round::Store::open(
+            temp.path().join("home/state/admission-acks.toml"),
+        ),
         config: Default::default(),
         device: owner.0.clone(),
         env: GitEnv::default(),

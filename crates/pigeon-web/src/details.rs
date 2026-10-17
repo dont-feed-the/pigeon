@@ -200,6 +200,7 @@ pub(crate) async fn panel(
                 @if let Some(rule) = &rule { dt { (r.id("web-detail-rule")) } dd { (rule) } }
             }
             div class="inline-forms" {
+                a class="btn small" href=(r.url(&format!("/erase?path={}", enc(&row.abs)))) { (r.id("web-erase-title")) }
                 a class="btn small" href=(open) {
                     (icon(if row.folder { "folder" } else { "history" }, ""))
                     (r.id(if row.folder { "web-open-folder" } else { "web-all-versions" }))

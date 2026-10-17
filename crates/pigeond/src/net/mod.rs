@@ -9,6 +9,7 @@
 //! ([`serve`]). What the roster says comes from a [`Directory`]; the loops
 //! of `pigeond` provide it, and tests use [`StaticDirectory`].
 
+mod content;
 mod debug;
 pub mod recovery;
 mod relays;
@@ -63,6 +64,21 @@ pub struct Admitted {
 
 /// What the network needs to know of the groups; the loops provide it.
 pub trait Directory: Send + Sync + 'static {
+    /// Current immutable content authorization; metadata stays available
+    /// while a reference scan is pending. Implementations without purge
+    /// support preserve the ordinary filter's behavior.
+    fn content_policy(&self, _group: &str) -> Arc<pigeon_core::filter::ContentPolicy> {
+        Arc::new(pigeon_core::filter::ContentPolicy::default())
+    }
+    /// Pending backup admission also fences content in an existing stream
+    /// from that peer. Metadata remains available for completing admission.
+    fn peer_content_policy(
+        &self,
+        group: &str,
+        _device: &str,
+    ) -> Arc<pigeon_core::filter::ContentPolicy> {
+        self.content_policy(group)
+    }
     /// The repository at `path`, its git directory, working tree or inside.
     fn repository(&self, path: &Path) -> Option<Repository>;
     /// This device's repository of `group`.
@@ -120,9 +136,15 @@ struct StaticInner {
     repositories: Vec<Repository>,
     admitted: HashMap<(String, String), Admitted>,
     addresses: HashMap<String, Vec<SocketAddr>>,
+    content: HashMap<String, Arc<pigeon_core::filter::ContentPolicy>>,
 }
 
 impl StaticDirectory {
+    /// Replace a verified content policy for an embedded/test repository.
+    pub fn set_content_policy(&self, group: &str, policy: pigeon_core::filter::ContentPolicy) {
+        self.lock().content.insert(group.into(), Arc::new(policy));
+    }
+
     /// An empty directory.
     pub fn new() -> Self {
         StaticDirectory::default()
@@ -155,6 +177,10 @@ impl StaticDirectory {
 }
 
 impl Directory for StaticDirectory {
+    fn content_policy(&self, group: &str) -> Arc<pigeon_core::filter::ContentPolicy> {
+        self.lock().content.get(group).cloned().unwrap_or_default()
+    }
+
     fn repository(&self, path: &Path) -> Option<Repository> {
         let path = canonical(path);
         self.lock()

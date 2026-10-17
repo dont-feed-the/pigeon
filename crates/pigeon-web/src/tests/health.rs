@@ -58,6 +58,13 @@ fn report() -> HealthReport {
                 reserve: 10_000,
                 full: false,
             }),
+            scrub: Some(pigeon_proto::health::Scrub {
+                last_pass_completed: Some(pigeon_proto::time::rfc3339(now - 86_400)),
+                keys_failed: 2,
+                remaining: Some(7),
+                current_failures: Some(1),
+                problem: None,
+            }),
             checking: false,
             repository_lost: false,
             queue: Some(Queue {
@@ -100,6 +107,8 @@ async fn home_shows_replicated_health_and_preserves_report_age_without_telemetry
         )
         .await,
     );
+    assert!(page.contains("Findings in that pass: 2"));
+    assert!(page.contains("7 keys left") && page.contains("Findings so far: 1"));
     assert!(page.contains("Current files") && page.contains("Other versions being kept"));
     assert!(page.contains("Safe: 2") && page.contains("Only on this computer: 1"));
     assert!(page.contains("Not checked recently: 4") && page.contains("Safe: 5"));

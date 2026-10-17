@@ -52,16 +52,19 @@ async fn fetch(g: &Group, id: &str) -> Result<(), crate::git::Error> {
     let reports = crate::report::refspec(id);
     let proposals = crate::proposal::refspec(id);
     let archive = crate::refound::refspec(id);
+    let proofs = crate::purge_epoch::refspec(id);
     let args = [
         "fetch",
         "-q",
         "--no-tags",
         "--no-write-fetch-head",
+        "--refmap=",
         id,
         spec.as_str(),
         reports.as_str(),
         proposals.as_str(),
         archive.as_str(),
+        proofs.as_str(),
     ];
     match g.git.run_for(&args, FETCH_TIMEOUT).await {
         Err(e @ crate::git::Error::Timeout { .. }) => {
@@ -344,6 +347,9 @@ pub async fn present(g: &Group, key: &str) -> Option<std::path::PathBuf> {
 /// laptop sends each key to the custodians lacking it, whose own reserve
 /// refuses what does not fit (E22).
 pub async fn place(g: &Group, me: &str) -> usize {
+    if crate::membership::pending(g, me) || g.lock().admission_error.is_some() {
+        return 0;
+    }
     let keys = match crate::retention::keys(g).await {
         Ok(keys) => keys,
         Err(e) => {

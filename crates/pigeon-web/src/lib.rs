@@ -32,6 +32,7 @@ mod assets;
 mod browse;
 mod conflicts;
 mod details;
+mod erase;
 mod files;
 mod folder_rules;
 mod format;
@@ -250,6 +251,7 @@ impl Web {
             .route("/events", get(pages::events))
             .route("/files", get(browse::files))
             .route("/space", get(space::page))
+            .route("/erase", get(erase::view).post(erase::submit))
             .route("/folder", get(browse::folder_page))
             .route(
                 "/folder-rule",

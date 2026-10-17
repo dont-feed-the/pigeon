@@ -5,6 +5,48 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Added
+
+- Review the exact versions covered by `pigeon erase PATH` or
+  `pigeon erase --suggestion ID`, including content still needed elsewhere.
+  The command and web pages show preparation, confirmation, waiting backup
+  machines and cancellation. Preparation never submits a later erasure.
+- Backup machines check retained files every 30 days during the nightly
+  window, using idle I/O priority on Linux. Set `resources.scrub_window`
+  to choose another local-time window.
+
+### Fixed
+
+- Erasure keeps bytes still named by a private staged file on this computer,
+  including a staged copy whose working file is absent.
+- While saved history is being verified after a change, status explains
+  that copying is waiting and what to do if the wait continues.
+- When a current version needs contents covered by an earlier erasure and
+  no copy is known, its deciders see *Needs you* with recovery advice.
+  The unavailable file still counts as missing, including while its new
+  version waits to be installed. Separate private saves remain visible.
+- Restoring an already retained version continues while erasure metadata is
+  being checked. Browser erasure receipts link directly to waiting requests,
+  and restoration explains how older contents become a new current version.
+- Refounding keeps verified completed erasure in the signed archive. Pending
+  requests stay with the old group; the new group asks for fresh preparation
+  after its backup machines rejoin.
+- New versions keep arriving while erasure is prepared or old groups are
+  checked. Routine peer metadata fetches no longer interrupt those transfers.
+- If computers agree to conflicting erasure preparations, the preview
+  explains why it cannot proceed and how an admin can recover explicitly.
+- History labels versions released by a completed erasure as erased. Restore
+  receipts and pending requests explain that later saved or restored versions
+  are kept without cancelling the earlier request.
+- If restored contents are unavailable, the new saved version or suggestion
+  remains requested across restarts. The command explains the wait, keeps
+  existing local files, and can finish when a copy becomes available.
+- A save, deletion or executable-bit change made while restore checks history
+  stays in place, even if pigeon has already saved that change. Members can
+  retry a waiting restore without losing their intervening saved suggestions.
+
 ## 0.5.16 — 2026-10-17
 
 ### Fixed
