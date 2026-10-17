@@ -280,8 +280,7 @@ pub async fn relay(
                     tokio::spawn(net.syncer.repair(repository, &key));
                 }
                 Action::Refused { rule, line } => {
-                    let line = String::from_utf8_lossy(&line);
-                    tracing::error!(peer = %device, rule = ?rule, line = %line, "message-refused");
+                    log_refusal(device, rule, &line);
                 }
                 Action::Close(why) => {
                     tracing::warn!(peer = %device, reason = ?why, "session-closed");
@@ -297,44 +296,41 @@ pub async fn relay(
     let _ = tokio::time::timeout(Duration::from_secs(5), send.stopped()).await;
 }
 
-/// What one relayed session carried, for the debug log: its length, its
-/// bytes each way and the tail of each direction.
+/// Bounded diagnostic counters for one session. Never retain or format
+/// credentials, protocol lines or private file fragments (ADR 0022).
 struct Seen {
     started: std::time::Instant,
-    up: (usize, Vec<u8>),
-    down: (usize, Vec<u8>),
+    up: usize,
+    down: usize,
 }
 
 impl Seen {
-    const TAIL: usize = 96;
-
     fn new() -> Self {
         Seen {
             started: std::time::Instant::now(),
-            up: (0, Vec::new()),
-            down: (0, Vec::new()),
+            up: 0,
+            down: 0,
         }
     }
 
-    fn keep(side: &mut (usize, Vec<u8>), bytes: &[u8]) {
-        side.0 += bytes.len();
-        side.1.extend_from_slice(bytes);
-        let excess = side.1.len().saturating_sub(Self::TAIL);
-        side.1.drain(..excess);
-    }
-
     fn up(&mut self, bytes: &[u8]) {
-        Self::keep(&mut self.up, bytes);
+        self.up += bytes.len();
     }
 
     fn down(&mut self, bytes: &[u8]) {
-        Self::keep(&mut self.down, bytes);
+        self.down += bytes.len();
     }
 
     fn log(&self, device: &str) {
         tracing::debug!(peer = %device, ms = self.started.elapsed().as_millis(),
-            up = self.up.0, down = self.down.0,
-            up_tail = %String::from_utf8_lossy(&self.up.1),
-            down_tail = %String::from_utf8_lossy(&self.down.1), "relay-ended");
+            up = self.up, down = self.down, "relay-ended");
     }
 }
+
+fn log_refusal(device: &str, rule: pigeon_core::filter::Rule, line: &[u8]) {
+    tracing::error!(peer = %device, rule = ?rule, bytes = line.len(), "message-refused");
+}
+
+#[cfg(test)]
+#[path = "serve_log_tests.rs"]
+mod log_tests;

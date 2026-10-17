@@ -12,6 +12,12 @@ increments the second number, and every other release the third.
 - Diagnostic formatting hides device signing keys, invitation secrets and repository authentication tokens.
 - Repairs to damaged files can run alongside backup transfers and take priority over routine integrity checks.
 
+## 0.6.12 — 2026-10-17
+
+### Fixed
+
+- Network diagnostics keep transfer counts and refusal reasons without copying file contents or connection passwords into the logs.
+
 ## 0.6.11 — 2026-10-17
 
 ### Changed

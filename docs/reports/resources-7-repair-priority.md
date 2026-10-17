@@ -49,3 +49,10 @@ in 33 seconds in the original run. All original S2/S3 and retake S2 filesystem
 and roster streams pass TLC. A valid trace does not erase the original
 native assertion failure. These finite scenarios do not prove the hardware
 budgets or a timing-flake rate.
+
+Current v0.6.12 main `11375509a7266e05e136a75631ce3e6a3614d697` is integrated before PR validation.
+The three 1000-case priority laws, controller/repair/charging and formatting/
+logging contracts, real annex transfer and idle corrupted-object scrub
+pass after integration. Native S2/S3 and their filesystem/roster trace checks
+also pass, as do all-target workspace Clippy and structural checks.
+Exact-head PR CI is separate; hardware budgets and elapsed gates remain open.
