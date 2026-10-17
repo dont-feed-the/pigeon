@@ -329,13 +329,15 @@ pub async fn run(d: std::sync::Arc<crate::daemon::Daemon>) {
             d.node
                 .resources
                 .set_person_paused(crate::pause::now(&d).is_some());
-            match crate::config::load(&d.dirs.config_file()).and_then(|c| {
-                c.resources
-                    .effective()
-                    .map_err(crate::config::ConfigError::Invalid)
-            }) {
-                Ok(settings) => d.node.resources.configure(settings),
-                Err(e) => tracing::warn!(error = %e, "resource-settings-refused"),
+            match crate::config::load(&d.dirs.config_file()) {
+                Ok(config) => match config.resources.effective() {
+                    Ok(settings) => {
+                        d.node.resources.configure(settings);
+                        crate::download_queue::configure(&d, &config);
+                    }
+                    Err(error) => tracing::warn!(%error, "resource-settings-refused"),
+                },
+                Err(error) => tracing::warn!(%error, "resource-settings-refused"),
             }
         }
         let now = crate::util::now();

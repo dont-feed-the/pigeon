@@ -154,6 +154,9 @@ pub struct GroupEntry {
     pub id: String,
     /// The folder, or a custodian's bare repository.
     pub path: PathBuf,
+    /// Local kept-folder download order, never custody or retention authority.
+    #[serde(default)]
+    pub priority: crate::download_queue::Priorities,
 }
 
 /// Errors of the configuration.
@@ -174,6 +177,9 @@ pub fn load(path: &Path) -> Result<Config, ConfigError> {
             let config: Config =
                 toml_edit::de::from_str(&text).map_err(|e| ConfigError::Invalid(e.to_string()))?;
             config.resources.effective().map_err(ConfigError::Invalid)?;
+            for group in &config.groups {
+                crate::download_queue::validate(&group.priority).map_err(ConfigError::Invalid)?;
+            }
             Ok(config)
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config {
@@ -248,6 +254,7 @@ pub fn set_value(path: &Path, key: &str, value: toml_edit::Value) -> Result<(), 
 
 /// Adds a `[[groups]]` entry to the file at `path`, keeping the rest.
 pub fn add_group(path: &Path, entry: &GroupEntry) -> Result<(), ConfigError> {
+    crate::download_queue::validate(&entry.priority).map_err(ConfigError::Invalid)?;
     let mut doc = read_doc(path)?;
     let mut table = toml_edit::Table::new();
     table.insert("id", toml_edit::value(entry.id.clone()));
@@ -255,6 +262,18 @@ pub fn add_group(path: &Path, entry: &GroupEntry) -> Result<(), ConfigError> {
         "path",
         toml_edit::value(entry.path.to_string_lossy().into_owned()),
     );
+    if !entry.priority.is_empty() {
+        let mut priorities = toml_edit::Table::new();
+        for (folder, priority) in &entry.priority {
+            let value = match priority {
+                crate::download_queue::Priority::High => "high",
+                crate::download_queue::Priority::Normal => "normal",
+                crate::download_queue::Priority::Low => "low",
+            };
+            priorities.insert(folder, toml_edit::value(value));
+        }
+        table.insert("priority", toml_edit::Item::Table(priorities));
+    }
     match doc
         .get_mut("groups")
         .and_then(toml_edit::Item::as_array_of_tables_mut)
@@ -298,7 +317,10 @@ pub fn replace_group(path: &Path, old: &str, entry: &GroupEntry) -> Result<(), C
                 });
             if (id == Some(old) && same_path) || id == Some(entry.id.as_str()) {
                 if !inserted {
-                    changed.push(replacement.clone());
+                    let mut preserved = table.clone();
+                    preserved.insert("id", replacement["id"].clone());
+                    preserved.insert("path", replacement["path"].clone());
+                    changed.push(preserved);
                     inserted = true;
                 }
             } else {
@@ -360,6 +382,7 @@ mod tests {
             let entry = GroupEntry {
                 id: id.into(),
                 path: t.path().join(id),
+                priority: Default::default(),
             };
             add_group(&path, &entry).unwrap();
         }
@@ -390,18 +413,22 @@ mod tests {
             GroupEntry {
                 id: "first".into(),
                 path: t.path().join("first"),
+                priority: Default::default(),
             },
             GroupEntry {
                 id: "old".into(),
                 path: old_path.clone(),
+                priority: Default::default(),
             },
             GroupEntry {
                 id: "old".into(),
                 path: t.path().join("another-repository"),
+                priority: Default::default(),
             },
             GroupEntry {
                 id: "last".into(),
                 path: t.path().join("last"),
+                priority: Default::default(),
             },
         ];
         for entry in &entries {
@@ -410,6 +437,7 @@ mod tests {
         let new = GroupEntry {
             id: "new".into(),
             path: old_path,
+            priority: Default::default(),
         };
         // A duplicate left by an older implementation is removed too.
         add_group(&path, &new).unwrap();

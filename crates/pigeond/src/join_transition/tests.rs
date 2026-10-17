@@ -48,6 +48,7 @@ async fn setup() -> Fixture {
         &GroupEntry {
             id: old.clone(),
             path: repo,
+            priority: Default::default(),
         },
     )
     .unwrap();

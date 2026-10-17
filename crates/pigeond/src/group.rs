@@ -28,6 +28,8 @@ use crate::roster_file::{self, RosterDoc};
 /// What the loops know of a group, behind a lock never held across a wait.
 #[derive(Debug, Default)]
 pub struct Known {
+    /// Current validated local download priorities; changed readings replace the snapshot.
+    pub(crate) download_priorities: Arc<crate::download_queue::Priorities>,
     /// Stable stat observations and actual captures of dirty background paths.
     pub capture_schedule: crate::capture_schedule::State,
     /// A temporary, non-listening metadata fetch admits only its inviter.

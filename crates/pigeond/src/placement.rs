@@ -144,26 +144,20 @@ async fn downloads(d: &Weak<Daemon>, g: &Group, revision: u64) -> usize {
     if g.worktree.is_none() {
         return 0;
     }
-    let keys = {
-        let _busy = g.busy.lock().await;
-        if g.git.purge_gate.revision() != Some(revision) {
-            return 0;
-        }
-        let Some(main) = g.git.rev("refs/heads/main").await else {
-            return 0;
-        };
-        let Ok(keys) = g.git.keys(&main).await else {
-            return 0;
-        };
-        let targets = crate::shared_overlay::targets(g);
-        keys.into_iter()
-            .filter(|(path, _)| !targets.is_freed(path))
-            .map(|(_, key)| key)
-            .collect::<std::collections::BTreeSet<_>>()
-    };
+    let priorities = g.lock().download_priorities.clone();
+    let items = crate::download_queue::items(g, &priorities).await;
     let mut made = 0;
     let mut validation = Validation::default();
-    for key in keys {
+    for work in items {
+        let pigeon_core::queue::Work::Download { key, .. } = work else {
+            continue;
+        };
+        if !Arc::ptr_eq(&priorities, &g.lock().download_priorities) {
+            if let Some(d) = d.upgrade() {
+                d.wake.notify_one();
+            }
+            break;
+        }
         if g.git.purge_gate.revision() != Some(revision) {
             break;
         }

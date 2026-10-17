@@ -368,7 +368,8 @@ def run():
             assert dav(a, "GET", "Docs/renamed.txt")[0] == 401
             assert http("GET", f"/clients/{aid}/peer/files", cookie=cookie_a)[0] == 403
             assert http("GET", f"/clients/{ids['Alice second client']}/peer/files", cookie=cookie_a)[0] == 200
-            assert dav(a2, "GET", "Docs/renamed.txt")[0] == 200
+            independent_status = dav(a2, "GET", "Docs/renamed.txt")[0]
+            assert independent_status == 200, f"The independent client returned HTTP {independent_status} after another client was revoked"
             print("PASS: deep-change discovery, persistent identities/metadata, and individual revocation", flush=True)
         except Exception:
             # Keep only non-secret daemon diagnostics on failure; HTTP credentials are never logged.

@@ -153,6 +153,7 @@ where
     let entry = GroupEntry {
         id: g.id.clone(),
         path: path.to_path_buf(),
+        priority: Default::default(),
     };
     if let Err(e) = crate::config::add_group(&d.dirs.config_file(), &entry) {
         d.groups

@@ -35,6 +35,7 @@ pub mod decide_files;
 pub mod decided;
 pub mod decision_file;
 mod doctor;
+pub mod download_queue;
 pub mod drop;
 pub mod erase;
 pub mod erase_commit;

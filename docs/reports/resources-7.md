@@ -766,3 +766,96 @@ without sized disks; required Linux namespace slice validation still
 precedes publication. The original v0.6.9 S8 miss and bounded retake remain
 retained. Main cache producers saved before tagging. No measured M6 or
 elapsed M7 gate is inferred.
+
+## Local kept-folder ordering checkpoint
+
+Kept downloads previously used lexical key order and ignored `[groups.priority]`.
+The native adapter now feeds current kept keys through the existing pure
+download order: high, normal, low, then latest retained reference birth and
+key. Shared keys take the highest priority among their kept paths and occur
+once; freed paths do not promote a key. Root files remain normal priority.
+Cold history reads remain outside the worktree lock, and repository revision,
+retention and transport authority checks still precede each content request.
+
+A complete valid configuration reload updates local folder priorities. An
+invalid priority or non-top-level name rejects that entire reading and keeps
+the prior runtime configuration. Equal reloads preserve the immutable queue
+snapshot; a changed one stops the old download plan between keys. In-place
+group identity replacement preserves local priorities, comments and unknown
+settings. This does not implement the complete global queue or measure an
+HDD/reference-tree resource budget. Validation is recorded after running.
+
+The native signed-history ordering fixture and both new 1000-case laws pass,
+alongside configuration validation/preservation (four initial focused checks).
+The later runtime fixture starts the production reload loop with an actual
+Git repository and local QUIC node: valid changes apply, equal readings keep
+the same snapshot, an invalid value preserves it, and the next valid edit
+applies without restart. Both runtime/configuration retakes pass. All-target
+workspace Clippy passes with lab, trace and console features. The broad
+783-check run precedes the final runtime test, guide, HTTP diagnostic and
+subsequent telemetry-tier and capacity-precondition additions.
+
+An English simulated task review identified a two-group insertion ambiguity
+in the guide. The focused retake accepts explicit placement after the
+intended existing ID/path and before the next group heading, preserving IDs
+and paths, and the explanation that preferences apply only to that group on
+this computer. This is wording evidence, separate from the native fixtures.
+The Nextcloud assertion also records its actual HTTP status if the independent
+client fails after revoking another client; its required 200 result is unchanged.
+
+Native S2 passes all 11 checks and S3 all 14 with the folder-order adapter.
+TLC accepts both filesystem streams and both roster streams. These are finite
+protection/free/keep and content-path observations, not resource budgets.
+The roadmap's seven-night requirement now explicitly applies to Linux; Mac
+results remain periodic background evidence under the user's release policy.
+The seven real Linux nights are still required.
+
+The complete parallel workspace run passed all 783 selected checks (two
+skipped); its source predates the final runtime-only fixture, guide,
+HTTP-status diagnostic and later telemetry-tier/capacity-precondition additions. The subsequent production-loop
+retake passed both runtime/configuration checks, and final all-target
+Clippy and repository structural/ADR/spec checks pass before committing.
+Current-main integration and exact-head CI still precede merging.
+
+The checkpoint integrates current v0.6.10 main `510146fce732cbcd1dd3a35e4bb5f8ed3ea52319` before PR
+validation. Compared with its tested queue parent, main changes only the
+version, lockfile and release reports. Affected queue/history/configuration
+and live-reload checks pass again after integration, with all-target Clippy
+and repository checks. No PR version bump is introduced.
+
+## Mac telemetry fixture correction before revalidation
+
+The v0.6.9 periodic Mac workspace (job 117496213933) passed 690 of
+692 checks, with one skip. Both telemetry multi-daemon fixtures failed
+because the normal build correctly refuses Mac backup roles. They now
+require the lab feature, matching the other simulated backup scenarios and
+the existing native-shard selection. No production role or filesystem rule
+is relaxed. The original assertion remains retained; this deterministic
+fixture-tier error is not retried on unchanged source. PR #79's earlier
+head is superseded so the correction and folder priorities validate together.
+
+Normal-build test discovery now finds zero telemetry multi-daemon fixtures;
+lab discovery finds both, and the unchanged native-shard selector includes
+that file. Both lab tests pass again with the corrected tier. Final
+all-target workspace Clippy and structural/ADR/spec checks pass. Normal Mac
+backup refusal stays required; a future periodic source run supplies the
+Mac retake, separate from these Linux observations.
+
+## Initial capacity-inventory observation
+
+v0.6.10's original daemon shard 3 (job 117500811605) passed 11 of
+12 tests. The capacity fixture's first current-byte assertion read zero
+instead of 13 after 7.304 seconds. Artifact 12113894459 is 9641122 bytes,
+SHA-256 `b3a2359940016fd47319d71b7560102a87adef8d1c931e728203caedd0fe6d20`.
+Its extraction verifies the laptop's one distinct 13-byte object; the saved
+history contains both initial paths' capture, while the backup still has
+the preceding empty accepted head. No absent backup copy is proved protected.
+
+The fixture's aggregate Protected wait can also match an empty catalogue.
+It now requires both named captured paths to be protected before measuring
+their bytes, within the same original 120-second wait budget. Current-byte,
+history-byte and distinct-key assertions remain unchanged. This corrects the
+observation precondition; it does not establish the exact concurrent
+interleaving that produced the original zero snapshot. Native capacity and
+pending-save retakes both pass. The unchanged immutable v0.6.10 tag receives
+one bounded original-shard retake; that outcome remains separate.

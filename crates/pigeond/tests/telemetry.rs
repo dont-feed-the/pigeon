@@ -1,6 +1,9 @@
 //! Real-device collection (ADR 0025): no export without a roster choice,
 //! authenticated peer data reaches only its chosen collector's explicit
 //! local OTLP backend, and turning it off stops further peer export.
+//! Backup peers on macOS are lab simulations; normal builds retain the
+//! Linux-only backup role policy (ADR 0032).
+#![cfg(feature = "lab")]
 #![allow(clippy::unwrap_used, clippy::panic, reason = "tests")]
 mod common;
 

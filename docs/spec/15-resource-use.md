@@ -48,6 +48,9 @@ back-off of §15.4 protects, and `pigeon doctor` says so for a hard disk.
 - A higher class preempts a lower one between keys; a transfer in progress
   is paused, not abandoned. Class 1 always runs within its floor (§15.4).
   Folder priority is `[groups.priority]` ([11 §11.2](11-local-state.md)).
+  A shared key takes the highest priority of its kept paths and is requested
+  once. Freed paths do not promote it; root files use normal priority. A valid
+  edit applies between keys without interrupting an active request.
 
 ## 15.3 The network
 
