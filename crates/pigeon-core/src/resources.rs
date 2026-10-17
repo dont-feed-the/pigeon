@@ -11,7 +11,7 @@
 pub enum WorkClass {
     /// Saving local changes takes precedence over content and maintenance.
     Capture,
-    /// Content movement takes precedence over background integrity checks.
+    /// Content movement and designated repairs precede background integrity checks.
     Transfer,
     /// Integrity work waits while either higher class has pending work.
     Scrub,
