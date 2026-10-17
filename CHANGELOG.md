@@ -5,6 +5,13 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Between keys, kept-folder downloads yield to pending work that protects files, then resume without spending their timeout while waiting.
+- Joining refuses unsupported protocol versions and unknown invitation or join fields instead of interpreting them as known authority. Invitation proofs use the constant-time comparison primitive.
+
 ## 0.6.14 — 2026-10-17
 
 ### Fixed

@@ -881,3 +881,8 @@ The [repair scheduling checkpoint](resources-7-repair-priority.md) separates
 corruption repair from routine scrub admission while preserving its actual
 fsck deadline identity. The full global queue, native presets/read-latency
 feedback and measured reference/HDD budgets remain open.
+
+The [download admission checkpoint](resources-7-download-priority.md) gives
+optional kept-folder retrieval a lower admission class than protection,
+while allowing the active key to finish before yielding. It does not close
+the complete global queue, native preset/read-latency or measured-budget gaps.

@@ -261,13 +261,22 @@ fn fits(g: &Group, key: &str) -> bool {
 /// Makes `key`'s content present here: answers a problem code if it does
 /// not fit above the reserve, or cannot be received.
 pub(crate) async fn bring(g: &Group, key: &str) -> Result<(), &'static str> {
+    bring_inner(g, key, false).await
+}
+
+/// Optional kept-folder retrieval must yield to pending protection work.
+pub(crate) async fn bring_download(g: &Group, key: &str) -> Result<(), &'static str> {
+    bring_inner(g, key, true).await
+}
+
+async fn bring_inner(g: &Group, key: &str, download: bool) -> Result<(), &'static str> {
     if available(g, key).await? {
         return Ok(());
     }
     if !fits(g, key) {
         return Err("disk-full");
     }
-    receive(g, key).await
+    receive(g, key, download).await
 }
 
 /// Resolve local/provider objects without waiting on a network transfer
@@ -289,11 +298,14 @@ pub(crate) async fn available(g: &Group, key: &str) -> Result<bool, &'static str
     Ok(false)
 }
 
-async fn receive(g: &Group, key: &str) -> Result<(), &'static str> {
+async fn receive(g: &Group, key: &str, download: bool) -> Result<(), &'static str> {
     let args = ["annex", "get", "--json", "--key", key];
-    let (status, output) = g
-        .git
-        .repo
+    let repo = if download {
+        g.git.repo.for_download()
+    } else {
+        g.git.repo.clone()
+    };
+    let (status, output) = repo
         .run_status(&args, None, Duration::from_secs(600))
         .await
         .map_err(|error| {

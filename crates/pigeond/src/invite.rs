@@ -75,11 +75,8 @@ pub fn proof(secret: &[u8], new_device: &str, admitter: &str) -> String {
 }
 
 fn equal(a: &str, b: &str) -> bool {
-    a.len() == b.len()
-        && a.bytes()
-            .zip(b.bytes())
-            .fold(0u8, |acc, (x, y)| acc | (x ^ y))
-            == 0
+    use subtle::ConstantTimeEq;
+    bool::from(a.as_bytes().ct_eq(b.as_bytes()))
 }
 
 /// `laptop` or `custodian`, as [`Join::role`] says a role.
@@ -95,6 +92,9 @@ pub async fn welcome(d: &Daemon, device: &str, join: Join) -> JoinAnswer {
     let refused = |code: &str| JoinAnswer::Refused {
         code: code.to_owned(),
     };
+    if join.v != JOIN_VERSION {
+        return refused("join-version-unsupported");
+    }
     if let Some(new) = join.new_device.clone() {
         return crate::recovery::welcome(d, device, &new, &join).await;
     }

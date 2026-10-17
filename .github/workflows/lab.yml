@@ -54,7 +54,7 @@ jobs:
       matrix:
         os: ${{ fromJSON(inputs.platform == 'macos' && '["macos-latest"]' || '["ubuntu-24.04"]') }}
         group: [E20 E21 E22, E12-E13 E14 E23, E15 E15b E18 E24, E19]
-      max-parallel: ${{ inputs.platform == 'macos' && 1 || 4 }}
+      max-parallel: ${{ inputs.platform == 'macos' && 2 || 4 }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:

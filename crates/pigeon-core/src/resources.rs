@@ -6,24 +6,26 @@
 
 /// Priority among heavy one-shot children across all groups. History and
 /// status do not enter this controller. Transfer sub-priorities and the full
-/// placement queue are separate from these three existing child classes.
+/// placement queue are separate from these four existing child classes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WorkClass {
     /// Saving local changes takes precedence over content and maintenance.
     Capture,
     /// Content movement and designated repairs precede background integrity checks.
     Transfer,
-    /// Integrity work waits while either higher class has pending work.
+    /// Optional kept-folder retrieval waits for protection work.
+    Download,
+    /// Integrity work waits while any higher class has pending work.
     Scrub,
 }
 
 impl WorkClass {
     /// Classes in decreasing priority, matching their counter indices.
-    pub const ALL: [Self; 3] = [Self::Capture, Self::Transfer, Self::Scrub];
+    pub const ALL: [Self; 4] = [Self::Capture, Self::Transfer, Self::Download, Self::Scrub];
 
     /// Same-class work may run together; only a higher pending class holds
     /// this class. Counts include work that has not started or is suspended.
-    pub fn admitted(self, pending: [u64; 3]) -> bool {
+    pub fn admitted(self, pending: [u64; 4]) -> bool {
         pending[..self as usize].iter().all(|count| *count == 0)
     }
 }

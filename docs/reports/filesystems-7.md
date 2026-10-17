@@ -115,3 +115,30 @@ was dispatched at the published v0.6.11 source
 `412accd7e0d0efe227ab4b5e452c07eb483ca454`, which includes the telemetry-tier
 correction. It remains pending at this checkpoint and is not a Mac pass.
 The older run's completed results are retained without an unchanged retry.
+
+## v0.6.11 follow-up outcome
+
+Background run 39071444656, source
+`412accd7e0d0efe227ab4b5e452c07eb483ca454`, completed with its corrected
+workspace passing all 703 checks (one skipped), including native streaming
+reads, cache advice, durable replacement, exclusive rename and Apple power/
+network probes. Native daemon shards 0, 1 and 2 passed. Shard 3 passed
+11 of 12 in 343.603 seconds; backup-rejoin failed at its initial object
+snapshot with NotFound after 91.193 seconds. Downstream lab/slice were
+skipped, so this is not a passing Mac background run.
+
+Artifact 12116771776 is 1,824,842 bytes, SHA-256
+`8566ee8208b16fbefd544d768c908afcea7d1568890ea7e8d979d8e59283ded8`.
+Its laptop main contains `kept.txt`, while the backup has only metadata in
+accepted main and no annex object directory. This source predates PR #81's
+explicit named-file prerequisite, now published in v0.6.13. The exact
+concurrent interleaving remains unproved; no unchanged-source retry is used.
+A subsequent current-source periodic run supplies the correction's Mac
+observation. ZFS and measured reference/HDD budgets remain open.
+
+The former one-at-a-time Mac native/lab/slice matrices now admit two jobs.
+Workflow stages remain sequential; CI and slice each allow at most four
+background Mac jobs, while lab permits two. Linux limits, selected checks,
+per-job case counts and every publication gate remain unchanged. This uses
+the user's increased runner capacity without a second overlapping Mac
+background workflow. Actual time savings await a new completed run.

@@ -350,6 +350,7 @@ hint-not-in-this-build = Cette première version n'a que les commandes qui mette
 problem-file-system-not-in-this-build = Ce dossier est sur { $fs }, que cette version de pigeon ne prend pas encore en charge.
 hint-file-system-not-in-this-build = Choisissez un dossier sur ext4 (Linux) ou APFS (macOS).
 problem-invite-unknown = Le groupe ne connaît pas cette invitation.
+problem-join-version-unsupported = Ces ordinateurs utilisent des versions différentes pour rejoindre un groupe. Mettez pigeon à jour sur les deux, puis réutilisez la ligne d’invitation du groupe.
 problem-invite-not-allowed = { $inviter } ne peut pas ajouter cet ordinateur au groupe.
 problem-inviter-offline = L'ordinateur de { $inviter } est injoignable pour le moment.
 hint-inviter-offline = Réessayez quand l'ordinateur de { $inviter } est allumé. Rien n’a été gardé sur cet ordinateur : vous pouvez reprendre le même dossier.

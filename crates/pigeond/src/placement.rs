@@ -167,7 +167,7 @@ async fn downloads(d: &Weak<Daemon>, g: &Group, revision: u64) -> usize {
         if !validation.allows(d, g, &key).await {
             break;
         }
-        if let Err(code) = crate::restore::bring(g, &key).await {
+        if let Err(code) = crate::restore::bring_download(g, &key).await {
             tracing::debug!(group = %g.id, key, code, "kept-content-waits");
         } else {
             made += 1;

@@ -90,6 +90,22 @@ impl Repo {
         *self.control.write().unwrap_or_else(|p| p.into_inner()) = Some(control);
     }
 
+    /// A kept-folder view with independent policy storage. Existing repository
+    /// clones keep their protection priority; metadata and native arguments
+    /// remain unchanged. Transfer waits retain their actual deadline class.
+    pub fn for_download(&self) -> Self {
+        let repo = Self::new(self.dir.clone(), self.env.clone());
+        if let Some(control) = self
+            .control
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone()
+        {
+            repo.set_work_control(std::sync::Arc::new(crate::work::DownloadControl(control)));
+        }
+        repo
+    }
+
     /// A one-key-at-a-time batch sharing this repository's resource policy.
     pub fn batch(&self, args: &[&str]) -> Result<crate::batch::Batch> {
         let mut batch = crate::batch::Batch::new(&self.dir, self.env.clone(), args)?;
@@ -216,7 +232,7 @@ impl Repo {
             control.began(class);
             crate::work::Registration(control, class)
         });
-        while controlled.is_some_and(|(control, class)| !control.running(class)) {
+        while controlled.is_some_and(|(control, class)| !control.starting(class)) {
             tokio::time::sleep(Duration::from_millis(crate::work::POLL_MS)).await;
         }
         if idle {

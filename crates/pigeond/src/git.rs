@@ -95,6 +95,15 @@ impl Git {
         Ok(self.repo.run(args, None, timeout).await?.text())
     }
 
+    /// A kept-folder view that shares the same purge/mutation fence, while
+    /// giving only this view's transfer children download priority.
+    pub(crate) fn for_download(&self) -> Self {
+        Self {
+            repo: self.repo.for_download(),
+            purge_gate: self.purge_gate.clone(),
+        }
+    }
+
     /// Runs `git args…` with `input` on its stdin.
     pub async fn run_in(&self, args: &[&str], input: &[u8]) -> Result<String, Error> {
         let _lease = self.purge_gate.before_mutation(args).await;

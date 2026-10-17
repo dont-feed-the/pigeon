@@ -567,3 +567,23 @@ One bounded failed-shard retake and a publication-job-only retry retained
 the tag and successful matching archives. No safety verdict or deadline was
 waived. The next checkpoint waits for the actual named file before taking
 its preservation snapshot; effect on recurrence remains unmeasured.
+
+## v0.6.13 observation
+
+[v0.6.13](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.13)
+published at 2026-10-17T22:24:57Z, source
+`a9f8447d09af85a9c5938554038e65346c6e62c6`. All six assets, four archive
+checksums, native Linux installation, pinned annex, completions and latest
+redirect passed independent verification. Candidate lead was
+**720 seconds**; completed gap was **1282 seconds**.
+The collector retains 22 lead and 21 completed-gap samples.
+Linux CI 39074142625, lab 39074142576, slice 39074142516 and release
+39074142604 all succeeded on attempt one. This is one candidate, not a
+sustained failure-rate or percentile claim.
+
+The bridge producer already saved the identical dependency-cache key used
+by the workspace job; the candidate need not wait for a second save of
+that key. Active main producers remain protected before cancellation.
+Subsequent periodic Mac matrices use two jobs each, bounded at four
+background jobs in CI/slice; publication remains Linux-gated with both
+platform archives. Actual background-time savings await a completed run.

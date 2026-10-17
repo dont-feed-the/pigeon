@@ -342,6 +342,7 @@ hint-not-in-this-build = This early build has only the commands that keep files 
 problem-file-system-not-in-this-build = This folder is on { $fs }, which this build of pigeon does not support yet.
 hint-file-system-not-in-this-build = Choose a folder on ext4 (Linux) or APFS (macOS).
 problem-invite-unknown = This invitation is not one the group knows.
+problem-join-version-unsupported = These computers use different joining versions. Update pigeon on both computers, then use the group’s invitation line again.
 problem-invite-not-allowed = { $inviter } may not add this computer to the group.
 problem-inviter-offline = { $inviter }'s computer can't be reached right now.
 hint-inviter-offline = Try again when { $inviter }'s computer is on. Nothing was kept on this computer, so you can use the same folder.

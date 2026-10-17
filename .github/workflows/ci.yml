@@ -256,7 +256,7 @@ jobs:
       matrix:
         os: ${{ fromJSON(inputs.platform == 'macos' && '["macos-latest"]' || '["ubuntu-24.04"]') }}
         shard: [0, 1, 2, 3]
-      max-parallel: ${{ inputs.platform == 'macos' && 1 || 4 }}
+      max-parallel: ${{ inputs.platform == 'macos' && 2 || 4 }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:

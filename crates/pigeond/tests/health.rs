@@ -7,6 +7,7 @@
 mod common;
 use common::*;
 use pigeon_git::GitEnv;
+use pigeon_proto::Response;
 use pigeon_proto::api::{Level, State};
 use pigeond::{
     git::Git,
@@ -26,6 +27,33 @@ fn field<'a>(page: &'a str, id: &str) -> &'a str {
         .split('<')
         .next()
         .unwrap()
+}
+
+// Establish the actual history entry before the next save: aggregate
+// Protected can describe an empty catalogue or the preceding version.
+fn protected_note(lap: &Daemon, folder: &std::path::Path, bytes: &[u8], all: &[&Daemon]) {
+    let expected = pigeond::util::sha256_hex(bytes);
+    eventually_within(
+        120,
+        || {
+            let captured = std::process::Command::new("git")
+                .current_dir(folder)
+                .args(["show", "main:note.txt"])
+                .output()
+                .is_ok_and(|out| {
+                    out.status.success() && String::from_utf8_lossy(&out.stdout).contains(&expected)
+                });
+            captured
+                && pigeon(lap, &["status", folder.join("note.txt").to_str().unwrap()])
+                    .into_iter()
+                    .any(|r| {
+                        matches!(r, Response::Status(s) if s.state == State::Protected
+                && s.versions.iter().any(|v| v.path == "note.txt" && v.state == State::Protected))
+                    })
+        },
+        "health fixture note version is not protected",
+        all,
+    );
 }
 
 #[test]
@@ -56,9 +84,9 @@ fn checking_and_unreadable_evidence_never_becomes_protected_health() {
     assert_eq!(status(&lap).headline.id, "headline-empty");
     std::fs::write(folder.join("note.txt"), b"first bytes\n").unwrap();
     join(&lap, &vault, &[&lap, &vault]);
-    until(&lap, State::Protected, &[&lap, &vault]);
+    protected_note(&lap, &folder, b"first bytes\n", &[&lap, &vault]);
     std::fs::write(folder.join("note.txt"), b"second bytes\n").unwrap();
-    until(&lap, State::Protected, &[&lap, &vault]);
+    protected_note(&lap, &folder, b"second bytes\n", &[&lap, &vault]);
     let session = web::login(&lap);
     let page = plain(&web::page(&session, "/"));
     assert!(field(&page, "health-current").contains("Safe: 1"), "{page}");
