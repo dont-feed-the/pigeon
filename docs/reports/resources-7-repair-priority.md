@@ -79,3 +79,15 @@ all four crash/replay seams in 32.328 seconds, retaining its object inode
 and byte comparisons. Final all-target workspace Clippy and structural
 checks pass after the fixture correction. The earlier PR head's in-flight
 CI/bridge runs were canceled; its final replacement receives fresh checks.
+
+## Merge validation
+
+Final source `8d87b8dc77a2e7d090b350a965d5025278339991` passed exact-head CI 39073002595,
+lab selection 39073002593 and bridge 39073002611. The original
+785-check workspace phase, later formatting checks and all current-main
+priority/controller/privacy/logging/native-annex/scrub/S2/S3/TLC retakes
+remain separate evidence above, including the original disk-reserve miss
+and the explicit-file recovery prerequisite validated across four crash seams.
+Bridge dependency and core slice cache producers saved before tagging; cancellation preserves
+other active producers. v0.6.12 was published and independently verified
+first. M6 hardware budgets and the broader M7 audit remain open.
