@@ -859,3 +859,17 @@ observation precondition; it does not establish the exact concurrent
 interleaving that produced the original zero snapshot. Native capacity and
 pending-save retakes both pass. The unchanged immutable v0.6.10 tag receives
 one bounded original-shard retake; that outcome remains separate.
+
+## Folder-priority checkpoint merge validation
+
+Final source `009769c2ae3181855dec0240af25373bc9c3450b` passed exact-head CI 39069183042,
+lab 39069183081 and bridge 39069183034. Its 783-check implementation
+run, subsequent runtime/native S2/S3/TLC observations, fourteen affected
+checks after v0.6.10 integration, two telemetry-tier retakes and two
+capacity/pending-save retakes remain distinct evidence. Default/lab
+discovery preserves both telemetry fixtures in the native tier; Mac role
+refusal and the capacity byte/count assertions remain unchanged. Earlier
+heads were superseded before final validation. Selected main cache producers saved
+before tagging; cancellation preserves other active producers. v0.6.10 was
+published and independently verified first.
+M6 hardware budgets and the real elapsed M7 gates remain open.
