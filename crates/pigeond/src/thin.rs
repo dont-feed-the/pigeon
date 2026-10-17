@@ -80,6 +80,7 @@ async fn rethin_after(g: &Group, me: &str, t: &Tracer, quiet_seconds: i64) -> us
     let hidden = hidden_paths(g).await;
     let observed = crate::status::observe(g, me, "").await;
     let mut done = 0;
+    let mut completed = Vec::new();
     for o in observed {
         if !matches!(o.state, State::Protected(_)) || hidden.contains(&o.path) {
             continue;
@@ -94,13 +95,18 @@ async fn rethin_after(g: &Group, me: &str, t: &Tracer, quiet_seconds: i64) -> us
         let seq = next_seq(&read(&journal(g)));
         let trace = Checkpoint::new(t, g, &o.path, seq, "thin").await;
         match one(g, &file, &object, &o.path, &o.key, &trace, quiet_seconds) {
-            Ok(true) => done += 1,
+            Ok(true) => {
+                done += 1;
+                completed.push(o.path.clone());
+            }
             Ok(false) => {}
             Err(e) => tracing::warn!(group = %g.id, path = %o.path, error = %e, "rethin-failed"),
         }
     }
     if done > 0 {
-        let _ = g.git.run(&["update-index", "-q", "--refresh"]).await;
+        if let Ok(staged) = g.git.index().await {
+            crate::capture_schedule::checked(g, &completed, &staged).await;
+        }
         tracing::info!(group = %g.id, files = done, "rethinned");
     }
     truncate_if_done(g);

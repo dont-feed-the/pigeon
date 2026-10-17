@@ -20,8 +20,20 @@ pub(crate) async fn changes(g: &Group) -> Result<Vec<Entry>, Error> {
     let Some(wt) = &g.worktree else {
         return Ok(Vec::new());
     };
-    let index = crate::trace_index::read_all(g).map_err(invalid)?;
-    let head = match g.git.rev("HEAD").await {
+    crate::capture_schedule::load(g);
+    let head_ref = g.git.rev("HEAD").await;
+    // A freshly initialized, unborn repository legitimately has no index.
+    // Once HEAD exists, an unreadable/missing index remains an error.
+    let unborn = head_ref.is_none()
+        && pigeon_sys::fs::lstat(&g.git_dir.join("index"))
+            .map_err(|e| invalid(e.to_string()))?
+            .is_none();
+    let index = if unborn {
+        Default::default()
+    } else {
+        crate::trace_index::read_all(g).map_err(invalid)?
+    };
+    let head = match head_ref {
         Some(head) => g.git.tree(&head).await?,
         None => Default::default(),
     };
@@ -36,7 +48,11 @@ pub(crate) async fn changes(g: &Group) -> Result<Vec<Entry>, Error> {
             continue;
         }
         let entry = cached.entry();
-        let clean = cached.clean(&file).map_err(invalid)?
+        let verified = stat
+            .as_ref()
+            .zip(entry.as_ref())
+            .is_some_and(|(stat, entry)| g.lock().capture_schedule.verified(path, *stat, entry));
+        let clean = (verified || cached.clean(&file).map_err(invalid)?)
             && stat.as_ref().is_none_or(|s| {
                 entry
                     .as_ref()

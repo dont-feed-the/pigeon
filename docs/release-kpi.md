@@ -259,3 +259,16 @@ Rust cache from 12:30:01 to 12:34:30 UTC on 17 October: about 4m29s before
 building. Download completed at 12:30:58; unpacking accounts for most of the
 remaining time. Reducing cached build contents is the next measured CI target,
 with first-build and warm-cache times to compare before claiming an improvement.
+
+
+## First dependency-cache observations after PR #71
+
+PR #71's bridge build, job 117411641261, had a cold namespace and passed
+in 2m39s (13:47:29–13:50:08 UTC). Main's matching build then saved a
+459,746,369-byte dependency cache in job 117414069081 at 14:02:49–14:02:55.
+The v0.6.3 tag's Rust-workspace job 117414959357 restored it successfully
+at 14:04:40–14:04:47: **7 seconds** for that step. The earlier observed
+bridge restore was 8,463,386,667 bytes and about 4m29s. These observations
+use different build/feature contexts and runner conditions; the cache
+excludes old test executables in both producers. Actual publication lead
+time still depends on every required gate and both platform archives.

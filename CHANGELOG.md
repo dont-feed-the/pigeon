@@ -20,6 +20,9 @@ increments the second number, and every other release the third.
 
 - Background capture waits for a file to settle before reading it and spaces
   captures of frequently saved files, while other stable files keep progressing.
+- Status and install checks leave another file's unsettled save alone. Capture
+  recognizes same-size edits even when an application preserves the file's
+  modification time.
 - Repeated in-place saves keep each captured version intact while it awaits
   backup, including when status checks or index refreshes inspect the file.
 - Status checks and protection planning finish sooner for folders with many

@@ -1,5 +1,5 @@
 //! Capture (07, 08 §8.1): every change of the folder becomes a version on
-//! `main`, through `git status`, `git annex add` and a commit.
+//! `main`, through metadata observations, `git annex add` and a commit.
 //!
 //! Only regular files are shared; links, nested repositories and special
 //! files are listed as not shared (07 §7.9). A file that a process may be
@@ -130,33 +130,6 @@ fn kind(worktree: &Path, path: &str) -> Option<&'static str> {
     }
 }
 
-/// `git status` of the folder (07 §7.3 step 2).
-async fn status(g: &Group) -> Result<Vec<Entry>, Error> {
-    // Status may run alongside an install. Git must not refresh or lock
-    // the index as a side effect of this observation.
-    let mut repo = g.git.repo.clone();
-    repo.env
-        .extra
-        .push(("GIT_OPTIONAL_LOCKS".into(), "0".into()));
-    let out = repo
-        .run(
-            &[
-                "status",
-                "--porcelain=v2",
-                "-z",
-                "-uall",
-                "--ignored=traditional",
-            ],
-            None,
-            pigeon_git::DEFAULT_TIMEOUT,
-        )
-        .await?;
-    pigeon_git::status::parse(&out.stdout).map_err(|detail| Error::Parse {
-        argv: vec!["status".to_owned()],
-        detail,
-    })
-}
-
 /// The status letters of an entry, index then folder (`?` untracked), and
 /// its path.
 fn letters(e: Entry) -> Option<(char, char, String)> {
@@ -182,7 +155,7 @@ pub(crate) async fn pending(g: &Group, prefix: &str) -> Result<BTreeSet<String>,
         return Ok(BTreeSet::new());
     };
     let table = crate::conflicts_file::read(g).unwrap_or_default();
-    Ok(status(g)
+    Ok(crate::capture_status::changes(g)
         .await?
         .into_iter()
         .filter_map(letters)
@@ -200,9 +173,11 @@ pub(crate) async fn pending(g: &Group, prefix: &str) -> Result<BTreeSet<String>,
 }
 
 /// The paths whose file differs from the index, untracked ones included:
-/// the person's, which install never writes (07 §7.5).
+/// the person's, which install never writes (07 §7.5). Ambiguous metadata
+/// counts as dirty until capture verifies it; an unrelated install must
+/// never invoke a clean filter on a save that has not settled (15 §15.5).
 pub async fn dirty(g: &Group) -> Result<std::collections::BTreeSet<String>, Error> {
-    Ok(status(g)
+    Ok(crate::capture_status::changes(g)
         .await?
         .into_iter()
         .filter_map(letters)
@@ -218,6 +193,7 @@ pub async fn dirty(g: &Group) -> Result<std::collections::BTreeSet<String>, Erro
 /// the person may not make become proposals (`suggest`); a suggested path
 /// saved since is left alone.
 pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, Error> {
+    g.lock().capture_schedule.begin();
     capture_inner(g, me, tracer, false).await
 }
 
@@ -258,11 +234,7 @@ async fn capture_inner(
     let (mut behind, mut pending, mut gone) = (false, Vec::new(), Vec::new());
     let mut soon = BTreeSet::new();
     let mut fresh = BTreeSet::new();
-    let changes = if scheduled {
-        crate::capture_status::changes(g).await?
-    } else {
-        status(g).await?
-    };
+    let changes = crate::capture_status::changes(g).await?;
     for (x, y, path) in changes.into_iter().filter_map(letters) {
         if is_pigeon_path(&path) {
             continue;
@@ -308,6 +280,9 @@ async fn capture_inner(
                 let Ok(Some(st)) = lstat(&worktree.join(&path)) else {
                     continue;
                 };
+                if !scheduled {
+                    g.lock().capture_schedule.explicit(&path, st);
+                }
                 let mut concurrent = x == '.' && soon_after_install(g, &path, st.mtime_ns);
                 if scheduled && x == '.' {
                     concurrent = g
@@ -360,7 +335,10 @@ async fn capture_inner(
     {
         main = Some(g.git.tree(h).await?);
     }
-    let all: Vec<String> = add.iter().chain(&pending).cloned().collect();
+    let mut all: Vec<String> = add.iter().chain(&pending).cloned().collect();
+    if scheduled {
+        g.lock().capture_schedule.order(&mut all);
+    }
     if all.is_empty() && remove.is_empty() && gone.is_empty() {
         return Ok(done);
     }
@@ -491,17 +469,49 @@ async fn commit_batch(g: &Group, b: Batch<'_>, mut done: Captured) -> Result<Cap
     let mut queue =
         crate::telemetry::Queue::start(&g.id, "capture", "batch", all.len() + remove.len());
     for chunk in all.chunks(64) {
-        let mut args = vec![
-            "-c",
-            "annex.thin=false",
-            "annex",
-            "add",
-            "--no-check-gitignore",
-            "--json",
-            "--",
-        ];
-        args.extend(chunk.iter().map(String::as_str));
-        g.git.run(&args).await?;
+        // Command/Add.hs's batch path goes straight to start/ingestAdd;
+        // the ordinary path's withFilesMaybeModified can skip a save whose
+        // application preserved size and mtime. NUL input retains literal
+        // newlines and option-looking file names, without per-file children.
+        let input: Vec<u8> = chunk
+            .iter()
+            .flat_map(|path| path.bytes().chain([0]))
+            .collect();
+        let output = g
+            .git
+            .run_in(
+                &[
+                    "-c",
+                    "annex.thin=false",
+                    "annex",
+                    "add",
+                    "--batch",
+                    "-z",
+                    "--no-check-gitignore",
+                    "--json",
+                ],
+                &input,
+            )
+            .await?;
+        let answers: Result<Vec<pigeon_git::annex::Answer>, _> =
+            output.lines().map(serde_json::from_str).collect();
+        if !answers.is_ok_and(|answers| {
+            let mut seen = BTreeSet::new();
+            answers.len() == chunk.len()
+                && answers.iter().all(|answer| {
+                    answer.success
+                        && answer.key.is_some()
+                        && answer
+                            .file
+                            .as_ref()
+                            .is_some_and(|path| chunk.contains(path) && seen.insert(path))
+                })
+        }) {
+            return Err(Error::Parse {
+                argv: vec!["annex add --batch".into()],
+                detail: "capture answers are missing, mismatched or unsuccessful".into(),
+            });
+        }
         // git-annex 10.20261006 Annex/Ingest.hs ingestAdd' reads mode
         // from contentLocation, not the working file (Annex/Link.hs
         // stagePointerFile). Keep the working executable bit explicitly.
@@ -538,6 +548,9 @@ async fn commit_batch(g: &Group, b: Batch<'_>, mut done: Captured) -> Result<Cap
         g.git.run(&args).await?;
         queue.complete(chunk.len());
     }
+    let staged = g.git.index().await?;
+    crate::capture_schedule::checked(g, &all, &staged).await;
+    drop(staged);
     let settled = settle(g, head.as_deref(), main.as_ref(), &before, &pending, &gone).await?;
     note_diverging(g, settled.diverging);
     done.added = add.len();
@@ -576,6 +589,16 @@ async fn commit_batch(g: &Group, b: Batch<'_>, mut done: Captured) -> Result<Cap
             (at.clone(), index.get(p).cloned())
         })
         .chain(remove.iter().map(|p| (p.clone(), None)))
+        // Conservative metadata can ask us to verify unchanged bytes.
+        // They are no new change and must not manufacture an empty proposal
+        // on somebody else's path. Keep a real existing suggestion's undo.
+        .filter(|(path, entry)| {
+            entry.as_ref() != main.get(path)
+                || table
+                    .paths
+                    .get(path)
+                    .is_some_and(|d| d.kind == crate::conflicts_file::Kind::Suggestion)
+        })
         .collect();
     let (allowed, proposals) =
         crate::suggest::plan(g, me, h, &main, &table, changes.clone()).await?;

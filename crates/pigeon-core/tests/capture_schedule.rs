@@ -21,6 +21,47 @@ fn hot(path: &str) -> (Schedule<u64>, u64) {
 }
 
 #[hegel::test(test_cases = 1000)]
+fn ordering_uses_the_oldest_observed_change_and_is_independent_of_arrival(tc: TestCase) {
+    let time = tc.draw(gs::integers::<u64>().max_value(1_000_000));
+    let stamp = tc.draw(gs::integers::<u64>());
+    let mut schedule = Schedule::default();
+    schedule.observe("old", stamp, 0, time);
+    schedule.observe("new", stamp, 0, time + 1);
+    schedule.observe("old", stamp, 0, time + 2);
+    let mut a = vec!["new".to_owned(), "unknown".to_owned(), "old".to_owned()];
+    let mut b = a.iter().rev().cloned().collect::<Vec<_>>();
+    schedule.order(&mut a);
+    schedule.order(&mut b);
+    assert_eq!(a, ["old", "new", "unknown"]);
+    assert_eq!(a, b);
+}
+
+#[hegel::test(test_cases = 1000)]
+fn a_new_fingerprint_moves_a_path_behind_older_pending_saves(tc: TestCase) {
+    let time = tc.draw(gs::integers::<u64>().max_value(1_000_000));
+    let stamp = tc.draw(gs::integers::<u64>());
+    let mut schedule = Schedule::default();
+    schedule.observe("a", stamp, 0, time);
+    schedule.observe("b", stamp, 0, time + 1);
+    schedule.observe("a", stamp ^ 1, 0, time + 2);
+    let mut paths = vec!["a".to_owned(), "b".to_owned()];
+    schedule.order(&mut paths);
+    assert_eq!(paths, ["b", "a"]);
+}
+
+#[hegel::test(test_cases = 1000)]
+fn unobserved_paths_follow_observed_work_even_at_the_last_clock_tick(tc: TestCase) {
+    let time = tc.draw(gs::integers::<u64>());
+    for time in [time, u64::MAX] {
+        let mut schedule = Schedule::default();
+        schedule.observe("z-known", 0, 0, time);
+        let mut paths = vec!["a-unknown".to_owned(), "z-known".to_owned()];
+        schedule.order(&mut paths);
+        assert_eq!(paths, ["z-known", "a-unknown"]);
+    }
+}
+
+#[hegel::test(test_cases = 1000)]
 fn two_equal_observations_span_the_entire_size_dependent_quiet_time(tc: TestCase) {
     let size = tc.draw(gs::integers::<u64>());
     let stamp = tc.draw(gs::integers::<u64>());

@@ -73,6 +73,20 @@ fn mode_bits(mode: Option<&str>, file: &Path) -> u32 {
     if exec { 0o755 } else { 0o644 }
 }
 
+fn same_after_rename(file: &Path, expected: Option<pigeon_sys::fs::Stat>) -> bool {
+    let Some(expected) = expected else {
+        return false;
+    };
+    let Ok(Some(mut actual)) = lstat(file) else {
+        return false;
+    };
+    // Our rename changes ctime. Before the move the complete stat must
+    // match; after it, identity/mode/mtime and the independent old-byte
+    // hash proof below still have to match. Never reuse this for a save.
+    actual.ctime_ns = expected.ctime_ns;
+    actual == expected
+}
+
 // Restore and explicit resolution have additional semantics absent from
 // CaptureInstall.Start. Keep their observations separately identified.
 fn trace_kind(g: &Group, rel: &str, indexed: bool) -> &'static str {
@@ -208,7 +222,7 @@ async fn put_mode(
     if st.is_some()
         && (stat_of(&aside) != st
             || !is_old(&aside, current)
-            || mode.is_some_and(|(_, expected)| lstat(&aside).ok() != Some(expected)))
+            || mode.is_some_and(|(_, expected)| !same_after_rename(&aside, expected)))
     {
         rollback(g, seq, &aside, &file, Some(&stage))?;
         check.finish("idle");
@@ -507,6 +521,7 @@ async fn incoming_at(
     let before = crate::evict::hidden_paths(g).await;
     let mut hidden = before.clone();
     let mut queue = crate::telemetry::Queue::start(&g.id, "download", "install", changed.len());
+    let mut completed = Vec::new();
     for path in changed {
         queue.complete(1);
         let (w, h) = (want.get(path), have.get(path));
@@ -590,6 +605,7 @@ async fn incoming_at(
         match put_or_remove {
             Ok(Put::Done(at)) if w.is_some() => {
                 done.written += 1;
+                completed.push(path.clone());
                 if let Some(h) = h {
                     g.lock().installed.insert(path.clone(), (at, h.clone()));
                 }
@@ -606,7 +622,8 @@ async fn incoming_at(
         crate::evict::write_sparse(g, &hidden);
     }
     save(g, &known, &table, t, Vec::new()).await;
-    let _ = g.git.run(&["update-index", "-q", "--refresh"]).await;
+    let staged = g.git.index().await?;
+    crate::capture_schedule::checked(g, &completed, &staged).await;
     if done != Installed::default() {
         tracing::info!(group = %g.id, written = done.written, removed = done.removed,
             receiving = done.receiving, deferred = done.deferred, "installed");

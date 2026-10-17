@@ -152,4 +152,16 @@ impl<S: Eq> Schedule<S> {
     pub fn tracked_paths(&self) -> usize {
         self.paths.len()
     }
+
+    /// Oldest observed change first, then literal path for deterministic
+    /// ties. Reobserving an unchanged fingerprint never makes it newer;
+    /// paths not observed by this scheduler follow its known candidates.
+    pub fn order(&self, paths: &mut [String]) {
+        let changed = |path: &str| {
+            self.paths
+                .get(path)
+                .map_or((true, 0), |s| (false, s.changed))
+        };
+        paths.sort_by(|a, b| changed(a).cmp(&changed(b)).then_with(|| a.cmp(b)));
+    }
 }

@@ -6,6 +6,245 @@ use super::*;
 use std::time::Duration;
 
 #[tokio::test]
+async fn verifying_unchanged_foreign_bytes_never_creates_an_empty_suggestion() {
+    let Some(l) = laptop().await else { return };
+    let mut doc = l.g.roster().unwrap();
+    doc.roster
+        .persons
+        .get_mut(&PersonId("ana".into()))
+        .unwrap()
+        .admin = false;
+    let base = pigeond::change::commit_roster(&l.g, &doc, "retire Ana", &l.t)
+        .await
+        .unwrap();
+    let mut tree = l.git.tree(&base).await.unwrap();
+    tree.insert(
+        "foreign.txt".into(),
+        version(&l, "foreign.txt", b"Ben's version\n", true).await,
+    );
+    bens(&l, &tree, &base, 60).await;
+    assert_eq!(
+        install::incoming(&l.g, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .written,
+        1
+    );
+    // No native stat cache is assumed. A restart with no private observation
+    // must verify the actual bytes instead of proposing a nonexistent edit.
+    std::fs::remove_file(l.g.git_dir.join("pigeon/capture-verified.json")).unwrap();
+    let reopened = Group::open(&l.g.id, &l.wt, &GitEnv::default())
+        .await
+        .unwrap();
+    let done = capture::capture(&reopened, &dev(1).0, &l.t).await.unwrap();
+    assert_eq!(done.suggested, 0);
+    assert!(done.commit.is_none());
+    assert!(pigeond::proposal::kept(&l.git).await.is_empty());
+    assert!(
+        pigeond::conflicts_file::read(&reopened)
+            .unwrap()
+            .paths
+            .is_empty()
+    );
+    assert_eq!(read(&l, "foreign.txt"), "Ben's version\n");
+}
+
+#[tokio::test]
+async fn exact_observations_survive_restart_but_not_a_preserved_mtime_save() {
+    let Some(l) = laptop().await else { return };
+    write(&l, "restart.txt", b"old contents\n");
+    capture::capture(&l.g, &dev(1).0, &l.t).await.unwrap();
+    let reopened = Group::open(&l.g.id, &l.wt, &GitEnv::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        capture::background(&reopened, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .busy,
+        0
+    );
+    let file = l.wt.join("restart.txt");
+    let modified = std::fs::metadata(&file).unwrap().modified().unwrap();
+    write(&l, "restart.txt", b"new contents\n");
+    std::fs::File::options()
+        .write(true)
+        .open(&file)
+        .unwrap()
+        .set_modified(modified)
+        .unwrap();
+    let reopened = Group::open(&l.g.id, &l.wt, &GitEnv::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        capture::background(&reopened, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .busy,
+        1
+    );
+}
+
+#[tokio::test]
+async fn malformed_and_future_observation_caches_do_not_mark_a_file_clean() {
+    let Some(l) = laptop().await else { return };
+    write(&l, "cache.txt", b"captured contents\n");
+    capture::capture(&l.g, &dev(1).0, &l.t).await.unwrap();
+    // A valid native Git stat cache is an independent clean observation.
+    // Clear that cache while preserving the exact pointer, so only the
+    // malformed private cache could incorrectly justify skipping this file.
+    let index = l.git.index().await.unwrap();
+    let entry = &index["cache.txt"];
+    let info = format!("{},{},cache.txt", entry.mode, entry.oid);
+    l.git
+        .run(&["update-index", "--cacheinfo", &info])
+        .await
+        .unwrap();
+    let path = l.g.git_dir.join("pigeon/capture-verified.json");
+    for bytes in [b"not json".as_slice(), b"{\"format\":999,\"paths\":{}}"] {
+        std::fs::write(&path, bytes).unwrap();
+        let reopened = Group::open(&l.g.id, &l.wt, &GitEnv::default())
+            .await
+            .unwrap();
+        assert_eq!(
+            capture::background(&reopened, &dev(1).0, &l.t)
+                .await
+                .unwrap()
+                .busy,
+            1
+        );
+    }
+}
+
+#[tokio::test]
+async fn explicit_captures_also_heat_later_background_work_without_blocking_other_files() {
+    let Some(l) = laptop().await else { return };
+    for i in 0..7 {
+        write(&l, "hot.txt", format!("captured save {i}\n").as_bytes());
+        assert!(
+            capture::capture(&l.g, &dev(1).0, &l.t)
+                .await
+                .unwrap()
+                .commit
+                .is_some()
+        );
+    }
+    write(&l, "hot.txt", b"the eighth save waits\n");
+    write(&l, "other.txt", b"unrelated stable save\n");
+    assert_eq!(
+        capture::background(&l.g, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .busy,
+        2
+    );
+    tokio::time::sleep(Duration::from_millis(2_100)).await;
+    let done = capture::background(&l.g, &dev(1).0, &l.t).await.unwrap();
+    assert_eq!(done.busy, 1);
+    assert_eq!(done.added, 1);
+    let keys = l.git.keys(&done.commit.unwrap()).await.unwrap();
+    let object = pigeond::custody::present(&l.g, &keys["hot.txt"])
+        .await
+        .unwrap();
+    assert_eq!(std::fs::read(object).unwrap(), b"captured save 6\n");
+    assert!(keys.contains_key("other.txt"));
+    assert_eq!(read(&l, "hot.txt"), "the eighth save waits\n");
+}
+
+#[tokio::test]
+async fn explicit_capture_reads_a_same_size_save_with_preserved_mtime() {
+    let Some(l) = laptop().await else { return };
+    write(&l, "preserved.txt", b"old contents\n");
+    capture::capture(&l.g, &dev(1).0, &l.t).await.unwrap();
+    let file = l.wt.join("preserved.txt");
+    let modified = std::fs::metadata(&file).unwrap().modified().unwrap();
+    write(&l, "preserved.txt", b"new contents\n");
+    std::fs::File::options()
+        .write(true)
+        .open(&file)
+        .unwrap()
+        .set_modified(modified)
+        .unwrap();
+    let done = capture::capture(&l.g, &dev(1).0, &l.t).await.unwrap();
+    let keys = l.git.keys(&done.commit.unwrap()).await.unwrap();
+    let object = pigeond::custody::present(&l.g, &keys["preserved.txt"])
+        .await
+        .unwrap();
+    assert_eq!(std::fs::read(object).unwrap(), b"new contents\n");
+}
+
+#[tokio::test]
+async fn native_capture_batch_keeps_literal_names_and_leaves_unportable_ones_held() {
+    let Some(l) = laptop().await else { return };
+    let names = ["-capture.txt", "two words.txt", "café.txt"];
+    write(&l, "line\nbreak.txt", b"unportable name stays here\n");
+    for name in names {
+        write(&l, name, format!("literal file {name}\n").as_bytes());
+    }
+    let done = capture::capture(&l.g, &dev(1).0, &l.t).await.unwrap();
+    let keys = l.git.keys(&done.commit.unwrap()).await.unwrap();
+    assert!(!keys.contains_key("line\nbreak.txt"));
+    assert!(
+        pigeond::held_file::read(&l.g)
+            .names()
+            .contains("line\nbreak.txt")
+    );
+    assert_eq!(read(&l, "line\nbreak.txt"), "unportable name stays here\n");
+    for name in names {
+        let object = pigeond::custody::present(&l.g, &keys[name]).await.unwrap();
+        assert_eq!(
+            std::fs::read(object).unwrap(),
+            format!("literal file {name}\n").as_bytes()
+        );
+    }
+}
+
+#[tokio::test]
+async fn preserving_mtime_cannot_make_a_same_size_save_look_captured() {
+    let Some(l) = laptop().await else { return };
+    write(&l, "preserved.txt", b"old contents\n");
+    capture::capture(&l.g, &dev(1).0, &l.t).await.unwrap();
+    let file = l.wt.join("preserved.txt");
+    let modified = std::fs::metadata(&file).unwrap().modified().unwrap();
+    assert_eq!(
+        capture::background(&l.g, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .busy,
+        0,
+        "the verified captured file must start settled"
+    );
+    write(&l, "preserved.txt", b"new contents\n");
+    std::fs::File::options()
+        .write(true)
+        .open(&file)
+        .unwrap()
+        .set_modified(modified)
+        .unwrap();
+    assert_eq!(
+        pigeond::status::report(&l.g, &dev(1).0, "", false)
+            .await
+            .state,
+        pigeon_proto::api::State::Local,
+        "ctime must invalidate a cached capture even when size and mtime agree"
+    );
+    assert_eq!(
+        capture::background(&l.g, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .busy,
+        1
+    );
+    tokio::time::sleep(Duration::from_millis(2_100)).await;
+    let done = capture::background(&l.g, &dev(1).0, &l.t).await.unwrap();
+    let keys = l.git.keys(&done.commit.unwrap()).await.unwrap();
+    let object = pigeond::custody::present(&l.g, &keys["preserved.txt"])
+        .await
+        .unwrap();
+    assert_eq!(std::fs::read(object).unwrap(), b"new contents\n");
+}
+
+#[tokio::test]
 async fn background_observation_does_not_ingest_a_save_before_its_quiet_period() {
     use sha2::{Digest, Sha256};
     let Some(l) = laptop().await else { return };
@@ -28,10 +267,63 @@ async fn background_observation_does_not_ingest_a_save_before_its_quiet_period()
     let waiting = capture::background(&l.g, &dev(1).0, &l.t).await.unwrap();
     assert_eq!(waiting.busy, 1);
     assert!(waiting.commit.is_none());
+    let report = pigeond::status::report(&l.g, &dev(1).0, "", false).await;
+    assert_eq!(report.state, pigeon_proto::api::State::Local);
     assert!(
         pigeond::custody::present(&l.g, &key).await.is_none(),
-        "observing an unsettled save ingested it through a Git filter"
+        "a status observation ingested an unsettled save through a Git filter"
     );
+}
+
+#[tokio::test]
+async fn installing_another_path_cannot_ingest_an_unsettled_save() {
+    use sha2::{Digest, Sha256};
+    let Some(l) = laptop().await else { return };
+    write(&l, "settling.txt", b"old contents\n");
+    let base = capture::capture(&l.g, &dev(1).0, &l.t)
+        .await
+        .unwrap()
+        .commit
+        .unwrap();
+    let mut tree = l.git.tree(&base).await.unwrap();
+    tree.insert(
+        "incoming.txt".into(),
+        version(&l, "incoming.txt", b"incoming bytes\n", true).await,
+    );
+    bens(&l, &tree, &base, 60).await;
+    let bytes = b"new contents\n";
+    let key = format!(
+        "SHA256E-s{}--{}.txt",
+        bytes.len(),
+        pigeond::util::hex(&Sha256::digest(bytes))
+    );
+    write(&l, "settling.txt", bytes);
+    assert_eq!(
+        capture::background(&l.g, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .busy,
+        1
+    );
+    assert!(pigeond::custody::present(&l.g, &key).await.is_none());
+    pigeond::evict::recover(&l.g, &l.t).await;
+    assert!(
+        pigeond::custody::present(&l.g, &key).await.is_none(),
+        "an idle recovery round must not refresh and ingest unsettled files"
+    );
+    assert_eq!(
+        install::incoming(&l.g, &dev(1).0, &l.t)
+            .await
+            .unwrap()
+            .written,
+        1
+    );
+    assert_eq!(read(&l, "incoming.txt"), "incoming bytes\n");
+    assert!(
+        pigeond::custody::present(&l.g, &key).await.is_none(),
+        "install's global dirty observation ingested another path before it settled"
+    );
+    assert_eq!(std::fs::read(l.wt.join("settling.txt")).unwrap(), bytes);
 }
 
 #[tokio::test]

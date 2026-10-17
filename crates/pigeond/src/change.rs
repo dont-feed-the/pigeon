@@ -43,7 +43,6 @@ pub async fn commit_index(git: &Git, parent: Option<&str>, message: &str) -> Res
     let parents: Vec<&str> = parent.into_iter().collect();
     let commit = git.commit_tree(&tree, &parents, message).await?;
     git.update_ref("refs/heads/main", &commit, parent).await?;
-    let _ = git.run(&["update-index", "-q", "--refresh"]).await;
     Ok(commit)
 }
 

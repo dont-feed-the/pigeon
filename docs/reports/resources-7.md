@@ -222,15 +222,53 @@ without a sleeping task per file. Explicit capture requests remain immediate.
 Actual successful proposals and concurrent saves are recorded separately from
 failed attempts; a remembered near-install classification survives settling.
 
-Nine pure laws run 1000 cases each. The native same-size edit fixture initially
-failed because Git status invoked a clean filter before settling. Background
-candidate discovery now uses the existing index parser and stat observations,
-plus a names-only untracked query, without that filter. The complete local
-install target and those laws pass: 58 checks, including index formats 2/3/4,
-conflict, crash recovery, seven actual hot-file captures, unrelated-file progress
-and the same-size pre-ingestion regression. This does not establish whole-round
-quiet behavior: status/install callers still have their older observations,
-and the full daemon round, oldest-first order and resource budgets need work.
+Twelve pure laws run 1000 cases each, including oldest-observed-change
+ordering and fingerprint changes that move a save behind older candidates.
+The clock uses Linux CLOCK_BOOTTIME and Darwin CLOCK_MONOTONIC_RAW, so sleep
+counts toward quiet and hot-path waits. The native clock API cross-compiles
+for Apple Silicon; a short elapsed check is not a physical suspend test.
+
+The native same-size edit fixture initially failed because Git status invoked
+a clean filter before settling. Candidate discovery, explicit capture, status
+and install's dirty observation now use the existing index parser and stat
+observations, plus a names-only untracked query. An install-wide index refresh
+also ingested unrelated saves; that global refresh has been removed.
+
+A same-size save with its modification time preserved exposed another native
+shortcut: non-batch annex add can skip the file in withFilesMaybeModified.
+The NUL-delimited batch path in Command/Add.hs enters start/ingestAdd directly.
+Replies are checked by unique literal file name, without assuming completion
+order. Unportable new names remain held. Native captures preserve immutable
+objects and executable modes.
+
+Annex's own temporary hardlink changes ctime during ingestion. Exact captured
+byte/stat/index observations are therefore made after ingestion with controlled
+calckey reads. Their private cache survives a restart, includes ctime and the
+exact staged pointer/mode, and is invalidated by later edits. Missing, malformed
+or future cache formats grant no shortcut. It authorizes no transfer, overwrite
+or deletion; install still proves displaced bytes and authority separately.
+Only paths just installed receive a completion observation, so another path's
+unsettled save is left alone. Normal idle recovery, keep, thinning and metadata
+commits no longer refresh every working file as a side effect. The full native
+metadata includes ctime, but the durable journal's tuple remains unchanged.
+After a restore's own rename, identity/mode/mtime and the independent old-byte
+proof still apply; the full ctime comparison remains before the move.
+Conservative verification of unchanged foreign bytes must create no empty
+suggestion. A genuinely unborn repository may have no index; a missing index
+with an existing HEAD remains an error. These extra reads and cache writes need reference
+budget measurements; no idle, memory, scan or HDD budget is inferred here.
+
+The initial 58-check checkpoint covered index formats 2/3/4, conflicts, crash
+recovery, seven actual hot-file captures, unrelated-file progress and pre-quiet
+observation. The broader run found fresh repositories without an index,
+post-rename ctime comparisons and empty proposals from unchanged foreign bytes;
+those implementation failures were corrected. The next workspace run passed
+714 of 715 checks; its malformed-cache fixture had left a valid native Git stat
+cache in place. Clearing that independent cache without changing its pointer
+makes the intended fallback test meaningful, and the corrected fixture passes.
+All-target Clippy and repository checks pass. Real daemon trace validation and
+current-main integration still precede the PR. Native priorities, the complete
+work queue and the resource budgets remain outstanding.
 
 ## Periodic macOS failures
 

@@ -20,8 +20,9 @@ pub struct FileId {
     pub ino: u64,
 }
 
-/// What install compares with the index entry: `(dev, ino, size, mtime in ns)`,
-/// with the link count (spec 07 §7.5, 11 §11.3).
+/// Native metadata for live save/restore preconditions and observations.
+/// The durable journal retains its `(dev, ino, size, mtime in ns)` tuple
+/// (spec 07 §7.5, 11 §11.3); ctime also detects preserved-mtime saves here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Stat {
     /// Device and inode.
@@ -30,6 +31,8 @@ pub struct Stat {
     pub size: u64,
     /// Modification time in nanoseconds since the epoch.
     pub mtime_ns: i64,
+    /// Inode-change time, including same-size writes that preserve mtime.
+    pub ctime_ns: i64,
     /// Number of hard links.
     pub nlink: u64,
     /// The file type and permission bits (`st_mode`).
@@ -72,6 +75,10 @@ impl Stat {
                 .mtime()
                 .saturating_mul(1_000_000_000)
                 .saturating_add(meta.mtime_nsec()),
+            ctime_ns: meta
+                .ctime()
+                .saturating_mul(1_000_000_000)
+                .saturating_add(meta.ctime_nsec()),
             nlink: meta.nlink(),
             mode: meta.mode(),
             uid: meta.uid(),
