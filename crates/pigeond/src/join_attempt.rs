@@ -163,6 +163,9 @@ where
         g.stop_remotedaemon().await;
         return Err(e.to_string());
     }
+    // Bootstrap access serves only the unverified welcome. The persisted
+    // group now admits every current roster peer through the usual rule.
+    g.lock().bootstrap_peer = None;
     d.serve_group(g.clone(), None).await;
     drop(busy);
     forget_uuid(d, &g.id);

@@ -101,6 +101,9 @@ fn checking_and_unreadable_evidence_never_becomes_protected_health() {
         &[&lap, &vault],
     );
     drop(vault);
+    // Stop the receiver too: an in-flight valid report must not race the
+    // deliberate checking-report fixture's compare-and-swap.
+    drop(lap);
     runtime.block_on(async {
         let old = git.rev(&reference).await.unwrap();
         let bytes = git.blob(&format!("{reference}:status.toml")).await.unwrap();
@@ -130,6 +133,8 @@ fn checking_and_unreadable_evidence_never_becomes_protected_health() {
             .await
             .unwrap();
     });
+    let lap = start(&root, sockets.path(), "lap");
+    let session = web::login(&lap);
     eventually_within(
         60,
         || plain(&web::page(&session, "/")).contains("Checking stored files"),
