@@ -63,6 +63,7 @@ async fn listing(
             crate::status::Observed {
                 path: path.clone(),
                 key: String::new(),
+                erased_restoration: false,
                 local: true,
                 state: pigeon_core::state::State::Local(pigeon_core::state::Reason::Sending),
                 level: Level::Working,

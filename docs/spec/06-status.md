@@ -132,9 +132,19 @@ Every version not *protected* has one **reason** (ADR 0027):
 | `history-full(bytes)` | "This computer keeps 18 GB of changes that no backup machine has yet; new changes wait." ([07 §7.8](07-capture-and-install.md)) |
 | `content-missing` | "This version of *budget.xlsx* is lost: no computer has its content any more." |
 | `erased(decision)` | "This version of *scan-12.pdf* was erased on 12 November 2026 (Roy's decision)." |
+| `erased-restoration-missing` | An earlier erasure covered these contents. They are needed again, but no copy is currently known. ([08 §8.6](08-custody-loops.md)) |
 | `in-use(path)` | "*tarte.docx* is open in another application; pigeon will update it when it is closed." ([07 §7.5](07-capture-and-install.md)) |
 | `settings-check` | "Checking the group's settings; freeing space waits until it is done." ([03 §3.5](03-repository-and-roles.md)) |
 | `removed` | "This computer is no longer in the group, so this file is not backed up." ([09 §9.7](09-network-and-joining.md)) |
+
+A new current reference to unavailable contents remains *missing*. Where
+signed decisions, original seals and the new birth's parent histories show
+that those contents previously qualified for erasure, its deciders see
+*Needs you* with recovery advice (`purge_missing`, `status_why`). The
+current missing count is preserved; an old completed erasure's history
+label does not make the new unavailable version safe. This diagnosis is
+rebuilt after restart and grants no content-transfer or release permission.
+Incomplete historical evidence supplies no erasure explanation.
 
 *Sending* and *group-unreachable* become `custodian-offline(names, since)`
 once every custodian the version waits for (those not holding it with its

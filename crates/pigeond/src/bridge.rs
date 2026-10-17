@@ -224,6 +224,12 @@ async fn perform(d: &Daemon, operation: Operation) -> Result<Reply> {
             if etag != file.etag {
                 return Err(err(412, "The file changed; synchronize again"));
             }
+            if !crate::shared::content_allowed(&g, key) {
+                return Err(err(
+                    503,
+                    "Content waits for verified erasure and membership state",
+                ));
+            }
             crate::restore::bring(&g, key)
                 .await
                 .map_err(|_| err(503, "Waiting for file content"))?;

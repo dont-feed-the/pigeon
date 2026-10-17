@@ -1,7 +1,7 @@
 //! The command line (10 §10.2, ADR 0024): its definition in `clap`, from
 //! which Tab completion comes too, and which request each command sends to
 //! `pigeond`, or why it sends none. `update`, `export` and `--version` need
-//! no daemon, and a command this build lacks answers `not-in-this-build`.
+//! no daemon. Erasing has an explicit preview and confirmation step.
 
 use std::path::Path;
 
@@ -26,8 +26,13 @@ pub enum Action {
     Update(Vec<String>),
     /// Write the files without `pigeond` (09 §9.9).
     Export(crate::export::Export),
-    /// A command this build does not have yet.
-    NotInThisBuild(String),
+    /// Review before a separate explicit erasure or preparation action.
+    Erase {
+        /// Preview, prepare or cancellation preview.
+        operation: pigeon_proto::erase::Operation,
+        /// Only show the read-only preview.
+        preview: bool,
+    },
     /// The arguments do not fit this command.
     Usage(String),
 }
@@ -75,6 +80,10 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("free PATH", "cmd-free"),
     ("free --without-checking PATH", "cmd-free-without-checking"),
     ("keep PATH", "cmd-keep"),
+    (
+        "erase [PATH | --suggestion ID | --cancel ID] [--preview | --prepare]",
+        "cmd-erase",
+    ),
     ("sync [PATH] [--default]", "cmd-sync"),
     ("suggestions", "cmd-suggestions"),
     (
@@ -226,6 +235,19 @@ enum Command {
         bring_back: bool,
         #[arg(long)]
         rename: bool,
+    },
+    #[command(group(ArgGroup::new("selection").args(["path", "suggestion", "cancel"])))]
+    Erase {
+        #[arg(value_hint = ValueHint::AnyPath)]
+        path: Option<String>,
+        #[arg(long, value_name = "ID", add = complete::suggestions())]
+        suggestion: Option<String>,
+        #[arg(long, value_name = "ID")]
+        cancel: Option<String>,
+        #[arg(long, requires = "selection", conflicts_with = "prepare")]
+        preview: bool,
+        #[arg(long, requires = "selection", conflicts_with = "cancel")]
+        prepare: bool,
     },
     Suggestions,
     Accept {
@@ -673,8 +695,36 @@ fn action(c: Command) -> Action {
             (None, None) if rollback => vec!["--rollback".into()],
             (None, None) => Vec::new(),
         }),
-        Command::Other(words) => {
-            Action::NotInThisBuild(words.into_iter().next().unwrap_or_default())
+        Command::Erase {
+            path,
+            suggestion,
+            cancel,
+            preview,
+            prepare,
+        } => {
+            use pigeon_proto::erase::{Operation, Selection};
+            if let Some(decision) = cancel {
+                return Action::Erase {
+                    operation: Operation::PreviewCancel { decision },
+                    preview,
+                };
+            }
+            let selection = match (path, suggestion) {
+                (Some(path), _) => Selection::Path(absolute(&path)),
+                (_, Some(id)) => Selection::Suggestion(id),
+                _ => {
+                    return send(Request::Erase {
+                        operation: Operation::List,
+                    });
+                }
+            };
+            let operation = if prepare {
+                Operation::Prepare { selection }
+            } else {
+                Operation::Preview { selection }
+            };
+            Action::Erase { operation, preview }
         }
+        Command::Other(words) => Action::Usage(words.into_iter().next().unwrap_or_default()),
     }
 }

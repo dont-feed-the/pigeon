@@ -67,8 +67,13 @@ fn commands_map_to_requests() {
 }
 
 #[test]
-fn other_commands_are_not_in_this_build_and_bad_arguments_are_usage() {
-    assert_eq!(line("erase").action, Action::NotInThisBuild("erase".into()));
+fn erase_is_available_and_bad_arguments_are_usage() {
+    assert_eq!(
+        line("erase").action,
+        Action::Send(Request::Erase {
+            operation: pigeon_proto::erase::Operation::List
+        })
+    );
     assert_eq!(line("free").action, Action::Usage("free".into()));
     assert_eq!(line("free a b").action, Action::Usage("free".into()));
     assert_eq!(
@@ -197,7 +202,12 @@ fn each_form_is_checked() {
     );
     let l = line("erase --json");
     assert!(l.json);
-    assert_eq!(l.action, Action::NotInThisBuild("erase".into()));
+    assert_eq!(
+        l.action,
+        Action::Send(Request::Erase {
+            operation: pigeon_proto::erase::Operation::List
+        })
+    );
 }
 
 /// The candidates for the last word of `typed`, and their help.
@@ -333,4 +343,49 @@ fn local_problems_fit_the_catalogue() {
         let lines = crate::render::for_person(0).problem(&p);
         assert!(lines.iter().all(|l| !l.contains('{')), "{lines:?}");
     }
+}
+
+#[test]
+fn erasing_parses_explicit_preview_preparation_and_cancellation() {
+    use pigeon_proto::erase::{Operation, Selection};
+    assert_eq!(
+        line("erase --suggestion abcd --preview --no-input").action,
+        Action::Erase {
+            operation: Operation::Preview {
+                selection: Selection::Suggestion("abcd".into())
+            },
+            preview: true
+        }
+    );
+    assert_eq!(
+        line("erase --cancel abcd").action,
+        Action::Erase {
+            operation: Operation::PreviewCancel {
+                decision: "abcd".into()
+            },
+            preview: false
+        }
+    );
+    assert!(matches!(
+        line("erase Photos --prepare").action,
+        Action::Erase {
+            operation: Operation::Prepare { .. },
+            preview: false
+        }
+    ));
+    for command in [
+        "erase Photos --suggestion abcd",
+        "erase --cancel abcd --prepare",
+        "erase --prepare",
+        "erase Photos --preview --prepare",
+    ] {
+        assert!(
+            matches!(line(command).action, Action::Usage(_)),
+            "{command}"
+        );
+    }
+    assert_eq!(
+        line("unknown-command").action,
+        Action::Usage("unknown-command".into())
+    );
 }

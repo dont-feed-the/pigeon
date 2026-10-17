@@ -19,6 +19,10 @@ Purge_full	Purge	fast	pass
 Purge_seals	Purge	fast	violation:KeepWins
 Purge_none	Purge	fast	violation:KeepWins
 Purge_full3	Purge	audit	pass
+PurgeMembership_fenced	PurgeMembership	fast	pass
+PurgeMembership_fenced2	PurgeMembership	full	pass
+PurgeMembership_no_ack	PurgeMembership	fast	violation:KeepWins
+PurgeMembership_naive	PurgeMembership	fast	violation:NoResurrection
 Roster_fold	Roster	fast	pass
 Roster_atomic	Roster	fast	violation:RemovalWins
 Roster_every	Roster	fast	violation:MergeAlwaysPossible
@@ -129,6 +133,12 @@ StorageTrace_bad	StorageTrace	fast	trace:rejected:1
 BridgeCatalogue_good	BridgeCatalogue	fast	pass
 BridgeCatalogue_bad	BridgeCatalogue	fast	violation:Consistent
 BridgeCatalogue_pinned	BridgeCatalogue	fast	pass
+PurgeUpgrade_design	PurgeUpgrade	fast	pass
+PurgeUpgrade_three	PurgeUpgrade	fast	pass
+PurgeUpgrade_forget	PurgeUpgrade	fast	violation:OneChoicePerDomain
+PurgeUpgrade_partial	PurgeUpgrade	fast	violation:ValidCertificate
+PurgeUpgrade_old_votes	PurgeUpgrade	fast	violation:ValidCertificate
+
 
 # Bridge deployment composition and same-person device isolation.
 BridgeLifecycle_good	BridgeLifecycle	fast	pass

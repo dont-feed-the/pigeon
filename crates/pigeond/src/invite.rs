@@ -356,15 +356,18 @@ pub async fn fetch_welcome(
 ) -> Result<String, String> {
     let spec = crate::settings::peer_refspec(admitter);
     let archive = crate::refound::refspec(admitter);
+    let proofs = crate::purge_epoch::refspec(admitter);
     let proposals = crate::proposal::refspec(admitter);
     let args = [
         "fetch",
         "-q",
         "--no-tags",
         "--no-write-fetch-head",
+        "--refmap=",
         admitter,
         spec.as_str(),
         archive.as_str(),
+        proofs.as_str(),
         proposals.as_str(),
     ];
     // The admitter may still be busy with the welcome's round: retry for

@@ -63,6 +63,16 @@ fn health_round_trips_without_inventing_evidence(tc: TestCase) {
                 },
                 reported_at: flag(&tc).then(|| text(&tc)),
                 report_fresh: flag(&tc),
+                scrub: flag(&tc).then(|| pigeon_proto::health::Scrub {
+                    last_pass_completed: flag(&tc).then(|| text(&tc)),
+                    keys_failed: n(&tc),
+                    remaining: flag(&tc).then(|| n(&tc)),
+                    current_failures: flag(&tc).then(|| n(&tc)),
+                    problem: flag(&tc).then(|| Message {
+                        id: text(&tc),
+                        args: Default::default(),
+                    }),
+                }),
                 checking: flag(&tc),
                 repository_lost: flag(&tc),
                 disk: flag(&tc).then(|| Disk {

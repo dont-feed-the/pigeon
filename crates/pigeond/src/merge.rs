@@ -328,6 +328,27 @@ async fn judge_step(
         None
     };
     let decisions = decisions(g, (before, writers), after, &changed, rosters).await?;
+    let purges =
+        crate::purge_admission::checks(g, after, &changed, adopted, &authority::parents(raw))
+            .await?;
+    let mut witnesses =
+        crate::purge_epoch::checks(g, after, &changed, &authority::parents(raw)).await?;
+    witnesses.extend(
+        crate::admission_proofs::checks(g, after, &changed, &authority::parents(raw)).await?,
+    );
+    if new_roster.as_ref().is_some_and(|r| {
+        r.as_ref()
+            .is_ok_and(|r| r.rules >= pigeon_core::purge::RULES)
+    }) && rosters.iter().any(|r| r.rules < pigeon_core::purge::RULES)
+    {
+        witnesses.insert(
+            ROSTER.into(),
+            crate::admission_proofs::upgrade(g, after, &authority::parents(raw)).await?,
+        );
+    }
+    if !purges.is_empty() {
+        g.git.purge_gate.arm();
+    }
     Ok(commit::judge(&commit::Commit {
         raw,
         rosters,
@@ -337,6 +358,8 @@ async fn judge_step(
         blobs: &blobs,
         new_roster: new_roster.as_ref(),
         decisions: &decisions,
+        purges: &purges,
+        witnesses: &witnesses,
         adopted,
     }))
 }
@@ -416,9 +439,7 @@ async fn about(
     // prevents a decision object from recursively naming itself or another
     // decision as its proposal. Validate the same signature/tree/permission
     // rule as live proposal admission before using the claimed author.
-    if authority::delta(&at, &tree)
-        .iter()
-        .any(|p| authority::is_pigeon_path(p))
+    if !crate::purge_admission::proposal_metadata(&at, &tree)
         || !matches!(
             Box::pin(judge_proposal(g, &raw, &base, &tree)).await?,
             Verdict::Refused(Refusal::NotAllowed(_))
@@ -613,7 +634,8 @@ pub async fn adopt(
         })
         .unwrap_or_else(|| "?".to_owned());
     let mine = g.git.tree(x).await?;
-    let tree = pigeon_core::proposal::adoption(&at, &mine, &ours, &who, Stamp { utc, offset });
+    let mut tree = pigeon_core::proposal::adoption(&at, &mine, &ours, &who, Stamp { utc, offset });
+    crate::purge_admission::extend_deadline(g, &at, &mine, &mut tree).await?;
     let oid = write_tree(&g.git, &tree).await?;
     let message = match force {
         Some(why) => format!("pigeon: accept a suggestion\n\n{} {why}", authority::FORCE),

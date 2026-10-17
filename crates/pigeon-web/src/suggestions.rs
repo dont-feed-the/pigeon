@@ -213,6 +213,7 @@ fn deciding(r: &Renderer, s: &Suggestion, i: usize, form: &str) -> Markup {
     html! {
         article {
             p { (headline(r, s)) }
+            p { a href=(r.url(&format!("/erase?suggestion={}", crate::browse::enc(&s.id)))) { (r.id("web-erase-suggestion")) } }
             @for (f, id) in files.iter().zip(&ids) { (review_form(r, s, f, id, form)) }
             form method="post" action=(r.url("/suggestions/decide")) {
                 input type="hidden" name="form" value=(form);
@@ -249,6 +250,7 @@ fn shown(r: &Renderer, s: &Suggestion, form: &str) -> Markup {
     html! {
         article {
             p { (headline(r, s)) }
+            p { a href=(r.url(&format!("/erase?suggestion={}", crate::browse::enc(&s.id)))) { (r.id("web-erase-suggestion")) } }
             ul {
                 @for (j, f) in files.iter().enumerate() {
                     @let id = format!("review-{}-{j}", &s.id[..s.id.len().min(12)]);

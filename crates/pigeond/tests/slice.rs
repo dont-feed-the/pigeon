@@ -272,10 +272,19 @@ fn local_published_protected_then_free_and_keep() {
     }
     let resumed = pigeon(&lap, &["resume"]);
     assert!(said(&resumed, "resumed", "-").is_some(), "{resumed:?}");
-    match pigeon(&lap, &["erase", "a.txt"]).as_slice() {
-        [Response::Problem(p)] => assert_eq!(p.code, "not-in-this-build"),
-        other => panic!("erase: {other:?}"),
+    let file = folder.join("a.txt");
+    let before = std::fs::read(&file).unwrap();
+    match pigeon(
+        &lap,
+        &["erase", file.to_str().unwrap(), "--preview", "--no-input"],
+    )
+    .as_slice()
+    {
+        [Response::Erasure { answer }] => assert!(matches!(answer.as_ref(),
+            pigeon_proto::erase::Answer::Preview(p) if p.current_files == 1)),
+        other => panic!("erase preview: {other:?}"),
     }
+    assert_eq!(std::fs::read(&file).unwrap(), before);
 }
 
 /// S4 and S2 on one host: a backup machine stopped while a version is saved

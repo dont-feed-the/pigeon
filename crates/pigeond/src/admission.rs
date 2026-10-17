@@ -98,13 +98,16 @@ pub async fn items(g: &Group, me: &str, keys: &BTreeSet<String>) -> Vec<(Work, V
     let uuids = |role| -> Vec<(String, String)> {
         peers
             .iter()
-            .filter(|(_, _, r)| *r == role)
+            .filter(|(id, _, r)| {
+                *r == role && (role != DeviceRole::Custodian || !crate::membership::pending(g, id))
+            })
             .map(|(id, u, _)| (id.clone(), u.clone()))
             .collect()
     };
     let (mut custodians, laptops) = (uuids(DeviceRole::Custodian), uuids(DeviceRole::Laptop));
     let own = g.lock().annex_uuid.clone();
     if g.role == Role::Custodian
+        && !crate::membership::pending(g, me)
         && let Some(u) = own
     {
         custodians.push((me.to_owned(), u));

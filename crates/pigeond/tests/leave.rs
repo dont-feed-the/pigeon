@@ -274,44 +274,40 @@ fn a_peer_that_never_learned_the_join_cannot_acknowledge_the_leave() {
     );
 }
 
-fn git(path: &Path, args: &[&str]) -> String {
-    // Share the daemon's bounded update-index/write-tree lock retry.
+/// Moves `folder`'s `main` to a roster in `format = 1`, as releases before
+/// 0.5.10 wrote it. The daemon has stopped, but an interrupted index writer
+/// can leave a lock; this history fixture has no reason to edit the index.
+fn in_an_earlier_format(folder: &Path) {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap();
-    let git = pigeond::git::Git::new(path, pigeon_git::GitEnv::default());
-    runtime.block_on(git.run(args)).unwrap().trim().into()
-}
-
-/// Moves `folder`'s `main` to a roster in `format = 1`, as releases before
-/// 0.5.10 wrote it.
-fn in_an_earlier_format(folder: &Path) {
-    let roster = folder.join(".pigeon/roster.toml");
-    let text = std::fs::read_to_string(&roster).unwrap();
-    assert!(text.starts_with("format = 2\n"), "{text}");
-    std::fs::write(&roster, text.replacen("format = 2", "format = 1", 1)).unwrap();
-    let blob = git(
-        folder,
-        &["hash-object", "-w", "--no-filters", ".pigeon/roster.toml"],
-    );
-    let entry = format!("100644,{blob},.pigeon/roster.toml");
-    git(folder, &["update-index", "--cacheinfo", &entry]);
-    let tree = git(folder, &["write-tree"]);
-    git(folder, &["config", "user.name", "old"]);
-    git(folder, &["config", "user.email", "old@pigeon"]);
-    let commit = git(
-        folder,
-        &[
-            "commit-tree",
-            &tree,
-            "-p",
-            "main",
-            "-m",
-            "an earlier release",
-        ],
-    );
-    git(folder, &["update-ref", "refs/heads/main", &commit]);
+    runtime.block_on(async {
+        let git = pigeond::git::Git::new(folder, pigeon_git::GitEnv::default());
+        let before = git.rev("refs/heads/main").await.unwrap();
+        let mut tree = git.tree(&before).await.unwrap();
+        let path = ".pigeon/roster.toml";
+        let text = String::from_utf8(git.blob(&format!("{before}:{path}")).await.unwrap()).unwrap();
+        assert!(text.starts_with("format = 2\n"), "{text}");
+        let old = text.replacen("format = 2", "format = 1", 1);
+        let blob = git
+            .run_in(&["hash-object", "-w", "--stdin"], old.as_bytes())
+            .await
+            .unwrap();
+        tree.get_mut(path).unwrap().oid = blob.trim().to_owned();
+        let tree = pigeond::merge::write_tree(&git, &tree).await.unwrap();
+        git.run(&["config", "user.name", "old"]).await.unwrap();
+        git.run(&["config", "user.email", "old@pigeon"])
+            .await
+            .unwrap();
+        let commit = git
+            .commit_tree(&tree, &[&before], "an earlier release")
+            .await
+            .unwrap();
+        git.update_ref("refs/heads/main", &commit, Some(&before))
+            .await
+            .unwrap();
+    });
 }
 
 #[test]

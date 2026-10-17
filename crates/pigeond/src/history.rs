@@ -50,9 +50,16 @@ pub(crate) fn relative(g: &Group, path: &Path) -> Option<String> {
 /// signed refounding trailers. Each archive gets its own in-memory judge.
 /// Successful immutable tips are cached without changing the live fold.
 pub async fn tips(g: &Group) -> Vec<String> {
-    let Some(mut tip) = g.git.rev("refs/heads/main").await else {
+    let Some(main) = g.git.rev("refs/heads/main").await else {
         return Vec::new();
     };
+    tips_at(g, &main).await
+}
+
+/// Traverse one immutable main. A caller binding destructive consent must
+/// recheck its complete ref snapshot after this potentially cold traversal.
+pub(crate) async fn tips_at(g: &Group, main: &str) -> Vec<String> {
+    let mut tip = main.to_owned();
     let mut seen = std::collections::BTreeSet::new();
     let mut tips = Vec::new();
     for _ in 0..32 {
@@ -151,7 +158,19 @@ pub async fn history(d: &Daemon, path: &Path) -> Vec<Response> {
     let Some(rel) = relative(&g, path) else {
         return vec![problem("not-in-group", &[], None)];
     };
-    let k = crate::status::settings(&g).k;
+    let versions = saved_versions(&g, &d.device, &rel).await;
+    let local = crate::status_why::Local::read(&g);
+    let changed = crate::capture::pending(&g, &rel)
+        .await
+        .is_ok_and(|p| p.contains(&rel));
+    let note = (changed || local.differs(&rel)).then(|| local.reason(&rel));
+    crate::status_why::noted(note, Response::History { versions })
+}
+
+/// Saved-version status shared by the public history command and recovery
+/// checks. Confirmed release takes precedence over stale annex copy logs.
+pub async fn saved_versions(g: &Group, me: &str, rel: &str) -> Vec<VersionStatus> {
+    let k = crate::status::settings(g).k;
     let doc = g.roster();
     let custodians: Vec<String> = doc
         .map(|d| {
@@ -163,15 +182,17 @@ pub async fn history(d: &Daemon, path: &Path) -> Vec<Response> {
                 .collect()
         })
         .unwrap_or_default();
-    let current = crate::status::observe(&g, &d.device, &rel).await;
-    let keys = versions(&g, &rel).await;
+    let current = crate::status::observe(g, me, rel).await;
+    let keys = versions(g, rel).await;
     let n = keys.len();
     let mut versions = Vec::new();
     for (i, (commit, key)) in keys.iter().enumerate() {
         let saved = g.git.commit_time(commit).await.unwrap_or(0);
         let held = crate::custody::holders(&g.git, key).await;
         let copies = custodians.iter().filter(|u| held.contains(*u)).count();
+        let policy = g.git.purge_gate.policy();
         let state = match current.iter().find(|o| o.key == *key) {
+            _ if !policy.waiting && policy.released.contains(key) => api::State::Erased,
             Some(o) => match o.state {
                 pigeon_core::state::State::Protected(_)
                 | pigeon_core::state::State::Uncertain(_) => api::State::Protected,
@@ -181,11 +202,11 @@ pub async fn history(d: &Daemon, path: &Path) -> Vec<Response> {
             },
             None if copies >= k => api::State::Protected,
             None if copies > 0 => api::State::Published,
-            None if crate::custody::present(&g, key).await.is_some() => api::State::Local,
+            None if crate::custody::present(g, key).await.is_some() => api::State::Local,
             None => api::State::Missing,
         };
         versions.push(VersionStatus {
-            path: rel.clone(),
+            path: rel.to_owned(),
             number: u64::try_from(n - i).unwrap_or(0),
             saved_at: rfc3339(saved),
             state,
@@ -193,15 +214,7 @@ pub async fn history(d: &Daemon, path: &Path) -> Vec<Response> {
             reason: None,
         });
     }
-    // The file on this computer may be none of these versions: say why,
-    // such as a copy that differs from the group's (`why-differs`); the web
-    // shows it above the versions.
-    let local = crate::status_why::Local::read(&g);
-    let changed = crate::capture::pending(&g, &rel)
-        .await
-        .is_ok_and(|p| p.contains(&rel));
-    let note = (changed || local.differs(&rel)).then(|| local.reason(&rel));
-    crate::status_why::noted(note, Response::History { versions })
+    versions
 }
 
 /// `pigeon remove-computer NAME`.
@@ -306,6 +319,59 @@ pub async fn doctor(d: &Daemon, _details: bool) -> Vec<Response> {
             let name = crate::status::this_name(&g, &d.device);
             out.push(problem("disk-full", &[("machine", text(&name))], None));
         }
+        if g.role == pigeon_core::filter::Role::Custodian {
+            match crate::scrub::status(&g) {
+                Ok(scrub) => {
+                    let name = crate::status::this_name(&g, &d.device);
+                    out.push(crate::api::said(
+                        "scrub-machine",
+                        &[("machine", text(&name))],
+                    ));
+                    if let Some(at) = scrub.last_pass_completed {
+                        out.push(crate::api::said(
+                            "scrub-last-pass",
+                            &[
+                                ("time", text(&at)),
+                                (
+                                    "failed",
+                                    Arg::Number(
+                                        i64::try_from(scrub.keys_failed).unwrap_or(i64::MAX),
+                                    ),
+                                ),
+                            ],
+                        ));
+                    } else {
+                        out.push(crate::api::said("scrub-no-pass", &[]));
+                    }
+                    if let Some(remaining) = scrub.remaining {
+                        out.push(crate::api::said(
+                            "scrub-progress",
+                            &[
+                                (
+                                    "remaining",
+                                    Arg::Number(i64::try_from(remaining).unwrap_or(i64::MAX)),
+                                ),
+                                (
+                                    "failed",
+                                    Arg::Number(
+                                        i64::try_from(scrub.current_failures.unwrap_or(0))
+                                            .unwrap_or(i64::MAX),
+                                    ),
+                                ),
+                            ],
+                        ));
+                    }
+                }
+                Err(detail) => {
+                    let name = crate::status::this_name(&g, &d.device);
+                    out.push(problem(
+                        "scrub-ledger",
+                        &[("machine", text(&name))],
+                        Some(detail),
+                    ));
+                }
+            }
+        }
         let shortfall = g.lock().shortfall.clone();
         if let Some(s) = shortfall {
             let name = crate::status::this_name(&g, &d.device);
@@ -322,6 +388,37 @@ pub async fn doctor(d: &Daemon, _details: bool) -> Vec<Response> {
                 .get(&DeviceId(peer.to_owned()))
                 .map_or(peer.to_owned(), |x| x.name.clone())
         };
+        for (peer, report) in crate::report::current(&g) {
+            if peer == d.device
+                || !names
+                    .get(&DeviceId(peer.clone()))
+                    .is_some_and(|d| d.role == DeviceRole::Custodian)
+            {
+                continue;
+            }
+            out.push(crate::api::said(
+                "scrub-machine",
+                &[("machine", text(&name(&peer)))],
+            ));
+            out.push(crate::api::said(
+                "scrub-report-time",
+                &[("when", text(&report.at.to_string()))],
+            ));
+            if let Some(scrub) = report.scrub {
+                out.push(crate::api::said(
+                    "scrub-last-pass",
+                    &[
+                        ("time", text(&scrub.last_pass_completed.to_string())),
+                        (
+                            "failed",
+                            Arg::Number(i64::try_from(scrub.keys_failed).unwrap_or(i64::MAX)),
+                        ),
+                    ],
+                ));
+            } else {
+                out.push(crate::api::said("scrub-no-pass", &[]));
+            }
+        }
         for (code, peer, files, missing) in crate::report::problems(&g) {
             let n = |x: u64| Arg::Number(i64::try_from(x).unwrap_or(i64::MAX));
             let mut args = vec![("machine", text(&name(&peer)))];
@@ -355,7 +452,15 @@ pub async fn doctor(d: &Daemon, _details: bool) -> Vec<Response> {
         }
         None => {}
     }
-    out
+    // The CLI stops at its first non-Progress answer. Scrub observations
+    // are context, not a completed diagnostic; the actual problem (or the
+    // final doctor-ok) must remain reachable on this same request.
+    out.into_iter()
+        .map(|response| match response {
+            Response::Said { message } if message.id.starts_with("scrub-") => progress(message),
+            other => other,
+        })
+        .collect()
 }
 
 fn progress(message: api::Message) -> Response {

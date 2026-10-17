@@ -10,7 +10,18 @@
 //! and carries out the [`Action`]s it returns, in order. Its laws are
 //! property tests in `tests/filter_laws.rs` (ADR 0012).
 
-use std::collections::VecDeque;
+use std::collections::{BTreeSet, VecDeque};
+use std::sync::Arc;
+
+/// An immutable, verified purge reading. An unresolved history pauses
+/// content while metadata can still travel; released keys never transfer.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ContentPolicy {
+    /// The complete reference reading is not ready yet.
+    pub waiting: bool,
+    /// Keys qualified as released by the reference/seal algebra.
+    pub released: BTreeSet<String>,
+}
 
 /// The highest P2P protocol version the filter knows: a client's
 /// `VERSION n` is forwarded as `VERSION min(n, MAX_VERSION)`.
@@ -145,6 +156,10 @@ pub enum Closed {
     Unattributed,
     /// git-annex's own output broke the framing.
     ServerFraming,
+    /// A new content request names a released key.
+    Erased,
+    /// Content waits until the current purge history is fully checked.
+    PurgePending,
 }
 
 /// One unit of either stream, as the framing cuts it.
@@ -256,7 +271,7 @@ enum Awaiting {
     /// The answer once a `PUT`'s data has been sent.
     PutData(String),
     /// The data a `GET` asked for, up to its validity.
-    Get,
+    Get(String),
 }
 
 /// Bytes on their way to the peer; a ticketed segment waits for its sync.
@@ -282,6 +297,9 @@ enum Held {
 #[derive(Debug)]
 pub struct Filter {
     config: Config,
+    policy: Arc<ContentPolicy>,
+    seen_content: BTreeSet<String>,
+    more_content: bool,
     checking: bool,
     closed: bool,
     relaying: bool,
@@ -300,6 +318,9 @@ impl Filter {
     pub fn new(config: Config, checking: bool) -> Self {
         Filter {
             config,
+            policy: Arc::new(ContentPolicy::default()),
+            seen_content: BTreeSet::new(),
+            more_content: false,
             checking,
             closed: false,
             relaying: false,
@@ -323,10 +344,63 @@ impl Filter {
         self.checking = checking;
     }
 
+    /// Replace the verified reading, including after a new uncovered
+    /// reference makes a previously released key wanted again.
+    pub fn set_content_policy(&mut self, policy: Arc<ContentPolicy>) {
+        self.policy = policy;
+    }
+
+    fn blocked(&self, key: &str) -> Option<Closed> {
+        if self.policy.waiting {
+            Some(Closed::PurgePending)
+        } else if self.policy.released.contains(key) {
+            Some(Closed::Erased)
+        } else {
+            None
+        }
+    }
+
+    fn stop_active(&mut self, out: &mut Vec<Action>) -> bool {
+        if self.relaying {
+            return false;
+        }
+        let why = self
+            .seen_content
+            .iter()
+            .find_map(|key| self.blocked(key))
+            .or_else(|| {
+                (self.more_content && (self.policy.waiting || !self.policy.released.is_empty()))
+                    .then_some(Closed::PurgePending)
+            })
+            .or_else(|| {
+                self.awaiting
+                    .iter()
+                    .find_map(|pending| match pending {
+                        Awaiting::Get(k)
+                        | Awaiting::Put(k)
+                        | Awaiting::PutData(k)
+                        | Awaiting::Lock(k)
+                        | Awaiting::Probe(k) => self.blocked(k),
+                        _ => None,
+                    })
+                    .or_else(|| {
+                        self.held.iter().find_map(|(_, held)| match held {
+                            Held::Lock(k) | Held::Probe(k) => self.blocked(k),
+                            _ => None,
+                        })
+                    })
+            });
+        if let Some(why) = why {
+            self.close(why, out);
+            return true;
+        }
+        false
+    }
+
     /// Bytes from the peer.
     pub fn from_client(&mut self, bytes: &[u8]) -> Vec<Action> {
         let mut out = Vec::new();
-        if self.closed {
+        if self.closed || self.stop_active(&mut out) {
             return out;
         }
         let mut frames = Vec::new();
@@ -346,7 +420,7 @@ impl Filter {
     /// Bytes from git-annex.
     pub fn from_server(&mut self, bytes: &[u8]) -> Vec<Action> {
         let mut out = Vec::new();
-        if self.closed {
+        if self.closed || self.stop_active(&mut out) {
             return out;
         }
         let mut frames = Vec::new();
@@ -368,7 +442,7 @@ impl Filter {
     /// failed sync is no answer: `pigeond` closes the session instead.
     pub fn synced(&mut self, ticket: u64, matched: bool) -> Vec<Action> {
         let mut out = Vec::new();
-        if self.closed {
+        if self.closed || self.stop_active(&mut out) {
             return out;
         }
         let Some(i) = self.held.iter().position(|(t, _)| *t == ticket) else {
@@ -490,6 +564,20 @@ impl Filter {
                 .map(|k| String::from_utf8_lossy(k).into_owned())
                 .ok_or(Closed::BadArguments)
         };
+        if matches!(name, b"GET" | b"PUT" | b"CHECKPRESENT" | b"LOCKCONTENT") {
+            let content_key = key()?;
+            if let Some(why) = self.blocked(&content_key) {
+                return Err(why);
+            }
+            // Laptop sessions preserve git-annex's permissive pipelining.
+            // Remember a bounded set; after overflow a new restriction
+            // conservatively reconnects, rather than missing an active key.
+            if self.seen_content.len() < 16 {
+                self.seen_content.insert(content_key);
+            } else if !self.seen_content.contains(&content_key) {
+                self.more_content = true;
+            }
+        }
         match name {
             b"VERSION" => {
                 let digits = line.get(8..).unwrap_or_default();
@@ -574,7 +662,7 @@ impl Filter {
                 out.push(Action::ToServer(with_newline(&line)));
             }
             b"GET" => {
-                self.expect(Awaiting::Get)?;
+                self.expect(Awaiting::Get(key()?))?;
                 out.push(Action::ToServer(with_newline(&line)));
             }
             b"CHECKPRESENT" | b"LOCKCONTENT" | b"PUT" | b"GETTIMESTAMP" | b"NOTIFYCHANGE" => {
@@ -596,7 +684,7 @@ impl Filter {
                 return Ok(());
             }
             Frame::PayloadEnd => {
-                if self.version == 0 && self.awaiting.front() == Some(&Awaiting::Get) {
+                if self.version == 0 && matches!(self.awaiting.front(), Some(Awaiting::Get(_))) {
                     self.awaiting.pop_front();
                 }
                 return Ok(());
@@ -609,7 +697,7 @@ impl Filter {
             return Ok(());
         }
         if matches!(name, b"VALID" | b"INVALID") {
-            if self.awaiting.front() == Some(&Awaiting::Get) {
+            if matches!(self.awaiting.front(), Some(Awaiting::Get(_))) {
                 self.awaiting.pop_front();
             }
             self.send_client(with_newline(&line), out);

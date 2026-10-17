@@ -156,7 +156,7 @@ impl Repo {
         span.set("repository", self.dir.to_string_lossy().into_owned())
             .set("command", args.first().copied().unwrap_or("unknown"));
         let result = span
-            .in_scope(self.run_status_inner(args, input, timeout))
+            .in_scope(self.run_status_inner(args, input, timeout, false))
             .await;
         if let Err(error) = &result {
             span.fail(&error.to_string());
@@ -164,16 +164,30 @@ impl Repo {
         result
     }
 
+    /// A maintenance call at idle I/O and CPU priority, without changing
+    /// this process. Retains the ordinary allow-list, deadline and cleanup.
+    pub async fn run_idle(
+        &self,
+        args: &[&str],
+        timeout: Duration,
+    ) -> Result<(Option<i32>, Output)> {
+        self.run_status_inner(args, None, timeout, true).await
+    }
+
     async fn run_status_inner(
         &self,
         args: &[&str],
         input: Option<&[u8]>,
         timeout: Duration,
+        idle: bool,
     ) -> Result<(Option<i32>, Output)> {
         let mut timer = (args.first() == Some(&"annex"))
             .then(|| pigeon_telemetry::AnnexCall::start(args.get(1).copied().unwrap_or("unknown")));
         let argv: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
         let mut cmd = command(&self.dir, &self.env, &argv)?;
+        if idle {
+            pigeon_sys::priority::idle_on_spawn(cmd.as_std_mut());
+        }
         cmd.stdin(if input.is_some() {
             Stdio::piped()
         } else {

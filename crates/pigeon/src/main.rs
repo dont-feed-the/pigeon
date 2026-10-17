@@ -9,6 +9,7 @@
 
 mod args;
 mod complete;
+mod erase;
 mod export;
 mod join;
 mod render;
@@ -293,11 +294,7 @@ fn run() -> ExitCode {
                 ExitCode::from(1)
             }
         },
-        Action::NotInThisBuild(cmd) => {
-            let p = local_problem("not-in-this-build", &[("command", cmd)]);
-            show(&out, line.json, &Response::Problem(p));
-            ExitCode::from(1)
-        }
+        Action::Erase { operation, preview } => erase::run(&out, &line, operation, *preview),
         Action::Send(Request::Drop { path, .. }) => drop(&out, &line, path),
         Action::Send(Request::Evict { folder, .. }) => free(&out, &line, folder),
         Action::Send(Request::SetFolderRule { folder, rule, .. }) => {

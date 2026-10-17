@@ -1,6 +1,6 @@
-about = "Ben's laptop captures under a roster of rules 3."
+about = "Ben's laptop captures under a roster of rules 4."
 verdict = "unknown"
-roster = "known/group-rules-3.toml"
+roster = "known/group-rules-4.toml"
 signer = 2
 message = "pigeon: capture"
 

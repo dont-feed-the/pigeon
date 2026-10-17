@@ -30,6 +30,7 @@ headline-capturing =
     }
 headline-checking = Le dossier local n'a pas pu être vérifié. Lancez : pigeon doctor
 headline-inventory-unreadable = Pigeon ne peut pas vérifier toutes les versions enregistrées pour le moment.
+headline-history-waiting = La copie des fichiers attend la vérification des versions enregistrées. Si cela dure, lancez : pigeon doctor
 headline-too-few-backups = Pas encore en sécurité : ajoutez un ordinateur de sauvegarde.
 why-capturing = Cette modification attend d'être enregistrée et copiée sur les ordinateurs de sauvegarde.
 why-differs = Votre copie diffère de la version du groupe. Choisissez laquelle garder.
@@ -279,10 +280,11 @@ web-resolve-suggest-again = Suggérer à nouveau
 web-resolve-suggest-again-help = Votre version reste dans ce fichier et est de nouveau suggérée au groupe. La version du groupe reste telle quelle jusqu’à ce que votre suggestion soit acceptée.
 undo-free = Annuler : pigeon keep { $folder }
 undo-keep = Annuler : pigeon free { $folder }
-restore-result = { $path } est restauré sur cet ordinateur ; la version plus récente reste dans son historique. Consultez Accueil pour le partage et la protection, et Suggestions si une approbation est nécessaire.
+restore-result = { $path } est restauré sur cet ordinateur. Restaurer un ancien contenu crée une nouvelle version actuelle et conserve l’historique existant. Les demandes d’effacement antérieures restent en attente mais ne couvrent pas cette nouvelle version. Consultez Accueil pour le partage et la protection, et Suggestions si une approbation est nécessaire.
 restore-folder-result = { $path } : { $files } fichiers restaurés sur cet ordinateur. Les fichiers plus récents et l’historique sont conservés. Consultez Accueil et Suggestions pour le partage et l’approbation.
 problem-restore-folder-incomplete = { $path } : { $files } fichiers restaurés ; { $skipped } n’ont pas pu être restaurés et sont restés inchangés. L’opération nécessite votre attention. Fichiers à vérifier : { $paths }. Fermez les fichiers utilisés et réessayez ; lancez pigeon doctor pour les autres problèmes. Consultez Accueil et Suggestions pour le partage et l’approbation.
 problem-restore-in-use = { $path } a changé ou est en cours d’utilisation. Pigeon l’a laissé inchangé. Ouvrez une ancienne version avec « Ouvrir une copie », ou fermez le fichier et réessayez.
+problem-restore-waiting = La restauration de { $path } a été demandée, mais son contenu enregistré n’est pas disponible sur cet ordinateur. Les modifications locales sont conservées. Consultez Accueil pour les copies disponibles, et Suggestions si une approbation est nécessaire. Réessayez la restauration lorsqu’une copie sera disponible.
 problem-restore-folder-version = Pour restaurer un dossier, choisissez une date avec --at ou omettez l’option de version pour restaurer son dernier état enregistré.
 web-restore-folder = Restaurer ce dossier
 web-files-arriving = En attente de { $files } fichiers pour qu’ils soient disponibles sur cet ordinateur. Laissez pigeon fonctionner ; il les recevra dès qu’une copie sera joignable.
@@ -335,7 +337,7 @@ confirm-remove-backup-unsafe = Retirer la machine de sauvegarde { $name } du gro
     } Vous pourrez l’inviter à nouveau plus tard. [o/N]
 confirm-yes = oui
 confirm-leave = Retirer cet ordinateur du groupe ? Ses fichiers restent dans le dossier, mais il cesse de les partager. [o/N]
-confirm-refound = Refonder le groupe avec vous pour seul administrateur ? Il devient un nouveau groupe : chaque autre membre le rejoint à nouveau par une invitation de votre part, et l'ancien historique reste lisible. [o/N]
+confirm-refound = Refonder le groupe avec vous pour seul administrateur ? Il devient un nouveau groupe : chaque autre membre le rejoint à nouveau par une invitation de votre part, et l'ancien historique reste lisible. Les effacements achevés dans cet état restent effectifs. Les demandes en attente ne continuent pas dans le nouveau groupe ; les ordinateurs restés dans l’ancien peuvent les terminer là-bas. Préparez à nouveau l’effacement après avoir réinvité vos sauvegardes. [o/N]
 confirm-join-refounded = { $group } a été refondé par { $name } le { $date } : le rejoindre, c'est accepter { $name } comme administrateur. Rejoindre ? [o/N]
 web-join-refounded = { $group } a été refondé par { $name } le { $date }. Le rejoindre, c'est accepter { $name } comme administrateur. Cliquez sur Rejoindre pour continuer.
 confirm-held-share = Supprimer les fichiers de { $batch } pour tout le monde ? Ils restent dans l'historique. [o/N]
@@ -748,6 +750,57 @@ space-rejected = refusée
 space-withdrawn = retirée
 space-snapshot = { $group }, vérifié { $when }.
 
+# Explicit, reference-aware erasure (08 §8.6).
+erase-checking = L’effacement attend la vérification de l’historique et la récupération locale.
+erase-prepare-needed = Un administrateur doit préparer l’effacement. Chaque ordinateur actuel doit confirmer la mise à jour avant tout effacement.
+erase-readiness-wait = L’effacement attend la fin de la préparation des ordinateurs et des machines de sauvegarde.
+erase-ready = Tous les ordinateurs actuels ont confirmé la préparation. Examinez cette portée avant de demander l’effacement.
+erase-waiting = En attente de : { $names }.
+erase-old-decisions = Un effacement antérieur doit se terminer ou être annulé avant qu’une nouvelle sauvegarde participe aux effacements.
+erase-preview-counts = Cette action retire { $files } fichiers actuels et demande l’effacement de { $versions } versions observées, couvrant { $bytes } octets distincts.
+erase-warning = L’effacement peut supprimer définitivement ces versions. Chaque sauvegarde attend au moins { $days } jours après réception de la demande, et toutes les sauvegardes requises doivent donner leur accord. Restaurer une version avant la fin la conserve. Ceci n’est pas un effacement sécurisé des disques ni des copies hors de Pigeon.
+erase-shared = { $versions } versions sélectionnées partagent des octets conservés ailleurs : { $paths }. Ces octets restent ; la taille affichée ne garantit pas l’espace qui sera libéré.
+erase-needs-approval = Cette action envoie une suggestion à un administrateur. Aucun effacement ne commence avant son acceptation.
+erase-preparing = Préparation demandée. Aucun effacement n’a été effectué ni programmé. Examinez et confirmez à nouveau lorsque tous les ordinateurs seront prêts.
+erase-submitted = Effacement demandé. Reçu : { $id }. Consultez les demandes d’effacement pour connaître les sauvegardes attendues et l’achèvement.
+erase-submitted-suggestion = La suggestion d’effacement { $id } attend un administrateur. Le délai commence après acceptation et réception par chaque sauvegarde.
+erase-none = Aucune demande d’effacement acceptée.
+erase-decision = { $id } : { $paths }. Fin déclarée au plus tôt : { $time } ; le délai propre à chaque destinataire s’applique aussi.
+erase-completed = Chaque sauvegarde d’origine a validé cette portée. Les références hors de cette portée ou partagées conservent leurs octets.
+erase-pending = En attente du délai de conservation et des validations de toutes les sauvegardes requises. Cette demande couvre les versions examinées lors de sa création. Les enregistrements et restaurations ultérieurs sont conservés ; restaurer n’annule pas cette demande.
+erase-membership-changed = La liste des sauvegardes a changé avant la fin. Un administrateur doit annuler cette demande puis en examiner une nouvelle.
+erase-cancel-warning = Annuler l’effacement en attente { $id } ? L’annulation ne peut pas reconstituer des octets déjà supprimés. Les fichiers actuels ne sont pas restaurés automatiquement.
+erase-cancelled = Effacement { $id } annulé. Restaurez séparément les fichiers actuels que vous souhaitez retrouver.
+confirm-erase = Demander cet effacement ? [o/N]
+confirm-erase-prepare = Préparer l’effacement pour ce groupe sans demander d’effacement ? [o/N]
+cmd-erase = Examiner l’effacement définitif des versions observées ou consulter son attente.
+problem-erase-stale = Un nouvel historique ou des confirmations de préparation sont arrivés depuis votre examen. Cette tentative n’a rien modifié. Ouvrez un nouvel aperçu, examinez sa portée, puis confirmez à nouveau.
+problem-erase-pending = Terminez l’opération locale interrompue avant de demander un autre effacement.
+problem-erase-not-ready = L’effacement n’est pas prêt. Consultez pigeon erase et l’aperçu pour connaître les ordinateurs ou sauvegardes attendus.
+problem-erase-checking = L’effacement attend la vérification de l’historique ou la récupération locale. Consultez Diagnostic pour plus de détails.
+problem-erase-unknown = Cet identifiant ne désigne pas un effacement en attente unique. La commande pigeon erase affiche les demandes actuelles.
+
+web-erase-title = Effacer les versions observées
+web-erase-list = Demandes d’effacement
+web-erase-confirm = Demander cet effacement
+web-erase-suggest = Suggérer cet effacement à un administrateur
+web-erase-prepare = Préparer l’effacement uniquement
+web-erase-cancel = Annuler cet effacement en attente
+web-erase-review-cancel = Examiner l’annulation de
+web-erase-suggestion = Examiner l’effacement de cette suggestion
+
+# Integrity pass evidence and local progress (08 §8.8).
+scrub-no-pass = Aucun contrôle d’intégrité complet n’a été signalé.
+scrub-last-pass = Dernier contrôle d’intégrité complet : { $time }. Anomalies trouvées pendant ce contrôle : { $failed }.
+scrub-progress = Contrôle d’intégrité local en cours : { $remaining } contenus restants. Anomalies trouvées : { $failed }.
+scrub-unreadable = La progression du contrôle d’intégrité est illisible. Les données existantes sont conservées ; consultez Diagnostic.
+scrub-machine = Contrôles d’intégrité sur { $machine } :
+problem-scrub-ledger = L’état du contrôle d’intégrité sur { $machine } est illisible. Conservez-le et rassemblez un rapport de diagnostic avant de réparer l’état local.
+scrub-report-time = Signalé { $when }. Un nouveau contact ne met pas cette observation à jour.
+erase-needs-backup = Ajoutez une machine de sauvegarde avant de préparer l’effacement.
+erase-preparation-split = Les ordinateurs ont accepté des préparations différentes ; l’effacement ne peut donc pas commencer. Un administrateur peut créer un groupe distinct avec pigeon refound, y inviter à nouveau les ordinateurs, puis y préparer l’effacement. Les demandes de l’ancien groupe restent dans cet ancien groupe.
+problem-erase-needs-backup = Ajoutez une machine de sauvegarde avant de préparer l’effacement.
+
 web-health-suggestions-unavailable = Suggestions en attente d’une décision : pas encore vérifiées.
 web-health-separator = {" : "}
 web-not-found = Il n’y a pas de page ici.
@@ -850,3 +903,10 @@ web-sync-inside =
     }
 web-sync-apply = Appliquer
 web-sync-unchanged = Rien à changer : chaque dossier est déjà comme coché.
+
+headline-erased-restoration-missing =
+    { $files ->
+        [one] La restauration d’un fichier n’a pas pu se terminer : son contenu manque. Essayez une autre version enregistrée ou récupérez une copie à part.
+       *[other] La restauration de { $files } fichiers n’a pas pu se terminer : leur contenu manque. Essayez d’autres versions enregistrées ou récupérez des copies à part.
+    }
+why-erased-restoration-missing = L’effacement précédent couvrait ce contenu. Votre demande de restauration reste enregistrée, mais aucune copie n’est connue pour le moment. Si vous trouvez une copie, réessayez la restauration.

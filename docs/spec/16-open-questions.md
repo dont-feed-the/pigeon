@@ -8,9 +8,9 @@
 
 ## 16.1 Decisions awaited
 
-No ADR is Proposed: Guillaume accepted ADRs 0046, 0047, 0048 and 0051 on
-14 October 2026. Rules that were Proposed ADRs before that day are listed in
-§16.3.
+ADRs 0074, 0078, 0079, 0080 and 0081 remain Proposed in this M5 branch.
+Guillaume accepted ADRs 0046, 0047, 0048 and 0051 on 14 October 2026.
+Rules moved out of earlier Proposed ADRs are listed in §16.3.
 
 ## 16.2 Where this specification departs from a source
 

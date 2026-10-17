@@ -284,6 +284,8 @@ fn ordinary(rng: &mut Rng, n: u64, parent: u64, p: &Kept, raw: &[u8]) -> Made {
         blobs: &blobs_of(&after),
         new_roster: changed.then_some(&parsed),
         decisions: &BTreeMap::new(),
+        purges: &BTreeMap::new(),
+        witnesses: &BTreeMap::new(),
         adopted: &[],
     });
     if let Verdict::Accepted(_, new) = &verdict {
@@ -349,6 +351,8 @@ fn decide(
         blobs: &blobs_of(&after),
         new_roster: None,
         decisions: &decisions,
+        purges: &BTreeMap::new(),
+        witnesses: &BTreeMap::new(),
         adopted: &[],
     });
     let word = match verdict {
@@ -428,6 +432,8 @@ fn part(
         blobs: &blobs_of(&after),
         new_roster: None,
         decisions: &decisions,
+        purges: &BTreeMap::new(),
+        witnesses: &BTreeMap::new(),
         adopted: &[],
     });
     Made {
@@ -497,6 +503,8 @@ fn adopt(
         blobs: &blobs_of(&after),
         new_roster: None,
         decisions: &BTreeMap::new(),
+        purges: &BTreeMap::new(),
+        witnesses: &BTreeMap::new(),
         adopted: &adopted,
     });
     Made {

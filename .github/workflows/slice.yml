@@ -4,7 +4,8 @@
 # each runner's isolation (loop-mounted ext4 and mount namespaces with sudo
 # on Linux, APFS disk images on macOS), then runs every scenario against
 # the lab build of pigeond and pigeon and hands the merged trace logs to
-# TLC. S5 runs separately from the remaining scenarios. The s9-random job
+# TLC. Five disjoint partitions use independent Linux runners. S5 retains
+# its own disk-isolation job. The s9-random job
 # runs 50 random S9 crash schedules per runner on release tags and by hand,
 # and models-full.yml runs 200 on tags and 1000 nightly.
 # A scenario marked blocked in pigeon-lab's slice.rs reports
@@ -44,8 +45,8 @@ jobs:
       fail-fast: false
       matrix:
         os: ${{ fromJSON(inputs.platform == 'macos' && '["macos-latest"]' || '["ubuntu-24.04"]') }}
-        scenarios: [rest, S5]
-      max-parallel: ${{ inputs.platform == 'macos' && 1 || 2 }}
+        scenarios: ${{ fromJSON(inputs.platform == 'macos' && '["rest","S5"]' || '["core","crashes","recovery","people","S5"]') }}
+      max-parallel: ${{ inputs.platform == 'macos' && 1 || 5 }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
@@ -115,7 +116,7 @@ jobs:
           mkdir -p target/lab/bin
           cp target/release/pigeond target/release/pigeon target/release/git-annex-p2p-iroh target/lab/bin/
       - name: save the Rust cache (main only)
-        if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true' && matrix.scenarios == 'rest'
+        if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true' && matrix.scenarios == 'core'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -129,7 +130,11 @@ jobs:
           SCENARIOS: ${{ matrix.scenarios }}
         run: |
           args=(--exclude S5)
-          if [ "$SCENARIOS" = S5 ]; then args=(S5); fi
+          if [ "$SCENARIOS" != rest ]; then
+            cargo run --locked --release -q -p pigeon-lab -- list > target/lab/scenarios.txt
+            selected=$(python3 scripts/ci-slice-partition "$SCENARIOS" target/lab/scenarios.txt)
+            read -r -a args <<< "$selected"
+          fi
           # target is cached; reports must contain only this partition's run.
           rm -rf target/lab/out
           cargo run --locked --release -q -p pigeon-lab -- run --bin target/lab/bin \

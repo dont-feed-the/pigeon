@@ -200,7 +200,7 @@ async fn client(net: Arc<Net>, stream: UnixStream) -> Result<(), NetError> {
                 let opened = span
                     .in_scope(net.node.open_annex_stream(&device, &repo.group, addresses))
                     .await;
-                let (mut send, mut recv) = match opened {
+                let (send, recv) = match opened {
                     Ok(s) => s,
                     Err(NetError::Refused(r)) => {
                         let code = r.map_or("peer-refused".to_owned(), |r| {
@@ -219,48 +219,30 @@ async fn client(net: Arc<Net>, stream: UnixStream) -> Result<(), NetError> {
                 reply(&mut wr, id, &Response::Connected).await?;
                 let started = std::time::Instant::now();
                 let rest = std::mem::take(&mut decoder).into_rest();
-                let up = async {
-                    if !rest.is_empty() {
-                        send.write_all(&rest).await.map_err(std::io::Error::other)?;
-                    }
-                    let n = tokio::io::copy(&mut rd, &mut send).await?;
-                    send.finish().map_err(std::io::Error::other)?;
-                    Ok::<_, std::io::Error>(n)
-                };
-                let down = async {
-                    let n = tokio::io::copy(&mut recv, &mut wr).await?;
-                    wr.shutdown().await?;
-                    Ok::<_, std::io::Error>(n)
-                };
-                let (a, b) = tokio::join!(up, down);
+                let (up, down) = super::content::outgoing(
+                    &net,
+                    (&repo.group, &device),
+                    rd,
+                    wr,
+                    send,
+                    recv,
+                    &rest,
+                )
+                .await?;
                 tracing::debug!(peer = %device, ms = started.elapsed().as_millis(),
-                    up = ?a, down = ?b, "connect-ended");
-                if let Ok(n) = &a {
+                    up, down, "connect-ended");
+                for (direction, bytes) in [("sent", up), ("received", down)] {
                     pigeon_telemetry::counter(
                         "pigeon.transfer.bytes",
-                        *n,
+                        bytes,
                         &[
-                            ("direction", "sent"),
+                            ("direction", direction),
                             ("peer", &device),
                             ("path", "unknown"),
                             ("group", &repo.group),
                         ],
                     );
                 }
-                if let Ok(n) = &b {
-                    pigeon_telemetry::counter(
-                        "pigeon.transfer.bytes",
-                        *n,
-                        &[
-                            ("direction", "received"),
-                            ("peer", &device),
-                            ("path", "unknown"),
-                            ("group", &repo.group),
-                        ],
-                    );
-                }
-                a?;
-                b?;
                 return Ok(());
             }
             Request::Listen { repository, socket } => {

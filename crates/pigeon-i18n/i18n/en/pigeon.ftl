@@ -30,6 +30,7 @@ headline-capturing =
     }
 headline-checking = The local folder could not be checked. Run: pigeon doctor
 headline-inventory-unreadable = Pigeon cannot check every saved version right now.
+headline-history-waiting = File copying waits until Pigeon can verify saved versions. If this continues, run: pigeon doctor
 headline-too-few-backups = Not safe yet: add a backup machine.
 why-capturing = This change is waiting to be saved and copied to the backup machines.
 why-differs = Your copy differs from the group's version. Choose which to keep.
@@ -271,10 +272,11 @@ web-resolve-suggest-again = Suggest again
 web-resolve-suggest-again-help = Your version stays in this file and is suggested to the group again. The group's version stays as it is until your suggestion is accepted.
 undo-free = Undo: pigeon keep { $folder }
 undo-keep = Undo: pigeon free { $folder }
-restore-result = { $path } is restored on this computer; the newer version stays in its history. Check Home for sharing and protection, and Suggestions if approval is needed.
+restore-result = { $path } is restored on this computer. Restoring older contents saves a new current version and keeps the existing history. Earlier erasure requests stay pending but do not cover this new version. Check Home for sharing and protection, and Suggestions if approval is needed.
 restore-folder-result = { $path }: { $files } files restored on this computer. Newer files and saved history are kept. Check Home and Suggestions for sharing and approval.
 problem-restore-folder-incomplete = { $path }: { $files } files restored; { $skipped } could not be restored and were left unchanged. The operation needs attention. Files to check: { $paths }. Close files in use and try again; use pigeon doctor for other problems. Check Home and Suggestions for sharing and approval.
 problem-restore-in-use = { $path } changed or is being used. Pigeon left it unchanged. Open an old version with “Open a copy”, or close the file and try again.
+problem-restore-waiting = Restoring { $path } has been requested, but its saved contents are not available on this computer. Local edits are kept. Check Home for available copies, and Suggestions if approval is needed. You can try restoring again when a copy becomes available.
 problem-restore-folder-version = To restore a folder, choose a date with --at or omit the version option to restore its latest saved snapshot.
 web-restore-folder = Restore this folder
 web-files-arriving = Waiting for { $files } files to be available on this computer. Leave pigeon running; it will receive them when a copy is reachable.
@@ -327,7 +329,7 @@ confirm-remove-backup-unsafe = Remove the backup machine { $name } from the grou
     } You can invite it again later. [y/N]
 confirm-yes = yes
 confirm-leave = Remove this computer from the group? Its files stay in the folder, but it stops sharing them. [y/N]
-confirm-refound = Refound the group with you as its only admin? It becomes a new group: every other member joins it again by an invitation from you, and the old history stays readable. [y/N]
+confirm-refound = Refound the group with you as its only admin? It becomes a new group: every other member joins it again by an invitation from you, and the old history stays readable. Completed erasures in that snapshot remain effective. Pending erasures do not continue in the new group; computers still in the old group may finish them there. Prepare erasing again after inviting your backups. [y/N]
 confirm-join-refounded = { $group } was refounded by { $name } on { $date }: joining it means accepting { $name } as its admin. Join? [y/N]
 web-join-refounded = { $group } was refounded by { $name } on { $date }. Joining it means accepting { $name } as its admin. Choose Join to continue.
 confirm-held-share = Delete the files of { $batch } for everyone? They stay in the history. [y/N]
@@ -740,6 +742,57 @@ space-rejected = declined
 space-withdrawn = withdrawn
 space-snapshot = { $group }, checked { $when }.
 
+# Explicit, reference-aware erasure (08 §8.6).
+erase-checking = Erasing is waiting for verified history and local recovery.
+erase-prepare-needed = An admin must prepare erasing. Every current computer must acknowledge the update before any erasure can be confirmed.
+erase-readiness-wait = Erasing is waiting for the current computers and backup machines to finish preparation.
+erase-ready = Every current computer has acknowledged preparation. Review this scope before requesting erasure.
+erase-waiting = Waiting for: { $names }.
+erase-old-decisions = An earlier erasure must finish or be cancelled before the new backup can join the erasure quorum.
+erase-preview-counts = This removes { $files } current files and requests erasing { $versions } observed versions, covering { $bytes } distinct bytes.
+erase-warning = Erasing can permanently remove these versions. Each backup waits at least { $days } days after receiving the request, and every required backup must agree. Restoring a version before completion keeps it. This is not secure wiping of disks or copies outside Pigeon.
+erase-shared = { $versions } selected versions share bytes retained elsewhere: { $paths }. Those bytes stay; the displayed size is not a promise of free disk space.
+erase-needs-approval = This sends a suggestion to an admin. No erasure starts until the admin accepts it.
+erase-preparing = Preparation requested. Nothing was erased or scheduled for erasure. Review and confirm again after every computer is ready.
+erase-submitted = Erasure requested. Receipt: { $id }. Check Erasure requests for waiting backup machines and completion.
+erase-submitted-suggestion = Erasure suggestion { $id } is awaiting an admin. The waiting period begins only after acceptance and receipt by each backup.
+erase-none = No accepted erasure requests.
+erase-decision = { $id }: { $paths }. Declared earliest completion: { $time }; each receiver’s own waiting period also applies.
+erase-completed = Every original backup has sealed this scope. Uncovered or shared references still keep their bytes.
+erase-pending = Waiting for the retention period and all required backup seals. This request covers the versions reviewed when it was made. Later saves and restores are kept; restoring does not cancel this request.
+erase-membership-changed = The backup membership changed before completion. An admin must cancel this request and review a new one.
+erase-cancel-warning = Cancel pending erasure { $id }? Cancelling cannot reconstruct bytes already removed. Current files are not restored automatically.
+erase-cancelled = Erasure { $id } cancelled. Restore any current files you want back separately.
+confirm-erase = Request this erasure? [y/N]
+confirm-erase-prepare = Prepare erasing for this group without requesting an erasure? [y/N]
+cmd-erase = Review permanent erasure of observed versions, or list its waiting state.
+problem-erase-stale = New history or preparation acknowledgements arrived after your review. This attempt made no change. Open a fresh erasure preview, review its scope, then confirm again.
+problem-erase-pending = Finish the interrupted local operation before requesting another erasure.
+problem-erase-not-ready = Erasing is not ready. Check pigeon erase and the preview for the computers or backups still waiting.
+problem-erase-checking = Erasing is waiting for verified history or local recovery. Check Doctor for details.
+problem-erase-unknown = No unique pending erasure matches this ID. Run pigeon erase to see current requests.
+
+web-erase-title = Erase observed versions
+web-erase-list = Erasure requests
+web-erase-confirm = Request this erasure
+web-erase-suggest = Send erasure suggestion to an admin
+web-erase-prepare = Prepare erasing only
+web-erase-cancel = Cancel this pending erasure
+web-erase-review-cancel = Review cancellation of
+web-erase-suggestion = Review erasing this suggestion
+
+# Integrity pass evidence and local progress (08 §8.8).
+scrub-no-pass = No completed integrity pass has been reported.
+scrub-last-pass = Last completed integrity pass: { $time }. Findings in that pass: { $failed }.
+scrub-progress = Local integrity pass in progress: { $remaining } keys left. Findings so far: { $failed }.
+scrub-unreadable = Integrity progress could not be read. Existing records are kept; check Doctor.
+scrub-machine = Integrity checks on { $machine }:
+problem-scrub-ledger = The integrity-check record on { $machine } could not be read. Keep it and gather a debug bundle before repairing local state.
+scrub-report-time = Reported { $when }. This observation is not refreshed by new contact.
+erase-needs-backup = Add a backup machine before preparing erasing.
+erase-preparation-split = Computers agreed to different preparations, so erasing cannot start. An admin can create a separate group with pigeon refound, invite its computers again, then prepare erasing there. The old group’s requests remain in the old group.
+problem-erase-needs-backup = Add a backup machine before preparing erasing.
+
 web-health-suggestions-unavailable = Suggestions awaiting a decision: not checked yet.
 web-health-separator = {": "}
 web-not-found = There is no page here.
@@ -842,3 +895,10 @@ web-sync-inside =
     }
 web-sync-apply = Apply
 web-sync-unchanged = Nothing to change: every folder already is as ticked.
+
+headline-erased-restoration-missing =
+    { $files ->
+        [one] Restoring a file could not finish: its contents are missing. Try another saved version or recover a separate copy.
+       *[other] Restoring { $files } files could not finish: their contents are missing. Try other saved versions or recover separate copies.
+    }
+why-erased-restoration-missing = The earlier erasure covered these contents. Your restore request remains recorded, but no copy is currently known. If you find a copy, try the restore again.

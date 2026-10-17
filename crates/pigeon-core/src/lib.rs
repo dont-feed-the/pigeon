@@ -7,6 +7,7 @@
 //! they mirror.
 #![forbid(unsafe_code)]
 
+pub mod admission;
 pub mod authority;
 pub mod capacity;
 pub mod catalogue;
@@ -25,11 +26,13 @@ pub mod latency;
 pub mod names;
 pub mod notify;
 pub mod proposal;
+pub mod purge;
 pub mod queue;
 pub mod refound;
 pub mod report;
 pub mod restore;
 pub mod roster;
+pub mod scrub;
 pub mod sig;
 pub mod state;
 pub mod time;

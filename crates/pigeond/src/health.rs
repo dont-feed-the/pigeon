@@ -120,6 +120,8 @@ pub(crate) async fn report(d: &Daemon) -> Vec<Response> {
         reports.insert(d.device.clone(), ours);
     }
     let stale_after = crate::status::settings(&g).stale_after;
+    let local_scrub =
+        (g.role == pigeon_core::filter::Role::Custodian).then(|| crate::scrub::status(&g));
     let machines = doc
         .roster
         .devices
@@ -140,6 +142,27 @@ pub(crate) async fn report(d: &Daemon) -> Vec<Response> {
                         .flatten(),
                     this_device: id.0 == d.device,
                 },
+                scrub: if id.0 == d.device {
+                    local_scrub.as_ref().map(|result| {
+                        result.clone().unwrap_or_else(|_| wire::Scrub {
+                            last_pass_completed: None,
+                            keys_failed: 0,
+                            remaining: None,
+                            current_failures: None,
+                            problem: Some(crate::status::msg("scrub-unreadable", &[])),
+                        })
+                    })
+                } else {
+                    report
+                        .and_then(|r| r.scrub.as_ref())
+                        .map(|scrub| wire::Scrub {
+                            last_pass_completed: Some(scrub.last_pass_completed.to_string()),
+                            keys_failed: scrub.keys_failed,
+                            remaining: None,
+                            current_failures: None,
+                            problem: None,
+                        })
+                },
                 reported_at: at.map(crate::util::rfc3339),
                 report_fresh: at.is_some_and(|at| {
                     at <= now.saturating_add(pigeon_core::report::SKEW.0)
@@ -152,7 +175,8 @@ pub(crate) async fn report(d: &Daemon) -> Vec<Response> {
                     reserve: r.disk.reserve,
                     full: r.disk.full,
                 }),
-                checking: report.is_some_and(|r| r.checking),
+                checking: crate::membership::pending(&g, &id.0)
+                    || report.is_some_and(|r| r.checking),
                 repository_lost: report
                     .is_some_and(|r| r.custody.as_ref().is_some_and(|c| c.repository == "lost")),
                 queue: report.map(|r| wire::Queue {

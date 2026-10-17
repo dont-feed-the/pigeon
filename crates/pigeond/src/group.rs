@@ -83,6 +83,20 @@ pub struct Known {
     pub report_files: BTreeMap<String, crate::report_file::Status>,
     /// This device's last publication: its gist, and when.
     pub published: Option<(String, i64)>,
+    /// Own durable immutable seals, rebuilt from receiver ledger/proofs.
+    pub purge_seals: Vec<crate::report_file::Purge>,
+    /// Derived diagnostic keys, bound to accepted main; never release authority.
+    pub renewed_after_erasure: Option<(String, BTreeSet<String>)>,
+    /// The last fully completed local integrity pass.
+    pub scrub_report: Option<crate::report_file::Scrub>,
+    /// Own durable capability/fence acknowledgements, before publication.
+    pub admission_acknowledgements: Vec<crate::report_file::AdmissionAck>,
+    /// Derived admission state, bound to one accepted main.
+    pub membership: Option<(String, crate::membership::State)>,
+    /// Last critical head durably acknowledged outside this repository.
+    pub admission_fence: Option<String>,
+    /// Unknown receipts or missing critical history stop custody claims.
+    pub admission_error: Option<String>,
     /// The bytes place left to send (a laptop) or to receive (a custodian)
     /// in its last round.
     pub queue_bytes: u64,
@@ -131,6 +145,8 @@ pub struct Group {
     pub shared: Option<crate::config::BridgeStorage>,
     /// What the loops know.
     pub known: Mutex<Known>,
+    /// Incremental purge scan; cold history work does not hold `busy`.
+    pub purge: tokio::sync::Mutex<crate::purge::State>,
     /// Held by whatever changes the repository: a round of the loops, or a
     /// request.
     pub busy: tokio::sync::Mutex<()>,
@@ -197,6 +213,7 @@ impl Group {
             files,
             shared: None,
             known: Mutex::new(Known::default()),
+            purge: Default::default(),
             busy: tokio::sync::Mutex::new(()),
             daemon: tokio::sync::Mutex::new(None),
             syncing: Arc::new(Mutex::new(BTreeMap::new())),
@@ -218,6 +235,23 @@ impl Group {
             k.roster_index_pending = role == Role::Laptop;
         }
         g.reload_roster().await;
+        crate::scrub::restore(&g);
+        if let Some(main) = g.git.rev("refs/heads/main").await {
+            match g.git.tree(&main).await {
+                Ok(tree)
+                    if !tree
+                        .keys()
+                        .any(|p| p.starts_with(crate::purge_file::PREFIX)) => {}
+                _ => g.git.purge_gate.arm(),
+            }
+        }
+        if g.git
+            .object(&g.id)
+            .await
+            .is_ok_and(|raw| crate::refound::refounded(&raw).is_some())
+        {
+            g.git.purge_gate.arm();
+        }
         Some(g)
     }
 
@@ -233,6 +267,7 @@ impl Group {
             git: self.git.clone(),
             files: self.files.clone(),
             known: Mutex::new(Known::default()),
+            purge: Default::default(),
             busy: tokio::sync::Mutex::new(()),
             daemon: tokio::sync::Mutex::new(None),
             syncing: Arc::new(Mutex::new(BTreeMap::new())),

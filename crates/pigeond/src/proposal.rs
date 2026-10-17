@@ -98,11 +98,7 @@ pub(crate) async fn valid(g: &Group, device: &str, commit: &str) -> Result<bool,
         .engine
         .base(std::slice::from_ref(&base))
         .map(|v| v.tree.clone());
-    if before.is_none_or(|before| {
-        pigeon_core::authority::delta(&before, &after)
-            .iter()
-            .any(|p| pigeon_core::authority::is_pigeon_path(p))
-    }) {
+    if before.is_none_or(|before| !crate::purge_admission::proposal_metadata(&before, &after)) {
         return Ok(false);
     }
     let verdict = crate::merge::judge_proposal(g, &raw, &base, &after).await?;

@@ -42,6 +42,13 @@ pub(crate) enum Put {
     InUse,
 }
 
+/// The file observed before an explicit restore yielded the worktree lock.
+/// A later save, creation, deletion or mode change must reach capture first.
+pub(crate) struct RestoreSource<'a> {
+    pub key: Option<&'a str>,
+    pub stat: Option<pigeon_sys::fs::Stat>,
+}
+
 /// What one round of install did.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Installed {
@@ -99,11 +106,11 @@ pub(crate) async fn put_restore(
     g: &Group,
     rel: &str,
     key: &str,
-    current: Option<&str>,
+    source: RestoreSource<'_>,
     mode: &str,
     t: &Tracer,
 ) -> Result<Put, String> {
-    put_mode(g, rel, key, current, None, Some(mode), t).await
+    put_mode(g, rel, key, source.key, None, Some((mode, source.stat)), t).await
 }
 
 async fn put_mode(
@@ -112,7 +119,7 @@ async fn put_mode(
     key: &str,
     current: Option<&str>,
     entry: Option<&Entry>,
-    mode: Option<&str>,
+    mode: Option<(&str, Option<pigeon_sys::fs::Stat>)>,
     t: &Tracer,
 ) -> Result<Put, String> {
     if crate::capture_file::pending(g) {
@@ -133,7 +140,8 @@ async fn put_mode(
     {
         use std::os::unix::fs::PermissionsExt;
         let mode = std::fs::Permissions::from_mode(mode_bits(
-            mode.or(entry.map(|e| e.mode.as_str())),
+            mode.map(|(mode, _)| mode)
+                .or(entry.map(|e| e.mode.as_str())),
             &file,
         ));
         let _ = std::fs::set_permissions(&stage, mode);
@@ -146,7 +154,9 @@ async fn put_mode(
     let st = stat_of(&file);
     // The caller's dirty scan precedes staging. A creation/deletion in
     // that gap must reach capture, rather than become a new install.
-    if entry.is_some() && current.is_some() != st.is_some() {
+    if (entry.is_some() && current.is_some() != st.is_some())
+        || mode.is_some_and(|(_, expected)| lstat(&file).ok() != Some(expected))
+    {
         std::fs::remove_file(&stage).map_err(|e| e.to_string())?;
         start.interrupted("idle").await;
         return Ok(Put::Raced);
@@ -195,7 +205,11 @@ async fn put_mode(
         let _ = std::fs::create_dir_all(dir);
     }
     let check = trace.begin(if st.is_some() { "Check" } else { "MoveAside" });
-    if st.is_some() && (stat_of(&aside) != st || !is_old(&aside, current)) {
+    if st.is_some()
+        && (stat_of(&aside) != st
+            || !is_old(&aside, current)
+            || mode.is_some_and(|(_, expected)| lstat(&aside).ok() != Some(expected)))
+    {
         rollback(g, seq, &aside, &file, Some(&stage))?;
         check.finish("idle");
         return Ok(Put::InUse);
@@ -416,12 +430,39 @@ async fn lost_the_name(g: &Group, me: &str, main: &str, path: &str, mine: &Entry
 /// One round of install: every path whose index entry is not `main`'s,
 /// but those of the divergence table (`conflicts.json`), which it updates.
 pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Error> {
+    incoming_at(g, me, t, None, None).await
+}
+
+/// An explicit erasure did not capture private staged paths first. Install
+/// exactly its committed changes, leaving every unrelated index entry and
+/// suggestion untouched, including across a restart after the main CAS.
+pub(crate) async fn incoming_erasure(
+    g: &Group,
+    me: &str,
+    t: &Tracer,
+    after: &str,
+    paths: &BTreeSet<String>,
+) -> Result<Installed, Error> {
+    incoming_at(g, me, t, Some(after), Some(paths)).await
+}
+
+async fn incoming_at(
+    g: &Group,
+    me: &str,
+    t: &Tracer,
+    after: Option<&str>,
+    scope: Option<&BTreeSet<String>>,
+) -> Result<Installed, Error> {
     let mut done = Installed::default();
     if g.worktree.is_none() || crate::capture_file::pending(g) || crate::evict::unsettled(g) {
         return Ok(done);
     }
-    let Some(main) = g.git.rev("refs/heads/main").await else {
-        return Ok(done);
+    let main = match after {
+        Some(after) => after.to_owned(),
+        None => match g.git.rev("refs/heads/main").await {
+            Some(main) => main,
+            None => return Ok(done),
+        },
     };
     let Some(mut table) = crate::conflicts_file::read(g) else {
         tracing::warn!(group = %g.id, "conflicts-unreadable");
@@ -430,12 +471,14 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
     let mut known = table.clone();
     let want = g.git.tree(&main).await?;
     let mut have = g.git.index().await?;
-    table
-        .paths
-        .retain(|p, d| d.kind == Kind::Suggestion || want.get(p) != have.get(p));
+    table.paths.retain(|p, d| {
+        scope.is_some_and(|paths| !paths.contains(p))
+            || d.kind == Kind::Suggestion
+            || want.get(p) != have.get(p)
+    });
     let suggested = table.paths.values().any(|d| d.kind == Kind::Suggestion);
     let mut dirty = None;
-    if suggested {
+    if suggested && scope.is_none() {
         let d = crate::capture::dirty(g).await?;
         let spans = suggestions(g, &want, &mut have, &mut table, &d, t).await;
         save(g, &known, &table, t, spans).await;
@@ -445,7 +488,7 @@ pub async fn incoming(g: &Group, me: &str, t: &Tracer) -> Result<Installed, Erro
     let paths: BTreeSet<&String> = want.keys().chain(have.keys()).collect();
     let changed: Vec<&String> = paths
         .into_iter()
-        .filter(|p| want.get(*p) != have.get(*p))
+        .filter(|p| scope.is_none_or(|paths| paths.contains(*p)) && want.get(*p) != have.get(*p))
         .collect();
     if changed.is_empty() {
         save(g, &known, &table, t, Vec::new()).await;

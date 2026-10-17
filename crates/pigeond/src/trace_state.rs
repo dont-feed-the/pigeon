@@ -84,6 +84,40 @@ async fn pointer(g: &Group, oid: Option<&str>) -> Result<String, String> {
     digest(Some(&key))
 }
 
+/// A content barrier prevents transfer authorization, not observation of
+/// existing bytes. While it is closed, a reference alone proves nothing:
+/// count only a locally present annex object whose actual hash matches.
+/// This read-only trace helper cannot publish policy or authorize a drop.
+async fn stored(g: &Group) -> Result<BTreeSet<String>, String> {
+    if !g.git.purge_gate.policy().waiting {
+        return crate::retention::keys(g)
+            .await
+            .map_err(|e| e.to_string())?
+            .iter()
+            .map(|key| digest(Some(key)))
+            .collect();
+    }
+    let tips = crate::retention::tips(g).await.map_err(|e| e.to_string())?;
+    let keys = g
+        .git
+        .retained_keys(&tips)
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut observed = BTreeSet::new();
+    for key in keys {
+        let Some(path) = crate::custody::present(g, &key).await else {
+            continue;
+        };
+        let expected = digest(Some(&key))?;
+        let actual = crate::net::sync::sha256_file(&path).map_err(|e| e.to_string())?;
+        if actual != expected {
+            return Err("local trace object does not match its content key".into());
+        }
+        observed.insert(actual);
+    }
+    Ok(observed)
+}
+
 // Unlike the driver's legacy reader, observations must not silently drop
 // an unreadable journal or a malformed complete record.
 fn journal(path: &Path) -> Result<Vec<pigeon_core::journal::Record>, String> {
@@ -202,12 +236,7 @@ pub async fn snapshot(g: &Group, path: &str, seq: u64) -> Result<Value, String> 
     } else {
         return Err("trace has no authority checkpoint".to_owned());
     };
-    let signed: BTreeSet<String> = crate::retention::keys(g)
-        .await
-        .map_err(|e| e.to_string())?
-        .iter()
-        .map(|k| digest(Some(k)))
-        .collect::<Result<_, _>>()?;
+    let signed = stored(g).await?;
     let div = crate::conflicts_file::read(g).ok_or("unreadable divergence table")?;
     let div = div.paths.get(path);
     state["index"] = json!(indexed);

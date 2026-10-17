@@ -7,6 +7,7 @@
 //! every id; the completeness test checks it against every bundle.
 
 mod capacity;
+mod erase;
 pub mod ids;
 pub mod lang;
 pub mod recovery;

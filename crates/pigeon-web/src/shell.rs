@@ -14,6 +14,7 @@ const SECTIONS: &[(&str, &str, &str, bool)] = &[
     ("/", "web-nav-home", "home", false),
     ("/files", "web-nav-files", "folder", false),
     ("/deleted", "web-deleted", "trash", true),
+    ("/erase", "web-erase-list", "trash", true),
     ("/suggestions", "web-nav-suggestions", "suggest", false),
     ("/machines", "web-nav-machines", "people", false),
 ];

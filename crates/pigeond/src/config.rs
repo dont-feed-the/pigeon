@@ -33,6 +33,9 @@ pub struct Config {
     /// Optional backend on this device; no default endpoint (ADR 0025).
     #[serde(default)]
     pub telemetry: Telemetry,
+    /// Local maintenance/resource choices (15 §15.6).
+    #[serde(default)]
+    pub resources: Resources,
     /// The groups of this device.
     #[serde(default)]
     pub groups: Vec<GroupEntry>,
@@ -49,6 +52,26 @@ pub struct BridgeStorage {
     pub store: PathBuf,
     /// A laptop or custodian daemon serving this group on a private local socket.
     pub source_socket: PathBuf,
+}
+
+/// `[resources]` maintenance settings, read again before each scrub slice.
+#[derive(Clone, Debug, Deserialize)]
+pub struct Resources {
+    /// Half-open local time window; the default is 01:00-06:00.
+    #[serde(default = "default_scrub_window")]
+    pub scrub_window: String,
+}
+
+fn default_scrub_window() -> String {
+    "01:00-06:00".into()
+}
+
+impl Default for Resources {
+    fn default() -> Self {
+        Self {
+            scrub_window: default_scrub_window(),
+        }
+    }
 }
 
 /// `[telemetry]`: configured locally, never learned from another member.

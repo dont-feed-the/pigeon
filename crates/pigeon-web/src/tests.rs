@@ -808,3 +808,6 @@ async fn the_pages_are_written_for_axe() {
         }
     }
 }
+
+#[path = "tests/erase.rs"]
+mod erase;

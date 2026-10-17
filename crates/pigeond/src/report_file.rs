@@ -49,6 +49,10 @@ pub struct Status {
     /// Custodians: purge seals (08 §8.6).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub purge: Vec<Purge>,
+    /// Exact protocol-upgrade or pending-custodian requests acknowledged
+    /// after their local sealing fence became durable (ADR 0081 proposed).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub acknowledgements: Vec<AdmissionAck>,
     /// Its queues.
     pub queue: Queue,
 }
@@ -111,6 +115,28 @@ pub struct Purge {
     /// Covered keys it keeps for a reference outside `main`.
     #[serde(default)]
     pub held: Vec<String>,
+}
+
+/// A capability/fence acknowledgement, bound to one exact request.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AdmissionAck {
+    /// Which independent admission protocol this request belongs to.
+    pub kind: AdmissionKind,
+    /// Opaque SHA-256 identity of its immutable introduction and scope.
+    pub request: String,
+    /// Exactly two implements the first purge-capable admission protocol.
+    pub protocol: u32,
+}
+
+/// Closed acknowledgement kinds; future kinds make a report unknown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AdmissionKind {
+    /// The initial group-wide rules upgrade.
+    Upgrade,
+    /// Activation of a configured pending backup.
+    Custodian,
 }
 
 /// A device's queues.
@@ -214,6 +240,7 @@ mod tests {
             }),
             scrub: None,
             purge: vec![],
+            acknowledgements: Vec::new(),
             queue: Queue {
                 admits: "all".into(),
                 ..Queue::default()
@@ -243,5 +270,27 @@ mod tests {
         assert_eq!(parse("device = \"x\""), Read::Malformed);
         let local = text.replace("Z\n", "\n");
         assert_eq!(parse(&local), Read::Malformed);
+    }
+
+    #[hegel::test(test_cases = 1000)]
+    fn admission_acknowledgements_roundtrip_and_future_kinds_are_unknown(tc: hegel::TestCase) {
+        use hegel::generators as gs;
+        let mut report = sample();
+        let bytes = tc.draw(gs::binary().min_size(32).max_size(32));
+        report.acknowledgements = vec![AdmissionAck {
+            kind: AdmissionKind::Upgrade,
+            request: crate::util::hex(&bytes),
+            protocol: 2,
+        }];
+        let text = render(&report).unwrap();
+        assert_eq!(parse(&text), Read::Known(Box::new(report)));
+        assert_eq!(
+            parse(&text.replace("kind = \"upgrade\"", "kind = \"future\"")),
+            Read::Unknown
+        );
+        assert_eq!(
+            parse(&text.replace("protocol = 2", "protocol = 2\nfuture = true")),
+            Read::Unknown
+        );
     }
 }

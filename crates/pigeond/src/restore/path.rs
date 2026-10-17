@@ -24,7 +24,7 @@ pub(crate) fn relative(g: &Group, path: &Path) -> Option<String> {
     parents_clear(g, &rel).then_some(rel)
 }
 
-pub(super) fn parents_clear(g: &Group, rel: &str) -> bool {
+pub(crate) fn parents_clear(g: &Group, rel: &str) -> bool {
     let Some(root) = &g.worktree else {
         return false;
     };

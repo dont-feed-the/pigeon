@@ -9,6 +9,7 @@
 pub mod api;
 pub mod bridge;
 pub mod capacity;
+pub mod erase;
 pub mod health;
 pub mod join;
 pub mod policy;

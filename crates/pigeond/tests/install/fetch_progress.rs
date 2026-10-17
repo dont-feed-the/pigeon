@@ -81,6 +81,7 @@ async fn a_ready_peers_file_is_installed_before_a_blocked_fetch_finishes() {
         web: OnceLock::new(),
         wake: Arc::default(),
         debug: Default::default(),
+        admissions: pigeond::admission_round::Store::open(l.dir.path().join("admission-acks.toml")),
         tracer: l.t,
     });
     let (round, target) = (daemon.clone(), group.clone());

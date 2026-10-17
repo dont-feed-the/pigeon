@@ -534,8 +534,10 @@ pub fn s12() -> Scenario {
 }
 
 /// S13: a commit signed outside the group is refused (04 §4.4, ADR 0007):
-/// the custodians keep `main` before it and say why, what came before
-/// stays protected, and a save made after it is not protected.
+/// the custodians keep `main` before it and say why. Both retain the
+/// earlier version’s bytes, and a save made after it
+/// is not protected. The laptop's deliberately invalid local head need
+/// not claim that its current membership has been verified.
 pub fn s13() -> Scenario {
     let Slice {
         world,
@@ -563,7 +565,9 @@ pub fn s13() -> Scenario {
         l.write_text(&b, "after the forgery"),
         hold(
             every(vec![
-                l.sees(&a, Kind::Protected),
+                c1.holds(&a),
+                c2.holds(&a),
+                l.has_text(&a, "signed words"),
                 not(l.sees(&b, Kind::Protected)),
             ]),
             20,
