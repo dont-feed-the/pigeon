@@ -13,6 +13,12 @@
   user could see; `debug`, protocol detail; `trace`, wire level.
 - `PIGEON_LOG` (default `info`) sets the level: human lines on stderr, JSON
   lines in `<state>/logs/`, one file per day, seven kept ([11 §11.2](11-local-state.md)).
+  It accepts target-specific EnvFilter directives. File and stderr I/O run on
+  workers behind bounded lossy queues; a slow diagnostic destination cannot
+  hold a custody loop. JSON events are limited to 16 KiB; an oversized event
+  is replaced by valid metadata naming its original size. Shutdown drains
+  the queues within the logging workers' bounded grace period. These are
+  diagnostic logs, not the durable trace proof channel.
 - **Redaction:** keys, tokens and invitation secrets print as `[redacted]`,
   which a test checks for every such type. File names are logged; `pigeon
   debug bundle` asks before including them. Logs are never parsed as traces.

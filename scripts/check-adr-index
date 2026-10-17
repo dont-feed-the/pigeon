@@ -5,7 +5,9 @@ Each ADR is a file NNNN-slug.md whose first line is "# NNNN. Title" and which
 holds a "- **Status:** ..." line. Numbers run from 0001 without gaps. The
 index has one row per ADR, linking to the file, with a title that starts with the
 ADR's title and the same first word of status (Proposed, Accepted, Rejected,
-Superseded, Withdrawn). Rows may sit in several tables of the index.
+Superseded, Withdrawn). Rows may sit in several tables of the index. The M7
+conformance inventory must map every accepted ADR exactly once to live paths;
+this checks inventory coverage, not the truth of behavioral conformance.
 """
 
 import re
@@ -67,9 +69,38 @@ def main():
             problems.append(f"README.md: {number} status {listed_status}, file says {status}")
     for number in rows.keys() - found.keys():
         problems.append(f"README.md: {number} has no file")
+    problems.extend(conformance(found))
     for problem in problems:
         print(problem, file=sys.stderr)
     return 1 if problems else 0
+
+
+def conformance(found):
+    """Check accepted-record inventory coverage and its local references."""
+    path = ADR.parent / "conformance.md"
+    if not path.is_file():
+        return ["conformance.md: accepted ADR inventory is missing"]
+    text, problems, listed = path.read_text(), [], {}
+    for number, name in re.findall(r"^\| \[(\d{4})\]\(adr/([^)]+)\)", text, re.M):
+        if number in listed:
+            problems.append(f"conformance.md: {number} is listed twice")
+        listed[number] = name
+    wanted = {n for n, (_, _, state) in found.items() if state == "Accepted"}
+    for number in wanted - listed.keys():
+        problems.append(f"conformance.md: accepted ADR {number} is missing")
+    for number, name in listed.items():
+        if number not in wanted:
+            problems.append(f"conformance.md: {number} is not an accepted ADR")
+        elif name != found[number][0]:
+            problems.append(f"conformance.md: {number} links to {name}, not {found[number][0]}")
+    count = re.search(r"for the (\d+) currently accepted ADRs", text)
+    if not count or int(count.group(1)) != len(wanted):
+        problems.append("conformance.md: stated accepted ADR count is stale or missing")
+    for target in re.findall(r"\]\(([^)]+)\)", text):
+        local = target.split("#", 1)[0]
+        if local and ":" not in local and not (path.parent / local).exists():
+            problems.append(f"conformance.md: missing referenced path {local}")
+    return problems
 
 
 if __name__ == "__main__":

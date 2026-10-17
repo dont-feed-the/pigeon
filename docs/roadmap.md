@@ -152,6 +152,8 @@ Exit: the budgets are measured in CI.
 
 - A conformance table maps each accepted ADR to the code and the test that
   shows it.
+  The [inventory](conformance.md) maps the 43 currently accepted records and
+  lists open evidence; its existence does not close this gate.
 - Every planned law and trace validation is done
   ([13 §13.10](spec/13-verification.md), issues #9, #10).
 - models-full stays green on both runners for seven nights in a row.

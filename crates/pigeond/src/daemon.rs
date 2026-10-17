@@ -649,7 +649,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     };
     let device = node.device_id();
     pigeon_telemetry::init(dirs.state.join("telemetry"), "pigeond", &device);
-    crate::logs::init(dirs.logs());
+    let _log_guards = crate::logs::init(dirs.logs());
     let tracer = Tracer::new(dirs.traces(), &device);
     for entry in &config.groups {
         crate::join_transition::recover(entry, &dirs.config_file(), &env).await?;

@@ -1,22 +1,31 @@
-//! `pigeond`'s logs (12 §12.1, ADR 0022): one JSON object per line, in
-//! `<state>/logs/pigeond-YYYY-MM-DD.ndjson` (UTC), with the time, the level,
-//! the target, the event's name and its fields. A minimal `tracing`
-//! layer writes them; a second layer records spans through the shared
-//! OpenTelemetry pipeline (ADR 0025).
+//! Diagnostics stay off the daemon's work (ADR 0022, 12 §12.1): bounded,
+//! lossy tracing-appender queues feed human stderr and the existing daily
+//! JSON files. Guards drain the queues at shutdown. Trace proofs use their
+//! separate durable channel, not these diagnostic logs.
 
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::Mutex;
 
 use tracing::field::{Field, Visit};
-use tracing::{Event, Level, Subscriber};
-use tracing_subscriber::{Layer, layer::Context, prelude::*};
+use tracing::{Event, Subscriber};
+use tracing_appender::non_blocking::{NonBlocking, NonBlockingBuilder, WorkerGuard};
+use tracing_subscriber::{EnvFilter, Layer, filter::LevelFilter, layer::Context, prelude::*};
 
-struct JsonLog {
-    dir: PathBuf,
-    file: Mutex<Option<(String, std::fs::File)>>,
+mod files;
+#[cfg(test)]
+mod tests;
+
+const QUEUED_LINES: usize = 128;
+const MAX_LINE: usize = 16_384;
+
+/// Owned for the daemon's lifetime so queued diagnostics drain on exit.
+#[must_use]
+pub struct Guards {
+    _file: WorkerGuard,
+    _stderr: WorkerGuard,
 }
 
+struct JsonLog(NonBlocking);
 struct Fields(serde_json::Map<String, serde_json::Value>);
 
 impl Visit for Fields {
@@ -27,10 +36,7 @@ impl Visit for Fields {
         );
     }
     fn record_str(&mut self, field: &Field, value: &str) {
-        self.0.insert(
-            field.name().to_owned(),
-            serde_json::Value::String(value.to_owned()),
-        );
+        self.0.insert(field.name().to_owned(), value.into());
     }
     fn record_i64(&mut self, field: &Field, value: i64) {
         self.0.insert(field.name().to_owned(), value.into());
@@ -40,27 +46,6 @@ impl Visit for Fields {
     }
     fn record_bool(&mut self, field: &Field, value: bool) {
         self.0.insert(field.name().to_owned(), value.into());
-    }
-}
-
-impl JsonLog {
-    fn write(&self, line: &[u8]) {
-        let now = crate::util::now();
-        let day = crate::util::date(now);
-        let mut file = self.file.lock().unwrap_or_else(|p| p.into_inner());
-        if file.as_ref().is_none_or(|(d, _)| *d != day) {
-            let _ = std::fs::create_dir_all(&self.dir);
-            let path = self.dir.join(format!("pigeond-{day}.ndjson"));
-            *file = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(path)
-                .ok()
-                .map(|f| (day, f));
-        }
-        if let Some((_, f)) = file.as_mut() {
-            let _ = f.write_all(line);
-        }
     }
 }
 
@@ -77,40 +62,59 @@ impl<S: Subscriber> Layer<S> for JsonLog {
         map.insert("target".into(), event.metadata().target().into());
         map.extend(fields.0);
         let mut line = serde_json::to_vec(&serde_json::Value::Object(map)).unwrap_or_default();
+        if line.len() >= MAX_LINE {
+            line = serde_json::to_vec(&serde_json::json!({
+                "time": crate::util::rfc3339(crate::util::now()),
+                "level": event.metadata().level().as_str(),
+                "target": event.metadata().target(),
+                "message": "log-event-too-large", "original_bytes": line.len()
+            }))
+            .unwrap_or_default();
+        }
         line.push(b'\n');
-        self.write(&line);
+        let _ = self.0.clone().write_all(&line);
     }
 }
 
-/// Sends `tracing` events to the daily files in `dir`; `PIGEON_LOG=debug`
-/// adds debug events.
-pub fn init(dir: PathBuf) {
-    let max = match std::env::var("PIGEON_LOG").as_deref() {
-        Ok("debug") => Level::DEBUG,
-        Ok("trace") => Level::TRACE,
-        _ => Level::INFO,
-    };
-    let log = JsonLog {
-        dir,
-        file: Mutex::new(None),
-    };
+fn filter(text: &str) -> EnvFilter {
+    EnvFilter::builder()
+        .with_regex(false)
+        .with_default_directive(LevelFilter::INFO.into())
+        .parse_lossy(text)
+}
+
+fn writer(sink: impl Write + Send + 'static) -> (NonBlocking, WorkerGuard) {
+    NonBlockingBuilder::default()
+        .buffered_lines_limit(QUEUED_LINES)
+        .lossy(true)
+        .finish(sink)
+}
+
+/// Start human stderr and daily JSON logging. PIGEON_LOG accepts EnvFilter
+/// directives and defaults to info. Keep the returned guards until shutdown.
+pub fn init(dir: PathBuf) -> Guards {
+    let filter = filter(&std::env::var("PIGEON_LOG").unwrap_or_default());
+    let (file, file_guard) = writer(files::Daily::new(dir));
+    let (stderr, stderr_guard) = writer(std::io::stderr());
     let registry = tracing_subscriber::registry();
     #[cfg(feature = "tokio-console")]
     let registry = registry.with(pigeon_telemetry::console_layer());
-    let _ =
-        tracing::subscriber::set_global_default(
-            registry
-                .with(
-                    log.with_filter(tracing_subscriber::filter::filter_fn(move |m| {
-                        *m.level() <= max
-                    })),
-                )
-                .with(pigeon_telemetry::layer().with_filter(
-                    tracing_subscriber::filter::filter_fn(move |m| {
-                        *m.level() <= max
-                            && !m.target().starts_with("tokio")
-                            && !m.target().starts_with("runtime")
-                    }),
-                )),
-        );
+    let subscriber = registry
+        .with(JsonLog(file).with_filter(filter.clone()))
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(stderr)
+                .with_filter(filter.clone()),
+        )
+        .with(pigeon_telemetry::layer().with_filter(filter).with_filter(
+            tracing_subscriber::filter::filter_fn(|m| {
+                !m.target().starts_with("tokio") && !m.target().starts_with("runtime")
+            }),
+        ));
+    let _ = tracing::subscriber::set_global_default(subscriber);
+    Guards {
+        _file: file_guard,
+        _stderr: stderr_guard,
+    }
 }
