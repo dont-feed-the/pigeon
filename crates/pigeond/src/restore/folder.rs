@@ -214,14 +214,46 @@ pub(super) async fn restore(
         return vec![problem("not-in-group", &[], None)];
     }
     crate::purge::round(g, &d.device, false).await;
+    drop(_busy);
+    let mut received = Ok(());
     for key in downloads {
         if let Err(code) = super::bring(g, key).await {
-            if code == "receiving" && absent {
-                d.wake.notify_one();
-                return vec![problem("restore-waiting", &[("path", text(rel))], None)];
-            }
-            return vec![problem(code, &[], None)];
+            received = Err(code);
+            break;
         }
+    }
+    crate::purge::prepare(g).await;
+    let _busy = g.busy.lock().await;
+    if !d.current_group(g).await {
+        return vec![problem("not-in-group", &[], None)];
+    }
+    crate::purge::round(g, &d.device, false).await;
+    let policy = g.git.purge_gate.policy();
+    if policy.waiting || files.values().any(|(key, _)| policy.released.contains(key)) {
+        d.wake.notify_one();
+        return vec![problem("restore-waiting", &[("path", text(rel))], None)];
+    }
+    if let Err(code) = received {
+        if code == "receiving" && absent {
+            d.wake.notify_one();
+            return vec![problem("restore-waiting", &[("path", text(rel))], None)];
+        }
+        return vec![problem(code, &[], None)];
+    }
+    // Downloads and concurrent captures may have changed available space;
+    // check the remaining staging copies again before the first write.
+    let staging = files.values().try_fold(
+        crate::settings::reserve_bytes(g.role, &g.git_dir),
+        |total, (key, _)| Some(total.saturating_add(key_size(key)?)),
+    );
+    if !staging.is_some_and(|need| {
+        pigeon_sys::fs::space(&g.git_dir).is_ok_and(|space| space.available >= need)
+    }) {
+        return vec![problem(
+            "disk-full",
+            &[("machine", text(&crate::status::this_name(g, &d.device)))],
+            None,
+        )];
     }
     let mut restored = 0i64;
     let mut installed = BTreeSet::new();

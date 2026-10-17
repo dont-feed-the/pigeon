@@ -56,6 +56,33 @@ fn trace_collection_supervises_a_late_capture_crash() {
     assert!(report.passed(), "{:?}", report.failure());
 }
 
+/// Retain v0.6.4's seed-156199965296 case 009, whose native checks passed
+/// but an Index boundary saw three unstable filesystem observations.
+#[test]
+fn trace_collection_reobserves_the_keep_index_schedule() {
+    use pigeon_lab::step::CrashPoint::KeepAfterBegin;
+    let Ok(bin) = std::env::var("PIGEON_LAB_BIN") else {
+        return;
+    };
+    let _world = WORLD.lock().unwrap_or_else(|e| e.into_inner());
+    let id = "S9-regression-keep-index-observation";
+    let cfg = Config {
+        bin: std::fs::canonicalize(bin).unwrap(),
+        work: PathBuf::from(format!("/tmp/p9-index-{}", std::process::id())),
+        out: PathBuf::from(
+            std::env::var("PIGEON_LAB_OUT").unwrap_or_else(|_| "target/lab/s9".into()),
+        ),
+        isolation: Isolation::detect(),
+    };
+    let plan = [
+        (1, KeepAfterBegin, 1),
+        (6, KeepAfterBegin, 3),
+        (5, KeepAfterBegin, 2),
+    ];
+    let report = run(&slice::s9(id, &plan), &mut Exec::new(cfg, id));
+    assert!(report.passed(), "{:?}", report.failure());
+}
+
 #[hegel::test(suppress_health_check = [HealthCheck::TooSlow])]
 fn random_crash_schedules_lose_and_duplicate_nothing(tc: TestCase) {
     let Ok(bin) = std::env::var("PIGEON_LAB_BIN") else {

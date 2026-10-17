@@ -341,3 +341,41 @@ is separate from publication. Job 117417325666 saved a 488,810,880-byte
 slice cache at 14:22:53–14:23:00 UTC; the cache API confirms it is present
 on main. Its native scenario/trace check continues, and the future warm-slice
 comparison is still pending.
+
+
+## v0.6.4 observation
+
+[v0.6.4](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.4)
+published on 17 October at 16:58:43 UTC from
+`fa00dcc013e98f98a6a0dcdd36949fe109e13d5b`. Its six assets, four archive
+checksums/API digests, Linux install, pinned annex version, three shell
+completions and public latest redirect were verified. A transient HTTP 503
+interrupted the first download verification; the next completed successfully.
+
+Candidate lead time was **24 minutes 29 seconds**, meeting the one-hour
+target. The completed gap from v0.6.3 was **2 hours 38 minutes 46 seconds**,
+missing the two-hour target. The collector retains 13 lead-time and 12
+publication-interval samples; no reliable percentile is inferred. Publication
+resets the current clock, without hiding this missed interval.
+
+PR #72's preparation found a status request bypassing file settling, a real
+clock-fence race, and historical protection stranded by equivalent sibling
+merges. Review also caught an erasure acknowledgement that needed to stay
+conservative. These were fixed before merging, with native regressions; no
+assertion timeout or release gate was relaxed. The final source passed all
+730 local checks, all 13 driver/model scenarios and negative checks, S2/S3
+with TLC, and exact-head PR CI. Main cache producers completed before tagging.
+
+Tag CI, lab, both platform builds and native install checks passed first time.
+S9 shard 0 passed its 25 native schedules but rejected one unstable filesystem
+observation at clock 49. One targeted retry repeated seed 156199965296 and
+the identical schedules; every required trace then passed. Only the failed
+publish job was rerun, retaining the successful archives. The
+[original failed trace](reports/evidence/v064-s9-observation-failure.ndjson)
+is retained, together with its artifact digest in the M6 report. This miss
+and retry remain part of the candidate's observed lead time.
+
+The next follow-up preserves the three-attempt observation bound and full
+stat/hash checks, but yields between unstable observations. The failing
+schedule is a named native regression. Its actual publication will supply
+the next observation; no measured reduction in failure rate is claimed now.

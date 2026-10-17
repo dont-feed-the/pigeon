@@ -170,7 +170,22 @@ pub async fn restore(
         return vec![problem("not-in-group", &[], None)];
     }
     crate::purge::round(&g, &d.device, false).await;
-    match bring(&g, &key).await {
+    // A content pause may be indefinite. Keep the original saved baseline,
+    // but leave captures, history and requests free to use the worktree.
+    drop(_busy);
+    let brought = bring(&g, &key).await;
+    crate::purge::prepare(&g).await;
+    let _busy = g.busy.lock().await;
+    if !d.current_group(&g).await {
+        return vec![problem("not-in-group", &[], None)];
+    }
+    crate::purge::round(&g, &d.device, false).await;
+    let policy = g.git.purge_gate.policy();
+    if policy.waiting || policy.released.contains(&key) {
+        d.wake.notify_one();
+        return vec![problem("restore-waiting", &[("path", text(&rel))], None)];
+    }
+    match brought {
         Ok(()) => {}
         Err("disk-full") => {
             let me = crate::status::this_name(&g, &d.device);
@@ -181,6 +196,10 @@ pub async fn restore(
             return vec![problem("restore-waiting", &[("path", text(&rel))], None)];
         }
         Err(code) => return vec![problem(code, &[], None)],
+    }
+    if !fits(&g, &key) {
+        let me = crate::status::this_name(&g, &d.device);
+        return vec![problem("disk-full", &[("machine", text(&me))], None)];
     }
     if !self::path::parents_clear(&g, &rel) {
         return vec![problem("restore-in-use", &[("path", text(&rel))], None)];
@@ -315,3 +334,7 @@ mod tests {
         assert_eq!(super::instant("yesterday"), None);
     }
 }
+
+#[cfg(test)]
+#[path = "restore/transfer_tests.rs"]
+mod transfer_tests;

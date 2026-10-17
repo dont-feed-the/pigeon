@@ -38,9 +38,20 @@ fn file(path: &Path, observe_writers: bool) -> Result<Value, String> {
 fn file_with(
     path: &Path,
     observe_writers: bool,
-    mut hash: impl FnMut(&Path) -> std::io::Result<String>,
+    hash: impl FnMut(&Path) -> std::io::Result<String>,
 ) -> Result<Value, String> {
-    for _ in 0..3 {
+    file_with_pause(path, observe_writers, hash, || {
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    })
+}
+
+fn file_with_pause(
+    path: &Path,
+    observe_writers: bool,
+    mut hash: impl FnMut(&Path) -> std::io::Result<String>,
+    mut on_retry: impl FnMut(),
+) -> Result<Value, String> {
+    for attempt in 0..3 {
         let Some(stat) = lstat(path).map_err(|e| e.to_string())? else {
             return Ok(json!({"inode": "", "content": "", "writers": false, "stat": ""}));
         };
@@ -51,7 +62,12 @@ fn file_with(
         if lstat(path).map_err(|e| e.to_string())? != Some(stat) {
             // A person can finish a write during hashing. Retry this same
             // observation before emitting it; never mix its old stat with
-            // new bytes, or discard an already emitted trace record.
+            // new bytes, or discard an already emitted trace record. Yield
+            // to the writer rather than spending all three attempts in one
+            // tight loop. The retry count and full stat/hash checks stay fixed.
+            if attempt < 2 {
+                on_retry();
+            }
             continue;
         }
         return Ok(json!({
@@ -520,6 +536,35 @@ mod tests {
                 crate::net::sync::sha256_file(path)
             })
             .is_err()
+        );
+    }
+
+    #[test]
+    fn retry_yields_to_a_writer_and_records_only_its_completed_bytes() {
+        use std::cell::Cell;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("file");
+        std::fs::write(&path, "initial bytes").unwrap();
+        let writing = Cell::new(true);
+        let sequence = Cell::new(0);
+        let value = super::file_with_pause(
+            &path,
+            false,
+            |path| {
+                let digest = crate::net::sync::sha256_file(path)?;
+                if writing.get() {
+                    sequence.set(sequence.get() + 1);
+                    std::fs::write(path, format!("later save {}", sequence.get()))?;
+                }
+                Ok(digest)
+            },
+            || writing.set(false),
+        )
+        .unwrap();
+        assert_eq!(value, super::file(&path, false).unwrap());
+        assert_eq!(
+            value["content"],
+            crate::net::sync::sha256_file(&path).unwrap()
         );
     }
 
