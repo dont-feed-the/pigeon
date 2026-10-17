@@ -45,3 +45,15 @@ the version-only v0.6.7 integration. After integrating that current main,
 all 13 affected law/daemon/restore checks passed again. All-target workspace
 Clippy, including trace, lab and optional console features, passed after
 correcting a style diagnostic in the new test. Exact-head CI still precedes merging.
+
+## Merge validation
+
+Final combined source `b92d8deba60b8c52674a39b26b9eaafefa033a48` passed exact-head CI 39060412068, lab
+39060412108 and bridge 39060412065. Main cache producers completed
+their save steps before tagging. The full 760-check implementation run,
+13 current-version input/role/restore checks, concrete-name law, 200
+positive Authority histories and 200 final-verdict mutants, abstract TLAPS
+checks, fold equivalence/mutant and nine-history end-to-end trace-driver
+retake remain distinct evidence. The first combined CI head failed before
+executing traces because nextest setup was missing; both calling workflows
+now install the existing pinned action. No elapsed M6 or M7 gate is inferred.

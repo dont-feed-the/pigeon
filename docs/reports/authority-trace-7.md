@@ -59,3 +59,15 @@ Fold migration equivalence passed and its shifted-index mutant failed the
 expected history-view invariant. End-to-end trace-driver retakes,
 current-main integration and exact-head CI still precede merging. The broader law/trace audit,
 seven-night, soak, upgrade and security gates remain open; M7 is not complete.
+
+## Merge validation
+
+Final combined source `b92d8deba60b8c52674a39b26b9eaafefa033a48` passed exact-head CI 39060412068, lab
+39060412108 and bridge 39060412065. Main cache producers completed
+their save steps before tagging. The full 760-check implementation run,
+13 current-version input/role/restore checks, concrete-name law, 200
+positive Authority histories and 200 final-verdict mutants, abstract TLAPS
+checks, fold equivalence/mutant and nine-history end-to-end trace-driver
+retake remain distinct evidence. The first combined CI head failed before
+executing traces because nextest setup was missing; both calling workflows
+now install the existing pinned action. No elapsed M6 or M7 gate is inferred.

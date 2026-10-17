@@ -415,3 +415,27 @@ English/French usability retakes. The original five local fixture failures,
 their focused retake and the final exact-head CI remain separate records.
 All Linux release gates and both platform builds passed. Duplicate queued
 main runs were canceled; active main cache producers were preserved.
+
+## v0.6.7 observation
+
+[v0.6.7](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.7)
+published at 2026-10-17T18:57:37Z from
+`eb3065b2730c4a7d5b0bac77a78220f349f8478c`. All six assets, four archive
+checksums, Linux install, pinned annex, completions and latest redirect
+were independently verified. Candidate lead was **1711 seconds**
+(met the one-hour target); publication gap was
+**3072 seconds** (met the two-hour target).
+There are 16 lead and
+15 completed-gap samples; no
+percentile or sustained failure-rate improvement is inferred.
+
+The original CI shard 3 had 10 passes and two timeouts: held-file protection
+reported disk busy; a capacity fixture did not finish its initial install.
+The bounded retake passed all 12 daemon checks and its storage-boundary
+trace checks. Original artifact 12110980651 is 15121562 bytes, SHA-256
+`d49c99a41b5ff8fef4012064564fee1d0ee8740065d933ae0d5a57998637b505`.
+Its held fixture retained 102 laptop objects and 21 backup objects, all
+matching their sizes and SHA-256 keys; incomplete transfer was not silently
+counted as protection. One bounded failed-shard retry and publication-only
+retry kept the original tag and source. No deadline, safety verdict or gate
+was waived. Both archives and the other Linux gates were retained.
