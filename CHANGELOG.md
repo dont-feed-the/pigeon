@@ -5,6 +5,14 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Status checks and later saves remain available while a file or folder
+  restore waits for its saved contents. A newer save is preserved if it
+  changes the file before restoration can finish.
+
 ## 0.6.4 — 2026-10-17
 
 ### Fixed

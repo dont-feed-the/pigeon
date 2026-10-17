@@ -465,3 +465,77 @@ together. The parent `03b973d` passed all 729 workspace tests, all 13 fresh
 native driver/TLC scenarios and negative checks, and native S2/S3 plus TLC.
 Final guard and affected purge/restore checks, followed by new exact-head CI,
 precede publication; the prior green CI is not reused for a changed commit.
+
+
+## Restore requests leave capture available while receiving
+
+File and folder restores now release the group worktree lock while their
+key-only content requests wait or run. They keep the exact pre-download
+filesystem baselines. After receiving, they refresh the complete purge reading,
+reacquire the lock, check the current group and content policy, and recheck
+staging space before installation. A newer captured save is never adopted as
+the replacement baseline. The request still retains its ordinary signed
+reference before asking for missing bytes.
+
+Three native interleaving regressions first failed at an actual get waiting for
+production resource admission: the group lock remained held. After the fix,
+later saves can be captured while that get waits, real status API requests
+return, unchanged files/folders restore after resuming, and removing the group
+prevents the old request from installing. Four existing baseline/bytes/mode
+checks and the five historical-acknowledgement checks pass alongside them
+(14 focused checks). These fixtures block admission before get starts; they
+are not evidence of a mid-transfer SIGSTOP workload or the HDD budget.
+
+Eight native integration checks passed on the initial follow-up: time/folder
+restores, missing contents and durable retry, health evidence and a limited
+transfer that leaves later capture available. Native S3 passed all 14 checks
+and TLC accepted its filesystem and roster streams. Distinct dates in the
+small unit fixture select an old folder snapshot; no retention period or
+resource interval is claimed elapsed. Full current-main CI still precedes
+merging. The complete cross-group queue, native priorities, read-latency
+feedback, filesystem admission and measured budgets remain open.
+
+
+## Trace observation retry fairness
+
+The first v0.6.4 tag slice passed all 25 native S9 shard-0 schedules but
+rejected a trace's failed filesystem observation at clock 49 during Index:
+three immediate stat/hash attempts all saw a changing file. Original artifact
+12107900725 is 218271 bytes, with verified SHA-256
+`ffb8bc45e31354827b05d7a1e7ce59aed9e5716da6ff948b9bde917750ac15db`.
+One bounded retry repeats seed 156199965296 and the identical 25 schedules;
+the retry passed its complete native and model checks. The failed observation
+remains retained in [the original trace](evidence/v064-s9-observation-failure.ndjson).
+No model verdict or release gate was waived.
+
+The follow-up collector gives concurrent writers one millisecond between
+unsuccessful observations. It still makes at most three attempts, compares
+the full native stat around the actual hash, and reports persistent changes
+as failed observations. A deterministic native-file interleaving failed
+before the yield: the writer could never finish before the next attempt.
+The regression requires the recorded hash to name the completed bytes;
+the existing continuously changing-file check must still fail closed.
+This is retry fairness, not evidence that every S9 observation race is gone.
+
+The restore patch passed all 735 parallel workspace checks before version-only
+integration of v0.6.4 main; its exact restore-source patch remained unchanged.
+Focused current-version restore/history/trace checks and new exact-head CI
+precede merging this follow-up.
+
+
+The retained keep-index schedule now runs as a named S9 regression. It passed
+locally in 26.4 seconds with the current-version binaries; TLC accepted both
+filesystem streams and the roster stream. The focused current-version set
+passed all 17 checks, including persistent-change refusal and the new yield
+interleaving. Full all-target Clippy and structural checks passed.
+
+## v0.6.4 publication checkpoint
+
+PR #72 merged at `45a2106`; [v0.6.4](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.4)
+published at 16:58:43 UTC from `fa00dcc`, with all assets and the Linux install
+independently verified. The bounded S9/publish retries and missed publication
+gap are recorded in [the KPI](../release-kpi.md#v064-observation).
+Background macOS run 39051800511 targets this exact release. The preceding
+v0.6.2 run completed with every workspace, daemon, lab, random-crash and S5
+job green; only its old S3 restore-action assertion failed. Neither result
+is represented as current-source macOS completion or measured M6 budgets.
