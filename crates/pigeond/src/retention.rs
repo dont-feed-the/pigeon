@@ -172,9 +172,10 @@ pub async fn states(
     }
     let now = Time(crate::util::now());
     let settings = crate::status::settings(g);
+    let locations = crate::custody::holders_for(&g.git, &keys).await;
     let mut out = Vec::new();
     for key in keys {
-        let held = crate::custody::holders(&g.git, &key).await;
+        let held = locations.get(&key).cloned().unwrap_or_default();
         let local = crate::custody::present(g, &key).await.is_some();
         let version = Version {
             custodians: peers

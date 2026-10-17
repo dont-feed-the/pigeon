@@ -57,7 +57,7 @@ impl Probe {
             return Observation::default();
         };
         let mut observation = Observation::default();
-        if let Ok(power) = zbus::Proxy::new(
+        if let Ok(power) = proxy(
             bus,
             "org.freedesktop.UPower",
             "/org/freedesktop/UPower",
@@ -65,7 +65,7 @@ impl Probe {
         )
         .await
             && power.get_property::<bool>("OnBattery").await == Ok(true)
-            && let Ok(display) = zbus::Proxy::new(
+            && let Ok(display) = proxy(
                 bus,
                 "org.freedesktop.UPower",
                 "/org/freedesktop/UPower/devices/DisplayDevice",
@@ -76,7 +76,7 @@ impl Probe {
         {
             observation.battery = percentage(percent);
         }
-        if let Ok(profile) = zbus::Proxy::new(
+        if let Ok(profile) = proxy(
             bus,
             "org.freedesktop.UPower.PowerProfiles",
             "/org/freedesktop/UPower/PowerProfiles",
@@ -92,7 +92,7 @@ impl Probe {
         }
         // NetworkManager: YES=1, NO=2, GUESS_YES=3, GUESS_NO=4,
         // UNKNOWN=0. A guess is usable, UNKNOWN remains unknown.
-        if let Ok(network) = zbus::Proxy::new(
+        if let Ok(network) = proxy(
             bus,
             "org.freedesktop.NetworkManager",
             "/org/freedesktop/NetworkManager",
@@ -108,6 +108,24 @@ impl Probe {
         }
         observation
     }
+}
+
+/// Poll properties directly: installing fresh change streams every five
+/// seconds both duplicates work and floods logs when a service is absent.
+#[cfg(target_os = "linux")]
+async fn proxy<'a>(
+    bus: &'a zbus::Connection,
+    destination: &'static str,
+    path: &'static str,
+    interface: &'static str,
+) -> zbus::Result<zbus::Proxy<'a>> {
+    zbus::proxy::Builder::new(bus)
+        .destination(destination)?
+        .path(path)?
+        .interface(interface)?
+        .cache_properties(zbus::proxy::CacheProperties::No)
+        .build()
+        .await
 }
 
 #[cfg(any(target_os = "linux", test))]

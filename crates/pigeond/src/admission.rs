@@ -23,7 +23,7 @@ use pigeon_core::roster::Role as DeviceRole;
 use pigeon_core::time::Time;
 use pigeon_proto::api::Arg;
 
-use crate::custody::{holders, peers};
+use crate::custody::{holders_for, peers};
 use crate::group::Group;
 
 /// What a custodian could not take in its last round.
@@ -116,6 +116,7 @@ pub async fn items(g: &Group, me: &str, keys: &BTreeSet<String>) -> Vec<(Work, V
     let recorded = endangered.len();
     endangered.retain(|key| keys.contains(key));
     let mut out = Vec::new();
+    let locations = holders_for(&g.git, keys).await;
     for key in keys {
         if g.role == Role::Custodian
             && !endangered.contains(key)
@@ -123,7 +124,7 @@ pub async fn items(g: &Group, me: &str, keys: &BTreeSet<String>) -> Vec<(Work, V
         {
             continue;
         }
-        let have = holders(&g.git, key).await;
+        let have = locations.get(key).cloned().unwrap_or_default();
         let lacking: Vec<String> = custodians
             .iter()
             .filter(|(_, u)| !have.contains(u))

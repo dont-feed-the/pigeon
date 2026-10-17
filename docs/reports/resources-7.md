@@ -124,6 +124,31 @@ traces were accepted by TLC. A final 12-check pass covers the alias/root-link
 guards, shortened bridge fixtures, child pause policy and a live later-save
 capture during a person's pause. These are finite observations.
 
+The next CI head (`ff93370`) still failed the 102-file protection deadline
+and a portal suggestion assertion. The saved, checksum-verified fixture has
+all 102 backup objects matching their sizes and SHA-256 keys; the laptop's
+fetched annex metadata is older. Cold location planning now runs outside
+the worktree lock, and complete unchanged retention readings need no lock
+per file. A controlled native location probe proves a new signed capture
+finishes before that probe is released.
+
+Location claims are read in bounded 64-key native batches instead of starting
+annex and its helper per key. Missing, duplicate, malformed or mismatched
+answers fail the entire batch closed. A real 67-key fixture crosses the
+batch boundary and includes a missing key. Nine selected checks pass,
+including the 102-file lifecycle in 60.4 seconds, normal free/keep and the
+queued-content erasure barriers. This is a finite local observation, not a
+controlled CI speedup or a reference-tree budget. The portal lifecycle also
+passes locally without NEXTCLOUDCMD; the real-client CI check remains required.
+
+The same head's actual Mac workspace passed all but the suspension fixture:
+twelve resumed shell/sleep forks could consume its 600 ms active budget.
+The fixture now requests completion at the first resumed checkpoint while
+keeping the 800 ms pause and 600 ms budget. The genuine active-timeout and
+dead-descendant checks remain. Missing Linux D-Bus services no longer create
+fresh property-change subscriptions or repeated cache warnings every probe;
+properties are polled directly, preserving unknown-value fallback.
+
 Upstream `Annex/Transfer.hs` chooses an independently grouped transferrer
 when explicit stall detection is enabled (`Annex/TransferrerPool.hs`).
 Managed repositories and peers now disable all three stall options; the

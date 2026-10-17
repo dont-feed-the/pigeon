@@ -18,6 +18,8 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Status checks and protection planning finish sooner for folders with many
+  small files, and slow copy-location checks leave new saves available.
 - A slow content transfer leaves later saves and history requests available;
   normal background downloads no longer keep the group's worktree locked.
 - Heavy native commands can be suspended and resumed by resource policy

@@ -54,7 +54,7 @@ worker=$!
 echo "$worker" > child.pid
 trap 'kill "$worker" 2>/dev/null; wait "$worker" 2>/dev/null; exit 143' TERM
 i=0
-while [ "$i" -lt 12 ]; do
+while [ "$i" -lt 12 ] && [ ! -e finish ]; do
     printf p >> parent.beats
     sleep 0.02
     i=$((i + 1))
@@ -150,6 +150,10 @@ async fn suspension_freezes_the_whole_group_and_spends_no_active_deadline() {
         !task.is_finished(),
         "deliberate pause consumed the operation deadline"
     );
+    // Finish on the first resumed checkpoint. Twelve shell/sleep forks
+    // can themselves exceed 600 ms on a loaded Mac, independently of the
+    // deliberate 800 ms pause this test is meant to exclude.
+    std::fs::write(dir.path().join("finish"), b"finish after resume").unwrap();
     policy.run.store(true, Ordering::Relaxed);
     assert_eq!(task.await.unwrap().unwrap().stdout, b"exact output");
     assert_eq!(policy.active.load(Ordering::Relaxed), 0);

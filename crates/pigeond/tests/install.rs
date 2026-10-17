@@ -590,6 +590,9 @@ mod erase_restart;
 #[path = "install/fetch_progress.rs"]
 mod fetch_progress;
 
+#[path = "install/placement_progress.rs"]
+mod placement_progress;
+
 #[path = "install/trace_barrier.rs"]
 mod trace_barrier;
 

@@ -22,7 +22,7 @@ use pigeon_core::state::{Custodian, Settings, State, Version, rank, state};
 use pigeon_core::time::{Span, Time};
 use pigeon_proto::api::{self, Arg, Message, StatusReport, VersionStatus};
 
-use crate::custody::{holders, present};
+use crate::custody::{holders_for, present};
 use crate::group::Group;
 use crate::status_why::Silent;
 use crate::util::rfc3339;
@@ -269,12 +269,20 @@ async fn observe_at(
             .get(&pigeon_core::roster::DeviceId(me.to_owned()))
             .map(|d| d.person.clone())
     });
+    let wanted_keys = keys
+        .iter()
+        .filter(|(path, _)| {
+            prefix.is_empty() || *path == prefix || path.starts_with(&format!("{prefix}/"))
+        })
+        .map(|(_, key)| key.clone())
+        .collect();
+    let locations = holders_for(&g.git, &wanted_keys).await;
     let mut out = Vec::new();
     for (path, key) in keys {
         if !(prefix.is_empty() || path == prefix || path.starts_with(&format!("{prefix}/"))) {
             continue;
         }
-        let have: BTreeSet<String> = holders(&g.git, &key).await;
+        let have = locations.get(&key).cloned().unwrap_or_default();
         let named = |id: &str| {
             id == me
                 || [&peer_keys, &report_keys]

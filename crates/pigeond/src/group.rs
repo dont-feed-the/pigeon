@@ -148,8 +148,8 @@ pub struct Group {
     /// Incremental purge scan; cold history work does not hold `busy`.
     pub purge: tokio::sync::Mutex<crate::purge::State>,
     pub(crate) placement: tokio::sync::Mutex<Option<crate::placement::Task>>,
-    /// Held by whatever changes the repository: a round of the loops, or a
-    /// request.
+    /// Serializes worktree and signed-history mutations. Cold location
+    /// probes and key-only content transfers use their own process groups.
     pub busy: tokio::sync::Mutex<()>,
     /// The repository's remotedaemon.
     pub daemon: tokio::sync::Mutex<Option<tokio::process::Child>>,

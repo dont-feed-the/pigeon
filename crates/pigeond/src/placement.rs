@@ -1,6 +1,7 @@
 //! Content work outlives a round without holding its worktree lock
-//! (ADR 0037, 15 §15.2). Planning and per-key revalidation hold `busy`;
-//! key-only transfers do not. Capture, admission and erasure keep running.
+//! (ADR 0037, 15 §15.2). Reference snapshots and fresh validation hold
+//! `busy`; cold location probes and key-only transfers do not. Capture,
+//! admission and erasure keep running.
 
 use std::sync::{Arc, Weak};
 
@@ -100,6 +101,18 @@ pub(crate) struct Validation {
 
 impl Validation {
     pub(crate) async fn allows(&mut self, d: &Weak<Daemon>, g: &Group, key: &str) -> bool {
+        if !current(d, g).await {
+            return false;
+        }
+        let Some(revision) = g.git.purge_gate.revision() else {
+            return false;
+        };
+        // A complete unchanged reading needs no worktree lock. Taking it
+        // once per small file queues every transfer behind a full round.
+        // Reference writers invalidate this revision before they mutate.
+        if self.revision == Some(revision) {
+            return self.keys.contains(key) && g.git.purge_gate.revision() == Some(revision);
+        }
         let _busy = g.busy.lock().await;
         if !current(d, g).await {
             return false;
