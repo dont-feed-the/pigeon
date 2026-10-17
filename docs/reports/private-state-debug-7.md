@@ -39,3 +39,10 @@ they are not additional unique checks. All-target workspace Clippy with
 lab, trace and console features and the repository header/length, ADR and
 spec checks pass. Current-main integration and exact-head PR CI remain
 separate before release.
+
+Current v0.6.13 main `a9f8447d09af85a9c5938554038e65346c6e62c6` is integrated before PR validation.
+All core/protocol and daemon-library selections, codec/format fixtures,
+real annex transfer and the corrected backup-rejoin preservation check
+pass again, with all-target Clippy and structural checks. The old repair
+changelog items stay in their actual release; only these diagnostic and removal wording corrections
+remain Unreleased. Exact-head PR CI and the wider M7 review are separate.

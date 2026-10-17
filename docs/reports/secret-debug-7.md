@@ -25,3 +25,7 @@ validation remain separate from this focused formatting evidence.
 
 Final all-target workspace Clippy with lab, trace and console features and
 repository header/length, ADR and spec checks pass for the combined checkpoint.
+
+Formatting and existing logging/annex contracts pass after integrating
+current v0.6.12 main, along with all-target Clippy and repository checks.
+This does not close the wider secret-type/security review.
