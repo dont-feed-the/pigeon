@@ -45,7 +45,7 @@ fn trace_collection_supervises_a_late_capture_crash() {
     let cfg = Config {
         bin: std::fs::canonicalize(bin).unwrap(),
         // Keep the fixed scenario's disks separate from randomized cases.
-        work: PathBuf::from(format!("/tmp/p9-fixed-{}", std::process::id())),
+        work: std::env::temp_dir().join(format!("p9-fixed-{}", std::process::id())),
         out: PathBuf::from(
             std::env::var("PIGEON_LAB_OUT").unwrap_or_else(|_| "target/lab/s9".into()),
         ),
@@ -68,7 +68,7 @@ fn trace_collection_reobserves_the_keep_index_schedule() {
     let id = "S9-regression-keep-index-observation";
     let cfg = Config {
         bin: std::fs::canonicalize(bin).unwrap(),
-        work: PathBuf::from(format!("/tmp/p9-index-{}", std::process::id())),
+        work: std::env::temp_dir().join(format!("p9-index-{}", std::process::id())),
         out: PathBuf::from(
             std::env::var("PIGEON_LAB_OUT").unwrap_or_else(|_| "target/lab/s9".into()),
         ),
@@ -110,9 +110,9 @@ fn random_crash_schedules_lose_and_duplicate_nothing(tc: TestCase) {
     let cfg = Config {
         bin: std::fs::canonicalize(bin).unwrap(),
         // Short: unix sockets live under it (pigeon-lab's short_name).
-        work: PathBuf::from(
-            std::env::var("PIGEON_LAB_WORK").unwrap_or_else(|_| "/tmp/lab-s9".into()),
-        ),
+        work: std::env::var_os("PIGEON_LAB_WORK")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| std::env::temp_dir().join("lab-s9")),
         out: out.clone(),
         isolation: Isolation::detect(),
     };

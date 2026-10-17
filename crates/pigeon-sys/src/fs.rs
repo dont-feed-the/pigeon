@@ -380,6 +380,26 @@ mod tests {
     }
 
     #[test]
+    fn hard_links_keep_the_same_identity_and_bytes_across_an_exclusive_rename() {
+        let dir = tempfile::tempdir().unwrap();
+        let original = dir.path().join("original");
+        let linked = dir.path().join("linked");
+        let renamed = dir.path().join("renamed");
+        std::fs::write(&original, b"saved bytes\0\xff").unwrap();
+        let id = lstat(&original).unwrap().unwrap().id;
+        std::fs::hard_link(&original, &linked).unwrap();
+        assert_eq!(lstat(&linked).unwrap().unwrap().id, id);
+        assert_eq!(
+            rename_noreplace(&original, &renamed).unwrap(),
+            Renamed::Done
+        );
+        assert_eq!(lstat(&renamed).unwrap().unwrap().id, id);
+        assert_eq!(lstat(&linked).unwrap().unwrap().nlink, 2);
+        assert_eq!(std::fs::read(&linked).unwrap(), b"saved bytes\0\xff");
+        assert_eq!(std::fs::read(&renamed).unwrap(), b"saved bytes\0\xff");
+    }
+
+    #[test]
     fn durable_writes_and_appends() {
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("state.json");

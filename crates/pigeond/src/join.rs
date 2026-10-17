@@ -33,7 +33,9 @@ use crate::settings::{ensure_remote, init_annex};
 pub async fn join(d: &Daemon, j: &Joining, folder: Option<String>) -> Result<String, String> {
     let inv = &j.inv;
     let path = folder.map_or_else(|| default_path(d, j), PathBuf::from);
+    crate::filesystem::check(&path, role(j))?;
     let attempt = Attempt::begin(&path, role(j) == Role::Custodian)?;
+    crate::filesystem::check(&attempt.path, role(j))?;
     if crate::join_in_place::applies(d, j, &attempt.path).await {
         return crate::join_in_place::join(d, j, &attempt.path).await;
     }

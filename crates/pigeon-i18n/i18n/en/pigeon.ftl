@@ -668,6 +668,8 @@ problem-recovery-not-received = No backup machine received the sheet in time, so
 problem-join-incomplete = The new group was verified, but recovery could not finish. Restart pigeon to finish the recorded operation. Your old history is kept.
 problem-repository-busy = This repository has an unfinished file update. Let pigeon finish it, or restart pigeon before trying recovery again.
 problem-folder-not-empty = This folder already has files in it. Choose an empty or new folder; to rejoin a refounded group, choose the folder of its existing repository.
+problem-file-system-unsupported = This folder is on a file system pigeon cannot safely use. This check does not change your files. Choose a local ext4, btrfs or xfs folder on Linux, or an APFS folder on macOS. Linux backup machines can also use ZFS.
+problem-file-system-unknown = pigeon could not check this folder’s file system. Check that the folder or its parent is accessible, then try again.
 # Group health from replicated state (ADR 0025).
 web-health = Group health
 web-health-current = Current files

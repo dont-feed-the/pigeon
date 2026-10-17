@@ -15,6 +15,7 @@ pub mod catalogue;
 pub mod commit;
 pub mod consent;
 pub mod export;
+pub mod filesystem;
 pub mod filter;
 pub mod folder_rules;
 pub mod headline;

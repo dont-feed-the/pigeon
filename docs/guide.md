@@ -210,6 +210,12 @@ machines must hold a copy before a version counts as protected:
 pigeon create Family ~/Family --k 1 --name mario-laptop
 ```
 
+Use a folder on a local disk: ext4, btrfs or xfs on Linux, APFS on macOS.
+Network shares, FUSE, FAT/exFAT and HFS+ are refused before creating a
+repository. On Linux, `df -T /path/to/folder` shows the file system under
+*Type*; for a new folder, check its existing parent. On a Mac, Disk Utility
+shows a volume’s *Format*. `pigeon doctor` checks folders already in a group.
+
 It prints the line that adds someone to the group. `pigeon invite` prints
 it again, on any computer of the group. The line is the same for everyone
 and never changes:

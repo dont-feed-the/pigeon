@@ -5,6 +5,14 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- `pigeon create` and `pigeon join` check the folder’s file system before
+  making a repository. Unsupported or unreadable volumes explain how to
+  choose another folder; `pigeon doctor` checks existing folders too.
+
 ## 0.6.5 — 2026-10-17
 
 ### Fixed

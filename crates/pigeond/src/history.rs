@@ -319,6 +319,11 @@ pub async fn doctor(d: &Daemon, _details: bool) -> Vec<Response> {
             let name = crate::status::this_name(&g, &d.device);
             out.push(problem("disk-full", &[("machine", text(&name))], None));
         }
+        if let Err(code) =
+            crate::filesystem::check(g.worktree.as_deref().unwrap_or(&g.git_dir), g.role)
+        {
+            out.push(problem(code, &[], None));
+        }
         if g.role == pigeon_core::filter::Role::Custodian {
             match crate::scrub::status(&g) {
                 Ok(scrub) => {
