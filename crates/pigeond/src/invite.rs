@@ -75,11 +75,8 @@ pub fn proof(secret: &[u8], new_device: &str, admitter: &str) -> String {
 }
 
 fn equal(a: &str, b: &str) -> bool {
-    a.len() == b.len()
-        && a.bytes()
-            .zip(b.bytes())
-            .fold(0u8, |acc, (x, y)| acc | (x ^ y))
-            == 0
+    use subtle::ConstantTimeEq;
+    bool::from(a.as_bytes().ct_eq(b.as_bytes()))
 }
 
 /// `laptop` or `custodian`, as [`Join::role`] says a role.
@@ -95,6 +92,9 @@ pub async fn welcome(d: &Daemon, device: &str, join: Join) -> JoinAnswer {
     let refused = |code: &str| JoinAnswer::Refused {
         code: code.to_owned(),
     };
+    if join.v != JOIN_VERSION {
+        return refused("join-version-unsupported");
+    }
     if let Some(new) = join.new_device.clone() {
         return crate::recovery::welcome(d, device, &new, &join).await;
     }
@@ -211,7 +211,7 @@ pub struct Joining {
 }
 
 /// What `pigeon join` asks for (10 §10.1).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct Ask {
     /// The `pgn2-` invitation.
     pub code: String,
@@ -225,6 +225,19 @@ pub struct Ask {
     pub existing: bool,
     /// As a backup machine.
     pub custodian: bool,
+}
+
+impl std::fmt::Debug for Ask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Ask")
+            .field("code", &"[redacted]")
+            .field("folder", &self.folder)
+            .field("name", &self.name)
+            .field("person", &self.person)
+            .field("existing", &self.existing)
+            .field("custodian", &self.custodian)
+            .finish()
+    }
 }
 
 /// The new device's side: answers a problem code, or the group's name.
@@ -413,4 +426,22 @@ pub async fn fetch_welcome(
         let _ = g.git.run(&["annex", "merge"]).await;
     }
     Ok(theirs)
+}
+
+#[cfg(test)]
+mod private_ask_tests {
+    use super::*;
+
+    #[test]
+    fn join_ask_debug_hides_the_pasted_invitation() {
+        let ask = Ask {
+            code: "synthetic-private-pasted-invitation".into(),
+            ..Default::default()
+        };
+        for text in [format!("{ask:?}"), format!("{ask:#?}")] {
+            assert!(!text.contains("synthetic-private-pasted-invitation"));
+            assert!(text.contains("redacted"));
+        }
+        assert_eq!(ask.code, "synthetic-private-pasted-invitation");
+    }
 }

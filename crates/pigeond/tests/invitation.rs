@@ -169,3 +169,91 @@ async fn a_refounded_group_has_a_new_invitation() {
     ));
     client.close().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn unknown_join_versions_never_admit_or_enter_recovery() {
+    let _one = JOIN_SERIAL.lock().await;
+    let Some((_tmp, root, sockets)) = dirs() else {
+        return;
+    };
+    let lap = start(&root, sockets.path(), "lap");
+    let folder = root.join("files");
+    std::fs::create_dir(&folder).unwrap();
+    let created = pigeon(&lap, &["create", "Family", folder.to_str().unwrap()]);
+    assert!(said(&created, "created", "group").is_some());
+    let inv = group(&lap);
+    let client = node(111).await;
+    let known = request(&client, &inv, "Bob", "bob-laptop");
+    let main = || {
+        std::process::Command::new("git")
+            .current_dir(&folder)
+            .args(["rev-parse", "main"])
+            .output()
+            .unwrap()
+            .stdout
+    };
+    let before = main();
+    for version in [0, JOIN_VERSION - 1, JOIN_VERSION + 1, u32::MAX] {
+        let mut unknown = known.clone();
+        unknown.v = version;
+        refused(
+            send(&client, &inv, &unknown).await,
+            "join-version-unsupported",
+        );
+        assert_eq!(main(), before, "unknown join changed accepted history");
+        unknown.new_device = Some(client.device_id());
+        refused(
+            send(&client, &inv, &unknown).await,
+            "join-version-unsupported",
+        );
+        assert_eq!(main(), before, "unknown recovery changed accepted history");
+    }
+    assert!(welcomed(&send(&client, &inv, &known).await));
+    assert_ne!(main(), before);
+    client.close().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn every_changed_proof_position_refuses_without_editing_the_roster() {
+    let _one = JOIN_SERIAL.lock().await;
+    let Some((_tmp, root, sockets)) = dirs() else {
+        return;
+    };
+    let lap = start(&root, sockets.path(), "lap");
+    let folder = root.join("files");
+    std::fs::create_dir(&folder).unwrap();
+    let created = pigeon(&lap, &["create", "Family", folder.to_str().unwrap()]);
+    assert!(said(&created, "created", "group").is_some());
+    let inv = group(&lap);
+    let client = node(112).await;
+    let known = request(&client, &inv, "Bob", "bob-laptop");
+    let main = || {
+        std::process::Command::new("git")
+            .current_dir(&folder)
+            .args(["rev-parse", "main"])
+            .output()
+            .unwrap()
+            .stdout
+    };
+    let before = main();
+    for at in 0..known.proof.len() {
+        let mut bad = known.clone();
+        let mut proof = known.proof.as_bytes().to_vec();
+        proof[at] = if proof[at] == b'0' { b'1' } else { b'0' };
+        bad.proof = String::from_utf8(proof).unwrap();
+        refused(send(&client, &inv, &bad).await, "invite-unknown");
+    }
+    for proof in [
+        String::new(),
+        known.proof[..known.proof.len() - 1].to_owned(),
+        format!("{}0", known.proof),
+    ] {
+        let mut bad = known.clone();
+        bad.proof = proof;
+        refused(send(&client, &inv, &bad).await, "invite-unknown");
+    }
+    assert_eq!(main(), before, "bad proof changed accepted history");
+    assert!(welcomed(&send(&client, &inv, &known).await));
+    assert_ne!(main(), before);
+    client.close().await;
+}

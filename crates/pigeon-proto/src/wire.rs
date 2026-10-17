@@ -56,9 +56,17 @@ pub fn encode_with_context<T: Serialize>(
 }
 
 /// Cuts a byte stream into lines, whatever the read sizes.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct LineDecoder {
     buffer: Vec<u8>,
+}
+
+impl std::fmt::Debug for LineDecoder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LineDecoder")
+            .field("buffered_bytes", &self.buffer.len())
+            .finish()
+    }
 }
 
 impl LineDecoder {
@@ -88,5 +96,23 @@ impl LineDecoder {
     /// The bytes read past the last line taken: the start of a raw stream.
     pub fn into_rest(self) -> Vec<u8> {
         self.buffer
+    }
+}
+
+#[cfg(test)]
+mod private_buffer_tests {
+    use super::*;
+
+    #[test]
+    fn decoder_debug_hides_partial_authority_and_preserves_every_byte() {
+        let bytes = b"synthetic-private-framing-authority";
+        let mut decoder = LineDecoder::new();
+        decoder.push(bytes);
+        for text in [format!("{decoder:?}"), format!("{decoder:#?}")] {
+            assert!(!text.contains("synthetic-private-framing-authority"));
+            assert!(!text.contains(&format!("{bytes:?}")));
+            assert!(!text.contains("115,"), "raw numeric payload in diagnostic");
+        }
+        assert_eq!(decoder.into_rest(), bytes);
     }
 }

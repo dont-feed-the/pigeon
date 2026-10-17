@@ -12,7 +12,7 @@ use crate::env::GitEnv;
 use crate::error::{Error, Result};
 
 /// An object read from the repository.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Object {
     /// Its id.
     pub oid: String,
@@ -20,6 +20,16 @@ pub struct Object {
     pub kind: String,
     /// Its content.
     pub data: Vec<u8>,
+}
+
+impl std::fmt::Debug for Object {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Object")
+            .field("oid", &self.oid)
+            .field("kind", &self.kind)
+            .field("data_bytes", &self.data.len())
+            .finish()
+    }
 }
 
 /// Parses the header line `<oid> <type> <size>`, or `<name> missing`.
@@ -138,5 +148,27 @@ mod tests {
         );
         assert_eq!(parse_header("HEAD:x missing").unwrap(), None);
         assert!(parse_header("abc blob").is_err() && parse_header("abc blob x").is_err());
+    }
+}
+
+#[cfg(test)]
+mod private_object_tests {
+    use super::*;
+
+    #[test]
+    fn object_debug_hides_blob_bytes_but_keeps_identity_kind_and_length() {
+        let data = b"synthetic-private-object-authority".to_vec();
+        let object = Object {
+            oid: "object-identity".into(),
+            kind: "blob".into(),
+            data: data.clone(),
+        };
+        for text in [format!("{object:?}"), format!("{object:#?}")] {
+            assert!(!text.contains("synthetic-private-object-authority"));
+            assert!(!text.contains(&format!("{data:?}")));
+            assert!(!text.contains("115,"), "raw numeric payload in diagnostic");
+            assert!(text.contains("object-identity") && text.contains("blob"));
+        }
+        assert_eq!(object.data, data);
     }
 }

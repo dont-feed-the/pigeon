@@ -23,7 +23,7 @@ pub const FIXED: [(&str, &str); 7] = [
 ];
 
 /// How children are started.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct GitEnv {
     /// Directories put first in the children's `PATH`, in order: the one
     /// holding the transport helper's link (and the `git-remote-p2p-annex`
@@ -32,6 +32,17 @@ pub struct GitEnv {
     pub path_first: Vec<PathBuf>,
     /// Extra variables, set after the fixed ones (for example by tests).
     pub extra: Vec<(OsString, OsString)>,
+}
+
+impl std::fmt::Debug for GitEnv {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let names: Vec<_> = self.extra.iter().map(|(name, _)| name).collect();
+        f.debug_struct("GitEnv")
+            .field("path_first", &self.path_first)
+            .field("extra_names", &names)
+            .field("extra_values", &"[redacted]")
+            .finish()
+    }
 }
 
 impl GitEnv {
@@ -175,5 +186,26 @@ mod tests {
             out.iter().filter(|(k, _)| k == "GIT_CONFIG_GLOBAL").count(),
             1
         );
+    }
+}
+
+#[cfg(test)]
+mod private_environment_tests {
+    use super::*;
+
+    #[test]
+    fn environment_debug_hides_values_without_changing_the_child_environment() {
+        let env = GitEnv {
+            path_first: vec![],
+            extra: vec![(
+                "PIGEON_SYNTHETIC_AUTH".into(),
+                "synthetic-private-child-authority".into(),
+            )],
+        };
+        for text in [format!("{env:?}"), format!("{env:#?}")] {
+            assert!(!text.contains("synthetic-private-child-authority"));
+            assert!(text.contains("PIGEON_SYNTHETIC_AUTH"));
+        }
+        assert!(env.child_env(Vec::new()).contains(&env.extra[0]));
     }
 }

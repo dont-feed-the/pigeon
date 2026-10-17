@@ -23,3 +23,10 @@ pub use wire::{Envelope, LineDecoder, MAX_LINE, encode};
 /// The version of the socket protocol, answered to `Hello` (10.1): a client
 /// of another version refuses with `version-mismatch`.
 pub const PROTOCOL_VERSION: u32 = 1;
+
+#[cfg(test)]
+mod private_state_debug_tests;
+
+mod api_debug;
+
+mod erase_debug;

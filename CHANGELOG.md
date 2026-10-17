@@ -10,6 +10,15 @@ increments the second number, and every other release the third.
 ### Fixed
 
 - Between keys, kept-folder downloads yield to pending work that protects files, then resume without spending their timeout while waiting.
+- Joining refuses unsupported protocol versions and unknown invitation or join fields instead of interpreting them as known authority. Invitation proofs use the constant-time comparison primitive.
+
+## 0.6.14 — 2026-10-17
+
+### Fixed
+
+- Diagnostic output also hides pasted join invitations, partial socket messages, Git object contents and extra child-environment values.
+- Diagnostic output hides recovery keys, stored invitation and authentication tokens, protocol data and private API messages.
+- Removing a computer or backup machine now explains in English and French that its existing invitation still lets its holder join as a new computer.
 
 ## 0.6.13 — 2026-10-17
 

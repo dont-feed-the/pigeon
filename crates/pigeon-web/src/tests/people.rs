@@ -92,7 +92,16 @@ async fn removing_a_computer_says_its_files_stay_and_it_can_come_back() {
         ask.contains("Its files stay on it but are no longer shared with the group"),
         "{ask}"
     );
-    assert!(ask.contains("You can invite it again later."), "{ask}");
+    assert!(ask.contains("Removal does not change the invitation line: anyone holding it can join as a new computer."), "{ask}");
+    let (_, french) = asked("fr", 1, "paul-laptop").await;
+    assert!(
+        french.contains("Le retrait ne change pas la ligne d’invitation"),
+        "{french}"
+    );
+    assert!(
+        french.contains("peut rejoindre comme nouvel ordinateur"),
+        "{french}"
+    );
     assert!(!ask.contains("role=\"alert\""), "{ask}");
     let (_, ask) = asked("en", 1, "2026-10-16-abc123").await;
     assert!(ask.contains("Revoke 2026-10-16-abc123?"), "{ask}");

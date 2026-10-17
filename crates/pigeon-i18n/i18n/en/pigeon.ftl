@@ -320,13 +320,13 @@ cmd-deleted = The files deleted from the group, which restore brings back
 machine-this = { $name }: this computer
 version-row = { $number }. { $saved }: { $state }
 waiting-row = { $path }: { $state }
-confirm-remove-computer = Remove { $name } from the group? Its files stay on it but are no longer shared with the group, and its copies stop counting. You can invite it again later. [y/N]
-confirm-remove-backup = Remove the backup machine { $name } from the group? The copies it keeps stop counting; the other backup machines take over. You can invite it again later. [y/N]
+confirm-remove-computer = Remove { $name } from the group? Its files stay on it but are no longer shared with the group, and its copies stop counting. Removal does not change the invitation line: anyone holding it can join as a new computer. [y/N]
+confirm-remove-backup = Remove the backup machine { $name } from the group? The copies it keeps stop counting; the other backup machines take over. Removal does not change the invitation line: anyone holding it can join as a new computer. [y/N]
 confirm-remove-backup-unsafe = Remove the backup machine { $name } from the group? { $left ->
         [0] After this, the group will have no backup machine. None of your files will be safe until you add one.
         [one] After this, the group will have only one backup machine, but it needs { $needed } for your files to be safe. Your files will not be safe until you add another one.
        *[other] After this, the group will have only { $left } backup machines, but it needs { $needed } for your files to be safe. Your files will not be safe until you add another one.
-    } You can invite it again later. [y/N]
+    } Removal does not change the invitation line: anyone holding it can join as a new computer. [y/N]
 confirm-yes = yes
 confirm-leave = Remove this computer from the group? Its files stay in the folder, but it stops sharing them. [y/N]
 confirm-refound = Refound the group with you as its only admin? It becomes a new group: every other member joins it again by an invitation from you, and the old history stays readable. Completed erasures in that snapshot remain effective. Pending erasures do not continue in the new group; computers still in the old group may finish them there. Prepare erasing again after inviting your backups. [y/N]
@@ -342,6 +342,7 @@ hint-not-in-this-build = This early build has only the commands that keep files 
 problem-file-system-not-in-this-build = This folder is on { $fs }, which this build of pigeon does not support yet.
 hint-file-system-not-in-this-build = Choose a folder on ext4 (Linux) or APFS (macOS).
 problem-invite-unknown = This invitation is not one the group knows.
+problem-join-version-unsupported = These computers use different joining versions. Update pigeon on both computers, then use the group’s invitation line again.
 problem-invite-not-allowed = { $inviter } may not add this computer to the group.
 problem-inviter-offline = { $inviter }'s computer can't be reached right now.
 hint-inviter-offline = Try again when { $inviter }'s computer is on. Nothing was kept on this computer, so you can use the same folder.
@@ -533,8 +534,8 @@ hint-held-choice = See its choices with: pigeon held
 problem-held-rename-taken = { $to } already exists.
 hint-held-rename-taken = Rename it yourself; pigeon captures it once its name works everywhere.
 web-remove = Remove
-web-remove-confirm = Remove { $name } from the group? Its files stay on it but are no longer shared with the group, and its copies stop counting. You can invite it again later.
-web-remove-backup-confirm = Remove the backup machine { $name } from the group? The copies it keeps stop counting. You can invite it again later.
+web-remove-confirm = Remove { $name } from the group? Its files stay on it but are no longer shared with the group, and its copies stop counting. Removal does not change the invitation line: anyone holding it can join as a new computer.
+web-remove-backup-confirm = Remove the backup machine { $name } from the group? The copies it keeps stop counting. Removal does not change the invitation line: anyone holding it can join as a new computer.
 remove-backup-unsafe =
     { $left ->
         [0] After this, the group will have no backup machine. None of your files will be safe until you add one.

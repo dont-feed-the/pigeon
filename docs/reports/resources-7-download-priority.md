@@ -61,3 +61,16 @@ header/length, ADR and spec checks pass on the final local source. The 25
 existing CI-selection and two slice-partition checks pass with the two-wide
 periodic Mac matrices. Current-main integration and exact-head CI precede
 merging. The reference-tree, HDD and wider M6/M7 gates remain open.
+
+## Current-main integration
+
+Current v0.6.14 candidate main `5fc77893e687d30efe6fcb855535b2b0701dcbc9` is integrated before PR validation.
+The independently validated joining delta `e2b2ac8cddada6c2b993758f33b09f4633c42d33` is folded into this
+same validation. Three 1000-case priority laws, ten native scheduling
+checks, complete protocol library and web/Fluent selections, native
+invitation/codec/format and both corrected health checks, real annex
+transfer and native S2/S3 pass; TLC accepts filesystem and roster streams.
+All-target Clippy, 27 workflow selection/partition checks and structural
+checks pass. This remains distinct from the original 774/775 workspace
+run, its retained failure and corrected precondition retakes above.
+Exact-head CI and subsequent publication are separate.

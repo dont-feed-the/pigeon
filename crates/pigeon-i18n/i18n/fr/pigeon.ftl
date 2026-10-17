@@ -328,13 +328,13 @@ cmd-deleted = Les fichiers supprimés du groupe, que restore fait revenir
 machine-this = { $name } : cet ordinateur
 version-row = { $number }. { $saved } : { $state }
 waiting-row = { $path } : { $state }
-confirm-remove-computer = Retirer { $name } du groupe ? Ses fichiers y restent, mais ne sont plus partagés avec le groupe, et ses copies ne comptent plus. Vous pourrez l’inviter à nouveau plus tard. [o/N]
-confirm-remove-backup = Retirer la machine de sauvegarde { $name } du groupe ? Les copies qu’elle garde ne comptent plus ; les autres machines de sauvegarde prennent le relais. Vous pourrez l’inviter à nouveau plus tard. [o/N]
+confirm-remove-computer = Retirer { $name } du groupe ? Ses fichiers y restent, mais ne sont plus partagés avec le groupe, et ses copies ne comptent plus. Le retrait ne change pas la ligne d’invitation : une personne qui la possède peut rejoindre comme nouvel ordinateur. [o/N]
+confirm-remove-backup = Retirer la machine de sauvegarde { $name } du groupe ? Les copies qu’elle garde ne comptent plus ; les autres machines de sauvegarde prennent le relais. Le retrait ne change pas la ligne d’invitation : une personne qui la possède peut rejoindre comme nouvel ordinateur. [o/N]
 confirm-remove-backup-unsafe = Retirer la machine de sauvegarde { $name } du groupe ? { $left ->
         [0] Après cela, le groupe n’aura plus aucune machine de sauvegarde. Aucun de vos fichiers ne sera en sécurité tant que vous n’en aurez pas ajouté une.
         [one] Après cela, le groupe n’aura plus qu’une machine de sauvegarde, alors qu’il lui en faut { $needed } pour que vos fichiers soient en sécurité. Ils ne le seront pas tant que vous n’en aurez pas ajouté une autre.
        *[other] Après cela, le groupe n’aura plus que { $left } machines de sauvegarde, alors qu’il lui en faut { $needed } pour que vos fichiers soient en sécurité. Ils ne le seront pas tant que vous n’en aurez pas ajouté une autre.
-    } Vous pourrez l’inviter à nouveau plus tard. [o/N]
+    } Le retrait ne change pas la ligne d’invitation : une personne qui la possède peut rejoindre comme nouvel ordinateur. [o/N]
 confirm-yes = oui
 confirm-leave = Retirer cet ordinateur du groupe ? Ses fichiers restent dans le dossier, mais il cesse de les partager. [o/N]
 confirm-refound = Refonder le groupe avec vous pour seul administrateur ? Il devient un nouveau groupe : chaque autre membre le rejoint à nouveau par une invitation de votre part, et l'ancien historique reste lisible. Les effacements achevés dans cet état restent effectifs. Les demandes en attente ne continuent pas dans le nouveau groupe ; les ordinateurs restés dans l’ancien peuvent les terminer là-bas. Préparez à nouveau l’effacement après avoir réinvité vos sauvegardes. [o/N]
@@ -350,6 +350,7 @@ hint-not-in-this-build = Cette première version n'a que les commandes qui mette
 problem-file-system-not-in-this-build = Ce dossier est sur { $fs }, que cette version de pigeon ne prend pas encore en charge.
 hint-file-system-not-in-this-build = Choisissez un dossier sur ext4 (Linux) ou APFS (macOS).
 problem-invite-unknown = Le groupe ne connaît pas cette invitation.
+problem-join-version-unsupported = Ces ordinateurs utilisent des versions différentes pour rejoindre un groupe. Mettez pigeon à jour sur les deux, puis réutilisez la ligne d’invitation du groupe.
 problem-invite-not-allowed = { $inviter } ne peut pas ajouter cet ordinateur au groupe.
 problem-inviter-offline = L'ordinateur de { $inviter } est injoignable pour le moment.
 hint-inviter-offline = Réessayez quand l'ordinateur de { $inviter } est allumé. Rien n’a été gardé sur cet ordinateur : vous pouvez reprendre le même dossier.
@@ -541,8 +542,8 @@ hint-held-choice = Voyez ses choix avec : pigeon held
 problem-held-rename-taken = { $to } existe déjà.
 hint-held-rename-taken = Renommez-le vous-même ; pigeon le capture dès que son nom marche partout.
 web-remove = Retirer
-web-remove-confirm = Retirer { $name } du groupe ? Ses fichiers y restent, mais ne sont plus partagés avec le groupe, et ses copies ne comptent plus. Vous pourrez l’inviter à nouveau plus tard.
-web-remove-backup-confirm = Retirer la machine de sauvegarde { $name } du groupe ? Les copies qu’elle garde ne comptent plus. Vous pourrez l’inviter à nouveau plus tard.
+web-remove-confirm = Retirer { $name } du groupe ? Ses fichiers y restent, mais ne sont plus partagés avec le groupe, et ses copies ne comptent plus. Le retrait ne change pas la ligne d’invitation : une personne qui la possède peut rejoindre comme nouvel ordinateur.
+web-remove-backup-confirm = Retirer la machine de sauvegarde { $name } du groupe ? Les copies qu’elle garde ne comptent plus. Le retrait ne change pas la ligne d’invitation : une personne qui la possède peut rejoindre comme nouvel ordinateur.
 remove-backup-unsafe =
     { $left ->
         [0] Après cela, le groupe n’aura plus aucune machine de sauvegarde. Aucun de vos fichiers ne sera en sécurité tant que vous n’en aurez pas ajouté une.

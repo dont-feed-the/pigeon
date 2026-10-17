@@ -24,6 +24,7 @@ pub const INSTALLER: &str =
 
 /// What the group's invitation carries.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Invitation {
     /// [`INVITATION_VERSION`].
     pub v: u32,
@@ -64,6 +65,7 @@ impl std::fmt::Debug for Invitation {
 
 /// A device that admits new ones.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Admitter {
     /// Its device ID.
     pub device: String,
@@ -75,7 +77,8 @@ pub struct Admitter {
 }
 
 /// What a new device sends to an admitter.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Join {
     /// [`JOIN_VERSION`].
     pub v: u32,
@@ -122,9 +125,23 @@ pub struct Join {
     pub recovery_version: Option<u32>,
 }
 
+impl std::fmt::Debug for Join {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Join")
+            .field("v", &self.v)
+            .field("invitation_hash", &self.invitation_hash)
+            .field("proof", &"[redacted]")
+            .field("person", &self.person)
+            .field("device_name", &self.device_name)
+            .field("role", &self.role)
+            .field("annex_uuid", &self.annex_uuid)
+            .finish_non_exhaustive()
+    }
+}
+
 /// The admitter's answer.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", deny_unknown_fields)]
 pub enum JoinAnswer {
     /// The device is in the roster from `commit` on.
     Welcome {
@@ -147,6 +164,7 @@ pub enum JoinAnswer {
 /// What an invitation to a refounded group says of it (09 §9.9, ADR 0047):
 /// joining means accepting `by` as its admin.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Refounded {
     /// The old group's ID.
     pub from: String,
@@ -249,3 +267,7 @@ mod tests {
 #[cfg(test)]
 #[path = "join_private_debug_tests.rs"]
 mod private_debug_tests;
+
+#[cfg(test)]
+#[path = "join_schema_tests.rs"]
+mod schema_tests;
