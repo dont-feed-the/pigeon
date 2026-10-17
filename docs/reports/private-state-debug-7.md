@@ -46,3 +46,15 @@ real annex transfer and the corrected backup-rejoin preservation check
 pass again, with all-target Clippy and structural checks. The old repair
 changelog items stay in their actual release; only these diagnostic and removal wording corrections
 remain Unreleased. Exact-head PR CI and the wider M7 review are separate.
+
+## Release validation
+
+PR #82, head `e28cb6b8a07008668b44e2e126c230a3f37933a0`, passed exact-head CI
+39075272648, lab 39075272692 and bridge
+39075272709. Current main was integrated before validation.
+The fourteen original privacy regressions, four later buffered-input
+regressions, both language wording retakes and affected native/codec/library
+checks remain distinct evidence above and in their linked reports. Bridge
+and core slice caches saved; active main producers remain protected from
+cancellation. v0.6.13 was published and independently verified before this
+candidate. The wider security audit and actual elapsed M7 gates remain open.
