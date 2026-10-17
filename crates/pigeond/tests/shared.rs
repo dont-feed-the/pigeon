@@ -127,7 +127,7 @@ fn aborted(peer: &mut Peer) {
 fn existing_peer_migrates_and_hiding_recovers_before_capture() {
     let temp = tempfile::Builder::new()
         .prefix("pgnshared")
-        .tempdir_in("/tmp")
+        .tempdir()
         .unwrap();
     let home = temp.path().join("home");
     let socket = temp.path().join("peer.sock");
@@ -353,7 +353,7 @@ fn existing_peer_migrates_and_hiding_recovers_before_capture() {
 fn a_bulk_delete_is_refused_before_it_can_block_journal_recovery() {
     let temp = tempfile::Builder::new()
         .prefix("pgnbulk")
-        .tempdir_in("/tmp")
+        .tempdir()
         .unwrap();
     let home = temp.path().join("home");
     let socket = temp.path().join("peer.sock");
@@ -429,7 +429,7 @@ fn pool_registration_deduplicates_before_acknowledging_without_background_rounds
     use std::os::unix::fs::DirBuilderExt;
     let temp = tempfile::Builder::new()
         .prefix("pgnregister")
-        .tempdir_in("/tmp")
+        .tempdir()
         .unwrap();
     let home = temp.path().join("home");
     let files = temp.path().join("files");

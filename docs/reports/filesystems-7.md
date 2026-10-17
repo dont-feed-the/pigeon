@@ -53,6 +53,19 @@ before claiming these native driver checks passed. This workspace lacks the
 privileged mount tools needed to run that script locally. ZFS runtime and
 current-source macOS filesystem evidence remain separate open checks.
 
+The initial 748-check parallel local run on `40b6ae6` passed 743 checks and
+failed five bridge/shared-storage fixtures that forced `/tmp`, despite the
+configured temporary volume. `/tmp` is tmpfs on this host, so create correctly
+refused it. Those five fixtures now honor the configured temporary directory;
+all five passed together in the focused retake, including the native paged
+catalogue. This does not relax the release or lab tmpfs policy, and the
+original failed run is not described as a successful 748-check run. Fixed and
+random S9 fixture defaults likewise follow the selected temporary volume.
+
+The named keep-index S9 regression passed against the filesystem branch's
+current-version binaries in 14.2 seconds. TLC accepted its two filesystem
+streams and roster stream. This scenario is not a resource-budget measurement.
+
 ## Usability
 
 Independent English and French agent sessions, accepted by the user for

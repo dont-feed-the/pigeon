@@ -87,7 +87,7 @@ fn call(peer: &Peer, request: &Request) -> std::io::Result<Response> {
 fn large_catalogues_page_over_the_real_socket_and_writes_stay_bounded() {
     let tmp = tempfile::Builder::new()
         .prefix("pgnpages")
-        .tempdir_in("/tmp")
+        .tempdir()
         .unwrap();
     let files = tmp.path().join("files");
     // Long portable paths cross the message limit with fewer native captures.
@@ -263,7 +263,7 @@ fn an_interrupted_bridge_batch_replays_and_file_preconditions_survive_rebase() {
     );
     let tmp = tempfile::Builder::new()
         .prefix("pgnbridge")
-        .tempdir_in("/tmp")
+        .tempdir()
         .unwrap();
     let root = tmp.path();
     let home = root.join("home");
