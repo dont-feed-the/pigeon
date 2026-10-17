@@ -7,6 +7,23 @@ increments the second number, and every other release the third.
 
 ## Unreleased
 
+### Fixed
+
+- Background capture waits for a file to settle before reading it and spaces
+  captures of frequently saved files, while other stable files keep progressing.
+- Status and install checks leave another file's unsettled save alone. Capture
+  recognizes same-size edits even when an application preserves the file's
+  modification time.
+
+## 0.6.3 — 2026-10-17
+
+### Fixed
+
+- Rejoining a backup can import its saved metadata while another fetch owns
+  the peer's metadata-ref lock, without touching that lock.
+
+## 0.6.2 — 2026-10-17
+
 ### Added
 
 - Settings → Use of this computer and `pigeon settings resources.*` offer
@@ -18,11 +35,6 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
-- Background capture waits for a file to settle before reading it and spaces
-  captures of frequently saved files, while other stable files keep progressing.
-- Status and install checks leave another file's unsettled save alone. Capture
-  recognizes same-size edits even when an application preserves the file's
-  modification time.
 - Repeated in-place saves keep each captured version intact while it awaits
   backup, including when status checks or index refreshes inspect the file.
 - Status checks and protection planning finish sooner for folders with many

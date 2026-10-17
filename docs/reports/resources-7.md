@@ -315,3 +315,17 @@ Original sessions and retakes are recorded in
 Nine real git-annex integration tests also passed locally in 35.7 seconds:
 protection, free/keep, returning backup, restores and explicit erasure. This
 finite result does not establish the ten-minute resource budgets or E17.
+
+
+## v0.6.2 publication checkpoint
+
+PR #70 merged after exact-head CI, lab and all three bridge cases passed.
+The previously failing 102-file lifecycle passed in CI in 76.9 seconds.
+[v0.6.2](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.2)
+then published on 17 October at 13:42:34 UTC, source
+`3439d9d67fc8b1a6368f4eb15e2633a28a2ee6dd`, with both platform archives,
+pinned dependencies, installer and checksums verified. Its two first-attempt
+misses and targeted follow-up fixes are recorded in the
+[publication KPI](../release-kpi.md#v062-observation). This patch releases
+the completed controller and safety work; it does not complete M6 or its
+reference-tree, filesystem, foreground HDD or native-priority gates.

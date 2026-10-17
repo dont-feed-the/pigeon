@@ -469,7 +469,7 @@ impl Model {
                 let lm = self.laptop(on);
                 lm.content.insert(ver.key.clone(), ver.len);
                 lm.disk.insert(file.clone(), OnDisk::File(ver.key.clone()));
-                self.log("Restore", "Start", d);
+                self.log("Restore", "VerifyRestore", d);
             }
             LaptopOp::Invite { custodian } => {
                 let c = &mut self.custodians[custodian.0 as usize];

@@ -144,6 +144,10 @@ pub fn s3() -> Scenario {
         wait(l.sees(&a, Kind::Protected), 120),
         l.restore(&a, 1),
         wait(l.has(&a, &v1), 120),
+        // Already-present bytes are a successful restore too, with a real
+        // verified postcondition rather than another filesystem install.
+        l.restore(&a, 1),
+        wait(l.has(&a, &v1), 120),
         wait(l.sees(&a, Kind::Protected), 120),
     ];
     scenario(

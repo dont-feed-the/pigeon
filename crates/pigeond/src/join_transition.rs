@@ -108,15 +108,14 @@ async fn import(g: &Group, plan: &Plan) -> Result<(), String> {
             .collect();
         g.set_addresses(&source.device, addresses);
         g.learn_peers(&source.peers);
-        if let Some(ga) = g.git.rev(&format!("{prefix}heads/git-annex")).await {
-            g.git
-                .run(&[
-                    "update-ref",
-                    &format!("refs/remotes/{}/git-annex", source.device),
-                    &ga,
-                ])
-                .await
-                .map_err(|e| e.to_string())?;
+        if g.git
+            .rev(&format!("{prefix}heads/git-annex"))
+            .await
+            .is_some()
+        {
+            // Annex/Branch.hs siblingBranches uses Git.Ref.matchingUniq,
+            // hence show-ref's suffix match includes this quarantined ref.
+            // Merge it directly; normal fetch owns the peer's remote ref.
             g.git
                 .run(&["annex", "merge"])
                 .await

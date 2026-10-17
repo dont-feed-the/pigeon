@@ -1,6 +1,6 @@
 # Daemon trace regressions
 
-These are complete single-path projections of real S9 traces. The first
+These are observations from real native runs. The first
 two are from
 `smarter/pigeon` Actions run 38821834366, job 116721582090, artifact
 12014443541, at da3d7a2. They retain the original observations and clocks;
@@ -30,10 +30,17 @@ gaps are events for other paths or specifications in the full log.
   5df9b31, generated with `--features tla-trace,lab`. A retained inode is
   written through a handle the scan did not see. The eager search cannot
   explain it, and must retry the full model, which accepts it.
+- `restore-already-present.ndjson`: the unchanged before/after observation
+  pair from a local native S3 run on 17 October 2026, after restoring version
+  1 a second time while its bytes are already visible. It retains clocks
+  51–52 and the actual signed versions and file hash. The run used the
+  `VerifyRestore` instrumentation added after v0.6.2; no install is invented.
 
-`scripts/check-driver-traces` checks the first three with TLC;
+`scripts/check-driver-traces` checks the first three and the restore pair with TLC;
 `models/tests/test_install_witness.py` checks the recovery retry histories.
 Removing the
 release boundary, clearing skip-worktree without a visible path, and
 omitting durable journal completion must fail. Global clock continuity is checked on
 full logs by `check-lab-traces`, rather than on these path projections.
+For the restore pair, replacing either the requested version with another
+signed version or the visible bytes must produce a model counterexample.
