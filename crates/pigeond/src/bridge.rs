@@ -4,7 +4,7 @@
 //! can interpret an interrupted batch. The bridge never writes Git directly.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
@@ -37,16 +37,7 @@ pub fn valid_path(path: &str) -> bool {
 }
 
 fn hash_file(path: &Path) -> std::io::Result<String> {
-    let mut file = std::fs::File::open(path)?;
-    let mut hash = Sha256::new();
-    let mut buf = [0; 64 * 1024];
-    loop {
-        let n = file.read(&mut buf)?;
-        if n == 0 {
-            return Ok(crate::util::hex(&hash.finalize()));
-        }
-        hash.update(&buf[..n]);
-    }
+    crate::net::sync::sha256_file(path)
 }
 
 fn executable(path: &Path) -> bool {

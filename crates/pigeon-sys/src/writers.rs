@@ -407,6 +407,7 @@ mod tests {
             id: FileId { dev: 1, ino: 2 },
             size: 0,
             mtime_ns: 0,
+            ctime_ns: 0,
             nlink: 1,
             mode: 0o100000 | mode,
             uid,

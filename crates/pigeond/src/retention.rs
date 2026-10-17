@@ -146,15 +146,7 @@ pub async fn states(
             .git
             .run(&["for-each-ref", "--format=%(objectname)", &prefix])
             .await?;
-        let mut named = BTreeSet::new();
-        for (tip, retained) in &by_tip {
-            for root in refs.lines() {
-                if g.git.contains(root, tip).await {
-                    named.extend(retained.iter().cloned());
-                    break;
-                }
-            }
-        }
+        let named = named_keys(&g.git, &by_tip, &refs, g.git.purge_gate.armed()).await?;
         peers.push((id, uuid, role, named));
     }
     if g.role == pigeon_core::filter::Role::Custodian
@@ -201,3 +193,58 @@ pub async fn states(
     }
     Ok(out)
 }
+
+// A retaining commit need not contain our newest merge: two peers can
+// independently merge the same parents. The common ancestry must include
+// the actual captured reference; equal bytes in unrelated history do not.
+async fn named_keys(
+    git: &crate::git::Git,
+    ours: &[(&String, BTreeSet<String>)],
+    refs: &str,
+    purge_history: bool,
+) -> Result<BTreeSet<String>, Error> {
+    if purge_history {
+        // Shared old bytes/history cannot acknowledge a fresh reference
+        // after erasure. Keep the previous complete-head rule until status
+        // binds individual live reference births to the peer's ancestry.
+        let mut named = BTreeSet::new();
+        for (tip, retained) in ours {
+            for root in refs.lines() {
+                if git.contains(root, tip).await {
+                    named.extend(retained.iter().cloned());
+                    break;
+                }
+            }
+        }
+        return Ok(named);
+    }
+    let mut shared = BTreeSet::new();
+    for (tip, _) in ours {
+        for root in refs.lines() {
+            let args = ["merge-base", "--all", tip, root];
+            let (status, output) = git
+                .repo
+                .run_status(&args, None, pigeon_git::DEFAULT_TIMEOUT)
+                .await?;
+            let bases = output.text();
+            match status {
+                Some(0) if !bases.is_empty() && bases.lines().all(crate::purge_file::commit_id) => {
+                    shared.extend(bases.lines().map(str::to_owned));
+                }
+                Some(1) if bases.is_empty() => {}
+                _ => {
+                    return Err(Error::Parse {
+                        argv: args.into_iter().map(str::to_owned).collect(),
+                        detail: "shared retained ancestry is unavailable".into(),
+                    });
+                }
+            }
+        }
+    }
+    git.retained_keys(&shared.into_iter().collect::<Vec<_>>())
+        .await
+}
+
+#[cfg(test)]
+#[path = "retention/tests.rs"]
+mod tests;

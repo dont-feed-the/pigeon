@@ -38,6 +38,8 @@ use pigeond::{capture, install, merge};
 
 #[path = "install/capture_immutability.rs"]
 mod capture_immutability;
+#[path = "install/capture_schedule.rs"]
+mod capture_schedule;
 
 const T0: i64 = 1_791_892_800;
 

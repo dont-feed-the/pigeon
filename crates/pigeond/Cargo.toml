@@ -17,7 +17,6 @@ tla-trace = ["pigeon-core/tla-trace"]
 tokio-console = ["pigeon-telemetry/tokio-console", "tokio/tracing"]
 
 [dependencies]
-notify-rust.workspace = true
 pigeon-core.workspace = true
 pigeon-git.workspace = true
 pigeon-proto.workspace = true
@@ -39,6 +38,13 @@ tokio = { workspace = true, features = ["rt-multi-thread", "net", "fs", "signal"
 toml_edit.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus.workspace = true
+futures-util.workspace = true
+
+[target.'cfg(target_vendor = "apple")'.dependencies]
+notify-rust.workspace = true
 
 [dev-dependencies]
 hegeltest.workspace = true

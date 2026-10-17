@@ -185,34 +185,23 @@ pub async fn check(d: &Daemon) {
     let open = cat.format(&pigeon_i18n::Message::new("notify-open"));
     // Grouped: one notification for all kinds of this round.
     let body = texts.join("\n");
+    #[cfg(target_os = "linux")]
+    tokio::spawn(async move {
+        linux::show(&body, &open, url).await;
+    });
+    #[cfg(target_vendor = "apple")]
     tokio::task::spawn_blocking(move || show(&body, &open, url));
 }
 
-/// Shows one notification; a click opens `url` (Linux).
+#[cfg(target_os = "linux")]
+#[path = "notices_linux.rs"]
+mod linux;
+
+/// Shows one notification with the existing macOS desktop backend.
+#[cfg(target_vendor = "apple")]
 fn show(body: &str, open: &str, url: Option<String>) {
     let mut n = notify_rust::Notification::new();
     n.appname("pigeon").summary("pigeon").body(body);
-    #[cfg(all(unix, not(target_vendor = "apple")))]
-    {
-        n.action("default", open);
-        if let Ok(handle) = n.show() {
-            handle.wait_for_action(|action| {
-                if action == "default"
-                    && let Some(url) = &url
-                {
-                    let _ = std::process::Command::new("xdg-open")
-                        .arg(url)
-                        .stdin(std::process::Stdio::null())
-                        .stdout(std::process::Stdio::null())
-                        .stderr(std::process::Stdio::null())
-                        .spawn();
-                }
-            });
-        }
-    }
-    #[cfg(target_vendor = "apple")]
-    {
-        let _ = (open, url);
-        let _ = n.show();
-    }
+    let _ = (open, url);
+    let _ = n.show();
 }

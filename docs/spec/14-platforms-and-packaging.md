@@ -193,7 +193,7 @@ ADRs 0021–0025, 0028 and 0029. Others:
 | join proof | `hmac` (the first build computes HMAC-SHA256 over `sha2`, checked against RFC 4231), `sha2`, `getrandom`, `data-encoding` (base32), `qrcode` | 0075 **[no ADR: crates]** |
 | change hints | `notify` | 0013 |
 | local state | `dirs`, `tempfile`, `toml`, `toml_edit`, `serde`, `serde_json` | 0036 |
-| platform | `rustix` (`unsafe` only in the macOS writer scan), `libc` on macOS (`libproc`), `zbus` (UPower, NetworkManager) | 0037 **[no ADR: crates]** |
+| platform | `rustix` (`unsafe` only in the macOS writer scan), `libc` on macOS (`libproc`), `zbus` (UPower, NetworkManager and Linux notifications; ADR 0082) | 0037 **[no ADR: crates]** |
 | property tests (dev) | `hegeltest` | 0012 |
 
 Not used: `gix` (ADR 0010), `redb` and `rusqlite` (ADR 0036), `anyhow`

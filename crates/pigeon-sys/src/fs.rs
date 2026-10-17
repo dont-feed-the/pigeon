@@ -3,7 +3,7 @@
 //! ADR 0037, spec 07 §7.5).
 
 use std::fs::{File, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
@@ -20,8 +20,9 @@ pub struct FileId {
     pub ino: u64,
 }
 
-/// What install compares with the index entry: `(dev, ino, size, mtime in ns)`,
-/// with the link count (spec 07 §7.5, 11 §11.3).
+/// Native metadata for live save/restore preconditions and observations.
+/// The durable journal retains its `(dev, ino, size, mtime in ns)` tuple
+/// (spec 07 §7.5, 11 §11.3); ctime also detects preserved-mtime saves here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Stat {
     /// Device and inode.
@@ -30,6 +31,8 @@ pub struct Stat {
     pub size: u64,
     /// Modification time in nanoseconds since the epoch.
     pub mtime_ns: i64,
+    /// Inode-change time, including same-size writes that preserve mtime.
+    pub ctime_ns: i64,
     /// Number of hard links.
     pub nlink: u64,
     /// The file type and permission bits (`st_mode`).
@@ -72,6 +75,10 @@ impl Stat {
                 .mtime()
                 .saturating_mul(1_000_000_000)
                 .saturating_add(meta.mtime_nsec()),
+            ctime_ns: meta
+                .ctime()
+                .saturating_mul(1_000_000_000)
+                .saturating_add(meta.ctime_nsec()),
             nlink: meta.nlink(),
             mode: meta.mode(),
             uid: meta.uid(),
@@ -234,6 +241,70 @@ pub fn open_uncached(path: &Path) -> Result<File> {
     Ok(file)
 }
 
+/// A bounded streaming read that advises completed cache pages on Linux.
+/// On macOS, the file is opened with F_NOCACHE instead. This does not keep
+/// content bytes or wait until a large file's complete hash is finished.
+pub struct StreamingRead {
+    file: File,
+    #[cfg(target_os = "linux")]
+    position: u64,
+    #[cfg(target_os = "linux")]
+    forgotten: u64,
+    #[cfg(target_os = "linux")]
+    page: u64,
+}
+
+/// Open an ordinary streaming read with native page-cache advice (ADR 0037).
+pub fn streaming_read(path: &Path) -> Result<StreamingRead> {
+    let file = open_uncached(path)?;
+    #[cfg(target_os = "linux")]
+    let page = {
+        // SAFETY: sysconf reads a scalar system parameter and takes no pointer.
+        let size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+        u64::try_from(size)
+            .ok()
+            .filter(|size| *size > 0)
+            .ok_or_else(|| Error::op("page-size", io::Error::other("unknown native page size")))?
+    };
+    Ok(StreamingRead {
+        file,
+        #[cfg(target_os = "linux")]
+        position: 0,
+        #[cfg(target_os = "linux")]
+        forgotten: 0,
+        #[cfg(target_os = "linux")]
+        page,
+    })
+}
+
+impl Read for StreamingRead {
+    fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+        let count = self.file.read(bytes)?;
+        #[cfg(target_os = "linux")]
+        {
+            self.position = self.position.saturating_add(count as u64);
+            let completed = self.position / self.page * self.page;
+            // A real EOF can also release the final partial page. Empty
+            // buffer reads are not EOF, and must advise no unread bytes.
+            let end = if count == 0 && !bytes.is_empty() && completed < self.position {
+                completed.saturating_add(self.page)
+            } else {
+                completed
+            };
+            if let Some(length) = std::num::NonZeroU64::new(end - self.forgotten) {
+                rustix::fs::fadvise(
+                    &self.file,
+                    self.forgotten,
+                    Some(length),
+                    rustix::fs::Advice::DontNeed,
+                )?;
+                self.forgotten = completed;
+            }
+        }
+        Ok(count)
+    }
+}
+
 /// Tells the kernel that pigeon will not read this file's pages again:
 /// `posix_fadvise(POSIX_FADV_DONTNEED)` on Linux; nothing on macOS, where
 /// [`open_uncached`] already kept them out (ADR 0037).
@@ -249,6 +320,33 @@ pub fn forget_pages(file: &File) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn short_streaming_reads_preserve_every_byte_and_advise_completed_pages() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("content.bin");
+        let expected: Vec<u8> = (0..1_048_613).map(|n| (n % 251) as u8).collect();
+        std::fs::write(&path, &expected).unwrap();
+        let mut reader = streaming_read(&path).unwrap();
+        let mut actual = Vec::new();
+        let mut chunk = [0; 257];
+        loop {
+            assert_eq!(reader.read(&mut []).unwrap(), 0);
+            let count = reader.read(&mut chunk).unwrap();
+            if count == 0 {
+                break;
+            }
+            actual.extend_from_slice(&chunk[..count]);
+            #[cfg(target_os = "linux")]
+            assert!(
+                reader.position - reader.forgotten < reader.page,
+                "completed pages must not wait until the whole file is read"
+            );
+        }
+        assert_eq!(actual, expected);
+        assert_eq!(std::fs::read(&path).unwrap(), expected);
+        assert_eq!(reader.read(&mut chunk).unwrap(), 0);
+    }
 
     #[test]
     fn noreplace_moves_onto_a_free_name_only() {

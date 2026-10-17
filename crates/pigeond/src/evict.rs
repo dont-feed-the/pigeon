@@ -519,7 +519,6 @@ async fn keep_inner(g: &Group, t: &Tracer, receive: bool) -> Result<usize, Strin
             }
             return Err(error.to_string());
         }
-        let _ = g.git.run(&["update-index", "-q", "--refresh"]).await;
         for span in indexing {
             span.finish("indexed").await;
         }
@@ -530,6 +529,9 @@ async fn keep_inner(g: &Group, t: &Tracer, receive: bool) -> Result<usize, Strin
             done.finish("idle").await;
         }
     }
+    let staged = g.git.index().await.map_err(|e| e.to_string())?;
+    let completed: Vec<_> = moved.iter().map(|(_, path)| path.clone()).collect();
+    crate::capture_schedule::checked(g, &completed, &staged).await;
     truncate_if_done(g);
     Ok(moved.len())
 }
@@ -659,6 +661,5 @@ pub async fn recover(g: &Group, t: &Tracer) {
             .finish("idle")
             .await;
     }
-    let _ = g.git.run(&["update-index", "-q", "--refresh"]).await;
     truncate_if_done(g);
 }

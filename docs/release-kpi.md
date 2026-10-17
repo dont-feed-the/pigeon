@@ -298,3 +298,46 @@ and shared bridge build. A new cache namespace avoids restoring the old
 archive. Only main writes caches; its first successful warm-up must be
 retained. Cold and warm runner measurements are still required before
 claiming a speedup. None of these follow-up changes is part of v0.6.2.
+
+
+## First dependency-cache observations after PR #71
+
+PR #71's bridge build, job 117411641261, had a cold namespace and passed
+in 2m39s (13:47:29–13:50:08 UTC). Main's matching build then saved a
+459,746,369-byte dependency cache in job 117414069081 at 14:02:49–14:02:55.
+The v0.6.3 tag's Rust-workspace job 117414959357 restored it successfully
+at 14:04:40–14:04:47: **7 seconds** for that step. The earlier observed
+bridge restore was 8,463,386,667 bytes and about 4m29s. These observations
+use different build/feature contexts and runner conditions; the cache
+excludes old test executables in both producers. Actual publication lead
+time still depends on every required gate and both platform archives.
+
+
+## v0.6.3 observation
+
+[v0.6.3](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.3)
+was published on 17 October at 14:19:57 UTC from
+`3f5e5efd554dc9421d488e5d8e453552a79492cc`. All six assets, archive
+checksums, native Linux installation, pinned annex, completions and the
+public latest-release redirect were verified. Candidate lead time was
+**16 minutes**, and the publication gap was **37 minutes 23 seconds**.
+Both targets were met. Twelve lead-time samples and eleven publication
+intervals still do not support a reliable percentile claim; previous
+misses remain in the history.
+
+CI, lab, slice and publication passed on their first attempts. The recovery
+lock and completed-restore trace failures from v0.6.2 did not recur. Lead
+time fell from 26m29s to 16m, with different event histories, cache conditions
+and no retry; this does not isolate the contribution of the cache change.
+The first warm restore's seven seconds is the separate step observation.
+
+The core slice had no cache to restore and spent 4m57s building its matching
+release programs (14:05:53–14:10:50 UTC, job 117414939258). Earlier main
+slice runs had been canceled before saving that cache. One core job from
+validated main merge eaef33a was restarted specifically to prime it; current
+main differs from that source only in its release version, lock and changelog.
+The canceled current-version run had created no jobs to rerun. This primer
+is separate from publication. Job 117417325666 saved a 488,810,880-byte
+slice cache at 14:22:53–14:23:00 UTC; the cache API confirms it is present
+on main. Its native scenario/trace check continues, and the future warm-slice
+comparison is still pending.

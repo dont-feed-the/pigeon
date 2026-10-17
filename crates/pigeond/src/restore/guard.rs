@@ -32,7 +32,7 @@ impl Before {
             return Some(before);
         };
         if divergence.kind != crate::conflicts_file::Kind::Suggestion
-            || !crate::suggest::unchanged(g.worktree.as_ref()?, &table, rel, false)
+            || !crate::suggest::unchanged(g, &table, rel, false)
         {
             return Some(before);
         }

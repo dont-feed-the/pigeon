@@ -28,6 +28,8 @@ use crate::roster_file::{self, RosterDoc};
 /// What the loops know of a group, behind a lock never held across a wait.
 #[derive(Debug, Default)]
 pub struct Known {
+    /// Stable stat observations and actual captures of dirty background paths.
+    pub capture_schedule: crate::capture_schedule::State,
     /// A temporary, non-listening metadata fetch admits only its inviter.
     pub bootstrap_peer: Option<(String, String)>,
     /// The roster of `main`.

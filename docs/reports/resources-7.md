@@ -212,6 +212,90 @@ later saves, index refresh and a pending-status observation.
 It passes with the fix, alongside 79 selected native install, contract,
 recovery, thinning and driver checks. Full all-target Clippy passes locally.
 
+## File scheduling continuation (not yet released)
+
+The native background capture adapter uses monotonic elapsed time, two equal
+stat observations and the size-dependent 2–60 second quiet period. Seven
+distinct captures in an hour space later captures of that path by ten minutes;
+an hour without changes cools it. One earliest deadline wakes the normal round,
+without a sleeping task per file. Explicit capture requests remain immediate.
+Actual successful proposals and concurrent saves are recorded separately from
+failed attempts; a remembered near-install classification survives settling.
+
+Twelve pure laws run 1000 cases each, including oldest-observed-change
+ordering and fingerprint changes that move a save behind older candidates.
+The clock uses Linux CLOCK_BOOTTIME and Darwin CLOCK_MONOTONIC_RAW, so sleep
+counts toward quiet and hot-path waits. The native clock API cross-compiles
+for Apple Silicon; a short elapsed check is not a physical suspend test.
+
+The native same-size edit fixture initially failed because Git status invoked
+a clean filter before settling. Candidate discovery, explicit capture, status
+and install's dirty observation now use the existing index parser and stat
+observations, plus a names-only untracked query. An install-wide index refresh
+also ingested unrelated saves; that global refresh has been removed.
+
+A same-size save with its modification time preserved exposed another native
+shortcut: non-batch annex add can skip the file in withFilesMaybeModified.
+The NUL-delimited batch path in Command/Add.hs enters start/ingestAdd directly.
+Replies are checked by unique literal file name, without assuming completion
+order. Unportable new names remain held. Native captures preserve immutable
+objects and executable modes.
+
+Annex's own temporary hardlink changes ctime during ingestion. Exact captured
+byte/stat/index observations are therefore made after ingestion with controlled
+calckey reads. A read-only kernel timestamp fence is read before hashing; only
+an older ctime and a complete unchanged stat are retained. Verification does
+not change the index timestamp to manufacture that fence. Native Git cache
+entries also require both their modification and change timestamps to predate
+the index; an old preserved mtime alone cannot clear a current-tick ctime.
+The focused native-cache regression failed before this check. Their private cache
+survives a restart, includes ctime and the
+exact staged pointer/mode, and is invalidated by later edits. Missing, malformed
+or future cache formats grant no shortcut. An unchanged suggestion also binds
+that observation to its exact signed proposal, so a later same-size edit or
+executable-mode change cannot hide behind its old modification time. Rebuilding
+a missing observation restores the accepted index pointer without creating an
+empty proposal. The install-window classification uses ctime, retaining an
+application's original mtime without making a recent save look old or a later
+save look concurrent. These regressions were reproduced before the correction.
+The cache authorizes no transfer, overwrite or deletion; install still proves
+displaced bytes and authority separately.
+Only paths just installed receive a completion observation, so another path's
+unsettled save is left alone. Normal idle recovery, keep, thinning and metadata
+commits no longer refresh every working file as a side effect. The full native
+metadata includes ctime, but the durable journal's tuple remains unchanged.
+After a restore's own rename, identity/mode/mtime and the independent old-byte
+proof still apply; the full ctime comparison remains before the move.
+Conservative verification of unchanged foreign bytes must create no empty
+suggestion. A genuinely unborn repository may have no index; a missing index
+with an existing HEAD remains an error. These extra reads and cache writes need reference
+budget measurements; no idle, memory, scan or HDD budget is inferred here.
+
+The initial 58-check checkpoint covered index formats 2/3/4, conflicts, crash
+recovery, seven actual hot-file captures, unrelated-file progress and pre-quiet
+observation. The broader run found fresh repositories without an index,
+post-rename ctime comparisons and empty proposals from unchanged foreign bytes;
+those implementation failures were corrected. The next workspace run passed
+714 of 715 checks; its malformed-cache fixture had left a valid native Git stat
+cache in place. Clearing that independent cache without changing its pointer
+makes the intended fallback test meaningful, and the corrected fixture passes.
+After integrating current main at `3f5e5ef`, the workspace checkpoint passed
+all 718 checks. A subsequent 69-check native run passed install, suggestions,
+restores and shared-pool regressions on the final pre-hash fence. The final
+native-cache ctime correction then passed both focused timestamp-fence checks;
+all-target Clippy and repository checks pass. Fresh generation of all 13 driver
+cases passed TLC and the corruption, missing-step, cancellation and pipeline
+negative checks. Native S2 passed 11 checks in 41 seconds and S3 passed 14
+checks in 13 seconds; TLC accepted both filesystem and roster streams.
+
+A subsequent API review found that CLI status still used immediate capture;
+its native handler regression failed without any wall-clock race. Status now
+uses the background policy and wakes the round to recalculate its earliest
+observation deadline. Explicit data-changing requests retain immediate capture.
+The corrected handler regression passes. Updated-head native validation and CI
+remain required before merging. Native priorities, the complete work queue
+and the resource budgets remain outstanding.
+
 ## Periodic macOS failures
 
 The v0.6.0 periodic run found a missing-file history lookup through macOS's
@@ -229,9 +313,12 @@ suffix. Existing and outer-alias root-link regressions pass. Three bridge
 lifecycle fixtures now use the established short `/tmp` socket root.
 
 The Linux-only scrub fixture's entire module is now conditional, avoiding
-unused imports under macOS Clippy. The separate periodic mass-deletion
-protection timeout is still open; neither change establishes a passing
-macOS runtime suite.
+unused imports under macOS Clippy. The subsequent periodic run
+[39037709329](https://github.com/dont-feed-the/pigeon/actions/runs/39037709329)
+on v0.6.2 passed workspace CI and all four native daemon shards, including the
+previously failing mass-deletion case, and advanced through lab to slice.
+The whole periodic suite is not yet reported complete. This does not establish
+the newer file scheduler's Mac runtime or foreground HDD budgets.
 
 
 ## Independent settings usability
@@ -271,3 +358,110 @@ misses and targeted follow-up fixes are recorded in the
 [publication KPI](../release-kpi.md#v062-observation). This patch releases
 the completed controller and safety work; it does not complete M6 or its
 reference-tree, filesystem, foreground HDD or native-priority gates.
+
+
+## Own-read cache advice continuation
+
+Native SHA-256 verification now uses a bounded streaming reader. Linux requests
+DONTNEED for each completed page range while the hash runs, and for the last
+partial page only after an actual EOF; empty-buffer reads never mean EOF.
+macOS opens the reader with F_NOCACHE. Bridge hashes share this reader instead
+of a second cached implementation. All actual bytes still pass through SHA-256;
+cache advice grants no integrity, authority or custody proof. The kernel may
+retain pages despite advice; no eviction or foreground HDD budget is inferred.
+
+The first native checkpoint read 1,048,613 exact bytes in 257-byte reads,
+including empty-buffer calls, and checked that completed-page advice does not
+wait for the whole file. Apple Silicon API checking passed. The initial
+Clippy run found a leftover bridge import, which was removed. Final validation
+of the EOF-tail refinement and integration still precedes publication.
+
+Independent CLI agent sessions observed final bytes through normal read-only
+views. The corrected status handler visibly distinguished pending changes from
+captured local versions; no false safe claim was observed. The retake found
+that saying a change was waiting to be saved could be confused with an editor
+save. English and French now distinguish pigeon's recorded version. The guide
+explains rapid-save history granularity. Sessions and limits are recorded in
+[m6-capture-usability-english.md](m6-capture-usability-english.md) and
+[m6-capture-usability-english-retake.md](m6-capture-usability-english-retake.md).
+
+
+## Final rolled-up validation before v0.6.4
+
+The corrected status handler passed the complete 720-check workspace run,
+then native S2 (11 checks) and S3 (14 checks), with TLC accepting both
+filesystem and roster streams. CI on `7951c52` separately missed recovery-sheet
+protection: its artifact contains both expected exact objects, matching
+location logs and backup main, while the last live status stayed Published.
+Artifact 12105134222 has SHA-256
+`09aa0cc908deb1076038ff965029f24ce0513389004ea6440eadf70cfb3979b8`.
+A targeted retry was cancelled after the independent dependency audit required
+a new head. The sibling-merge cause was then reproduced below.
+
+The audit rejected the retired D-Bus support crates in RUSTSEC-2026-0370,
+0371 and 0372. zbus 6 removes them. Linux notifications now use its standard
+D-Bus interface, while macOS retains notify-rust without its Linux backend
+(ADR 0082). Three private native D-Bus tests pass, including immediate action,
+a foreign notification ID and closure. The full dependency audit passes
+without new exceptions.
+
+The separate cache-reader checkpoint passed 71 of 72 native checks; the
+remaining recent-foreign-save trace again lacked a completed install. A
+fresh-ctime regression reproduced the cause: the real coarse clock fence
+had not advanced yet. Verification now asynchronously waits up to 50 ms for
+that actual clock reading before hashing. Every path still needs an older
+ctime, a complete unchanged stat and the exact hash/pointer/mode. Future
+stamps remain unknown; other eligible files in the batch can progress.
+Neither index timestamps nor proof comparisons are relaxed. Eight consecutive
+fresh observations and the bounded future-stamp check pass.
+
+The maintained D-Bus adapter, cache reader, status handler and clock-fence
+regressions pass together (seven checks), and all-target Clippy passes.
+The completed components are rolled up for one new PR CI run. Fresh full
+workspace/native/trace validation still precedes merging and publication.
+
+
+## Historical status after independent merges
+
+The final `5263f7a` local workspace run passed 724 of 725 checks; recovery-sheet
+again missed its protection deadline. Its preserved fixture contains the exact
+old and new objects and matching location logs on all peers. Bob and the backup
+had independently merged the same two parents: their merge IDs differed, while
+their accepted recipe and both historical captures matched. The earlier
+`7951c52` CI artifact has the same shape: Bob's `70c441f` and the backup's
+`208f22a` have the same two parents.
+
+Current-file status already accepted the shared recipe, but retained-history
+status required the backup to contain Bob's entire latest merge commit. That
+condition could never become true when identical trees needed no further merge.
+The group therefore stayed Published with an empty current-file problem list.
+A native Git DAG regression failed deterministically on that condition.
+
+For groups without purge or refounding history, historical evidence follows all common
+ancestry roots and their actual retained pointer history. A backup can prove a shared capture without adopting
+an equivalent sibling merge. Unrelated histories with identical keys prove
+nothing, captures absent from the peer do not count, and an unreadable ancestry
+remains unknown. Actual annex location claims, recency, checking/lost state,
+custodian role and purge exclusions still apply. No timeout was raised.
+Final native recovery, health, traces and exact-head CI precede publication.
+
+
+The periodic macOS run on v0.6.2 (39037709329) passed workspace, all four
+daemon shards and all lab groups. Its serial remaining-scenarios job passed
+S1, S2 and S4–S16, but S3 failed the already-completed-restore trace assertion.
+That source predates v0.6.3's VerifyRestore fix; it is retained as a background
+failure, not reported as validation of the current source. The other macOS
+slice jobs were still running at this checkpoint.
+
+
+Review before merging added a fresh-reference guard. A fifth native DAG test
+showed that shared old history alone could acknowledge a historical key whose
+fresh post-erasure reference the backup had not seen. The test failed before
+the guard. Groups with armed purge history therefore retain the previous
+complete-head requirement; this patch does not relax it. Per-reference live
+birth evidence for equivalent merges in those groups remains future work.
+The four ordinary shared-history/negative regressions and the guard are checked
+together. The parent `03b973d` passed all 729 workspace tests, all 13 fresh
+native driver/TLC scenarios and negative checks, and native S2/S3 plus TLC.
+Final guard and affected purge/restore checks, followed by new exact-head CI,
+precede publication; the prior green CI is not reused for a changed commit.

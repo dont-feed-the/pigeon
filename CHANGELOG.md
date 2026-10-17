@@ -5,6 +5,29 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Historical versions can now count as safe when a backup independently
+  merged the same captured history. `pigeon status` can recognize those
+  equivalent merges despite their different IDs. Groups with erasure or
+  refounding history keep their stricter acknowledgement check.
+
+- Content checks ask the operating system to reclaim completed read pages
+  while checking large files.
+- Pending changes are described as not yet recorded by pigeon, to distinguish
+  them from files already saved in an editor. The guide explains which rapid
+  saves become history versions.
+
+- Background capture waits for a file to settle before reading it and spaces
+  captures of frequently saved files, while other stable files keep progressing.
+  Asking for status preserves those waits.
+- Status and install checks leave another file's unsettled save alone. Capture
+  recognizes same-size edits even when an application preserves the file's
+  modification time. Pending suggestions also detect later byte and executable
+  mode changes, and rebuilding their cache keeps the accepted version intact.
+
 ## 0.6.3 — 2026-10-17
 
 ### Fixed

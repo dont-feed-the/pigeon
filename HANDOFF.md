@@ -5,8 +5,8 @@
 The historical snapshot below is retained for context. The user has since
 authorized the whole roadmap through v1.1, pushes, green non-draft PR merges,
 and publication. M0–M5 are released; the latest verified publication is
-[v0.6.2](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.2), source
-`3439d9d67fc8b1a6368f4eb15e2633a28a2ee6dd`. The failed v0.6.0 tag remains
+[v0.6.3](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.3), source
+`3f5e5efd554dc9421d488e5d8e453552a79492cc`. The failed v0.6.0 tag remains
 immutable and unpublished. See [M5 evidence](docs/reports/deletion-6.md).
 
 M6 is in progress; [its report](docs/reports/resources-7.md) distinguishes

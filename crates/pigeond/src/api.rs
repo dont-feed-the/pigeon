@@ -180,13 +180,18 @@ pub(crate) async fn handle(d: &Arc<Daemon>, request: Request) -> Vec<Response> {
                     None => return vec![problem("not-in-group", &[], None)],
                 },
             };
-            // Changes not yet captured are only on this computer: capture
-            // them first, unless a round is already at work.
-            if g.role == pigeon_core::filter::Role::Laptop
-                && let Ok(_busy) = g.busy.try_lock()
-                && let Err(e) = crate::capture::capture(&g, &d.device, &d.tracer).await
-            {
-                tracing::warn!(group = %g.id, error = %e, "capture-failed");
+            // Status can advance ordinary background work, but polling it
+            // must preserve the quiet period and hot-path spacing. Pending
+            // observations below already keep uncaptured saves Local.
+            if g.role == pigeon_core::filter::Role::Laptop {
+                if let Ok(_busy) = g.busy.try_lock()
+                    && let Err(e) = crate::capture::background(&g, &d.device, &d.tracer).await
+                {
+                    tracing::warn!(group = %g.id, error = %e, "capture-failed");
+                }
+                // Recompute the earliest due observation if the round was
+                // already sleeping on its normal, longer interval.
+                d.wake.notify_one();
             }
             let mut report = crate::status::report(&g, &d.device, &prefix, not_shared).await;
             // A pause the person chose says so, in the headline unless
@@ -743,3 +748,7 @@ pub fn message(id: &str, args: &[(&str, Arg)]) -> Message {
 pub fn bundle_dir(d: &Daemon) -> PathBuf {
     d.dirs.state.join("bundles")
 }
+
+#[cfg(test)]
+#[path = "api_status_tests.rs"]
+mod status_tests;

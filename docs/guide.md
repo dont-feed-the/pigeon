@@ -14,7 +14,7 @@ counts the copies and refuses unsafe deletions. pigeon adds the parts people
 see: who belongs to the group, which machines keep the safe copies, and a
 status everybody can read.
 
-> **Status: alpha (v0.5).** It runs on Linux and macOS, from release
+> **Status: alpha.** It runs on Linux and macOS, from release
 > binaries or built from source ([roadmap](roadmap.md)). Try it, but
 > keep another copy of anything you care about.
 
@@ -47,6 +47,15 @@ requests local copies and can wait for a reachable source. Free says first
 which files will leave this computer and the backup machines they stay on,
 and asks a second time when no backup machine has been in touch for an hour;
 a freed file then reads "Safe, not on this computer".
+
+## Saves and history
+
+pigeon waits for a file to stop changing before capturing a background version.
+Several quick saves can become one history version containing the final save.
+A file saved repeatedly over an hour is captured less often, while other files
+continue. Keep an editor's undo history for intermediate changes; `pigeon history`
+lists the versions pigeon has captured. Status still counts a newly saved file
+as local until that version has safe backup copies.
 
 ## What "safe" means
 
