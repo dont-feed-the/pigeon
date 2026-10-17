@@ -28,3 +28,9 @@ The real git-annex copy/get/refused-remove integration also passes. Final
 all-target workspace Clippy with lab, trace and console features and the
 repository structural/ADR/spec checks pass. These targeted checks do not
 claim the broader M7 audit is complete.
+
+The checkpoint integrates current v0.6.11 main `412accd7e0d0efe227ab4b5e452c07eb483ca454` before
+PR validation. Its tested parent differs from that main only by the
+release version, lockfile and report. The seven privacy/logging checks,
+real annex transfer check, final all-target Clippy and repository checks
+pass again after integration. Required exact-head CI remains separate.
