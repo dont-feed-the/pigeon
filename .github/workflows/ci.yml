@@ -434,6 +434,8 @@ jobs:
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
       - name: observations and every semantic, schema and pipeline mutant
         run: python3 scripts/check-driver-traces
+      - name: cargo-nextest at its pinned version
+        uses: ./.github/actions/nextest
       - name: real purge/restore partitions, physical drops, and rejected trace mutants
         run: python3 scripts/check-purge-traces
       - name: trace workers and eager witnesses preserve verdicts and coverage failures

@@ -547,3 +547,8 @@ signed-history and physical-erasure checks pass, as do all 18 language
 checks and the four native Purge traces with their rejection checks.
 All-target Clippy and the mandatory repository checks pass. Full Linux CI
 and release publication remain pending.
+
+The first PR CI attempt reached the new native Purge step without
+`cargo-nextest` installed in that job. The earlier trace and mutation checks
+had passed; this was missing runner setup, not a Purge verdict. The job now
+uses the repository's pinned nextest action before generating the traces.
