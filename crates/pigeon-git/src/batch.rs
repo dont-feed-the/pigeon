@@ -113,7 +113,7 @@ impl Batch {
             control.began(class);
             crate::work::Registration(control, class)
         });
-        while controlled.is_some_and(|(control, class)| !control.running(class)) {
+        while controlled.is_some_and(|(control, class)| !control.starting(class)) {
             tokio::time::sleep(Duration::from_millis(crate::work::POLL_MS)).await;
         }
         self.start()?;

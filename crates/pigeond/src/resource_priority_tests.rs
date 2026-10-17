@@ -319,3 +319,117 @@ async fn serving_side_repair_does_not_wait_behind_ongoing_backup_transfers() {
         "repair was classified as routine scrub behind backup work"
     );
 }
+
+#[tokio::test]
+async fn protection_holds_the_next_kept_key_without_spending_its_deadline() {
+    let controller = Arc::new(Controller::default());
+    let (protect_dir, protect_repo) = fixture(&controller, "protecting");
+    let (download_dir, download_repo) = fixture(&controller, "keeping");
+    let high = operation(protect_repo, "get", Duration::from_secs(10));
+    eventually(|| beats(protect_dir.path()) >= 2).await;
+    let low = operation(download_repo.for_download(), "get", Duration::from_secs(2));
+    eventually(|| controller.children[Class::Download as usize].load(Ordering::Relaxed) == 1).await;
+    tokio::time::sleep(Duration::from_millis(2200)).await;
+    assert_eq!(
+        beats(download_dir.path()),
+        0,
+        "kept key started ahead of protection"
+    );
+    assert!(
+        !low.is_finished(),
+        "admission wait consumed the active deadline"
+    );
+    assert_eq!(
+        download_repo
+            .run(&["--version"], None, Duration::from_secs(2))
+            .await
+            .unwrap()
+            .stdout,
+        b"metadata"
+    );
+    std::fs::write(protect_dir.path().join("finish"), b"done").unwrap();
+    assert_eq!(high.await.unwrap().unwrap().stdout, b"exact output");
+    eventually(|| beats(download_dir.path()) >= 2).await;
+    std::fs::write(download_dir.path().join("finish"), b"done").unwrap();
+    assert_eq!(low.await.unwrap().unwrap().stdout, b"exact output");
+    assert!(
+        controller
+            .children
+            .iter()
+            .all(|n| n.load(Ordering::Relaxed) == 0)
+    );
+}
+
+#[tokio::test]
+async fn an_active_kept_key_finishes_but_the_next_yields_to_protection() {
+    let controller = Arc::new(Controller::default());
+    let (download_dir, original_repo) = fixture(&controller, "keeping");
+    let download_repo = original_repo.for_download();
+    let low = operation(download_repo.clone(), "get", Duration::from_secs(10));
+    eventually(|| beats(download_dir.path()) >= 2).await;
+    assert_eq!(
+        controller.children[Class::Download as usize].load(Ordering::Relaxed),
+        1
+    );
+    let (protect_dir, protect_repo) = fixture(&controller, "protecting");
+    let high = operation(protect_repo, "get", Duration::from_secs(10));
+    eventually(|| beats(protect_dir.path()) >= 2).await;
+    let before = beats(download_dir.path());
+    eventually(|| beats(download_dir.path()) > before + 2).await;
+    std::fs::write(download_dir.path().join("finish"), b"done").unwrap();
+    assert_eq!(low.await.unwrap().unwrap().stdout, b"exact output");
+    std::fs::remove_file(download_dir.path().join("finish")).unwrap();
+    std::fs::remove_file(download_dir.path().join("beats")).unwrap();
+    let next = operation(download_repo, "get", Duration::from_secs(3));
+    eventually(|| controller.children[Class::Download as usize].load(Ordering::Relaxed) == 1).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(beats(download_dir.path()), 0);
+    // The original repository keeps protection priority: it can run beside
+    // the other protection operation while its scoped download waits.
+    let original = operation(original_repo, "get", Duration::from_secs(3));
+    eventually(|| beats(download_dir.path()) >= 2).await;
+    std::fs::write(download_dir.path().join("finish"), b"done").unwrap();
+    assert_eq!(original.await.unwrap().unwrap().stdout, b"exact output");
+    std::fs::write(protect_dir.path().join("finish"), b"done").unwrap();
+    assert_eq!(high.await.unwrap().unwrap().stdout, b"exact output");
+    assert_eq!(next.await.unwrap().unwrap().stdout, b"exact output");
+    assert!(
+        controller
+            .children
+            .iter()
+            .all(|n| n.load(Ordering::Relaxed) == 0)
+    );
+}
+
+#[tokio::test]
+async fn a_scoped_download_batch_waits_before_starting_its_key() {
+    let controller = Arc::new(Controller::default());
+    let (protect_dir, protect_repo) = fixture(&controller, "protecting");
+    let (download_dir, repo) = fixture(&controller, "keeping");
+    let high = operation(protect_repo, "get", Duration::from_secs(10));
+    eventually(|| beats(protect_dir.path()) >= 2).await;
+    let mut batch = repo
+        .for_download()
+        .batch(&["annex", "get", "--batch-keys", "--json"])
+        .unwrap();
+    let low = tokio::spawn(async move {
+        let result = batch.call("fixture-key", Duration::from_secs(2)).await;
+        batch.stop(Duration::from_secs(1)).await;
+        result
+    });
+    eventually(|| controller.children[Class::Download as usize].load(Ordering::Relaxed) == 1).await;
+    tokio::time::sleep(Duration::from_millis(2200)).await;
+    assert_eq!(beats(download_dir.path()), 0);
+    assert!(!low.is_finished());
+    std::fs::write(protect_dir.path().join("finish"), b"done").unwrap();
+    assert_eq!(high.await.unwrap().unwrap().stdout, b"exact output");
+    eventually(|| beats(download_dir.path()) >= 2).await;
+    std::fs::write(download_dir.path().join("finish"), b"done").unwrap();
+    assert_eq!(low.await.unwrap().unwrap(), "exact output");
+    assert!(
+        controller
+            .children
+            .iter()
+            .all(|n| n.load(Ordering::Relaxed) == 0)
+    );
+}

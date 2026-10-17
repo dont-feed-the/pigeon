@@ -431,6 +431,7 @@ async fn keep_inner(g: &Group, t: &Tracer, receive: bool) -> Result<usize, Strin
             }
             let args = ["annex", "get", "--json", "--key", key.as_str()];
             g.git
+                .for_download()
                 .run_for(&args, Duration::from_secs(600))
                 .await
                 .map_err(|_| "receiving".to_owned())?;

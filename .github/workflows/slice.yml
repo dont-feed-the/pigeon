@@ -46,7 +46,7 @@ jobs:
       matrix:
         os: ${{ fromJSON(inputs.platform == 'macos' && '["macos-latest"]' || '["ubuntu-24.04"]') }}
         scenarios: ${{ fromJSON(inputs.platform == 'macos' && '["rest","S5"]' || '["core","crashes","recovery","people","S5"]') }}
-      max-parallel: ${{ inputs.platform == 'macos' && 1 || 5 }}
+      max-parallel: ${{ inputs.platform == 'macos' && 2 || 5 }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
@@ -169,7 +169,7 @@ jobs:
       matrix:
         os: ${{ fromJSON(inputs.platform == 'macos' && '["macos-latest"]' || '["ubuntu-24.04"]') }}
         shard: [0, 1]
-      max-parallel: ${{ inputs.platform == 'macos' && 1 || 2 }}
+      max-parallel: ${{ inputs.platform == 'macos' && 2 || 2 }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 75
     steps:

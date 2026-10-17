@@ -49,7 +49,7 @@ struct State {
 pub struct Controller {
     epoch: Instant,
     inner: Mutex<State>,
-    children: [AtomicUsize; 3],
+    children: [AtomicUsize; 4],
     person_paused: AtomicBool,
 }
 

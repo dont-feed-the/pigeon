@@ -22,6 +22,12 @@ pub trait Control: std::fmt::Debug + Send + Sync {
     /// Release that record on success, failure or cancellation.
     fn ended(&self, _class: Class) {}
 
+    /// Whether a new native operation may start or send its next batch key.
+    /// By default admission and active scheduling have the same policy.
+    fn starting(&self, class: Class) -> bool {
+        self.running(class)
+    }
+
     /// Whether the child's process group may run in this scheduling slice.
     fn running(&self, class: Class) -> bool;
 
@@ -141,5 +147,41 @@ pub(crate) async fn deadline<F: std::future::Future + Unpin>(
             result = &mut *work => return Ok(Some(result)),
             _ = tokio::time::sleep(Duration::from_millis(POLL_MS).min(Duration::from_millis(budget.remaining(ms(timeout))))) => {},
         }
+    }
+}
+
+/// A scoped kept-folder transfer: admission uses Download priority, while
+/// deadline charging retains the actual native operation's class.
+#[derive(Debug)]
+pub(crate) struct DownloadControl(pub(crate) std::sync::Arc<dyn Control>);
+
+impl DownloadControl {
+    fn priority(class: Class) -> Class {
+        if class == Class::Transfer {
+            Class::Download
+        } else {
+            class
+        }
+    }
+}
+
+impl Control for DownloadControl {
+    fn began(&self, class: Class) {
+        self.0.began(Self::priority(class));
+    }
+    fn ended(&self, class: Class) {
+        self.0.ended(Self::priority(class));
+    }
+    fn starting(&self, class: Class) -> bool {
+        self.0.starting(Self::priority(class))
+    }
+    fn running(&self, class: Class) -> bool {
+        // Finish this key before yielding to protection: stopping it here
+        // could retain an annex object lock that protection itself needs.
+        // Capture and environmental pauses still use the native policy.
+        self.0.running(class)
+    }
+    fn charging(&self, class: Class) -> bool {
+        self.0.charging(class)
     }
 }

@@ -4,7 +4,7 @@
 use hegel::{TestCase, generators as gs};
 use pigeon_core::resources::WorkClass;
 
-fn counts(tc: &TestCase) -> [u64; 3] {
+fn counts(tc: &TestCase) -> [u64; 4] {
     std::array::from_fn(|_| tc.draw(gs::integers::<u64>()))
 }
 
@@ -19,7 +19,8 @@ fn capture_is_never_held_by_pending_children(tc: TestCase) {
 #[hegel::test(test_cases = 1000)]
 fn higher_work_holds_lower_work(tc: TestCase) {
     let mut pending = counts(&tc);
-    let high = usize::from(tc.draw(gs::integers::<u8>().max_value(1)));
+    let high =
+        usize::from(tc.draw(gs::integers::<u8>().max_value((WorkClass::ALL.len() - 2) as u8)));
     pending[high] = tc.draw(gs::integers::<u64>().min_value(1));
     for class in &WorkClass::ALL[high + 1..] {
         assert!(!class.admitted(pending));
