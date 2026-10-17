@@ -174,21 +174,25 @@ fn parse(addresses: &[String]) -> Vec<std::net::SocketAddr> {
     addresses.iter().filter_map(|a| a.parse().ok()).collect()
 }
 
-fn hostname() -> String {
-    std::fs::read_to_string("/etc/hostname")
-        .ok()
-        .map(|h| h.trim().to_owned())
-        .filter(|h| !h.is_empty())
-        .unwrap_or_else(|| "backup".to_owned())
-}
-
 /// The name of this computer's account, which a person who gives none
-/// is called: `$USER`, else `Me`.
+/// is called: `$USER`, else the computer's name, never a placeholder such
+/// as "Me" that the others in the group would see as a name.
 pub fn account() -> String {
     std::env::var("USER")
         .ok()
-        .filter(|u| !u.trim().is_empty())
-        .unwrap_or_else(|| "Me".to_owned())
+        .map(|u| u.trim().to_owned())
+        .filter(|u| !u.is_empty())
+        .unwrap_or_else(computer)
+}
+
+/// This computer's name, for a person who gave none and has no `$USER`.
+fn computer() -> String {
+    std::fs::read_to_string("/etc/hostname")
+        .ok()
+        .or_else(|| std::env::var("HOSTNAME").ok())
+        .map(|h| h.trim().to_owned())
+        .filter(|h| !h.is_empty())
+        .unwrap_or_else(|| "person".to_owned())
 }
 
 /// What a joining device asks.
@@ -244,7 +248,7 @@ pub async fn join(d: &Daemon, ask: Ask) -> Result<String, String> {
         } else {
             Role::Laptop
         },
-        name: given(ask.name).unwrap_or_else(|| format!("{}-{short}", hostname())),
+        name: given(ask.name).unwrap_or_else(|| format!("{}-{short}", pigeon_sys::host::name())),
         inv,
     };
     crate::join::join(d, &j, ask.folder).await

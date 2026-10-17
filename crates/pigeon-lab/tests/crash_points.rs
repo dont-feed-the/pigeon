@@ -69,5 +69,11 @@ fn the_crash_points_are_pigeonds() {
         ]
         .map(str::to_owned),
     );
+    // Ordinary joins have their own real SIGKILL/retry workload.
+    let joins = std::fs::read_to_string(src.join("../tests/join_resume.rs")).unwrap();
+    for point in ["join.after-welcome", "join.before-config"] {
+        assert!(joins.contains(&format!("\"{point}\"")));
+        ours.insert(point.to_owned());
+    }
     assert_eq!(ours, theirs);
 }

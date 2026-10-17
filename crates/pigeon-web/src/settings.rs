@@ -1,7 +1,8 @@
 //! Settings (ux.md §6.5): this computer's settings of `config.toml` (11
 //! §11.2), each a choice and a *Save* button that becomes `SetSettings`.
 //! A new language shows from the answer on. *Pause* and *Share again* are
-//! `pigeon pause` and `pigeon resume` (15 §15.6); *Leave the group* is
+//! `pigeon pause` and `pigeon resume` (15 §15.6), only the one that
+//! applies; *Leave the group* is
 //! `pigeon leave` (`leave.rs`).
 
 use std::sync::Arc;
@@ -15,6 +16,7 @@ use maud::{Markup, html};
 use pigeon_proto::Request;
 use pigeon_proto::api::Setting;
 
+use crate::icons::icon;
 use crate::pages::{list, page};
 use crate::{FormToken, Web, pages};
 
@@ -35,7 +37,7 @@ pub async fn settings(
     }
     let mut peers = Vec::new();
     for answer in web.ask(Request::Machines).await {
-        if let pigeon_proto::Response::Machines { machines } = answer {
+        if let pigeon_proto::Response::Machines { machines, .. } = answer {
             peers = machines
                 .into_iter()
                 .filter(|m| !m.this_device && !m.recovery)
@@ -44,30 +46,46 @@ pub async fn settings(
     }
     let body = html! {
         (list(&other))
-        @for s in &rows { (setting(&r, s, &form.0)) }
-        p { a href=(r.url("/space")) { (r.id("space-title")) } }
-        p { (r.id("status-freshness")) }
-        (pausing(&r, &form.0))
-        @if r.mount.is_none() { (crate::leave::form(&r, &form.0)) }
-        h2 { (r.id("web-diagnostics")) }
-        p { a href=(r.url("/doctor")) { (r.id("web-doctor")) } }
-        form method="post" action=(r.url("/settings/diagnostics")) {
-            input type="hidden" name="form" value=(&form.0);
-            p {
-                label for="diagnostic-peer" { (r.id("web-diagnostic-peer")) }
-                " "
-                select id="diagnostic-peer" name="peer" {
-                    @for peer in &peers { option value=(&peer.device) { (&peer.name) } }
-                }
+        section class="card stack" aria-labelledby="settings-computer" {
+            h2 id="settings-computer" { (icon("laptop", "")) " " (r.id("web-settings-computer")) }
+            @for s in &rows { (setting(&r, s, &form.0)) }
+            p class="lead" { (r.id("status-freshness")) }
+        }
+        section class="card stack" aria-labelledby="settings-pause" {
+            h2 id="settings-pause" { (icon("clock", "")) " " (r.id("web-settings-sharing")) }
+            (pausing(&r, &form.0))
+        }
+        section class="card stack" aria-labelledby="settings-advanced" {
+            h2 id="settings-advanced" { (icon("gear", "")) " " (r.id("web-diagnostics")) }
+            p class="inline-forms" {
+                a class="btn" href=(r.url("/doctor")) { (r.id("web-doctor")) }
+                a class="btn" href=(r.url("/space")) { (icon("disk", "")) (r.id("space-title")) }
             }
-            p {
-                label {
-                    input type="checkbox" name="consent" value="true" required;
+            form method="post" action=(r.url("/settings/diagnostics")) class="stack" {
+                input type="hidden" name="form" value=(&form.0);
+                p {
+                    label for="diagnostic-peer" { (r.id("web-diagnostic-peer")) }
                     " "
-                    (r.id("web-diagnostics-consent"))
+                    select id="diagnostic-peer" name="peer" {
+                        @for peer in &peers { option value=(&peer.device) { (&peer.name) } }
+                    }
                 }
+                p {
+                    label {
+                        input type="checkbox" name="consent" value="true" required;
+                        " "
+                        (r.id("web-diagnostics-consent"))
+                    }
+                }
+                button type="submit" { (r.id("web-allow-diagnostics")) }
             }
-            button type="submit" { (r.id("web-allow-diagnostics")) }
+        }
+        @if r.mount.is_none() {
+            section class="card stack" aria-labelledby="settings-leave" {
+                h2 id="settings-leave" { (r.id("web-leave")) }
+                p { (r.id("web-leave-help")) }
+                (crate::leave::form(&r, &form.0))
+            }
         }
     };
     page(&r, "/settings", &r.id("web-nav-settings"), &body)
@@ -82,8 +100,8 @@ pub async fn doctor(State(web): State<Arc<Web>>) -> Html<String> {
         .flat_map(|answer| r.response(answer).0)
         .collect();
     let body = html! {
-        (list(&lines))
-        p { a href=(r.url("/settings")) { (r.id("web-back")) } }
+        div class="card" { (list(&lines)) }
+        p { a class="btn" href=(r.url("/settings")) { (r.id("web-back")) } }
     };
     page(&r, "/settings", &r.id("web-doctor"), &body)
 }
@@ -104,8 +122,8 @@ fn label(r: &Renderer, key: &str, value: &str) -> String {
 fn setting(r: &Renderer, s: &Setting, form: &str) -> Markup {
     let id = format!("setting-{}", s.key);
     html! {
-        article {
-            form method="post" action=(r.url("/settings")) {
+        div {
+            form method="post" action=(r.url("/settings")) class="setting-row" data-inline[s.key != "language"] {
                 input type="hidden" name="form" value=(form);
                 input type="hidden" name="key" value=(s.key);
                 label for=(id) { (r.id(&id)) " " }
@@ -121,11 +139,23 @@ fn setting(r: &Renderer, s: &Setting, form: &str) -> Markup {
     }
 }
 
-/// The pause: a duration and *Pause*, and *Share again*.
+/// The pause, with only the action that applies: while sharing, a
+/// duration and *Pause*; while paused, the pause and *Share again*.
 fn pausing(r: &Renderer, form: &str) -> Markup {
+    if let Some(banner) = &r.banner {
+        return html! {
+            article {
+                p { (r.text(&banner.message)) }
+                form method="post" action=(r.url("/resume")) {
+                    input type="hidden" name="form" value=(form);
+                    button type="submit" { (r.id("web-resume")) }
+                }
+            }
+        };
+    }
     html! {
-        article {
-            form method="post" action=(r.url("/pause")) {
+        div class="inline-forms" {
+            form method="post" action=(r.url("/pause")) class="setting-row" data-inline {
                 input type="hidden" name="form" value=(form);
                 label for="pause-for" { (r.id("web-pause")) " " }
                 select id="pause-for" name="duration" {
@@ -135,10 +165,6 @@ fn pausing(r: &Renderer, form: &str) -> Markup {
                 }
                 " "
                 button type="submit" { (r.id("web-pause")) }
-            }
-            form method="post" action=(r.url("/resume")) {
-                input type="hidden" name="form" value=(form);
-                button type="submit" { (r.id("web-resume")) }
             }
         }
     }
@@ -189,8 +215,13 @@ async fn answer(web: &Arc<Web>, token: &FormToken, form: &str, request: Request)
         )
             .into_response();
     }
+    let pause = matches!(request, Request::Pause { .. } | Request::Resume);
     let answers = web.ask(request).await;
-    let r = web.renderer();
+    let mut r = web.renderer();
+    // The result of *Pause* or *Share again* shows the pause it leaves.
+    if pause {
+        r.banner = web.banner(form).await;
+    }
     let lines = answers.iter().flat_map(|a| r.response(a).0).collect();
     pages::result(&r, "/settings", lines).into_response()
 }

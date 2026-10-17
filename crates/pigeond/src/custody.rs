@@ -72,6 +72,43 @@ async fn fetch(g: &Group, id: &str) -> Result<(), crate::git::Error> {
     }
 }
 
+/// How long [`any_reachable`] waits for one peer: someone is waiting.
+const PROBE_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// Whether at least one of `ids` answers a fetch now, tried at once and
+/// once each; one that does is heard. The remotes are configured under
+/// the repository lock, the fetches run without it.
+pub async fn any_reachable(g: &Group, me: &str, ids: &[String]) -> bool {
+    {
+        let _busy = g.busy.lock().await;
+        for (id, uuid, _) in peers(g, me).iter().filter(|(id, _, _)| ids.contains(id)) {
+            if let Err(e) = ensure_remote(&g.git, id, uuid).await {
+                tracing::warn!(group = %g.id, peer = %id, error = %e, "remote-failed");
+            }
+        }
+    }
+    let probes = ids.iter().map(|id| async move {
+        let spec = crate::settings::peer_refspec(id);
+        let args = [
+            "fetch",
+            "-q",
+            "--no-tags",
+            "--no-write-fetch-head",
+            id,
+            &spec,
+        ];
+        let ok = g.git.run_for(&args, PROBE_TIMEOUT).await.is_ok();
+        if ok {
+            g.lock().heard.insert(id.clone(), crate::util::now());
+        }
+        ok
+    });
+    crate::util::join_all(probes.collect())
+        .await
+        .into_iter()
+        .any(|ok| ok)
+}
+
 /// Configures fetch remotes under the repository lock, before network waits.
 pub async fn prepare_accept(g: &Group, me: &str) -> Vec<String> {
     let peers = peers(g, me);
@@ -88,6 +125,18 @@ pub async fn prepare_accept(g: &Group, me: &str) -> Vec<String> {
 /// Fetches only objects and peer refs, without holding the file-operation lock.
 /// It never moves `main`, edits the index, or changes the working tree.
 pub async fn fetch_ready(g: &Group, peers: &[String]) -> Vec<String> {
+    fetch_each(g, peers, |_| std::future::ready(())).await
+}
+
+/// Offers completed peers without waiting for the others. Already-ready
+/// results are grouped without a delay to avoid repeated annex merges. The caller serializes
+/// adoption with other repository operations. Fetches continue being polled
+/// while adoption runs, and every fetch still finishes or times out.
+pub async fn fetch_each<F, R>(g: &Group, peers: &[String], mut ready: F) -> Vec<String>
+where
+    F: FnMut(Vec<String>) -> R,
+    R: std::future::Future<Output = ()>,
+{
     let mut fetched = Vec::new();
     let mut unreachable = BTreeSet::new();
     // Every peer at once: one whose fetch hangs until its timeout must not
@@ -96,29 +145,55 @@ pub async fn fetch_ready(g: &Group, peers: &[String]) -> Vec<String> {
         .iter()
         .map(|id| async move { (id.clone(), fetch(g, id).await) });
     let mut history_queue = crate::telemetry::Queue::start(&g.id, "history", "fetch", peers.len());
-    for (id, result) in crate::util::join_all(fetches.collect()).await {
-        history_queue.complete(1);
-        match result {
-            Ok(()) => {
-                g.lock().heard.insert(id.clone(), crate::util::now());
-                if let Some(ga) = g
-                    .git
-                    .rev(&format!("refs/pigeon/peers/{id}/git-annex"))
-                    .await
-                {
-                    let name = format!("refs/remotes/{id}/git-annex");
-                    let _ = g.git.run(&["update-ref", &name, &ga]).await;
-                }
-                fetched.push(id);
-            }
-            Err(e) => {
-                tracing::debug!(group = %g.id, peer = %id, error = %e, "fetch-failed");
-                unreachable.insert(id);
+    let mut fetches = crate::util::Pending::new(fetches.collect());
+    // There is at most one result per peer. Buffering those results keeps
+    // network I/O and its existing deadlines running during history checks.
+    let (send, mut receive) = tokio::sync::mpsc::channel(peers.len().max(1));
+    let network = async move {
+        while let Some(result) = fetches.next().await {
+            if send.send(result).await.is_err() {
+                break;
             }
         }
-    }
-    g.lock().unreachable = unreachable;
-    fetched
+        drop(send);
+    };
+    let histories = async {
+        while let Some(first) = receive.recv().await {
+            let mut completed = vec![first];
+            while let Ok(result) = receive.try_recv() {
+                completed.push(result);
+            }
+            let mut available = Vec::new();
+            for (id, result) in completed {
+                history_queue.complete(1);
+                match result {
+                    Ok(()) => {
+                        g.lock().heard.insert(id.clone(), crate::util::now());
+                        if let Some(ga) = g
+                            .git
+                            .rev(&format!("refs/pigeon/peers/{id}/git-annex"))
+                            .await
+                        {
+                            let name = format!("refs/remotes/{id}/git-annex");
+                            let _ = g.git.run(&["update-ref", &name, &ga]).await;
+                        }
+                        fetched.push(id.clone());
+                        available.push(id);
+                    }
+                    Err(e) => {
+                        tracing::debug!(group = %g.id, peer = %id, error = %e, "fetch-failed");
+                        unreachable.insert(id);
+                    }
+                }
+            }
+            if !available.is_empty() {
+                ready(available).await;
+            }
+        }
+        g.lock().unreachable = unreachable;
+        fetched
+    };
+    tokio::join!(network, histories).1
 }
 
 /// Validates fetched history and advances `main` under the repository lock.

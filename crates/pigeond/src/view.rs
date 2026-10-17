@@ -4,8 +4,10 @@
 //! application. `--group` is the group's version, the one `main` holds
 //! while the folder keeps the person's own; `--version N` any version of
 //! the history, numbered from 1, the oldest, as `history` numbers them;
-//! neither, the current one. Copies older than seven days are removed at
-//! each view.
+//! neither, the current one. The copy’s name says which, in the person’s
+//! language. Copies older than seven days are removed at each view.
+//! `ReadText` answers the start of the group’s current version as text,
+//! for the web’s README, from content already here.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -19,6 +21,21 @@ use crate::history::relative;
 
 /// How long a copy stays.
 pub const KEPT: Duration = Duration::from_secs(7 * 24 * 3600);
+
+/// What a copy's name says of its version, in the person's language (the
+/// `language` setting, read afresh, 11 §11.2): `view-name-group`,
+/// `view-name-version` or `view-name-suggested`.
+fn label(d: &Daemon, message: pigeon_i18n::Message) -> String {
+    let config = crate::config::load(&d.dirs.config_file()).unwrap_or_default();
+    label_in(&crate::web::language(config.language.as_deref()), &message)
+}
+
+/// `message` in `lang`, fit for a file name.
+fn label_in(lang: &pigeon_i18n::LanguageIdentifier, message: &pigeon_i18n::Message) -> String {
+    pigeon_i18n::Catalogue::new(lang, false)
+        .format(message)
+        .replace('/', "-")
+}
 
 /// The name of the copy: `tarte (version 3).docx`, `tarte (group's
 /// version).docx`.
@@ -73,7 +90,10 @@ pub async fn view(d: &Daemon, path: &Path, version: Option<u64>, group: bool) ->
             None => Default::default(),
         };
         match keys.get(&rel) {
-            Some(k) => (k.clone(), "group's version".to_owned()),
+            Some(k) => (
+                k.clone(),
+                label(d, pigeon_i18n::Message::new("view-name-group")),
+            ),
             None => {
                 let args = [("path", text(&rel)), ("version", text("main"))];
                 return vec![problem("no-such-version", &args, None)];
@@ -88,7 +108,14 @@ pub async fn view(d: &Daemon, path: &Path, version: Option<u64>, group: bool) ->
             .and_then(|i| i.checked_sub(1))
             .and_then(|i| versions.get(i));
         match wanted {
-            Some((_, k)) => (k.clone(), format!("version {n}")),
+            Some((_, k)) => (
+                k.clone(),
+                label(
+                    d,
+                    pigeon_i18n::Message::new("view-name-version")
+                        .arg("number", i64::try_from(n).unwrap_or(i64::MAX)),
+                ),
+            ),
             None => {
                 let args = [("path", text(&rel)), ("version", Arg::Number(n as i64))];
                 return vec![problem("no-such-version", &args, None)];
@@ -114,6 +141,77 @@ pub async fn view(d: &Daemon, path: &Path, version: Option<u64>, group: bool) ->
         }],
         Err(e) => vec![problem("internal-error", &[], Some(e.to_string()))],
     }
+}
+
+/// The most `ReadText` answers, whatever it asks for: even escaped as
+/// JSON control characters, six bytes each, it fits one line of the socket.
+pub const READ_CAP: u64 = 128 << 10;
+
+/// `ReadText`: the first `limit` bytes of the accepted current version of
+/// `path`, a file of the group. Only annexed files of `main` are read, so
+/// neither pigeon's own files nor anything outside the folder is; and only
+/// from this computer's content, which is never fetched for it.
+pub async fn text(d: &Daemon, path: &Path, limit: u64) -> Vec<Response> {
+    let Some(g) = d.group_at(path).or_else(|| d.group_at(path.parent()?)) else {
+        return vec![problem("not-in-group", &[], None)];
+    };
+    let Some(rel) = relative(&g, path) else {
+        return vec![problem("not-in-group", &[], None)];
+    };
+    let keys = match g.git.rev("refs/heads/main").await {
+        Some(m) => g.git.keys(&m).await.unwrap_or_default(),
+        None => Default::default(),
+    };
+    let Some(key) = keys.get(&rel) else {
+        let args = [
+            ("path", Arg::Text(rel)),
+            ("version", Arg::Text("main".into())),
+        ];
+        return vec![problem("no-such-version", &args, None)];
+    };
+    let Some(object) = crate::custody::present(&g, key).await else {
+        return vec![problem(
+            "content-not-here",
+            &[("path", Arg::Text(rel))],
+            None,
+        )];
+    };
+    match read_start(&object, limit.min(READ_CAP)) {
+        Ok((text, size, truncated)) => vec![Response::Text {
+            text,
+            size,
+            truncated,
+        }],
+        Err(e) => vec![problem("internal-error", &[], Some(e.to_string()))],
+    }
+}
+
+/// The first `limit` bytes of `file` as UTF-8, cut at a character
+/// boundary, with the file's size and whether more follows.
+fn read_start(file: &Path, limit: u64) -> std::io::Result<(String, u64, bool)> {
+    use std::io::Read;
+    let f = std::fs::File::open(file)?;
+    let size = f.metadata()?.len();
+    let mut bytes = Vec::new();
+    f.take(limit).read_to_end(&mut bytes)?;
+    let truncated = size > limit;
+    Ok((utf8_start(bytes, truncated), size, truncated))
+}
+
+/// `bytes` as text; when `cut`, an incomplete last character is dropped
+/// rather than shown as a replacement.
+fn utf8_start(mut bytes: Vec<u8>, cut: bool) -> String {
+    if cut {
+        for _ in 0..3 {
+            match std::str::from_utf8(&bytes) {
+                Err(e) if e.error_len().is_none() => {
+                    bytes.truncate(e.valid_up_to());
+                }
+                _ => break,
+            }
+        }
+    }
+    String::from_utf8_lossy(&bytes).into_owned()
 }
 
 /// Open only a changed path from a currently pending, verified proposal.
@@ -171,7 +269,10 @@ pub async fn suggestion(d: &Daemon, id: &str, path: &Path) -> Vec<Response> {
     match write_copy(
         &views,
         &object,
-        &copy_name(&rel, "suggested version"),
+        &copy_name(
+            &rel,
+            &label(d, pigeon_i18n::Message::new("view-name-suggested")),
+        ),
         g.shared.is_some(),
     ) {
         Ok(copy) => vec![crate::api::said(
@@ -224,6 +325,32 @@ mod tests {
 
     #[test]
     #[allow(clippy::unwrap_used, reason = "test fixtures")]
+    fn a_copy_name_is_in_the_person_s_language() {
+        let fr = "fr".parse().unwrap();
+        let en = "en".parse().unwrap();
+        let group = pigeon_i18n::Message::new("view-name-group");
+        let second = pigeon_i18n::Message::new("view-name-version").arg("number", 2i64);
+        let suggested = pigeon_i18n::Message::new("view-name-suggested");
+        assert_eq!(
+            copy_name("a/tarte.docx", &label_in(&fr, &group)),
+            "tarte (version du groupe).docx"
+        );
+        assert_eq!(
+            copy_name("a/tarte.docx", &label_in(&fr, &suggested)),
+            "tarte (version suggérée).docx"
+        );
+        assert_eq!(
+            copy_name("a/tarte.docx", &label_in(&en, &second)),
+            "tarte (version 2).docx"
+        );
+        assert_eq!(
+            copy_name("Makefile", &label_in(&en, &group)),
+            "Makefile (group's version)"
+        );
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used, reason = "test fixtures")]
     fn shared_views_pin_immutable_bytes_and_cleanup_never_makes_the_object_writable() {
         use std::os::unix::fs::{MetadataExt, PermissionsExt};
         let temp = tempfile::tempdir().unwrap();
@@ -253,6 +380,28 @@ mod tests {
         assert_ne!(
             native.metadata().unwrap().ino(),
             object.metadata().unwrap().ino()
+        );
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used, reason = "test fixtures")]
+    fn read_text_answers_the_start_cut_at_a_character() {
+        let temp = tempfile::tempdir().unwrap();
+        let file = temp.path().join("README.md");
+        std::fs::write(&file, "# Été\nbody").unwrap();
+        assert_eq!(
+            super::read_start(&file, 100).unwrap(),
+            ("# Été\nbody".to_owned(), 12, false)
+        );
+        // "É" is two bytes: three bytes end inside it, so it is dropped.
+        assert_eq!(
+            super::read_start(&file, 3).unwrap(),
+            ("# ".to_owned(), 12, true)
+        );
+        assert_eq!(super::read_start(&file, 4).unwrap().0, "# \u{c9}");
+        assert_eq!(
+            super::utf8_start(vec![b'a', 0xff, b'b'], false),
+            "a\u{fffd}b"
         );
     }
 }

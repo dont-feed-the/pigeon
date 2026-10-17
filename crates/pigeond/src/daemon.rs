@@ -121,7 +121,7 @@ impl Daemon {
     /// Writes the key this daemon runs with back to `<config>/device-key`
     /// when leaving the last group deleted it (09 §9.7): the new group's
     /// roster names this device, which must stay the same after a restart.
-    fn keep_key(&self) -> Result<(), String> {
+    pub(crate) fn keep_key(&self) -> Result<(), String> {
         let path = self.dirs.device_key();
         if path.exists() {
             return Ok(());
@@ -213,7 +213,9 @@ impl Daemon {
                 }
             }
             let mut step = round.child("capture");
-            if let Err(e) = crate::capture::capture(g, &self.device, &self.tracer).await {
+            let captured = crate::capture::capture(g, &self.device, &self.tracer).await;
+            crate::status_why::note_capture(g, captured.as_ref().err());
+            if let Err(e) = captured {
                 tracing::warn!(group = %g.id, error = %e, "capture-failed");
                 step.fail(&e.to_string());
                 settled = false;
@@ -233,9 +235,48 @@ impl Daemon {
         // Fetch changes objects and peer refs only. Slow or offline peers must
         // not block conditional bridge writes, capture, or portal decisions.
         drop(busy);
+        let early_moved = std::sync::atomic::AtomicBool::new(false);
         let fetched = {
             let _step = round.child("fetch");
-            crate::custody::fetch_ready(g, &peers).await
+            let accept_round = &round;
+            let made_progress = &early_moved;
+            crate::custody::fetch_each(g, &peers, |peers| async move {
+                let _busy = g.busy.lock().await;
+                if !self.current_group(g).await
+                    || crate::pause::now(self).is_some()
+                    || crate::leave::leaving(g).is_some()
+                {
+                    return;
+                }
+                if settled
+                    && !crate::evict::unsettled(g)
+                    && let Err(e) = crate::bridge::recover(self, g).await
+                {
+                    tracing::warn!(group = %g.id, error = %e, "bridge-recovery-waits");
+                    return;
+                }
+                let mut step = accept_round.child("accept");
+                let moved = crate::custody::accept(g, peers, &self.tracer).await;
+                step.set("moved", moved);
+                if moved {
+                    made_progress.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+                if moved && settled && !crate::evict::unsettled(g) {
+                    // Install ready contents before releasing busy to bridge
+                    // writes. One pending peer must not delay files whose
+                    // contents are already here.
+                    let mut install = accept_round.child("install");
+                    if let Err(e) = crate::install::incoming(g, &self.device, &self.tracer).await {
+                        tracing::warn!(group = %g.id, error = %e, "install-failed");
+                        install.fail(&e.to_string());
+                        return;
+                    }
+                    if let Err(e) = crate::shared::compact(g).await {
+                        tracing::warn!(group = %g.id, error = %e, "shared-storage-waits");
+                    }
+                }
+            })
+            .await
         };
         let _busy = g.busy.lock().await;
         // Refounding can replace this group while its network fetch runs.
@@ -243,6 +284,8 @@ impl Daemon {
         if !self.current_group(g).await {
             return;
         }
+        // Peers that refuse this computer tell it that it was removed.
+        crate::removed::note(self, g).await;
         if crate::pause::now(self).is_some() || crate::leave::leaving(g).is_some() {
             return;
         }
@@ -253,7 +296,8 @@ impl Daemon {
         }
         {
             let mut step = round.child("accept");
-            let moved = crate::custody::accept(g, fetched, &self.tracer).await;
+            let moved = crate::custody::accept(g, fetched, &self.tracer).await
+                || early_moved.load(std::sync::atomic::Ordering::Relaxed);
             step.set("moved", moved);
         }
         if settled {

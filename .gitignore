@@ -5,3 +5,4 @@ states/
 __pycache__/
 .tlacache/
 _apalache-out/
+node_modules/

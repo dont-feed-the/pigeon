@@ -2,8 +2,9 @@
 //! each with its files, those not safe yet, its least safe state, and
 //! whether its space is freed on this computer (08 §8.5). Files at the top
 //! of the group's folder belong to no folder and are not listed. And the
-//! answer to `Files`: the files under one folder, with their states; and
-//! to `Deleted`: the files deleted from `main`.
+//! answer to `Files`: the files under one folder, with their states, sizes,
+//! whether each is freed and, for those on this computer, when they last
+//! changed; and to `Deleted`: the files deleted from `main`.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -16,6 +17,31 @@ use crate::group::Group;
 /// The top-level folder of `path`, if it is in one.
 fn top(path: &str) -> Option<&str> {
     path.split_once('/').map(|(t, _)| t)
+}
+
+/// The size of `o`'s current version: its key's, or for a save not yet
+/// captured, the file's on disk.
+fn size(g: &Group, o: &crate::status::Observed) -> Option<u64> {
+    crate::restore::key_size(&o.key).or_else(|| {
+        let at = g.worktree.as_ref()?.join(&o.path);
+        std::fs::symlink_metadata(at)
+            .ok()
+            .filter(std::fs::Metadata::is_file)
+            .map(|m| m.len())
+    })
+}
+
+/// When the copy of `path` on this computer last changed, if it is a
+/// regular file there.
+fn modified(g: &Group, path: &str) -> Option<String> {
+    let at = g.worktree.as_ref()?.join(path);
+    let time = std::fs::symlink_metadata(at)
+        .ok()
+        .filter(std::fs::Metadata::is_file)?
+        .modified()
+        .ok()?;
+    let secs = time.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
+    Some(crate::util::rfc3339(i64::try_from(secs).ok()?))
 }
 
 /// Files pages include uncaptured local saves, even while a round is busy.
@@ -40,6 +66,8 @@ async fn listing(
                 local: true,
                 state: pigeon_core::state::State::Local(pigeon_core::state::Reason::Sending),
                 level: Level::Working,
+                since: crate::util::now(),
+                silent: None,
             },
         );
     }
@@ -87,6 +115,7 @@ pub async fn folders(g: &Group, me: &str) -> Response {
                 state: crate::status::worst(files.iter().map(|o| &o.state)),
                 freed,
                 arriving: n(arriving),
+                size: Some(files.iter().filter_map(|o| size(g, o)).sum()),
             }
         })
         .collect();
@@ -102,10 +131,16 @@ pub async fn files(g: &Group, me: &str, prefix: &str) -> Response {
         Ok(listing) => listing,
         Err(error) => return crate::api::problem("internal-error", &[], Some(error.to_string())),
     };
+    // A file is not on this computer once freeing hid it (08 §8.5).
+    let targets = crate::evict::targets(g);
+    let hidden = crate::evict::hidden_paths(g).await;
     let files = observed
         .into_iter()
         .map(|o| FileEntry {
             state: crate::status::worst(std::iter::once(&o.state)),
+            size: size(g, &o),
+            modified: modified(g, &o.path),
+            freed: hidden.contains(&o.path) && targets.is_freed(&o.path),
             path: o.path,
         })
         .collect();

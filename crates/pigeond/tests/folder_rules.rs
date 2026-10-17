@@ -104,9 +104,9 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
     eventually_within(
         60,
         || {
-            pigeon(&bob, &["suggestions"])
-                .iter()
-                .any(|r| matches!(r, Response::Proposals { proposals } if !proposals.is_empty()))
+            pigeon(&bob, &["suggestions"]).iter().any(
+                |r| matches!(r, Response::Proposals { proposals, .. } if !proposals.is_empty()),
+            )
         },
         "ordinary change not suggested",
         &[&lap, &bob],
@@ -146,7 +146,7 @@ fn signed_folder_rules_enforce_authority_and_preserve_personal_index_work() {
         .unwrap();
     let git = pigeond::git::Git::new(&folder, pigeon_git::GitEnv::default());
     let bob_device = match pigeon(&lap, &["machines"]).as_slice() {
-        [Response::Machines { machines }] => machines
+        [Response::Machines { machines, .. }] => machines
             .iter()
             .find(|m| m.name == "bob-laptop")
             .unwrap()
@@ -400,9 +400,9 @@ fn a_per_person_folder_gives_each_person_theirs() {
     eventually_within(
         120,
         || {
-            pigeon(&lap, &["suggestions"])
-                .iter()
-                .any(|r| matches!(r, Response::Proposals { proposals } if !proposals.is_empty()))
+            pigeon(&lap, &["suggestions"]).iter().any(
+                |r| matches!(r, Response::Proposals { proposals, .. } if !proposals.is_empty()),
+            )
         },
         "Bob's file in Ana's folder not suggested",
         &[&lap, &bob],

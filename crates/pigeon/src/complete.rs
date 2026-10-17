@@ -102,7 +102,7 @@ fn candidate(value: &str, help: String) -> CompletionCandidate {
 /// The suggestions waiting for a decision, for `accept` and `decline`.
 pub fn suggestions() -> ArgValueCandidates {
     listed(Request::Proposals, |r, answer| match answer {
-        Response::Proposals { proposals } => proposals
+        Response::Proposals { proposals, .. } => proposals
             .iter()
             .map(|p| candidate(&p.id, r.suggestion(p)))
             .collect(),
@@ -122,7 +122,7 @@ pub fn held() -> ArgValueCandidates {
 /// `debug bundle --from`.
 pub fn machines() -> ArgValueCandidates {
     listed(Request::Machines, |r, answer| match answer {
-        Response::Machines { machines } => machines
+        Response::Machines { machines, .. } => machines
             .iter()
             .filter(|m| !m.this_device)
             .map(|m| candidate(&m.name, r.machine(m)))

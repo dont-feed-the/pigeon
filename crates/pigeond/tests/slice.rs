@@ -86,7 +86,7 @@ fn local_published_protected_then_free_and_keep() {
 
     let machines = pigeon(&lap, &["machines"]);
     match machines.as_slice() {
-        [Response::Machines { machines }] => {
+        [Response::Machines { machines, .. }] => {
             let mut names: Vec<&str> = machines.iter().map(|m| m.name.as_str()).collect();
             names.sort_unstable();
             assert_eq!(names, ["c1", "c2", "lap"]);
@@ -112,21 +112,34 @@ fn local_published_protected_then_free_and_keep() {
     let web = common::web::login(&lap);
     let files = common::web::page(&web, "/files");
     assert!(
-        files.contains("sub: Safe, 1 file") && !files.contains("Waiting for 1 file"),
+        files.contains("data-name=\"sub\"")
+            && files.contains("1 file")
+            && !files.contains("Waiting for 1 file"),
         "{files}"
     );
-    // The nested page offers actions for this scope; the parent does not
-    // promise that intentionally freed files will download themselves.
+    // The nested page says it is not on this computer and offers to keep
+    // it; the parent does not promise that freed files download themselves.
     // The folder's page lists its file; the file's page its version.
     let listed = common::web::page(&web, &format!("/folder?path={}", sub.display()));
-    assert!(listed.contains("sub/2019/big.bin: Safe"), "{listed}");
-    assert!(listed.contains("action=\"/files/free\"") && listed.contains("action=\"/files/keep\""));
+    assert!(
+        listed.contains("data-name=\"big.bin\"") && listed.contains("Safe"),
+        "{listed}"
+    );
+    assert!(
+        listed.contains("action=\"/files/keep\"")
+            && !listed.contains("action=\"/files/free\"")
+            && listed.contains("This folder is not on this computer"),
+        "{listed}"
+    );
     assert!(listed.contains(&format!("name=\"folder\" value=\"{}\"", sub.display())));
     let file = common::web::page(
         &web,
         &format!("/file?path={}", sub.join("big.bin").display()),
     );
-    assert!(file.contains("Versions") && file.contains("Safe"), "{file}");
+    assert!(
+        file.contains("Versions") && file.contains("Safe, not on this computer"),
+        "{file}"
+    );
     // `pigeon settings` writes config.toml, and the web speaks French at
     // once (11 §11.2).
     let set = pigeon(&lap, &["settings", "language", "fr"]);
@@ -205,7 +218,7 @@ fn local_published_protected_then_free_and_keep() {
     // its last version back (ux.md §6.2).
     std::fs::remove_file(folder.join("a.txt")).unwrap();
     eventually(
-        || common::web::page(&web, "/deleted").contains("a.txt, deleted"),
+        || common::web::page(&web, "/deleted").contains("data-name=\"a.txt\""),
         "a.txt is not under Deleted files",
         &all,
     );
@@ -241,8 +254,21 @@ fn local_published_protected_then_free_and_keep() {
         "{paused:?}"
     );
     match pigeon(&lap, &["status"]).as_slice() {
-        [Response::Status(r)] => assert_eq!(r.headline.id, "headline-paused", "{r:?}"),
+        [Response::Status(r)] => {
+            assert_eq!(r.headline.id, "headline-paused", "{r:?}");
+            assert_eq!(r.paused.as_ref(), Some(&r.headline), "{r:?}");
+        }
         other => panic!("status while paused: {other:?}"),
+    }
+    // Every page says so, with *Share again*; Settings offers only that.
+    let web = common::web::login(&lap);
+    for path in ["/files", "/settings"] {
+        let page = common::web::page(&web, path);
+        assert!(
+            page.contains("Sharing is paused until ") && page.contains("action=\"/resume\""),
+            "{path}: {page}"
+        );
+        assert!(!page.contains("action=\"/pause\""), "{path}: {page}");
     }
     let resumed = pigeon(&lap, &["resume"]);
     assert!(said(&resumed, "resumed", "-").is_some(), "{resumed:?}");

@@ -49,10 +49,12 @@ asks for none. Grouped by file, so that a few ADRs could cover them.
 | 07, 11 | durable `kept` and `preserved` journal records; non-replacing recovery names and capture manifests retained for manual recovery (07 §7.5, 11 §11.3) |
 | [08](08-custody-loops.md) | fetching every 5 minutes besides change notices; repair in the protect class of the queue (§8.1, [15 §15.2](15-resource-use.md), issue #13) |
 | 08 | the deadline of a P2P fetch or push (§8.2); `free --without-checking` and its record (§8.7); a full scrub every 30 days (§8.8) |
+| 08 | declined suggestions stay retained until explicit erasure; no automatic expiry (user decision, 16 October 2026; §8.6, §8.9) |
 | [09](09-network-and-joining.md) | the invitation encoding `pgn2-` + base32 of JSON; the admitters it lists, the device writing it first (§9.6) |
 | 09 | the join exchange carries a custodian's direct addresses, the welcome the admitter's git-annex UUID; default `maxsize` free space minus 10 %; device names made unique with `-2`, `-3`…; the safety words (§9.6); `pigeon leave` (§9.7) |
 | [10](10-interfaces.md) | force as `accept --override`; the verbs `held`, `settings`, `leave`, `erase --cancel` (§10.1); one notification per kind and day (§10.4) |
 | 10 | isolation marks around arguments, an unknown message id rendered as itself (§10.5); the clock-skew warning at 5 minutes (§10.7) |
+| 10 | the web's sidebar, the Files browser's table, details panel and README rules, and its 128 KiB `ReadText` cap (§10.3) |
 | 10 | problem codes as `P-` and capitals; the first build's `usage`, `unknown-computer`, `receiving`, `not-a-pigeon-repository`, `peer-unreachable`, `peer-refused`, `internal-error` (§10.6) |
 | [11](11-local-state.md) | `toml_edit` for writing `config.toml`, its `[network]` and `[loops]` tables (§11.2) |
 | [12](12-observability.md) | telemetry bounded to 50 MB; `debug bundle` asks each peer's person; the `PIGEON_TRACE` switch (§12.2, §12.3) |
@@ -104,8 +106,6 @@ into 0054; 0065 into 0053.
   from macOS's type declarations (§7.9); mapping non-portable names on
   Windows only, as Samba's `catia` does ([05 §5.4](05-catalogue-and-names.md));
   K per folder.
-- **Expiring declined suggestions** ([08 §8.9](08-custody-loops.md)) by a
-  group setting, as a purge decided in advance.
 - **Recovery** (ADR 0047, [09 §9.9](09-network-and-joining.md)): Shamir
   shares of a sheet among admins; refounding only with the surviving
   custodians' owners; ADR 0046's sync points under power loss, tested with a

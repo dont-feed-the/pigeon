@@ -8,17 +8,23 @@
 //! more, or its report says so: it then counts for nothing, and the
 //! headline says *Needs you*. A custodian's report (06 §6.3) tells the
 //! `main` it has, and whether it is full or short of room.
+//!
+//! A version's grace period counts from when this computer first saw it
+//! (its key), so a later commit on `main` does not restart it (06 §6.7).
+//! On a computer removed from the group (09 §9.7) no backup machine
+//! counts, and the headline says so. The reasons are `status_why`'s.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use pigeon_core::headline::{Level, checked_at, headline, version_level};
 use pigeon_core::roster::Role as DeviceRole;
-use pigeon_core::state::{Custodian, Reason, Settings, State, Version, rank, state};
+use pigeon_core::state::{Custodian, Settings, State, Version, rank, state};
 use pigeon_core::time::{Span, Time};
 use pigeon_proto::api::{self, Arg, Message, StatusReport, VersionStatus};
 
 use crate::custody::{holders, present};
 use crate::group::Group;
+use crate::status_why::Silent;
 use crate::util::rfc3339;
 
 /// How long a new version may take before it is *not safe yet* (06 §6.7).
@@ -48,6 +54,55 @@ pub struct Observed {
     pub state: State<String>,
     /// Its level.
     pub level: Level,
+    /// When this computer first saw it, while it was not safe yet; for a
+    /// safe version, at most the time of the `main` it was observed in.
+    pub since: i64,
+    /// The backup machines it waits for, if all have been silent for a
+    /// while (`status_why::SILENT`).
+    pub silent: Option<Silent>,
+}
+
+/// Whether `s` is a state whose level counts from the version's age.
+fn young(s: &State<String>) -> bool {
+    matches!(
+        s,
+        State::Local(_)
+            | State::Published(_)
+            | State::Missing(pigeon_core::state::Missing::ContentMissing)
+    )
+}
+
+/// When each of `states`, by key, was first seen not safe: as `first`
+/// remembers, else `seed`, the time of the `main` they were read from.
+/// `first` keeps only those not safe; after a look at every version
+/// (`all`), it forgets those this look did not see, unless a look at a
+/// newer `main` (one that read it while this one ran) added them.
+fn ages(
+    first: &mut BTreeMap<String, i64>,
+    states: &[(String, bool)],
+    seed: i64,
+    all: bool,
+) -> Vec<i64> {
+    let out = states
+        .iter()
+        .map(|(key, not_safe)| {
+            if *not_safe {
+                *first.entry(key.clone()).or_insert(seed)
+            } else {
+                first.remove(key);
+                seed
+            }
+        })
+        .collect();
+    if all {
+        let seen: BTreeSet<&String> = states
+            .iter()
+            .filter(|(_, not_safe)| *not_safe)
+            .map(|(k, _)| k)
+            .collect();
+        first.retain(|k, since| seen.contains(k) || *since >= seed);
+    }
+    out
 }
 
 /// Whether the disk of `g`'s repository has less free space than its
@@ -174,6 +229,10 @@ async fn observe_at(
             }
         }
     }
+    if crate::removed::is_removed(g) {
+        // The backup machines refuse this computer: none counts here.
+        custodians.clear();
+    }
     let mut out = Vec::new();
     for (path, key) in keys {
         if !(prefix.is_empty() || path == prefix || path.starts_with(&format!("{prefix}/"))) {
@@ -207,14 +266,27 @@ async fn observe_at(
             erased: false,
         };
         let st = state(&version, &s, Time(now));
-        let level = version_level(&st, Span(now - saved), GRACE, &s, Time(now));
+        let silent = crate::status_why::silent(&version.custodians, Time(now));
         out.push(Observed {
             path,
             key,
             local: version.this_device_holds,
             state: st,
-            level,
+            level: Level::Safe,
+            since: now,
+            silent,
         });
+    }
+    // A version is at least as old as the first `main` seen holding it.
+    let seed = if saved > 0 { saved.min(now) } else { now };
+    let states: Vec<(String, bool)> = out
+        .iter()
+        .map(|o| (o.key.clone(), young(&o.state)))
+        .collect();
+    let since = ages(&mut g.lock().first_seen, &states, seed, prefix.is_empty());
+    for (o, since) in out.iter_mut().zip(since) {
+        o.since = since;
+        o.level = version_level(&o.state, Span(now - since), GRACE, &s, Time(now));
     }
     Ok(out)
 }
@@ -227,49 +299,6 @@ fn proto_state(s: &State<String>) -> api::State {
         State::Published(_) => api::State::Published,
         State::Uncertain(_) | State::Protected(_) => api::State::Protected,
     }
-}
-
-fn reason(s: &State<String>, k: usize, names: &BTreeMap<String, String>) -> Option<Message> {
-    let r = match s {
-        State::Local(r) | State::Published(r) => r,
-        _ => return None,
-    };
-    Some(match r {
-        Reason::CustodianOffline(who, since) => {
-            let machine = Arg::Text(
-                who.iter()
-                    .map(|d| names.get(d).cloned().unwrap_or_else(|| d.clone()))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            );
-            // Never heard from, as on a computer that has just joined: no
-            // time to say it went offline at.
-            match since {
-                Some(t) => msg(
-                    "why-machine-offline",
-                    &[("machine", machine), ("since", Arg::Text(rfc3339(t.0)))],
-                ),
-                None => msg("why-machine-not-heard", &[("machine", machine)]),
-            }
-        }
-        Reason::TooFewCustodians { have, k } => msg(
-            "why-too-few-backups",
-            &[
-                (
-                    "have",
-                    Arg::Number(i64::try_from(*have).unwrap_or(i64::MAX)),
-                ),
-                ("need", Arg::Number(i64::try_from(*k).unwrap_or(i64::MAX))),
-            ],
-        ),
-        _ => msg(
-            "why-safe-copies",
-            &[
-                ("have", Arg::Number(0)),
-                ("need", Arg::Number(i64::try_from(k).unwrap_or(2))),
-            ],
-        ),
-    })
 }
 
 /// The worst of `states`, the lowest in rank (missing, local, published,
@@ -385,7 +414,9 @@ pub(crate) async fn inventory_report(
     let peers = crate::report::problems(g);
     let held_table = crate::held_file::read(g);
     let (held, held_names) = (held_table.held().len(), held_table.names().len());
-    let level = if current_unreadable
+    let removed = crate::removed::is_removed(g);
+    let level = if removed
+        || current_unreadable
         || history_unreadable
         || pending_unreadable
         || full
@@ -401,6 +432,7 @@ pub(crate) async fn inventory_report(
     };
     let name = |d: &str| Arg::Text(names.get(d).cloned().unwrap_or_else(|| d.to_owned()));
     let headline = match (level, &shortfall) {
+        _ if removed => msg("headline-removed", &[]),
         _ if current_unreadable || history_unreadable => msg("headline-inventory-unreadable", &[]),
         _ if pending_unreadable => msg("headline-checking", &[]),
         _ if full => msg("headline-disk-full", &[]),
@@ -479,31 +511,41 @@ pub(crate) async fn inventory_report(
             )
         }),
     };
+    // On a removed computer the headline says it of every file: the list
+    // names a file only when asked about it.
+    let listed = asked || !removed;
     let mut versions: Vec<VersionStatus> = observed
         .iter()
+        .filter(|_| listed)
         .filter(|o| !pending.contains(&o.path))
         .filter(|o| asked || !matches!(o.state, State::Protected(_)))
         .map(|o| VersionStatus {
             path: o.path.clone(),
             number: 1,
-            saved_at: rfc3339(now),
+            saved_at: rfc3339(o.since),
             state: proto_state(&o.state),
             observed_at: match o.state {
                 State::Protected(t) => Some(rfc3339(t.0)),
                 State::Uncertain(t) => t.map(|t| rfc3339(t.0)),
                 _ => None,
             },
-            reason: reason(&o.state, k, &names),
+            reason: crate::status_why::version(o, k, &names, removed),
         })
         .collect();
-    versions.extend(pending.into_iter().map(|path| VersionStatus {
-        path,
-        number: 1,
-        saved_at: rfc3339(now),
-        state: api::State::Local,
-        observed_at: None,
-        reason: Some(msg("why-capturing", &[])),
-    }));
+    let local = crate::status_why::Local::read(g);
+    versions.extend(
+        pending
+            .into_iter()
+            .filter(|_| listed)
+            .map(|path| VersionStatus {
+                reason: Some(local.reason(&path)),
+                path,
+                number: 1,
+                saved_at: rfc3339(now),
+                state: api::State::Local,
+                observed_at: None,
+            }),
+    );
     let not_shared = if not_shared {
         g.lock()
             .not_shared
@@ -536,6 +578,7 @@ pub(crate) async fn inventory_report(
             state: worst,
             versions,
             not_shared,
+            paused: None,
         },
         inventory,
     )
@@ -556,5 +599,42 @@ mod tests {
             api::State::Published
         );
         assert_eq!(super::worst(std::iter::empty()), api::State::Protected);
+    }
+
+    #[test]
+    fn a_later_commit_does_not_restart_a_versions_grace() {
+        let mut first = std::collections::BTreeMap::new();
+        let not_safe = |k: &str| (k.to_owned(), true);
+        // First seen in a main committed at 100.
+        assert_eq!(
+            super::ages(&mut first, &[not_safe("a")], 100, true),
+            vec![100]
+        );
+        // Another capture moves main to 500: "a" keeps its age, "b" is new.
+        assert_eq!(
+            super::ages(&mut first, &[not_safe("a"), not_safe("b")], 500, true),
+            vec![100, 500]
+        );
+        // A look at one folder forgets nothing it did not see.
+        assert_eq!(
+            super::ages(&mut first, &[not_safe("b")], 900, false),
+            vec![500]
+        );
+        assert_eq!(first.len(), 2);
+        // A look at an older main, finishing late, keeps what a newer one
+        // added meanwhile ("c" at 950), and forgets what main dropped.
+        first.insert("c".to_owned(), 950);
+        assert_eq!(
+            super::ages(&mut first, &[not_safe("a")], 900, true),
+            vec![100]
+        );
+        assert_eq!(first.keys().collect::<Vec<_>>(), ["a", "c"]);
+        first.remove("c");
+        // Once safe, a version is forgotten; one no longer in main too.
+        assert_eq!(
+            super::ages(&mut first, &[("a".to_owned(), false)], 900, true),
+            vec![900]
+        );
+        assert!(first.is_empty(), "{first:?}");
     }
 }

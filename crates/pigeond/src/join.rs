@@ -13,9 +13,9 @@
 //! admitter's roster may already hold (`Admission::Again`). A group that
 //! `config.toml` lists without `main`, as earlier releases left a failed
 //! join, becomes such a join again when the daemon starts ([`recover`]).
+//! Ordinary failures clean up what the attempt made ([`crate::join_attempt`]).
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use pigeon_core::filter::Role;
 use pigeon_git::GitEnv;
@@ -24,6 +24,7 @@ use crate::config::{self, GroupEntry};
 use crate::daemon::Daemon;
 use crate::group::Group;
 use crate::invite::{Joining, Welcomed, admitter_addresses, dial, fetch_welcome};
+use crate::join_attempt::{Attempt, remember_uuid, reuse_uuid, serve_verified};
 use crate::settings::{ensure_remote, init_annex};
 
 /// Joins the group of `j` in `folder`, by default the group's name in the
@@ -32,23 +33,27 @@ use crate::settings::{ensure_remote, init_annex};
 pub async fn join(d: &Daemon, j: &Joining, folder: Option<String>) -> Result<String, String> {
     let inv = &j.inv;
     let path = folder.map_or_else(|| default_path(d, j), PathBuf::from);
-    std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
-    let path = std::fs::canonicalize(&path).map_err(|e| e.to_string())?;
-    if crate::join_in_place::applies(d, j, &path).await {
-        return crate::join_in_place::join(d, j, &path).await;
+    let attempt = Attempt::begin(&path, role(j) == Role::Custodian)?;
+    if crate::join_in_place::applies(d, j, &attempt.path).await {
+        return crate::join_in_place::join(d, j, &attempt.path).await;
     }
-    let g = repository(d, j, &path).await?;
-    let git_dir = g.git_dir.clone();
-    welcome(d, j, g).await?;
-    pigeon_sys::lab::crash_point("join.before-config");
-    let g = Group::open(&inv.group, &path, &d.env)
-        .await
-        .ok_or("not-a-repository")?;
-    d.add_group(g, &path).await?;
-    let _ = std::fs::remove_file(marker(&git_dir));
+    if unfinished(&attempt.path) != Some((role(j), inv.group.clone())) && !attempt.empty()? {
+        return Err("folder-not-empty".into());
+    }
+    attempt.run(d, join_in(d, j, &attempt.path)).await?;
     tracing::info!(group = %inv.group, "joined-group");
     d.wake.notify_one();
     Ok(inv.name.clone())
+}
+
+/// Completes a new or interrupted attempt, retaining the repository only
+/// across a crash; an ordinary failure is cleaned up by the caller.
+async fn join_in(d: &Daemon, j: &Joining, path: &Path) -> Result<(), String> {
+    let g = repository(d, j, path).await?;
+    let git_dir = g.git_dir.clone();
+    welcome(d, j, g, path).await?;
+    let _ = std::fs::remove_file(marker(&git_dir));
+    Ok(())
 }
 
 fn default_path(d: &Daemon, j: &Joining) -> PathBuf {
@@ -113,6 +118,8 @@ async fn repository(d: &Daemon, j: &Joining, path: &Path) -> Result<Group, Strin
         .await
         .ok_or("not-a-repository")?;
     if g.lock().token.is_some() {
+        let uuid = g.lock().annex_uuid.clone().ok_or("not-a-repository")?;
+        remember_uuid(d, &inv.group, &uuid);
         return Ok(g);
     }
     git.run(&["config", "user.name", &j.name])
@@ -123,9 +130,11 @@ async fn repository(d: &Daemon, j: &Joining, path: &Path) -> Result<Group, Strin
         .await
         .map_err(fail)?;
     crate::settings::check(&g).await;
+    reuse_uuid(d, &inv.group, &git).await?;
     let (uuid, token) = init_annex(&git, role(j), &j.name, inv.k)
         .await
         .map_err(fail)?;
+    remember_uuid(d, &inv.group, &uuid);
     if role(j) == Role::Laptop {
         let k = inv.k.to_string();
         git.run(&["annex", "numcopies", &k]).await.map_err(fail)?;
@@ -140,7 +149,7 @@ async fn repository(d: &Daemon, j: &Joining, path: &Path) -> Result<Group, Strin
 /// among the daemon's groups only meanwhile, so that the helper finds its
 /// repository, busy, so that no round reads it before every annexed file
 /// is hidden, and open to its admitter alone, as a staged join (09 §9.9).
-async fn welcome(d: &Daemon, j: &Joining, g: Group) -> Result<(), String> {
+async fn welcome(d: &Daemon, j: &Joining, g: Group, path: &Path) -> Result<(), String> {
     let uuid = g.lock().annex_uuid.clone().ok_or("not-a-repository")?;
     let w = dial(d, j, &uuid).await?;
     pigeon_sys::lab::crash_point("join.after-welcome");
@@ -151,19 +160,13 @@ async fn welcome(d: &Daemon, j: &Joining, g: Group) -> Result<(), String> {
     g.set_addresses(admitter, admitter_addresses(&w.admitter));
     g.learn_peers(&w.peers);
     g.lock().bootstrap_peer = Some((admitter.clone(), w.annex_uuid.clone()));
-    let g = Arc::new(g);
-    let busy = g.busy.lock().await;
-    d.groups
-        .write()
-        .unwrap_or_else(|p| p.into_inner())
-        .push(g.clone());
-    let taken = take(d, j, &g, &w).await;
-    d.groups
-        .write()
-        .unwrap_or_else(|p| p.into_inner())
-        .retain(|live| !Arc::ptr_eq(live, &g));
-    drop(busy);
-    taken
+    serve_verified(d, g, path, |g| async move {
+        take(d, j, &g, &w).await?;
+        pigeon_sys::lab::crash_point("join.before-config");
+        Ok(())
+    })
+    .await?;
+    Ok(())
 }
 
 /// Fetches and checks the welcome `w` of `j`, then makes its `main`

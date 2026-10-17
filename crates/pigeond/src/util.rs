@@ -122,6 +122,42 @@ pub fn device_key(path: &Path) -> io::Result<[u8; 32]> {
     }
 }
 
+/// A finite set of futures, yielding each result as soon as it is ready.
+pub(crate) struct Pending<F> {
+    futures: Vec<Option<std::pin::Pin<Box<F>>>>,
+}
+
+impl<F: std::future::Future> Pending<F> {
+    pub(crate) fn new(futures: Vec<F>) -> Self {
+        Self {
+            futures: futures.into_iter().map(|f| Some(Box::pin(f))).collect(),
+        }
+    }
+
+    pub(crate) async fn next(&mut self) -> Option<F::Output> {
+        std::future::poll_fn(|cx| {
+            let mut waiting = false;
+            for slot in &mut self.futures {
+                if let Some(future) = slot {
+                    match future.as_mut().poll(cx) {
+                        std::task::Poll::Ready(value) => {
+                            *slot = None;
+                            return std::task::Poll::Ready(Some(value));
+                        }
+                        std::task::Poll::Pending => waiting = true,
+                    }
+                }
+            }
+            if waiting {
+                std::task::Poll::Pending
+            } else {
+                std::task::Poll::Ready(None)
+            }
+        })
+        .await
+    }
+}
+
 /// Runs `futures` concurrently on this task and answers their outputs in
 /// order, as `futures::future::join_all` does.
 pub async fn join_all<F: std::future::Future>(futures: Vec<F>) -> Vec<F::Output> {

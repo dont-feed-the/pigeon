@@ -136,7 +136,7 @@ pub(crate) fn group_of(d: &Daemon, path: &Path) -> Option<Arc<Group>> {
     d.group_at(path).or_else(|| d.group_at(path.parent()?))
 }
 
-pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
+pub(crate) async fn handle(d: &Arc<Daemon>, request: Request) -> Vec<Response> {
     match request {
         Request::FolderRules { folder } => crate::folder_rules::list(d, folder.as_deref()),
         Request::SetFolderRule {
@@ -152,9 +152,18 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             folder,
             k,
             device_name,
+            person,
         } => match in_another_group(d, &[]) {
             Some(refused) => vec![refused],
-            None => vec![create(d, &name, Path::new(&folder), k, &device_name).await],
+            None => {
+                let new = New {
+                    name: &name,
+                    k,
+                    device_name: &device_name,
+                    person: person.as_deref(),
+                };
+                vec![create(d, &new, Path::new(&folder)).await]
+            }
         },
         Request::Status { path, not_shared } => {
             let (g, prefix) = match &path {
@@ -179,13 +188,9 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
                 tracing::warn!(group = %g.id, error = %e, "capture-failed");
             }
             let mut report = crate::status::report(&g, &d.device, &prefix, not_shared).await;
-            // A pause the person chose says so, unless something needs them
-            // (15 §15.6, ADR 0027).
-            if let Some(p) = crate::pause::now(d)
-                && report.level != pigeon_proto::api::Level::NeedsYou
-            {
-                report.headline = crate::pause::headline(p);
-            }
+            // A pause the person chose says so, in the headline unless
+            // something needs them (15 §15.6, ADR 0027).
+            crate::pause::tell(d, &mut report);
             vec![Response::Status(report)]
         }
         Request::Invite => {
@@ -225,20 +230,28 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             let ask = crate::invite::Ask {
                 code: code.clone(),
                 folder,
-                name,
+                name: name.clone(),
                 person: person.clone(),
                 existing,
                 custodian,
             };
+            let group_id = pigeon_proto::join::decode(&code).map(|i| i.group);
             match crate::invite::join(d, ask).await {
-                Ok(group) => vec![said(
-                    "joined",
-                    &[("group", text(&group)), ("who", text(who(custodian)))],
-                )],
+                Ok(group) => {
+                    let mut args = vec![("group", text(&group)), ("who", text(who(custodian)))];
+                    match group_id.and_then(|id| renamed(d, &id, name)) {
+                        Some((given, asked)) => {
+                            args.extend([("name", text(&given)), ("asked", text(&asked))]);
+                            vec![said("joined-renamed", &args)]
+                        }
+                        None => vec![said("joined", &args)],
+                    }
+                }
                 Err(e) => vec![join_problem(&e, &code, person.as_deref())],
             }
         }
-        Request::Evict { folder } => free(d, Path::new(&folder)).await,
+        Request::Evict { folder, confirmed } => free(d, Path::new(&folder), confirmed).await,
+        Request::FreePreview { folder } => crate::free_check::preview(d, Path::new(&folder)).await,
         Request::Drop { path, confirmed } => {
             crate::drop::drop(d, Path::new(&path), confirmed).await
         }
@@ -283,7 +296,9 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         Request::SetSettings { key, value } => crate::prefs::set(d, &key, &value),
         Request::Pause { duration } => crate::pause::pause(d, duration.as_deref()),
         Request::Resume => crate::pause::resume(d),
+        Request::Paused => crate::pause::state(d),
         Request::History { path } => crate::history::history(d, Path::new(&path)).await,
+        Request::ReadText { path, limit } => crate::view::text(d, Path::new(&path), limit).await,
         Request::ViewSuggestion { proposal, path } => {
             crate::view::suggestion(d, &proposal, Path::new(&path)).await
         }
@@ -321,7 +336,7 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
             }
             crate::recovery::recover(d, &sheet, folder, from).await
         }
-        Request::Proposals => crate::decide::list(d).await,
+        Request::Proposals => crate::decide::list_detailed(d).await,
         Request::Conflicts => crate::resolve::list(d).await,
         Request::Resolve { path, choice } => {
             crate::resolve::resolve(d, Path::new(&path), &choice).await
@@ -332,11 +347,38 @@ pub(crate) async fn handle(d: &Daemon, request: Request) -> Vec<Response> {
         Request::Reject { proposal, note } => {
             crate::decide::decline(d, &proposal, note.as_deref()).await
         }
+        Request::DecideFiles {
+            proposal,
+            paths,
+            accept,
+            note,
+            reason,
+        } => {
+            let (note, reason) = (note.as_deref(), reason.as_deref());
+            crate::decide_files::decide(d, &proposal, &paths, accept, note, reason).await
+        }
         Request::Hello { .. }
         | Request::Address { .. }
         | Request::Connect { .. }
         | Request::Listen { .. } => not_in_this_build("helper"),
     }
+}
+
+/// After a join, this computer's name in the roster of `group` and the
+/// one asked for, when the admitter gave it another because a computer had
+/// it (09 §9.6 step 3). A name not asked for is unique already.
+fn renamed(d: &Daemon, group: &str, name: Option<String>) -> Option<(String, String)> {
+    let asked = name
+        .map(|n| n.trim().to_owned())
+        .filter(|n| !n.is_empty())?;
+    let doc = d.group(group)?.roster()?;
+    let given = doc
+        .roster
+        .devices
+        .get(&DeviceId(d.device.clone()))?
+        .name
+        .clone();
+    (given != asked).then_some((given, asked))
 }
 
 /// A computer is in one group only: the web pages and the commands without
@@ -412,25 +454,37 @@ fn join_problem(code: &str, invitation: &str, person: Option<&str>) -> Response 
     }
 }
 
-async fn create(d: &Daemon, name: &str, folder: &Path, k: u32, device_name: &str) -> Response {
+/// What `pigeon create` asks for.
+struct New<'a> {
+    /// The group's name.
+    name: &'a str,
+    /// Copies on distinct backup machines before a version is safe.
+    k: u32,
+    /// This computer's name in the roster.
+    device_name: &'a str,
+    /// The creator's name, if they gave one.
+    person: Option<&'a str>,
+}
+
+async fn create(d: &Daemon, new: &New<'_>, folder: &Path) -> Response {
     // Refused before anything is written, so a corrected try starts clean.
-    if name.trim().is_empty() || device_name.trim().is_empty() {
+    if new.name.trim().is_empty() || new.device_name.trim().is_empty() {
         return problem("name-empty", &[], None);
     }
-    if k == 0 {
+    if new.k == 0 {
         return problem("copies-zero", &[], None);
     }
     if !folder.is_absolute() {
         let folder = folder.to_string_lossy();
         return problem("folder-not-absolute", &[("folder", text(&folder))], None);
     }
-    match create_inner(d, name, folder, k, device_name).await {
+    match create_inner(d, new, folder).await {
         Ok(g) => {
             let code = crate::invite::code(d, &g).unwrap_or_default();
             said(
                 "created",
                 &[
-                    ("group", text(name)),
+                    ("group", text(new.name)),
                     ("command", text(&pigeon_proto::join::command(&code))),
                 ],
             )
@@ -439,13 +493,8 @@ async fn create(d: &Daemon, name: &str, folder: &Path, k: u32, device_name: &str
     }
 }
 
-async fn create_inner(
-    d: &Daemon,
-    name: &str,
-    folder: &Path,
-    k: u32,
-    device_name: &str,
-) -> Result<Arc<Group>, String> {
+async fn create_inner(d: &Daemon, new: &New<'_>, folder: &Path) -> Result<Arc<Group>, String> {
+    let (name, k, device_name) = (new.name, new.k, new.device_name);
     std::fs::create_dir_all(folder).map_err(|e| e.to_string())?;
     let folder = std::fs::canonicalize(folder).map_err(|e| e.to_string())?;
     if folder.join(".git").exists() {
@@ -489,8 +538,13 @@ async fn create_inner(
         removed: BTreeMap::new(),
         folders: Vec::new(),
     };
-    // The creator is the account's person, the group's first admin.
-    let creator = crate::invite::account();
+    // The creator is the person they named, else the account's, the
+    // group's first admin; never a placeholder the others would see.
+    let creator = new
+        .person
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .map_or_else(crate::invite::account, str::to_owned);
     let person = roster.fresh_person_id(&creator);
     roster.persons.insert(
         person.clone(),
@@ -550,13 +604,18 @@ pub(crate) fn wake_soon(d: &Daemon) {
 
 /// `pigeon free`: records the target; the loops hide each protected file
 /// and drop its content, and the others once they are protected (08 §8.5).
-async fn free(d: &Daemon, path: &Path) -> Vec<Response> {
+/// While no backup machine has been heard from recently, only once
+/// `confirmed` (`free_check.rs`).
+async fn free(d: &Daemon, path: &Path, confirmed: bool) -> Vec<Response> {
     let Some(g) = group_of(d, path) else {
         return vec![problem("not-in-group", &[], None)];
     };
     let Some(prefix) = relative(&g, path) else {
         return vec![problem("not-in-group", &[], None)];
     };
+    if !confirmed && let Some(ask) = crate::free_check::ask_again(d, &g) {
+        return vec![ask];
+    }
     if let Err(error) = crate::evict::set_target(&g, &prefix, true) {
         return vec![problem("internal-error", &[], Some(error))];
     }
@@ -622,7 +681,14 @@ fn machines(d: &Daemon) -> Vec<Response> {
             this_device: id.0 == d.device,
         })
         .collect();
-    vec![Response::Machines { machines }]
+    // A removed computer's list is the group as it last knew it (09 §9.7).
+    crate::removed::noted(
+        &g,
+        Response::Machines {
+            machines,
+            copies: Some(doc.roster.k),
+        },
+    )
 }
 
 /// `pigeon people`: each person of the roster, with their machines.
@@ -664,7 +730,7 @@ async fn people(d: &Daemon) -> Vec<Response> {
                 .collect(),
         })
         .collect();
-    vec![Response::People { people }]
+    crate::removed::noted(&g, Response::People { people })
 }
 
 /// The message of a text, for the modules that answer with one.

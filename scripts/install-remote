@@ -66,6 +66,8 @@ version="v$v+g$commit"
 build_there() {
   remote 'command -v cargo >/dev/null' ||
     die "$host has no Rust: install it there with rustup (https://rustup.rs), then run this again"
+  remote 'command -v node >/dev/null && command -v npm >/dev/null' ||
+    die "$host has no Node.js with npm, which builds the web interface: install Node.js 22.12 or later there (https://nodejs.org, or Homebrew), then run this again"
   say "copying the source of pigeon $version to $host:$cache/src"
   remote "rm -rf $(quote "$cache/src") && mkdir -p $(quote "$cache/src")"
   (cd "$root" && git ls-files -z --cached --others --exclude-standard |
@@ -81,6 +83,8 @@ build_there() {
 # that the host's installer moves them into place there (and removes it).
 build_here() {
   [ "$os" = Linux ] || die "programs for $os are built there: add --build-there"
+  command -v node >/dev/null && command -v npm >/dev/null ||
+    die "building pigeon needs Node.js 22.12 or later with npm, for the web interface: install it here (https://nodejs.org), then run this again"
   say "building pigeon $version"
   (cd "$root" && PIGEON_COMMIT=$commit cargo build --release --locked -p pigeond -p pigeon -p git-annex-p2p-iroh)
   local target=${CARGO_TARGET_DIR:-$root/target}/release need staging

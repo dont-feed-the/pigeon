@@ -9,8 +9,9 @@ use std::collections::BTreeMap;
 use hegel::TestCase;
 use hegel::generators as gs;
 use pigeon_proto::api::{
-    Choice, DeletedFile, Divergence, FileEntry, Folder, HeldChoice, HeldEntry, Level, Machine,
-    PersonEntry, Setting, State, StatusReport, Suggestion, VersionStatus,
+    Choice, DeletedFile, Divergence, FileChange, FileEntry, Folder, FreePreview, HeldChoice,
+    HeldEntry, Level, Machine, Outcome, PersonEntry, Setting, State, StatusReport, SuggestedFile,
+    Suggestion, VersionStatus,
 };
 use pigeon_proto::stream::{Refusal, StreamAnswer, StreamHeader};
 use pigeon_proto::{Arg, Envelope, LineDecoder, Message, Problem, Request, Response, encode};
@@ -28,7 +29,13 @@ fn flag(tc: &TestCase) -> bool {
 }
 
 fn request(tc: &TestCase) -> Request {
-    match tc.draw(gs::integers::<u8>().max_value(49)) {
+    match tc.draw(gs::integers::<u8>().max_value(52)) {
+        52 => Request::ReadText {
+            path: text(tc),
+            limit: tc.draw(gs::integers::<u64>()),
+        },
+        51 => Request::Paused,
+        50 => Request::FreePreview { folder: text(tc) },
         49 => Request::ForgetChoice { folder: text(tc) },
         48 => Request::Sync {
             folder: tc.draw(gs::booleans()).then(|| text(tc)),
@@ -69,6 +76,7 @@ fn request(tc: &TestCase) -> Request {
             folder: text(tc),
             k: tc.draw(gs::integers::<u32>()),
             device_name: text(tc),
+            person: maybe_text(tc),
         },
         3 => Request::Invite,
         4 => Request::Join {
@@ -81,7 +89,10 @@ fn request(tc: &TestCase) -> Request {
             custodian: flag(tc),
         },
         5 => Request::Keep { folder: text(tc) },
-        6 => Request::Evict { folder: text(tc) },
+        6 => Request::Evict {
+            folder: text(tc),
+            confirmed: flag(tc),
+        },
         7 => Request::History { path: text(tc) },
         8 => Request::Restore {
             path: text(tc),
@@ -161,6 +172,15 @@ fn request(tc: &TestCase) -> Request {
             proposal: text(tc),
             note: maybe_text(tc),
         },
+        17 => Request::DecideFiles {
+            proposal: text(tc),
+            paths: (0..tc.draw(gs::integers::<u8>().max_value(3)))
+                .map(|_| text(tc))
+                .collect(),
+            accept: flag(tc),
+            note: maybe_text(tc),
+            reason: maybe_text(tc),
+        },
         21 => Request::Conflicts,
         22 => Request::Resolve {
             path: text(tc),
@@ -212,7 +232,16 @@ fn version(tc: &TestCase) -> VersionStatus {
 }
 
 fn response(tc: &TestCase) -> Response {
-    match tc.draw(gs::integers::<u8>().max_value(21)) {
+    match tc.draw(gs::integers::<u8>().max_value(23)) {
+        23 => Response::FreePreview(FreePreview {
+            files: tc.draw(gs::integers::<u64>()),
+            safe: tc.draw(gs::integers::<u64>()),
+            backups: (0..tc.draw(gs::integers::<u8>().max_value(2)))
+                .map(|_| text(tc))
+                .collect(),
+            heard_at: maybe_text(tc),
+            quiet: flag(tc),
+        }),
         21 => Response::Sync {
             root: text(tc),
             folders: (0..tc.draw(gs::integers::<u8>().max_value(3)))
@@ -223,6 +252,11 @@ fn response(tc: &TestCase) -> Response {
                     others: tc.draw(gs::booleans()).then(|| text(tc)),
                 })
                 .collect(),
+        },
+        22 => Response::Text {
+            text: text(tc),
+            size: tc.draw(gs::integers::<u64>()),
+            truncated: flag(tc),
         },
         20 => Response::FolderRules(Box::new(pigeon_proto::policy::Report {
             root: text(tc),
@@ -266,6 +300,7 @@ fn response(tc: &TestCase) -> Response {
                 .map(|_| version(tc))
                 .collect(),
             not_shared: Vec::new(),
+            paused: flag(tc).then(|| message(tc)),
         }),
         6 => Response::Machines {
             machines: (0..tc.draw(gs::integers::<u8>().max_value(3)))
@@ -278,6 +313,7 @@ fn response(tc: &TestCase) -> Response {
                     this_device: flag(tc),
                 })
                 .collect(),
+            copies: flag(tc).then(|| tc.draw(gs::integers::<u32>())),
         },
         19 => Response::Held {
             held: (0..tc.draw(gs::integers::<u8>().max_value(3)))
@@ -327,8 +363,36 @@ fn response(tc: &TestCase) -> Response {
                     decide: flag(tc),
                     force: flag(tc),
                     mine: flag(tc),
+                    files: (0..tc.draw(gs::integers::<u8>().max_value(2)))
+                        .map(|_| SuggestedFile {
+                            path: text(tc),
+                            change: match tc.draw(gs::integers::<u8>().max_value(3)) {
+                                0 => FileChange::Added,
+                                1 => FileChange::Changed,
+                                2 => FileChange::Deleted,
+                                _ => FileChange::Renamed,
+                            },
+                            from: maybe_text(tc),
+                            before: flag(tc).then_some(7),
+                            after: flag(tc).then_some(1_234_567),
+                            lines: flag(tc).then_some((3, 1)),
+                        })
+                        .collect(),
                 })
                 .collect(),
+            decided: (0..tc.draw(gs::integers::<u8>().max_value(2)))
+                .map(|_| Outcome {
+                    id: text(tc),
+                    by: text(tc),
+                    decided_at: text(tc),
+                    accepted: vec![text(tc)],
+                    declined: (0..tc.draw(gs::integers::<u8>().max_value(2)))
+                        .map(|_| text(tc))
+                        .collect(),
+                    note: maybe_text(tc),
+                })
+                .collect(),
+            root: text(tc),
         },
         11 => Response::Conflicts {
             conflicts: (0..tc.draw(gs::integers::<u8>().max_value(3)))
@@ -350,6 +414,7 @@ fn response(tc: &TestCase) -> Response {
                     state: state(tc),
                     freed: flag(tc),
                     arriving: tc.draw(gs::integers::<u64>()),
+                    size: flag(tc).then(|| tc.draw(gs::integers::<u64>())),
                 })
                 .collect(),
         },
@@ -359,6 +424,9 @@ fn response(tc: &TestCase) -> Response {
                 .map(|_| FileEntry {
                     path: text(tc),
                     state: state(tc),
+                    size: flag(tc).then(|| tc.draw(gs::integers::<u64>())),
+                    modified: maybe_text(tc),
+                    freed: flag(tc),
                 })
                 .collect(),
         },

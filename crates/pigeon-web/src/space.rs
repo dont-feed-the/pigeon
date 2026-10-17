@@ -12,6 +12,6 @@ pub(crate) async fn page(State(web): State<Arc<Web>>) -> Html<String> {
         &r,
         "/space",
         &r.id("space-title"),
-        &html! { div class="capacity-details" { (pages::list(&lines)) } },
+        &html! { div class="card capacity-details" { (pages::list(&lines)) } },
     )
 }

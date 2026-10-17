@@ -98,6 +98,8 @@ Evict_copy	Evict	fast	violation:NoLoss
 Evict_journal	Evict	fast	violation:NoDeletion
 Evict_lockfile	Evict	fast	violation:temporal
 Authority_decide	Authority	fast	pass
+Authority_part	Authority	fast	pass
+Authority_part4	Authority	full	pass
 Authority_faulty	Authority	fast	pass
 Authority_revoke	Authority	fast	pass
 Authority_live	Authority	fast	pass

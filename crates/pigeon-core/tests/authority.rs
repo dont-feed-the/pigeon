@@ -745,6 +745,26 @@ fn a_rename_trailer_names_its_paths(tc: TestCase) {
     assert!(authority::renamed(bad.as_bytes()).is_empty() || old.contains('"'));
 }
 
+#[hegel::test(test_cases = 1000)]
+fn an_accepted_trailer_names_its_path_beside_the_others(tc: TestCase) {
+    let (one, two) = (odd_path(&tc), odd_path(&tc));
+    let raw = format!(
+        "tree x\nauthor A <a@x> 12 +0000\n\npigeon: decide\n\n{}\n{}\n{} why\n{}\n",
+        authority::accepted_trailer(&one),
+        authority::renamed_trailer(&one, &two),
+        authority::FORCE,
+        authority::accepted_trailer(&two),
+    );
+    assert_eq!(authority::accepted(raw.as_bytes()), vec![one.clone(), two]);
+    assert_eq!(authority::renamed(raw.as_bytes()).len(), 1);
+    assert!(authority::forced(raw.as_bytes()));
+    let elsewhere = format!(
+        "tree x\n\n{}\n\npigeon: decide\n",
+        authority::accepted_trailer(&one)
+    );
+    assert!(authority::accepted(elsewhere.as_bytes()).is_empty());
+}
+
 /// Selecting and clearing a collector follows the same atomic field and
 /// authority rules as other admin-only group settings (ADR 0025).
 #[hegel::test(test_cases = 1000)]

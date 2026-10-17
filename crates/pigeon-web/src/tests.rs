@@ -11,18 +11,36 @@ use tower::ServiceExt;
 
 use crate::{Answer, Backend, Web};
 
+#[path = "tests/a11y.rs"]
+mod a11y;
+#[path = "tests/browse.rs"]
+mod browse;
+#[path = "tests/conflicts.rs"]
+mod conflicts;
+#[path = "tests/demo.rs"]
+mod demo;
 #[path = "tests/doctor.rs"]
 mod doctor;
 #[path = "tests/folder_rules.rs"]
 mod folder_rules;
+#[path = "tests/free.rs"]
+mod free;
 #[path = "tests/health.rs"]
 mod health;
 #[path = "tests/mounted.rs"]
 mod mounted;
+#[path = "tests/pause.rs"]
+mod pause;
+#[path = "tests/people.rs"]
+mod people;
 #[path = "tests/recovery.rs"]
 mod recovery;
 #[path = "tests/setup.rs"]
 mod setup;
+#[path = "tests/suggestions.rs"]
+mod suggestions;
+#[path = "tests/sync.rs"]
+mod sync;
 #[path = "tests/usability.rs"]
 mod usability;
 
@@ -41,6 +59,7 @@ impl Backend for Fixed {
                     state: State::Protected,
                     versions: Vec::new(),
                     not_shared: Vec::new(),
+                    paused: None,
                 })]
             }
             pigeon_proto::Request::Capacity => vec![Response::Capacity(Box::new(
@@ -53,7 +72,8 @@ impl Backend for Fixed {
                     suggestions: 18,
                     overflow: None,
                     configured: 58,
-                    short: true,
+                    limited: vec!["nas".into()],
+                    no_spare: true,
                     machines: Vec::new(),
                     proposals: vec![pigeon_proto::capacity::Proposal {
                         id: "a".repeat(40),
@@ -73,7 +93,10 @@ impl Backend for Fixed {
                     decide: true,
                     force: false,
                     mine: false,
+                    files: Vec::new(),
                 }],
+                decided: Vec::new(),
+                root: String::new(),
             }],
             pigeon_proto::Request::Reject { proposal, note } => vec![Response::Said {
                 message: Message {
@@ -113,6 +136,7 @@ impl Backend for Fixed {
                         this_device: name == "mine",
                     })
                     .into(),
+                copies: None,
             }],
             pigeon_proto::Request::RemoveDevice { name } => {
                 vec![said("removed-computer", "name", name)]
@@ -183,6 +207,18 @@ impl Backend for Fixed {
                     })
                     .into(),
             }],
+            pigeon_proto::Request::Conflicts => conflicts::tarte("conflict"),
+            pigeon_proto::Request::Folders => vec![Response::Folders {
+                root: "/g".into(),
+                folders: Vec::new(),
+            }],
+            pigeon_proto::Request::Resolve { path, choice } => {
+                vec![said(
+                    "resolved-take-group",
+                    "path",
+                    format!("{path} {choice:?}"),
+                )]
+            }
             pigeon_proto::Request::View {
                 version: Some(1), ..
             } => {
@@ -503,11 +539,9 @@ async fn the_line_that_joins_the_group_is_shown_with_copy() {
         "{page}"
     );
     assert!(page.contains("data-copy=\"invitation-line\""), "{page}");
-    assert!(page.contains("src=\"/copy.js\""), "{page}");
-    let script = app
-        .oneshot(get("/copy.js", HOST, Some(&cookie)))
-        .await
-        .unwrap();
+    let script = format!("/assets/{}", crate::assets::SCRIPT.name);
+    assert!(page.contains(&format!("src=\"{script}\"")), "{page}");
+    let script = app.oneshot(get(&script, HOST, None)).await.unwrap();
     assert_eq!(script.status(), StatusCode::OK);
     assert!(body(script).await.contains("clipboard"));
 }
@@ -544,7 +578,7 @@ async fn a_held_deletion_is_shared_once_confirmed_or_brought_back() {
         .unwrap();
     let ask = body(ask).await;
     assert!(
-        ask.contains("Delete the files of h1 for everyone?"),
+        ask.contains("Delete these 3 files for everyone (Photos/a.jpg)?") && !ask.contains(" h1 "),
         "{ask}"
     );
     assert!(!ask.contains("h1/Share"), "{ask}");
@@ -639,7 +673,7 @@ async fn a_version_is_opened_as_a_read_only_download() {
         .await
         .unwrap();
     let page = body(page).await;
-    assert_eq!(page.matches("Open a copy").count(), 2, "{page}");
+    assert_eq!(page.matches("Download a copy").count(), 2, "{page}");
     assert_eq!(page.matches("Restore this version").count(), 1, "{page}");
     let form = form_of(&page);
     let forged = app
@@ -707,6 +741,37 @@ async fn the_pages_are_written_for_axe() {
     ];
     for lang in ["en", "fr"] {
         folder_rules::write_pages(&dir, lang).await;
+        let demo = Web::new(Arc::new(demo::Demo), lang.parse().unwrap(), 4321);
+        let demo_app = demo.router();
+        let demo_cookie = logged_in(&demo_app, &demo).await;
+        let photos = form_urlencoded::byte_serialize(format!("{}/Photos", demo::ROOT).as_bytes())
+            .collect::<String>();
+        let budget =
+            form_urlencoded::byte_serialize(format!("{}/budget-2026.xlsx", demo::ROOT).as_bytes())
+                .collect::<String>();
+        for (name, path) in [
+            ("demo-files", "/files".to_owned()),
+            ("demo-folder", format!("/folder?path={photos}")),
+            ("demo-details-file", format!("/files?selected={budget}")),
+            (
+                "demo-details-folder",
+                format!("/files?sort=size&selected={photos}"),
+            ),
+            ("demo-file", format!("/file?path={budget}")),
+            ("demo-deleted", "/deleted".to_owned()),
+            ("demo-machines", "/machines".to_owned()),
+            ("demo-folders", "/folders".to_owned()),
+        ] {
+            let r = demo_app
+                .clone()
+                .oneshot(get(&path, HOST, Some(&demo_cookie)))
+                .await
+                .unwrap();
+            assert_eq!(r.status(), StatusCode::OK, "{path}");
+            std::fs::write(dir.join(format!("{lang}-{name}.html")), body(r).await).unwrap();
+        }
+        free::write_pages(&dir, lang).await;
+        pause::write_pages(&dir, lang).await;
         let w = Web::new(Arc::new(Fixed), lang.parse().unwrap(), 4321);
         let app = w.router();
         let cookie = logged_in(&app, &w).await;

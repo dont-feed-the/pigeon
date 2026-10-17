@@ -30,7 +30,7 @@ fn machines(d: &common::Daemon) -> Vec<String> {
     pigeon(d, &["machines"])
         .into_iter()
         .flat_map(|r| match r {
-            Response::Machines { machines } => machines.into_iter().map(|m| m.name).collect(),
+            Response::Machines { machines, .. } => machines.into_iter().map(|m| m.name).collect(),
             _ => Vec::new(),
         })
         .collect()
@@ -263,18 +263,13 @@ fn a_peer_that_never_learned_the_join_cannot_acknowledge_the_leave() {
 }
 
 fn git(path: &Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(path)
-        .args(args)
-        .output()
+    // Share the daemon's bounded update-index/write-tree lock retry.
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
         .unwrap();
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    String::from_utf8(out.stdout).unwrap().trim().into()
+    let git = pigeond::git::Git::new(path, pigeon_git::GitEnv::default());
+    runtime.block_on(git.run(args)).unwrap().trim().into()
 }
 
 /// Moves `folder`'s `main` to a roster in `format = 1`, as releases before
@@ -291,13 +286,11 @@ fn in_an_earlier_format(folder: &Path) {
     let entry = format!("100644,{blob},.pigeon/roster.toml");
     git(folder, &["update-index", "--cacheinfo", &entry]);
     let tree = git(folder, &["write-tree"]);
+    git(folder, &["config", "user.name", "old"]);
+    git(folder, &["config", "user.email", "old@pigeon"]);
     let commit = git(
         folder,
         &[
-            "-c",
-            "user.name=old",
-            "-c",
-            "user.email=old@pigeon",
             "commit-tree",
             &tree,
             "-p",

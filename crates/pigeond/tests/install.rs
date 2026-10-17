@@ -557,3 +557,6 @@ mod shared;
 #[cfg(all(feature = "lab", feature = "tla-trace"))]
 #[path = "install/tracing.rs"]
 mod tracing;
+
+#[path = "install/fetch_progress.rs"]
+mod fetch_progress;

@@ -6,7 +6,8 @@ mod common;
 use common::{flag, int, pick};
 use hegel::TestCase;
 use pigeon_core::capacity::{
-    Admits, GB, Need, Part, Plan, admit, capacity, key_size, need, reserve, room, short,
+    Admits, GB, Part, Plan, admit, below_one_copy, capacity, key_size, need, no_spare, reserve,
+    room,
 };
 use pigeon_core::filter::Role;
 use pigeon_core::queue::{Work, compare};
@@ -192,11 +193,19 @@ fn capacity_counts_at_most_one_copy_per_custodian(tc: TestCase) {
         })
         .collect();
     let c = capacity(&cs);
-    assert!(c <= cs.iter().map(|x| x.1).sum());
-    let n = Need {
-        parts: [(Part::Current, int(&tc, 0, 40) as u64)].into(),
-    };
-    assert_eq!(short(c, &n), 4 * c < 5 * n.total());
+    let full: u64 = cs.iter().map(|x| x.1).sum();
+    assert!(c <= full);
+    let below = below_one_copy(&cs);
+    for (i, (max, all)) in cs.iter().enumerate() {
+        assert_eq!(below.contains(&i), max.is_some_and(|m| m < *all));
+    }
+    // The limits warned about are exactly what keeps the capacity below
+    // one copy per custodian; no limit, or a large one, never warns.
+    assert_eq!(c < full, !below.is_empty());
+    let unlimited: Vec<_> = cs.iter().map(|(_, all)| (None, *all)).collect();
+    assert!(below_one_copy(&unlimited).is_empty());
+    let k = int(&tc, 1, 4) as u32;
+    assert_eq!(no_spare(cs.len(), k), cs.len() == k as usize);
 }
 
 #[test]

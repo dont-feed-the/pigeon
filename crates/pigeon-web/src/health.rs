@@ -34,19 +34,9 @@ fn ago(r: &Renderer, time: Option<&str>) -> String {
         )
 }
 
+/// A size as the Space page and the command line say it: "29.3 GB".
 fn size(r: &Renderer, bytes: u64) -> String {
-    if bytes < 1000 {
-        return r
-            .catalogue()
-            .format(&Message::new("web-health-bytes").arg("bytes", number(bytes)));
-    }
-    if bytes < 1_000_000 {
-        return r
-            .catalogue()
-            .format(&Message::new("web-health-kb").arg("kb", number(bytes / 1000)));
-    }
-    r.catalogue()
-        .format(&Message::new("web-health-size").arg("mb", number(bytes / 1_000_000)))
+    r.size(bytes)
 }
 
 fn disk(r: &Renderer, machine: &MachineHealth) -> String {
@@ -200,20 +190,28 @@ pub(crate) fn section(r: &crate::Renderer, h: &HealthReport) -> Markup {
     let values = values(r, h);
     let text = |id: &str| values.get(id).map_or("", String::as_str);
     html! {
-        section id="health" data-membership=(membership(h)) aria-labelledby="health-title" {
+        section id="health" class="stack" data-membership=(membership(h)) aria-labelledby="health-title" {
             h2 id="health-title" { (r.id("web-health")) (r.id("web-health-separator")) span id="health-group" { (text("health-group")) } }
-            h3 { (r.id("web-health-current")) }
-            p id="health-current" { (text("health-current")) }
-            h3 { (r.id("web-health-retained")) }
-            p id="health-retained" { (text("health-retained")) }
-            p { a href=(r.url("/suggestions")) id="health-suggestions" { (text("health-suggestions")) } }
-            p id="health-repair" { (text("health-repair")) }
-            p id="health-omitted" { (text("health-omitted")) }
-            details {
+            div class="cards" {
+                div class="card" {
+                    h3 { (r.id("web-health-current")) }
+                    p id="health-current" { (text("health-current")) }
+                }
+                div class="card" {
+                    h3 { (r.id("web-health-retained")) }
+                    p id="health-retained" { (text("health-retained")) }
+                }
+                div class="card" {
+                    p { a href=(r.url("/suggestions")) id="health-suggestions" { (text("health-suggestions")) } }
+                    p id="health-repair" { (text("health-repair")) }
+                    p id="health-omitted" { (text("health-omitted")) }
+                }
+            }
+            details class="card" {
                 summary { (r.id("web-health-machines")) }
                 @for machine in &h.machines {
                     @let id = &machine.machine.device;
-                    article {
+                    article class="plain-list" {
                         h3 id=(format!("health-machine-{id}")) { (text(&format!("health-machine-{id}"))) }
                         p id=(format!("health-report-{id}")) { (text(&format!("health-report-{id}"))) }
                         p id=(format!("health-disk-{id}")) { (text(&format!("health-disk-{id}"))) }
@@ -222,7 +220,7 @@ pub(crate) fn section(r: &crate::Renderer, h: &HealthReport) -> Markup {
                 }
                 p { a href=(r.url("/machines")) { (r.id("web-nav-machines")) } }
             }
-            details {
+            details class="card" {
                 summary { (r.id("web-health-epochs")) }
                 @if let Some(epochs) = &h.repair_epochs {
                     @if epochs.is_empty() { p { (r.id("web-health-no-epochs")) } }
@@ -232,7 +230,7 @@ pub(crate) fn section(r: &crate::Renderer, h: &HealthReport) -> Markup {
                     }
                 } @else { p { (r.id("web-health-unavailable")) } }
             }
-            p id="health-updated" { (text("health-updated")) }
+            p id="health-updated" class="lead" { (text("health-updated")) }
         }
     }
 }

@@ -83,7 +83,7 @@ decision is a new ADR that supersedes it.
 | [0018](0018-deletion-keeps-custody-until-purge.md) | Deleting a file never deletes its custody copies; only a purge does | Accepted |
 | [0019](0019-licence.md) | pigeon v2 is licensed MIT OR Apache-2.0 | Accepted |
 | [0020](0020-git-annex-delivery.md) | git-annex comes from its official builds, with a checked minimum version | Superseded by 0069 |
-| [0021](0021-cli-and-local-web-ui.md) | Interfaces: a CLI and a local web interface served by `pigeond` | Accepted |
+| [0021](0021-cli-and-local-web-ui.md) | Interfaces: a CLI and a local web interface served by `pigeond` | Superseded by 0076 |
 | [0022](0022-logging-with-tracing.md) | Logging: `tracing`, human logs to stderr, JSON logs to a file | Accepted |
 | [0023](0023-typed-errors.md) | Errors: typed enums everywhere; one serialisable problem for people | Accepted |
 | [0024](0024-cli-with-clap.md) | The command line: `clap`, `--json` everywhere, stdout for results | Accepted |
@@ -147,3 +147,5 @@ passes; 16 §16.3 lists where each rule now lives.
 | [0074](0074-mount-the-peer-ui-behind-bridge-authorization.md) | Mount the peer UI behind bridge authorization | Proposed |
 | [0075](0075-one-invitation-per-group-shared-as-a-line.md) | One invitation per group, shared as a line that installs and joins | Accepted |
 | [0076](0076-pigeon-updates-itself-from-the-latest-release.md) | pigeon updates itself from the latest release, daily and when a peer is newer | Accepted |
+| [0077](0077-the-web-interface-ships-a-bundled-typescript-client.md) | The web interface ships a bundled TypeScript client, built with Node | Accepted |
+| [0078](0078-a-suggestion-is-decided-file-by-file-in-one-decision.md) | A suggestion is decided file by file, in one decision | Proposed |

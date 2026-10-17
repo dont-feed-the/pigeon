@@ -59,6 +59,13 @@ class DependencyGroups(unittest.TestCase):
                      ".github/workflows/ci.yml", "scripts/select-ci", "scripts/tests/test_select_ci.py"]:
             self.assertEqual(self.groups(path), MODULE.GROUPS, path)
 
+    def test_web_client_toolchain_is_full_but_its_sources_are_runtime(self):
+        for name in ["package.json", "package-lock.json", ".nvmrc", "build.mjs"]:
+            path = f"crates/pigeon-web/client/{name}"
+            self.assertEqual(self.groups(path), MODULE.GROUPS, path)
+        for path in ["crates/pigeon-web/client/src/main.ts", "crates/pigeon-web/client/tsconfig.json"]:
+            self.assertEqual(self.groups(path), MODULE.RUNTIME, path)
+
     def test_every_non_pr_event_is_full_without_reading_git(self):
         with patch.object(MODULE, "git", side_effect=AssertionError("must not inspect diff")):
             for event in ["push", "schedule", "workflow_dispatch", "workflow_call", "pull_request_target", ""]:

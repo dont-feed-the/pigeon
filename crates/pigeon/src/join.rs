@@ -121,10 +121,15 @@ fn expand(typed: &str, home: &str) -> String {
 }
 
 /// The name of this computer's account, as the daemon gives a person
-/// who gives none.
+/// who gives none: `$USER`, else the computer's name, never "Me".
 fn account() -> String {
     std::env::var("USER")
         .ok()
-        .filter(|u| !u.trim().is_empty())
-        .unwrap_or_else(|| "Me".to_owned())
+        .map(|u| u.trim().to_owned())
+        .filter(|u| !u.is_empty())
+        .or_else(|| std::fs::read_to_string("/etc/hostname").ok())
+        .or_else(|| std::env::var("HOSTNAME").ok())
+        .map(|h| h.trim().to_owned())
+        .filter(|h| !h.is_empty())
+        .unwrap_or_else(|| "person".to_owned())
 }

@@ -146,6 +146,7 @@ fn existing_peer_migrates_and_hiding_recovers_before_capture() {
                 folder: files.display().to_string(),
                 k: 1,
                 device_name: "Managed client".into(),
+                person: None,
             }
         ),
         Response::Said { .. }
@@ -343,6 +344,7 @@ fn a_bulk_delete_is_refused_before_it_can_block_journal_recovery() {
                 folder: files.display().to_string(),
                 k: 1,
                 device_name: "Managed client".into(),
+                person: None,
             }
         ),
         Response::Said { .. }
@@ -415,6 +417,7 @@ fn pool_registration_deduplicates_before_acknowledging_without_background_rounds
             folder: files.display().to_string(),
             k: 1,
             device_name: "Provider".into(),
+            person: None,
         },
     );
     assert!(matches!(created, Response::Said { .. }), "{created:?}");
