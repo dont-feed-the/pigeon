@@ -30,3 +30,15 @@ simulated wording retakes, not runtime identity-transition evidence.
 All 18 existing Fluent message, argument, plural and rendering checks pass.
 All-target workspace Clippy with lab/trace/console features, formatting,
 header/length, ADR and spec-reference checks pass before this commit.
+
+PR #82's first workspace passed 732 of 733 checks (one skipped). Its sole
+failure was an existing rendered-page fixture still requiring the replaced
+“You can invite it again later” sentence. The page already rendered the
+correct clarification. The fixture now checks the actual unchanged-line /
+new-computer statement in both rendered languages. No unchanged-source
+retry is used; the old head is superseded before new PR validation.
+
+The corrected selection passes all 99 existing web/Fluent checks (one
+ignored demo), including both rendered removal languages. All-target
+workspace Clippy with lab/trace/console features and repository structural,
+ADR and spec-reference checks pass before the replacement commit.
