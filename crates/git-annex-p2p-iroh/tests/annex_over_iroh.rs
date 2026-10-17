@@ -97,7 +97,7 @@ async fn device(dir: &Path, name: &str) -> Device {
         node: node.clone(),
         directory: directory.clone(),
         listeners: Listeners::default(),
-        syncer: Arc::new(AnnexSyncer),
+        syncer: Arc::new(AnnexSyncer::new(node.resources.clone(), Default::default())),
         socket_path: socket.clone(),
         loops: None,
     });

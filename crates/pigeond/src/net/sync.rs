@@ -41,8 +41,27 @@ const CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 const REPAIR_ATTEMPTS: usize = 10;
 
 /// Finds the object with `git annex contentlocation`, then syncs it.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct AnnexSyncer;
+#[derive(Clone, Debug, Default)]
+pub struct AnnexSyncer {
+    resources: std::sync::Arc<crate::resource_control::Controller>,
+    env: GitEnv,
+}
+
+impl AnnexSyncer {
+    /// Share the daemon's resource policy and native child environment.
+    pub fn new(
+        resources: std::sync::Arc<crate::resource_control::Controller>,
+        env: GitEnv,
+    ) -> Self {
+        Self { resources, env }
+    }
+
+    fn repository(&self, repository: &Repository) -> Repo {
+        let repo = Repo::new(directory(repository), self.env.clone());
+        repo.set_work_control(self.resources.for_group(repository.group.clone()));
+        repo
+    }
+}
 
 /// Whether `key` may be passed to git-annex: it comes from a peer.
 pub fn plausible_key(key: &str) -> bool {
@@ -74,7 +93,7 @@ fn directory(repository: &Repository) -> PathBuf {
 
 impl Syncer for AnnexSyncer {
     fn sync(&self, repository: &Repository, key: &str, hash: bool) -> SyncFuture {
-        let repo = Repo::new(directory(repository), GitEnv::default());
+        let repo = self.repository(repository);
         let key = key.to_owned();
         let provider = (repository.role == pigeon_core::filter::Role::Custodian)
             .then(|| (repository.git_dir.clone(), repository.group.clone()));
@@ -106,7 +125,7 @@ impl Syncer for AnnexSyncer {
     }
 
     fn repair(&self, repository: &Repository, key: &str) -> RepairFuture {
-        let repo = Repo::new(directory(repository), GitEnv::default());
+        let repo = self.repository(repository);
         let key = key.to_owned();
         Box::pin(async move {
             if !plausible_key(&key) {

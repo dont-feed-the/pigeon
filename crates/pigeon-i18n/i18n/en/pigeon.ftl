@@ -923,6 +923,7 @@ setting-continue = Continue
 headline-resource-battery = Waiting for power: this computer is on battery.
 headline-resource-metered = Waiting for a non-metered network.
 headline-resource-disk = Waiting while another program uses the disk.
+headline-resource-saving = Transfers are waiting while pigeon saves new changes. They’ll resume automatically.
 
 setting-none = None
 

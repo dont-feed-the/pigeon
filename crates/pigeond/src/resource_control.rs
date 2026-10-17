@@ -49,7 +49,7 @@ struct State {
 pub struct Controller {
     epoch: Instant,
     inner: Mutex<State>,
-    children: AtomicUsize,
+    children: [AtomicUsize; 3],
     person_paused: AtomicBool,
 }
 
@@ -71,7 +71,7 @@ impl Controller {
     pub fn new(settings: Effective) -> Self {
         Self {
             epoch: Instant::now(),
-            children: AtomicUsize::new(0),
+            children: std::array::from_fn(|_| AtomicUsize::new(0)),
             person_paused: AtomicBool::new(false),
             inner: Mutex::new(State {
                 settings,
@@ -115,7 +115,8 @@ impl Controller {
     pub fn observe(&self, conditions: Conditions, io_pressure: bool) {
         let mut s = self.lock();
         s.conditions = conditions;
-        let busy = io_pressure && (s.pending > 0 || self.children.load(Ordering::Relaxed) > 0);
+        let busy = io_pressure
+            && (s.pending > 0 || self.children.iter().any(|n| n.load(Ordering::Relaxed) > 0));
         s.disk.observe(self.now(), busy);
     }
 
@@ -130,18 +131,24 @@ impl Controller {
         .or_else(|| {
             (s.disk.share(self.now(), s.settings.preset, false) < 100).then_some(Wait::DiskBusy)
         })
+        .or_else(|| self.capturing().then_some(Wait::Saving))
+    }
+
+    fn capturing(&self) -> bool {
+        self.children[resources::WorkClass::Capture as usize].load(Ordering::Relaxed) > 0
     }
 
     fn content_blocked(&self) -> bool {
         let s = self.lock();
         let now = self.now();
         let share = s.disk.share(now, s.settings.preset, false);
-        resources::external_wait(
-            s.conditions,
-            s.settings.battery_below,
-            s.settings.avoid_metered,
-        )
-        .is_some()
+        self.capturing()
+            || resources::external_wait(
+                s.conditions,
+                s.settings.battery_below,
+                s.settings.avoid_metered,
+            )
+            .is_some()
             || now % 1_000 >= u64::from(share) * 10
     }
 
@@ -260,15 +267,23 @@ struct ChildControl {
 }
 
 impl pigeon_git::work::Control for ChildControl {
-    fn began(&self, _: pigeon_git::work::Class) {
-        self.controller.children.fetch_add(1, Ordering::Relaxed);
+    fn began(&self, class: pigeon_git::work::Class) {
+        self.controller.children[class as usize].fetch_add(1, Ordering::Relaxed);
     }
 
-    fn ended(&self, _: pigeon_git::work::Class) {
-        self.controller.children.fetch_sub(1, Ordering::Relaxed);
+    fn ended(&self, class: pigeon_git::work::Class) {
+        self.controller.children[class as usize].fetch_sub(1, Ordering::Relaxed);
     }
 
     fn running(&self, class: pigeon_git::work::Class) -> bool {
+        let pending = self
+            .controller
+            .children
+            .each_ref()
+            .map(|n| n.load(Ordering::Relaxed) as u64);
+        if !class.admitted(pending) {
+            return false;
+        }
         let capture = class == pigeon_git::work::Class::Capture;
         let state = self.controller.lock();
         if !capture
@@ -336,14 +351,34 @@ pub async fn run(d: std::sync::Arc<crate::daemon::Daemon>) {
 /// native readings follow ADR 0037; a previous low battery is not permanent.
 pub async fn probe(d: std::sync::Arc<crate::daemon::Daemon>) {
     let mut probe = pigeon_sys::resources::Probe::default();
+    let mut previous_pressure = None;
     loop {
         let observation = tokio::time::timeout(Duration::from_secs(2), probe.sample())
             .await
             .unwrap_or_default();
-        let pressure = pigeon_sys::pressure::io()
-            .ok()
-            .flatten()
-            .is_some_and(|p| p.avg10 > 10.0);
+        let reading = pigeon_sys::pressure::io().ok().flatten();
+        let pressure = reading.is_some_and(|p| p.avg10 > 10.0);
+        let pending = d.node.resources.lock().pending;
+        let children = d
+            .node
+            .resources
+            .children
+            .each_ref()
+            .map(|n| n.load(Ordering::Relaxed));
+        let outstanding = pending > 0 || children.iter().any(|n| *n > 0);
+        let sample = (pressure, outstanding);
+        if previous_pressure != Some(sample)
+            && (pressure || previous_pressure.is_some_and(|(high, _)| high))
+        {
+            tracing::info!(
+                pressure_high = pressure,
+                avg10 = ?reading.map(|p| p.avg10),
+                pending_content = pending,
+                pending_children = ?children,
+                "resource-io-pressure"
+            );
+        }
+        previous_pressure = Some(sample);
         d.node.resources.observe(
             Conditions {
                 battery: observation.battery,
@@ -371,10 +406,15 @@ pub fn tell(d: &crate::daemon::Daemon, report: &mut pigeon_proto::api::StatusRep
             Wait::Battery => "headline-resource-battery",
             Wait::Metered => "headline-resource-metered",
             Wait::DiskBusy => "headline-resource-disk",
+            Wait::Saving => "headline-resource-saving",
         };
         report.headline = crate::api::message(id, &[]);
     }
 }
+
+#[cfg(test)]
+#[path = "resource_priority_tests.rs"]
+mod priority_tests;
 
 #[cfg(test)]
 mod tests {
@@ -401,7 +441,12 @@ mod tests {
         assert_eq!(controller.waiting(), Some(Wait::DiskBusy));
         assert!(!child.running(Class::Transfer));
         child.ended(Class::Capture);
-        assert_eq!(controller.children.load(Ordering::Relaxed), 0);
+        assert!(
+            controller
+                .children
+                .iter()
+                .all(|n| n.load(Ordering::Relaxed) == 0)
+        );
     }
 
     #[test]
