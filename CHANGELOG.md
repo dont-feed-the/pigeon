@@ -5,6 +5,12 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Network diagnostics keep transfer counts and refusal reasons without copying file contents or connection passwords into the logs.
+
 ## 0.6.11 — 2026-10-17
 
 ### Changed
