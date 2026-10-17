@@ -11,6 +11,7 @@ increments the second number, and every other release the third.
 
 - Background capture waits for a file to settle before reading it and spaces
   captures of frequently saved files, while other stable files keep progressing.
+  Asking for status preserves those waits.
 - Status and install checks leave another file's unsettled save alone. Capture
   recognizes same-size edits even when an application preserves the file's
   modification time. Pending suggestions also detect later byte and executable

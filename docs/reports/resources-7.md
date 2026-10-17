@@ -283,9 +283,18 @@ After integrating current main at `3f5e5ef`, the workspace checkpoint passed
 all 718 checks. A subsequent 69-check native run passed install, suggestions,
 restores and shared-pool regressions on the final pre-hash fence. The final
 native-cache ctime correction then passed both focused timestamp-fence checks;
-all-target Clippy and repository checks pass. Fresh driver/model validation
-and exact-head CI remain required before merging this continuation. Native
-priorities, the complete work queue and the resource budgets remain outstanding.
+all-target Clippy and repository checks pass. Fresh generation of all 13 driver
+cases passed TLC and the corruption, missing-step, cancellation and pipeline
+negative checks. Native S2 passed 11 checks in 41 seconds and S3 passed 14
+checks in 13 seconds; TLC accepted both filesystem and roster streams.
+
+A subsequent API review found that CLI status still used immediate capture;
+its native handler regression failed without any wall-clock race. Status now
+uses the background policy and wakes the round to recalculate its earliest
+observation deadline. Explicit data-changing requests retain immediate capture.
+The corrected handler regression passes. Updated-head native validation and CI
+remain required before merging. Native priorities, the complete work queue
+and the resource budgets remain outstanding.
 
 ## Periodic macOS failures
 
