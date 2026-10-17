@@ -15,6 +15,7 @@ pub mod batch;
 pub mod catfile;
 pub mod env;
 pub mod error;
+mod progress;
 pub mod run;
 pub mod status;
 pub mod version;

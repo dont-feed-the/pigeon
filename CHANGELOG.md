@@ -9,6 +9,8 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Large file transfers keep running while their bytes advance; transfers that stop making progress still time out.
+
 - Between keys, kept-folder downloads yield to pending work that protects files, then resume without spending their timeout while waiting.
 - Joining refuses unsupported protocol versions and unknown invitation or join fields instead of interpreting them as known authority. Invitation proofs use the constant-time comparison primitive.
 

@@ -310,3 +310,101 @@ async fn a_batch_past_its_deadline_restarts() {
     assert_eq!(b.starts, 2);
     assert!(b.stop(T).await);
 }
+
+/// Messages/JSON.hs:164 and Messages/Progress.hs:130 bind byte-progress
+/// to the current action's command/key. Both managed transfer forms must
+/// retain the final answer and copied bytes while stripping these records.
+#[tokio::test]
+async fn keyed_progress_records_preserve_one_shot_copy_and_batch_get_results() {
+    if !annex_present() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let env = GitEnv::default();
+    let a = tmp.path().join("source");
+    let laptop = new_repo(&a, &env, "source").await;
+    for name in ["raw", "managed"] {
+        let destination = tmp.path().join(name);
+        new_repo(&destination, &env, name).await;
+        laptop
+            .run(
+                &["remote", "add", name, destination.to_str().unwrap()],
+                None,
+                T,
+            )
+            .await
+            .unwrap();
+        laptop.run(&["fetch", "-q", name], None, T).await.unwrap();
+    }
+    let bytes = vec![7u8; 32 * 1024 * 1024];
+    std::fs::write(a.join("content.bin"), &bytes).unwrap();
+    let mut annex = Annex::new(&a, env.clone(), 1);
+    let key = annex
+        .add("content.bin", T)
+        .await
+        .unwrap()
+        .unwrap()
+        .key
+        .unwrap();
+    let mut command = tokio::process::Command::new("git");
+    env.apply(&mut command);
+    let raw = command
+        .current_dir(&a)
+        .args([
+            "annex",
+            "copy",
+            "--json",
+            "--json-progress",
+            "--key",
+            &key,
+            "--to",
+            "raw",
+        ])
+        .output()
+        .await
+        .unwrap();
+    assert!(
+        raw.status.success(),
+        "{}",
+        String::from_utf8_lossy(&raw.stderr)
+    );
+    let records: Vec<serde_json::Value> = String::from_utf8(raw.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let progress: Vec<_> = records
+        .iter()
+        .filter(|record| record.get("byte-progress").is_some())
+        .collect();
+    assert!(
+        !progress.is_empty(),
+        "pinned native annex emitted no progress"
+    );
+    assert!(
+        progress
+            .iter()
+            .any(|record| record["byte-progress"].as_u64().unwrap() > 0)
+    );
+    for record in progress {
+        assert_eq!(record["action"]["command"], "copy");
+        assert_eq!(record["action"]["key"], key);
+        assert!(record["byte-progress"].as_u64().unwrap() <= bytes.len() as u64);
+    }
+    assert_eq!(records.last().unwrap()["success"], true);
+    let copied = laptop
+        .run(
+            &["annex", "copy", "--json", "--key", &key, "--to", "managed"],
+            None,
+            T,
+        )
+        .await
+        .unwrap();
+    let answer: pigeon_git::annex::Answer = serde_json::from_slice(&copied.stdout).unwrap();
+    assert!(answer.success && answer.key.as_deref() == Some(key.as_str()));
+    assert!(!copied.text().contains("byte-progress"));
+    assert!(annex.drop_local(&key, T).await.unwrap().unwrap().success);
+    assert!(annex.get(&key, T).await.unwrap().unwrap().success);
+    assert_eq!(std::fs::read(a.join("content.bin")).unwrap(), bytes);
+    assert!(annex.stop(T).await);
+}

@@ -2928,6 +2928,7 @@ dependencies = [
 name = "pigeon-git"
 version = "0.6.14"
 dependencies = [
+ "hegeltest",
  "pigeon-core",
  "pigeon-sys",
  "pigeon-telemetry",

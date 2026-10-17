@@ -36,7 +36,8 @@ impl Batch {
     /// A batch process `git argv…` in `dir`, started at the first call. The
     /// arguments are checked now, so a refused command fails at once.
     pub fn new(dir: impl Into<PathBuf>, env: GitEnv, argv: &[&str]) -> Result<Batch> {
-        let argv: Vec<String> = argv.iter().map(|s| (*s).to_owned()).collect();
+        let mut argv: Vec<String> = argv.iter().map(|s| (*s).to_owned()).collect();
+        crate::progress::instrument_batch(&mut argv);
         crate::allow::check(&argv).map_err(|rule| Error::Refused {
             argv: argv.clone(),
             rule,
@@ -109,6 +110,7 @@ impl Batch {
         let control = self.control.clone();
         let args: Vec<_> = argv.iter().map(String::as_str).collect();
         let controlled = control.as_deref().zip(crate::work::class(&args));
+        let progress = crate::progress::Progress::batch(&args, line);
         let _registration = controlled.map(|(control, class)| {
             control.began(class);
             crate::work::Registration(control, class)
@@ -133,20 +135,30 @@ impl Batch {
                     .await?;
                 running.stdin.flush().await?;
                 let mut answer = String::new();
-                let n = running.stdout.read_line(&mut answer).await?;
-                if n == 0 {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::UnexpectedEof,
-                        "process ended",
-                    ));
+                loop {
+                    let n = running.stdout.read_line(&mut answer).await?;
+                    if n == 0 {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::UnexpectedEof,
+                            "process ended",
+                        ));
+                    }
+                    if progress
+                        .as_ref()
+                        .is_some_and(|p| p.consume(answer.as_bytes()))
+                    {
+                        answer.clear();
+                        continue;
+                    }
+                    return Ok(answer.trim_end_matches('\n').to_owned());
                 }
-                Ok(answer.trim_end_matches('\n').to_owned())
             };
             tokio::pin!(exchange);
             crate::work::deadline(
                 &mut exchange,
                 &running.group,
                 controlled,
+                progress.as_ref(),
                 timeout,
                 Duration::from_secs(20),
                 &argv.join(" "),
