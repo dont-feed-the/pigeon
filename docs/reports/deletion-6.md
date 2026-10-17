@@ -354,3 +354,24 @@ checks passed (one existing ignored test). Nine subsequent focused checks
 also passed, including the extension/retained-alias cases and the new
 1000-case DAG ancestry/descendant law. Wider archive/proposal cases and
 Purge implementation-trace conformance remain in the release checklist.
+
+
+## Missing-content wording review
+
+A returning English agent participant reviewed only the new status text,
+without source access. They understood that an erased historical version
+was requested again, no copy was currently known, and permanent loss was
+not established. They initially read “restored” as implying the PDF was
+ready and found “bring back a computer” ambiguous between reconnecting and
+rejoining. The text now explicitly says restoration could not finish and
+suggests another saved version or a separate copy, followed by an explicit
+retry. A text-only retake correctly identified the PDF as unavailable and
+loss as uncertain. It still asked how to supply a separate copy and what
+“request is kept” meant; the latter now says the restore request remains
+recorded. English and French share this meaning.
+
+This is a wording review by an existing participant, not an additional
+full workflow session. It makes no promise that an offline machine will
+retain bytes indefinitely, or that supplying a copy automatically retries
+the restore. The existing 18 language checks passed; wider recovery and
+trace evidence remains required before release.

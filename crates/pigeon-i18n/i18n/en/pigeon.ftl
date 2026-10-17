@@ -896,7 +896,7 @@ web-sync-unchanged = Nothing to change: every folder already is as ticked.
 
 headline-erased-restoration-missing =
     { $files ->
-        [one] A restored file’s contents are missing. Try another saved version or bring back a computer with a copy.
-       *[other] Restored contents are missing for { $files } files. Try another saved version or bring back a computer with a copy.
+        [one] Restoring a file could not finish: its contents are missing. Try another saved version or recover a separate copy.
+       *[other] Restoring { $files } files could not finish: their contents are missing. Try other saved versions or recover separate copies.
     }
-why-erased-restoration-missing = An earlier erasure covered these contents. They are needed again, but no copy is currently known.
+why-erased-restoration-missing = The earlier erasure covered these contents. Your restore request remains recorded, but no copy is currently known. If you find a copy, try the restore again.

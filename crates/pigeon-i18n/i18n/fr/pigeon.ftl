@@ -904,7 +904,7 @@ web-sync-unchanged = Rien à changer : chaque dossier est déjà comme coché.
 
 headline-erased-restoration-missing =
     { $files ->
-        [one] Le contenu d’un fichier restauré manque. Essayez une autre version enregistrée ou rallumez un ordinateur qui en a une copie.
-       *[other] Le contenu restauré manque pour { $files } fichiers. Essayez une autre version enregistrée ou rallumez un ordinateur qui en a une copie.
+        [one] La restauration d’un fichier n’a pas pu se terminer : son contenu manque. Essayez une autre version enregistrée ou récupérez une copie à part.
+       *[other] La restauration de { $files } fichiers n’a pas pu se terminer : leur contenu manque. Essayez d’autres versions enregistrées ou récupérez des copies à part.
     }
-why-erased-restoration-missing = Un effacement précédent couvrait ce contenu. Il est à nouveau demandé, mais aucune copie n’est connue pour le moment.
+why-erased-restoration-missing = L’effacement précédent couvrait ce contenu. Votre demande de restauration reste enregistrée, mais aucune copie n’est connue pour le moment. Si vous trouvez une copie, réessayez la restauration.
