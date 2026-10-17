@@ -120,9 +120,9 @@ async fn proxy<'a>(
     interface: &'static str,
 ) -> zbus::Result<zbus::Proxy<'a>> {
     zbus::proxy::Builder::new(bus)
-        .destination(destination)?
-        .path(path)?
-        .interface(interface)?
+        .destination(destination)
+        .path(path)
+        .interface(interface)
         .cache_properties(zbus::proxy::CacheProperties::No)
         .build()
         .await

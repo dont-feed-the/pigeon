@@ -194,6 +194,23 @@ pub(crate) fn bind_proposal(g: &Group, path: &str, proposal: &str, entry: &Entry
     }
 }
 
+/// Wait briefly for the real kernel timestamp fence, never manufacture
+/// an older stat or a newer index time. A future ctime stays unknown; the
+/// final per-file comparison also lets other files in that batch progress.
+async fn aged_epoch(latest: i64) -> Option<i64> {
+    let deadline = tokio::time::Instant::now() + Duration::from_millis(50);
+    loop {
+        let epoch = pigeon_sys::clock::stat_epoch_ns().ok()?;
+        if epoch > latest || tokio::time::Instant::now() >= deadline {
+            return Some(epoch);
+        }
+        tokio::time::sleep_until(
+            (tokio::time::Instant::now() + Duration::from_millis(1)).min(deadline),
+        )
+        .await;
+    }
+}
+
 /// Bind the actual bytes after ingestion to their exact staged pointer.
 /// Annex may change ctime while adding/removing its temporary hardlink, so
 /// an unchanged pre-ingestion stat cannot prove this observation. CalcKey
@@ -212,7 +229,10 @@ pub(crate) async fn checked(g: &Group, paths: &[String], index: &pigeon_core::au
             .collect();
         // The observed ctime must already be older than a kernel tick
         // before hashing, so a write during the read cannot reuse that tick.
-        let Ok(epoch) = pigeon_sys::clock::stat_epoch_ns() else {
+        let Some(latest) = before.iter().flatten().map(|stat| stat.ctime_ns).max() else {
+            continue;
+        };
+        let Some(epoch) = aged_epoch(latest).await else {
             continue;
         };
         let files: Vec<_> = chunk.iter().map(|path| wt.join(path)).collect();
@@ -292,6 +312,18 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn a_future_ctime_cannot_make_the_fence_wait_without_a_bound() {
+        let epoch = tokio::time::timeout(Duration::from_secs(1), aged_epoch(i64::MAX))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            epoch < i64::MAX,
+            "a future stamp must still fail the per-file age check"
+        );
+    }
+
+    #[tokio::test]
     async fn a_verified_observation_does_not_need_a_newer_index_timestamp() {
         let temp = tempfile::tempdir().unwrap();
         let env = pigeon_git::GitEnv::default();
@@ -319,27 +351,34 @@ mod tests {
             .await
             .unwrap();
         let index = g.git.index().await.unwrap();
-        let stat = pigeon_sys::fs::lstat(&file).unwrap().unwrap();
-        let stamp =
-            std::time::UNIX_EPOCH + Duration::from_nanos(u64::try_from(stat.ctime_ns).unwrap());
-        let index_file = g.git_dir.join("index");
-        std::fs::File::options()
-            .write(true)
-            .open(&index_file)
-            .unwrap()
-            .set_modified(stamp)
-            .unwrap();
-        g.lock().capture_schedule.verified.clear();
-        checked(&g, &["notes.bin".to_owned()], &index).await;
-        assert!(
-            g.lock()
-                .capture_schedule
-                .verified("notes.bin", stat, &index["notes.bin"])
-        );
-        assert_eq!(
-            std::fs::metadata(index_file).unwrap().modified().unwrap(),
-            stamp,
-            "the observation must not mutate the index to manufacture an age fence"
-        );
+        for _ in 0..8 {
+            // A fresh native ctime models annex's final hardlink removal.
+            // Every observation must finish its proof; this is not a retry
+            // until one invocation happens to cross a clock tick.
+            std::fs::set_permissions(&file, std::fs::metadata(&file).unwrap().permissions())
+                .unwrap();
+            let stat = pigeon_sys::fs::lstat(&file).unwrap().unwrap();
+            let stamp =
+                std::time::UNIX_EPOCH + Duration::from_nanos(u64::try_from(stat.ctime_ns).unwrap());
+            let index_file = g.git_dir.join("index");
+            std::fs::File::options()
+                .write(true)
+                .open(&index_file)
+                .unwrap()
+                .set_modified(stamp)
+                .unwrap();
+            g.lock().capture_schedule.verified.clear();
+            checked(&g, &["notes.bin".to_owned()], &index).await;
+            assert!(
+                g.lock()
+                    .capture_schedule
+                    .verified("notes.bin", stat, &index["notes.bin"])
+            );
+            assert_eq!(
+                std::fs::metadata(index_file).unwrap().modified().unwrap(),
+                stamp,
+                "the observation must not mutate the index to manufacture an age fence"
+            );
+        }
     }
 }

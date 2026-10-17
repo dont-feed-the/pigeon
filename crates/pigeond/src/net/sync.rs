@@ -150,7 +150,7 @@ pub fn sync_object(object: &Path) -> io::Result<()> {
 
 /// The SHA-256 of a file, in lowercase hex.
 pub fn sha256_file(path: &Path) -> io::Result<String> {
-    let mut file = std::fs::File::open(path)?;
+    let mut file = pigeon_sys::fs::streaming_read(path).map_err(native_io)?;
     let mut hasher = Sha256::new();
     let mut buf = vec![0u8; 1 << 16];
     loop {
@@ -165,4 +165,8 @@ pub fn sha256_file(path: &Path) -> io::Result<String> {
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect())
+}
+
+fn native_io(error: pigeon_sys::Error) -> io::Error {
+    io::Error::new(error.kind().unwrap_or(io::ErrorKind::Other), error)
 }

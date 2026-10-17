@@ -9,6 +9,12 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Content checks ask the operating system to reclaim completed read pages
+  while checking large files.
+- Pending changes are described as not yet recorded by pigeon, to distinguish
+  them from files already saved in an editor. The guide explains which rapid
+  saves become history versions.
+
 - Background capture waits for a file to settle before reading it and spaces
   captures of frequently saved files, while other stable files keep progressing.
   Asking for status preserves those waits.

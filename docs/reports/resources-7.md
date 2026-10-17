@@ -358,3 +358,64 @@ misses and targeted follow-up fixes are recorded in the
 [publication KPI](../release-kpi.md#v062-observation). This patch releases
 the completed controller and safety work; it does not complete M6 or its
 reference-tree, filesystem, foreground HDD or native-priority gates.
+
+
+## Own-read cache advice continuation
+
+Native SHA-256 verification now uses a bounded streaming reader. Linux requests
+DONTNEED for each completed page range while the hash runs, and for the last
+partial page only after an actual EOF; empty-buffer reads never mean EOF.
+macOS opens the reader with F_NOCACHE. Bridge hashes share this reader instead
+of a second cached implementation. All actual bytes still pass through SHA-256;
+cache advice grants no integrity, authority or custody proof. The kernel may
+retain pages despite advice; no eviction or foreground HDD budget is inferred.
+
+The first native checkpoint read 1,048,613 exact bytes in 257-byte reads,
+including empty-buffer calls, and checked that completed-page advice does not
+wait for the whole file. Apple Silicon API checking passed. The initial
+Clippy run found a leftover bridge import, which was removed. Final validation
+of the EOF-tail refinement and integration still precedes publication.
+
+Independent CLI agent sessions observed final bytes through normal read-only
+views. The corrected status handler visibly distinguished pending changes from
+captured local versions; no false safe claim was observed. The retake found
+that saying a change was waiting to be saved could be confused with an editor
+save. English and French now distinguish pigeon's recorded version. The guide
+explains rapid-save history granularity. Sessions and limits are recorded in
+[m6-capture-usability-english.md](m6-capture-usability-english.md) and
+[m6-capture-usability-english-retake.md](m6-capture-usability-english-retake.md).
+
+
+## Final rolled-up validation before v0.6.4
+
+The corrected status handler passed the complete 720-check workspace run,
+then native S2 (11 checks) and S3 (14 checks), with TLC accepting both
+filesystem and roster streams. CI on `7951c52` separately missed recovery-sheet
+protection: its artifact contains both expected exact objects, matching
+location logs and backup main, while the last live status stayed Published.
+Artifact 12105134222 has SHA-256
+`09aa0cc908deb1076038ff965029f24ce0513389004ea6440eadf70cfb3979b8`.
+The cause of that missed live observation is not claimed fixed. A targeted
+retry was cancelled after the independent dependency audit required a new head.
+
+The audit rejected the retired D-Bus support crates in RUSTSEC-2026-0370,
+0371 and 0372. zbus 6 removes them. Linux notifications now use its standard
+D-Bus interface, while macOS retains notify-rust without its Linux backend
+(ADR 0082). Three private native D-Bus tests pass, including immediate action,
+a foreign notification ID and closure. The full dependency audit passes
+without new exceptions.
+
+The separate cache-reader checkpoint passed 71 of 72 native checks; the
+remaining recent-foreign-save trace again lacked a completed install. A
+fresh-ctime regression reproduced the cause: the real coarse clock fence
+had not advanced yet. Verification now asynchronously waits up to 50 ms for
+that actual clock reading before hashing. Every path still needs an older
+ctime, a complete unchanged stat and the exact hash/pointer/mode. Future
+stamps remain unknown; other eligible files in the batch can progress.
+Neither index timestamps nor proof comparisons are relaxed. Eight consecutive
+fresh observations and the bounded future-stamp check pass.
+
+The maintained D-Bus adapter, cache reader, status handler and clock-fence
+regressions pass together (seven checks), and all-target Clippy passes.
+The completed components are rolled up for one new PR CI run. Fresh full
+workspace/native/trace validation still precedes merging and publication.
