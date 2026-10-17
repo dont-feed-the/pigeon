@@ -47,14 +47,22 @@ a join (ADR 0012; `Authority.tla` `Converge`).
 
 The driver enumerates pointer blobs from every tree reachable from the
 accepted head and retained proposal heads (`pigeond::retention`), not just
-their current trees. The same set feeds placement and repair. Purge is not
-implemented yet, so every such historical reference remains retained.
+their current trees. The same set feeds placement and repair. A complete
+purge reading excludes released keys; an incomplete reading pauses content.
 The whole-group status includes retained keys outside the current tree;
 they cannot be hidden behind a safe current version. Current files and
 retained history use one snapshot of the Git refs, so a capture between
 reads cannot turn a new current file into an unlisted historical version.
-Counting their metadata conservatively waits for every retained head on
-each counted custodian **[no ADR]**.
+Without purge or refounding history, a counted custodian must have the
+retained capture's shared history, proved through every common ancestry root
+of the local and advertised retaining heads. Equivalent independent merges
+need not contain each other's newest merge commit. Identical keys in unrelated
+history prove no shared reference; unreadable ancestry stays unknown.
+With purge or refounding history, status retains the conservative requirement
+for the complete retaining head. Shared old history cannot acknowledge a
+fresh post-erasure reference whose birth the backup has not seen. Individual
+live-birth acknowledgement remains future work. The location, recency and
+health checks of [06 §6.1](06-status.md) apply in both cases.
 
 - A **laptop** uploads each key of `keys()`
   ([05 §5.1](05-catalogue-and-names.md)) that a custodian wants (its
