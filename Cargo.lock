@@ -3048,9 +3048,11 @@ dependencies = [
 name = "pigeon-sys"
 version = "0.6.0"
 dependencies = [
+ "block2",
  "core-foundation",
  "dirs",
  "libc",
+ "objc2-foundation",
  "rustix",
  "system-configuration-sys",
  "tempfile",

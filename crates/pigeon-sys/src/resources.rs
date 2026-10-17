@@ -3,6 +3,10 @@
 //! permissive fallback. No shell command or environment variable supplies
 //! an observation.
 
+#[cfg(target_os = "macos")]
+#[path = "resources_macos.rs"]
+mod apple;
+
 /// Latest native observations, separate from the person's chosen policy.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Observation {
@@ -19,6 +23,8 @@ pub struct Observation {
 pub struct Probe {
     #[cfg(target_os = "linux")]
     bus: Option<zbus::Connection>,
+    #[cfg(target_os = "macos")]
+    apple: apple::Probe,
 }
 
 impl Probe {
@@ -29,7 +35,11 @@ impl Probe {
         {
             self.linux().await
         }
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(target_os = "macos")]
+        {
+            self.apple.sample()
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         {
             Observation::default()
         }
