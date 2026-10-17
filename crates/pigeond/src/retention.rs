@@ -146,7 +146,7 @@ pub async fn states(
             .git
             .run(&["for-each-ref", "--format=%(objectname)", &prefix])
             .await?;
-        let named = named_keys(&g.git, &by_tip, &refs).await?;
+        let named = named_keys(&g.git, &by_tip, &refs, g.git.purge_gate.armed()).await?;
         peers.push((id, uuid, role, named));
     }
     if g.role == pigeon_core::filter::Role::Custodian
@@ -201,7 +201,23 @@ async fn named_keys(
     git: &crate::git::Git,
     ours: &[(&String, BTreeSet<String>)],
     refs: &str,
+    purge_history: bool,
 ) -> Result<BTreeSet<String>, Error> {
+    if purge_history {
+        // Shared old bytes/history cannot acknowledge a fresh reference
+        // after erasure. Keep the previous complete-head rule until status
+        // binds individual live reference births to the peer's ancestry.
+        let mut named = BTreeSet::new();
+        for (tip, retained) in ours {
+            for root in refs.lines() {
+                if git.contains(root, tip).await {
+                    named.extend(retained.iter().cloned());
+                    break;
+                }
+            }
+        }
+        return Ok(named);
+    }
     let mut shared = BTreeSet::new();
     for (tip, _) in ours {
         for root in refs.lines() {

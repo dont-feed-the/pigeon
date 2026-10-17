@@ -51,7 +51,7 @@ async fn sibling_merges_prove_their_shared_overwritten_version() {
         .retained_keys(std::slice::from_ref(&left))
         .await
         .unwrap();
-    let named = named_keys(&git, &[(&left, retained)], &right)
+    let named = named_keys(&git, &[(&left, retained)], &right, false)
         .await
         .unwrap();
     assert!(
@@ -70,7 +70,7 @@ async fn a_peer_without_the_capture_cannot_prove_its_retention() {
         .retained_keys(std::slice::from_ref(&second))
         .await
         .unwrap();
-    let named = named_keys(&git, &[(&second, retained)], &first)
+    let named = named_keys(&git, &[(&second, retained)], &first, false)
         .await
         .unwrap();
     assert!(!named.contains(&new));
@@ -86,7 +86,7 @@ async fn unrelated_identical_bytes_do_not_prove_a_shared_reference() {
         .await
         .unwrap();
     assert!(
-        named_keys(&git, &[(&left, retained)], &right)
+        named_keys(&git, &[(&left, retained)], &right, false)
             .await
             .unwrap()
             .is_empty()
@@ -106,7 +106,41 @@ async fn every_common_ancestor_counts_and_unreadable_ancestry_stays_unknown() {
         .await
         .unwrap();
     let ours = [(&left, retained)];
-    let named = named_keys(&git, &ours, &right).await.unwrap();
+    let named = named_keys(&git, &ours, &right, false).await.unwrap();
     assert!(named.contains(&old) && named.contains(&new));
-    assert!(named_keys(&git, &ours, &"f".repeat(40)).await.is_err());
+    assert!(
+        named_keys(&git, &ours, &"f".repeat(40), false)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn purge_history_keeps_fresh_references_from_borrowing_an_old_capture() {
+    let (_temp, git, old, new) = fixture().await;
+    let first = commit(&git, &[], &old, "original capture").await;
+    let other = commit(&git, &[&first], &new, "overwrite before erasure").await;
+    let fresh = commit(&git, &[&other], &old, "fresh reference after erasure").await;
+    let tip = commit(&git, &[&fresh], &new, "fresh reference is now historical").await;
+    let retained = git.retained_keys(std::slice::from_ref(&tip)).await.unwrap();
+    let ours = [(&tip, retained)];
+    // Shared old history alone is not an acknowledgement of the new birth.
+    assert!(
+        named_keys(&git, &ours, &first, false)
+            .await
+            .unwrap()
+            .contains(&old)
+    );
+    assert!(
+        !named_keys(&git, &ours, &first, true)
+            .await
+            .unwrap()
+            .contains(&old)
+    );
+    assert!(
+        named_keys(&git, &ours, &tip, true)
+            .await
+            .unwrap()
+            .contains(&old)
+    );
 }

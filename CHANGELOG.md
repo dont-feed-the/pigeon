@@ -9,9 +9,10 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
-- Historical versions now count as safe when a backup independently merged
-  the same captured history. `pigeon status` no longer stays at “not safe”
-  solely because those equivalent merge commits have different IDs.
+- Historical versions can now count as safe when a backup independently
+  merged the same captured history. `pigeon status` can recognize those
+  equivalent merges despite their different IDs. Groups with erasure or
+  refounding history keep their stricter acknowledgement check.
 
 - Content checks ask the operating system to reclaim completed read pages
   while checking large files.

@@ -437,8 +437,8 @@ condition could never become true when identical trees needed no further merge.
 The group therefore stayed Published with an empty current-file problem list.
 A native Git DAG regression failed deterministically on that condition.
 
-Historical evidence now follows all common ancestry roots and their actual
-retained pointer history. A backup can prove a shared capture without adopting
+For groups without purge or refounding history, historical evidence follows all common
+ancestry roots and their actual retained pointer history. A backup can prove a shared capture without adopting
 an equivalent sibling merge. Unrelated histories with identical keys prove
 nothing, captures absent from the peer do not count, and an unreadable ancestry
 remains unknown. Actual annex location claims, recency, checking/lost state,
@@ -452,3 +452,16 @@ S1, S2 and S4–S16, but S3 failed the already-completed-restore trace assertion
 That source predates v0.6.3's VerifyRestore fix; it is retained as a background
 failure, not reported as validation of the current source. The other macOS
 slice jobs were still running at this checkpoint.
+
+
+Review before merging added a fresh-reference guard. A fifth native DAG test
+showed that shared old history alone could acknowledge a historical key whose
+fresh post-erasure reference the backup had not seen. The test failed before
+the guard. Groups with armed purge history therefore retain the previous
+complete-head requirement; this patch does not relax it. Per-reference live
+birth evidence for equivalent merges in those groups remains future work.
+The four ordinary shared-history/negative regressions and the guard are checked
+together. The parent `03b973d` passed all 729 workspace tests, all 13 fresh
+native driver/TLC scenarios and negative checks, and native S2/S3 plus TLC.
+Final guard and affected purge/restore checks, followed by new exact-head CI,
+precede publication; the prior green CI is not reused for a changed commit.
