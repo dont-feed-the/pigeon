@@ -793,7 +793,7 @@ the same snapshot, an invalid value preserves it, and the next valid edit
 applies without restart. Both runtime/configuration retakes pass. All-target
 workspace Clippy passes with lab, trace and console features. The broad
 783-check run precedes the final runtime test, guide, HTTP diagnostic and
-subsequent telemetry fixture-tier additions.
+subsequent telemetry-tier and capacity-precondition additions.
 
 An English simulated task review identified a two-group insertion ambiguity
 in the guide. The focused retake accepts explicit placement after the
@@ -812,7 +812,7 @@ The seven real Linux nights are still required.
 
 The complete parallel workspace run passed all 783 selected checks (two
 skipped); its source predates the final runtime-only fixture, guide,
-HTTP-status diagnostic and later telemetry fixture-tier additions. The subsequent production-loop
+HTTP-status diagnostic and later telemetry-tier/capacity-precondition additions. The subsequent production-loop
 retake passed both runtime/configuration checks, and final all-target
 Clippy and repository structural/ADR/spec checks pass before committing.
 Current-main integration and exact-head CI still precede merging.
@@ -840,3 +840,22 @@ that file. Both lab tests pass again with the corrected tier. Final
 all-target workspace Clippy and structural/ADR/spec checks pass. Normal Mac
 backup refusal stays required; a future periodic source run supplies the
 Mac retake, separate from these Linux observations.
+
+## Initial capacity-inventory observation
+
+v0.6.10's original daemon shard 3 (job 117500811605) passed 11 of
+12 tests. The capacity fixture's first current-byte assertion read zero
+instead of 13 after 7.304 seconds. Artifact 12113894459 is 9641122 bytes,
+SHA-256 `b3a2359940016fd47319d71b7560102a87adef8d1c931e728203caedd0fe6d20`.
+Its extraction verifies the laptop's one distinct 13-byte object; the saved
+history contains both initial paths' capture, while the backup still has
+the preceding empty accepted head. No absent backup copy is proved protected.
+
+The fixture's aggregate Protected wait can also match an empty catalogue.
+It now requires both named captured paths to be protected before measuring
+their bytes, within the same original 120-second wait budget. Current-byte,
+history-byte and distinct-key assertions remain unchanged. This corrects the
+observation precondition; it does not establish the exact concurrent
+interleaving that produced the original zero snapshot. Native capacity and
+pending-save retakes both pass. The unchanged immutable v0.6.10 tag receives
+one bounded original-shard retake; that outcome remains separate.

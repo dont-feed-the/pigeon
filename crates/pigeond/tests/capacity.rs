@@ -44,7 +44,23 @@ fn shared_keys_and_declined_suggestions_remain_visible_and_count_once() {
     );
     assert!(said(&result, "created", "group").is_some());
     join(&alice, &vault, &all);
-    until(&alice, State::Protected, &all);
+    // An empty accepted catalogue also has aggregate state Protected.
+    // Require both actual captured paths before asking about their bytes.
+    // Keep the original protection wait's 120-second observation budget.
+    eventually_within(
+        120,
+        || {
+            pigeon(&alice, &["status", folder.join("Media").to_str().unwrap()])
+                .into_iter()
+                .any(|r| {
+                    matches!(r, Response::Status(s) if
+                    ["Media/a.bin", "Media/b.bin"].iter().all(|path|
+                        s.versions.iter().any(|v| v.path == *path && v.state == State::Protected)))
+                })
+        },
+        "initial captured paths are not protected",
+        &all,
+    );
     let first = report(&alice);
     assert_eq!(first.current, old.len() as u64);
     assert_eq!(first.history, 0);
