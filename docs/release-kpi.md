@@ -397,3 +397,21 @@ Its restore-lock and bounded trace-retry changes ship in this publication.
 The original S9 failed observation remains retained. Duplicate queued main
 workflows were canceled in favor of the tag gates; active main cache producers
 were preserved through their completed save steps.
+
+## v0.6.6 observation
+
+[v0.6.6](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.6)
+published at 2026-10-17T18:06:25Z from
+`152d2a7d6da3b483f4a3e73f3ff14be6b344dde3`. All six assets, four archive
+checksums, Linux installation, pinned annex, shell completions and latest
+redirect were independently verified. Candidate lead was **764 seconds**
+and the completed publication gap was **2002 seconds**, meeting
+the one-hour and two-hour targets. There are 15
+lead-time and 14 completed-gap samples;
+no percentile or sustained failure-rate improvement is inferred.
+
+Filesystem admission ships with native ext4/btrfs/xfs evidence and accepted
+English/French usability retakes. The original five local fixture failures,
+their focused retake and the final exact-head CI remain separate records.
+All Linux release gates and both platform builds passed. Duplicate queued
+main runs were canceled; active main cache producers were preserved.

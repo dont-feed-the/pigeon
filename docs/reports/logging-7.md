@@ -67,3 +67,12 @@ need the joining/signing security and conformance review. In particular,
 logging's dedicated checks are not substituted by telemetry exporter tests.
 The inventory also records the open Authority refinement, upgrade matrix,
 M6 scheduling and measured budgets, and real elapsed M7 gates.
+
+## Merge validation
+
+Final source `439609292fe306ef3add67ba222ebb899921a11a` passed exact-head CI 39056996041, lab
+39056996027 and bridge 39056995988. Local evidence retains the
+752-pass/one-fixture-failure workspace run, the passing two-scenario restart
+retake, five logging contracts and native S2/S3 with TLC as distinct runs.
+No failed run or observation is converted into success. Main cache producers
+completed their save steps before tagging the patch release.
