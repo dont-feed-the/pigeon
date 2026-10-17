@@ -75,7 +75,7 @@ pub struct Admitter {
 }
 
 /// What a new device sends to an admitter.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Join {
     /// [`JOIN_VERSION`].
     pub v: u32,
@@ -120,6 +120,20 @@ pub struct Join {
     /// Recovery exchange version; older custodian-signed recovery is refused.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recovery_version: Option<u32>,
+}
+
+impl std::fmt::Debug for Join {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Join")
+            .field("v", &self.v)
+            .field("invitation_hash", &self.invitation_hash)
+            .field("proof", &"[redacted]")
+            .field("person", &self.person)
+            .field("device_name", &self.device_name)
+            .field("role", &self.role)
+            .field("annex_uuid", &self.annex_uuid)
+            .finish_non_exhaustive()
+    }
 }
 
 /// The admitter's answer.

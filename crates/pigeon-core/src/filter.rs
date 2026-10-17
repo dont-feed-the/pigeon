@@ -72,7 +72,7 @@ pub enum Role {
 }
 
 /// What the filter knows of the session before it starts.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Config {
     /// The serving device's role in the group.
     pub role: Role,
@@ -89,8 +89,22 @@ pub struct Config {
     pub peer_custodian: bool,
 }
 
+impl std::fmt::Debug for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Config")
+            .field("role", &self.role)
+            .field(
+                "auth_token",
+                &self.auth_token.as_ref().map(|_| "[redacted]"),
+            )
+            .field("peer_uuid", &self.peer_uuid)
+            .field("peer_custodian", &self.peer_custodian)
+            .finish()
+    }
+}
+
 /// What `pigeond` must do, in the order given.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Action {
     /// Write these bytes to git-annex.
     ToServer(Vec<u8>),
@@ -126,6 +140,42 @@ pub enum Action {
     },
     /// Close both directions. Nothing follows.
     Close(Closed),
+}
+
+impl std::fmt::Debug for Action {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ToServer(bytes) => f
+                .debug_struct("ToServer")
+                .field("len", &bytes.len())
+                .finish(),
+            Self::ToClient(bytes) => f
+                .debug_struct("ToClient")
+                .field("len", &bytes.len())
+                .finish(),
+            Self::ContentToServer(bytes) => f
+                .debug_struct("ContentToServer")
+                .field("len", &bytes.len())
+                .finish(),
+            Self::ContentToClient(bytes) => f
+                .debug_struct("ContentToClient")
+                .field("len", &bytes.len())
+                .finish(),
+            Self::Sync { ticket, key, hash } => f
+                .debug_struct("Sync")
+                .field("ticket", ticket)
+                .field("key", key)
+                .field("hash", hash)
+                .finish(),
+            Self::Repair { key } => f.debug_struct("Repair").field("key", key).finish(),
+            Self::Refused { rule, line } => f
+                .debug_struct("Refused")
+                .field("rule", rule)
+                .field("len", &line.len())
+                .finish(),
+            Self::Close(reason) => f.debug_tuple("Close").field(reason).finish(),
+        }
+    }
 }
 
 /// The rules that refuse a message without closing the session.
@@ -299,7 +349,6 @@ enum Held {
 }
 
 /// The filter of one session. See the module documentation.
-#[derive(Debug)]
 pub struct Filter {
     config: Config,
     policy: Arc<ContentPolicy>,
@@ -316,6 +365,21 @@ pub struct Filter {
     outbox: VecDeque<Segment>,
     held: Vec<(u64, Held)>,
     next_ticket: u64,
+}
+
+impl std::fmt::Debug for Filter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Filter")
+            .field("config", &self.config)
+            .field("checking", &self.checking)
+            .field("closed", &self.closed)
+            .field("relaying", &self.relaying)
+            .field("version", &self.version)
+            .field("awaiting", &self.awaiting.len())
+            .field("outbox", &self.outbox.len())
+            .field("held", &self.held.len())
+            .finish_non_exhaustive()
+    }
 }
 
 impl Filter {
