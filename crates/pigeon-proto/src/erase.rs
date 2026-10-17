@@ -15,7 +15,7 @@ pub enum Selection {
 }
 
 /// No future readiness change submits an erasure automatically.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum Operation {
     /// Read-only history and capacity scope.
@@ -79,7 +79,7 @@ pub struct Readiness {
 
 /// Counts describe reference versions; shared content may remain needed
 /// by other paths and cannot be promised as recoverable free disk space.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Preview {
     /// What was requested, in the same form needed for confirmation.
     pub selection: Selection,
@@ -121,7 +121,7 @@ pub struct Decision {
 }
 
 /// Typed result shared by CLI and browser; text is rendered with Fluent.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "result", rename_all = "kebab-case")]
 pub enum Answer {
     /// Nothing changed.

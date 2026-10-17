@@ -26,7 +26,7 @@ use crate::git::Git;
 use crate::roster_file::{self, RosterDoc};
 
 /// What the loops know of a group, behind a lock never held across a wait.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Known {
     /// Current validated local download priorities; changed readings replace the snapshot.
     pub(crate) download_priorities: Arc<crate::download_queue::Priorities>,
@@ -201,6 +201,17 @@ pub fn locate(path: &Path) -> Option<(Role, PathBuf, Option<PathBuf>)> {
         Some((Role::Custodian, path, None))
     } else {
         None
+    }
+}
+
+impl std::fmt::Debug for Known {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Known")
+            .field("roster_commit", &self.roster_commit)
+            .field("roster", &self.roster)
+            .field("token", &self.token.as_ref().map(|_| "[redacted]"))
+            .field("removed", &self.removed)
+            .finish_non_exhaustive()
     }
 }
 

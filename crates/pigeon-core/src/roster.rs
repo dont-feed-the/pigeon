@@ -78,7 +78,7 @@ pub struct Folder {
 }
 
 /// A roster, as the fold computes it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Roster {
     /// The rule set the group runs; never decreases (ADR 0048).
     pub rules: u32,
@@ -103,6 +103,24 @@ pub struct Roster {
     pub removed: BTreeMap<DeviceId, Option<String>>,
     /// Folder rules.
     pub folders: Vec<Folder>,
+}
+
+impl std::fmt::Debug for Roster {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Roster")
+            .field("invitation", &"[redacted]")
+            .field("rules", &self.rules)
+            .field("group", &self.group)
+            .field("k", &self.k)
+            .field("retention_days", &self.retention_days)
+            .field("relay", &self.relay)
+            .field("telemetry_device", &self.telemetry_device)
+            .field("persons", &self.persons)
+            .field("devices", &self.devices)
+            .field("removed", &self.removed)
+            .field("folders", &self.folders)
+            .finish()
+    }
 }
 
 /// A field that a `set` edit changes.

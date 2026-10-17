@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 /// One request, named as in 10 §10.1.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Request {
     /// Explicit erasure review, readiness, confirmation and cancellation.
@@ -368,7 +368,7 @@ pub enum Request {
 }
 
 /// One response; a request has one result, or progress then a result.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Response {
     /// Erasure review or explicit action result.
@@ -512,7 +512,7 @@ pub enum Response {
 }
 
 /// Text for people: a message id of the Fluent bundles, and its arguments.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Message {
     /// The id, such as `problem-person-exists`.
     pub id: String,
@@ -522,7 +522,7 @@ pub struct Message {
 }
 
 /// An argument of a [`Message`].
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Arg {
     /// A number, formatted for the person's language.

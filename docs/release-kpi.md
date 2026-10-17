@@ -546,3 +546,24 @@ but failed the workspace on two telemetry fixtures requiring lab roles;
 downstream lab and slice were skipped. The fixture-tier correction ships
 in v0.6.11; one new background run 39071444656 is pending at this checkpoint.
 These results do not establish elapsed nights or hardware budgets.
+
+## v0.6.12 observation
+
+[v0.6.12](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.12)
+published at 2026-10-17T22:03:35Z from
+`11375509a7266e05e136a75631ce3e6a3614d697`. All six assets, four archive
+checksums, native Linux installation, pinned annex, completions and latest
+redirect passed independent verification. Candidate lead was
+**1257 seconds**; completed gap was **1841 seconds**.
+The collector retains 21 lead and
+20 completed-gap samples.
+No percentile or sustained failure-rate improvement is inferred.
+
+The original native shard passed 12/13 and failed the backup-rejoin setup
+when aggregate Protected described empty accepted history. Its artifact
+12115173627 is 7,247,737 bytes, SHA-256
+`63a2aa7d9c6f6fc73c7d1fcd6d86b93539112b1503e60bbd9ad34bd6999b8287`.
+One bounded failed-shard retake and a publication-job-only retry retained
+the tag and successful matching archives. No safety verdict or deadline was
+waived. The next checkpoint waits for the actual named file before taking
+its preservation snapshot; effect on recurrence remains unmeasured.

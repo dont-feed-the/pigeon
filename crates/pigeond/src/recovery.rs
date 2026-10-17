@@ -31,7 +31,7 @@ use crate::status::msg;
 use crate::util::{hex, random, sha256_hex, unhex};
 
 /// What a sheet carries.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Sheet {
     /// Its version, 1.
     pub v: u32,
@@ -51,6 +51,21 @@ pub struct Sheet {
     pub key: String,
     /// The backup machines when it was printed.
     pub custodians: Vec<SheetCustodian>,
+}
+
+impl std::fmt::Debug for Sheet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Sheet")
+            .field("key", &"[redacted]")
+            .field("v", &self.v)
+            .field("group", &self.group)
+            .field("name", &self.name)
+            .field("k", &self.k)
+            .field("person", &self.person)
+            .field("label", &self.label)
+            .field("custodians", &self.custodians)
+            .finish()
+    }
 }
 
 /// A backup machine named on a sheet.

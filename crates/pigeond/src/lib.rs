@@ -126,3 +126,6 @@ pub mod util;
 pub mod verify;
 pub mod view;
 pub mod web;
+
+#[cfg(test)]
+mod private_state_debug_tests;
