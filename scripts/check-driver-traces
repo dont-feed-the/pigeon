@@ -249,13 +249,28 @@ def pipeline_mutations(out, java):
 
 
 def recorded_regressions(java):
-    for name in ("write-during-keep-index", "recycled-stage-inode", "keep-restart-visible"):
+    for name in ("write-during-keep-index", "recycled-stage-inode", "keep-restart-visible",
+                 "restore-already-present"):
         path = ROOT / "models/tla/daemon-fixtures" / (name + ".ndjson")
         events = [json.loads(line) for line in path.read_text().splitlines()]
         got = checker.check(events, java, 4, diagnostics=False)
         if got != "trace:accepted":
             sys.exit(f"FAIL recorded {path.stem}: {got}")
         print(f"ok   recorded {path.stem}: {got}", flush=True)
+        if path.stem == "restore-already-present":
+            # Actual S3 snapshots after restoring the already visible version.
+            # Both a different signed request and wrong visible bytes must fail
+            # semantically; a well-formed trace alone proves neither postcondition.
+            target = events[0]["vars"]["state"]["p"]["content"]
+            other = next(key for key in events[0]["vars"]["state"]["signed"] if key != target)
+            for field in ("request", "content"):
+                wrong = copy.deepcopy(events)
+                for event in wrong:
+                    if field == "request":
+                        event["vars"]["request"] = event["vars"]["request"].replace(target, other)
+                    else:
+                        event["vars"]["state"]["p"]["content"] = other
+                reject(wrong, java, f"restore {field} differs from requested bytes", model=True)
         if path.stem == "recycled-stage-inode":
             missing = [e for e in events if e["action"] != "Release"]
             got = checker.check(missing, java, 4, diagnostics=False)

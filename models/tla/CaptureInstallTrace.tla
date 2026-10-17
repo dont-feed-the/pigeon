@@ -76,6 +76,9 @@ TraceInit ==
   /\ Match(Projection, v) /\ Safety
 
 Common(step) == step /\ SameControl
+VerifiedRestore(v, requested) ==
+  /\ requested # Absent /\ requested \in ToSet(v.signed) /\ v.p # 0
+  /\ \E f \in Files(v) : f.i = v.p /\ f.c = requested
 Driver == CASE Ev.action = "Capture" ->
                  (CaptureWith(Ev.vars.before.allowed) /\ hidden' = FALSE /\ UNCHANGED operation)
                  \/ ConcurrentCapture(Ev.vars.before.recent, Ev.vars.before.allowed) \/ AdoptPresent
@@ -88,6 +91,13 @@ Driver == CASE Ev.action = "Capture" ->
                    [] Ev.vars.kind = "restore" -> StartRestore(Ev.vars.request,
                          IF Ev.vars.before.p = 0 THEN Absent ELSE Ev.vars.before.index)
                    [] OTHER -> FALSE
+            [] Ev.action = "VerifyRestore" ->
+                 /\ Ev.vars.kind = "restore" /\ pc = "idle" /\ ~jr.open
+                 /\ VerifiedRestore(Ev.vars.before, Ev.vars.request)
+                 /\ VerifiedRestore(Ev.vars.after, Ev.vars.request)
+                 /\ Ev.vars.request \in store /\ Ev.vars.request # Absent
+                 /\ at.p # 0 /\ fc[at.p] = Ev.vars.request
+                 /\ UNCHANGED driverVars
             [] Ev.action = "TakeGroup" -> StartResolve
             [] Ev.action = "MoveAside" -> Common(MoveAside)
             [] Ev.action = "Scan" -> Common(Scan)

@@ -209,6 +209,19 @@ pub async fn restore(
     if let Err(e) = crate::capture::capture(&g, &d.device, &d.tracer).await {
         tracing::warn!(group = %g.id, error = %e, "capture-failed");
     }
+    // A normal round may have installed this retained request while its
+    // cold policy scan ran. Observe the actual completed postcondition in
+    // both paths; a successful restore need not start another install.
+    let verified = crate::trace_state::Span::begin_request(
+        &d.tracer,
+        &g,
+        &rel,
+        0,
+        ("VerifyRestore", "restore"),
+        Some(&key),
+    )
+    .await;
+    verified.finish("idle").await;
     d.wake.notify_one();
     vec![Response::Said {
         message: crate::status::msg("restore-result", &[("path", text(&rel))]),

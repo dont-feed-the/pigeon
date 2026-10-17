@@ -172,9 +172,16 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            target
-          key: rust-${{ matrix.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
-          restore-keys: rust-${{ matrix.os }}-
+            target/debug/.fingerprint
+            target/debug/build
+            target/debug/deps/*.rlib
+            target/debug/deps/*.rmeta
+            target/debug/deps/*.so
+            target/debug/deps/*.dylib
+            target/debug/deps/*.d
+            target/.rustc_info.json
+          key: rust-deps-v2-${{ matrix.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: rust-deps-v2-${{ matrix.os }}-
       - name: Node, which builds the web interface's script (ADR 0077)
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -226,7 +233,14 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            target
+            target/debug/.fingerprint
+            target/debug/build
+            target/debug/deps/*.rlib
+            target/debug/deps/*.rmeta
+            target/debug/deps/*.so
+            target/debug/deps/*.dylib
+            target/debug/deps/*.d
+            target/.rustc_info.json
           key: ${{ steps.cache.outputs.cache-primary-key }}
 
   # pigeond's daemons-on-one-host tests (feature lab, 13 §13.12) took 24 of

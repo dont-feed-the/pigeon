@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FIELDS = {"p", "aside", "stage", "kept", "index", "current", "clean", "signed",
           "physical_index", "open", "proved", "new", "expected", "expected_stat", "divergence", "mine", "pending", "allowed", "hidden", "operation", "recent"}
 ACTIONS = {"Capture", "Start", "TakeGroup", "MoveAside", "Scan", "Check", "RenameIn",
-           "Index", "Done", "Release", "Recover", "RecoverEnd", "Cleanup", "Conflict", "Resolve", "Withdraw", "Decide", "Reconcile", "Adopt"}
+           "Index", "Done", "Release", "Recover", "RecoverEnd", "Cleanup", "Conflict", "Resolve", "Withdraw", "Decide", "Reconcile", "Adopt", "VerifyRestore"}
 
 
 WITNESS_MIN_TRANSITIONS = 32

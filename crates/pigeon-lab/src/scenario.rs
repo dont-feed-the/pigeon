@@ -565,7 +565,9 @@ fn labels_of(s: &Step) -> Vec<Label> {
             match op {
                 // Free journals `begin` before anything can crash.
                 LaptopOp::Free { .. } => vec![l("Evict", "Start", d)],
-                LaptopOp::Restore { .. } => vec![l("Restore", "Start", d)],
+                // Restore can verify bytes already installed by another
+                // round; its completed postcondition is always observable.
+                LaptopOp::Restore { .. } => vec![l("Restore", "VerifyRestore", d)],
                 LaptopOp::TakeGroup { .. } => vec![l("Resolve", "Resolve", d)],
                 // The inviter commits the roster that adds the custodian;
                 // a removal is a roster commit too.
