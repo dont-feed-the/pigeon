@@ -211,3 +211,45 @@ impl Bucket {
         )
     }
 }
+
+/// An operation's active-time budget. Deliberate suspension spends no
+/// budget; a backwards observation never refunds time or charges a pause.
+/// The adapter records each actual stop/resume transition in milliseconds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ActiveClock {
+    last: u64,
+    used: u64,
+    running: bool,
+}
+
+impl ActiveClock {
+    /// Start a fresh operation, which may already be waiting for a permit.
+    pub fn new(now_ms: u64, running: bool) -> Self {
+        Self {
+            last: now_ms,
+            used: 0,
+            running,
+        }
+    }
+
+    /// Charge only the preceding running interval, then record the new
+    /// state. Saturating arithmetic cannot wrap a spent budget into credit.
+    pub fn observe(&mut self, now_ms: u64, running: bool) {
+        let now_ms = now_ms.max(self.last);
+        if self.running {
+            self.used = self.used.saturating_add(now_ms - self.last);
+        }
+        self.last = now_ms;
+        self.running = running;
+    }
+
+    /// Active milliseconds spent, independent of the duration of pauses.
+    pub fn used(self) -> u64 {
+        self.used
+    }
+
+    /// Remaining active time; expiration cannot wrap or become negative.
+    pub fn remaining(self, budget_ms: u64) -> u64 {
+        budget_ms.saturating_sub(self.used)
+    }
+}

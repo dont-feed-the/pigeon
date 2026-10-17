@@ -3,7 +3,7 @@
 //! lose capture's floor, accumulate unbounded bursts or invent past credit.
 
 use hegel::{TestCase, generators as gs};
-use pigeon_core::resources::{self, Bucket, Conditions, Disk, Permit, Preset, Wait};
+use pigeon_core::resources::{self, ActiveClock, Bucket, Conditions, Disk, Permit, Preset, Wait};
 
 #[hegel::test(test_cases = 1000)]
 fn quiet_time_is_monotone_and_bounded_for_every_file_size(tc: TestCase) {
@@ -132,4 +132,44 @@ fn rate_changes_and_backwards_clocks_grant_no_past_credit(tc: TestCase) {
     ));
     let mut bucket = Bucket::new(0, 65_536, 1);
     assert!(matches!(bucket.reserve(1, 1, faster), Permit::Wait(_)));
+}
+
+#[hegel::test(test_cases = 1000)]
+fn arbitrary_pauses_do_not_spend_an_operations_active_budget(tc: TestCase) {
+    let active = tc.draw(gs::integers::<u64>().max_value(1_000_000));
+    let pause = tc.draw(gs::integers::<u64>().max_value(u64::MAX - 2_000_000));
+    let mut clock = ActiveClock::new(0, true);
+    clock.observe(active, false);
+    clock.observe(active + pause, true);
+    clock.observe(active + pause + active, false);
+    assert_eq!(clock.used(), 2 * active);
+    assert_eq!(clock.remaining(2 * active), 0);
+    assert_eq!(clock.remaining(2 * active + 1), 1);
+}
+
+#[hegel::test(test_cases = 1000)]
+fn backwards_or_repeated_clock_samples_cannot_refund_active_time(tc: TestCase) {
+    let start = tc.draw(gs::integers::<u64>());
+    let now = tc.draw(gs::integers::<u64>()).max(start);
+    let earlier = tc.draw(gs::integers::<u64>()).min(now);
+    let mut clock = ActiveClock::new(start, true);
+    clock.observe(now, false);
+    let spent = clock.used();
+    clock.observe(earlier, true);
+    clock.observe(now, true);
+    assert_eq!(clock.used(), spent);
+    assert_eq!(spent, now - start);
+}
+
+#[hegel::test(test_cases = 1000)]
+fn observing_a_running_interval_in_parts_has_the_same_charge(tc: TestCase) {
+    let start = tc.draw(gs::integers::<u64>());
+    let middle = tc.draw(gs::integers::<u64>()).max(start);
+    let end = tc.draw(gs::integers::<u64>()).max(middle);
+    let mut one = ActiveClock::new(start, true);
+    let mut parts = one;
+    one.observe(end, false);
+    parts.observe(middle, true);
+    parts.observe(end, false);
+    assert_eq!(one, parts);
 }

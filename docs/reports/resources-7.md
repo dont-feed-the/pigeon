@@ -14,8 +14,11 @@ supplied monotonic input. Manual ceilings win over automatic rate floors;
 backwards clocks and rate changes cannot manufacture past credit. Oversize
 reservations are refused for splitting rather than silently undercharged.
 
-Eight hegel laws run 1000 cases each, including extreme integer clock/rate
-ranges. These are pure controller laws, not measurements of foreground
+Eleven hegel laws run 1000 cases each, including extreme integer clock/rate
+ranges. The active-time clock separately proves that arbitrary pauses spend no
+operation budget, backwards clocks refund nothing, and splitting an active
+interval changes no charge. Native child deadlines are not wired to that
+clock yet. These are pure controller laws, not measurements of foreground
 workload interference, real network delay or native process pausing.
 
 The P2P filter can distinguish content DATA bodies from protocol and Git
