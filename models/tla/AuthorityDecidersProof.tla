@@ -5,6 +5,7 @@ EXTENDS Authority, TLAPS
 
 ProofParameters == /\ ForceAdopt = TRUE
                      /\ DecidersAt \in {"decision", "mixed"}
+                     /\ ConcreteNames = FALSE
 
 ASSUME Parameters == ProofParameters
 USE DEF ProofParameters
@@ -15,7 +16,7 @@ THEOREM AdoptPermissions ==
   PROVE MayAdopt(u, x, p)
   OBVIOUS
 <1>2. CASE DecidersAt = "decision"
-  BY <1>1, <1>2, Parameters, SMT DEF Deciders, MayAdopt
+  BY <1>1, <1>2, Parameters, SMT DEF Deciders, AbstractDeciders, MayAdopt
 <1>3. CASE DecidersAt = "mixed"
   <2>1. ADiff(x, p) \subseteq PDiff(p) /\ ADiff(x, p) \subseteq CPaths
     BY SMT DEF ADiff, AdoptTree
@@ -23,7 +24,7 @@ THEOREM AdoptPermissions ==
     AllowedC(u, q, cm[cm[p].cbase].tree[q], cm[p].tree[q], R(x), Counting(HistSet({x}))) =>
       AllowedC(u, q, cm[x].tree[q], AdoptTree(x, p)[q], R(x), Counting(HistSet({x})))
     BY <2>1, SMT DEF AllowedC, AdoptTree
-  <2> QED BY <1>1, <1>3, <2>1, <2>2, Parameters, SMT DEF Deciders, MayAdopt
+  <2> QED BY <1>1, <1>3, <2>1, <2>2, Parameters, SMT DEF Deciders, AbstractDeciders, MayAdopt
 <1> QED BY <1>2, <1>3, Parameters
 
 THEOREM Safety == []DecidersCanAdopt

@@ -60,7 +60,10 @@ HistoryViewsAgree == \\A x \\in Ids : R(x) = Old!R(x) /\\ TreeOf({x}) = Old!Tree
 SameTransitions == [][Next <=> Old!Next]_vars
 ====
 ''')
-        (work / "AuthorityEquivalent.cfg").write_text('''CONSTANTS MaxCommits = 2
+        (work / "AuthorityEquivalent.cfg").write_text('''CONSTANTS PathSet = {"f", "r"}
+          OwnedPaths = {"f"}
+          ConcreteNames = FALSE
+          MaxCommits = 2
           MaxHostile = 1
           Hostile = TRUE
           Ops = {"capture", "revise", "adopt", "rejected", "withdrawn", "merge", "fetch", "transfer", "remove", "hcommit", "hmerge", "hadd", "hdecide"}

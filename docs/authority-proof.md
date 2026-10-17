@@ -6,7 +6,8 @@
 ## What is proved
 
 `AuthorityDecidersProof.Safety` establishes `[]DecidersCanAdopt` under
-`ForceAdopt = TRUE` and `DecidersAt` in `{"decision", "mixed"}`. It extends
+`ForceAdopt = TRUE`, `DecidersAt` in `{"decision", "mixed"}` and
+`ConcreteNames = FALSE` (the original abstract-path model). It extends
 the actual `Authority` model and uses its policy definitions directly.
 No transition relation or policy implementation is duplicated for proof.
 
@@ -15,6 +16,9 @@ selected as a decider satisfies the model's adoption-permission predicate.
 It does not depend on a commit bound, history length, hostile-device budget,
 operation selection or fairness. The model still fixes its persons, devices
 and two paths; this is not a proof for arbitrary membership structures.
+Concrete-name trace validation uses its separate pointwise adoption checks;
+this abstract-path theorem does not certify those traces. Configuration
+coverage must reject enabling concrete names for the abstract theorem.
 
 For the decision policy, deciders satisfy the exact permission check of
 the adoption's diff, or are fallback admins whose Force grants permission.

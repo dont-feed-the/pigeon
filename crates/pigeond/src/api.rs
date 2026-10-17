@@ -456,6 +456,7 @@ fn join_problem(code: &str, invitation: &str, person: Option<&str>) -> Response 
         | "repository-busy"
         | "file-system-unsupported"
         | "file-system-unknown"
+        | "backup-machine-needs-linux"
         | "folder-not-empty" => problem(code, &[], None),
         "not-in-this-build" => problem(code, &[("command", text("join"))], None),
         other => problem("internal-error", &[], Some(other.to_owned())),
@@ -758,3 +759,7 @@ pub fn bundle_dir(d: &Daemon) -> PathBuf {
 #[cfg(test)]
 #[path = "api_status_tests.rs"]
 mod status_tests;
+
+#[cfg(test)]
+#[path = "api_role_tests.rs"]
+mod role_tests;

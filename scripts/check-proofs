@@ -319,6 +319,7 @@ class Checks:
                               f"uncovered-{constant}", reject=True)
 
         for constant, old, new in [("ForceAdopt", "TRUE", "FALSE"),
+                                    ("ConcreteNames", "FALSE", "TRUE"),
                                     ("DecidersAt", '"mixed"', '"proposal"')]:
             with tempfile.TemporaryDirectory() as temp:
                 work = Path(temp)

@@ -12,7 +12,8 @@ immutable and unpublished. See [M5 evidence](docs/reports/deletion-6.md).
 M6 is in progress; [its report](docs/reports/resources-7.md) distinguishes
 implemented controllers and settings from outstanding native scheduling,
 filesystem checks and measured reference/HDD budgets. M7 still needs its
-real elapsed gates and the open seed-104 Authority trace refinement recorded
+real elapsed gates and the broader law/trace audit. The seed-104 concrete-name
+refinement and its validation are recorded
 in [the trace report](docs/reports/authority-trace-7.md). Finite fixtures do
 not establish elapsed nights, soak, dogfood or a month.
 

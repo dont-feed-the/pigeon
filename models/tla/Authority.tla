@@ -32,13 +32,14 @@
      DecisionRule "deciders" (04 §4.3 table) or any "members". *)
 EXTENDS Naturals, FiniteSets, Sequences
 CONSTANTS MaxCommits, MaxHostile, Hostile, Ops,
-          Revocation, DecidersAt, ForceAdopt, DecisionMerge, Rule3, BaseOf, DecisionRule
+          Revocation, DecidersAt, ForceAdopt, DecisionMerge, Rule3, BaseOf, DecisionRule,
+          PathSet, OwnedPaths, ConcreteNames
 
 Persons == {1, 2, 3}
 Devices == {1, 2, 3, 4}
 Honest == {1, 2}
 Attacker == IF Hostile THEN {3, 4} ELSE {}
-CPaths == {"f", "r"}
+CPaths == PathSet
 
 VARIABLES cm, head, has
 vars == <<cm, head, has>>
@@ -131,7 +132,15 @@ R(x) == RosterOf(HistSet({x}))           \* the roster in force for x's children
    0070), change or delete. A value that keeps every version of old only
    adds: a version beside them is a conflict copy, a new file (05 §5.3). *)
 AllowedC(u, q, old, new, Ro, S) ==
-  IF q = "f" THEN u = Ro.own ELSE old \subseteq new \/ u \in Ro.adm \/ Mine(u, q, S)
+  IF q \in OwnedPaths THEN u = Ro.own ELSE old \subseteq new \/ u \in Ro.adm \/ Mine(u, q, S)
+
+(* Concrete trace names have no extensions and are ASCII. This is the same
+   structural conflict-name relation as 05 §5.3, not a permission supplied
+   by the native judge. The original two-slot state exploration stays
+   available with ConcreteNames = FALSE. *)
+CopyOf(q, p) == /\ Len(q) >= Len(p) + 3
+                /\ SubSeq(q, 1, Len(p) + 2) = p \o " ("
+                /\ SubSeq(q, Len(q), Len(q)) = ")"
 
 (* Proposals (04 §4.5). The adoption on main x: a path the proposal changed
    gets its value, or both values if x changed it meanwhile. *)
@@ -143,7 +152,7 @@ AdoptTree(x, p) ==
                     ELSE cm[x].tree[q]]
 ADiff(x, p) == {q \in CPaths : AdoptTree(x, p)[q] # cm[x].tree[q]}
 (* Deciders of p for a decision on main x; if nobody may, the admins. *)
-Deciders(p, x) ==
+AbstractDeciders(p, x) ==
   LET Ro == IF DecidersAt = "proposal" THEN R(cm[p].cbase) ELSE R(x)
       diff == IF DecidersAt = "decision" THEN ADiff(x, p) ELSE PDiff(p)
       old(q) == IF DecidersAt = "decision" THEN cm[x].tree[q] ELSE cm[cm[p].cbase].tree[q]
@@ -151,13 +160,37 @@ Deciders(p, x) ==
       S == Counting(HistSet({IF DecidersAt = "proposal" THEN cm[p].cbase ELSE x}))
       D == {u \in Persons : \A q \in diff : AllowedC(u, q, old(q), new(q), Ro, S)}
   IN IF D = {} THEN Ro.adm ELSE D
+
+(* Pointwise adoption: an unchanged main receives the proposal's entry;
+   a changed main keeps its entry, and a missing proposed version adds a
+   conflict copy in the same folder. A copy addition is never a change to
+   the original name or its writers. No particular generated copy spelling
+   is needed to compute these permissions. *)
+ConcreteDeciders(p, x) ==
+  LET Ro == R(x)
+      S == Counting(HistSet({x}))
+      AllowedAdoption(u, q) ==
+        IF cm[x].tree[q] = cm[cm[p].cbase].tree[q]
+        THEN AllowedC(u, q, cm[x].tree[q], cm[p].tree[q], Ro, S)
+        ELSE \/ cm[p].tree[q] = {}
+             \/ cm[p].tree[q] = cm[x].tree[q]
+             \/ \E copy \in CPaths : CopyOf(copy, q) /\ cm[x].tree[copy] = cm[p].tree[q]
+             \/ AllowedC(u, q, {}, cm[p].tree[q], Ro, S)
+      D == {u \in Persons : \A q \in PDiff(p) : AllowedAdoption(u, q)}
+  IN IF D = {} THEN Ro.adm ELSE D
+Deciders(p, x) == IF ConcreteNames THEN ConcreteDeciders(p, x) ELSE AbstractDeciders(p, x)
 Author(p) == R(cm[p].cbase).dev[cm[p].signer]
 (* tree holds the change of p on a base BT (rule 7): each version it wrote,
    and nothing where it deleted a path that BT has not changed since. *)
 Holds(p, BT, tree) ==
-  \A q \in PDiff(p) : IF cm[p].tree[q] = {}
-                     THEN tree[q] = {} \/ BT[q] # cm[cm[p].cbase].tree[q]
-                     ELSE cm[p].tree[q] \subseteq tree[q]
+  IF ConcreteNames THEN
+    \A q \in PDiff(p) : \/ tree[q] = cm[p].tree[q]
+                       \/ /\ BT[q] # cm[cm[p].cbase].tree[q]
+                          /\ \/ cm[p].tree[q] = {}
+                             \/ \E copy \in CPaths : CopyOf(copy, q) /\ tree[copy] = cm[p].tree[q]
+  ELSE \A q \in PDiff(p) : IF cm[p].tree[q] = {}
+                          THEN tree[q] = {} \/ BT[q] # cm[cm[p].cbase].tree[q]
+                          ELSE cm[p].tree[q] \subseteq tree[q]
 
 (* The verdict of a commit with parents P, signer s, tree, decisions D,
    roster edits RE and Force F (04 §4.4 rules 1-4, and DecisionMerge). A

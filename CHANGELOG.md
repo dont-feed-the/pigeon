@@ -5,6 +5,15 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- `pigeon restore --at` refuses impossible calendar dates and invalid UTC
+  offsets before choosing a version, leaving current files untouched.
+- Joining as a backup machine on macOS explains that backups currently
+  need Linux, instead of suggesting another APFS folder or an internal error.
+
 ## 0.6.7 — 2026-10-17
 
 ### Fixed

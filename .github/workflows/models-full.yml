@@ -121,6 +121,7 @@ jobs:
           key: tla2tools-${{ hashFiles('scripts/run-tlc') }}
       - name: the pinned toolchain (rust-toolchain.toml)
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
+      - uses: ./.github/actions/nextest
       - name: every run is accepted by its model, every mutant rejected (13 §13.3)
         run: scripts/check-code-traces --seeds ${{ github.event_name == 'push' && 50 || 200 }} --jobs 4 --heap 2g
 
