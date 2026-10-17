@@ -163,7 +163,7 @@ pigeon's mistakes; it is not a sandbox.
 
 | Allowed | Used for |
 |---|---|
-| `git cat-file --batch`, `rev-list`, `for-each-ref`, `status --porcelain=v2 -z -uall --ignored=traditional` | reading commits, trees, refs and changes |
+| `git cat-file --batch`, `rev-list`, `merge-base --all`, `for-each-ref`, `status --porcelain=v2 -z -uall --ignored=traditional` | reading commits, trees, refs and changes |
 | `commit-tree -S`, `update-ref`, `merge-tree --write-tree`, `read-tree`, `update-index`, `write-tree` | commits and merges without touching the working tree |
 | `git fetch <remote>`, `sparse-checkout` | history; kept folders |
 | `git bundle create`, `bundle list-heads` | private read-only recovery metadata, pulled by an authenticated sheet or custodian (ADR 0047); imports use `fetch` into peer refs |

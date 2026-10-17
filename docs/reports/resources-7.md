@@ -395,8 +395,8 @@ protection: its artifact contains both expected exact objects, matching
 location logs and backup main, while the last live status stayed Published.
 Artifact 12105134222 has SHA-256
 `09aa0cc908deb1076038ff965029f24ce0513389004ea6440eadf70cfb3979b8`.
-The cause of that missed live observation is not claimed fixed. A targeted
-retry was cancelled after the independent dependency audit required a new head.
+A targeted retry was cancelled after the independent dependency audit required
+a new head. The sibling-merge cause was then reproduced below.
 
 The audit rejected the retired D-Bus support crates in RUSTSEC-2026-0370,
 0371 and 0372. zbus 6 removes them. Linux notifications now use its standard
@@ -419,3 +419,36 @@ The maintained D-Bus adapter, cache reader, status handler and clock-fence
 regressions pass together (seven checks), and all-target Clippy passes.
 The completed components are rolled up for one new PR CI run. Fresh full
 workspace/native/trace validation still precedes merging and publication.
+
+
+## Historical status after independent merges
+
+The final `5263f7a` local workspace run passed 724 of 725 checks; recovery-sheet
+again missed its protection deadline. Its preserved fixture contains the exact
+old and new objects and matching location logs on all peers. Bob and the backup
+had independently merged the same two parents: their merge IDs differed, while
+their accepted recipe and both historical captures matched. The earlier
+`7951c52` CI artifact has the same shape: Bob's `70c441f` and the backup's
+`208f22a` have the same two parents.
+
+Current-file status already accepted the shared recipe, but retained-history
+status required the backup to contain Bob's entire latest merge commit. That
+condition could never become true when identical trees needed no further merge.
+The group therefore stayed Published with an empty current-file problem list.
+A native Git DAG regression failed deterministically on that condition.
+
+Historical evidence now follows all common ancestry roots and their actual
+retained pointer history. A backup can prove a shared capture without adopting
+an equivalent sibling merge. Unrelated histories with identical keys prove
+nothing, captures absent from the peer do not count, and an unreadable ancestry
+remains unknown. Actual annex location claims, recency, checking/lost state,
+custodian role and purge exclusions still apply. No timeout was raised.
+Final native recovery, health, traces and exact-head CI precede publication.
+
+
+The periodic macOS run on v0.6.2 (39037709329) passed workspace, all four
+daemon shards and all lab groups. Its serial remaining-scenarios job passed
+S1, S2 and S4–S16, but S3 failed the already-completed-restore trace assertion.
+That source predates v0.6.3's VerifyRestore fix; it is retained as a background
+failure, not reported as validation of the current source. The other macOS
+slice jobs were still running at this checkpoint.

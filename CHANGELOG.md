@@ -9,6 +9,10 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Historical versions now count as safe when a backup independently merged
+  the same captured history. `pigeon status` no longer stays at “not safe”
+  solely because those equivalent merge commits have different IDs.
+
 - Content checks ask the operating system to reclaim completed read pages
   while checking large files.
 - Pending changes are described as not yet recorded by pigeon, to distinguish
