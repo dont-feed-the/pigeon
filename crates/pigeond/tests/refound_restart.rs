@@ -185,6 +185,26 @@ fn a_backup_rejoins_and_restarts_without_recopying_its_objects() {
         let before = objects(&path.join("annex/objects"));
         assert!(!before.is_empty());
         drop(vault);
+        // An ordinary fetch owns this metadata ref while welcome import
+        // proceeds. The importer must use its private ref, preserving the
+        // owner's lock rather than racing or deleting it.
+        let refs = git(
+            &path,
+            &["for-each-ref", "--format=%(refname)", "refs/remotes/"],
+        );
+        let peer_ref = refs
+            .lines()
+            .find(|name| name.ends_with("/git-annex"))
+            .unwrap();
+        let lock = path.join(format!("{peer_ref}.lock"));
+        let mut held = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock)
+            .unwrap();
+        use std::io::Write;
+        held.write_all(b"owned by the metadata-fetch fixture\n")
+            .unwrap();
         let mut vault = start_with_crash(&root, sockets.path(), "vault", Some(point));
         let answer = pigeon(&lap, &["refound", folder.to_str().unwrap(), "--yes"]);
         assert!(said(&answer, "refounded", "group").is_some(), "{answer:?}");
@@ -205,6 +225,12 @@ fn a_backup_rejoins_and_restarts_without_recopying_its_objects() {
             ],
         );
         assert_crashed(&mut vault);
+        assert_eq!(
+            std::fs::read(&lock).unwrap(),
+            b"owned by the metadata-fetch fixture\n"
+        );
+        drop(held);
+        std::fs::remove_file(&lock).unwrap();
         assert!(path.join("pigeon/in-place.json").exists(), "{point}");
         drop(vault);
         // No admitter is available during replay; the invitation is

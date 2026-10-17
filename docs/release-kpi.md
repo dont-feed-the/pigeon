@@ -259,3 +259,42 @@ Rust cache from 12:30:01 to 12:34:30 UTC on 17 October: about 4m29s before
 building. Download completed at 12:30:58; unpacking accounts for most of the
 remaining time. Reducing cached build contents is the next measured CI target,
 with first-build and warm-cache times to compare before claiming an improvement.
+
+
+## v0.6.2 observation
+
+[v0.6.2](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.2)
+was published on 17 October at 13:42:34 UTC from
+`3439d9d67fc8b1a6368f4eb15e2633a28a2ee6dd`. All six assets, four archive
+checksums, the native Linux install, pinned annex, shell completions and
+public latest-release redirect were verified. Candidate lead time was
+**26 minutes 29 seconds**, meeting the one-hour target. The publication gap
+was **4 hours 34 minutes 52 seconds**, missing the two-hour target. Eleven
+lead-time samples and ten completed intervals still do not support a
+reliable percentile claim.
+
+PR #70's final head passed CI, lab and all three parallel bridge cases.
+The tag's first CI attempt hit a competing peer metadata-ref lock during
+backup rejoin. Its first core-slice attempt passed all S3 byte/status checks
+and TLC, but the scenario expected a new restore install when a normal
+round had already installed the retained request. S2 passed all eleven
+checks in 40 seconds and its trace passed TLC. Each failed partition was
+retried once, retaining all other results. Publication alone was then
+retried with both successful platform archives retained. Exact-source
+Linux CI, lab, slice and publication all finished successfully.
+
+The follow-up removes the redundant remote-ref write during welcome import:
+annex already merges the imported private metadata ref. A regression holds
+the competing lock across all four recovery crash points without removing
+or changing it. Restore traces now observe the actual requested bytes at
+completion, including an already completed request, instead of requiring
+an extra install. A native S3 run passes fourteen checks and fifty
+filesystem observations; recorded no-op snapshots are accepted by TLC,
+while different requested or visible bytes must produce counterexamples.
+
+The measured 8.46 GB Rust-cache restore above motivates retaining compiled
+dependencies while excluding old test executables in the Rust workspace
+and shared bridge build. A new cache namespace avoids restoring the old
+archive. Only main writes caches; its first successful warm-up must be
+retained. Cold and warm runner measurements are still required before
+claiming a speedup. None of these follow-up changes is part of v0.6.2.
