@@ -109,6 +109,11 @@ async fn laptop() -> Option<Laptop> {
 }
 
 async fn laptop_fixture(with_custodian: bool) -> Option<Laptop> {
+    laptop_fixture_options(u8::from(with_custodian), 30).await
+}
+
+/// Actual repository identities and retention chosen before the genesis.
+async fn laptop_fixture_options(custodians: u8, retention_days: u32) -> Option<Laptop> {
     let serial = SERIAL.lock().await;
     if !annex_present() {
         assert!(
@@ -136,16 +141,27 @@ async fn laptop_fixture(with_custodian: bool) -> Option<Laptop> {
     git.run(&["annex", "init", "lap"]).await.unwrap();
     pigeond::git::set_signer(key(1));
     let mut roster = roster();
-    if with_custodian {
-        // Repository UUIDs are immutable identities (04 §4.7). Configure
-        // the actual backup before genesis instead of rewriting one later.
-        let remote = dir.path().join("custodian.git");
-        std::fs::create_dir(&remote).unwrap();
-        let backup = Git::new(&remote, env.clone());
-        backup.run(&["init", "--bare", "-q"]).await.unwrap();
-        backup.run(&["annex", "init", "backup"]).await.unwrap();
-        roster.k = 1;
-        roster.devices.get_mut(&dev(3)).unwrap().annex_uuid = backup.config("annex.uuid").await;
+    roster.retention_days = retention_days;
+    if custodians > 0 {
+        roster.devices.get_mut(&dev(1)).unwrap().annex_uuid = git.config("annex.uuid").await;
+        roster.k = u32::from(custodians);
+        for n in 3..3 + custodians {
+            // Repository UUIDs are immutable identities (04 §4.7).
+            let name = if n == 3 {
+                "custodian.git".into()
+            } else {
+                format!("custodian-{n}.git")
+            };
+            let remote = dir.path().join(name);
+            std::fs::create_dir(&remote).unwrap();
+            let backup = Git::new(&remote, env.clone());
+            backup.run(&["init", "--bare", "-q"]).await.unwrap();
+            backup.run(&["annex", "init", "backup"]).await.unwrap();
+            let mut device = roster.devices[&dev(3)].clone();
+            device.name = format!("backup {n}");
+            device.annex_uuid = backup.config("annex.uuid").await;
+            roster.devices.insert(dev(n), device);
+        }
     }
     let text = roster_file::render(&RosterDoc { roster }).unwrap();
     let attributes = pigeond::settings::GITATTRIBUTES.as_bytes();
@@ -572,3 +588,6 @@ mod purge_upgrade;
 mod erase_restart;
 #[path = "install/fetch_progress.rs"]
 mod fetch_progress;
+
+#[path = "purge/trace_driver.rs"]
+mod purge_trace;

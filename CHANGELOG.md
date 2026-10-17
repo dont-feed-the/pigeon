@@ -21,7 +21,8 @@ increments the second number, and every other release the third.
 
 - When a current version needs contents covered by an earlier erasure and
   no copy is known, its deciders see *Needs you* with recovery advice.
-  The unavailable file still counts as missing.
+  The unavailable file still counts as missing, including while its new
+  version waits to be installed. Separate private saves remain visible.
 - Restoring an already retained version continues while erasure metadata is
   being checked. Browser erasure receipts link directly to waiting requests,
   and restoration explains how older contents become a new current version.

@@ -50,9 +50,16 @@ pub(crate) fn relative(g: &Group, path: &Path) -> Option<String> {
 /// signed refounding trailers. Each archive gets its own in-memory judge.
 /// Successful immutable tips are cached without changing the live fold.
 pub async fn tips(g: &Group) -> Vec<String> {
-    let Some(mut tip) = g.git.rev("refs/heads/main").await else {
+    let Some(main) = g.git.rev("refs/heads/main").await else {
         return Vec::new();
     };
+    tips_at(g, &main).await
+}
+
+/// Traverse one immutable main. A caller binding destructive consent must
+/// recheck its complete ref snapshot after this potentially cold traversal.
+pub(crate) async fn tips_at(g: &Group, main: &str) -> Vec<String> {
+    let mut tip = main.to_owned();
     let mut seen = std::collections::BTreeSet::new();
     let mut tips = Vec::new();
     for _ in 0..32 {

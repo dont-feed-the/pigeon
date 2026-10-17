@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+"""Check actual fixed-membership purge interleavings against Purge.tla.
+
+Native tests observe admitted signed histories, received signed seals and
+three real annex stores. TLC supplies the state transitions and safety
+invariants. Zero-day fixtures establish ordering only. Corrupted physical
+presence, causal history and seals must be rejected, as must missing logs.
+"""
+
+import argparse
+import copy
+import importlib.machinery
+import importlib.util
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+
+ROOT = Path(__file__).resolve().parent.parent
+CASES = {"timely-restore", "late-restore", "timely-cancel", "late-missing"}
+NODES = {"l1", "c1", "c2"}
+CUSTODIANS = {"c1", "c2"}
+ACTIONS = {"Init", "Decide", "Restore", "Cancel", "Seal", "Drop", "Fetch",
+           "SyncHistory", "SyncReports", "Stutter"}
+FIELDS = {"id", "decision", "restored", "cancelled", "sealed", "seal_restore",
+          "seal_cancel", "reports", "present"}
+
+
+def load(name):
+    loader = importlib.machinery.SourceFileLoader(name, str(ROOT / "scripts" / name))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+class Refused(ValueError):
+    pass
+
+
+def validate(events):
+    if len(events) < 2 or events[0].get("action") != "Init":
+        raise Refused("missing initial observation or transitions")
+    for clock, e in enumerate(events):
+        if set(e) != {"spec", "device", "clock", "action", "vars"}:
+            raise Refused("unknown or missing event fields")
+        if e["spec"] != "Purge" or e["device"] not in NODES or type(e["clock"]) is not int or e["clock"] != clock:
+            raise Refused("wrong specification, identity or order")
+        v = e["vars"]
+        if e["action"] not in ACTIONS or set(v) != {"from", "to", "nodes"}:
+            raise Refused("unknown action or missing snapshot")
+        if v["from"] not in NODES or v["to"] not in NODES or e["device"] != v["from"]:
+            raise Refused("unknown or inconsistent transport identities")
+        if not isinstance(v["nodes"], list) or len(v["nodes"]) != 3:
+            raise Refused("all three stores must be observed")
+        ids = []
+        for n in v["nodes"]:
+            if set(n) != FIELDS or n["id"] not in NODES:
+                raise Refused("unknown or missing node fields")
+            ids.append(n["id"])
+            if any(type(n[k]) is not bool for k in FIELDS - {"id", "reports"}):
+                raise Refused("observed facts must be booleans")
+            reports = n["reports"]
+            if not isinstance(reports, list) or any(r not in CUSTODIANS for r in reports) or len(reports) != len(set(reports)):
+                raise Refused("unknown or duplicated seal identities")
+        if set(ids) != NODES:
+            raise Refused("missing or duplicated store")
+
+
+def check(events, java):
+    validate(events)
+    encoder, tlc = load("trace-to-tla"), load("run-tlc")
+    with tempfile.TemporaryDirectory(prefix="pigeon-purge-tlc-") as tmp:
+        work = Path(tmp)
+        for name in ("Purge", "PurgeTrace"):
+            shutil.copy(ROOT / "models/tla" / (name + ".tla"), work)
+        (work / "PurgeCodeLog.tla").write_text(encoder.convert(
+            [json.dumps(e) for e in events], "PurgeCodeLog", "CodeLog"))
+        (work / "Observed.cfg").write_text('''CONSTANTS TraceLog <- CodeLog
+Custodians = {"c1", "c2"}
+Laptops = {"l1"}
+Decider = "l1"
+Share = {"c1", "c2"}
+LaptopCopies = {"l1"}
+R = 0
+MaxTime = 0
+Mode = "full"
+SPECIFICATION TraceSpec
+INVARIANT KeepWins
+INVARIANT WaitingPeriod
+INVARIANT NoResurrection
+INVARIANT TraceNotConsumed
+CHECK_DEADLOCK FALSE
+''')
+        verdict, output = tlc.run(tlc.tlc_jar(), "Observed", "PurgeTrace", java, "1", "1g", models=work, timeout=60)
+        if verdict == "error":
+            raise Refused(tlc.excerpt(output))
+        return verdict
+
+
+def node(event, identity):
+    return next(n for n in event["vars"]["nodes"] if n["id"] == identity)
+
+
+def corruptions(logs):
+    bad = copy.deepcopy(logs["timely-restore"])
+    e = next(e for e in bad if e["action"] == "Stutter")
+    e["action"] = "Drop"
+    node(e, "c1")["present"] = False
+    yield "drop before adopting the sealer's restoring history", bad
+
+    bad = copy.deepcopy(logs["timely-restore"])
+    e = next(e for e in bad if e["action"] == "Seal" and e["vars"]["from"] == "c2")
+    node(e, "c2")["seal_restore"] = False
+    yield "seal omits its admitted restored reference", bad
+
+    bad = copy.deepcopy(logs["late-restore"])
+    e = next(e for e in bad if e["action"] == "SyncReports")
+    node(e, e["vars"]["to"])["reports"] = []
+    yield "received signed seal disappears", bad
+
+    bad = copy.deepcopy(logs["late-restore"])
+    e = next(e for e in bad if e["action"] == "Drop")
+    e["action"] = "Stutter"
+    yield "physical copy disappears without a permitted drop", bad
+
+    bad = copy.deepcopy(logs["late-restore"])
+    index = next(i for i, e in enumerate(bad) if e["action"] == "Restore")
+    e = copy.deepcopy(bad[index - 1])
+    e.update(action="Fetch", device="l1")
+    e["vars"].update({"from": "l1", "to": "c1"})
+    node(e, "c1")["present"] = True
+    bad.insert(index, e)
+    for i, e in enumerate(bad):
+        e["clock"] = i
+    yield "refetch of released history without a new reference", bad
+
+    bad = copy.deepcopy(logs["timely-cancel"])
+    e = next(e for e in bad if e["action"] == "SyncHistory" and node(e, "c2")["cancelled"])
+    node(e, "c2")["cancelled"] = False
+    yield "adopted history forgets cancellation", bad
+
+
+def verify(out, java):
+    paths = {p.parent.name: p for p in out.glob("*/trace.ndjson")}
+    if set(paths) != CASES:
+        raise Refused(f"required cases are {sorted(CASES)}, found {sorted(paths)}")
+    encoder = load("trace-to-tla")
+    logs = {case: [json.loads(line, object_pairs_hook=encoder.pairs) for line in p.read_text().splitlines()] for case, p in paths.items()}
+    for case, events in sorted(logs.items()):
+        verdict = check(events, java)
+        if verdict != "trace:accepted":
+            raise Refused(f"{case}: {verdict}")
+        print(f"ok   {case}: {len(events)} real-driver observations accepted", flush=True)
+    for label, bad in corruptions(logs):
+        verdict = check(bad, java)
+        if not verdict.startswith("trace:rejected:"):
+            raise Refused(f"mutant {label}: expected rejection, got {verdict}")
+        print(f"ok   rejected {label}", flush=True)
+    bad = copy.deepcopy(logs["late-restore"])
+    del bad[0]["vars"]["nodes"][0]["present"]
+    try:
+        check(bad, java)
+    except Refused:
+        print("ok   missing observations rejected", flush=True)
+    else:
+        raise Refused("missing presence was accepted")
+    return logs
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--out", type=Path)
+    parser.add_argument("--check-only", action="store_true")
+    parser.add_argument("--java", default=os.environ.get("JAVA", "java"))
+    args = parser.parse_args()
+    if args.check_only and args.out is None:
+        parser.error("--check-only requires --out")
+    with tempfile.TemporaryDirectory(prefix="pigeon-purge-traces-") as tmp:
+        out = args.out.resolve() if args.out else Path(tmp)
+        if not args.check_only:
+            # A fresh directory ensures old logs cannot mask a skipped test.
+            if out.exists() and any(out.iterdir()):
+                raise Refused("generation requires an empty output directory")
+            out.mkdir(parents=True, exist_ok=True)
+            env = dict(os.environ, PIGEON_PURGE_TRACE_DIR=str(out), PIGEON_REQUIRE_GIT_ANNEX="1")
+            subprocess.run(["cargo", "nextest", "run", "--locked", "-p", "pigeond", "--features",
+                            "pigeond/lab,pigeond/tla-trace,pigeon-core/tla-trace", "--test", "install",
+                            "-E", "test(purge_trace_)"], cwd=ROOT, env=env, check=True)
+        verify(out, args.java)
+        with tempfile.TemporaryDirectory(prefix="pigeon-purge-missing-") as missing:
+            for wanted in (set(), CASES - {"late-missing"}):
+                probe = Path(missing)
+                for case in wanted:
+                    (probe / case).mkdir()
+                    (probe / case / "trace.ndjson").write_text("")
+                try:
+                    verify(probe, args.java)
+                except Refused:
+                    print("ok   absent required run rejected", flush=True)
+                else:
+                    raise Refused("absent required run was accepted")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (Refused, ValueError, KeyError, TypeError) as error:
+        sys.exit(f"FAIL purge trace: {error}")

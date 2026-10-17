@@ -85,19 +85,20 @@ skip the configured month or claim physical purge completion.
 
 ## Remaining before release
 
-- Broader missing-restoration cases across retained suggestions and refounded
-  archive boundaries, complete cancellation/readiness recovery, and broader
-  interface usability tests.
-- Post-seal partition/restore/drop races and implementation traces. The
-  waiting-period live offline-return check below is complete.
-- Wider refounded archive and initial-preparation recovery conformance.
-- Initial upgrade contention: different concurrent requests may split
-  immutable choices and remain blocked. No retry may silently change a
-  vote. Explicit refounding creates a fresh authority domain; the finite
-  model and signed-history fixture below check this separation; actual
-  network partition recovery and broader implementation traces still need evidence.
-- Linux release validation and both platforms’ archive builds, followed by
-  publication; macOS tests supply periodic background evidence. This checkpoint supplies no longitudinal test claim.
+- Retake the erasure workflow through the current file manager and dialogs.
+- Integrate current main, finish Linux release validation and both platforms'
+  archive builds, then publish v0.6. macOS tests provide periodic background
+  evidence. No longitudinal test claim is made at this milestone.
+
+## Known limits of this evidence
+
+Initial preparation can wait indefinitely if competing requests split the
+participants' immutable choices. No retry silently changes a vote. Explicit
+refounding creates a fresh authority domain; finite models, signed-history
+fixtures, and the normal three-peer CLI recovery check cover that boundary.
+Arbitrary churn and full network-partition conformance remain broader
+verification work. The new Purge traces cover fixed membership, not every
+membership interleaving. Process-crash tests do not prove power-loss safety.
 
 ## Browser usability checkpoint
 
@@ -375,3 +376,82 @@ full workflow session. It makes no promise that an offline machine will
 retain bytes indefinitely, or that supplying a copy automatically retries
 the restore. The existing 18 language checks passed; wider recovery and
 trace evidence remains required before release.
+
+
+## Physical erasure interleavings checked against Purge
+
+Four native-driver fixtures now use one laptop and two real bare git-annex
+repositories, whose UUIDs are recorded before genesis. Signed rules-3
+preparation is fixture setup, using the existing verified report/witness
+readers; this does not claim a runtime consent negotiation. The production
+purge driver makes the seals and physical drops. Reports use the production
+builder and codec and are signed with the fixture keys. Explicit file-remote
+transfers control partitions and deliver signed histories separately from
+reports; they are not a three-host P2P test.
+
+The observed cases are a restore reaching an unsealed backup, cancellation
+reaching an unsealed backup, a late restore after both backup copies drop,
+and a late restore after all three annex copies drop. A report delivered
+before its restoring history cannot authorize a drop. The normal placement
+code does not fetch released history; a new signed reference permits the
+surviving laptop's exact binary bytes to return to both backups. When no
+annex copy remains, the new request survives reopening, placement does not
+invent contents, and the decider sees *Needs you* with a missing file.
+
+That last case initially exposed a status defect: the headline explained
+missing restored contents, but the row said “capturing” because the incoming
+main led the index. The pending scan excludes absent index-only lag while
+preserving actual private files, including staged saves. The regression
+checks the missing row and both private saves, all visible without modifying
+private bytes.
+
+`scripts/check-purge-traces` generates all four runs using nextest and
+checks their 58 snapshots against `PurgeTrace`, which uses the original
+`Purge` transition relation and all three safety invariants. Observations
+come from admitted main ancestry, actual authenticated report objects, and
+annex object presence with exact-byte checks. TLC derives time, causal and
+safety ghost state. Six semantic corruptions are rejected: dropping before
+adopting a sealer's history, omitting its restored reference, losing a
+received seal, an unexplained physical disappearance, refetching without a
+fresh reference, and forgetting cancellation. Missing fields, empty output
+and an absent required case are also rejected. Linux CI gates this check.
+
+Retention is explicitly zero days in these fixtures, testing order without
+pretending that a month elapsed. Receiver elapsed-time laws and crash tests
+remain separate evidence. These traces cover fixed membership; they do not
+prove arbitrary churn, initial-preparation liveness, power-loss durability,
+or every implementation interleaving.
+
+
+The same missing-content diagnostic now crosses a verified refounding
+archive. A new signed reference in the new authority domain can explain
+completed erasure in its old signed archive. The regression failed with
+only “too few backups” before the change and now raises the missing-content
+alert before and after reopening. Historical parent reasoning incorporates
+only archive roots verified for that authority domain's genesis; older
+parents cannot borrow future links. Removing the signed archive anchor
+suspends content and suppresses the cached erasure diagnosis. This changes
+status explanation only, never the release policy.
+
+
+The full workspace run exposed a moving-head preview race during initial
+preparation: the preview took one retention snapshot but archive traversal
+reread a later main, reporting an unverified archive when the two simply
+differed. Traversal now starts at the snapshot's immutable main. The final
+fresh-ref check still rejects a changed review as stale; no archive check
+or confirmation token was weakened.
+
+
+## Combined validation checkpoint
+
+The full workspace baseline ran 642 tests: 640 passed, two failed, and two
+existing tests were skipped. The failures were the moving-head preview
+race described above and the slice's obsolete expectation that erase was
+unimplemented. With those corrected, all 22 selected signed-history,
+physical-erasure and restore checks pass, including acceptance of a missing
+restoration suggestion and its decider-only alert before and after reopening.
+All 12 normal CLI/status/archive checks pass, including both prior failures,
+member/folder restoration and S2's free/keep/offline-return path. All four
+Purge traces and their rejection checks pass, as do 25 CI-selection checks.
+All-target Clippy, workflow lint and repository structural checks pass.
+These local results are not a substitute for current-main CI or publication.

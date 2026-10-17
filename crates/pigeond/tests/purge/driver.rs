@@ -6,7 +6,14 @@ use super::*;
 use pigeond::purge_file::{PurgeDoc, render};
 
 async fn pending() -> (World, String, String) {
+    pending_with_rule(None).await
+}
+
+async fn pending_with_rule(rule: Option<Rule>) -> (World, String, String) {
     let mut r = roster(1);
+    if let Some(rule) = rule {
+        r.folders[0].rule = rule;
+    }
     r.retention_days = 0;
     let mut w = world_with_roster(r).await;
     let head = purge_upgrade::upgrade(&w.g).await;
@@ -397,4 +404,62 @@ async fn a_retained_alias_before_the_seals_prevents_the_erased_restoration_diagn
             .as_ref()
             .is_none_or(|m| m.id != "why-erased-restoration-missing")
     }));
+}
+
+#[tokio::test]
+async fn accepting_a_missing_restoration_suggestion_alerts_its_decider() {
+    let (w, content, _) = pending_with_rule(Some(Rule::Owned(PersonId("ana".into())))).await;
+    complete(&w, &content).await;
+    let parent = w.g.git.rev("refs/heads/main").await.unwrap();
+    let mut tree = w.g.git.tree(&parent).await.unwrap();
+    tree.insert("Shared/a.txt".into(), w.base["Shared/a.txt"].clone());
+    let proposal = commit(&w.git, &tree, &[&parent], 2, 2).await;
+    w.git
+        .update_ref(
+            &pigeond::proposal::name(&dev(2).0, &proposal),
+            &proposal,
+            None,
+        )
+        .await
+        .unwrap();
+    pigeond::purge::prepare(&w.g).await;
+    pigeond::purge::round(&w.g, &dev(3).0, false).await;
+    assert!(!w.g.git.purge_gate.policy().released.contains(&content));
+    let pending = pigeond::decide::pending(&w.g).await.unwrap();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].id, proposal);
+    let adopted = merge::adopt(&w.g, &parent, &proposal, None)
+        .await
+        .unwrap()
+        .unwrap();
+    w.g.git
+        .update_ref("refs/heads/main", &adopted, Some(&parent))
+        .await
+        .unwrap();
+    for restart in [false, true] {
+        let reopened;
+        let g = if restart {
+            reopened = Group::open(&w.genesis, &w.g.git_dir, &GitEnv::default())
+                .await
+                .unwrap();
+            &reopened
+        } else {
+            &w.g
+        };
+        pigeond::purge::prepare(g).await;
+        pigeond::purge::round(g, &dev(3).0, false).await;
+        assert!(!g.git.purge_gate.policy().released.contains(&content));
+        let report = pigeond::status::report(g, &dev(3).0, "", false).await;
+        assert_eq!(report.level, pigeon_proto::api::Level::NeedsYou);
+        assert_eq!(report.headline.id, "headline-erased-restoration-missing");
+        assert!(report.versions.iter().any(|v| {
+            v.path == "Shared/a.txt"
+                && v.state == pigeon_proto::api::State::Missing
+                && v.reason
+                    .as_ref()
+                    .is_some_and(|m| m.id == "why-erased-restoration-missing")
+        }));
+        let member = pigeond::status::report(g, &dev(2).0, "", false).await;
+        assert_ne!(member.level, pigeon_proto::api::Level::NeedsYou);
+    }
 }

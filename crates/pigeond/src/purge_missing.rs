@@ -20,6 +20,7 @@ pub(crate) async fn renewed(
     index: &Index,
     view: &View<'_, String, String, String>,
     active: &BTreeMap<String, Active>,
+    archive_roots: &BTreeMap<String, String>,
 ) -> BTreeSet<String> {
     if view.current.is_empty() || view.decisions.is_empty() {
         return BTreeSet::new();
@@ -43,6 +44,11 @@ pub(crate) async fn renewed(
         .iter()
         .filter(|r| view.decisions.values().any(|d| d.covers(r, &contains)))
         .filter_map(|r| hash(&r.key))
+        .collect();
+    let archive_ancestry: BTreeSet<_> = archive_roots
+        .values()
+        .filter_map(|root| index.ancestors(root))
+        .flatten()
         .collect();
     let mut renewed_hashes = BTreeSet::new();
     let mut checked = BTreeSet::new();
@@ -75,9 +81,15 @@ pub(crate) async fn renewed(
             .cloned()
             .collect();
         for parent in parents {
-            let Some(parent_ancestors) = index.ancestors(parent) else {
+            let Some(mut parent_ancestors) = index.ancestors(parent) else {
                 continue;
             };
+            // Verified signed links are part of this authority domain's
+            // genesis. A parent in that domain already observed them;
+            // parents from older domains cannot borrow future archives.
+            if parent_ancestors.contains(&g.id) {
+                parent_ancestors.extend(archive_ancestry.iter().cloned());
+            }
             let earlier_contains = |tip: &String, ancestor: &String| {
                 if tip == parent {
                     parent_ancestors.contains(ancestor)

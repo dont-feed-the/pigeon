@@ -89,7 +89,7 @@ pub async fn plan(g: &Group, me: &str, selection: &Selection) -> Result<Plan, Er
     let (paths, proposals, history, bases) = match selection {
         Selection::Path(path) => {
             let rel = relative(g, path)?;
-            let verified = crate::history::tips(g).await;
+            let verified = crate::history::tips_at(g, main).await;
             let named: BTreeSet<_> = reading
                 .named
                 .iter()

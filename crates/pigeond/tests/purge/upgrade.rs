@@ -119,6 +119,9 @@ pub async fn upgrade(g: &Group) -> String {
         .await
         .unwrap();
     assert!(g.lock().engine.accepted(&upgraded));
+    pigeond::admission_proofs::retain(g, &witness)
+        .await
+        .unwrap();
     g.git
         .update_ref("refs/heads/main", &upgraded, Some(&parent))
         .await

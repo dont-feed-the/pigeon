@@ -212,6 +212,15 @@ What carries each guarantee today; gaps are GitHub issues
 | P5 Convergence | E3 (printing); `models/catalogue`, `Catalogue` | merges by `pigeond`; the scenarios of two people and three laptops (M2); renames in `Catalogue` traces (ADR 0072) | renames with a large edit, or of files beyond 1 MiB, are a deletion and an add (ADR 0072) |
 | P6 Honest status | E20, E21 (asserting) | observation laws; usability test | — |
 
+M5 also gates `scripts/check-purge-traces` in Linux CI. Four fixed-membership
+native-driver runs observe actual signed histories, authenticated seals and
+physical annex objects across controlled file-remote partitions. `PurgeTrace`
+uses the original `Purge` actions and safety invariants; corrupt causal and
+physical observations and missing required runs are rejected. The zero-day
+fixture checks ordering, with durable receiver-wait laws checked separately.
+This supplements the slice ledger; it does not establish arbitrary membership
+churn, power loss, or that a real month elapsed.
+
 ## 13.11 Going on: technical and human criteria
 
 **Go** for v1 if all hold (on the platforms of ADR 0005): no

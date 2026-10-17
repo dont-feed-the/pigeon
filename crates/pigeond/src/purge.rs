@@ -221,6 +221,7 @@ async fn evaluate(g: &Group, me: &str, allow_drop: bool) -> Result<(), crate::gi
         seals: &proofs,
         epochs: &epochs,
     };
+    let archive_roots = archives.anchors.clone();
     let mut own: BTreeMap<String, crate::report_file::Purge> =
         crate::purge_proofs::own(&proofs, me)
             .into_iter()
@@ -283,7 +284,8 @@ async fn evaluate(g: &Group, me: &str, allow_drop: bool) -> Result<(), crate::gi
         .into_values()
         .filter(|seal| active.contains_key(&seal.decision) && !epochs.contains_key(&seal.decision))
         .collect();
-    let renewed = crate::purge_missing::renewed(g, &state.index, &view, &all_active).await;
+    let renewed =
+        crate::purge_missing::renewed(g, &state.index, &view, &all_active, &archive_roots).await;
     let released = view.released(contains);
     let after = crate::retention::snapshot(g).await?;
     if after.named != reading.named
