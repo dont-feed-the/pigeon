@@ -633,3 +633,13 @@ environment without adding a dependency.
 Final source, including the pressure diagnostics, passes all-target workspace
 Clippy with the lab, trace and console features and the repository structural,
 ADR-index and spec-reference checks. Exact-head CI still precedes merging.
+
+## Priority checkpoint merge validation
+
+Final source `9c862267f64ea63e04f5d6a1c3d0523e7f9cf4a2` passed exact-head CI 39063348430,
+lab selection 39063348426 and bridge 39063348409. Local 771-check
+workspace evidence precedes the diagnostics-only addition; native S2/S3 and
+final all-target Clippy include it. The three 1000-case priority laws, twelve
+focused controller/process/QUIC checks, original failing fixtures and accepted
+English/French simulated wording retakes remain distinct evidence. Main cache
+producers saved before tagging. No elapsed or measured M6/M7 gate is inferred.
