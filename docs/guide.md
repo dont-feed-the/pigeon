@@ -233,8 +233,10 @@ To add another computer of yours, run the line there and give your own
 name, as `pigeon people` lists it: pigeon asks whether this computer is
 yours, and adds it to you rather than to a new person.
 
-**3. Add a backup machine.** Any computer that stays on will do: an old
-laptop, a mini PC, a server. Run the line there with `--backup-machine` at
+**3. Add a backup machine.** Use a Linux computer with systemd that stays
+on: an old laptop, a mini PC, a server. A Mac can share files as a regular
+computer by joining without `--backup-machine`. Run the line on the Linux
+backup machine with `--backup-machine` at
 its end, and give the name of the person it belongs to. On a Linux server,
 `loginctl enable-linger $USER` keeps `pigeond` running when nobody is
 logged in.

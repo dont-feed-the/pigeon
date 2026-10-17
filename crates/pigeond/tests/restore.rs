@@ -61,6 +61,23 @@ fn a_time_between_two_saves_restores_the_first() {
             .any(|r| matches!(r, Response::Problem(x) if x.code == "restore-at")),
         "{early:?}"
     );
+    // Invalid future dates must be refused rather than normalized and used
+    // to select the latest saved version. Refusal preserves current bytes.
+    for invalid in [
+        "2099-02-30T00:00:00Z",
+        "2099-04-31T00:00:00Z",
+        "2099-01-01T00:00:00+24:00",
+        "2099-01-01T00:00:00+00:60",
+    ] {
+        let refused = pigeon(&a1, &["restore", p, "--at", invalid]);
+        assert!(
+            refused
+                .iter()
+                .any(|r| matches!(r, Response::Problem(x) if x.code == "restore-at")),
+            "{invalid}: {refused:?}"
+        );
+        assert_eq!(std::fs::read(&file).unwrap(), b"two\n");
+    }
     let back = pigeon(&a1, &["restore", p, "--at", &between]);
     assert!(said(&back, "restore-result", "path").is_some(), "{back:?}");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "one\n");

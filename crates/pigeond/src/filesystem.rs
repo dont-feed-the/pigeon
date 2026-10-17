@@ -8,10 +8,6 @@ use std::path::Path;
 
 /// Refuse unsupported or unreadable native filesystem identities.
 pub(crate) fn check(path: &Path, role: Role) -> Result<(), &'static str> {
-    let volume = pigeon_sys::volume::inspect(path).map_err(|error| {
-        tracing::warn!(path = %path.display(), %error, "filesystem-unreadable");
-        "file-system-unknown"
-    })?;
     let platform = if cfg!(target_os = "linux") {
         Platform::Linux
     } else if cfg!(target_vendor = "apple") {
@@ -19,6 +15,13 @@ pub(crate) fn check(path: &Path, role: Role) -> Result<(), &'static str> {
     } else {
         Platform::Other
     };
+    if let Some(code) = role_problem(platform, role, cfg!(feature = "lab")) {
+        return Err(code);
+    }
+    let volume = pigeon_sys::volume::inspect(path).map_err(|error| {
+        tracing::warn!(path = %path.display(), %error, "filesystem-unreadable");
+        "file-system-unknown"
+    })?;
     if supported(platform, role, &volume.name, volume.local) {
         return Ok(());
     }
@@ -41,10 +44,31 @@ pub(crate) fn check(path: &Path, role: Role) -> Result<(), &'static str> {
     Err("file-system-unsupported")
 }
 
-#[cfg(all(test, target_os = "linux"))]
+fn role_problem(platform: Platform, role: Role, lab: bool) -> Option<&'static str> {
+    (role == Role::Custodian && platform != Platform::Linux && !(lab && platform == Platform::Mac))
+        .then_some("backup-machine-needs-linux")
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
+    #[test]
+    fn unsupported_backup_roles_get_the_linux_requirement_and_lab_simulation_stays_explicit() {
+        assert_eq!(
+            role_problem(Platform::Mac, Role::Custodian, false),
+            Some("backup-machine-needs-linux")
+        );
+        assert_eq!(
+            role_problem(Platform::Other, Role::Custodian, true),
+            Some("backup-machine-needs-linux")
+        );
+        assert_eq!(role_problem(Platform::Linux, Role::Custodian, false), None);
+        assert_eq!(role_problem(Platform::Mac, Role::Custodian, true), None);
+        assert_eq!(role_problem(Platform::Mac, Role::Laptop, false), None);
+    }
+
+    #[cfg(target_os = "linux")]
     #[test]
     fn unsupported_native_volume_is_refused_before_any_target_is_created() {
         let path = Path::new("/proc/pigeon-filesystem-preflight/nested");

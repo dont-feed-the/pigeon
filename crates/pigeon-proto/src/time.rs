@@ -67,6 +67,10 @@ pub fn parse_rfc3339(text: &str) -> Option<i64> {
     if !(1..=12).contains(&mo) || !(1..=31).contains(&d) || h > 23 || mi > 59 || s > 60 {
         return None;
     }
+    let days = days_from_civil(y, mo, d);
+    if civil(days) != (y, mo, d) {
+        return None;
+    }
     let offset = match text.get(19..)? {
         "Z" | "z" => 0,
         o if o.len() == 6 && o.get(3..4)? == ":" => {
@@ -75,11 +79,14 @@ pub fn parse_rfc3339(text: &str) -> Option<i64> {
                 "-" => -1,
                 _ => return None,
             };
-            let oh: i64 = o.get(1..3)?.parse().ok()?;
-            let om: i64 = o.get(4..6)?.parse().ok()?;
+            let oh = num(20, 22)?;
+            let om = num(23, 25)?;
+            if oh > 23 || om > 59 {
+                return None;
+            }
             sign * (oh * 3600 + om * 60)
         }
         _ => return None,
     };
-    Some(days_from_civil(y, mo, d) * 86_400 + h * 3600 + mi * 60 + s - offset)
+    Some(days * 86_400 + h * 3600 + mi * 60 + s - offset)
 }
