@@ -3,7 +3,52 @@
 //! lose capture's floor, accumulate unbounded bursts or invent past credit.
 
 use hegel::{TestCase, generators as gs};
-use pigeon_core::resources::{self, ActiveClock, Bucket, Conditions, Disk, Permit, Preset, Wait};
+use pigeon_core::resources::{
+    self, ActiveClock, Bucket, Conditions, Delay, Disk, Permit, Preset, Wait,
+};
+
+#[hegel::test(test_cases = 1000)]
+fn propagation_on_different_paths_cannot_manufacture_queue_delay(tc: TestCase) {
+    let near = tc.draw(gs::integers::<u64>().max_value(100));
+    let far = tc.draw(gs::integers::<u64>().min_value(101).max_value(10_000));
+    let queue = tc.draw(gs::integers::<u64>().max_value(10_000));
+    let mut lan = Delay::default();
+    let mut wan = Delay::default();
+    assert_eq!(lan.observe(0, near), 0);
+    assert_eq!(wan.observe(200, far), 0);
+    assert_eq!(lan.observe(400, near), 0);
+    assert_eq!(wan.observe(400, far + queue), queue);
+    assert_eq!(lan.observe(600, near), 0);
+}
+
+#[hegel::test(test_cases = 1000)]
+fn base_delay_expires_after_ten_minutes_including_the_boundary(tc: TestCase) {
+    let base = tc.draw(gs::integers::<u64>().max_value(100_000));
+    let queue = tc.draw(gs::integers::<u64>().min_value(1).max_value(100_000));
+    let mut delay = Delay::default();
+    assert_eq!(delay.observe(0, base), 0);
+    assert_eq!(delay.observe(600_000, base + queue), queue);
+    assert_eq!(delay.observe(600_001, base + queue), 0);
+}
+
+#[hegel::test(test_cases = 1000)]
+fn path_delay_matches_the_minimum_of_actual_recent_observations(tc: TestCase) {
+    let readings = tc.draw(gs::vecs(gs::integers::<u64>()).max_size(80));
+    let step = tc.draw(gs::integers::<u64>().max_value(700_000));
+    let mut delay = Delay::default();
+    let mut history = Vec::new();
+    for (i, rtt) in readings.into_iter().enumerate() {
+        let now = i as u64 * step;
+        history.push((now, rtt));
+        let minimum = history
+            .iter()
+            .filter(|(at, _)| now - at <= 600_000)
+            .map(|(_, value)| *value)
+            .min()
+            .unwrap_or(rtt);
+        assert_eq!(delay.observe(now, rtt), rtt - minimum);
+    }
+}
 
 #[hegel::test(test_cases = 1000)]
 fn quiet_time_is_monotone_and_bounded_for_every_file_size(tc: TestCase) {

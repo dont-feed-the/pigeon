@@ -27,6 +27,15 @@ def run(tag, number=1, **changes):
 
 
 class PublicationKPI(unittest.TestCase):
+    def test_completed_candidate_duration_stops_while_publication_age_keeps_growing(self):
+        report = MODULE.build_report([release()], [run("v0.3.6")], NOW)
+        candidate = report["latest_candidate"]
+        self.assertEqual(candidate["elapsed_seconds"], 13006)
+        self.assertGreater(candidate["age_seconds"], candidate["elapsed_seconds"])
+        self.assertIn("success, elapsed 3h 36m", MODULE.markdown(report))
+        running = MODULE.build_report([], [run("v0.3.6", status="in_progress", conclusion=None)], NOW)
+        self.assertEqual(running["latest_candidate"]["elapsed_seconds"], candidate["age_seconds"])
+
     def test_completed_gap_miss_survives_the_new_publication_resetting_the_clock(self):
         published = [release("v0.5.9", "2026-10-16T10:00:00Z"),
                      release("v0.5.12", "2026-10-16T13:00:00Z"),

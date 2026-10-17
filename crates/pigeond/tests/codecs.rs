@@ -17,6 +17,28 @@ use pigeon_proto::join::{Admitter, INVITATION_VERSION, Invitation, decode, encod
 use pigeond::roster_file::{RosterDoc, parse, render};
 use pigeond::util::{date, hex, hmac_sha256, parse_rfc3339, rfc3339, unhex};
 
+#[test]
+fn absent_paths_resolve_outer_aliases_without_reinterpreting_invalid_parents() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("files");
+    std::fs::create_dir(&root).unwrap();
+    let root = std::fs::canonicalize(root).unwrap();
+    let alias = temp.path().join("alias");
+    std::os::unix::fs::symlink(&root, &alias).unwrap();
+    let resolve = pigeond::util::canonicalize_missing;
+    assert_eq!(resolve(&alias).unwrap(), root);
+    assert_eq!(
+        resolve(&alias.join("absent/nested.txt")).unwrap(),
+        root.join("absent/nested.txt")
+    );
+    std::fs::write(root.join("file"), b"exact").unwrap();
+    assert_eq!(resolve(&alias.join("file")).unwrap(), root.join("file"));
+    assert!(resolve(&alias.join("file/nested")).is_err());
+    assert!(resolve(&alias.join("absent/../file")).is_err());
+    std::os::unix::fs::symlink(root.join("absent"), root.join("dangling")).unwrap();
+    assert!(resolve(&alias.join("dangling/nested")).is_err());
+}
+
 /// Law *hex*: bytes round-trip through their lower-case hex.
 #[hegel::test(test_cases = 1000)]
 fn hex_round_trips(tc: TestCase) {

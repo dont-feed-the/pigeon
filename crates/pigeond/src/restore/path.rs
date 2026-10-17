@@ -7,7 +7,12 @@ use std::path::{Component, Path};
 pub(crate) fn relative(g: &Group, path: &Path) -> Option<String> {
     let root = g.worktree.as_ref()?;
     let path = std::path::absolute(path).ok()?;
-    let rel = path.strip_prefix(root).ok()?;
+    // Resolve aliases of the worktree itself (/tmp on macOS), retaining
+    // every component below it so parents_clear still rejects links there.
+    let alias = path
+        .ancestors()
+        .find(|ancestor| std::fs::canonicalize(ancestor).is_ok_and(|resolved| resolved == *root))?;
+    let rel = path.strip_prefix(alias).ok()?;
     let parts: Option<Vec<_>> = rel
         .components()
         .map(|part| match part {

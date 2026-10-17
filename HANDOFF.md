@@ -1,5 +1,30 @@
 # pigeon v2: handoff
 
+## Continuation on 17 October 2026
+
+The historical snapshot below is retained for context. The user has since
+authorized the whole roadmap through v1.1, pushes, green non-draft PR merges,
+and publication. M0–M5 are released; the latest verified publication is
+[v0.6.1](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.1), source
+`be2e4ffa3be8e651becf711842f460a0ff15aac2`. The failed v0.6.0 tag remains
+immutable and unpublished. See [M5 evidence](docs/reports/deletion-6.md).
+
+M6 is in progress; [its report](docs/reports/resources-7.md) distinguishes
+implemented controllers and settings from outstanding native scheduling,
+filesystem checks and measured reference/HDD budgets. M7 still needs its
+real elapsed gates and the open seed-104 Authority trace refinement recorded
+in [the trace report](docs/reports/authority-trace-7.md). Finite fixtures do
+not establish elapsed nights, soak, dogfood or a month.
+
+The user accepts agent usability sessions and considers prior dogfood done.
+Declined suggestions require explicit erasure. GitHub Teams permits 60
+concurrent runners; roll up validation and cancel obsolete runs. macOS tests
+are periodic background evidence; both platform archives and all required
+Linux gates still precede publication. Track actual asset-bearing releases
+using [the publication KPI](docs/release-kpi.md), not tags.
+
+## Historical snapshot
+
 State on 2026-10-16 at 01:00 CEST. Repository: `dont-feed-the/pigeon`, branch
 `main` at `74d55da`.
 

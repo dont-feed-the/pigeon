@@ -14,7 +14,7 @@ supplied monotonic input. Manual ceilings win over automatic rate floors;
 backwards clocks and rate changes cannot manufacture past credit. Oversize
 reservations are refused for splitting rather than silently undercharged.
 
-Eleven hegel laws run 1000 cases each, including extreme integer clock/rate
+Fourteen hegel laws run 1000 cases each, including extreme integer clock/rate
 ranges. The active-time clock separately proves that arbitrary pauses spend no
 operation budget, backwards clocks refund nothing, and splitting an active
 interval changes no charge. Native child deadlines are not wired to that
@@ -44,6 +44,8 @@ Authenticated selected QUIC paths provide smoothed RTT and a cwnd/RTT
 capacity estimate. The controller updates every 200 ms, with a ten-minute
 minimum baseline, bounded 64 KiB reservations and explicit ceilings even
 inside full-speed windows. Control/history frames do not reserve tokens.
+Each connection/path/address keeps its own rolling minimum; adding a distant
+peer cannot turn its propagation time into congestion on a local path.
 Queued content rechecks the existing erasure/admission filter at most every
 200 ms and immediately before forwarding. No new authorization rule or
 positive custody proof is introduced.
@@ -79,6 +81,21 @@ without replacing Missing or Needs you; Resume remains a person's pause.
 
 No 10-minute budget, 30-minute HDD run, 72-hour soak, seven-night result or
 two-week dogfood result is inferred from these finite tests.
+
+## Periodic macOS failures
+
+The v0.6.0 periodic run found a missing-file history lookup through macOS's
+`/tmp` alias. A Linux symlink fixture reproduced the same `not-in-group`
+response before the fix. Group lookup now resolves existing ancestors of
+missing paths; shared-path validation resolves an alias of the worktree
+while retaining and checking every component below it. Dangling links,
+non-directories and ambiguous missing `..` paths are refused. The native
+migration/history regression and folder-restore checks pass locally.
+
+The Linux-only scrub fixture's entire module is now conditional, avoiding
+unused imports under macOS Clippy. The separate periodic mass-deletion
+protection timeout is still open; neither change establishes a passing
+macOS runtime suite.
 
 
 ## Independent settings usability

@@ -2,16 +2,24 @@
 //! frames never reserve tokens. Waiting reserves no future credit and
 //! callers re-check their content authority before and after every wait.
 
-use std::collections::VecDeque;
+use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use pigeon_core::resources::{self, Bucket, Conditions, Disk, Permit, Wait};
+use pigeon_core::resources::{self, Bucket, Conditions, Delay, Disk, Permit, Wait};
 
 use crate::resource_config::Effective;
 
 /// Maximum payload reservation; long DATA frames are split at this boundary.
 pub const CHUNK: usize = 65_536;
+
+/// An authenticated selected path, scoped to its connection and address.
+#[derive(Debug)]
+pub(crate) struct PathSample {
+    pub id: (usize, String),
+    pub rtt_ms: u64,
+    pub capacity: u64,
+}
 
 /// Content direction relative to this computer, independent of initiator.
 #[derive(Clone, Copy, Debug)]
@@ -27,7 +35,7 @@ struct State {
     settings: Effective,
     conditions: Conditions,
     disk: Disk,
-    samples: VecDeque<(u64, u64)>,
+    samples: BTreeMap<(usize, String), (u64, Delay)>,
     rate: [u64; 2],
     buckets: [Bucket; 2],
     last_tick: u64,
@@ -63,7 +71,7 @@ impl Controller {
                 settings,
                 conditions: Conditions::default(),
                 disk: Disk::default(),
-                samples: VecDeque::new(),
+                samples: BTreeMap::new(),
                 rate: [16_384; 2],
                 buckets: [Bucket::new(0, CHUNK as u64, 16_384); 2],
                 last_tick: 0,
@@ -126,29 +134,23 @@ impl Controller {
 
     /// Update delay feedback at most once per 200 ms, with a rolling ten
     /// minute minimum. Capacity is a selected QUIC path's cwnd/RTT estimate.
-    pub fn tick(&self, rtt_ms: u64, capacity: u64, minute: u16) {
+    pub(crate) fn tick(&self, paths: Vec<PathSample>, minute: u16) {
         let now = self.now();
         let mut s = self.lock();
         if now.saturating_sub(s.last_tick) < 200 {
             return;
         }
         s.last_tick = now;
-        if capacity > 0 {
-            s.samples.push_back((now, rtt_ms));
+        s.samples
+            .retain(|_, (at, _)| now.saturating_sub(*at) <= 600_000);
+        let mut delay = 0;
+        let mut capacity: u64 = 0;
+        for path in paths.into_iter().filter(|p| p.capacity > 0) {
+            let (at, baseline) = s.samples.entry(path.id).or_default();
+            *at = now;
+            delay = delay.max(baseline.observe(now, path.rtt_ms));
+            capacity = capacity.saturating_add(path.capacity);
         }
-        while s
-            .samples
-            .front()
-            .is_some_and(|(at, _)| now.saturating_sub(*at) > 600_000)
-        {
-            s.samples.pop_front();
-        }
-        let base = s
-            .samples
-            .iter()
-            .map(|(_, rtt)| *rtt)
-            .min()
-            .unwrap_or(rtt_ms);
         let target = if s.settings.full_speed.iter().any(|w| w.contains(minute)) {
             None
         } else {
@@ -158,14 +160,7 @@ impl Controller {
             .into_iter()
             .enumerate()
         {
-            s.rate[i] = resources::rate(
-                s.rate[i],
-                capacity,
-                rtt_ms.saturating_sub(base),
-                target,
-                1,
-                ceiling,
-            );
+            s.rate[i] = resources::rate(s.rate[i], capacity, delay, target, 1, ceiling);
         }
     }
 
@@ -243,8 +238,9 @@ pub async fn run(d: std::sync::Arc<crate::daemon::Daemon>) {
         let now = crate::util::now();
         let offset = i64::from(pigeon_sys::clock::local_offset_minutes(now)) * 60;
         let minute = (i128::from(now) + i128::from(offset)).rem_euclid(86_400) / 60;
-        let (delay, capacity) = d.node.resource_sample();
-        d.node.resources.tick(delay, capacity, minute as u16);
+        d.node
+            .resources
+            .tick(d.node.resource_sample(), minute as u16);
     }
 }
 

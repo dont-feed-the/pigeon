@@ -72,7 +72,7 @@ impl Daemon {
 
     /// The group whose folder or repository holds `path`.
     pub fn group_at(&self, path: &Path) -> Option<Arc<Group>> {
-        let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        let path = crate::util::canonicalize_missing(path).ok()?;
         self.groups().into_iter().find(|g| {
             path.starts_with(&g.git_dir) || g.worktree.as_ref().is_some_and(|w| path.starts_with(w))
         })

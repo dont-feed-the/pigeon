@@ -361,22 +361,27 @@ impl Node {
         observed.insert(connection.remote_id(), connection.clone());
     }
 
-    /// The greatest selected-path queue delay and aggregate capacity estimate.
+    /// Selected-path RTTs and capacity estimates, with independent identities.
     /// No path means a conservative initial rate, not a guessed fast link.
-    pub(crate) fn resource_sample(&self) -> (u64, u64) {
+    pub(crate) fn resource_sample(&self) -> Vec<crate::resource_control::PathSample> {
         let mut observed = self.observed.lock().unwrap_or_else(|p| p.into_inner());
         observed.retain(|_, c| c.close_reason().is_none());
-        let mut delay = 0;
-        let mut capacity: u64 = 0;
+        let mut samples = Vec::new();
         for connection in observed.values() {
             for path in connection.paths().iter().filter(|p| p.is_selected()) {
                 let stats = path.stats();
                 let ms = stats.rtt.as_millis().min(u128::from(u64::MAX)) as u64;
-                delay = delay.max(ms);
-                capacity = capacity.saturating_add(stats.cwnd.saturating_mul(1000) / ms.max(1));
+                samples.push(crate::resource_control::PathSample {
+                    id: (
+                        connection.stable_id(),
+                        format!("{:?}:{:?}", path.id(), path.remote_addr()),
+                    ),
+                    rtt_ms: ms,
+                    capacity: stats.cwnd.saturating_mul(1000) / ms.max(1),
+                });
             }
         }
-        (delay, capacity)
+        samples
     }
 
     /// This device's ID.

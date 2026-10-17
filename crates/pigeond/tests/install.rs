@@ -577,6 +577,7 @@ mod tracing;
 #[path = "purge/content.rs"]
 mod purge_content;
 
+#[cfg(target_os = "linux")]
 #[path = "purge/scrub.rs"]
 mod scrub_content;
 

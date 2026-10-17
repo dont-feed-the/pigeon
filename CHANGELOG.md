@@ -18,6 +18,13 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- History and saved copies of absent files work when the shared folder's
+  location uses a path alias, including `/tmp` on macOS.
+
+## 0.6.1 — 2026-10-17
+
+### Fixed
+
 - `pigeon doctor` continues through backup integrity-check observations to
   report problems such as unavailable capacity or a refused signing key.
 - A computer still in a group whose roster predates the supported format

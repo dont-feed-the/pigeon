@@ -186,6 +186,31 @@ This is a targeted change to a measured serial step, not a measured speedup
 claim. The next actual publication will supply the before/after observation.
 The failed v0.6.0 candidate and the interruption remain in the KPI history.
 
+## v0.6.1 observation
+
+[v0.6.1](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.1)
+published at 09:07:42 UTC on 17 October with all six assets. Archive
+checksums, asset digests, the native Linux installer, completions, pinned
+annex and public latest redirect were verified. Candidate lead time was
+**15 minutes 49 seconds**, meeting the one-hour target. The interval from
+v0.5.16 was **7 hours 19 minutes 20 seconds**, missing the two-hour target;
+the failed v0.6.0 candidate and interruption remain visible. The two-day
+collection has ten lead-time samples and nine completed intervals, still
+insufficient for a reliable percentile.
+
+All five Linux slice partitions and both random crash shards passed.
+Their total job durations, including setup/build/trace checking, were
+10m24s (core), 9m06s (crashes), 9m38s (recovery), 8m18s (people) and 6m55s
+(S5). Random shard 1 was the final release gate at 09:07:27; publication
+followed 15 seconds later. These measurements show the new partitions
+completed independently; differing histories and runner conditions prevent
+attributing the whole candidate improvement to partitioning.
+
+Completed workflow elapsed time now stops at completion. Its separate
+candidate age and the actual publication gap continue to grow. Previously
+the readable report mislabeled a completed candidate's growing age as its
+elapsed execution, even though its publication lead-time measure was right.
+
 
 ## Bridge integration baseline: 17 October
 

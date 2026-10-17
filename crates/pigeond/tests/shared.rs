@@ -201,6 +201,33 @@ fn existing_peer_migrates_and_hiding_recovers_before_capture() {
     );
     assert!(!files.join("one.txt").exists());
     assert!(!files.join("two").exists());
+    // macOS /tmp is itself an alias of /private/tmp. Reproduce that
+    // spelling difference on every Unix runner, including a missing parent.
+    let alias = temp.path().join("files-alias");
+    std::os::unix::fs::symlink(&files, &alias).unwrap();
+    let alias_history = call(
+        &peer,
+        Request::History {
+            path: alias.join("two/file.txt").display().to_string(),
+        },
+    );
+    assert!(
+        matches!(&alias_history, Response::History { versions } if versions.len() == 1),
+        "{alias_history:?}"
+    );
+    // An alias inside the worktree must still be refused, even when its
+    // target is another in-group folder with retained history.
+    std::os::unix::fs::symlink(files.join("two"), files.join("shortcut")).unwrap();
+    assert!(matches!(
+        call(
+            &peer,
+            Request::History {
+                path: alias.join("shortcut/file.txt").display().to_string(),
+            }
+        ),
+        Response::Problem(_)
+    ));
+    std::fs::remove_file(files.join("shortcut")).unwrap();
     let nested = files.join("two/file.txt").display().to_string();
     assert!(
         matches!(call(&peer, Request::History { path: nested.clone() }), Response::History { versions } if versions.len() == 1)

@@ -3,6 +3,35 @@
 //! work. Capture retains a progress floor under contention; control traffic
 //! never uses the content limiter. Laws live in `tests/resources.rs`.
 
+/// A single QUIC path's rolling base RTT. Paths keep separate baselines:
+/// joining a distant peer must not turn propagation into queuing delay.
+#[derive(Clone, Debug, Default)]
+pub struct Delay {
+    minima: std::collections::VecDeque<(u64, u64)>,
+    last: u64,
+}
+
+impl Delay {
+    /// Observe smoothed RTT at monotonic milliseconds and return its delay
+    /// above this path's minimum over the inclusive last ten minutes.
+    pub fn observe(&mut self, now: u64, rtt_ms: u64) -> u64 {
+        let now = now.max(self.last);
+        self.last = now;
+        while self
+            .minima
+            .front()
+            .is_some_and(|(at, _)| now - at > 600_000)
+        {
+            self.minima.pop_front();
+        }
+        while self.minima.back().is_some_and(|(_, rtt)| *rtt >= rtt_ms) {
+            self.minima.pop_back();
+        }
+        self.minima.push_back((now, rtt_ms));
+        rtt_ms.saturating_sub(self.minima.front().map_or(rtt_ms, |(_, rtt)| *rtt))
+    }
+}
+
 /// The locally chosen preset; explicit settings override these defaults.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Preset {
