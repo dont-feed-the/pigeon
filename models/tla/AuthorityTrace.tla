@@ -21,6 +21,14 @@ CONSTANT TraceLog
 VARIABLE l
 
 ToSet(s) == {s[i] : i \in DOMAIN s}
+ConcretePaths == {"F/f", "r"} \cup UNION {
+                  {TraceLog[i].vars.tree[j].path : j \in DOMAIN TraceLog[i].vars.tree} :
+                  i \in DOMAIN TraceLog}
+ConcreteFolders == {q \in ConcretePaths : Len(q) >= 2 /\ SubSeq(q, 1, 2) = "F/"}
+ConcreteTree(rows) == [q \in CPaths |->
+                       IF \E j \in DOMAIN rows : rows[j].path = q
+                       THEN {(CHOOSE row \in ToSet(rows) : row.path = q).version}
+                       ELSE {}]
 Ev == TraceLog[l]
 
 TraceInit == Init /\ l = 1
@@ -29,9 +37,10 @@ TraceNext == /\ l <= Len(TraceLog)
              /\ Ev.action = "Judge"
              /\ LET e == Ev.vars
                     c == New(ToSet(e.parents), e.signer, "traced",
-                             [q \in CPaths |-> ToSet(e.tree[q])], ToSet(e.dec),
+                             ConcreteTree(e.tree), ToSet(e.dec),
                              ToSet(e.redits), e.force, e.cbase)
                 IN /\ ToSet(e.parents) \subseteq Ids
+                   /\ Cardinality({e.tree[j].path : j \in DOMAIN e.tree}) = Len(e.tree)
                    /\ e.cbase \in ToSet(e.parents) /\ cm[e.cbase].acc
                    /\ c.acc = e.acc
                    /\ cm' = Append(cm, c)

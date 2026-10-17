@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check runs of pigeon's own code against the TLA+ models (ADR 0008, 13 §13.3).
 
-`cargo test` writes NDJSON traces of pigeon-core's simulated runs (feature
+`cargo nextest` writes NDJSON traces of pigeon-core's simulated runs (feature
 `tla-trace`); each becomes a TLA+ module through scripts/trace-to-tla, and TLC
 checks it with its *Trace.tla specification: every run must be accepted. A
 mutant of each run (a logged roster changed, a decision or verdict reversed, a
@@ -87,7 +87,7 @@ SPECS = [("RosterTrace", "roster_trace", "roster", ("RosterCodeLog", "CodeLog"),
 
 def traces(target, seeds, out):
     env = dict(os.environ, PIGEON_TRACE_DIR=str(out), PIGEON_TRACE_SEEDS=str(seeds))
-    subprocess.run(["cargo", "test", "--locked", "-q", "-p", "pigeon-core", "--features", "tla-trace",
+    subprocess.run(["cargo", "nextest", "run", "--locked", "-p", "pigeon-core", "--features", "tla-trace",
                     "--test", target], cwd=ROOT, env=env, check=True)
 
 

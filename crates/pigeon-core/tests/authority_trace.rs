@@ -2,8 +2,8 @@
 //! trace events for TLC (04 §4.4, §4.5, 13 §13.3). The world is
 //! `Authority.tla`'s: person 1 the admin, person 2 the owner of folder `F`,
 //! person 3 a member; device i is person i's and device 4 a fresh key; path
-//! `f` is `F/f` and `r` a root file, whose model value is the versions at
-//! the path and its conflict copies. Each commit, signed by any device with
+//! `F/f` is owned and `r` is add-only. Traces retain each concrete name,
+//! including conflict copies, and its own writers. Each commit, signed by any device with
 //! or without a Force, builds on one accepted parent and either writes or
 //! deletes versions and may transfer `F`, add device 4 or remove a device;
 //! or rejects or withdraws a proposal the code keeps (a commit refused for
@@ -17,12 +17,19 @@
 //! Each line logs the commit as the model's `New` takes it and the code's
 //! verdict; `AuthorityTrace.tla` checks that the verdict is `Judge`'s. With `PIGEON_TRACE_DIR` set, one
 //! NDJSON file per seed is written there for `scripts/check-code-traces`.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "signed finite trace fixtures"
+)]
 #![cfg(feature = "tla-trace")]
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::PathBuf;
+
+use hegel::{TestCase, generators as gs};
 
 use pigeon_core::authority::{
     self, Decided, Decision, Entry, ROSTER, Refusal, Tree, Verdict, Writers,
@@ -650,8 +657,18 @@ fn run(seed: u64) -> Vec<Event> {
                 },
             );
         }
-        let tree = model_tree(&made.after);
-        let versions = |q: &str| Value::List(tree[q].iter().map(|v| int(*v)).collect());
+        let tree = Value::List(
+            made.after
+                .iter()
+                .filter(|(path, _)| !authority::is_pigeon_path(path))
+                .map(|(path, entry)| {
+                    rec(vec![
+                        ("path", Value::Str(path.clone())),
+                        ("version", int(entry.oid[1..].parse().unwrap())),
+                    ])
+                })
+                .collect(),
+        );
         out.push(Event::new(
             Authority::Judge,
             "l1",
@@ -663,10 +680,7 @@ fn run(seed: u64) -> Vec<Event> {
                 ),
                 ("cbase".to_owned(), int(parent)),
                 ("signer".to_owned(), int(signer)),
-                (
-                    "tree".to_owned(),
-                    rec(vec![("f", versions("f")), ("r", versions("r"))]),
-                ),
+                ("tree".to_owned(), tree),
                 ("redits".to_owned(), Value::List(made.edits)),
                 ("dec".to_owned(), Value::List(made.dec)),
                 ("force".to_owned(), Value::Bool(force)),
@@ -677,6 +691,74 @@ fn run(seed: u64) -> Vec<Event> {
     out
 }
 
+/// Law *concrete names*: adding a deleted original and removing one's own
+/// conflict copy is allowed; modifying another person's original or copy
+/// is not. An unrelated copy never prevents an ordinary new addition.
+#[hegel::test(test_cases = 1000)]
+fn a_deleted_original_and_its_conflict_copy_keep_separate_authority(tc: TestCase) {
+    let n = tc.draw(gs::integers::<u32>().min_value(1));
+    let copy = names::conflict_name(
+        "r",
+        "person 2",
+        Stamp {
+            utc: i64::from(n),
+            offset: 0,
+        },
+        1,
+    );
+    let roster = genesis();
+    let signed = raw(u64::from(n), 2, false);
+    let before = Tree::from([
+        (ROSTER.to_owned(), entry("roster-1".into())),
+        (copy.clone(), entry("v0".into())),
+    ]);
+    let after = Tree::from([
+        (ROSTER.to_owned(), entry("roster-1".into())),
+        ("r".to_owned(), entry(format!("v{n}"))),
+    ]);
+    let writers = Writers::from([
+        ("r".to_owned(), BTreeSet::from([pid(1)])),
+        (names::fold(&copy), BTreeSet::from([pid(2)])),
+    ]);
+    let judge = |before: &Tree, after: &Tree, writers: &Writers| {
+        commit::judge(&Commit {
+            raw: &signed,
+            rosters: std::slice::from_ref(&roster),
+            before,
+            after,
+            writers,
+            blobs: &blobs_of(after),
+            new_roster: None,
+            decisions: &BTreeMap::new(),
+            purges: &BTreeMap::new(),
+            witnesses: &BTreeMap::new(),
+            adopted: &[],
+        })
+    };
+    assert!(matches!(
+        judge(&before, &after, &writers),
+        Verdict::Accepted(..)
+    ));
+    let mut existing = before.clone();
+    existing.insert("r".to_owned(), entry("another-original".into()));
+    assert!(matches!(
+        judge(&existing, &after, &writers),
+        Verdict::Refused(Refusal::NotAllowed(_))
+    ));
+    let mut others = writers.clone();
+    others.insert(names::fold(&copy), BTreeSet::from([pid(3)]));
+    assert!(matches!(
+        judge(&before, &after, &others),
+        Verdict::Refused(Refusal::NotAllowed(_))
+    ));
+    let mut addition = before.clone();
+    addition.insert("r".to_owned(), entry(format!("v{n}")));
+    assert!(matches!(
+        judge(&before, &addition, &others),
+        Verdict::Accepted(..)
+    ));
+}
+
 #[test]
 fn traces_for_tlc() {
     let seeds: u64 = std::env::var("PIGEON_TRACE_SEEDS")
@@ -685,7 +767,11 @@ fn traces_for_tlc() {
         .unwrap_or(20);
     let dir = std::env::var_os("PIGEON_TRACE_DIR").map(PathBuf::from);
     let (mut acc, mut refused) = (0, 0);
-    for seed in 1..=seeds {
+    // Ordinary 20/50-seed checks retain the nightly boundary regression.
+    // Seed 1 alone remains the deterministic committed-fixture generator.
+    let regression = (seeds > 1 && seeds < 104).then_some(104);
+    let histories = seeds + u64::from(regression.is_some());
+    for seed in (1..=seeds).chain(regression) {
         let events = run(seed);
         for e in &events {
             if e.vars
@@ -707,7 +793,7 @@ fn traces_for_tlc() {
             .unwrap();
         }
     }
-    eprintln!("{seeds} histories: {acc} commits accepted, {refused} refused");
+    eprintln!("{histories} histories: {acc} commits accepted, {refused} refused");
     if seeds >= 20 {
         assert!(acc > 0 && refused > 0, "the histories accept and refuse");
     }
