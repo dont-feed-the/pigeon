@@ -236,3 +236,165 @@ async fn an_unavailable_signed_report_waits_then_admits_after_proof_fetch() {
         );
     }
 }
+
+#[tokio::test]
+async fn deciders_are_alerted_when_a_post_erasure_reference_has_no_known_copy() {
+    missing_alert(false).await;
+}
+
+#[tokio::test]
+async fn another_annex_extension_still_explains_missing_erased_contents() {
+    missing_alert(true).await;
+}
+
+async fn missing_alert(alias: bool) {
+    let (w, content, _) = pending().await;
+    complete(&w, &content).await;
+    assert!(pigeond::purge_epoch::close(&w.g).await.unwrap());
+    let before = w.g.git.rev("refs/heads/main").await.unwrap();
+    let mut tree = w.g.git.tree(&before).await.unwrap();
+    let path = if alias {
+        "Recovered/restored.bin"
+    } else {
+        "Recovered/restored.txt"
+    };
+    let restored_key = if alias {
+        format!("{}.bin", content.trim_end_matches(".txt"))
+    } else {
+        content.clone()
+    };
+    let entry = if alias {
+        blob(
+            &w.git,
+            format!("/annex/objects/{restored_key}\n").as_bytes(),
+        )
+        .await
+    } else {
+        w.base["Shared/a.txt"].clone()
+    };
+    tree.insert(path.into(), entry);
+    let restored = commit(&w.git, &tree, &[&before], 2, 1).await;
+    merge::judge_history(&w.g, std::slice::from_ref(&restored))
+        .await
+        .unwrap();
+    assert!(w.g.lock().engine.accepted(&restored));
+    w.g.git
+        .update_ref("refs/heads/main", &restored, Some(&before))
+        .await
+        .unwrap();
+    for restart in [false, true] {
+        let reopened;
+        let group = if restart {
+            reopened = Group::open(&w.genesis, &w.g.git_dir, &GitEnv::default())
+                .await
+                .unwrap();
+            &reopened
+        } else {
+            &w.g
+        };
+        pigeond::purge::prepare(group).await;
+        pigeond::purge::round(group, &dev(3).0, false).await;
+        assert!(!group.git.purge_gate.policy().waiting);
+        assert!(
+            !group
+                .git
+                .purge_gate
+                .policy()
+                .released
+                .contains(&restored_key)
+        );
+        let report = pigeond::status::report(group, &dev(3).0, "", false).await;
+        assert_eq!(report.state, pigeon_proto::api::State::Missing);
+        assert_eq!(
+            report.level,
+            pigeon_proto::api::Level::NeedsYou,
+            "restart={restart}: {report:?}"
+        );
+        assert_eq!(report.headline.id, "headline-erased-restoration-missing");
+        assert!(report.versions.iter().any(|v| {
+            v.path == path
+                && v.state == pigeon_proto::api::State::Missing
+                && v.reason
+                    .as_ref()
+                    .is_some_and(|m| m.id == "why-erased-restoration-missing")
+        }));
+        let member = pigeond::status::report(group, &dev(2).0, "", false).await;
+        assert_ne!(
+            member.level,
+            pigeon_proto::api::Level::NeedsYou,
+            "a member is not this path's decider"
+        );
+    }
+}
+
+async fn fresh_reference(w: &World, path: &str) {
+    fresh_entry(w, path, w.base["Shared/a.txt"].clone()).await;
+}
+
+async fn fresh_entry(w: &World, path: &str, entry: Entry) {
+    let before = w.g.git.rev("refs/heads/main").await.unwrap();
+    let mut tree = w.g.git.tree(&before).await.unwrap();
+    tree.insert(path.into(), entry);
+    let head = commit(&w.git, &tree, &[&before], 3, 1).await;
+    merge::judge_history(&w.g, std::slice::from_ref(&head))
+        .await
+        .unwrap();
+    assert!(w.g.lock().engine.accepted(&head));
+    w.g.git
+        .update_ref("refs/heads/main", &head, Some(&before))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn a_pending_erasure_does_not_explain_an_unavailable_new_reference_as_erased() {
+    let (w, content, _) = pending().await;
+    fresh_reference(&w, "Recovered/restored.txt").await;
+    pigeond::purge::prepare(&w.g).await;
+    pigeond::purge::round(&w.g, &dev(3).0, false).await;
+    assert!(!w.g.git.purge_gate.policy().waiting);
+    assert!(!w.g.git.purge_gate.policy().released.contains(&content));
+    let report = pigeond::status::report(&w.g, &dev(3).0, "", false).await;
+    assert_eq!(report.state, pigeon_proto::api::State::Missing);
+    assert_ne!(
+        report.level,
+        pigeon_proto::api::Level::NeedsYou,
+        "{report:?}"
+    );
+    assert!(report.versions.iter().all(|v| {
+        v.reason
+            .as_ref()
+            .is_none_or(|m| m.id != "why-erased-restoration-missing")
+    }));
+}
+
+#[tokio::test]
+async fn a_retained_alias_before_the_seals_prevents_the_erased_restoration_diagnosis() {
+    let (w, content, _) = pending().await;
+    let alias_key = format!("{}.bin", content.trim_end_matches(".txt"));
+    let alias = blob(&w.git, format!("/annex/objects/{alias_key}\n").as_bytes()).await;
+    fresh_entry(&w, "Outside/retained.bin", alias).await;
+    pigeond::purge::prepare(&w.g).await;
+    pigeond::purge::round(&w.g, &dev(3).0, false).await;
+    assert!(pigeond::report::publish(&w.g, &dev(3).0).await);
+    pigeond::purge::round(&w.g, &dev(3).0, false).await;
+    assert!(w.g.git.purge_gate.policy().released.contains(&content));
+    assert!(!w.g.git.purge_gate.policy().released.contains(&alias_key));
+    fresh_reference(&w, "Recovered/restored.txt").await;
+    pigeond::purge::prepare(&w.g).await;
+    pigeond::purge::round(&w.g, &dev(3).0, false).await;
+    assert!(!w.g.git.purge_gate.policy().waiting);
+    assert!(!w.g.git.purge_gate.policy().released.contains(&content));
+    let report = pigeond::status::report(&w.g, &dev(3).0, "", false).await;
+    assert_eq!(report.state, pigeon_proto::api::State::Missing);
+    assert_ne!(
+        report.level,
+        pigeon_proto::api::Level::NeedsYou,
+        "{report:?}"
+    );
+    assert!(report.versions.iter().all(|v| {
+        v.reason
+            .as_ref()
+            .is_none_or(|m| m.id != "why-erased-restoration-missing")
+    }));
+}

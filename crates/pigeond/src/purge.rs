@@ -283,6 +283,7 @@ async fn evaluate(g: &Group, me: &str, allow_drop: bool) -> Result<(), crate::gi
         .into_values()
         .filter(|seal| active.contains_key(&seal.decision) && !epochs.contains_key(&seal.decision))
         .collect();
+    let renewed = crate::purge_missing::renewed(g, &state.index, &view, &all_active).await;
     let released = view.released(contains);
     let after = crate::retention::snapshot(g).await?;
     if after.named != reading.named
@@ -296,6 +297,7 @@ async fn evaluate(g: &Group, me: &str, allow_drop: bool) -> Result<(), crate::gi
     {
         return Err(invalid("retained refs changed during purge evaluation"));
     }
+    g.lock().renewed_after_erasure = Some((main.clone(), renewed));
     if allow_drop {
         let held_hashes: BTreeSet<_> = references
             .iter()

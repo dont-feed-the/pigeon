@@ -85,8 +85,9 @@ skip the configured month or claim physical purge completion.
 
 ## Remaining before release
 
-- The deciders' Needs you state for unavailable restored content, complete
-  cancellation/readiness recovery, and broader interface usability tests.
+- Broader missing-restoration cases across retained suggestions and refounded
+  archive boundaries, complete cancellation/readiness recovery, and broader
+  interface usability tests.
 - Post-seal partition/restore/drop races and implementation traces. The
   waiting-period live offline-return check below is complete.
 - Wider refounded archive and initial-preparation recovery conformance.
@@ -324,3 +325,32 @@ trace conformance listed above.
 The proposed completion-epoch ADR is now 0081 because the rollup uses 0078
 for per-file suggestion decisions. Proposed ADRs 0079 and 0080 keep their
 numbers. Accepted ADRs 0075, 0076 and 0077 retain their exact source contents.
+
+
+## Unavailable current contents after earlier erasure
+
+Current files with no known copy now explain an earlier erasure to the
+people who may decide their paths and raise *Needs you*. The classifier
+replays the existing reference/seal algebra against the new reference's
+parents, with their actual membership and current keys. It retains unrelated
+uncovered histories as conservative blockers. Different annex extensions
+are matched by their physical content hash; a retained alias blocks the
+inference that all those bytes qualified for release. Unknown parent
+metadata suppresses this diagnosis and never alters the release policy.
+The bound diagnostic cache is rebuilt; no persistent released-key bit exists.
+
+The missing-restoration regression failed before this change: *Missing*,
+*Not safe*, no explanation. It now passes before and after reopening the
+group. Deciders see the actionable alert, other members keep the missing
+state without that decision level, and counts continue to classify the
+contents as missing. A pending request and an alias retained before sealing
+do not get blamed on an erasure. Another extension gets the same correct
+explanation. These fixtures use the stated zero-day signed lifecycle and
+actual absent contents; they do not claim a month elapsed or a multi-host
+physical-drop race.
+
+All 233 selected interface, daemon, signed-history and physical-install
+checks passed (one existing ignored test). Nine subsequent focused checks
+also passed, including the extension/retained-alias cases and the new
+1000-case DAG ancestry/descendant law. Wider archive/proposal cases and
+Purge implementation-trace conformance remain in the release checklist.

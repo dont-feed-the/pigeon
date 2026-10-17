@@ -893,3 +893,10 @@ web-sync-inside =
     }
 web-sync-apply = Apply
 web-sync-unchanged = Nothing to change: every folder already is as ticked.
+
+headline-erased-restoration-missing =
+    { $files ->
+        [one] A restored file’s contents are missing. Try another saved version or bring back a computer with a copy.
+       *[other] Restored contents are missing for { $files } files. Try another saved version or bring back a computer with a copy.
+    }
+why-erased-restoration-missing = An earlier erasure covered these contents. They are needed again, but no copy is currently known.

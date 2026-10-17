@@ -75,6 +75,7 @@ pub mod purge_epoch;
 pub mod purge_file;
 pub mod purge_gate;
 pub mod purge_index;
+mod purge_missing;
 pub mod purge_proofs;
 pub mod purge_receipts;
 pub mod purge_state;

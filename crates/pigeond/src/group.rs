@@ -82,6 +82,8 @@ pub struct Known {
     pub published: Option<(String, i64)>,
     /// Own durable immutable seals, rebuilt from receiver ledger/proofs.
     pub purge_seals: Vec<crate::report_file::Purge>,
+    /// Derived diagnostic keys, bound to accepted main; never release authority.
+    pub renewed_after_erasure: Option<(String, BTreeSet<String>)>,
     /// The last fully completed local integrity pass.
     pub scrub_report: Option<crate::report_file::Scrub>,
     /// Own durable capability/fence acknowledgements, before publication.

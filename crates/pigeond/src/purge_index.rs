@@ -134,6 +134,29 @@ impl Index {
         Ok(())
     }
 
+    /// The immutable parents observed during the complete scan.
+    pub(crate) fn parents(&self, id: &str) -> Option<&[String]> {
+        self.parents.get(id).map(Vec::as_slice)
+    }
+
+    /// Known births at or after `id` cannot describe its parents' retention.
+    pub(crate) fn descendants(&self, id: &str) -> BTreeSet<String> {
+        let mut children: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+        for (child, parents) in &self.parents {
+            for parent in parents {
+                children.entry(parent).or_default().push(child);
+            }
+        }
+        let mut todo = vec![id];
+        let mut found = BTreeSet::new();
+        while let Some(id) = todo.pop() {
+            if found.insert(id.to_owned()) {
+                todo.extend(children.get(id).into_iter().flatten().copied());
+            }
+        }
+        found
+    }
+
     /// Exact ancestry including the tip. Unknown objects fail closed.
     pub fn ancestors(&self, tip: &str) -> Option<BTreeSet<String>> {
         let mut todo = vec![tip.to_owned()];
@@ -195,3 +218,7 @@ async fn at_paths(
     }
     Ok(entries)
 }
+
+#[cfg(test)]
+#[path = "purge_index_laws.rs"]
+mod laws;

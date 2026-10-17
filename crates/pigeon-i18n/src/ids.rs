@@ -190,6 +190,8 @@ pub const MESSAGES: &[Entry] = &[
     e("headline-capturing", &["files"]),
     e("headline-checking", &[]),
     e("headline-inventory-unreadable", &[]),
+    e("headline-erased-restoration-missing", &["files"]),
+    e("why-erased-restoration-missing", &[]),
     e("headline-too-few-backups", &[]),
     e("why-capturing", &[]),
     e("why-differs", &[]),

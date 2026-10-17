@@ -901,3 +901,10 @@ web-sync-inside =
     }
 web-sync-apply = Appliquer
 web-sync-unchanged = Rien à changer : chaque dossier est déjà comme coché.
+
+headline-erased-restoration-missing =
+    { $files ->
+        [one] Le contenu d’un fichier restauré manque. Essayez une autre version enregistrée ou rallumez un ordinateur qui en a une copie.
+       *[other] Le contenu restauré manque pour { $files } fichiers. Essayez une autre version enregistrée ou rallumez un ordinateur qui en a une copie.
+    }
+why-erased-restoration-missing = Un effacement précédent couvrait ce contenu. Il est à nouveau demandé, mais aucune copie n’est connue pour le moment.
