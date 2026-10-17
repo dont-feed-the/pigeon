@@ -80,3 +80,14 @@ The original observations and focused runtime retakes are retained in
 [French retake](m6-filesystem-usability-french-retake.md).
 These sessions assess wording; they do not establish filesystem support
 or existing-file preservation. Native assertions provide the latter check.
+
+## Merge validation
+
+Initial parallel workspace validation retained 743 passes and five fixture
+failures on `40b6ae6`. All five corrected fixture checks passed together.
+Final source `cf7447c22ef8398f986386b22d3e400d00a439d8` also passed
+the named native S9 keep-index schedule with TLC. Exact-head PR CI
+39054525260, lab 39054525195 and bridge 39054525203 passed.
+The native supported-filesystem step in job 117459692349 completed
+successfully on actual ext4, btrfs and xfs loop-mounted fixtures.
+These are filesystem-conformance fixtures, not resource-budget measurements.

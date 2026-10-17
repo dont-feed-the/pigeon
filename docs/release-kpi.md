@@ -379,3 +379,21 @@ The next follow-up preserves the three-attempt observation bound and full
 stat/hash checks, but yields between unstable observations. The failing
 schedule is a named native regression. Its actual publication will supply
 the next observation; no measured reduction in failure rate is claimed now.
+
+## v0.6.5 observation
+
+[v0.6.5](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.5)
+published at 2026-10-17T17:33:03Z from
+`987941a93ea0ba47ca74b88fe68fa4e87bc9c94f`. All six assets, four archive
+checksums, Linux installation, pinned annex, shell completions and latest
+redirect were independently verified. Candidate lead time was **666 seconds**
+(target 3600); the completed publication gap was **2060 seconds**
+(target 7200). The collector retains
+14 lead-time and 13 completed-gap samples.
+No percentile or measured reduction in S9 failure rate is inferred.
+
+PR #73 passed all 737 parallel local checks and exact-head CI before merge.
+Its restore-lock and bounded trace-retry changes ship in this publication.
+The original S9 failed observation remains retained. Duplicate queued main
+workflows were canceled in favor of the tag gates; active main cache producers
+were preserved through their completed save steps.

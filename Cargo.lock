@@ -1306,7 +1306,7 @@ dependencies = [
 
 [[package]]
 name = "git-annex-p2p-iroh"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "pigeon-core",
  "pigeon-proto",
@@ -2867,7 +2867,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "clap",
  "clap_complete",
@@ -2884,7 +2884,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-bridge"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "argon2",
  "axum",
@@ -2915,7 +2915,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-core"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "caseless",
  "hegeltest",
@@ -2926,7 +2926,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-git"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "pigeon-core",
  "pigeon-sys",
@@ -2942,7 +2942,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-i18n"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "data-encoding",
  "fluent-bundle",
@@ -2958,7 +2958,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-lab"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "hegeltest",
  "pigeon-core",
@@ -2970,7 +2970,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-proto"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "data-encoding",
  "hegeltest",
@@ -2981,7 +2981,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-sys"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "block2",
  "core-foundation",
@@ -2997,7 +2997,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-telemetry"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "console-subscriber",
  "hegeltest",
@@ -3015,7 +3015,7 @@ dependencies = [
 
 [[package]]
 name = "pigeon-web"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "axum",
  "data-encoding",
@@ -3034,7 +3034,7 @@ dependencies = [
 
 [[package]]
 name = "pigeond"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "axum",
  "data-encoding",
