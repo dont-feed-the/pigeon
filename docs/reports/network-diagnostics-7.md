@@ -34,3 +34,12 @@ PR validation. Its tested parent differs from that main only by the
 release version, lockfile and report. The seven privacy/logging checks,
 real annex transfer check, final all-target Clippy and repository checks
 pass again after integration. Required exact-head CI remains separate.
+
+## Merge validation
+
+Final source `57758b4c4a043c47baec37eb35ec956f98766748` passed exact-head CI 39070739633,
+lab selection 39070739565 and bridge 39070740276. The local
+seven diagnostic contracts and native annex integration passed again after
+integrating current main. Selected main cache producers saved before tagging;
+cancellation preserves other active producers. v0.6.11 was published and
+independently verified first. The broader M7 security audit remains open.
