@@ -586,7 +586,7 @@ mod tracing;
 #[path = "purge/content.rs"]
 mod purge_content;
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[path = "purge/scrub.rs"]
 mod scrub_content;
 

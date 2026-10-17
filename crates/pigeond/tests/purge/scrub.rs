@@ -6,7 +6,7 @@ use super::*;
 use std::os::unix::fs::PermissionsExt;
 
 #[tokio::test]
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 async fn scrub_checks_real_objects_at_idle_priority_and_keeps_a_durable_result() {
     let Some(l) = laptop_fixture(true).await else {
         return;

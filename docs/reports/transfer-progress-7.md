@@ -69,3 +69,25 @@ Summary [ 572.300s] 812 tests run: 812 passed (9 slow), 1 skipped
 All-target Clippy, formatting and repository structural checks pass after
 that run. The original stack failures and preflight-only capacity stop
 remain retained; this result does not establish the reference/HDD budgets.
+
+## Maintenance rollup
+
+The macOS maintenance-priority correction is rolled into this PR before CI.
+The complete workspace result above precedes these maintenance-only files;
+all affected checks, the native scrub and all-target Clippy run below after
+current-main integration. See [native maintenance](macos-maintenance-7.md).
+
+## Current-main validation
+
+Current v0.6.15 main `c51af44c4e80fad8fd1a89e8ea8185b775028428` is integrated before PR validation.
+Relative to the validated feature base, incoming changes are only workspace
+versions, lockfile, release changelog and the preceding report footer. The
+new progress entry alone remains Unreleased. The complete parallel
+workspace evidence above precedes this version/report integration; all
+affected selections and required native traces are repeated below.
+
+All platform-layer and Git-driver tests, native corrupt-object scrub, daemon-library checks, health/throttled-transfer/codec/
+format fixtures, real annex transfer and S2/S3 pass on current main. TLC
+requires and accepts CaptureInstall and Roster coverage. All-target Clippy,
+formatting and structural/ADR/spec checks pass before the integration commit.
+Exact-head PR CI and publication remain separate.
