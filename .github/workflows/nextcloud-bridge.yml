@@ -17,6 +17,8 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
+  GIT_ANNEX_VERSION: "10.20261006"
+  GIT_ANNEX_SHA256: 88ea73c9bb8fb751916e0e4a0a8f489a7476f9b9e861fd2cce2601a77f4f409d
   CARGO_INCREMENTAL: "0"
   CARGO_PROFILE_DEV_DEBUG: line-tables-only
   CARGO_PROFILE_TEST_DEBUG: line-tables-only
@@ -25,36 +27,15 @@ jobs:
   changes:
     uses: ./.github/workflows/ci-changes.yml
 
-  bridge:
+  bridge-build:
     needs: changes
     if: needs.changes.outputs.bridge == 'true'
-    name: Nextcloud bridge (ubuntu-24.04)
+    name: matching bridge binaries (ubuntu-24.04)
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    env:
-      GIT_ANNEX_VERSION: "10.20261006"
-      GIT_ANNEX_SHA256: 88ea73c9bb8fb751916e0e4a0a8f489a7476f9b9e861fd2cce2601a77f4f409d
-      NEXTCLOUDCMD: nextcloudcmd
-      PYTHONUNBUFFERED: "1"
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/git-annex-dist
-          key: git-annex-standalone-${{ env.GIT_ANNEX_SHA256 }}
-      - name: git-annex at the repository's pinned checksum
-        run: |
-          mkdir -p ~/.cache/git-annex-dist
-          t=~/.cache/git-annex-dist/git-annex-standalone-amd64.tar.gz
-          [ -f "$t" ] || curl -fsSL -o "$t" \
-            https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
-          echo "$GIT_ANNEX_SHA256  $t" | sha256sum -c - || {
-            echo "::error::upstream moved past git-annex $GIT_ANNEX_VERSION; move the pin deliberately"
-            rm -f "$t"; exit 1; }
-          tar -C ~ -xzf "$t"
-          echo ~/git-annex.linux >> "$GITHUB_PATH"
-      - name: the real Nextcloud command client
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends nextcloud-desktop-cmd
+      - uses: ./.github/actions/bridge-annex
       - name: restore main's Rust cache
         id: rust-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -74,36 +55,26 @@ jobs:
           cache-dependency-path: crates/pigeon-web/client/package-lock.json
       - name: the pinned toolchain (rust-toolchain.toml)
         run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-        with:
-          distribution: temurin
-          java-version: "21"
+      - uses: ./.github/actions/nextest
       - name: matching bridge, daemon, CLI and transport binaries
-        id: build
         run: |
           cargo build --locked -p pigeon-bridge -p pigeond -p pigeon -p git-annex-p2p-iroh \
             --features pigeond/lab,pigeon-bridge/tla-trace
-      - name: share an existing laptop's storage
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: python3 scripts/check-nextcloud-shared-storage --provider laptop
       - name: decisions arriving before their proposals do not freeze later edits
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: cargo test --locked -p pigeond --features lab --test decision_retry
-      - name: share an existing custodian's storage
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        id: shared-custodian
-        env:
-          PIGEON_TRACE: "1"
-          PIGEON_TRACE_DIR: ${{ runner.temp }}/bridge-system-traces
-        run: python3 scripts/check-nextcloud-shared-storage --provider custodian
-      - name: check real multi-peer identity and DAV transaction observations
-        if: ${{ !cancelled() && steps.shared-custodian.outcome == 'success' }}
+        run: cargo nextest run --locked -p pigeond --features lab --test decision_retry
+      - name: bundle this run's matching native programs
         run: |
-          python3 scripts/check-bridge-lifecycle-traces "${{ runner.temp }}/bridge-system-traces"
-          python3 scripts/check-bridge-sync-traces "${{ runner.temp }}/bridge-system-traces"
-      - name: portal, WebDAV and real Nextcloud synchronization
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: python3 scripts/check-nextcloud-bridge
+          mkdir -p "$RUNNER_TEMP/bridge-native"
+          tar -C target/debug -czf "$RUNNER_TEMP/bridge-native/programs.tar.gz" \
+            pigeon-bridge pigeond pigeon git-annex-p2p-iroh
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/bridge-native/source"
+          (cd "$RUNNER_TEMP/bridge-native" && sha256sum programs.tar.gz > SHA256SUMS)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bridge-native-${{ github.run_id }}
+          path: ${{ runner.temp }}/bridge-native
+          compression-level: 0
+          overwrite: true
       - name: save the Rust cache (main only)
         if: github.ref == 'refs/heads/main' && steps.rust-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -114,6 +85,61 @@ jobs:
             ~/.cargo/git/db
             target
           key: ${{ steps.rust-cache.outputs.cache-primary-key }}
+
+
+  bridge:
+    needs: [changes, bridge-build]
+    if: needs.changes.outputs.bridge == 'true'
+    name: Nextcloud bridge (${{ matrix.case }}, ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [laptop, custodian, nextcloud]
+    env:
+      NEXTCLOUDCMD: nextcloudcmd
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/bridge-annex
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: bridge-native-${{ github.run_id }}
+          path: ${{ runner.temp }}/bridge-native
+      - name: verify the immutable source and restore executable permissions
+        run: |
+          a="$RUNNER_TEMP/bridge-native"
+          test "$(cat "$a/source")" = "$GITHUB_SHA"
+          (cd "$a" && sha256sum -c SHA256SUMS)
+          mkdir -p target/debug
+          tar -C target/debug -xzf "$a/programs.tar.gz"
+      - name: the real Nextcloud command client
+        if: matrix.case == 'nextcloud'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends nextcloud-desktop-cmd
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        if: matrix.case == 'custodian'
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: share an existing laptop's storage
+        if: matrix.case == 'laptop'
+        run: python3 scripts/check-nextcloud-shared-storage --provider laptop
+      - name: share an existing custodian's storage
+        if: matrix.case == 'custodian'
+        id: shared-custodian
+        env:
+          PIGEON_TRACE: "1"
+          PIGEON_TRACE_DIR: ${{ runner.temp }}/bridge-system-traces
+        run: python3 scripts/check-nextcloud-shared-storage --provider custodian
+      - name: check real multi-peer identity and DAV transaction observations
+        if: matrix.case == 'custodian' && steps.shared-custodian.outcome == 'success'
+        run: |
+          python3 scripts/check-bridge-lifecycle-traces "${{ runner.temp }}/bridge-system-traces"
+          python3 scripts/check-bridge-sync-traces "${{ runner.temp }}/bridge-system-traces"
+      - name: portal, WebDAV and real Nextcloud synchronization
+        if: matrix.case == 'nextcloud'
+        run: python3 scripts/check-nextcloud-bridge
 
   catalogue-traces:
     needs: changes
@@ -154,7 +180,7 @@ jobs:
   selected-checks:
     name: Bridge selection verified
     if: ${{ !cancelled() }}
-    needs: [changes, bridge, catalogue-traces]
+    needs: [changes, bridge-build, bridge, catalogue-traces]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

@@ -185,3 +185,25 @@ five independently; periodic macOS validation retains its serial limit.
 This is a targeted change to a measured serial step, not a measured speedup
 claim. The next actual publication will supply the before/after observation.
 The failed v0.6.0 candidate and the interruption remain in the KPI history.
+
+
+## Bridge integration baseline: 17 October
+
+The successful PR #69 bridge job
+[117352256007](https://github.com/dont-feed-the/pigeon/actions/runs/39017382261/job/117352256007)
+ran from 08:27:07 to 08:51:06 UTC: **23 minutes 59 seconds**. Its serial
+phases included 2m15s restoring the Rust cache, 35s building the native
+programs, 3m12s checking laptop storage, 33s checking delayed decisions,
+3m48s checking custodian storage, 2m37s checking native traces and 10m23s
+exercising the portal and real Nextcloud client. Full CI and lab were
+already green while this final PR check continued.
+
+The next rollup builds and tests the matching programs once, then gives
+laptop, custodian and real-client execution independent runners. Programs
+travel as a compressed, checksummed archive with the immutable workflow
+source recorded and verified before extraction. Executable permissions
+survive the archive; execution jobs do not restore the large Rust cache or
+rebuild the programs. Every selected build, execution and trace check still
+must succeed. The real laptop-storage check passed locally using an
+extracted bundle. This is preparation for a measured improvement, not a
+reported reduction in CI or publication time.

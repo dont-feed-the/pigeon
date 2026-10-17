@@ -1,0 +1,23 @@
+# The bridge tests' existing pinned standalone git-annex, shared by the
+# native build and independent execution jobs without rebuilding Rust.
+name: bridge git-annex
+description: Install the checksum-pinned standalone used by bridge integration checks
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/git-annex-dist
+        key: git-annex-standalone-${{ env.GIT_ANNEX_SHA256 }}
+    - name: git-annex at the repository's pinned checksum
+      shell: bash
+      run: |
+        mkdir -p ~/.cache/git-annex-dist
+        t=~/.cache/git-annex-dist/git-annex-standalone-amd64.tar.gz
+        [ -f "$t" ] || curl -fsSL -o "$t" \
+          https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
+        echo "$GIT_ANNEX_SHA256  $t" | sha256sum -c - || {
+          echo "::error::upstream moved past git-annex $GIT_ANNEX_VERSION; move the pin deliberately"
+          rm -f "$t"; exit 1; }
+        tar -C ~ -xzf "$t"
+        echo ~/git-annex.linux >> "$GITHUB_PATH"
