@@ -161,6 +161,20 @@ impl Controller {
         std::sync::Arc::new(ChildControl {
             controller: self.clone(),
             group,
+            repair: false,
+        })
+    }
+
+    /// A designated repair protects contents alongside transfers (15 §15.2).
+    /// Its fsck budget remains independent of content-stream shaping waits.
+    pub fn for_repair_group(
+        self: &std::sync::Arc<Self>,
+        group: String,
+    ) -> std::sync::Arc<dyn pigeon_git::work::Control> {
+        std::sync::Arc::new(ChildControl {
+            controller: self.clone(),
+            group,
+            repair: true,
         })
     }
 
@@ -264,15 +278,26 @@ impl Controller {
 struct ChildControl {
     controller: std::sync::Arc<Controller>,
     group: String,
+    repair: bool,
+}
+
+impl ChildControl {
+    fn priority(&self, class: pigeon_git::work::Class) -> pigeon_git::work::Class {
+        if self.repair && class == pigeon_git::work::Class::Scrub {
+            pigeon_git::work::Class::Transfer
+        } else {
+            class
+        }
+    }
 }
 
 impl pigeon_git::work::Control for ChildControl {
     fn began(&self, class: pigeon_git::work::Class) {
-        self.controller.children[class as usize].fetch_add(1, Ordering::Relaxed);
+        self.controller.children[self.priority(class) as usize].fetch_add(1, Ordering::Relaxed);
     }
 
     fn ended(&self, class: pigeon_git::work::Class) {
-        self.controller.children[class as usize].fetch_sub(1, Ordering::Relaxed);
+        self.controller.children[self.priority(class) as usize].fetch_sub(1, Ordering::Relaxed);
     }
 
     fn running(&self, class: pigeon_git::work::Class) -> bool {
@@ -281,7 +306,7 @@ impl pigeon_git::work::Control for ChildControl {
             .children
             .each_ref()
             .map(|n| n.load(Ordering::Relaxed) as u64);
-        if !class.admitted(pending) {
+        if !self.priority(class).admitted(pending) {
             return false;
         }
         let capture = class == pigeon_git::work::Class::Capture;
@@ -311,6 +336,8 @@ impl pigeon_git::work::Control for ChildControl {
     }
 
     fn charging(&self, class: pigeon_git::work::Class) -> bool {
+        // Keep the actual operation class: a repair fsck never waits on
+        // the content bucket, even though it shares protection priority.
         class != pigeon_git::work::Class::Transfer
             || !self.controller.lock().group_waits.contains_key(&self.group)
     }
@@ -469,6 +496,7 @@ mod tests {
     async fn a_stream_wait_extends_only_its_own_groups_transfer_budget() {
         let controller = std::sync::Arc::new(Controller::default());
         let a = controller.for_group("a".into());
+        let repair = controller.for_repair_group("a".into());
         let b = controller.for_group("b".into());
         let queued = controller.clone();
         let task = tokio::spawn(async move {
@@ -487,6 +515,7 @@ mod tests {
         assert!(b.charging(Class::Transfer));
         assert!(a.charging(Class::Capture));
         assert!(a.charging(Class::Scrub));
+        assert!(repair.charging(Class::Scrub));
         task.abort();
         assert!(task.await.unwrap_err().is_cancelled());
         assert_eq!(controller.pending(), 0);

@@ -527,3 +527,22 @@ measurement or a real resource budget. The v0.6.9 Mac workspace separately
 passed 690 of 692 checks: two telemetry fixtures correctly encountered
 normal-build Mac backup refusal. They are corrected into the lab tier in
 the next checkpoint; that run is not a passing Mac suite.
+
+## v0.6.11 observation
+
+[v0.6.11](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.11)
+published at 2026-10-17T21:32:54Z from
+`412accd7e0d0efe227ab4b5e452c07eb483ca454`. Independent verification
+passed all six assets, four archive checksums, native Linux installation,
+pinned annex, completions and latest redirect. Candidate lead was
+**722 seconds** (12m02s); publication gap was **1343 seconds** (22m23s).
+Both targets were met, with 20 lead and 19 completed-gap samples.
+All required Linux gates and publication passed on their first attempt.
+This single candidate does not establish a sustained failure-rate change.
+
+The older v0.6.9 full-model run 39064536212 completed successfully. Its
+periodic macOS run 39066233321 passed all four daemon shards and installation,
+but failed the workspace on two telemetry fixtures requiring lab roles;
+downstream lab and slice were skipped. The fixture-tier correction ships
+in v0.6.11; one new background run 39071444656 is pending at this checkpoint.
+These results do not establish elapsed nights or hardware budgets.

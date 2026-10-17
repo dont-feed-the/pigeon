@@ -126,6 +126,7 @@ impl Syncer for AnnexSyncer {
 
     fn repair(&self, repository: &Repository, key: &str) -> RepairFuture {
         let repo = self.repository(repository);
+        repo.set_work_control(self.resources.for_repair_group(repository.group.clone()));
         let key = key.to_owned();
         Box::pin(async move {
             if !plausible_key(&key) {

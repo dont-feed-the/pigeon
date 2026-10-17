@@ -100,11 +100,18 @@ completed successfully on 17 October. It validated v0.6.4 source
 workspace, four native daemon shards, lab, fixed slice and random schedules.
 That source predates this filesystem-admission checkpoint, so the passing
 baseline does not establish its native APFS adapter or the later scheduling
-changes. Latest-source v0.6.9 background run 39066233321 has completed
-its workspace with 690 passes, two failures and one skip; other native shards
-remain pending. Both failures are telemetry fixtures requesting Mac backup
+changes. The v0.6.9 background run 39066233321 has now completed:
+its workspace has 690 passes, two failures and one skip. All four native
+daemon shards and installation checks passed; downstream lab and slice
+were skipped after the workspace failure. Both failures are telemetry fixtures requesting Mac backup
 roles in a normal build, correctly refused with `backup-machine-needs-linux`.
 Those multi-daemon fixtures now require the lab feature and are selected by
 the existing native daemon shards. Production role admission is unchanged;
 the unchanged failing Mac workspace is not retried as a timing miss.
 ZFS runtime and measured reference-tree/HDD budgets remain open.
+
+A single follow-up background run, [39071444656](https://github.com/dont-feed-the/pigeon/actions/runs/39071444656),
+was dispatched at the published v0.6.11 source
+`412accd7e0d0efe227ab4b5e452c07eb483ca454`, which includes the telemetry-tier
+correction. It remains pending at this checkpoint and is not a Mac pass.
+The older run's completed results are retained without an unchanged retry.

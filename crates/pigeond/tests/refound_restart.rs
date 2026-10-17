@@ -8,7 +8,7 @@
 mod common;
 
 use common::*;
-use pigeon_proto::api::State;
+use pigeon_proto::{Response, api::State};
 use std::collections::BTreeMap;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
@@ -172,7 +172,20 @@ fn a_backup_rejoins_and_restarts_without_recopying_its_objects() {
         let folder = root.join("files");
         created(&lap, &folder);
         join(&lap, &vault, &[&lap, &vault]);
-        until(&lap, State::Protected, &[&lap, &vault]);
+        // An empty accepted tree can already be Protected. The preservation
+        // snapshot needs this actual captured file on its backup first.
+        // Retain the original protection wait's 120-second budget.
+        eventually_within(
+            120,
+            || {
+                pigeon(&lap, &["status", folder.join("kept.txt").to_str().unwrap()])
+                    .into_iter()
+                    .any(|r| matches!(r, Response::Status(s) if
+                        s.versions.iter().any(|v| v.path == "kept.txt" && v.state == State::Protected)))
+            },
+            "backup-rejoin fixture file is not protected",
+            &[&lap, &vault],
+        );
         let entry = configured(&vault).remove(0);
         let path = entry.path;
         let uuid = git(&path, &["config", "annex.uuid"]);

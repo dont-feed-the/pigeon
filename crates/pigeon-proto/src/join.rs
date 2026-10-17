@@ -23,7 +23,7 @@ pub const INSTALLER: &str =
     "https://github.com/dont-feed-the/pigeon/releases/latest/download/pigeon-install";
 
 /// What the group's invitation carries.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Invitation {
     /// [`INVITATION_VERSION`].
     pub v: u32,
@@ -45,6 +45,21 @@ pub struct Invitation {
     /// For a refounded group, what the joiner accepts (ADR 0047).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refounded: Option<Refounded>,
+}
+
+impl std::fmt::Debug for Invitation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Invitation")
+            .field("v", &self.v)
+            .field("group", &self.group)
+            .field("name", &self.name)
+            .field("k", &self.k)
+            .field("admitters", &self.admitters)
+            .field("secret", &"[redacted]")
+            .field("relay", &self.relay)
+            .field("refounded", &self.refounded)
+            .finish()
+    }
 }
 
 /// A device that admits new ones.
@@ -230,3 +245,7 @@ mod tests {
         assert_eq!(decode(&code()).map(|i| encode(&i)), Some(code()));
     }
 }
+
+#[cfg(test)]
+#[path = "join_private_debug_tests.rs"]
+mod private_debug_tests;

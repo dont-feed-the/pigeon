@@ -76,10 +76,11 @@ without replacing Missing or Needs you; Resume remains a person's pause.
 
 ## Remaining
 
-- Extend the staged work queue and validate native pausing against the
-  foreground HDD workload, including explicit request paths.
-- Integrate file quiet/hot-path scheduling, native priorities and supervisor
-  behavior. Validate foreground disk contention and read-latency feedback.
+- Complete the global key/class work queue and validate native pausing
+  against the foreground HDD workload, including explicit request paths.
+- Complete native process/I/O presets and supervisor behavior, plus own-read
+  latency and device-specific feedback. File quiet/hot-path scheduling has
+  its implemented native checkpoint below.
 - Measure the reference-tree idle/scan/memory budgets in CI and the E17
   foreground video workload on the required HDD/platform combinations.
 - Validate supported filesystems, upgrade and crash behavior, integrate
@@ -873,3 +874,10 @@ heads were superseded before final validation. Selected main cache producers sav
 before tagging; cancellation preserves other active producers. v0.6.10 was
 published and independently verified first.
 M6 hardware budgets and the real elapsed M7 gates remain open.
+
+## Designated repair priority follow-up
+
+The [repair scheduling checkpoint](resources-7-repair-priority.md) separates
+corruption repair from routine scrub admission while preserving its actual
+fsck deadline identity. The full global queue, native presets/read-latency
+feedback and measured reference/HDD budgets remain open.

@@ -35,7 +35,7 @@ use pigeon_proto::{Request, Response};
 use tokio::io::{AsyncRead, AsyncReadExt};
 
 /// A repository this device serves, as the loops know it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Repository {
     /// The group it belongs to.
     pub group: String,
@@ -50,6 +50,22 @@ pub struct Repository {
     pub auth_token: Option<String>,
     /// Whether it is being re-checked (06 §6.3).
     pub checking: bool,
+}
+
+impl std::fmt::Debug for Repository {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Repository")
+            .field("group", &self.group)
+            .field("git_dir", &self.git_dir)
+            .field("worktree", &self.worktree)
+            .field("role", &self.role)
+            .field(
+                "auth_token",
+                &self.auth_token.as_ref().map(|_| "[redacted]"),
+            )
+            .field("checking", &self.checking)
+            .finish()
+    }
 }
 
 /// A device the roster admits for a group.
@@ -269,7 +285,7 @@ pub enum Reach {
 }
 
 /// How the endpoint is set up.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct NetConfig {
     /// The device key's 32-byte ed25519 secret.
     pub secret_key: [u8; 32],
@@ -279,6 +295,17 @@ pub struct NetConfig {
     pub mdns: bool,
     /// Relays and address lookup.
     pub reach: Reach,
+}
+
+impl std::fmt::Debug for NetConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NetConfig")
+            .field("secret_key", &"[redacted]")
+            .field("bind", &self.bind)
+            .field("mdns", &self.mdns)
+            .field("reach", &self.reach)
+            .finish()
+    }
 }
 
 /// The device's endpoint: it dials peers and accepts their streams.
@@ -690,3 +717,7 @@ pub async fn read_line<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Vec<u8>, 
         }
     }
 }
+
+#[cfg(test)]
+#[path = "private_debug_tests.rs"]
+mod private_debug_tests;

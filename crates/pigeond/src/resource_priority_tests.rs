@@ -225,7 +225,7 @@ async fn serving_side_repair_waits_for_power_and_other_groups_capture() {
     let syncer = AnnexSyncer::new(controller.clone(), repo.env.clone());
     let repair = tokio::spawn(syncer.repair(&repository, "fixture-key"));
     eventually(|| {
-        controller.children[Class::Scrub as usize].load(Ordering::Relaxed) == 1
+        controller.children[Class::Transfer as usize].load(Ordering::Relaxed) == 1
             || beats(dir.path()) > 0
     })
     .await;
@@ -235,7 +235,7 @@ async fn serving_side_repair_waits_for_power_and_other_groups_capture() {
     controller.observe(Conditions::default(), false);
     assert!(
         !controller
-            .for_group("repairing".into())
+            .for_repair_group("repairing".into())
             .running(Class::Scrub)
     );
     assert_eq!(
@@ -265,7 +265,7 @@ async fn serving_side_repair_waits_for_power_and_other_groups_capture() {
         false,
     );
     let queued = tokio::spawn(syncer.repair(&repository, "fixture-key"));
-    eventually(|| controller.children[Class::Scrub as usize].load(Ordering::Relaxed) == 1).await;
+    eventually(|| controller.children[Class::Transfer as usize].load(Ordering::Relaxed) == 1).await;
     queued.abort();
     assert!(queued.await.unwrap_err().is_cancelled());
     assert!(
@@ -273,5 +273,49 @@ async fn serving_side_repair_waits_for_power_and_other_groups_capture() {
             .children
             .iter()
             .all(|n| n.load(Ordering::Relaxed) == 0)
+    );
+}
+
+#[tokio::test]
+async fn serving_side_repair_does_not_wait_behind_ongoing_backup_transfers() {
+    use crate::net::sync::{AnnexSyncer, Syncer};
+    let controller = Arc::new(Controller::default());
+    let content = controller.for_group("backing-up".into());
+    content.began(Class::Transfer);
+    let (dir, repo) = fixture(&controller, "repairing");
+    let repository = crate::net::Repository {
+        group: "repairing".into(),
+        git_dir: dir.path().join(".git"),
+        worktree: Some(dir.path().to_owned()),
+        role: pigeon_core::filter::Role::Laptop,
+        auth_token: None,
+        checking: false,
+    };
+    let syncer = AnnexSyncer::new(controller.clone(), repo.env.clone());
+    let repair = tokio::spawn(syncer.repair(&repository, "fixture-key"));
+    let progressed = tokio::time::timeout(Duration::from_secs(2), async {
+        while beats(dir.path()) < 2 {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .is_ok();
+    // Always release/join the original native operation before asserting,
+    // including the old scheduler's denied-launch reproduction.
+    content.ended(Class::Transfer);
+    std::fs::write(dir.path().join("finish"), b"done").unwrap();
+    tokio::time::timeout(Duration::from_secs(5), repair)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        controller
+            .children
+            .iter()
+            .all(|n| n.load(Ordering::Relaxed) == 0)
+    );
+    assert!(
+        progressed,
+        "repair was classified as routine scrub behind backup work"
     );
 }
