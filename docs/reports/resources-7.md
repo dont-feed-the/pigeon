@@ -17,9 +17,9 @@ reservations are refused for splitting rather than silently undercharged.
 Fourteen hegel laws run 1000 cases each, including extreme integer clock/rate
 ranges. The active-time clock separately proves that arbitrary pauses spend no
 operation budget, backwards clocks refund nothing, and splitting an active
-interval changes no charge. Native child deadlines are not wired to that
-clock yet. These are pure controller laws, not measurements of foreground
-workload interference, real network delay or native process pausing.
+interval changes no charge. The next native scheduling checkpoint wires that
+clock into heavy one-shot children. These are pure controller laws, not
+measurements of foreground workload interference or real network delay.
 
 The P2P filter can distinguish content DATA bodies from protocol and Git
 history bytes without changing their order or bytes. Two more 1000-case
@@ -81,6 +81,30 @@ without replacing Missing or Needs you; Resume remains a person's pause.
 
 No 10-minute budget, 30-minute HDD run, 72-hour soak, seven-night result or
 two-week dogfood result is inferred from these finite tests.
+
+## Native child scheduling checkpoint
+
+Heavy one-shot annex commands use owned process groups, STOP/CONT and active
+deadlines. Cancellation resumes and kills the whole unreaped group; after
+waiting reaps the leader, the guard disarms before another suspension point
+to avoid signalling a reused PID. Metadata calls bypass the controller.
+Capture ignores power/network waits and keeps its disk share. Each group's
+local stream waits exclude time only from that group's transfer budget.
+
+Twenty-eight selected driver and native checks pass, including real parent
+and helper heartbeats frozen beyond the ordinary deadline, exact output
+after resuming, dead-descendant assertions after cancellation and genuine
+timeout, and independent groups' deadline accounting. These finite process
+tests do not establish the HDD workload budget.
+
+Daemon integration is still blocked by a discovered scheduling gap: normal
+placement and downloads can hold the group lock and the round while waiting,
+preventing later capture. The new child primitives must not be presented as
+the complete work queue until that integration and its live regression pass.
+git-annex's configurable stall transferrer also needs integration: upstream
+`Annex/Transfer.hs` selects it for explicit stall detection, and
+`Annex/TransferrerPool.hs` creates a separate child process group. The default
+probe only warns. A controlled pause must cover the actual transfer tree.
 
 ## Periodic macOS failures
 

@@ -87,7 +87,7 @@ pub(super) async fn permit(
 ) -> io::Result<()> {
     net.node
         .resources
-        .acquire(direction, bytes, || {
+        .acquire(group, direction, bytes, || {
             filter.set_content_policy(net.directory.peer_content_policy(group, peer));
             if filter
                 .from_client(&[])

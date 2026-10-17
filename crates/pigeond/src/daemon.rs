@@ -139,6 +139,9 @@ impl Daemon {
     /// its existing position. The caller holds `busy` during a pending join
     /// and records configuration only after its welcome is verified.
     pub(crate) async fn serve_group(&self, g: Arc<Group>, replacing: Option<&str>) {
+        g.git
+            .repo
+            .set_work_control(self.node.resources.for_group(g.id.clone()));
         crate::settings::check(&g).await;
         self.admissions.round(&g, &self.device).await;
         {
@@ -649,6 +652,9 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     for entry in &config.groups {
         match Group::open(&entry.id, &entry.path, &env).await {
             Some(mut g) => {
+                g.git
+                    .repo
+                    .set_work_control(node.resources.for_group(g.id.clone()));
                 crate::shared::configure(&mut g, config.bridge_storage.as_ref())?;
                 if let crate::clock_file::Read::Known(c) = crate::clock_file::read(&g) {
                     tracer.at_least(c.clock);

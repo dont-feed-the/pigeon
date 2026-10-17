@@ -18,6 +18,9 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Heavy native commands can be suspended and resumed by resource policy
+  without spending their active operation timeout. Cancelling a suspended
+  command also stops its helpers.
 - History and saved copies of absent files work when the shared folder's
   location uses a path alias, including `/tmp` on macOS.
 
