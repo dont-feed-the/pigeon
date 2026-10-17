@@ -218,6 +218,22 @@ pub async fn dirty(g: &Group) -> Result<std::collections::BTreeSet<String>, Erro
 /// the person may not make become proposals (`suggest`); a suggested path
 /// saved since is left alone.
 pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, Error> {
+    capture_inner(g, me, tracer, false).await
+}
+
+/// Background capture waits for two stable stats across the size-dependent
+/// quiet period and spaces hot paths. Explicit requests use [`capture`].
+pub async fn background(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, Error> {
+    g.lock().capture_schedule.begin();
+    capture_inner(g, me, tracer, true).await
+}
+
+async fn capture_inner(
+    g: &Group,
+    me: &str,
+    tracer: &Tracer,
+    scheduled: bool,
+) -> Result<Captured, Error> {
     let mut done = Captured::default();
     let Some(worktree) = g.worktree.clone() else {
         return Ok(done);
@@ -242,7 +258,12 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
     let (mut behind, mut pending, mut gone) = (false, Vec::new(), Vec::new());
     let mut soon = BTreeSet::new();
     let mut fresh = BTreeSet::new();
-    for (x, y, path) in status(g).await?.into_iter().filter_map(letters) {
+    let changes = if scheduled {
+        crate::capture_status::changes(g).await?
+    } else {
+        status(g).await?
+    };
+    for (x, y, path) in changes.into_iter().filter_map(letters) {
         if is_pigeon_path(&path) {
             continue;
         }
@@ -287,12 +308,21 @@ pub async fn capture(g: &Group, me: &str, tracer: &Tracer) -> Result<Captured, E
                 let Ok(Some(st)) = lstat(&worktree.join(&path)) else {
                     continue;
                 };
-                if !pigeon_sys::writers::scan(st.id).is_clear() {
+                let mut concurrent = x == '.' && soon_after_install(g, &path, st.mtime_ns);
+                if scheduled && x == '.' {
+                    concurrent = g
+                        .lock()
+                        .capture_schedule
+                        .near_install(&path, st, concurrent);
+                }
+                if scheduled && !g.lock().capture_schedule.ready(&path, st)
+                    || !pigeon_sys::writers::scan(st.id).is_clear()
+                {
                     done.busy += 1;
                 } else if lagging {
                     pending.push(path);
                 } else {
-                    if x == '.' && soon_after_install(g, &path, st.mtime_ns) {
+                    if concurrent {
                         soon.insert(path.clone());
                     }
                     if x == '?' {
@@ -523,15 +553,21 @@ async fn commit_batch(g: &Group, b: Batch<'_>, mut done: Captured) -> Result<Cap
     if done.added + done.removed == 0 {
         return Ok(done);
     }
+    let index = g.git.index().await?;
     let (Some(h), Some(worktree)) = (&head, &g.worktree) else {
         let tree = g.git.run(&["write-tree"]).await?.trim().to_owned();
-        return commit_main(g, tree, head, done, &[]).await;
+        let done = commit_main(g, tree, head, done, &[]).await?;
+        for path in &add {
+            if let Some(entry) = index.get(path) {
+                crate::capture_schedule::recorded(g, path, entry);
+            }
+        }
+        return Ok(done);
     };
     let main = match main {
         Some(t) => t,
         None => g.git.tree(h).await?,
     };
-    let index = g.git.index().await?;
     let beside = beside(g, me, &main, &index, &soon);
     let changes: crate::suggest::Changes = add
         .iter()
@@ -547,6 +583,12 @@ async fn commit_batch(g: &Group, b: Batch<'_>, mut done: Captured) -> Result<Cap
     for p in proposals {
         let commit = crate::proposal::write(g, me, &p.parent, &p.tree).await?;
         crate::suggest::record(g, worktree, &main, &mut table, &commit, &p.paths, &changes).await?;
+        for path in &p.paths {
+            if let Some(Some(entry)) = changes.get(path) {
+                let source = beside.iter().find(|(_, target)| *target == path);
+                crate::capture_schedule::recorded(g, source.map_or(path, |(p, _)| p), entry);
+            }
+        }
         done.suggested += p.paths.len();
     }
     table.paths.retain(|p, d| {
@@ -564,7 +606,15 @@ async fn commit_batch(g: &Group, b: Batch<'_>, mut done: Captured) -> Result<Cap
     }
     let renames = crate::renames::detect(g, &main, &allowed).await;
     let tree = crate::merge::write_tree(&g.git, &crate::suggest::applied(&main, &allowed)).await?;
-    commit_main(g, tree, head, done, &renames).await
+    let previous_commit = done.commit.clone();
+    let done = commit_main(g, tree, head, done, &renames).await?;
+    for (path, entry) in allowed.iter().filter(|_| done.commit != previous_commit) {
+        if let Some(entry) = entry {
+            let source = beside.iter().find(|(_, target)| *target == path);
+            crate::capture_schedule::recorded(g, source.map_or(path, |(p, _)| p), entry);
+        }
+    }
+    Ok(done)
 }
 
 /// Commits `tree` on `main` at `head`, unless it is `main`'s tree, with a
@@ -643,6 +693,9 @@ async fn settle(
             match crate::merge::concurrent(g, &t, p, before.get(p), mine).await {
                 Ok(Some(m)) => {
                     g.git.update_ref("refs/heads/main", &m, Some(&t)).await?;
+                    if let Some(entry) = mine {
+                        crate::capture_schedule::recorded(g, p, entry);
+                    }
                     tracing::info!(group = %g.id, path = %p, commit = %m, "concurrent-save");
                     if deleted {
                         g.git

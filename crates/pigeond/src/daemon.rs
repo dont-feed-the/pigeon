@@ -229,7 +229,7 @@ impl Daemon {
                 }
             }
             let mut step = round.child("capture");
-            let captured = crate::capture::capture(g, &self.device, &self.tracer).await;
+            let captured = crate::capture::background(g, &self.device, &self.tracer).await;
             crate::status_why::note_capture(g, captured.as_ref().err());
             if let Err(e) = captured {
                 tracing::warn!(group = %g.id, error = %e, "capture-failed");
@@ -736,8 +736,9 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
                 rounds.round(&g).await;
             }
             crate::notices::check(&rounds).await;
+            let delay = crate::capture_schedule::delay(&rounds.groups(), interval);
             tokio::select! {
-                () = tokio::time::sleep(interval) => {}
+                () = tokio::time::sleep(delay) => {}
                 () = rounds.wake.notified() => {}
             }
         }

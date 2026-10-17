@@ -10,6 +10,7 @@
 pub mod admission;
 pub mod authority;
 pub mod capacity;
+pub mod capture_schedule;
 pub mod catalogue;
 pub mod commit;
 pub mod consent;

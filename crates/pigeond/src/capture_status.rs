@@ -1,0 +1,90 @@
+//! Discover background candidates without Git's clean filters (15 §15.5).
+//! Cached index stats and lstat can defer a same-size edit before any read;
+//! Git lists untracked names without examining their file contents.
+
+use std::collections::BTreeSet;
+
+use pigeon_git::status::Entry;
+
+use crate::git::{Error, is_pigeon_path};
+use crate::group::Group;
+
+fn invalid(detail: String) -> Error {
+    Error::Parse {
+        argv: vec!["capture index observation".into()],
+        detail,
+    }
+}
+
+pub(crate) async fn changes(g: &Group) -> Result<Vec<Entry>, Error> {
+    let Some(wt) = &g.worktree else {
+        return Ok(Vec::new());
+    };
+    let index = crate::trace_index::read_all(g).map_err(invalid)?;
+    let head = match g.git.rev("HEAD").await {
+        Some(head) => g.git.tree(&head).await?,
+        None => Default::default(),
+    };
+    let mut out = Vec::new();
+    for (path, cached) in &index {
+        if is_pigeon_path(path) {
+            continue;
+        }
+        let file = wt.join(path);
+        let stat = pigeon_sys::fs::lstat(&file).map_err(|e| invalid(e.to_string()))?;
+        if cached.hidden && stat.is_none() {
+            continue;
+        }
+        let entry = cached.entry();
+        let clean = cached.clean(&file).map_err(invalid)?
+            && stat.as_ref().is_none_or(|s| {
+                entry
+                    .as_ref()
+                    .is_some_and(|e| (e.mode == "100755") == (s.mode & 0o111 != 0))
+            });
+        let x = if entry.as_ref() == head.get(path) {
+            '.'
+        } else if head.contains_key(path) {
+            'M'
+        } else {
+            'A'
+        };
+        let y = if stat.is_none() {
+            'D'
+        } else if clean {
+            '.'
+        } else {
+            'M'
+        };
+        if x == '.' && y == '.' {
+            continue;
+        }
+        out.push(Entry::Changed {
+            xy: format!("{x}{y}"),
+            mode_worktree: stat.map_or_else(|| "000000".into(), |s| format!("{:o}", s.mode)),
+            oid_index: cached.oid.clone().unwrap_or_default(),
+            path: path.clone(),
+        });
+    }
+    let names = g
+        .git
+        .repo
+        .run(
+            &["ls-files", "--others", "-z"],
+            None,
+            pigeon_git::DEFAULT_TIMEOUT,
+        )
+        .await?;
+    let mut listed = BTreeSet::new();
+    for bytes in names.stdout.split(|b| *b == 0).filter(|b| !b.is_empty()) {
+        let path = std::str::from_utf8(bytes).map_err(|e| invalid(e.to_string()))?;
+        if !index.contains_key(path) && listed.insert(path.to_owned()) {
+            out.push(Entry::Untracked {
+                path: path.to_owned(),
+            });
+        }
+    }
+    // A staged deletion with a visible file is untracked above. A truly
+    // deleted index entry has no local save to stage, as with Git status.
+    Ok(out)
+}

@@ -183,6 +183,26 @@ later saves, index refresh and a pending-status observation.
 It passes with the fix, alongside 79 selected native install, contract,
 recovery, thinning and driver checks. Full all-target Clippy passes locally.
 
+## File scheduling continuation (not yet released)
+
+The native background capture adapter uses monotonic elapsed time, two equal
+stat observations and the size-dependent 2–60 second quiet period. Seven
+distinct captures in an hour space later captures of that path by ten minutes;
+an hour without changes cools it. One earliest deadline wakes the normal round,
+without a sleeping task per file. Explicit capture requests remain immediate.
+Actual successful proposals and concurrent saves are recorded separately from
+failed attempts; a remembered near-install classification survives settling.
+
+Nine pure laws run 1000 cases each. The native same-size edit fixture initially
+failed because Git status invoked a clean filter before settling. Background
+candidate discovery now uses the existing index parser and stat observations,
+plus a names-only untracked query, without that filter. The complete local
+install target and those laws pass: 58 checks, including index formats 2/3/4,
+conflict, crash recovery, seven actual hot-file captures, unrelated-file progress
+and the same-size pre-ingestion regression. This does not establish whole-round
+quiet behavior: status/install callers still have their older observations,
+and the full daemon round, oldest-first order and resource budgets need work.
+
 ## Periodic macOS failures
 
 The v0.6.0 periodic run found a missing-file history lookup through macOS's

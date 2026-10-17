@@ -18,6 +18,8 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Background capture waits for a file to settle before reading it and spaces
+  captures of frequently saved files, while other stable files keep progressing.
 - Repeated in-place saves keep each captured version intact while it awaits
   backup, including when status checks or index refreshes inspect the file.
 - Status checks and protection planning finish sooner for folders with many

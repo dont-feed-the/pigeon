@@ -2,12 +2,14 @@
 //! In particular ls-files can clear a visible file's skip-worktree bit;
 //! an observation must not perform the transition it is meant to check.
 
+use std::collections::BTreeMap;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
 use crate::group::Group;
 
 /// The pointer and cache data actually stored by Git for one path.
+#[derive(Clone)]
 pub(crate) struct Index {
     pub oid: Option<String>,
     pub hidden: bool,
@@ -16,6 +18,15 @@ pub(crate) struct Index {
 }
 
 impl Index {
+    pub(crate) fn entry(&self) -> Option<pigeon_core::authority::Entry> {
+        let mode = format!("{:o}", self.cache?[6]);
+        Some(pigeon_core::authority::Entry {
+            kind: if mode == "160000" { "commit" } else { "blob" }.to_owned(),
+            mode,
+            oid: self.oid.clone()?,
+        })
+    }
+
     pub fn clean(&self, file: &Path) -> Result<bool, String> {
         let stat = match std::fs::symlink_metadata(file) {
             Ok(s) => s,
@@ -53,6 +64,21 @@ fn integer(bytes: &[u8], at: &mut usize) -> Result<u32, String> {
 
 /// Formats 2/3 use padded paths; format 4 uses Git's prefix-compressed paths.
 pub(crate) fn read(g: &Group, path: &str) -> Result<Index, String> {
+    Ok(read_selected(g, Some(path))?.remove(path).unwrap_or(Index {
+        oid: None,
+        hidden: false,
+        cache: None,
+        mtime: 0,
+    }))
+}
+
+/// One immutable index reading for the whole background scan. No Git
+/// clean filter runs, even for a same-size edit or a racy stat cache.
+pub(crate) fn read_all(g: &Group) -> Result<BTreeMap<String, Index>, String> {
+    read_selected(g, None)
+}
+
+fn read_selected(g: &Group, wanted: Option<&str>) -> Result<BTreeMap<String, Index>, String> {
     let file = g.git_dir.join("index");
     let before = pigeon_sys::fs::lstat(&file).map_err(|e| e.to_string())?;
     let bytes = std::fs::read(&file).map_err(|e| e.to_string())?;
@@ -69,12 +95,8 @@ pub(crate) fn read(g: &Group, path: &str) -> Result<Index, String> {
     }
     let count = integer(&bytes, &mut at)?;
     let mut previous = Vec::new();
-    let mut result = Index {
-        oid: None,
-        hidden: false,
-        cache: None,
-        mtime: before.ok_or("index disappeared")?.mtime_ns,
-    };
+    let mtime = before.ok_or("index disappeared")?.mtime_ns;
+    let mut result = BTreeMap::new();
     for _ in 0..count {
         let start = at;
         let mut cache = [0; 10];
@@ -129,13 +151,25 @@ pub(crate) fn read(g: &Group, path: &str) -> Result<Index, String> {
             let padding = (8 - (at - start) % 8) % 8;
             take(&bytes, &mut at, padding)?;
         }
-        if previous == path.as_bytes() {
+        if wanted.is_none_or(|path| previous == path.as_bytes()) {
             if flags & 0x3000 != 0 {
                 return Err("unmerged index entry".into());
             }
-            result.oid = Some(oid);
-            result.hidden = extended & 0x4000 != 0;
-            result.cache = Some(cache);
+            let path = String::from_utf8(previous.clone()).map_err(|_| "non-UTF-8 index path")?;
+            if result
+                .insert(
+                    path,
+                    Index {
+                        oid: Some(oid),
+                        hidden: extended & 0x4000 != 0,
+                        cache: Some(cache),
+                        mtime,
+                    },
+                )
+                .is_some()
+            {
+                return Err("duplicate index path".into());
+            }
         }
     }
     let end = bytes.len().checked_sub(20).ok_or("index has no checksum")?;
