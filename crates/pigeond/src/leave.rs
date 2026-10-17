@@ -13,7 +13,8 @@
 //! files. A custodian's repository stays where it is. Once no group is
 //! left, the device key is deleted. The folder itself is never deleted
 //! here **[no ADR]**. A computer alone in its group has nobody to tell, so
-//! it forgets the group at once, last admin or not.
+//! it forgets the group at once, last admin or not; so does one in a group
+//! whose roster is in a format this release no longer reads.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -67,7 +68,7 @@ pub async fn leave(d: &Daemon) -> Vec<Response> {
     }
     let _busy = g.busy.lock().await;
     let Some(mut doc) = g.roster() else {
-        return vec![problem("not-in-group", &[], None)];
+        return unreadable(d, &g).await;
     };
     let me = DeviceId(d.device.clone());
     let name = doc
@@ -119,6 +120,31 @@ pub async fn leave(d: &Daemon) -> Vec<Response> {
     d.wake.notify_one();
     vec![Response::Said {
         message: msg("leaving", &[("name", text(&name))]),
+    }]
+}
+
+/// `pigeon leave` of a group whose roster this release does not read. One
+/// in an earlier format it never reads again: no removal it could sign
+/// would reach anyone, so it forgets the group at once, keeping its files.
+/// A later one asks for an update first.
+async fn unreadable(d: &Daemon, g: &std::sync::Arc<Group>) -> Vec<Response> {
+    let declared = g
+        .git
+        .blob("refs/heads/main:.pigeon/roster.toml")
+        .await
+        .map(|b| crate::roster_file::declared(&String::from_utf8_lossy(&b)))
+        .unwrap_or_default();
+    match declared.format {
+        Some(f) if f < i64::from(crate::roster_file::FORMAT) => {}
+        Some(_) => return vec![problem("update-needed", &[], None)],
+        None => return vec![problem("not-in-group", &[], None)],
+    }
+    if let Err(e) = finish(d, g).await {
+        return vec![problem("internal-error", &[], Some(e))];
+    }
+    let group = declared.group.unwrap_or_default();
+    vec![Response::Said {
+        message: msg("left-unreadable", &[("group", text(&group))]),
     }]
 }
 

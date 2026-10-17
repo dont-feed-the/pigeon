@@ -155,8 +155,17 @@ where
         path: path.to_path_buf(),
     };
     if let Err(e) = crate::config::add_group(&d.dirs.config_file(), &entry) {
-        tracing::warn!(error = %e, "config-write-failed");
+        d.groups
+            .write()
+            .unwrap_or_else(|p| p.into_inner())
+            .retain(|live| !Arc::ptr_eq(live, &g));
+        drop(busy);
+        g.stop_remotedaemon().await;
+        return Err(e.to_string());
     }
+    // Bootstrap access serves only the unverified welcome. The persisted
+    // group now admits every current roster peer through the usual rule.
+    g.lock().bootstrap_peer = None;
     d.serve_group(g.clone(), None).await;
     drop(busy);
     forget_uuid(d, &g.id);

@@ -516,6 +516,7 @@ pub const MESSAGES: &[Entry] = &[
     e("refounded", &["group", "name"]),
     e("leaving-already", &[]),
     e("left", &["name", "group"]),
+    e("left-unreadable", &["group"]),
     e("cmd-held", &[]),
     e("held-none", &[]),
     e("held-row", &["id", "reason", "files", "since", "paths"]),

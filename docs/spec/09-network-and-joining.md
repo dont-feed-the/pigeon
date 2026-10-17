@@ -176,6 +176,16 @@ same folder starts clean **[no ADR]**.
   one. Every join is a signed, visible roster commit.
 - A device already in the group refuses to join it again
   (`already-in-group`).
+- A new device is **in the group once step 5 checked its welcome**, and
+  only then **[no ADR]**: `config.toml` records the group and its loops
+  start last ([11 §11.2](11-local-state.md)). Until then its repository's
+  `joining` names the group ([11 §11.3](11-local-state.md)), and a join
+  cut short by a crash resumes in that repository when the same
+  invitation is given again: its annex UUID is the one the admitter's
+  roster may already hold, which step 3 welcomes again. A group that
+  `config.toml` lists without `main`, as releases up to 0.5.13 left a
+  failed join, becomes such a join again when `pigeond` starts
+  (`pigeond/src/join.rs`, `tests/join_resume.rs`).
 - A computer is in **one group only** **[no ADR]**: the web pages and the
   commands without a path show one group. While it is in a group,
   `create`, `join` and `recover` of another one are refused before anything
@@ -247,7 +257,10 @@ person (ADR 0075), and visible in the history.
 
 Coded so far (`pigeond/src/leave.rs`, `tests/leave.rs`): a computer that
 is the group's only machine (recovery sheets aside) has nobody to tell: it
-forgets the group at once, as below, without signing a removal. Otherwise
+forgets the group at once, as below, without signing a removal. So does a
+computer whose group's roster is in a format before this release's, which
+it never reads again (`left-unreadable`); a later format asks for an
+update (`update-needed`). Otherwise
 `pigeon leave` refuses the group's last admin computer (`leave-last-admin`:
 no device of an admin, recovery sheets included, would remain), signs the
 removal and records it in `.git/pigeon/leaving`

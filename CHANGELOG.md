@@ -5,6 +5,17 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- `pigeon join` can finish an interrupted join with the same invitation and
+  folder. Failed attempts clean up their files while retaining the admitted
+  identity for a retry. Computers stuck with an older unfinished join can
+  retry after updating.
+- `pigeon leave` can forget groups whose roster predates the supported
+  format, keeping their files so the computer can join or create a group.
+
 ## 0.5.15 — 2026-10-17
 
 ### Added

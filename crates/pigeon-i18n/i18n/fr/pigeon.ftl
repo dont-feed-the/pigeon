@@ -502,6 +502,7 @@ cmd-leave = Retirer cet ordinateur du groupe ; ses fichiers restent
 leaving = { $name } quitte le groupe dès qu'une autre machine a son retrait. Ses fichiers restent dans le dossier.
 leaving-already = Cet ordinateur quitte déjà le groupe.
 left = { $name } a quitté le groupe « { $group } », dont il était la seule machine. Ses fichiers restent dans le dossier.
+left-unreadable = Cet ordinateur a quitté le groupe « { $group } », créé par une version antérieure de pigeon que celle-ci ne sait pas lire. Ses fichiers restent dans le dossier.
 cmd-refound = Refonder le groupe avec vous pour seul administrateur, quand aucun administrateur ne peut signer
 refounded = { $group } est refondé avec { $name } pour seul administrateur. Invitez à nouveau les autres : leurs dossiers le rejoignent sur place.
 cmd-held = Changements que pigeon retient jusqu'à votre choix : suppressions à partager ou annuler, noms à renommer
