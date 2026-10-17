@@ -495,3 +495,35 @@ streak. The remaining four old v0.6.8 background S9 shards were canceled in
 favor of v0.6.9; nine completed jobs were retained, not represented as a
 completed full v0.6.8 model run. Active main cache producers saved before
 obsolete main workflows were canceled.
+
+## v0.6.10 observation
+
+[v0.6.10](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.10)
+published at 2026-10-17T21:10:31Z from
+`510146fce732cbcd1dd3a35e4bb5f8ed3ea52319`. Independent verification
+passed all six assets, four archive checksums, native Linux installation,
+pinned annex, completions and latest redirect. Candidate lead was
+**1200 seconds** and publication gap **3111 seconds**; both targets were met.
+There are 19 lead and 18 completed-gap samples. No percentile or sustained
+failure-rate improvement is inferred.
+
+Original daemon shard 3 passed 11 of 12 tests; the initial capacity
+assertion saw zero instead of 13 bytes. Artifact 12113894459 is 9641122
+bytes, SHA-256
+`b3a2359940016fd47319d71b7560102a87adef8d1c931e728203caedd0fe6d20`.
+The one bounded original-shard retake passed all 12 checks in 203.441
+seconds and the positive/negative storage-boundary trace checks. The
+publish job had stopped at that failed CI gate after its installation
+and real backup-service checks passed. One publication-job-only retry
+reused both green archives. Source, tag, assertions, deadlines and gates
+stayed unchanged. The next fixture checkpoint requires its actual named
+paths before capacity observation; it does not infer the zero snapshot's
+precise interleaving.
+
+Main's stricter S8 observer passed all 15 checks in Linux namespaces, with
+accepted filesystem and roster traces. The tag's complete slice also passed.
+This is finite validation of the observation change, not a failure-rate
+measurement or a real resource budget. The v0.6.9 Mac workspace separately
+passed 690 of 692 checks: two telemetry fixtures correctly encountered
+normal-build Mac backup refusal. They are corrected into the lab tier in
+the next checkpoint; that run is not a passing Mac suite.
