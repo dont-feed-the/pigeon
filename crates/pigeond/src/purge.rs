@@ -300,7 +300,13 @@ async fn evaluate(g: &Group, me: &str, allow_drop: bool) -> Result<(), crate::gi
         return Err(invalid("retained refs changed during purge evaluation"));
     }
     g.lock().renewed_after_erasure = Some((main.clone(), renewed));
-    if allow_drop {
+    if allow_drop && !released.is_empty() {
+        let private = crate::purge_local::keys(g).await?;
+        let private_hashes: BTreeSet<_> = private
+            .iter()
+            .filter_map(|key| crate::net::sync::key_sha256(key))
+            .map(str::to_ascii_lowercase)
+            .collect();
         let held_hashes: BTreeSet<_> = references
             .iter()
             .filter(|r| !released.contains(&r.key))
@@ -308,6 +314,15 @@ async fn evaluate(g: &Group, me: &str, allow_drop: bool) -> Result<(), crate::gi
             .map(str::to_ascii_lowercase)
             .collect();
         for key in released {
+            // A local staged copy may reuse an erased version's object or
+            // a pool hash under another extension. Preserve existing bytes
+            // without treating that private intent as a replicated birth.
+            if private.contains(&key)
+                || crate::net::sync::key_sha256(&key)
+                    .is_some_and(|hash| private_hashes.contains(&hash.to_ascii_lowercase()))
+            {
+                continue;
+            }
             let _lease = g.git.purge_gate.erasure().await;
             let policy = g.git.purge_gate.policy();
             if policy.waiting || !policy.released.contains(&key) {

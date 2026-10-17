@@ -30,6 +30,7 @@ headline-capturing =
     }
 headline-checking = Le dossier local n'a pas pu être vérifié. Lancez : pigeon doctor
 headline-inventory-unreadable = Pigeon ne peut pas vérifier toutes les versions enregistrées pour le moment.
+headline-history-waiting = La copie des fichiers attend la vérification des versions enregistrées. Si cela dure, lancez : pigeon doctor
 headline-too-few-backups = Pas encore en sécurité : ajoutez un ordinateur de sauvegarde.
 why-capturing = Cette modification attend d'être enregistrée et copiée sur les ordinateurs de sauvegarde.
 why-differs = Votre copie diffère de la version du groupe. Choisissez laquelle garder.
@@ -503,6 +504,7 @@ cmd-leave = Retirer cet ordinateur du groupe ; ses fichiers restent
 leaving = { $name } quitte le groupe dès qu'une autre machine a son retrait. Ses fichiers restent dans le dossier.
 leaving-already = Cet ordinateur quitte déjà le groupe.
 left = { $name } a quitté le groupe « { $group } », dont il était la seule machine. Ses fichiers restent dans le dossier.
+left-unreadable = Cet ordinateur a quitté le groupe « { $group } », créé par une version antérieure de pigeon que celle-ci ne sait pas lire. Ses fichiers restent dans le dossier.
 cmd-refound = Refonder le groupe avec vous pour seul administrateur, quand aucun administrateur ne peut signer
 refounded = { $group } est refondé avec { $name } pour seul administrateur. Invitez à nouveau les autres : leurs dossiers le rejoignent sur place.
 cmd-held = Changements que pigeon retient jusqu'à votre choix : suppressions à partager ou annuler, noms à renommer

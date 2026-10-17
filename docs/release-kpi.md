@@ -131,3 +131,19 @@ The user reported a GitHub Teams capacity of **60 concurrent runners** on
 16 October. Independent validation and release jobs can use that capacity;
 combined PR validation and cancellation of superseded runs still avoid
 waste. The publication-gap and candidate-lead targets stay unchanged.
+
+
+## v0.5.15 observation
+
+[v0.5.15](https://github.com/dont-feed-the/pigeon/releases/tag/v0.5.15)
+was published on 17 October at 00:27:06 UTC with all six required assets.
+Its candidate took **18 minutes 31 seconds** to publish, meeting the
+60-minute target. The completed publication interval from v0.5.14 was
+**1 hour 24 seconds**, meeting the two-hour target. Prior missed intervals
+remain in the history. The collector retained eight lead-time samples and
+seven completed publication intervals; these are still not a reliable
+percentile estimate.
+
+Linux CI and lab completed before slice, which finished at 00:26:53 UTC.
+Publication followed 13 seconds later. The increased runner allowance did
+not waive any release check or the macOS archive requirement.

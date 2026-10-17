@@ -104,7 +104,9 @@ impl Daemon {
         g.git.root(&main).await.as_deref() == Some(g.id.as_str())
     }
 
-    /// Serves a new group: records it in `config.toml` and starts its loops.
+    /// Serves a new group: records it in `config.toml`, then starts its
+    /// loops. A group the file does not record is not served: it would be
+    /// gone after a restart.
     pub async fn add_group(&self, mut g: Group, path: &Path) -> Result<Arc<Group>, String> {
         crate::shared::configure(&mut g, self.config.bridge_storage.as_ref())?;
         self.keep_key()?;
@@ -112,9 +114,7 @@ impl Daemon {
             id: g.id.clone(),
             path: path.to_path_buf(),
         };
-        if let Err(e) = config::add_group(&self.dirs.config_file(), &entry) {
-            tracing::warn!(error = %e, "config-write-failed");
-        }
+        config::add_group(&self.dirs.config_file(), &entry).map_err(|e| e.to_string())?;
         let g = Arc::new(g);
         self.serve_group(g.clone(), None).await;
         Ok(g)
@@ -640,6 +640,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     let tracer = Tracer::new(dirs.traces(), &device);
     for entry in &config.groups {
         crate::join_transition::recover(entry, &dirs.config_file(), &env).await?;
+        crate::join::recover(entry, &dirs.config_file(), &env).await;
     }
     let config = config::load(&dirs.config_file()).map_err(|e| e.to_string())?;
     let mut groups = Vec::new();

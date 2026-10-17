@@ -58,6 +58,13 @@ async fn pending_with_rule(rule: Option<Rule>) -> (World, String, String) {
 
 async fn complete(w: &World, content: &str) {
     assert!(w.g.git.purge_gate.policy().waiting);
+    let status = pigeond::status::report(&w.g, &dev(3).0, "", false).await;
+    assert_eq!(status.headline.id, "headline-history-waiting");
+    assert_eq!(status.level, pigeon_proto::api::Level::NeedsYou);
+    assert!(
+        w.g.git.purge_gate.policy().waiting,
+        "status must not lift a content barrier"
+    );
     pigeond::purge::round(&w.g, &dev(3).0, false).await;
     assert!(
         w.g.git.purge_gate.policy().waiting,

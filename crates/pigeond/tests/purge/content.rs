@@ -150,6 +150,45 @@ async fn only_fully_released_historical_objects_drop_and_private_bytes_stay() {
         .update_ref(&format!("refs/pigeon/status/{}", dev(3).0), &witness, None)
         .await
         .unwrap();
+    // An unpublished staged pointer is private intent, even when its
+    // working file is absent and its bytes reuse released history.
+    let private_path = "private-index-only.txt";
+    let info = format!("{},{},{}", old_entry.mode, old_entry.oid, private_path);
+    l.git
+        .run(&["update-index", "--add", "--cacheinfo", &info])
+        .await
+        .unwrap();
+    assert!(!l.wt.join(private_path).exists());
+    pigeond::purge::round(&l.g, &dev(1).0, true).await;
+    assert!(l.g.git.purge_gate.policy().released.contains(&old_key));
+    assert_eq!(l.git.index().await.unwrap()[private_path], old_entry);
+    assert_eq!(std::fs::read(&old_object).unwrap(), old_bytes);
+    assert_eq!(std::fs::read(&old_pool).unwrap(), old_bytes);
+    l.git
+        .run(&["update-index", "--force-remove", "--", private_path])
+        .await
+        .unwrap();
+    // A differently extended key still pins the same physical pool hash.
+    let alias_key = format!("{old_key}.private");
+    pigeond::change::stage_file(
+        &l.git,
+        None,
+        private_path,
+        format!("/annex/objects/{alias_key}\n").as_bytes(),
+    )
+    .await
+    .unwrap();
+    let alias_index = l.git.index().await.unwrap()[private_path].clone();
+    assert!(!l.wt.join(private_path).exists());
+    pigeond::purge::round(&l.g, &dev(1).0, true).await;
+    assert!(l.g.git.purge_gate.policy().released.contains(&old_key));
+    assert_eq!(l.git.index().await.unwrap()[private_path], alias_index);
+    assert_eq!(std::fs::read(&old_object).unwrap(), old_bytes);
+    assert_eq!(std::fs::read(&old_pool).unwrap(), old_bytes);
+    l.git
+        .run(&["update-index", "--force-remove", "--", private_path])
+        .await
+        .unwrap();
     pigeond::purge::round(&l.g, &dev(1).0, true).await;
     assert!(l.g.git.purge_gate.policy().released.contains(&old_key));
     assert!(

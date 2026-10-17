@@ -413,6 +413,10 @@ pub(crate) async fn inventory_report(
         let unreadable = observed.is_err();
         (observed.unwrap_or_default(), Ok(Vec::new()), unreadable)
     };
+    let history_waiting = retained
+        .as_ref()
+        .err()
+        .is_some_and(crate::retention::waiting);
     let history_unreadable = retained.is_err();
     let retained = retained.unwrap_or_default();
     let k = settings(g).k;
@@ -498,6 +502,7 @@ pub(crate) async fn inventory_report(
         .count();
     let headline = match (level, &shortfall) {
         _ if removed => msg("headline-removed", &[]),
+        _ if !current_unreadable && history_waiting => msg("headline-history-waiting", &[]),
         _ if current_unreadable || history_unreadable => msg("headline-inventory-unreadable", &[]),
         _ if pending_unreadable => msg("headline-checking", &[]),
         _ if full => msg("headline-disk-full", &[]),

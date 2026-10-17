@@ -9,6 +9,11 @@ use std::collections::BTreeSet;
 use crate::git::Error;
 use crate::group::Group;
 
+/// A deliberate content barrier is distinct from unreadable Git history.
+pub(crate) fn waiting(error: &Error) -> bool {
+    matches!(error, Error::Parse { argv, .. } if argv == &["retained history waiting"])
+}
+
 /// One reading of accepted and proposal refs, shared by both status views.
 pub(crate) struct Snapshot {
     /// The accepted head in this reading.
@@ -98,9 +103,10 @@ pub async fn states(
     }
     let policy = g.git.purge_gate.policy();
     if policy.waiting {
-        return Err(crate::membership::invalid(
-            "historical content waits for complete purge metadata",
-        ));
+        return Err(Error::Parse {
+            argv: vec!["retained history waiting".into()],
+            detail: "historical content waits for complete purge metadata".into(),
+        });
     }
     keys.retain(|k| !current.contains(k) && !policy.released.contains(k));
     if keys.is_empty() {

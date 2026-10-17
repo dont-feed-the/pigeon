@@ -4,7 +4,8 @@
 //! the second laptop leaves. Its removal reaches the first laptop, which
 //! drops it from the machines; the leaver then forgets the group, keeps its
 //! files as plain files without `.git`, and, in no group any more, deletes
-//! its device key.
+//! its device key. A group whose roster is in a format this release no
+//! longer reads is left at once, as nobody could read its removal.
 //!
 //! Needs what `tests/slice.rs` needs: git-annex, and `pigeon` and
 //! `git-annex-p2p-iroh` built next to `pigeond`.
@@ -16,6 +17,7 @@ mod common;
 use common::{SERIAL, dirs, eventually_within, invitation, join, logs, pigeon, said, start, until};
 use pigeon_proto::Response;
 use pigeon_proto::api::State;
+use std::path::Path;
 
 fn problem(rs: &[Response]) -> Option<String> {
     rs.iter().find_map(|r| match r {
@@ -258,4 +260,75 @@ fn a_peer_that_never_learned_the_join_cannot_acknowledge_the_leave() {
         "the witnessed leave did not finish",
         &all,
     );
+}
+
+/// Moves `folder`'s `main` to a roster in `format = 1`, as releases before
+/// 0.5.10 wrote it. The daemon has stopped, but an interrupted index writer
+/// can leave a lock; this history fixture has no reason to edit the index.
+fn in_an_earlier_format(folder: &Path) {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let git = pigeond::git::Git::new(folder, pigeon_git::GitEnv::default());
+        let before = git.rev("refs/heads/main").await.unwrap();
+        let mut tree = git.tree(&before).await.unwrap();
+        let path = ".pigeon/roster.toml";
+        let text = String::from_utf8(git.blob(&format!("{before}:{path}")).await.unwrap()).unwrap();
+        assert!(text.starts_with("format = 2\n"), "{text}");
+        let old = text.replacen("format = 2", "format = 1", 1);
+        let blob = git
+            .run_in(&["hash-object", "-w", "--stdin"], old.as_bytes())
+            .await
+            .unwrap();
+        tree.get_mut(path).unwrap().oid = blob.trim().to_owned();
+        let tree = pigeond::merge::write_tree(&git, &tree).await.unwrap();
+        git.run(&["config", "user.name", "old"]).await.unwrap();
+        git.run(&["config", "user.email", "old@pigeon"])
+            .await
+            .unwrap();
+        let commit = git
+            .commit_tree(&tree, &[&before], "an earlier release")
+            .await
+            .unwrap();
+        git.update_ref("refs/heads/main", &commit, Some(&before))
+            .await
+            .unwrap();
+    });
+}
+
+#[test]
+fn a_group_in_an_earlier_roster_format_is_left_at_once() {
+    let _one = SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some((_tmp, root, sockets)) = dirs() else {
+        return;
+    };
+    let s = sockets.path();
+    let fa = root.join("ana");
+    std::fs::create_dir_all(&fa).unwrap();
+    std::fs::write(fa.join("a.txt"), "first\n").unwrap();
+    let f = fa.to_str().unwrap();
+    let a1 = start(&root, s, "a1");
+    let created = pigeon(&a1, &["create", "Family", f, "--k", "1"]);
+    assert!(said(&created, "created", "group").is_some(), "{created:?}");
+    drop(a1);
+    in_an_earlier_format(&fa);
+    let a1 = start(&root, s, "a1");
+    let left = pigeon(&a1, &["leave", "--yes"]);
+    assert_eq!(
+        said(&left, "left-unreadable", "group").as_deref(),
+        Some("Family"),
+        "{left:?}\n{}",
+        logs(&[&a1])
+    );
+    assert!(!fa.join(".git").exists(), "the folder keeps no repository");
+    assert_eq!(
+        std::fs::read_to_string(fa.join("a.txt")).unwrap(),
+        "first\n"
+    );
+    let again = pigeon(&a1, &["create", "Family", f, "--k", "1"]);
+    assert!(said(&again, "created", "group").is_some(), "{again:?}");
 }

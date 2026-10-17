@@ -30,6 +30,7 @@ headline-capturing =
     }
 headline-checking = The local folder could not be checked. Run: pigeon doctor
 headline-inventory-unreadable = Pigeon cannot check every saved version right now.
+headline-history-waiting = File copying waits until Pigeon can verify saved versions. If this continues, run: pigeon doctor
 headline-too-few-backups = Not safe yet: add a backup machine.
 why-capturing = This change is waiting to be saved and copied to the backup machines.
 why-differs = Your copy differs from the group's version. Choose which to keep.
@@ -495,6 +496,7 @@ cmd-leave = Remove this computer from the group; its files stay
 leaving = { $name } leaves the group once another machine has its removal. Its files stay in the folder.
 leaving-already = This computer is already leaving the group.
 left = { $name } has left the group “{ $group }”, where it was the only machine. Its files stay in the folder.
+left-unreadable = This computer has left the group “{ $group }”, made by an earlier pigeon that this one cannot read. Its files stay in the folder.
 cmd-refound = Found the group again with you as its only admin, when no admin can sign
 refounded = { $group } is refounded with { $name } as its only admin. Invite the others again: their folders join in place.
 cmd-held = Changes pigeon holds until you choose: deletions to share or bring back, names to rename

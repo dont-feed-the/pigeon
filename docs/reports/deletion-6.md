@@ -1,8 +1,9 @@
 # M5 implementation progress
 
-M5 is not complete or tagged. Its branch leaves the published version unchanged. Erase is implemented in the working CLI and
-web interface; destructive protocol conformance and the remaining recovery
-semantics still need release evidence.
+M5 is not complete or tagged. Its branch leaves the published version unchanged.
+Erase is implemented in the CLI and web interface. The local protocol,
+recovery and usability evidence below still needs current-main CI and an
+actual v0.6 publication.
 
 ## Implemented and checked locally
 
@@ -85,7 +86,6 @@ skip the configured month or claim physical purge completion.
 
 ## Remaining before release
 
-- Retake the erasure workflow through the current file manager and dialogs.
 - Integrate current main, finish Linux release validation and both platforms'
   archive builds, then publish v0.6. macOS tests provide periodic background
   evidence. No longitudinal test claim is made at this milestone.
@@ -455,3 +455,95 @@ member/folder restoration and S2's free/keep/offline-return path. All four
 Purge traces and their rejection checks pass, as do 25 CI-selection checks.
 All-target Clippy, workflow lint and repository structural checks pass.
 These local results are not a substitute for current-main CI or publication.
+
+
+## French workflow retake on the conformance commit
+
+The returning French agent participant used the normal, non-lab build of
+`36cce03f6e235980f4c39f87da03edcc30e5fe1a`, without source access or
+assistance. This is a retake by an existing participant, not a new person.
+The three-peer fixture used the actual 30-day retention setting. Its
+preparation and invitation setup happened before the participant began;
+two harness setup errors are not counted as participant errors.
+
+The participant found the deleted file and its history, reviewed the
+correct scope (one current file, two versions and 79 distinct bytes),
+prepared erasure separately from requesting it, identified the named
+backup being waited for, cancelled, restored the current file, and then
+explicitly restored version 1. There were no wrong targets, failed clicks
+or requests for help. The final history showed version 3 alongside
+versions 2 and 1, and no accepted erasure request remained.
+
+Their explanations distinguished the earliest retention end from a
+completion promise, and explained that every backup waits at least
+30 days after receipt. They understood that another current file using
+the same bytes prevents their release; 79 bytes is not guaranteed freed
+space. Preparation does not delete or schedule anything. Newer saves and
+restores remain retained without cancelling an older request. Cancellation
+cannot recreate destroyed bytes or automatically restore the current
+file. Permanent erasure in Pigeon is not a promise of secure disk wiping
+or deletion of separate copies.
+
+Independent checks after the session found no active decisions, three
+saved versions, and exact binary equality of the current file to the
+original version 1, including its NUL, 0xff and CRLF bytes. Its SHA-256 was
+`43c3705c99546b9a86985a0d7b1aa5d394f244d23e8f0ccb5dc2ac36cb114337`.
+The duplicate file's original bytes were unchanged. All fixture peers
+were stopped and reaped after these checks.
+
+Ease ratings on a 1–7 scale were 7 for finding the controls, 6 for
+understanding/requesting erasure, 7 for cancelling, 5 for restoring, and
+6 overall. Remaining concerns were the vague “Retour” after preparation,
+the long path from a deleted file to an older version, long differing
+receipt/request identifiers, and history not naming version 1 as the
+source of version 3. A restore was not visible in the first snapshot;
+the participant waited without clicking again and it then appeared.
+This session did not measure response latency. A transient inventory
+verification warning around confirmations cleared on later navigation,
+but was alarming and unexplained. It remains an observation to investigate,
+not evidence that any content was lost. No month-long wait or secure-wipe
+test is claimed by this session.
+
+
+## A private staged copy can reuse erased history
+
+A physical-drop regression reproduced loss of a real annex object still
+named by an unpublished index entry whose working file was absent. Other
+private-save fixtures used different bytes and did not cover this case.
+Physical erasure now reads local staged pointers before dropping anything,
+keeps their exact keys and shared content hashes, and leaves the index
+unchanged. Bare backup repositories have no private working index to pin.
+The read inspects only bounded pointer blobs; an incomplete or unreadable
+object response prevents physical deletion.
+
+The regression now passes with both the same annex key and a different
+extension sharing its pool hash. It verifies exact annex and provider-pool
+bytes and the unchanged staged entry while no working file exists. Removing
+the private entry lets the same qualified erasure drop those bytes. The
+signed reference policy still marks the old history released: the private
+entry neither publishes a reference nor enables fetching erased history.
+
+
+## Current-main integration and verification wording
+
+The branch integrates v0.5.16 and PR #66's resumable join, ordinary-failure
+cleanup, verified-welcome serving and old-format leave. A release-tag CI
+miss in the old-roster fixture held `index.lock` beyond the existing bounded
+retry, even though the daemon had already been stopped. The fixture now
+constructs its historical roster in an isolated tree instead of editing the
+working index. The production retry remains bounded and never removes locks.
+
+Status used the same warning for a deliberate history-verification barrier
+and an unreadable inventory. The barrier now has a distinct status message
+explaining that copying waits
+for verification and suggesting `pigeon doctor` if it persists. The level
+remains *Needs you*, inventory counts remain unavailable, and status cannot
+lift the barrier or claim that the files are safe. Actual unreadable history
+still gets its separate warning. This wording correction has not had another
+full workflow retake.
+
+On the integrated source, all 30 selected join/resume, retry, leave, health,
+signed-history and physical-erasure checks pass, as do all 18 language
+checks and the four native Purge traces with their rejection checks.
+All-target Clippy and the mandatory repository checks pass. Full Linux CI
+and release publication remain pending.

@@ -19,6 +19,10 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Erasure keeps bytes still named by a private staged file on this computer,
+  including a staged copy whose working file is absent.
+- While saved history is being verified after a change, status explains
+  that copying is waiting and what to do if the wait continues.
 - When a current version needs contents covered by an earlier erasure and
   no copy is known, its deciders see *Needs you* with recovery advice.
   The unavailable file still counts as missing, including while its new
@@ -42,6 +46,17 @@ increments the second number, and every other release the third.
 - A save, deletion or executable-bit change made while restore checks history
   stays in place, even if pigeon has already saved that change. Members can
   retry a waiting restore without losing their intervening saved suggestions.
+
+## 0.5.16 — 2026-10-17
+
+### Fixed
+
+- `pigeon join` can finish an interrupted join with the same invitation and
+  folder. Failed attempts clean up their files while retaining the admitted
+  identity for a retry. Computers stuck with an older unfinished join can
+  retry after updating.
+- `pigeon leave` can forget groups whose roster predates the supported
+  format, keeping their files so the computer can join or create a group.
 
 ## 0.5.15 — 2026-10-17
 
