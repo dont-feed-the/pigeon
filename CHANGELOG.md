@@ -11,6 +11,8 @@ increments the second number, and every other release the third.
 
 - Kept folders download in their configured high, normal or low priority, with newer versions first within each priority. Valid changes to `[groups.priority]` apply while pigeon runs.
 
+## 0.6.10 — 2026-10-17
+
 ### Fixed
 
 - pigeon backs up recent saves before older ones with the same copy needs,

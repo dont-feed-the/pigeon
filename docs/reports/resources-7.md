@@ -718,6 +718,55 @@ observer addition has its separate native regressions and S2/S3 retakes above.
 Final all-target Clippy and repository checks precede committing; exact-head
 CI still precedes merging. M6 budgets and the complete queue remain open.
 
+## First queue-checkpoint CI miss
+
+PR #78's original daemon shard 2 passed 12 of 13 checks; the ordinary
+protection/free/keep scenario timed out waiting for a later sibling to
+become protected. Its final status request took 62.072 seconds. Artifact
+12113263963 is 15018648 bytes, SHA-256
+`77fbe0f284450b0826d836d152a890af62c2e94ac391193281d6cf12f4acda90`.
+A verified extraction contains three valid laptop objects and three on c2,
+including the sibling; c1 has two valid objects and lacks the sibling.
+No absent copy counted as protection.
+
+The new diagnostics record Linux I/O pressure above 21% while transfer
+children were pending; it fell below 10% near the timeout. This correlates
+a native wait with pressure but does not prove its cause or establish a
+per-device pressure measurement. The first failed assertion remains retained.
+One failed-shard-only retry uses the same source, integrated v0.6.9 main,
+unchanged assertion and deadline. Final merge evidence records its outcome.
+
+The same head's original real-Nextcloud job also failed its final independent
+client GET after bridge restart and revoking a different client. Earlier
+real-client download, upload, large-file upload and deletion checks passed.
+The assertion did not retain the actual non-200 code, so no specific HTTP or
+authority cause is inferred. Original job 117495141481's diagnostic log is
+retained; that workflow does not save failed native fixture directories.
+One bounded failed-job-only retake reuses the same matching binaries, source,
+assertions and deadlines. Its outcome is separate from the original miss.
+
+The bounded shard-2 retake (job 117496578675) passed all 13 tests in
+169.988 seconds; protection/free/keep took 50.899 seconds. This finite
+retake does not establish a sustained failure-rate reduction.
+
+The bounded real-Nextcloud retake (job 117497027650) passed every
+checkpoint, including actual client download/upload/large upload/deletion,
+persistent identities and metadata, and independent-client access after
+revoking another client. This does not identify the first miss's cause or
+establish a sustained failure-rate reduction.
+
+## Queue and observer checkpoint merge validation
+
+Final source `d837e8bc9c1171a6adc02ac777c381c2ea3c1b51` passed exact-head CI 39066347848,
+lab 39066347803 and bridge 39066347795. The local 775-check queue
+run, 24 affected checks after v0.6.9 main integration, four final native
+absence regressions, final S2/S3 and TLC retakes, model S2/S3/S8 and
+all-target Clippy remain distinct evidence. Local S8 explicitly skipped
+without sized disks; required Linux namespace slice validation still
+precedes publication. The original v0.6.9 S8 miss and bounded retake remain
+retained. Main cache producers saved before tagging. No measured M6 or
+elapsed M7 gate is inferred.
+
 ## Local kept-folder ordering checkpoint
 
 Kept downloads previously used lexical key order and ignored `[groups.priority]`.
@@ -766,3 +815,9 @@ and HTTP-status diagnostic additions. The subsequent production-loop
 retake passed both runtime/configuration checks, and final all-target
 Clippy and repository structural/ADR/spec checks pass before committing.
 Current-main integration and exact-head CI still precede merging.
+
+The checkpoint integrates current v0.6.10 main `510146fce732cbcd1dd3a35e4bb5f8ed3ea52319` before PR
+validation. Compared with its tested queue parent, main changes only the
+version, lockfile and release reports. Affected queue/history/configuration
+and live-reload checks pass again after integration, with all-target Clippy
+and repository checks. No PR version bump is introduced.
