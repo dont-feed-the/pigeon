@@ -74,3 +74,18 @@ All-target Clippy, 27 workflow selection/partition checks and structural
 checks pass. This remains distinct from the original 774/775 workspace
 run, its retained failure and corrected precondition retakes above.
 Exact-head CI and subsequent publication are separate.
+
+## Release validation
+
+PR #83, head `323a2c8a82401f05291ad48ad282418b48981ee1`, passed exact-head CI
+39076769916, lab 39076769904 and bridge
+39076769930. Current main was integrated before validation.
+The three priority laws, native key/batch admission and lock-progress
+checks, joining version/schema/proof regressions and affected native/codec/
+rendering checks remain distinct evidence above. The original 774/775
+workspace miss, intermediate fixture-number mistake and rejected empty
+traces remain retained; corrected health and required S2/S3 trace retakes
+precede this validation. Bridge
+and core slice caches saved; active main producers remain protected from
+cancellation. v0.6.14 was published and independently verified before this
+candidate. The full resource queue, measured hardware budgets, wider security audit and actual elapsed M7 gates remain open.
