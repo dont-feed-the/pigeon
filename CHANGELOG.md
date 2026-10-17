@@ -9,6 +9,8 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Removing a computer or backup machine now explains in English and French that its existing invitation still lets its holder join as a new computer.
+
 - Diagnostic output hides recovery keys, stored invitation and authentication tokens, protocol data and private API messages.
 - Diagnostic formatting hides device signing keys, invitation secrets and repository authentication tokens.
 - Repairs to damaged files can run alongside backup transfers and take priority over routine integrity checks.
