@@ -147,3 +147,22 @@ percentile estimate.
 Linux CI and lab completed before slice, which finished at 00:26:53 UTC.
 Publication followed 13 seconds later. The increased runner allowance did
 not waive any release check or the macOS archive requirement.
+
+
+## v0.5.16 observation
+
+[v0.5.16](https://github.com/dont-feed-the/pigeon/releases/tag/v0.5.16)
+was published on 17 October at 01:48:22 UTC. All six assets, archive
+checksums, small downloads and the public latest-release redirect were
+verified. Candidate lead time was **20 minutes 45 seconds**; the completed
+publication interval was **1 hour 21 minutes 16 seconds**. Both targets
+were met. Nine lead-time samples and eight completed intervals still do
+not establish a reliable percentile; earlier misses remain recorded.
+
+The first tag CI attempt hit an `index.lock` race in the old-roster leave
+fixture beyond its existing bounded retry. Only that failed shard and its
+dependent selection check were rerun. The publication job was retried
+afterward with the successful archives retained. Final Linux CI, lab,
+slice and release checks all passed. The next rollup removes the fixture's
+unnecessary working-index mutation rather than extending the retry or
+removing a lock. Full-model background checks remain separate evidence.

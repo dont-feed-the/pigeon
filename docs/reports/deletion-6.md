@@ -1,9 +1,9 @@
 # M5 implementation progress
 
-M5 is not complete or tagged. Its branch leaves the published version unchanged.
-Erase is implemented in the CLI and web interface. The local protocol,
-recovery and usability evidence below still needs current-main CI and an
-actual v0.6 publication.
+Erase and the periodic integrity scrub are implemented for the v0.6.0
+candidate. This report records the local evidence and its limits. The
+release workflow requires the tag’s complete Linux CI, lab and slice and
+both platforms’ archives before actual publication.
 
 ## Implemented and checked locally
 
@@ -86,8 +86,8 @@ skip the configured month or claim physical purge completion.
 
 ## Remaining before release
 
-- Integrate current main, finish Linux release validation and both platforms'
-  archive builds, then publish v0.6. macOS tests provide periodic background
+- Finish tag validation and both platforms' archive builds, then publish
+  v0.6. macOS tests provide periodic background
   evidence. No longitudinal test claim is made at this milestone.
 
 ## Known limits of this evidence
@@ -552,3 +552,15 @@ The first PR CI attempt reached the new native Purge step without
 `cargo-nextest` installed in that job. The earlier trace and mutation checks
 had passed; this was missing runner setup, not a Purge verdict. The job now
 uses the repository's pinned nextest action before generating the traces.
+
+
+## Exact-head PR validation for v0.6.0
+
+PR #68's integrated head `d211890edcfc15348064d0338a6cfbe1fdd6409d` passed its complete selected
+[Linux CI](https://github.com/dont-feed-the/pigeon/actions/runs/38992529939),
+[lab](https://github.com/dont-feed-the/pigeon/actions/runs/38992529910), and
+[real Nextcloud bridge](https://github.com/dont-feed-the/pigeon/actions/runs/38992529922)
+checks before merging. The selection-verification checks also passed.
+The version is set only in this release commit; the final tag workflows
+remain publication gates. These are finite run results, not elapsed
+longitudinal evidence.
