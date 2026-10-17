@@ -20,11 +20,11 @@ async fn forward(
 ) -> io::Result<()> {
     for action in actions {
         match action {
-            Action::ToServer(bytes) => {
+            Action::ToServer(bytes) | Action::ContentToServer(bytes) => {
                 send.write_all(&bytes).await.map_err(io::Error::other)?;
                 counts.0 = counts.0.saturating_add(bytes.len() as u64);
             }
-            Action::ToClient(bytes) => {
+            Action::ToClient(bytes) | Action::ContentToClient(bytes) => {
                 writer.write_all(&bytes).await?;
                 counts.1 = counts.1.saturating_add(bytes.len() as u64);
             }

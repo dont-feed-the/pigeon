@@ -225,12 +225,12 @@ pub async fn relay(
         };
         for action in actions {
             match action {
-                Action::ToServer(bytes) => {
+                Action::ToServer(bytes) | Action::ContentToServer(bytes) => {
                     if to_server.write_all(&bytes).await.is_err() {
                         break 'session;
                     }
                 }
-                Action::ToClient(bytes) => {
+                Action::ToClient(bytes) | Action::ContentToClient(bytes) => {
                     if send.write_all(&bytes).await.is_err() {
                         break 'session;
                     }

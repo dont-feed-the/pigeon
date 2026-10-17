@@ -19,6 +19,8 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Invalid resource presets, byte rates and maintenance time windows are
+  refused as a whole when reading this computer's configuration.
 - Erasure keeps bytes still named by a private staged file on this computer,
   including a staged copy whose working file is absent.
 - While saved history is being verified after a change, status explains
