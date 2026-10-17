@@ -156,7 +156,9 @@ Exit: the budgets are measured in CI.
   lists open evidence; its existence does not close this gate.
 - Every planned law and trace validation is done
   ([13 §13.10](spec/13-verification.md), issues #9, #10).
-- models-full stays green on both runners for seven nights in a row.
+- models-full stays green on Linux for seven actual nights in a row;
+  macOS results are recorded periodically in the background under the
+  release policy above.
 - The lab passes a 72-hour soak.
 - Every v0.N upgrades with its data (ADR 0048).
 - Joining and signing get a security review (ADRs 0007, 0075).

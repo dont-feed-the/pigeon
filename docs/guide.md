@@ -179,6 +179,34 @@ patched git-annex with a stock standalone archive also on `PATH`, put the
 system's git before that archive: the archive's git wrapper selects its
 own git-annex.
 
+## Download one folder before another
+
+On this computer, you can ask pigeon to download kept folders in a
+preferred order. Open `~/.config/pigeon/config.toml` on Linux, or
+`~/Library/Application Support/pigeon/config.toml` on macOS. Under the
+existing `[[groups]]` entry for your shared folder, find its `id` and `path`.
+Add this table after those lines, **before the next `[[groups]]` heading**
+if you have another group. Keep your existing IDs and paths:
+
+```toml
+[groups.priority]
+"Photos" = "high"
+"Archives" = "low"
+```
+
+Use names of folders directly inside the shared folder. Unlisted folders
+and files at its root have normal priority. Within each priority, newer
+versions download first. A valid edit applies automatically; a download
+already in progress finishes first. If a key appears in several kept
+folders, its highest priority wins and pigeon downloads its bytes once.
+This changes that group's preferences on this computer only. It does not
+set an order between different groups.
+
+Priorities do not select which folders to keep. Use *Keep on this computer*
+for that. Within this group, sending needed backup copies comes before
+these downloads. Saving new changes has higher priority. Home shows when
+a file is protected.
+
 ## When a safety check gets old
 
 Only *protected* means safe. A new change may show *Sending* for up to

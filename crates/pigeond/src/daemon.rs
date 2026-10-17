@@ -117,6 +117,7 @@ impl Daemon {
         let entry = GroupEntry {
             id: g.id.clone(),
             path: path.to_path_buf(),
+            priority: Default::default(),
         };
         config::add_group(&self.dirs.config_file(), &entry).map_err(|e| e.to_string())?;
         let g = Arc::new(g);
@@ -689,6 +690,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
         tracer,
         debug: crate::debug::Permissions::default(),
     });
+    crate::download_queue::configure(&daemon, &daemon.config);
     // Recover external admission fences before any transport can serve a
     // restored older repository. Metadata recovery still remains available.
     for g in daemon.groups() {

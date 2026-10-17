@@ -40,6 +40,8 @@ use pigeond::{capture, install, merge};
 mod capture_immutability;
 #[path = "install/capture_schedule.rs"]
 mod capture_schedule;
+#[path = "install/download_order.rs"]
+mod download_order;
 #[path = "install/queue_order.rs"]
 mod queue_order;
 

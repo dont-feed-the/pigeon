@@ -717,3 +717,52 @@ The final queue implementation passed 775 parallel checks (two skipped), then
 observer addition has its separate native regressions and S2/S3 retakes above.
 Final all-target Clippy and repository checks precede committing; exact-head
 CI still precedes merging. M6 budgets and the complete queue remain open.
+
+## Local kept-folder ordering checkpoint
+
+Kept downloads previously used lexical key order and ignored `[groups.priority]`.
+The native adapter now feeds current kept keys through the existing pure
+download order: high, normal, low, then latest retained reference birth and
+key. Shared keys take the highest priority among their kept paths and occur
+once; freed paths do not promote a key. Root files remain normal priority.
+Cold history reads remain outside the worktree lock, and repository revision,
+retention and transport authority checks still precede each content request.
+
+A complete valid configuration reload updates local folder priorities. An
+invalid priority or non-top-level name rejects that entire reading and keeps
+the prior runtime configuration. Equal reloads preserve the immutable queue
+snapshot; a changed one stops the old download plan between keys. In-place
+group identity replacement preserves local priorities, comments and unknown
+settings. This does not implement the complete global queue or measure an
+HDD/reference-tree resource budget. Validation is recorded after running.
+
+The native signed-history ordering fixture and both new 1000-case laws pass,
+alongside configuration validation/preservation (four initial focused checks).
+The later runtime fixture starts the production reload loop with an actual
+Git repository and local QUIC node: valid changes apply, equal readings keep
+the same snapshot, an invalid value preserves it, and the next valid edit
+applies without restart. Both runtime/configuration retakes pass. All-target
+workspace Clippy passes with lab, trace and console features. The broad
+783-check run precedes only that final runtime test and guide additions.
+
+An English simulated task review identified a two-group insertion ambiguity
+in the guide. The focused retake accepts explicit placement after the
+intended existing ID/path and before the next group heading, preserving IDs
+and paths, and the explanation that preferences apply only to that group on
+this computer. This is wording evidence, separate from the native fixtures.
+The Nextcloud assertion also records its actual HTTP status if the independent
+client fails after revoking another client; its required 200 result is unchanged.
+
+Native S2 passes all 11 checks and S3 all 14 with the folder-order adapter.
+TLC accepts both filesystem streams and both roster streams. These are finite
+protection/free/keep and content-path observations, not resource budgets.
+The roadmap's seven-night requirement now explicitly applies to Linux; Mac
+results remain periodic background evidence under the user's release policy.
+The seven real Linux nights are still required.
+
+The complete parallel workspace run passed all 783 selected checks (two
+skipped); its source predates only the final runtime-only fixture, guide
+and HTTP-status diagnostic additions. The subsequent production-loop
+retake passed both runtime/configuration checks, and final all-target
+Clippy and repository structural/ADR/spec checks pass before committing.
+Current-main integration and exact-head CI still precede merging.

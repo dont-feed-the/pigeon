@@ -91,3 +91,14 @@ the named native S9 keep-index schedule with TLC. Exact-head PR CI
 The native supported-filesystem step in job 117459692349 completed
 successfully on actual ext4, btrfs and xfs loop-mounted fixtures.
 These are filesystem-conformance fixtures, not resource-budget measurements.
+
+## Periodic macOS baseline
+
+Background run [39051800511](https://github.com/dont-feed-the/pigeon/actions/runs/39051800511)
+completed successfully on 17 October. It validated v0.6.4 source
+`fa00dcc013e98f98a6a0dcdd36949fe109e13d5b`: pinned annex installation,
+workspace, four native daemon shards, lab, fixed slice and random schedules.
+That source predates this filesystem-admission checkpoint, so the passing
+baseline does not establish its native APFS adapter or the later scheduling
+changes. Latest-source v0.6.9 background run 39066233321 remains pending.
+ZFS runtime and measured reference-tree/HDD budgets remain open.

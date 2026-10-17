@@ -124,6 +124,7 @@ fn a_group_recorded_without_main_is_joined_again() {
     let entry = pigeond::config::GroupEntry {
         id: group.clone(),
         path: folder.clone(),
+        priority: Default::default(),
     };
     pigeond::config::add_group(&root.join("bob/config/config.toml"), &entry).unwrap();
     let bob = start(&root, sockets.path(), "bob");

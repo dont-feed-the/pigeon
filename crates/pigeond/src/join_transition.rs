@@ -242,6 +242,7 @@ pub(crate) async fn finish(g: &Group, configuration: &Path) -> Result<bool, Stri
         &GroupEntry {
             id: plan.group.clone(),
             path: path.to_path_buf(),
+            priority: Default::default(),
         },
     )
     .map_err(|e| e.to_string())?;

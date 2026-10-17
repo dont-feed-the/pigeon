@@ -156,7 +156,11 @@ fn doctor_reports_an_existing_repository_on_a_native_unsupported_volume() {
     drop(d);
     pigeond::config::add_group(
         &home.join("config/config.toml"),
-        &pigeond::config::GroupEntry { id, path: folder },
+        &pigeond::config::GroupEntry {
+            id,
+            path: folder,
+            priority: Default::default(),
+        },
     )
     .unwrap();
     let d = start(&root, sockets.path(), "fs-doctor");

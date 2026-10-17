@@ -108,7 +108,8 @@ fn verify(
         configured(d),
         vec![pigeond::config::GroupEntry {
             id: root.clone(),
-            path: path.into()
+            path: path.into(),
+            priority: Default::default(),
         }]
     );
     root
