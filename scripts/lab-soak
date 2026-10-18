@@ -23,6 +23,9 @@ Peer = REFERENCE['Peer']
 checkpoint = REFERENCE['checkpoint']
 SIZE = 4096
 HOURS_72 = 72 * 3600
+# §15.5 permits a hot path to wait ten minutes after its previous capture.
+# Retain five further minutes for settling, fetch cadence and byte proofs.
+CYCLE_PROOF_SECONDS = 15 * 60
 
 
 def utc():
@@ -77,6 +80,7 @@ def exercise(args, report):
                   build=manifest, stage='starting', cycles=0, backup_restarts=0,
                   elapsed_seconds=0, smoke=args.smoke, peer_count=2,
                   scope='persistent laptop/backup; atomic saves, retained history and backup crashes',
+                  cycle_proof_seconds=CYCLE_PROOF_SECONDS,
                   budget_verdict='not-measured', elapsed_gate='not-complete', started_at=utc())
     checkpoint(args.report, report)
     started = time.monotonic()
@@ -134,6 +138,8 @@ def exercise(args, report):
             if Path('/proc/sys/kernel/random/boot_id').read_text().strip() != boot:
                 raise RuntimeError('soak host rebooted')
             cycle = report['cycles'] + 1
+            report['in_flight_cycle'] = cycle
+            checkpoint(args.report, report)
             for slot in range(4):
                 name = f'file-{slot:02}.bin'
                 data = payload(cycle, slot)
@@ -155,7 +161,8 @@ def exercise(args, report):
                 time.sleep(1 if args.smoke else 10)
                 backup.start()
                 report['backup_restarts'] += 1
-            wait_verified(peers, repositories, current, history, time.monotonic() + 300, heartbeat)
+            wait_verified(peers, repositories, current, history,
+                          time.monotonic() + CYCLE_PROOF_SECONDS, heartbeat)
             elapsed = time.monotonic() - started
             record = dict(cycle=cycle, elapsed_seconds=elapsed, observed_at=utc(),
                           retained_hashes=len(history), backup_restarts=report['backup_restarts'])
@@ -163,7 +170,8 @@ def exercise(args, report):
                 output.write(json.dumps(record, sort_keys=True) + '\n')
                 output.flush()
                 os.fsync(output.fileno())
-            report.update(cycles=cycle, elapsed_seconds=elapsed, last_observation=record,
+            report.update(cycles=cycle, in_flight_cycle=None,
+                          elapsed_seconds=elapsed, last_observation=record,
                           resources={p.home.name: p.sample() for p in peers})
             checkpoint(args.report, report)
             if elapsed >= duration and (not args.smoke or cycle >= 2):
