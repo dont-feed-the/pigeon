@@ -225,6 +225,10 @@ jobs:
       CARGO_INCREMENTAL: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: retain an explicit unmeasured verdict during native setup
+        run: |
+          printf '{"budget_verdict":"not-measured","stage":"native setup","source":"%s","samples":[]}\n' \
+            "$GITHUB_SHA" > "$RUNNER_TEMP/reference-budget.json"
       - uses: ./.github/actions/bridge-annex
       - uses: ./.github/actions/git-annex-pigeon
         with:
@@ -238,7 +242,7 @@ jobs:
         run: |
           set -e
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends btrfs-progs compsize
+          sudo apt-get install -y -qq --no-install-recommends btrfs-progs btrfs-compsize
           rustup toolchain install
           cargo build --release --locked -p pigeon -p pigeond -p git-annex-p2p-iroh
           uname -a

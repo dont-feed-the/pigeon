@@ -84,3 +84,10 @@ parser rejects unreadable output. `compsize.c`'s `human_bytes` and
 observation does not itself prove compressed allocation; the next native
 run must record that evidence. The whole profile is revalidated on current
 main before another dispatch; no failed immutable tag is retried or moved.
+
+The next head `cef31df4a8389514497f4b922361c713a0b9f92c`, run
+39097723435/job 117587521973, stops earlier during package setup: Ubuntu
+24.04 names the package `btrfs-compsize`, not `compsize`. The Ubuntu noble
+package index confirms the corrected name. No tree or peer starts and no
+budget is measured. Setup now writes an explicit unmeasured JSON verdict
+immediately after checkout so a tool/build failure also retains a report.
