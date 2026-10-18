@@ -166,10 +166,10 @@ the one of Sharing settings on macOS and the host name up to its first dot
 elsewhere (`pigeon-sys::host`) **[no ADR]**.
 A name another device has gets made unique at step 3, and the join's
 answer (`joined-renamed`) tells the new device's person the name it got.
-A join that fails takes back what it made: the group is served only once
-its welcome is checked, and its folder holds nothing of the attempt
-(`pigeond/src/join_attempt.rs`, `tests/join_retry.rs`), so a retry in the
-same folder starts clean **[no ADR]**.
+A group is served only once its welcome is checked. A failed laptop join
+takes back unchanged files it made; a failed backup join retains its
+unfinished repository for retry, preserving files added concurrently
+(`pigeond/src/join_attempt.rs`, `tests/join_retry.rs`) **[no ADR]**.
 
 | # | Who | Step |
 |---|---|---|
@@ -202,16 +202,18 @@ same folder starts clean **[no ADR]**.
   it (§9.7). Joining in place the refounding of the group it is in
   replaces that group, and goes on (§9.9).
 
-A join either completes or takes back what it made **[no ADR]**
+A join completes only after verification **[no ADR]**
 (`pigeond/src/join_attempt.rs`, `tests/join_retry.rs`): the new device
 serves the group, in `config.toml` and to its peers, only once step 5 has
 passed; until then the group is pending and no round reads it. On any
 failure, a refusal or an inviter that stays unreachable included, it
-forgets the group and removes what it wrote: the repository, pigeon's own
-files, the files of the group's tree it wrote that are unchanged, and the
-folder if the join made it. A join starts only in an empty or new folder,
-so nothing that was there before is touched, and a retry in the same folder
-starts clean. The annex UUID is kept in `<state>/joins/<group>`
+forgets the group. On a laptop it removes the repository, pigeon's own
+files, unchanged files of the group's tree it wrote, and an empty folder
+the join made. A backup retains its unfinished bare repository, marker and
+annex UUID: the initial empty-folder check does not make later concurrent
+additions the attempt's property. Retrying the same group resumes that
+repository; it is not recursively discarded. A join starts only in an empty
+or new folder, so pre-existing files are refused. The annex UUID is kept in `<state>/joins/<group>`
 ([11 §11.2](11-local-state.md)) until the join succeeds, so that a retry
 after step 3 resumes the welcome with the same UUID. The web's requests
 run to their end even when the browser leaves (10 §10.3).

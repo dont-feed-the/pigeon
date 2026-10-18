@@ -1,10 +1,13 @@
-//! A join that fails takes back what it made, so a retry in the same
+//! A laptop join that fails takes back what it made, so a retry in the same
 //! folder works (09 §9.6): Carol's first two tries are refused, with an
 //! invitation whose secret is not the group's, and neither leaves a
 //! repository, a group or, for a folder the join made, the folder; the
 //! third, with the real invitation, joins, and is told that the computer
 //! name she asked for was taken. Ana created the group under the name she
 //! gave, not `$USER`'s.
+//!
+//! A failed backup join retains its unfinished repository and original UUID;
+//! a later retry preserves files added while setup was interrupted.
 //!
 //! Needs what `tests/slice.rs` needs: git-annex, and `pigeon` and
 //! `git-annex-p2p-iroh` built next to `pigeond`.
@@ -28,6 +31,85 @@ fn problem(rs: &[Response]) -> Option<String> {
 /// Whether `folder` holds anything.
 fn has_files(folder: &Path) -> bool {
     std::fs::read_dir(folder).is_ok_and(|mut d| d.next().is_some())
+}
+
+#[test]
+fn a_failed_backup_join_keeps_new_files_and_retries_with_its_original_uuid() {
+    let _one = SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some((_tmp, root, sockets)) = dirs() else {
+        return;
+    };
+    let ana = start(&root, sockets.path(), "ana");
+    let backup = start(&root, sockets.path(), "backup");
+    let folder = root.join("files");
+    let created = pigeon(
+        &ana,
+        &[
+            "create",
+            "Family",
+            folder.to_str().unwrap(),
+            "--k",
+            "1",
+            "--person",
+            "Ana",
+        ],
+    );
+    assert!(said(&created, "created", "group").is_some());
+    let code = invitation(&ana);
+    let mut forged = pigeon_proto::join::decode(&code).unwrap();
+    forged.secret = "ab".repeat(32);
+    let forged = pigeon_proto::join::encode(&forged);
+    let repo = root.join("backup.git");
+    let first = pigeon(
+        &backup,
+        &[
+            "join",
+            "--backup-machine",
+            &forged,
+            repo.to_str().unwrap(),
+            "--person",
+            "Ana",
+            "--yes",
+        ],
+    );
+    assert!(problem(&first).is_some());
+    assert!(repo.join("pigeon/joining").is_file());
+    let uuid = || {
+        let result = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(["config", "annex.uuid"])
+            .output()
+            .unwrap();
+        assert!(result.status.success());
+        result.stdout
+    };
+    let before = uuid();
+    let note = repo.join("personal-note.txt");
+    std::fs::write(&note, b"notes added during the interrupted setup\0\n").unwrap();
+    drop(backup);
+    let backup = start(&root, sockets.path(), "backup");
+    let second = pigeon(
+        &backup,
+        &[
+            "join",
+            "--backup-machine",
+            &code,
+            repo.to_str().unwrap(),
+            "--person",
+            "Ana",
+            "--yes",
+        ],
+    );
+    assert!(said(&second, "joined", "group").is_some(), "{second:?}");
+    assert_eq!(uuid(), before);
+    assert_eq!(
+        std::fs::read(&note).unwrap(),
+        b"notes added during the interrupted setup\0\n"
+    );
+    assert!(!repo.join("pigeon/joining").exists());
 }
 
 #[test]

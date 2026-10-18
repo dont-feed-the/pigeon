@@ -1,12 +1,10 @@
-//! A join either completes or takes back what it made (09 §9.6). The new
-//! group is served for good, in `config.toml` and with its remotedaemon,
-//! only once its welcome is fetched and checked; until then it is pending,
-//! found by the transport helper but held by its lock, so no round reads
-//! it. On any failure the attempt forgets the group and removes what it
-//! wrote in the folder: its repository, pigeon's own files and the files
-//! of the group's tree it wrote, and the folder itself if it made it. A
-//! join starts only in an empty or new folder, so nothing that was there
-//! before is touched, and a retry in the same folder starts clean.
+//! A join is served only after its welcome is checked (09 §9.6). Until
+//! then its pending group is held busy, so no round reads it. Failure
+//! forgets the group. A laptop takes back unchanged files it wrote. A
+//! backup retains its unfinished bare repository: an initially empty
+//! directory does not establish ownership of files another application
+//! adds while the exchange waits. Its existing joining marker permits a
+//! retry without recursively deleting concurrent additions.
 //!
 //! The device's annex UUID is kept in `<state>/joins/<group>` (11 §11.2)
 //! until the join succeeds: once the inviter signed the welcome, a retry
@@ -27,7 +25,7 @@ pub(crate) struct Attempt {
     pub path: PathBuf,
     /// The attempt made the folder: it goes on failure if it is empty.
     made: bool,
-    /// A bare repository, whose every file the attempt made.
+    /// A bare backup repository, retained on failure for a safe retry.
     bare: bool,
 }
 
@@ -48,7 +46,7 @@ impl Attempt {
             .is_none())
     }
 
-    /// Runs `join` and, if it fails, takes back what it made.
+    /// Runs `join`; failure rolls back a laptop or retains an unfinished backup.
     pub async fn run<T>(
         &self,
         d: &Daemon,
@@ -56,27 +54,28 @@ impl Attempt {
     ) -> Result<T, String> {
         let result = join.await;
         if let Err(code) = &result {
-            tracing::info!(path = %self.path.display(), %code, "join-undone");
+            if self.bare {
+                tracing::info!(path = %self.path.display(), %code, "join-backup-kept-for-retry");
+            } else {
+                tracing::info!(path = %self.path.display(), %code, "join-undone");
+            }
             self.undo(d).await;
         }
         result
+    }
+
+    fn undo_bare(&self) {
+        // Git/annex and unrelated writers may have added files after the
+        // empty-folder check. There is no ownership manifest, so retain
+        // the complete repository, its joining marker and its annex UUID.
+        tracing::debug!(path = %self.path.display(), "incomplete-backup-repository-retained");
     }
 
     /// Removes what the attempt wrote. A file of the group's tree goes
     /// only while it still matches the index, so one changed since stays.
     async fn undo(&self, d: &Daemon) {
         if self.bare {
-            if self.made {
-                remove_tree(&self.path);
-            } else {
-                for entry in std::fs::read_dir(&self.path)
-                    .into_iter()
-                    .flatten()
-                    .flatten()
-                {
-                    remove_tree(&entry.path());
-                }
-            }
+            self.undo_bare();
             return;
         }
         let git = Git::new(&self.path, d.env.clone());
@@ -254,6 +253,40 @@ fn remove_empty_parents(root: &Path, file: &Path) {
 mod tests {
     #![allow(clippy::unwrap_used, reason = "tests")]
     use super::*;
+
+    fn preserves_new_backup_files(existing: bool) {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("backup.git");
+        if existing {
+            std::fs::create_dir(&path).unwrap();
+        }
+        let attempt = Attempt::begin(&path, true).unwrap();
+        assert!(attempt.empty().unwrap());
+        // Another application writes after the initial empty-folder check,
+        // before a refused exchange asks the attempt to roll back.
+        std::fs::create_dir(path.join("objects")).unwrap();
+        std::fs::write(path.join("notes.txt"), b"new personal notes").unwrap();
+        std::fs::write(path.join("objects/local-note.txt"), b"new nested notes").unwrap();
+        attempt.undo_bare();
+        assert_eq!(
+            std::fs::read(path.join("notes.txt")).unwrap(),
+            b"new personal notes"
+        );
+        assert_eq!(
+            std::fs::read(path.join("objects/local-note.txt")).unwrap(),
+            b"new nested notes"
+        );
+    }
+
+    #[test]
+    fn failure_in_a_new_backup_folder_preserves_concurrent_files() {
+        preserves_new_backup_files(false);
+    }
+
+    #[test]
+    fn failure_in_an_existing_backup_folder_preserves_concurrent_files() {
+        preserves_new_backup_files(true);
+    }
 
     #[test]
     fn a_tree_made_read_only_is_removed_and_only_empty_parents_go() {

@@ -791,3 +791,20 @@ job 117579932868 restores in **6 seconds**, 03:52:51–03:52:57 UTC.
 Its native tests begin 03:54:23: **92 seconds** from restore start, versus
 347 seconds on the original PR #91 shard. Preparation and archive-size
 measurements remain separate from complete publication lead/gap samples.
+
+## Verified publications at 05:01 UTC, 18 October
+
+Both publications have six assets, all four archive checksums and independently
+verified Linux installation, completions and the pinned annex build.
+
+| Publication | Published UTC | Lead | Gap from prior publication |
+| --- | --- | --- | --- |
+| [v0.6.23](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.23) | 04:48:41 | 803 s | 3,803 s |
+| [v0.6.24](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.24) | 05:00:55 | 584 s | 734 s |
+
+The latter checkpoint has 31 lead samples and 30 completed publication
+intervals. Its tag gates all pass on the first attempt. v0.6.23 needs one
+preserved/classified native health-shard retake under sustained I/O pressure,
+then publication alone reuses both archives after the upstream gate passes.
+No failed assertion is waived. Both intervals and leads meet the defined
+targets; these observations do not establish a sustained causal speedup.
