@@ -131,3 +131,15 @@ workflow actionlint, zero-warning workspace/all-target Clippy and repository
 checks pass. These checks use current main v0.6.37 integrated before
 submission. Fresh hosted Linux and corrected focused Mac results remain
 required evidence before claiming their respective passes.
+
+## Integrated release validation
+
+PR #107, head `e5c7f7601647731c59dc374aa1610db95f535544`, integrates main `79d290b6f3d7885f76be199630d29e6faeaba1bb` before validation.
+CI 39126619540, lab 39126619545 and bridge
+39126619537 pass. v0.6.37 is independently published
+and verified first. Local validation passes ten 1000-case change-scan laws,
+194 daemon library tests, eight focused native and 59 broader native
+cases, 139 script contracts, actionlint, zero-warning Clippy and repository
+checks. Fresh v0.6.38 tag gates and independent archive/install verification
+remain required. Corrected Mac evidence is recorded separately; no full Mac
+suite, reference/HDD budget or actual elapsed gate is inferred.
