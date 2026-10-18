@@ -89,6 +89,16 @@ in 68.827 seconds. No tests are skipped, and the program/source SHA-256
 fences remain unchanged. This is a compatibility check, not a performance
 comparison with the earlier recovery run.
 
+The combined head `e6b3cbdf584c5b3b4ba20a3eb81fbd42843d2e47` exposes
+a separate diagnostic-observer test race in CI 39157932935. Immediately
+after `Popen`, `/proc` can still expose the exec transition, so the real Git
+batch process is classified as `other` before `cat-file` is ready. The
+finished original job log is retained. The test now sends one nonexistent
+OID and requires the actual `missing` response before inspecting that same
+PID. Readiness has a five-second bound; the operation classifier, its privacy
+rules and the assertion that follows are unchanged. This does not change
+the earlier performance experiment's runtime or measurement criteria.
+
 ## Case-count audit
 
 An attribute audit finds six remaining properties using 300 cases: one
