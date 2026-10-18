@@ -63,3 +63,15 @@ under the user's release policy.
 The actual 72-hour soak and reference-resource diagnostics continue
 separately with their frozen source revisions. No elapsed or resource gate
 is inferred from these finite native checks.
+
+## Integrated release validation
+
+PR #106, head `a7219ed40ef8120954cfa9c7ec2654562e2268e4`, integrates main `c298375d0dac14017dfdc2222f83539cf51137d6` before validation.
+CI 39124407657, lab 39124407652 and bridge
+39124407629 pass. v0.6.36 is independently published
+and verified first. Local validation includes six proof/fence cases,
+191 daemon library tests, 63 native integrations, S2/S3 with accepted
+TLC filesystem and roster traces, zero-warning all-target Clippy and
+repository checks. Fresh v0.6.37 tag gates and independent publication
+verification remain required. macOS failure mechanisms, resource budgets
+and actual elapsed gates remain open.
