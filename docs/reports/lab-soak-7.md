@@ -114,3 +114,20 @@ verified before this candidate. Local validation passes 128 script contracts,
 zero-warning all-target Clippy and repository checks. Fresh v0.6.35 tag gates
 and independent archive/install checks remain required. The fresh actual
 72-hour observation remains pending; none of the failed run is resumed.
+
+## Host interruption on 18 October
+
+The corrected observation is interrupted by the execution host restart
+around 13:42 UTC. Its last reported checkpoint completes 22 cycles and
+four backup restarts; it has not reached 72 hours. The processes and
+`/tmp` report are lost, while its repository roots and frozen binaries
+remain. The recorded checkpoint supplies no continuous 72-hour credit.
+The observation cannot be resumed by adding pre-restart elapsed time.
+
+A replacement controller prepares clean v0.6.40 source
+`1dbcf729a7f33de98afbe215c309371963d676d8`, freezes all three matching
+lab programs and the harness, and requires a native restart smoke before
+a fresh actual observation. Its new root is distinct and its reports live
+in the persistent workspace. The new clock starts from zero after setup
+and independent initial proofs. A successful smoke is not an elapsed pass,
+and this patch source does not itself establish current-RC qualification.

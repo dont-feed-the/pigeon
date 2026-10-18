@@ -528,34 +528,7 @@ async fn commit_batch(g: &Group, b: Batch<'_>, mut done: Captured) -> Result<Cap
                 detail: "capture answers are missing, mismatched or unsuccessful".into(),
             });
         }
-        // git-annex 10.20261006 Annex/Ingest.hs ingestAdd' reads mode
-        // from contentLocation, not the working file (Annex/Link.hs
-        // stagePointerFile). Keep the working executable bit explicitly.
-        let mut executable = Vec::new();
-        let mut ordinary = Vec::new();
-        for path in chunk {
-            let stat = g
-                .worktree
-                .as_ref()
-                .and_then(|wt| lstat(&wt.join(path)).ok().flatten())
-                .filter(|stat| stat.mode & 0o170_000 == 0o100_000)
-                .ok_or_else(|| Error::Parse {
-                    argv: vec!["capture mode".into(), path.clone()],
-                    detail: "saved file mode is unavailable".into(),
-                })?;
-            if stat.mode & 0o111 != 0 {
-                executable.push(path.as_str());
-            } else {
-                ordinary.push(path.as_str());
-            }
-        }
-        for (mode, paths) in [("--chmod=+x", executable), ("--chmod=-x", ordinary)] {
-            if !paths.is_empty() {
-                let mut args = vec!["update-index", mode, "--"];
-                args.extend(paths);
-                g.git.run(&args).await?;
-            }
-        }
+        crate::capture_mode::correct(g, chunk).await?;
         queue.complete(chunk.len());
         processed += chunk.len();
         tracing::debug!(target: "pigeond::work_phases", group = %g.id, processed, total = all.len(),

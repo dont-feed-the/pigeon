@@ -9,6 +9,13 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Capturing executable files keeps the bytes already captured when saving
+  their permissions, without rereading a later save through annex's filter.
+
+## 0.6.40 — 2026-10-18
+
+### Fixed
+
 - A device opening incomplete peer requests leaves initial connection and
   header capacity available for other devices. Accepted transfers keep
   their existing limits.
