@@ -101,3 +101,20 @@ Corrected local native validation passes all five held, folder-restore and
 watch cases in 24.811 seconds; the formerly failing folder-restore case passes
 in 15.234 seconds and the mass-delete case in 24.811 seconds. Workspace
 all-target Clippy again passes with zero warnings.
+
+## Dependency policy validation
+
+Corrected source `01da565d1a719c07b2817a96ae031ac29700793a` passes all
+836 workspace tests and the lab gate, but CI 39112451223/job 117631289345
+rejects notify 8.2's `CC0-1.0`: that compatible public-domain dedication and
+permissive fallback licence was absent from the allowlist. The correction
+adds a notify-specific exception with its reason; no general dependency
+licence policy or runtime source is relaxed. The original job log is retained
+with SHA-256
+`6512fca7a0569e421102d0872cccd7e4163fb67561ad9fb22909abfa4fe4b4a8`.
+The same cargo-deny 0.20.2 version used by CI checks the corrected policy locally
+before the next commit and fresh hosted validation.
+
+Local cargo-deny 0.20.2 passes advisories, bans, licences and sources with
+the notify-specific exception. All corrected-head native shards finish green;
+the remaining workspace failure is the dependency policy alone.

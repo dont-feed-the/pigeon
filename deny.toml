@@ -64,3 +64,10 @@ allow = ["CDLA-Permissive-2.0"]
 [[licenses.exceptions]]
 crate = "webpki-root-certs"
 allow = ["CDLA-Permissive-2.0"]
+
+# Native change hints (ADR 0013): notify 8.2 dedicates its code under CC0,
+# with a permissive fallback licence; compatible with MIT OR Apache-2.0.
+# Keep this exception specific to notify rather than allowing it globally.
+[[licenses.exceptions]]
+crate = "notify"
+allow = ["CC0-1.0"]
