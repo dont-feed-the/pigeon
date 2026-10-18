@@ -52,5 +52,54 @@ A corrected-source smoke on
 restart in 56.843 seconds. The actual 72-hour observation on those frozen lab
 binaries starts its exercise at 08:49:13.805554 UTC on 18 October, after setup
 and independent initial byte proofs. Its earliest completion is 21 October
-at that time. It remains pending; interruptions would fail it. Later source
-changes do not rewrite this run's provenance or earn elapsed credit.
+at that time. The observation instead fails at 09:36:54 UTC; it supplies no
+72-hour credit. Later source changes do not rewrite its provenance.
+
+## First actual observation: hot-path deadline mismatch
+
+The initial run completes seven cycles and one deliberate backup restart,
+then fails its eighth cycle after 2,860.205 seconds of exercise. The harness
+allowed only 300 seconds for each accepted-tree/object proof. It edits the
+same four paths every five minutes, so those paths exceed six captures per
+hour. [15 §15.5](../spec/15-resource-use.md#155-large-and-hot-files) then
+intentionally permits one capture per ten minutes. The source logs show
+its seventh and eighth captures at 09:26:24 and 09:36:24 UTC, exactly that
+interval. The backup catalogue is one capture behind when the deadline
+expires; independent post-run hashing verifies all 48 generated objects on
+both peers, and the source catalogue matches the eighth save. This is a
+harness deadline mismatch, with no lost content observed. It does not prove
+that the backup would have accepted the catalogue after the stopped run.
+
+The private original fixture, report and logs are retained together in an
+archive of 378,434 bytes, SHA-256
+`16d42d3d9ea46e3dcdbd7cd5e366bbbb1f512f3e2095658bf420bcdec852d649`.
+No unchanged-source retry is used and none of this elapsed time is resumed.
+
+Cycle proofs now have a bounded fifteen minutes: the specified ten-minute
+hot-path interval plus five minutes for settling, history propagation and
+independent proofs. Initial setup keeps its five-minute deadline. Reports
+record the cycle deadline and the in-flight cycle before each save. The
+72-hour requirement, heartbeat fences, actual byte checks and restart
+coverage are unchanged. A deterministic observer test reproduces the old
+300-second rejection and admits a catalogue arriving after the valid hot
+wait. A new actual observation and its final verdict remain required.
+
+## Corrected observation
+
+All 128 script checks pass, including the delayed-catalogue regression. The
+12 scheduling laws also pass 1000 generated cases each, including the
+specified ten-minute hot interval and eventual last-save readiness. The
+all-target workspace Clippy and structural/ADR/spec checks pass.
+
+Frozen lab source `265b3c34474d44c1a72774c7d30c9bfff201252c` includes
+the deadline correction and the v0.6.33 runtime. The matching native smoke
+passes two cycles and one backup restart in 56.791 seconds; every retained
+object is independently hashed on both peers. Its maximum heartbeat gap is
+1.124 seconds and its elapsed verdict is `not-measured`.
+
+A fresh actual observation on those programs begins its exercise at
+10:21:55.086777 UTC on 18 October. The harness and observer are frozen
+beside the binary snapshot, so subsequent worktree edits do not change the
+running experiment. Its earliest completion is 21 October at that time.
+The observation remains pending, with zero credit from the failed run; it
+is lab evidence on its recorded source, not current-RC qualification.
