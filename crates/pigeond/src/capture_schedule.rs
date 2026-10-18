@@ -229,7 +229,11 @@ pub(crate) async fn checked(g: &Group, paths: &[String], index: &pigeon_core::au
     }
     load(g);
     let Some(wt) = &g.worktree else { return };
-    for chunk in paths.chunks(64) {
+    let proof = Instant::now();
+    let mut reported = Instant::now();
+    let mut verified = 0usize;
+    tracing::debug!(target: "pigeond::work_phases", group = %g.id, total = paths.len(), "capture-proof-started");
+    for (batch, chunk) in paths.chunks(64).enumerate() {
         let before: Vec<_> = chunk
             .iter()
             .map(|path| pigeon_sys::fs::lstat(&wt.join(path)).ok().flatten())
@@ -295,8 +299,19 @@ pub(crate) async fn checked(g: &Group, paths: &[String], index: &pigeon_core::au
                 path.to_owned(),
                 (stamp(stat), entry.clone(), String::new(), Instant::now()),
             );
+            verified += 1;
+        }
+        let attempted = batch.saturating_add(1).saturating_mul(64).min(paths.len());
+        if reported.elapsed() >= Duration::from_secs(5) || attempted == paths.len() {
+            tracing::debug!(target: "pigeond::work_phases", group = %g.id, attempted, verified, total = paths.len(),
+                elapsed_us = u64::try_from(proof.elapsed().as_micros()).unwrap_or(u64::MAX),
+                "capture-proof-progress");
+            reported = Instant::now();
         }
     }
+    tracing::debug!(target: "pigeond::work_phases", group = %g.id, attempted = paths.len(), verified,
+        elapsed_us = u64::try_from(proof.elapsed().as_micros()).unwrap_or(u64::MAX),
+        "capture-proof-complete");
     save(g);
 }
 

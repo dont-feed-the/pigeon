@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Measure a real two-peer reference tree; compressed storage is not E17 HDD evidence."""
 import argparse
+import copy
 from collections import deque
 import datetime
 import hashlib
@@ -30,7 +31,15 @@ def diagnostic_events(home):
     allowed = {'resource-io-pressure', 'captured', 'capture-failed', 'capture-recovery-failed',
                'candidate-scan-complete', 'writer-inventory-complete', 'capture-watch-registered', 'accepted', 'placed', 'copy-failed', 'get-failed',
                'admission-waits', 'keep-waits', 'fetch-failed'}
+    phases = {'capture-ingestion-started', 'capture-ingestion-progress', 'capture-ingestion-complete',
+              'capture-proof-started', 'capture-proof-progress', 'capture-proof-complete',
+              'protection-planning-started', 'protection-history-read-complete',
+              'protection-locations-read-complete', 'protection-presence-read-complete',
+              'location-claims-progress', 'content-presence-progress'}
+    allowed |= phases
     events = deque(maxlen=50)
+    latest = {}
+    sequence = 0
     for path in sorted((home / 'state/logs').glob('*.ndjson')):
         with path.open() as stream:
             for line in stream:
@@ -44,7 +53,8 @@ def diagnostic_events(home):
                 if re.fullmatch(r'\d{4}-\d\d-\d\dT[\d:.]+Z', str(row.get('time', ''))):
                     event['time'] = row['time']
                 for key in ['added', 'removed', 'renamed', 'copies', 'entries', 'pending',
-                            'elapsed_us', 'pressure_high', 'pending_content', 'native']:
+                            'elapsed_us', 'pressure_high', 'pending_content', 'native', 'total',
+                            'processed', 'attempted', 'verified', 'observed']:
                     if isinstance(row.get(key), (int, float, bool)):
                         event[key] = row[key]
                 pressure = re.fullmatch(r'Some\((\d+(?:\.\d+)?)\)', str(row.get('avg10', '')))
@@ -58,8 +68,25 @@ def diagnostic_events(home):
                     if needle in error:
                         event['error_kind'] = kind
                         break
-                events.append(event)
-    return list(events)
+                sequence += 1
+                if row['message'] in phases:
+                    latest[row['message']] = (sequence, event)
+                else:
+                    events.append((sequence, event))
+    # Retain the latest bounded phase snapshot even after many scan/pressure
+    # events. The overall private diagnostic envelope remains at most 50 rows.
+    rows = [*latest.values(), *list(events)[-(50 - len(latest)):]]
+    return [event for _, event in sorted(rows, key=lambda item: item[0])]
+
+
+def preparation_sample(report, elapsed, progress, resources):
+    """Reuse existing samples, at most every 30 seconds and 256 rows total."""
+    samples = report.setdefault('preparation_samples', [])
+    if samples and elapsed - samples[-1]['elapsed_seconds'] < 30:
+        return
+    samples.append(dict(elapsed_seconds=elapsed, progress=copy.deepcopy(progress),
+                        resources=copy.deepcopy(resources)))
+    del samples[:-256]
 
 
 def stop_peers(peers, report, already_failed):
@@ -225,7 +252,7 @@ class Peer:
         self.env = dict(os.environ, HOME=str(self.home), USER='reference',
                         PIGEON_SOCKET=str(self.socket), GIT_CONFIG_GLOBAL='/dev/null',
                         GIT_CONFIG_NOSYSTEM='1',
-                        PIGEON_LOG='info,pigeond::capture_status=debug')
+                        PIGEON_LOG='info,pigeond::capture_status=debug,pigeond::work_phases=debug')
         # Ordinary qualification retains defaults throughout preparation.
         config = '[network]\nbind = "127.0.0.1:0"\nmdns = false\nrelays = "off"\n'
         if initial_preset is not None:
@@ -475,6 +502,8 @@ def measure(args, report):
             except RuntimeError:
                 accepted, backup_accepted, copied = 0, 0, 0
             report['last_preparation'] = dict(accepted=accepted, backup_accepted=backup_accepted, objects=copied)
+            preparation_sample(report, time.monotonic() - (deadline - report['preparation_deadline_seconds']),
+                               report['last_preparation'], report['last_preparation_resources'])
             checkpoint(args.report, report)
             print(json.dumps(dict(stage='preparing', accepted=accepted, backup_accepted=backup_accepted, objects=copied)), flush=True)
             if accepted == backup_accepted == copied == count:

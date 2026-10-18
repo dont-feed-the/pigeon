@@ -480,6 +480,9 @@ async fn commit_batch(g: &Group, b: Batch<'_>, mut done: Captured) -> Result<Cap
     let remove = hold_mass_deletions(g, &mut held, &before, &add, remove).await?;
     let mut queue =
         crate::telemetry::Queue::start(&g.id, "capture", "batch", all.len() + remove.len());
+    let ingestion = std::time::Instant::now();
+    let mut processed = 0usize;
+    tracing::debug!(target: "pigeond::work_phases", group = %g.id, total = all.len(), "capture-ingestion-started");
     for range in pigeon_core::capture_batch::ranges(&all) {
         let chunk = &all[range];
         // Command/Add.hs's batch path goes straight to start/ingestAdd;
@@ -554,7 +557,14 @@ async fn commit_batch(g: &Group, b: Batch<'_>, mut done: Captured) -> Result<Cap
             }
         }
         queue.complete(chunk.len());
+        processed += chunk.len();
+        tracing::debug!(target: "pigeond::work_phases", group = %g.id, processed, total = all.len(),
+            elapsed_us = u64::try_from(ingestion.elapsed().as_micros()).unwrap_or(u64::MAX),
+            "capture-ingestion-progress");
     }
+    tracing::debug!(target: "pigeond::work_phases", group = %g.id, processed, total = all.len(),
+        elapsed_us = u64::try_from(ingestion.elapsed().as_micros()).unwrap_or(u64::MAX),
+        "capture-ingestion-complete");
     for chunk in remove.chunks(64) {
         let mut args = vec!["update-index", "--remove", "--"];
         args.extend(chunk.iter().map(String::as_str));

@@ -116,18 +116,31 @@ pub async fn items(g: &Group, me: &str, keys: &BTreeSet<String>) -> Vec<(Work, V
     let recorded = endangered.len();
     endangered.retain(|key| keys.contains(key));
     let mut out = Vec::new();
+    let history = std::time::Instant::now();
+    tracing::debug!(target: "pigeond::work_phases", group = %g.id, total = keys.len(), "protection-planning-started");
     let introductions = crate::queue_history::introductions(g)
         .await
         .unwrap_or_else(|error| {
             tracing::warn!(group = %g.id, %error, "protection-order-dates-unreadable");
             Default::default()
         });
+    tracing::debug!(target: "pigeond::work_phases", group = %g.id, total = keys.len(),
+        elapsed_us = u64::try_from(history.elapsed().as_micros()).unwrap_or(u64::MAX),
+        "protection-history-read-complete");
+    let locations_started = std::time::Instant::now();
     let locations = holders_for(&g.git, keys).await;
+    tracing::debug!(target: "pigeond::work_phases", group = %g.id, total = keys.len(), observed = locations.len(),
+        elapsed_us = u64::try_from(locations_started.elapsed().as_micros()).unwrap_or(u64::MAX),
+        "protection-locations-read-complete");
+    let presence_started = std::time::Instant::now();
     let local = if g.role == Role::Custodian {
         crate::custody::present_for(&g.git, keys).await
     } else {
         Default::default()
     };
+    tracing::debug!(target: "pigeond::work_phases", group = %g.id, total = keys.len(), observed = local.len(),
+        elapsed_us = u64::try_from(presence_started.elapsed().as_micros()).unwrap_or(u64::MAX),
+        "protection-presence-read-complete");
     for key in keys {
         if g.role == Role::Custodian && !endangered.contains(key) && local.contains_key(key) {
             continue;
