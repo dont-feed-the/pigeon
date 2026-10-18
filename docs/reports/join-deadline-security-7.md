@@ -71,11 +71,11 @@ regression or a passing join result.
 
 ## Findings still requiring work
 
-- Invitation and recovery welcome paths acquire the group busy lock before
-  rejecting an invalid proof or nonmember recovery identity. Authentication
-  should precede that wait and be rechecked under the lock, with regressions
-  that hold the group busy. The existing header bound alone does not bound
-  this application wait.
+The original finding about unauthenticated requests queuing on a busy group
+is addressed by the [authentication checkpoint](join-authentication-security-7.md),
+with refusal-before-wait and revocation-during-wait regressions. The wider
+review remains open:
+
 - The accept loop spawns per-connection work without an explicit application
   concurrency cap. Transport limits and timeouts need to be assessed together
   before claiming resistance to an unauthenticated connection flood.

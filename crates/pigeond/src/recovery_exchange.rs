@@ -133,6 +133,12 @@ fn addition(
 /// a custodian serves it. Recovery devices cannot open annex streams.
 pub async fn bundle(d: &Daemon, group: &str, device: &str) -> Option<Bundle> {
     let g = d.group(group)?;
+    let preflight = g.roster()?;
+    if g.role != pigeon_core::filter::Role::Custodian
+        || preflight.roster.devices.get(&DeviceId(device.into()))?.role != Role::Recovery
+    {
+        return None;
+    }
     let _busy = g.busy.lock().await;
     let doc = g.roster()?;
     if g.role != pigeon_core::filter::Role::Custodian
@@ -155,6 +161,21 @@ pub async fn welcome(d: &Daemon, device: &str, new: &str, join: &Join) -> JoinAn
         return refused("invite-not-allowed");
     }
     for g in d.groups() {
+        let Some(preflight) = g.roster() else {
+            continue;
+        };
+        if !preflight
+            .roster
+            .devices
+            .contains_key(&DeviceId(device.into()))
+        {
+            continue;
+        }
+        if g.role != pigeon_core::filter::Role::Custodian
+            || addition(&preflight, device, new, join).is_none()
+        {
+            return refused("invite-not-allowed");
+        }
         let _busy = g.busy.lock().await;
         let Some(doc) = g.roster() else { continue };
         if !doc.roster.devices.contains_key(&DeviceId(device.into())) {

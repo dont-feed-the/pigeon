@@ -79,6 +79,19 @@ fn equal(a: &str, b: &str) -> bool {
     bool::from(a.as_bytes().ct_eq(b.as_bytes()))
 }
 
+fn proves_invitation(
+    doc: &crate::roster_file::RosterDoc,
+    device: &str,
+    admitter: &str,
+    join: &Join,
+) -> bool {
+    let Some(secret) = unhex(&doc.roster.invitation) else {
+        return false;
+    };
+    equal(&sha256_hex(&secret), &join.invitation_hash)
+        && equal(&proof(&secret, device, admitter), &join.proof)
+}
+
 /// `laptop` or `custodian`, as [`Join::role`] says a role.
 pub fn role_name(role: Role) -> &'static str {
     match role {
@@ -99,17 +112,20 @@ pub async fn welcome(d: &Daemon, device: &str, join: Join) -> JoinAnswer {
         return crate::recovery::welcome(d, device, &new, &join).await;
     }
     for g in d.groups() {
+        // Unknown peers must not queue on a repository operation. This
+        // preflight is only a rejection: read and authenticate again once
+        // the lock is held before deciding or signing any roster change.
+        if !g
+            .roster()
+            .is_some_and(|doc| proves_invitation(&doc, device, &d.device, &join))
+        {
+            continue;
+        }
         let _busy = g.busy.lock().await;
         let Some(mut doc) = g.roster() else {
             continue;
         };
-        let Some(secret) = unhex(&doc.roster.invitation) else {
-            continue;
-        };
-        if !equal(&sha256_hex(&secret), &join.invitation_hash) {
-            continue;
-        }
-        if !equal(&proof(&secret, device, &d.device), &join.proof) {
+        if !proves_invitation(&doc, device, &d.device, &join) {
             return refused("invite-unknown");
         }
         let role = match join.role.as_str() {
