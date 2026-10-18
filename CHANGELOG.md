@@ -9,6 +9,8 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Joining or recovering asks for a folder when the received group name
+  cannot safely supply a default folder name.
 - Reading a recovery sheet uses the last pasted code and refuses unknown
   fields or an unreadable code.
 - Joining a refounded group in its existing folder stops if a committed

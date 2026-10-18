@@ -259,6 +259,9 @@ impl std::fmt::Debug for Ask {
 /// The new device's side: answers a problem code, or the group's name.
 pub async fn join(d: &Daemon, ask: Ask) -> Result<String, String> {
     let inv = pigeon_proto::join::decode(&ask.code).ok_or("invite-unknown")?;
+    if !crate::purge_file::commit_id(&inv.group) {
+        return Err("invite-unknown".into());
+    }
     if d.group(&inv.group).is_some() {
         return Err("already-in-group".into());
     }

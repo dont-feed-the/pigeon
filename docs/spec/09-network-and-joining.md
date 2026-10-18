@@ -164,6 +164,11 @@ default; none for a backup machine) and the person's name (the account's,
 `<computer name>-<6 hex digits of its device ID>`, the computer name being
 the one of Sharing settings on macOS and the host name up to its first dot
 elsewhere (`pigeon-sys::host`) **[no ADR]**.
+An invitation's genesis ID must be a supported 40-character lowercase object
+ID before any destination is created. A default laptop folder uses the
+received display name only if it is one portable component (05 §5.4).
+Otherwise `join-folder-needed` asks for an explicit folder; the display name
+is not rewritten. Backup defaults derive their filename from the checked ID.
 A name another device has gets made unique at step 3, and the join's
 answer (`joined-renamed`) tells the new device's person the name it got.
 A group is served only once its welcome is checked. A failed join on either
@@ -345,6 +350,9 @@ tools are those of ADR 0047, which fixes their formats:
   an absent legacy label stays supported. Input uses the last `pgr`-prefixed
   token, without falling back past an unreadable or unsupported candidate,
   and stays within the existing one-MiB IPC-frame bound.
+  Its genesis ID is checked before destination creation. A default recovery
+  folder follows the same single-component rule as joining; an explicit
+  folder remains the person's choice when the display name is unsuitable.
 - **Refounding:** `pigeon refound [REPOSITORY]` signs a new genesis with the
   last accepted tree and the refounder as only admin, keeping the old
   history replicated and its keys in `keys()`; existing folders join the new
