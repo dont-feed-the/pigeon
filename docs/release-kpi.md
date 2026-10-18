@@ -775,3 +775,19 @@ trace checks to validate that layout on the PR head. Ordinary main/tag and
 background Mac calls keep their fixed slice partitions. The manual profile
 cannot substitute for publication: the gate requires an exact tag/source
 push event and every fixed Linux partition as well as all random shards.
+
+The first five-shard profile 39095141432 passes on PR #92 head e3b49d3.
+All fifty schedules and all trace checks pass. Job durations are 384–441
+seconds; the maximum is **7m21s**, versus **11m11s** for v0.6.22's last
+two-shard job. The first new shard spends 137 seconds building, 205 on
+its ten schedules and 41 on TLC. Different runners and random seeds make
+this a first hosted observation rather than an isolated or sustained
+publication improvement. That PR head separately fails a Files-page
+assertion in CI, with the original artifact retained in the device report.
+The source correction therefore receives fresh exact-head validation.
+
+The smaller dependency archive also has an actual warm restore: PR #92
+job 117579932868 restores in **6 seconds**, 03:52:51–03:52:57 UTC.
+Its native tests begin 03:54:23: **92 seconds** from restore start, versus
+347 seconds on the original PR #91 shard. Preparation and archive-size
+measurements remain separate from complete publication lead/gap samples.

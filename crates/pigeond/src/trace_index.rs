@@ -79,13 +79,53 @@ pub(crate) fn read_all(g: &Group) -> Result<BTreeMap<String, Index>, String> {
     read_selected(g, None)
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum SnapshotError {
+    Changed,
+    Other(String),
+}
+
+impl SnapshotError {
+    fn detail(self) -> String {
+        match self {
+            Self::Changed => "index changed during observation".to_owned(),
+            Self::Other(detail) => detail,
+        }
+    }
+}
+
+fn index_snapshot(file: &Path) -> Result<(pigeon_sys::fs::Stat, Vec<u8>), SnapshotError> {
+    let other = |error: String| SnapshotError::Other(error);
+    let before = pigeon_sys::fs::lstat(file).map_err(|e| other(e.to_string()))?;
+    let bytes = std::fs::read(file).map_err(|e| other(e.to_string()))?;
+    if before != pigeon_sys::fs::lstat(file).map_err(|e| other(e.to_string()))? {
+        return Err(SnapshotError::Changed);
+    }
+    Ok((
+        before.ok_or_else(|| other("index disappeared".into()))?,
+        bytes,
+    ))
+}
+
+fn stable_snapshot<T>(mut observe: impl FnMut() -> Result<T, SnapshotError>) -> Result<T, String> {
+    // Git replaces index.lock atomically. A concurrent read is not corrupt;
+    // restart the complete fenced observation, at most twice. All other
+    // failures and persistent instability remain errors, never empty data.
+    let mut retries = 2;
+    loop {
+        match observe() {
+            Err(SnapshotError::Changed) if retries > 0 => {
+                retries -= 1;
+                tracing::debug!(remaining = retries, "index-observation-retried");
+            }
+            result => return result.map_err(SnapshotError::detail),
+        }
+    }
+}
+
 fn read_selected(g: &Group, wanted: Option<&str>) -> Result<BTreeMap<String, Index>, String> {
     let file = g.git_dir.join("index");
-    let before = pigeon_sys::fs::lstat(&file).map_err(|e| e.to_string())?;
-    let bytes = std::fs::read(&file).map_err(|e| e.to_string())?;
-    if before != pigeon_sys::fs::lstat(&file).map_err(|e| e.to_string())? {
-        return Err("index changed during observation".to_owned());
-    }
+    let (before, bytes) = stable_snapshot(|| index_snapshot(&file))?;
     let mut at = 0;
     if take(&bytes, &mut at, 4)? != b"DIRC" {
         return Err("invalid index signature".into());
@@ -96,7 +136,7 @@ fn read_selected(g: &Group, wanted: Option<&str>) -> Result<BTreeMap<String, Ind
     }
     let count = integer(&bytes, &mut at)?;
     let mut previous = Vec::new();
-    let mtime = before.ok_or("index disappeared")?.mtime_ns;
+    let mtime = before.mtime_ns;
     let mut result = BTreeMap::new();
     for _ in 0..count {
         let start = at;
@@ -191,6 +231,44 @@ fn read_selected(g: &Group, wanted: Option<&str>) -> Result<BTreeMap<String, Ind
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_index_replacement_gets_a_fresh_complete_read() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
+        let file = temp.path().join("index");
+        std::fs::write(&file, b"fresh complete bytes")?;
+        let mut observations = 0;
+        let result = stable_snapshot(|| {
+            observations += 1;
+            if observations <= 2 {
+                Err(SnapshotError::Changed)
+            } else {
+                index_snapshot(&file)
+            }
+        });
+        let (_, bytes) = result?;
+        assert_eq!(bytes, b"fresh complete bytes");
+        assert_eq!(observations, 3);
+        Ok(())
+    }
+
+    #[test]
+    fn persistent_changes_are_bounded_and_other_errors_are_not_retried() {
+        let mut observations = 0;
+        let result: Result<(), _> = stable_snapshot(|| {
+            observations += 1;
+            Err(SnapshotError::Changed)
+        });
+        assert_eq!(result, Err("index changed during observation".into()));
+        assert_eq!(observations, 3);
+        observations = 0;
+        let result: Result<(), _> = stable_snapshot(|| {
+            observations += 1;
+            Err(SnapshotError::Other("unreadable".into()))
+        });
+        assert_eq!(result, Err("unreadable".into()));
+        assert_eq!(observations, 1);
+    }
 
     #[test]
     fn preserved_mtime_does_not_make_a_racy_ctime_clean() -> Result<(), Box<dyn std::error::Error>>

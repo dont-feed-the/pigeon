@@ -79,7 +79,10 @@ async fn listing(
 pub async fn folders(g: &Group, me: &str) -> Response {
     let (observed, pending) = match listing(g, me, "").await {
         Ok(listing) => listing,
-        Err(error) => return crate::api::problem("internal-error", &[], Some(error.to_string())),
+        Err(error) => {
+            tracing::warn!(group = %g.id, error = %error, "file-listing-unavailable");
+            return crate::api::problem("internal-error", &[], Some(error.to_string()));
+        }
     };
     let targets = crate::evict::targets(g);
     let mut by: BTreeMap<&str, Vec<&crate::status::Observed>> = BTreeMap::new();
@@ -130,7 +133,10 @@ pub async fn folders(g: &Group, me: &str) -> Response {
 pub async fn files(g: &Group, me: &str, prefix: &str) -> Response {
     let (observed, _) = match listing(g, me, prefix).await {
         Ok(listing) => listing,
-        Err(error) => return crate::api::problem("internal-error", &[], Some(error.to_string())),
+        Err(error) => {
+            tracing::warn!(group = %g.id, error = %error, "file-listing-unavailable");
+            return crate::api::problem("internal-error", &[], Some(error.to_string()));
+        }
     };
     // A file is not on this computer once freeing hid it (08 §8.5).
     let targets = crate::evict::targets(g);

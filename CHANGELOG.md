@@ -9,6 +9,8 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Opening Files while a folder is being updated retries brief read conflicts
+  automatically.
 - Final checks of saved files follow the read delays of the drive containing
   the file, while still respecting system-wide disk pressure.
 
