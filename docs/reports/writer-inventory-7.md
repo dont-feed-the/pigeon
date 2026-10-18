@@ -159,3 +159,16 @@ option and every complete-tree/object/window requirement remain unchanged.
 Native watcher/overflow behavior and ten-minute scan scheduling are also
 still open in the conformance inventory; this optimization does not claim
 complete ADR 0013 implementation or close M6.
+
+## Integrated release validation
+
+PR #99, head `0e345d81ea6c114e7405a29f8f2a24e935b97ca0`, integrates main `47dc25a07b21c83b43505e63ac8f99f51db91b9a` before
+validation. CI 39108827235, lab 39108827262 and bridge
+39108827236 pass. v0.6.29 is published and independently
+verified before this candidate. Local validation passes 234 combined library
+cases, 37 system/native cases, 120 script contracts and 54 native install
+cases, followed by 18 combined held/capture cases on current main.
+The full reference/HDD budgets, native watcher and real elapsed M7 gates
+remain separate; no passing resource budget is inferred from the primitive
+timing or the incomplete preparation diagnostic. Fresh v0.6.30 tag gates
+and independent archive/install checks are required before publication.
