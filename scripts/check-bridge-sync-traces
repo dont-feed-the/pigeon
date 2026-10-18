@@ -258,15 +258,29 @@ def mutations(streams, java):
 
 def replay(root, java, regression=False):
     streams = []
+    accepted = set()
+    model_paths = [ROOT / 'models/tla' / f'{name}.tla'
+                   for name in ('BridgeSync', 'BridgeSyncTrace')]
     for path in sorted(root.rglob('sync-*.ndjson')):
         events = [json.loads(line, object_pairs_hook=encoder.pairs) for line in path.read_text().splitlines()]
-        verdict = check(events, java)
-        if verdict != 'trace:accepted':
-            raise Refused(f'{path.name}: {verdict}')
+        # Parse/normalize every raw stream before looking up a verdict.
+        # These are the exact CodeLog, constants and model source bytes
+        # supplied to TLC. The memo is local to this invocation; mutations
+        # below still run their independent solver checks.
+        normalized, method, resource, target = normalize(events)
+        model_input = (encoder.encode(normalized), encoder.encode(method),
+                       encoder.encode(resource), target,
+                       tuple(p.read_bytes() for p in model_paths))
+        if model_input not in accepted:
+            verdict = check(events, java)
+            if verdict != 'trace:accepted':
+                raise Refused(f'{path.name}: {verdict}')
+            accepted.add(model_input)
         streams.append(events)
     if not streams:
         raise Refused('no DAV transaction traces')
-    print(f'ok   TLC accepts {len(streams)} real DAV transactions', flush=True)
+    print(f'ok   TLC accepts {len(streams)} real DAV transactions '
+          f'({len(accepted)} distinct normalized model inputs)', flush=True)
     if regression:
         if len(streams) != 13:
             raise Refused(f'expected all 13 regression transactions, found {len(streams)}')

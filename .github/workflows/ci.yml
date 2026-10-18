@@ -92,6 +92,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: checked archives, supervisor configuration and preserved user data
         run: python3 -B -m unittest discover -s packaging/tests -v
+      - name: retain failed native Mac supervisor observations
+        if: failure() && runner.os == 'macOS'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: failed-native-macos-priority-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pigeon-macos-priority
+          if-no-files-found: ignore
+          retention-days: 14
       - name: native presets restart under systemd and children inherit CPU and I/O priority
         if: runner.os == 'Linux'
         run: |
