@@ -84,6 +84,8 @@ without replacing Missing or Needs you; Resume remains a person's pause.
   its implemented native checkpoint below.
 - Measure the reference-tree idle/scan/memory budgets in CI and the E17
   foreground video workload on the required HDD/platform combinations.
+  The [native reference profile](reference-budget-7.md) prepares the full
+  logical tree and records its result separately from the HDD workload.
 - Validate supported filesystems, upgrade and crash behavior, integrate
   current main, complete the release gates and publish v0.7.0.
 

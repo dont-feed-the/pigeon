@@ -1,0 +1,508 @@
+#!/usr/bin/env python3
+"""Measure a real two-peer reference tree; compressed storage is not E17 HDD evidence."""
+import argparse
+from collections import deque
+import datetime
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import signal
+import subprocess
+import time
+import uuid
+
+FILES = 100_000
+SIZE = 500_000
+WINDOW = 600
+MEMORY = 300_000_000
+
+
+def preparation_seconds(value):
+    seconds = int(value)
+    if not 1 <= seconds <= 5400:
+        raise argparse.ArgumentTypeError('preparation must be between 1 and 5400 seconds')
+    return seconds
+
+
+def diagnostic_events(home):
+    allowed = {'resource-io-pressure', 'captured', 'capture-failed', 'capture-recovery-failed',
+               'candidate-scan-complete', 'accepted', 'placed', 'copy-failed', 'get-failed',
+               'admission-waits', 'keep-waits', 'fetch-failed'}
+    events = deque(maxlen=50)
+    for path in sorted((home / 'state/logs').glob('*.ndjson')):
+        with path.open() as stream:
+            for line in stream:
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if not isinstance(row, dict) or not isinstance(row.get('message'), str) or row['message'] not in allowed:
+                    continue
+                event = dict(message=row['message'])
+                if re.fullmatch(r'\d{4}-\d\d-\d\dT[\d:.]+Z', str(row.get('time', ''))):
+                    event['time'] = row['time']
+                for key in ['added', 'removed', 'renamed', 'copies', 'entries', 'pending',
+                            'elapsed_us', 'pressure_high', 'pending_content']:
+                    if isinstance(row.get(key), (int, float, bool)):
+                        event[key] = row[key]
+                pressure = re.fullmatch(r'Some\((\d+(?:\.\d+)?)\)', str(row.get('avg10', '')))
+                if pressure:
+                    event['io_pressure_avg10'] = float(pressure[1])
+                # Keep a failure class, never native argv, tokens, paths or raw output.
+                error = str(row.get('error', ''))
+                for needle, kind in [('index.lock', 'index-lock'), ('cannot lock ref', 'ref-lock'),
+                                     ('hPutBuf', 'closed-handle'), ('not-listening', 'not-listening'),
+                                     ('No space left', 'disk-full'), ('timed out', 'timeout')]:
+                    if needle in error:
+                        event['error_kind'] = kind
+                        break
+                events.append(event)
+    return list(events)
+
+
+def stop_peers(peers, report, already_failed):
+    failures = []
+    for peer in reversed(peers):
+        try:
+            peer.stop()
+        except Exception as error:
+            failures.append(type(error).__name__)
+    if failures:
+        report['cleanup_failures'] = failures
+        if not already_failed:
+            raise RuntimeError('reference peer cleanup failed')
+
+
+def run(args, include_stderr=False, **kwargs):
+    try:
+        result = subprocess.run([str(x) for x in args], capture_output=True, **kwargs)
+    except subprocess.TimeoutExpired:
+        # TimeoutExpired formats the complete command, including the pasted
+        # invitation. Suppress that exception chain as well as its message.
+        raise RuntimeError('fixture command timed out: ' + Path(str(args[0])).name) from None
+    if result.returncode:
+        # Arguments may contain an invitation. Never print the command/output.
+        raise RuntimeError('fixture command failed: ' + Path(str(args[0])).name)
+    return result.stdout + result.stderr if include_stderr else result.stdout
+
+
+def checkpoint(path, report):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix('.pending')
+    temporary.write_text(json.dumps(report, indent=2) + '\n')
+    temporary.replace(path)
+
+
+def daemon_build(diagnostics, full):
+    ids = {r.get('message', {}).get('id') for r in diagnostics}
+    versions = {r.get('message', {}).get('args', {}).get('program')
+                for r in diagnostics if r.get('message', {}).get('id') == 'doctor-version'}
+    if 'doctor-ok' not in ids or not {'git', 'git-annex'} <= versions:
+        raise RuntimeError('daemon build diagnostics incomplete')
+    kind = 'lab' if 'doctor-lab-build' in ids else 'ordinary'
+    if full and kind != 'ordinary':
+        raise RuntimeError('full reference profile requires ordinary daemons')
+    return kind
+
+
+def counters(text):
+    values = dict(line.split() for line in text.splitlines())
+    return int(values['usage_usec'])
+
+
+def proc_identity(text):
+    # comm can contain spaces and parentheses; field 22 is starttime.
+    fields = text[text.rfind(')') + 2:].split()
+    return int(fields[19])
+
+
+def verdict(samples, scans, count, seconds, full, require_scan=True):
+    if len(samples) < 2:
+        raise ValueError('insufficient samples')
+    elapsed = samples[-1]['time'] - samples[0]['time']
+    cpu = samples[-1]['cpu_us'] - samples[0]['cpu_us']
+    if elapsed <= 0 or cpu < 0:
+        raise ValueError('invalid clock or CPU counter')
+    result = dict(duration_seconds=elapsed, cpu_one_core_percent=cpu / elapsed / 10_000,
+                  max_daemon_rss_bytes=max(max(s['rss'], s.get('rss_high_water', 0)) for s in samples), scans=scans)
+    complete = [s for s in scans if s['entries'] >= count and s['pending'] == 0
+                and s['elapsed_us'] <= 600_000_000]
+    result['checks'] = dict(idle_cpu=result['cpu_one_core_percent'] < 1,
+                            daemon_rss=result['max_daemon_rss_bytes'] <= MEMORY,
+                            full_window=elapsed >= seconds)
+    if require_scan:
+        result['checks']['complete_scan'] = bool(complete)
+    if not full:
+        result['cpu_one_core_percent'] = None
+        result['checks']['idle_cpu'] = None
+    result['budget_verdict'] = ('passed' if all(result['checks'].values()) else 'failed') if full else 'not-measured'
+    return result
+
+
+def payload(number, size):
+    return number.to_bytes(8, 'big') + bytes(size - 8)
+
+
+def physical_extent_usage(text):
+    # st_blocks can describe uncompressed extents on Btrfs. compsize's
+    # Btrfs extent-tree Disk Usage column measures physical allocation.
+    match = re.search(r'^TOTAL\s+[0-9]+%\s+([0-9]+)\s+([0-9]+)\s+([0-9]+)\s*$', text, re.M)
+    if not match:
+        raise RuntimeError('unreadable physical compression measurement')
+    return dict(disk_bytes=int(match[1]), uncompressed_bytes=int(match[2]),
+                referenced_bytes=int(match[3]))
+
+
+def generate(folder, count, size, compressed, progress=lambda *_: None):
+    expected = {}
+    for number in range(count):
+        relative = f'{number // 1000:03d}/{number:06d}.bin'
+        file = folder / relative
+        file.parent.mkdir(parents=True, exist_ok=True)
+        data = payload(number, size)
+        file.write_bytes(data)
+        expected[relative] = hashlib.sha256(data).hexdigest()
+        if number % 1000 == 999:
+            os.sync()
+            if compressed:
+                physical = physical_extent_usage(run(['sudo', '-n', 'compsize', '-b', file], text=True))
+                progress(number + 1, physical)
+                if physical['disk_bytes'] > 65_536 or physical['referenced_bytes'] < size:
+                    raise RuntimeError('reference compression absent; abort before filling host')
+            print(json.dumps(dict(stage='generating', files=number + 1)), flush=True)
+    progress(count, None)
+    return expected
+
+
+class Peer:
+    def __init__(self, root, binary, name, managed):
+        self.home = root / name
+        (self.home / 'config').mkdir(parents=True)
+        self.socket = root / (name + '.sock')
+        self.binary = binary
+        self.unit = 'pigeon-ref-' + uuid.uuid4().hex
+        self.managed = managed
+        self.process = None
+        self.pid = None
+        self.cgroup = None
+        self.env = dict(os.environ, HOME=str(self.home), USER='reference',
+                        PIGEON_SOCKET=str(self.socket), GIT_CONFIG_GLOBAL='/dev/null',
+                        GIT_CONFIG_NOSYSTEM='1',
+                        PIGEON_LOG='info,pigeond::capture_status=debug')
+        # Keep the default resource settings and default round interval.
+        (self.home / 'config/config.toml').write_text(
+            '[network]\nbind = "127.0.0.1:0"\nmdns = false\nrelays = "off"\n')
+
+    def start(self):
+        command = [str(self.binary / 'pigeond'), '--home', str(self.home)]
+        if self.managed:
+            properties = ['Type=exec', 'KillMode=control-group', 'CPUAccounting=yes',
+                          'MemoryAccounting=yes', f'User={os.getuid()}', f'Group={os.getgid()}']
+            if self.home.name == 'laptop':
+                properties += ['Nice=10', 'CPUWeight=20', 'IOSchedulingClass=idle',
+                               'IOWeight=20', 'MemoryHigh=512M']
+            command = ['sudo', '-n', 'systemd-run', '--quiet', '--collect', '--unit', self.unit] + [
+                '--property=' + value for value in properties] + [
+                '--setenv=' + key + '=' + self.env[key] for key in (
+                    'HOME', 'USER', 'PATH', 'PIGEON_SOCKET', 'GIT_CONFIG_GLOBAL',
+                    'GIT_CONFIG_NOSYSTEM', 'PIGEON_LOG')] + command
+            run(command)
+            state = run(['systemctl', 'show', self.unit, '-p', 'MainPID', '-p', 'ControlGroup'], text=True)
+            values = dict(line.split('=', 1) for line in state.splitlines())
+            self.pid = int(values['MainPID'])
+            relative = Path(values['ControlGroup']).relative_to('/')
+            self.cgroup = Path('/sys/fs/cgroup') / relative
+            if self.unit + '.service' != self.cgroup.name:
+                raise RuntimeError('unexpected service ownership')
+        else:
+            with (self.home / 'daemon.out').open('wb') as output:
+                self.process = subprocess.Popen(command, env=self.env, stdout=output,
+                                                stderr=output, start_new_session=True)
+            self.pid = self.process.pid
+        self.identity = proc_identity(Path(f'/proc/{self.pid}/stat').read_text())
+        deadline = time.monotonic() + 60
+        while not self.socket.exists():
+            self.sample()
+            if time.monotonic() >= deadline:
+                raise RuntimeError('daemon startup timed out')
+            time.sleep(.1)
+
+    def cli(self, *args, with_progress=False):
+        output = run([self.binary / 'pigeon', '--json', *args], env=self.env, timeout=180,
+                     include_stderr=with_progress)
+        replies = [json.loads(line) for line in output.splitlines()]
+        if any(r['type'] == 'Problem' for r in replies):
+            raise RuntimeError('CLI returned a problem')
+        return replies
+
+    def sample(self):
+        if proc_identity(Path(f'/proc/{self.pid}/stat').read_text()) != self.identity:
+            raise RuntimeError('daemon process was replaced')
+        status = Path(f'/proc/{self.pid}/status').read_text()
+        rss = int(re.search(r'^VmRSS:\s+(\d+) kB$', status, re.M)[1]) * 1024
+        high_water = int(re.search(r'^VmHWM:\s+(\d+) kB$', status, re.M)[1]) * 1024
+        cpu = counters((self.cgroup / 'cpu.stat').read_text()) if self.managed else 0
+        return dict(time=time.monotonic(), cpu_us=cpu, rss=rss, rss_high_water=high_water)
+
+    def diagnostics(self, repo):
+        result = {}
+        try:
+            result['resources'] = self.sample()
+        except Exception as error:
+            result['resources_unavailable'] = type(error).__name__
+        try:
+            index = run(['git', '-C', repo, 'ls-files', '--cached', '-z'], env=self.env, timeout=10)
+            result['index_paths'] = index.count(b'\0')
+            result['unverified_object_files'] = sum(
+                1 for p in (repo / 'annex/objects').rglob('SHA256E-*')
+                if not p.is_symlink() and p.is_file())
+        except Exception as error:
+            result['inventory_unavailable'] = type(error).__name__
+        try:
+            result['events'] = diagnostic_events(self.home)
+            pids = (self.cgroup / 'cgroup.procs').read_text().split() if self.managed else [str(self.pid)]
+            processes = []
+            for pid in pids[:64]:
+                try:
+                    status = Path(f'/proc/{int(pid)}/status').read_text()
+                    name = Path(f'/proc/{int(pid)}/comm').read_text().strip()
+                    rss = re.search(r'^VmRSS:\s+(\d+) kB$', status, re.M)
+                    processes.append(dict(pid=int(pid), name=name if name in (
+                        'pigeond', 'git', 'git-annex', 'git-annex-p2p') else 'other',
+                        rss=int(rss[1]) * 1024 if rss else None))
+                except (OSError, ValueError):
+                    continue
+            result['native_processes'] = processes
+        except Exception as error:
+            result['events_unavailable'] = type(error).__name__
+        return result
+
+    def stop(self):
+        if self.managed:
+            run(['sudo', '-n', 'systemctl', 'stop', self.unit])
+        elif self.process:
+            os.killpg(self.process.pid, signal.SIGTERM)
+            try:
+                self.process.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                os.killpg(self.process.pid, signal.SIGKILL)
+                self.process.wait()
+
+
+def git(repo, *args, input=None):
+    return run(['git', '--git-dir=' + str(repo), *args], env=dict(
+        os.environ, GIT_CONFIG_GLOBAL='/dev/null', GIT_CONFIG_NOSYSTEM='1'), input=input)
+
+
+def tree(repo, expected):
+    result = {}
+    for entry in git(repo, 'ls-tree', '-r', '-z', 'main').split(b'\0'):
+        if not entry:
+            continue
+        fields, path = entry.split(b'\t', 1)
+        path = path.decode()
+        if path in expected:
+            result[path] = fields.split()[2].decode()
+    return result
+
+
+def verify_tree(repo, expected, wanted_size):
+    entries = tree(repo, expected)
+    if entries.keys() != expected.keys():
+        raise RuntimeError('incomplete reference main tree')
+    paths = list(entries)
+    result = git(repo, 'cat-file', '--batch', input=('\n'.join(entries[p] for p in paths) + '\n').encode())
+    at = 0
+    for path in paths:
+        end = result.index(b'\n', at)
+        header = result[at:end].split()
+        if len(header) != 3 or header[1] != b'blob':
+            raise RuntimeError('invalid reference pointer blob')
+        size = int(header[2])
+        value = result[end + 1:end + 1 + size]
+        match = re.search(rb'SHA256E-s([0-9]+)--([0-9a-f]{64})', value)
+        if not match or int(match[1]) != wanted_size or match[2].decode() != expected[path]:
+            raise RuntimeError('reference main tree has incorrect bytes')
+        at = end + size + 2
+
+
+def objects(repo, expected, size, verify=False):
+    wanted = set(expected.values())
+    found = set()
+    for base, _, names in os.walk(repo / 'annex/objects'):
+        for name in names:
+            match = re.fullmatch(r'SHA256E-s([0-9]+)--([0-9a-f]{64})(?:\..*)?', name)
+            if not match or match[2] not in wanted:
+                continue
+            file = Path(base) / name
+            if file.is_symlink() or file.stat().st_size != size or int(match[1]) != size:
+                raise RuntimeError('invalid reference object')
+            if verify:
+                with file.open('rb') as source:
+                    actual = hashlib.file_digest(source, 'sha256').hexdigest()
+                if actual != match[2]:
+                    raise RuntimeError('reference object hash mismatch')
+            found.add(match[2])
+    return len(found)
+
+
+def scan_events(home):
+    for file in sorted((home / 'state/logs').glob('*')):
+        if not file.is_file():
+            continue
+        for line in file.read_text(errors='replace').splitlines():
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if row.get('message') == 'candidate-scan-complete':
+                yield row
+
+
+def measure(args, report):
+    root, binary = args.root.resolve(), args.bin.resolve()
+    count, size, seconds = (32, 4096, 5) if args.smoke else (FILES, SIZE, WINDOW)
+    if root.exists():
+        raise RuntimeError('reference root must be new')
+    root.mkdir(parents=True)
+    report.update(files=count, bytes_per_file=size, logical_bytes=count * size, peers=2,
+                  storage='Btrfs compressed loop image' if args.compressed else 'ordinary filesystem',
+                  hardware_hdd_e17='not-measured', settings=(
+                      'defaults; Linux laptop service presets' if not args.smoke
+                      else 'default daemon; smoke has no service presets or CPU measurement'),
+                  samples=[], backup_samples=[])
+    report['preparation_deadline_seconds'] = min(300, args.prepare_seconds) if args.smoke else args.prepare_seconds
+    report['kernel'] = os.uname().release
+    report['filesystem'] = run(['findmnt', '-T', str(root), '-n', '-o', 'FSTYPE,OPTIONS'], text=True).strip()
+    def generated(count, physical):
+        report['generated_files'] = count
+        if physical is not None:
+            report['last_physical_compression_check'] = physical
+        checkpoint(args.report, report)
+    report['stage'] = 'generating reference files'
+    checkpoint(args.report, report)
+    expected = generate(root / 'files', count, size, args.compressed, generated)
+    if len(set(expected.values())) != count:
+        raise RuntimeError('reference files must contain unique content')
+    (root / 'manifest.json').write_text(json.dumps(expected))
+    a = Peer(root, binary, 'laptop', not args.smoke)
+    b = Peer(root, binary, 'backup', not args.smoke)
+    started = []
+    failed = False
+    try:
+        report['stage'] = 'starting native peers'
+        checkpoint(args.report, report)
+        for peer in (a, b):
+            started.append(peer)
+            peer.start()
+        report['daemon_builds'] = {peer.home.name: daemon_build(peer.cli('doctor', with_progress=True), not args.smoke)
+                                  for peer in (a, b)}
+        checkpoint(args.report, report)
+        a.cli('create', 'Reference', str(root / 'files'), '--k', '1', '--name', 'reference-laptop')
+        answer = a.cli('invite')
+        command = next(r['message']['args']['command'] for r in answer
+                       if r['type'] == 'Said' and r['message']['id'] == 'invitation')
+        code = re.search(r'pgn2-[A-Za-z0-9_-]+', command)[0]
+        people = next(r['people'] for r in a.cli('people') if r['type'] == 'People')
+        person = next(p['name'] for p in people if p['this_person'])
+        backup = root / 'backup.git'
+        report['stage'] = 'joining backup'
+        checkpoint(args.report, report)
+        b.cli('join', '--backup-machine', code, str(backup), '--name', 'reference-backup',
+              '--person', person, '--yes')
+        source = root / 'files/.git'
+        deadline = time.monotonic() + report['preparation_deadline_seconds']
+        report['stage'] = 'waiting for complete accepted trees and objects'
+        while True:
+            if time.monotonic() >= deadline:
+                raise RuntimeError('reference preparation deadline expired')
+            report['last_preparation_resources'] = dict(laptop=a.sample(), backup=b.sample())
+            try:
+                accepted = len(tree(source, expected))
+                backup_accepted = len(tree(backup, expected))
+                copied = objects(backup, expected, size)
+            except RuntimeError:
+                accepted, backup_accepted, copied = 0, 0, 0
+            report['last_preparation'] = dict(accepted=accepted, backup_accepted=backup_accepted, objects=copied)
+            checkpoint(args.report, report)
+            print(json.dumps(dict(stage='preparing', accepted=accepted, backup_accepted=backup_accepted, objects=copied)), flush=True)
+            if accepted == backup_accepted == copied == count:
+                break
+            if time.monotonic() >= deadline:
+                raise RuntimeError('reference preparation deadline expired')
+            time.sleep(min(5, max(0, deadline - time.monotonic())))
+        for repo in (source, backup):
+            report['stage'] = 'independently hashing ' + ('source' if repo == source else 'backup')
+            checkpoint(args.report, report)
+            verify_tree(repo, expected, size)
+            if objects(repo, expected, size, verify=True) != count:
+                raise RuntimeError('reference objects incomplete')
+        report['independent_hash_verification'] = 'both peers, every unique object'
+        report['stage'] = 'collecting complete resource window'
+        checkpoint(args.report, report)
+        # No CLI/status/Git polling in the CPU window. The cgroup includes
+        # every native child, including exited/reaped processes.
+        start = time.monotonic()
+        start_wall = time.time()
+        before = list(scan_events(a.home))
+        report['scan_markers_before_window'] = len(before)
+        while True:
+            report['samples'].append(a.sample())
+            report['backup_samples'].append(b.sample())
+            if time.monotonic() - start >= seconds:
+                break
+            time.sleep(1)
+        scans = list(scan_events(a.home))
+        # JSON log timestamps have second resolution. Use the pre-window
+        # event prefix, and retain only newly completed scans.
+        scans = scans[len(before):] if scans[:len(before)] == before else []
+        # A scan begun before the measurement does not establish a full
+        # in-window scan. Log time is rounded down to seconds, so this
+        # comparison is deliberately conservative.
+        scans = [s for s in scans if datetime.datetime.fromisoformat(
+            s['time'].replace('Z', '+00:00')).timestamp() - start_wall >= s['elapsed_us'] / 1_000_000]
+        report.update(verdict(report['samples'], scans, count, seconds, not args.smoke))
+        report['backup_resources'] = verdict(report['backup_samples'], [], 0, seconds,
+                                              not args.smoke, require_scan=False)
+        if not args.smoke and report['backup_resources']['budget_verdict'] != 'passed':
+            report['budget_verdict'] = 'failed'
+        for repo in (source, backup):
+            verify_tree(repo, expected, size)
+        report['stage'] = 'measurement complete'
+        if not args.smoke and report['budget_verdict'] != 'passed':
+            raise RuntimeError('reference budget exceeded')
+    except BaseException:
+        failed = True
+        report['failure_diagnostics'] = dict(laptop=a.diagnostics(root / 'files/.git'),
+                                            backup=b.diagnostics(root / 'backup.git'))
+        raise
+    finally:
+        stop_peers(started, report, failed)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--bin', required=True, type=Path)
+    parser.add_argument('--root', required=True, type=Path)
+    parser.add_argument('--report', required=True, type=Path)
+    parser.add_argument('--smoke', action='store_true', help='reduced control-flow check, never a budget pass')
+    parser.add_argument('--compressed', action='store_true')
+    parser.add_argument('--prepare-seconds', type=preparation_seconds, default=5400)
+    args = parser.parse_args()
+    report = dict(budget_verdict='not-measured', source=run(['git', 'rev-parse', 'HEAD']).decode().strip(),
+                  dirty_worktree=bool(run(['git', 'status', '--porcelain'])))
+    try:
+        if not args.smoke and report['dirty_worktree']:
+            raise RuntimeError('full reference profile requires a clean source checkout')
+        measure(args, report)
+    except BaseException as error:
+        report['error'] = str(error)
+        raise
+    finally:
+        checkpoint(args.report, report)
+
+
+if __name__ == '__main__':
+    main()

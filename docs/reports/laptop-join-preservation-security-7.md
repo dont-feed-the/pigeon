@@ -47,3 +47,12 @@ success. The backup case retains the same guarantees.
 Formatting, all-target workspace Clippy with zero warnings, headers/length,
 ADR index and specification references pass. Full joining/signing review,
 resource budgets and real elapsed gates remain separate.
+
+The combined follow-up integrates current main
+`d4e4e7ff65a6cc0e6b8dcb310c3406aac859a51c` (v0.6.28 candidate) before
+PR validation. All 179 daemon-library cases pass again in 17.610 seconds;
+the eight native join, invitation and crash-resume cases pass in 8.742
+seconds. All-target Clippy, formatting and repository rules pass. The
+measurement diagnostics and expiring scheduled-night policy share this
+rollup's single hosted validation; no extra native performance pass or
+elapsed-night result is claimed.

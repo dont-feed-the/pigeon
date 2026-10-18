@@ -3,6 +3,7 @@
 import importlib.machinery
 import importlib.util
 import os
+from datetime import datetime, timezone
 import subprocess
 import tempfile
 import textwrap
@@ -162,7 +163,7 @@ class AuditSchedule(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/models-full.yml").read_text()
         fresh = workflow.split("      - id: fresh\n", 1)[1].split("\n  proofs:", 1)[0]
         script = textwrap.dedent(fresh.split("        run: |\n", 1)[1])
-        mocks = ('date() { if [ "$*" = +%s ]; then echo 1000000; '
+        mocks = ('date() { if [ "$*" = +%s ]; then echo "$TEST_NOW"; '
                  'else echo "$TEST_DAY"; fi; }\n'
                  'git() { echo "$TEST_COMMIT"; }\n')
         for event, day, recent, expected in (
@@ -175,8 +176,9 @@ class AuditSchedule(unittest.TestCase):
             with self.subTest(event=event, day=day, recent=recent), tempfile.TemporaryDirectory() as temp:
                 output = Path(temp) / "output"
                 output.touch()
-                env = dict(os.environ, EVENT=event, TEST_DAY=day,
-                           TEST_COMMIT=str(999940 if recent else 800000),
+                now = int(datetime(2026, 10, 18 + int(day), tzinfo=timezone.utc).timestamp())
+                env = dict(os.environ, EVENT=event, TEST_DAY=day, TEST_NOW=str(now),
+                           CAMPAIGN_UNTIL="", TEST_COMMIT=str(now - (60 if recent else 200_000)),
                            GITHUB_OUTPUT=str(output), GITHUB_STEP_SUMMARY=str(Path(temp) / "summary"))
                 subprocess.run(["bash", "-eu", "-c", mocks + script], env=env, check=True)
                 self.assertEqual(set(output.read_text().splitlines()), expected)

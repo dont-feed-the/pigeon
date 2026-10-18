@@ -808,3 +808,20 @@ preserved/classified native health-shard retake under sustained I/O pressure,
 then publication alone reuses both archives after the upstream gate passes.
 No failed assertion is waived. Both intervals and leads meet the defined
 targets; these observations do not establish a sustained causal speedup.
+
+## v0.6.27 publication observation
+
+[v0.6.27](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.27), source
+`2b9670765248e56274d7e569e9f93145c9468f5c`, is published at 06:19:39 UTC
+on 18 October. Six assets, four archive checksums, pinned annex and native
+Linux installation are independently verified. Candidate lead time is
+19 minutes; the publication interval from v0.6.25 is 59 minutes 50 seconds.
+The report has 33 completed lead-time samples and 32 publication intervals.
+
+Its first native shard misses initial protection in the mass-deletion
+fixture: 102 valid source objects and 78 valid backup objects are retained
+with repeated I/O-pressure pauses and closed-handle fetch errors. One
+bounded native-shard retake passes, followed by one publication-only retake;
+the successful archive producers are reused. The exact original mechanism
+is unproved and no source correction is claimed for that miss. All original
+artifacts remain retained; v0.6.26 stays immutable and unpublished.

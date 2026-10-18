@@ -20,7 +20,9 @@ permissions:
   actions: read
 
 concurrency:
-  group: models-full-${{ github.ref }}
+  # Superseded automatic tag audits share one slot; main's scheduled/manual
+  # evidence remains independent and is never canceled by a main push.
+  group: models-full-${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && 'release-tags' || format('{0}-{1}', github.event_name, github.ref) }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
@@ -36,15 +38,16 @@ jobs:
       - id: fresh
         env:
           EVENT: ${{ github.event_name }}
+          CAMPAIGN_UNTIL: ${{ vars.PIGEON_MODEL_NIGHTS_UNTIL }}
         run: |
-          age=$(( $(date +%s) - $(git log -1 --format=%ct) ))
-          if [ "$EVENT" != schedule ] || [ "$age" -lt 90000 ]; then
-            echo run=true >> "$GITHUB_OUTPUT"
-          else
-            echo "main has not moved since the last nightly run." >> "$GITHUB_STEP_SUMMARY"
+          selection=$(python3 scripts/ci-model-night --event "$EVENT" \
+            --source-epoch "$(git log -1 --format=%ct)" --now-epoch "$(date +%s)" \
+            --campaign-until "${CAMPAIGN_UNTIL:-}")
+          if [ -n "$selection" ]; then
+            printf '%s\n' "$selection" >> "$GITHUB_OUTPUT"
           fi
-          if [ "$EVENT" = workflow_dispatch ] || { [ "$EVENT" = schedule ] && [ "$(date -u +%u)" = 1 ]; }; then
-            echo audit=true >> "$GITHUB_OUTPUT"
+          if [[ "$selection" != *run=true* ]]; then
+            echo "main has not moved and no qualification campaign is active." >> "$GITHUB_STEP_SUMMARY"
           fi
 
   proofs:
@@ -146,6 +149,10 @@ jobs:
           curl -fsSL -o "$t" https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
           echo "$GIT_ANNEX_SHA256  $t" | sha256sum -c -
           tar -C ~ -xzf "$t" && echo ~/git-annex.linux >> "$GITHUB_PATH"
+      - name: the same verified git-annex build as release gates
+        uses: ./.github/actions/git-annex-pigeon
+        with:
+          required: "true"
       - name: Node, which builds the web interface's script (ADR 0077)
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -232,6 +239,8 @@ jobs:
       - name: pigeon's git-annex, once git-annex.yml has built this patch set (ADR 0069)
         if: steps.blocked.outputs.run == 'true'
         uses: ./.github/actions/git-annex-pigeon
+        with:
+          required: "true"
       - name: the lab build
         if: steps.blocked.outputs.run == 'true'
         run: |

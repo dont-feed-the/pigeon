@@ -27,6 +27,15 @@ on:
         default: linux
   workflow_dispatch:
     inputs:
+      native_reference_only:
+        description: Measure the actual 100000-file, 50GB, two-peer reference budgets
+        type: boolean
+        default: false
+      reference_prepare_seconds:
+        description: "Reference preparation limit: 600 for diagnosis, 5400 for the complete attempt"
+        type: choice
+        options: ["5400", "600"]
+        default: "5400"
       native_zfs_only:
         description: Run only the disposable native Linux ZFS backup fixture
         type: boolean
@@ -54,7 +63,7 @@ jobs:
 
   lab:
     needs: changes
-    if: needs.changes.outputs.lab == 'true' && !inputs.native_zfs_only
+    if: needs.changes.outputs.lab == 'true' && !inputs.native_zfs_only && !inputs.native_reference_only
     name: ${{ matrix.group }} (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -128,7 +137,7 @@ jobs:
 
   selected-checks:
     name: Lab selection verified
-    if: ${{ !cancelled() && !inputs.native_zfs_only }}
+    if: ${{ !cancelled() && !inputs.native_zfs_only && !inputs.native_reference_only }}
     needs: [changes, lab]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -141,7 +150,7 @@ jobs:
 
   native-zfs:
     name: real ZFS backup admission and persisted objects
-    if: inputs.native_zfs_only
+    if: inputs.native_zfs_only && !inputs.native_reference_only
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -211,3 +220,48 @@ jobs:
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14
+
+  native-reference:
+    name: 100000 files, 50GB, two real peers, ten-minute resource window
+    if: inputs.native_reference_only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: retain an explicit unmeasured verdict during native setup
+        run: |
+          printf '{"budget_verdict":"not-measured","stage":"native setup","source":"%s","samples":[]}\n' \
+            "$GITHUB_SHA" > "$RUNNER_TEMP/reference-budget.json"
+      - uses: ./.github/actions/bridge-annex
+      - uses: ./.github/actions/git-annex-pigeon
+        with:
+          required: "true"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: crates/pigeon-web/client/.nvmrc
+          cache: npm
+          cache-dependency-path: crates/pigeon-web/client/package-lock.json
+      - name: native measurement tools and production programs
+        run: |
+          set -e
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends btrfs-progs btrfs-compsize
+          rustup toolchain install
+          cargo build --release --locked -p pigeon -p pigeond -p git-annex-p2p-iroh
+          uname -a
+          git annex version --raw
+          systemd --version | head -1
+      - name: real reference preparation and measured resource budgets
+        env:
+          PREPARE_SECONDS: ${{ inputs.reference_prepare_seconds || '5400' }}
+        run: scripts/check-reference-budget "$RUNNER_TEMP/reference-budget.json" --prepare-seconds "$PREPARE_SECONDS"
+      - name: retain measurement, including failed and unmeasured verdicts
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reference-budget-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/reference-budget.json
+          if-no-files-found: error
+          retention-days: 30

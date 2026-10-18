@@ -12,6 +12,16 @@ increments the second number, and every other release the third.
 - Failed laptop joins preserve their unfinished folder and files added during
   setup. Retrying the same group keeps the original repository and identity.
 
+
+## 0.6.28 — 2026-10-18
+
+### Added
+
+- Diagnostic logs include completed file-scan counts and durations, to help
+  investigate resource use.
+
+
+
 ## 0.6.27 — 2026-10-18
 
 ### Fixed

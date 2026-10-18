@@ -17,6 +17,7 @@ fn invalid(detail: String) -> Error {
 }
 
 pub(crate) async fn changes(g: &Group) -> Result<Vec<Entry>, Error> {
+    let began = std::time::Instant::now();
     let Some(wt) = &g.worktree else {
         return Ok(Vec::new());
     };
@@ -102,5 +103,11 @@ pub(crate) async fn changes(g: &Group) -> Result<Vec<Entry>, Error> {
     }
     // A staged deletion with a visible file is untracked above. A truly
     // deleted index entry has no local save to stage, as with Git status.
+    tracing::debug!(
+        entries = index.len(),
+        pending = out.len(),
+        elapsed_us = u64::try_from(began.elapsed().as_micros()).unwrap_or(u64::MAX),
+        "candidate-scan-complete"
+    );
     Ok(out)
 }
