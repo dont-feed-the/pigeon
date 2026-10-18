@@ -59,3 +59,32 @@ in 42.932 seconds with unchanged programs and source: capacity accounting,
 honest status, a returning backup and Free/Keep. The merge has the same tree
 as that validated head. The release retains pigeon1; resource/HDD budgets,
 the broader law/trace audit and elapsed M7 gates remain open.
+
+## Unpublished v0.6.49 candidate
+
+Tag v0.6.49 remains immutable and unpublished. Its required CI
+39168336285 fails `health::another_laptop_proves_retained_publication_after_backup_removal`
+at the first exact-byte wait for Bob's kept file. The fixture uses a separate
+60-second wall limit, whereas protection uses the 120-second functional
+allowance. Bob's native log records disk pressure from 21:34:47 until
+21:36:03 UTC; the assertion expires at 21:36:12 while the controller is
+recovering its disk share. Its native download remains pending.
+
+The preserved artifact's accepted note pointers agree on both laptops, and
+the backup's sole object independently matches its key's size and SHA-256.
+Bob's working note is absent. This supports a fixture budget mismatch; it
+does not establish that an unobserved later transfer completed. Original
+job 117795950019 and artifact 12151746611 are retained before correction;
+the 10,002,257-byte ZIP has SHA-256
+`31fd96830da1eb1cfebe3d7c9a531fdd92d1801461aa63f7a5cf23df2363449b`.
+
+Both kept-file waits now use 120 wall seconds, still stricter than the
+existing protection allowance of 120 active seconds and a 300-second wall
+cap. Exact bytes remain required. The controller, resource budgets and
+production code are unchanged. v0.6.50 carries the unpublished copy-check
+improvement and must pass fresh tag gates before publication.
+
+The corrected native health case passes locally in 13.592 seconds, with
+both exact-byte waits and the retained-publication assertions intact.
+Workspace Cargo check, all-target Clippy, formatting and repository rules
+also pass. This is a changed fixture, not an unchanged-source CI retry.

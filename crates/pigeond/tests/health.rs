@@ -247,7 +247,7 @@ fn another_laptop_proves_retained_publication_after_backup_removal() {
     std::fs::write(folder.join("note.txt"), b"first bytes\n").unwrap();
     protected_note(&lap, &folder, b"first bytes\n", &[&lap, &bob, &vault]);
     eventually_within(
-        60,
+        120,
         || std::fs::read(other.join("note.txt")).is_ok_and(|b| b == b"first bytes\n"),
         "first version never reached Bob",
         &[&lap, &bob, &vault],
@@ -255,7 +255,7 @@ fn another_laptop_proves_retained_publication_after_backup_removal() {
     std::fs::write(folder.join("note.txt"), b"second bytes\n").unwrap();
     protected_note(&lap, &folder, b"second bytes\n", &[&lap, &bob, &vault]);
     eventually_within(
-        60,
+        120,
         || std::fs::read(other.join("note.txt")).is_ok_and(|b| b == b"second bytes\n"),
         "second version never reached Bob",
         &[&lap, &bob, &vault],
