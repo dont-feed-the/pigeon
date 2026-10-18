@@ -29,3 +29,6 @@ pub mod volume;
 pub mod writers;
 
 pub use error::{Error, Result};
+
+/// Filesystem events as bounded hints, never catalogue authority (ADR 0013).
+pub mod change_hints;

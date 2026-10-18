@@ -5,6 +5,14 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Added
+
+- Saved files wake background capture through native folder watching on Linux
+  and macOS. Periodic checks continue if events are lost or watching is
+  unavailable; status explains when pigeon is checking by scan only.
+
 ## 0.6.30 — 2026-10-18
 
 ### Fixed

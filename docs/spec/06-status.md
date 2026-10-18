@@ -219,3 +219,12 @@ owner of a missing machine and the admins see the same fact.
 | status report period | 10 minutes | **[no ADR]** |
 
 All are settings with tested defaults for the usability test (ux.md §11).
+
+## 6.8 Native watching availability
+
+Local `StatusReport.scan_only` is an optional translated message. When native
+folder watching is unavailable, the command line and Health page explain that
+periodic checks continue and registration retries automatically. This is
+secondary information: it changes no headline, captured catalogue, local-byte
+proof or signed peer report. Absent fields retain the previous wire format.
+See [the implementation and evidence](../reports/change-hints-7.md).

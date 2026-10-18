@@ -134,6 +134,7 @@ pub const MESSAGES: &[Entry] = &[
     e("headline-resource-battery", &[]),
     e("headline-resource-metered", &[]),
     e("headline-resource-disk", &[]),
+    e("status-scan-only", &[]),
     e("headline-resource-saving", &[]),
     e("erase-needs-backup", &[]),
     e("erase-preparation-split", &[]),

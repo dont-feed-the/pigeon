@@ -32,6 +32,8 @@ pub struct Known {
     pub(crate) download_priorities: Arc<crate::download_queue::Priorities>,
     /// Stable stat observations and actual captures of dirty background paths.
     pub capture_schedule: crate::capture_schedule::State,
+    /// Native event hints and successful full-observation admission.
+    pub(crate) capture_watch: crate::capture_watch::State,
     /// A temporary, non-listening metadata fetch admits only its inviter.
     pub bootstrap_peer: Option<(String, String)>,
     /// The roster of `main`.

@@ -114,6 +114,7 @@ pub async fn release(d: &Daemon, id: &str, choice: HeldChoice) -> Vec<Response> 
                 return vec![problem("internal-error", &[], Some(e.to_string()))];
             }
             tracing::info!(group = %g.id, id, from = %from, to = %to, "held-renamed");
+            crate::capture_watch::invalidate(&g);
             d.wake.notify_one();
             return vec![Response::Said {
                 message: msg(
@@ -127,6 +128,7 @@ pub async fn release(d: &Daemon, id: &str, choice: HeldChoice) -> Vec<Response> 
         return vec![problem("internal-error", &[], Some(e.to_string()))];
     }
     tracing::info!(group = %g.id, id, choice = ?choice, "held-released");
+    crate::capture_watch::invalidate(&g);
     d.wake.notify_one();
     vec![Response::Said {
         message: msg(said, &[("files", files)]),

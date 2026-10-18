@@ -34,6 +34,7 @@ impl Backend for Pausing {
                     versions: Vec::new(),
                     not_shared: Vec::new(),
                     paused: None,
+                    scan_only: None,
                 })]
             }
             pigeon_proto::Request::Resume => {

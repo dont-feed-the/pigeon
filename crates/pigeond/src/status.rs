@@ -665,6 +665,7 @@ pub(crate) async fn inventory_report(
             versions,
             not_shared,
             paused: None,
+            scan_only: crate::capture_watch::scan_only(g).then(|| msg("status-scan-only", &[])),
         },
         inventory,
     )

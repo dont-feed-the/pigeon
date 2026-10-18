@@ -42,3 +42,6 @@ pub mod state;
 pub mod time;
 #[cfg(feature = "tla-trace")]
 pub mod trace;
+
+/// Event hints and periodic full-scan admission (ADR 0013).
+pub mod change_scan;

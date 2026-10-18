@@ -17,6 +17,7 @@ lab = []
 [dependencies]
 dirs.workspace = true
 libc.workspace = true
+notify.workspace = true
 rustix.workspace = true
 thiserror.workspace = true
 

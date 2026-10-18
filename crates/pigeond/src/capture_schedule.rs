@@ -78,6 +78,15 @@ impl State {
         true
     }
 
+    /// Retry a failed full observation without spinning on an expired timer.
+    pub(crate) fn retry_at(&mut self, at: Instant) {
+        self.due = Some(at);
+    }
+
+    pub(crate) fn next_due(&self) -> Option<Instant> {
+        self.due
+    }
+
     pub(crate) fn ready(&mut self, path: &str, stat: Stat) -> bool {
         let now = Instant::now();
         let Ok(elapsed) = pigeon_sys::clock::continuous_millis() else {
@@ -292,7 +301,21 @@ pub(crate) fn delay(groups: &[std::sync::Arc<Group>], interval: Duration) -> Dur
     let now = Instant::now();
     groups
         .iter()
-        .filter_map(|g| g.lock().capture_schedule.due)
+        .filter_map(|g| {
+            let known = g.lock();
+            let watch = known.capture_watch.delay(now).map(|delay| now + delay);
+            known
+                .capture_schedule
+                .due
+                .map(|at| {
+                    now + known
+                        .capture_watch
+                        .bound_expired(at.saturating_duration_since(now), now)
+                })
+                .into_iter()
+                .chain(watch)
+                .min()
+        })
         .map(|due| {
             due.saturating_duration_since(now)
                 .max(Duration::from_millis(20))

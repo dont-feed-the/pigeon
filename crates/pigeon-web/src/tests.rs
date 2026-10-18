@@ -62,6 +62,7 @@ impl Backend for Fixed {
                     versions: Vec::new(),
                     not_shared: Vec::new(),
                     paused: None,
+                    scan_only: None,
                 })]
             }
             pigeon_proto::Request::Capacity => vec![Response::Capacity(Box::new(

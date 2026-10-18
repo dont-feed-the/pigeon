@@ -45,6 +45,7 @@ fn health_round_trips_without_inventing_evidence(tc: TestCase) {
             versions: Vec::new(),
             not_shared: Vec::new(),
             paused: None,
+            scan_only: None,
         },
         omitted_paths: n(&tc),
         current: counts(&tc),

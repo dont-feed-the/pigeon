@@ -844,3 +844,15 @@ waits. The separate earlier bridge stall has a reproduced same-repository
 lock/preemption correction and passes corrected hosted validation. The
 full v0.6.28 background model run 39103734428 also passes; a tag audit does
 not count as an actual scheduled qualification night.
+
+## v0.6.30 publication observation
+
+[v0.6.30](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.30), source
+`97e6fc81a318a01d05f17eddeb4c3529efa042f3`, is published on 18 October at
+08:09:10 UTC. Six assets, four archive checksums, pinned annex, Linux
+installation and shell completions are independently verified. Candidate
+lead is 11 minutes 16 seconds; the publication gap from v0.6.29 is
+26 minutes 40 seconds. Both targets are met, with 36 lead samples and 35
+completed publication intervals. All four tag workflows pass on their first
+attempt. This ships the shared Linux writer inventory and finite scheduled
+model campaign; actual elapsed nights and resource budgets remain unproved.
