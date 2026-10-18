@@ -38,7 +38,9 @@ Main, release-tag and periodic runs retain full validation.
 For M7 qualification on stable main, the repository Actions variable
 `PIGEON_MODEL_NIGHTS_UNTIL=YYYY-MM-DD` keeps full scheduled model work enabled
 until that date's exclusive UTC midnight. Empty or expired values restore
-the routine 25-hour policy. This does not create a scheduled event or supply
+the routine 25-hour policy. When no variable override is set, the tracked
+`.github/model-night-campaign-until` supplies the expiry instead; deleting
+that file disables the tracked campaign. This does not create a scheduled event or supply
 a green night; see [the campaign policy](reports/model-night-campaign-7.md).
 The [conformance inventory](conformance.md) links accepted decisions to their
 implementation and verification entry points, with the remaining release gates.
@@ -105,6 +107,11 @@ with that Node; in `client/`, `npm ci && npm test` runs them alone. To
 look at the pages with sample data, `PIGEON_WEB_DEMO=8123 cargo test -p
 pigeon-web --lib serve_the_demo -- --ignored --nocapture` serves them on
 127.0.0.1:8123 and prints login links.
+
+Functional native protection waits allow 120 seconds of active work, excluding
+only a declared disk-pressure wait after capture is complete, with a five-minute
+wall bound. The actual Protected predicate is unchanged. Capture waits and the
+separate measured resource budgets do not receive this exemption.
 
 The integration tests of `pigeond` need git-annex on the `PATH`. Under
 cargo, git ignores your global and system configuration and ignore files

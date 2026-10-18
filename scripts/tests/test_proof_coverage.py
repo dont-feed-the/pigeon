@@ -178,10 +178,27 @@ class AuditSchedule(unittest.TestCase):
                 output.touch()
                 now = int(datetime(2026, 10, 18 + int(day), tzinfo=timezone.utc).timestamp())
                 env = dict(os.environ, EVENT=event, TEST_DAY=day, TEST_NOW=str(now),
-                           CAMPAIGN_UNTIL="", TEST_COMMIT=str(now - (60 if recent else 200_000)),
+                           CAMPAIGN_UNTIL="1970-01-01", TEST_COMMIT=str(now - (60 if recent else 200_000)),
                            GITHUB_OUTPUT=str(output), GITHUB_STEP_SUMMARY=str(Path(temp) / "summary"))
                 subprocess.run(["bash", "-eu", "-c", mocks + script], env=env, check=True)
                 self.assertEqual(set(output.read_text().splitlines()), expected)
+
+    def test_tracked_campaign_runs_unchanged_main_until_its_utc_expiry(self):
+        workflow = (ROOT / ".github/workflows/models-full.yml").read_text()
+        fresh = workflow.split("      - id: fresh\n", 1)[1].split("\n  proofs:", 1)[0]
+        script = textwrap.dedent(fresh.split("        run: |\n", 1)[1])
+        expiry = datetime.fromisoformat((ROOT / ".github/model-night-campaign-until").read_text().strip()).replace(tzinfo=timezone.utc)
+        mocks = 'date() { echo "$TEST_NOW"; }; git() { echo "$TEST_COMMIT"; };\n'
+        for delta, expected in [(-1, True), (0, False)]:
+            now = int(expiry.timestamp()) + delta
+            with self.subTest(delta=delta), tempfile.TemporaryDirectory() as temp:
+                output = Path(temp) / "output"
+                output.touch()
+                env = dict(os.environ, EVENT="schedule", CAMPAIGN_UNTIL="", TEST_NOW=str(now),
+                    TEST_COMMIT=str(now - 200_000), GITHUB_OUTPUT=str(output),
+                    GITHUB_STEP_SUMMARY=str(Path(temp) / "summary"))
+                subprocess.run(["bash", "-eu", "-c", mocks + script], env=env, check=True)
+                self.assertEqual("run=true" in output.read_text().splitlines(), expected)
 
 
 if __name__ == "__main__":

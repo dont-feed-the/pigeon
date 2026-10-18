@@ -256,8 +256,11 @@ pub fn status(d: &Daemon) -> StatusReport {
 
 /// Waits for captured versions to reach `want`. A pending save is local
 /// too, but is not yet a history entry that the next test step may use.
+/// Protection gets 120 active seconds, excluding its declared disk waits
+/// (15 §15.4), with a five-minute wall bound. Capture never gets this exemption.
 pub fn until(lap: &Daemon, want: State, all: &[&Daemon]) -> StatusReport {
-    let deadline = Instant::now() + Duration::from_secs(120);
+    let began = Instant::now();
+    let mut active = pigeon_core::resources::ActiveClock::new(0, true);
     loop {
         let s = status(lap);
         let capturing = s
@@ -267,8 +270,19 @@ pub fn until(lap: &Daemon, want: State, all: &[&Daemon]) -> StatusReport {
         if s.state == want && !capturing {
             return s;
         }
-        if Instant::now() > deadline {
-            panic!("never {want:?}; last {s:?}\n{}", logs(all));
+        let elapsed = began.elapsed();
+        let deliberate_wait =
+            want == State::Protected && !capturing && s.headline.id == "headline-resource-disk";
+        active.observe(
+            elapsed.as_millis().min(u128::from(u64::MAX)) as u64,
+            !deliberate_wait,
+        );
+        if active.used() >= 120_000 || elapsed >= Duration::from_secs(300) {
+            panic!(
+                "never {want:?}; active {}ms, wall {elapsed:?}; last {s:?}\n{}",
+                active.used(),
+                logs(all)
+            );
         }
         std::thread::sleep(Duration::from_millis(500));
     }

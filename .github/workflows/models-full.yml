@@ -40,9 +40,13 @@ jobs:
           EVENT: ${{ github.event_name }}
           CAMPAIGN_UNTIL: ${{ vars.PIGEON_MODEL_NIGHTS_UNTIL }}
         run: |
+          model_campaign_until=${CAMPAIGN_UNTIL:-}
+          if [ -z "$model_campaign_until" ] && [ -f .github/model-night-campaign-until ]; then
+            model_campaign_until=$(cat .github/model-night-campaign-until)
+          fi
           selection=$(python3 scripts/ci-model-night --event "$EVENT" \
             --source-epoch "$(git log -1 --format=%ct)" --now-epoch "$(date +%s)" \
-            --campaign-until "${CAMPAIGN_UNTIL:-}")
+            --campaign-until "$model_campaign_until")
           if [ -n "$selection" ]; then
             printf '%s\n' "$selection" >> "$GITHUB_OUTPUT"
           fi

@@ -164,6 +164,10 @@ class ReferenceMeasurement(unittest.TestCase):
             self.assertNotIn('private state', MODULE.json.dumps(report))
             self.assertEqual(report['native_processes'], [])
 
+    def test_process_name_parentheses_do_not_change_cpu_counters(self):
+        fields = ['S'] + [str(n) for n in range(4, 53)]
+        self.assertEqual(MODULE.proc_cpu_ticks('123 (worker (a) b) ' + ' '.join(fields)), 29)
+
     def test_process_name_parentheses_do_not_change_start_time_field(self):
         fields = ['S'] + [str(n) for n in range(4, 53)]
         self.assertEqual(MODULE.proc_identity('123 (worker (a) b) ' + ' '.join(fields)), 22)

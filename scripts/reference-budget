@@ -28,7 +28,7 @@ def preparation_seconds(value):
 
 def diagnostic_events(home):
     allowed = {'resource-io-pressure', 'captured', 'capture-failed', 'capture-recovery-failed',
-               'candidate-scan-complete', 'accepted', 'placed', 'copy-failed', 'get-failed',
+               'candidate-scan-complete', 'writer-inventory-complete', 'accepted', 'placed', 'copy-failed', 'get-failed',
                'admission-waits', 'keep-waits', 'fetch-failed'}
     events = deque(maxlen=50)
     for path in sorted((home / 'state/logs').glob('*.ndjson')):
@@ -116,6 +116,11 @@ def proc_identity(text):
     # comm can contain spaces and parentheses; field 22 is starttime.
     fields = text[text.rfind(')') + 2:].split()
     return int(fields[19])
+
+
+def proc_cpu_ticks(text):
+    fields = text[text.rfind(')') + 2:].split()
+    return int(fields[11]) + int(fields[12])
 
 
 def verdict(samples, scans, count, seconds, full, require_scan=True):
@@ -266,15 +271,19 @@ class Peer:
             processes = []
             for pid in pids[:64]:
                 try:
+                    before = Path(f'/proc/{int(pid)}/stat').read_text()
                     status = Path(f'/proc/{int(pid)}/status').read_text()
                     name = Path(f'/proc/{int(pid)}/comm').read_text().strip()
                     rss = re.search(r'^VmRSS:\s+(\d+) kB$', status, re.M)
-                    processes.append(dict(pid=int(pid), name=name if name in (
+                    if proc_identity(Path(f'/proc/{int(pid)}/stat').read_text()) != proc_identity(before):
+                        continue
+                    processes.append(dict(pid=int(pid), cpu_ticks=proc_cpu_ticks(before), name=name if name in (
                         'pigeond', 'git', 'git-annex', 'git-annex-p2p') else 'other',
                         rss=int(rss[1]) * 1024 if rss else None))
                 except (OSError, ValueError):
                     continue
             result['native_processes'] = processes
+            result['native_cpu_ticks_per_second'] = os.sysconf('SC_CLK_TCK')
         except Exception as error:
             result['events_unavailable'] = type(error).__name__
         return result

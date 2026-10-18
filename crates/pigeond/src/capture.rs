@@ -235,6 +235,7 @@ async fn capture_inner(
     let mut soon = BTreeSet::new();
     let mut fresh = BTreeSet::new();
     let changes = crate::capture_status::changes(g).await?;
+    let writers = crate::capture_writers::snapshot(&worktree, &changes);
     for (x, y, path) in changes.into_iter().filter_map(letters) {
         if is_pigeon_path(&path) {
             continue;
@@ -285,7 +286,7 @@ async fn capture_inner(
                         .near_install(&path, st, concurrent);
                 }
                 if scheduled && !g.lock().capture_schedule.ready(&path, st)
-                    || !pigeon_sys::writers::scan(st.id).is_clear()
+                    || !crate::capture_writers::clear(writers.as_ref(), st.id)
                 {
                     done.busy += 1;
                 } else if lagging {

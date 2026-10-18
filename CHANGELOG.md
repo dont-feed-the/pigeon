@@ -5,6 +5,13 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Linux capture checks open writers together, reducing repeated process
+  scanning when many files are saved at once.
+
 ## 0.6.29 — 2026-10-18
 
 ### Fixed
