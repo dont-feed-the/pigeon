@@ -446,6 +446,7 @@ async fn pending_batch_keeps_priority(cancel: bool) {
     let git = crate::git::Git {
         repo: high_repo,
         purge_gate: Arc::new(crate::purge_gate::Gate::default()),
+        whereis_no_urls: Default::default(),
     };
     let mut pool = crate::custody_transfer::Pool::default();
     pool.copy(&git, "fixture-peer", "first", Duration::from_secs(3))
@@ -515,6 +516,7 @@ async fn a_pending_batch_uses_its_download_view_and_releases_on_stop() {
     let git = crate::git::Git {
         repo: repo.for_download(),
         purge_gate: Arc::new(crate::purge_gate::Gate::default()),
+        whereis_no_urls: Default::default(),
     };
     let mut pool = crate::custody_transfer::Pool::default();
     pool.get(&git, "kept", Duration::from_secs(3))

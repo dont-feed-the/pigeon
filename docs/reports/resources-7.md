@@ -7,6 +7,8 @@ has been claimed to pass.
 
 The [positive-answer lookup checkpoint](sync-lookups-7.md) records bounded
 native process reuse while keeping every durability and required hash check.
+The [location-query checkpoint](location-claims-7.md) records the optional
+native URL optimization and retained full-reference diagnostic failure.
 
 ## Controller components
 

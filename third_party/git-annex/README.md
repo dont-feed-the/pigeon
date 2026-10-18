@@ -8,7 +8,8 @@ experiments found:
 |---|---|---|
 | `0001-p2p-checkpresent-honours-removal-lock.patch` | `CHECKPRESENT` reports a copy that its owner holds locked for removal, so two concurrent drops over P2P each count the other's copy and both drop it (`P2P/Annex.hs`) | E23 |
 | `0002-p2p-relay-connectdone-after-output.patch` | `CONNECTDONE` can overtake the end of git's output, so a fetch over P2P hangs for good, about twice in 100; it was also sent twice (`P2P/IO.hs` `runRelayService`) | E25, E12's retries |
-| `0100-pigeon-version.patch` | none: it makes `git annex version` say `10.20261006-pigeon1` | |
+| `0003-whereis-without-url-lookups.patch` | `whereis` queries download URLs even when its caller consumes only location UUIDs; `--no-urls` omits that work and keeps location/trust outcomes | `lab/git-annex/ga-whereis-no-urls.py` |
+| `0100-pigeon-version.patch` | none: it makes `git annex version` say `10.20261006-pigeon2` | |
 
 pigeon keeps its own guards against both bugs (the filter's `CHECKPRESENT`
 probe of 09 §9.4, deadlines on P2P fetches and the restart of a stuck
@@ -28,6 +29,15 @@ the patches with E23 and E25 against the stock build. `slice.yml` and
 To move to a new upstream release, change `VERSION`, refresh the patches with
 `patch -p1` on the new tree (drop those upstream has taken), and let
 `git-annex.yml` prove the result.
+
+The optional `whereis --no-urls` mode leaves ordinary output unchanged unless
+selected. The contract checks web and ordinary UUID claims, absent keys and
+trusted/untrusted outcomes against normal queries, with no content objects.
+It supplies metadata claims, never a physical-copy or deletion proof. A manual
+`build_all_platforms` run prepares both archives before a pin change; the
+Stack cache can reuse the same architecture's dependency store across a
+pigeon suffix change. Package bytes still build from the checked upstream
+and patch set, with the normal provenance, version and archive checks.
 
 ## Licence and source
 

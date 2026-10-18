@@ -22,6 +22,9 @@ pub type Error = pigeon_git::Error;
 #[path = "git_object_tests.rs"]
 mod object_tests;
 
+#[path = "git_location_queries.rs"]
+mod location_queries;
+
 /// The zero object ID: "must not exist" as an old value.
 pub const ZERO: &str = "0000000000000000000000000000000000000000";
 
@@ -62,6 +65,8 @@ pub struct Git {
     pub repo: Repo,
     /// Invalidate content authorization around retained-ref mutations.
     pub purge_gate: std::sync::Arc<crate::purge_gate::Gate>,
+    /// Optional native query capability, shared by this repository's views.
+    pub(crate) whereis_no_urls: std::sync::Arc<tokio::sync::OnceCell<bool>>,
 }
 
 /// Whether `path` is pigeon's own, never captured: `.pigeon/` and
@@ -84,6 +89,7 @@ impl Git {
         Git {
             repo: Repo::new(dir, env),
             purge_gate: Default::default(),
+            whereis_no_urls: Default::default(),
         }
     }
 
@@ -105,6 +111,7 @@ impl Git {
         Self {
             repo: self.repo.for_download(),
             purge_gate: self.purge_gate.clone(),
+            whereis_no_urls: self.whereis_no_urls.clone(),
         }
     }
 

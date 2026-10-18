@@ -1,0 +1,38 @@
+Subject: [PATCH] whereis: optionally omit remote URL lookups
+
+Pigeon consumes repository UUID claims, including untrusted locations, but
+not download URLs. Leave normal output unchanged; --no-urls skips the
+additional URL log and remote queries while retaining keyLocations and
+trustPartition. This is not a physical-copy verification mode.
+
+---
+--- a/Command/Whereis.hs
++++ b/Command/Whereis.hs
+@@ -33,6 +33,7 @@
+ 	, keyOptions :: Maybe KeyOptions
+ 	, batchOption :: BatchMode
+ 	, formatOption :: Maybe Utility.Format.Format
++	, omitUrlsOption :: Bool
+ 	}
+ 
+ optParser :: CmdParamsDesc -> Parser WhereisOptions
+@@ -41,6 +42,8 @@
+ 	<*> optional (parseKeyOptions <|> parseFailedTransfersOption)
+ 	<*> parseBatchOption True
+ 	<*> optional parseFormatOption
++	<*> switch (long "no-urls"
++		<> help "omit URL lookups and report recorded repository locations")
+ 
+ parseFormatOption :: Parser Utility.Format.Format
+ parseFormatOption = option (Utility.Format.gen <$> str)
+@@ -83,7 +86,9 @@
+ perform :: WhereisOptions -> M.Map UUID Remote -> Key -> ActionItem -> CommandPerform
+ perform o remotemap key ai = do
+ 	locations <- keyLocations key
+-	urls <- getUUIDUrls key locations remotemap
++	urls <- if omitUrlsOption o
++		then pure [(u, []) | u <- locations]
++		else getUUIDUrls key locations remotemap
+ 	(untrustedlocations, safelocations) <- trustPartition UnTrusted locations
+ 	case formatOption o of
+ 		Nothing -> do

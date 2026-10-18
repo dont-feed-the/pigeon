@@ -71,7 +71,7 @@ class Installation(unittest.TestCase):
             tar.add(binaries, arcname="bin")
         annex_stage = self.root / f"annex-{tag}"
         (annex_stage / "bin").mkdir(parents=True)
-        self.executable(annex_stage / "bin/git-annex", "echo 10.20261006-pigeon1")
+        self.executable(annex_stage / "bin/git-annex", "echo 10.20261006-pigeon2")
         (annex_stage / "bin/git-remote-p2p-annex").symlink_to("git-annex")
         annex = dest / f"git-annex-pigeon-{self.platform}.tar.gz"
         with tarfile.open(annex, "w:gz") as tar:

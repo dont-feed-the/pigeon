@@ -1,7 +1,7 @@
 # pigeon's git-annex (ADR 0069): the upstream release it patches, and the
 # version its build reports. Read by build.sh and by the workflows.
 UPSTREAM_VERSION=10.20261006
-PIGEON_VERSION=10.20261006-pigeon1
+PIGEON_VERSION=10.20261006-pigeon2
 TARBALL_URL=https://hackage.haskell.org/package/git-annex-10.20261006/git-annex-10.20261006.tar.gz
 TARBALL_SHA256=f2f275f8b1bef3ab482935cde137a59a815886e5edc7545171c2081a9bf64a9c
 # Stack, which builds it at the resolver of the release's stack.yaml.

@@ -233,12 +233,7 @@ async fn overflow(
             + "\n";
         let (_, out) = g
             .git
-            .repo
-            .run_status(
-                &["annex", "whereis", "--json", "--batch-keys"],
-                Some(input.as_bytes()),
-                std::time::Duration::from_secs(5),
-            )
+            .location_claims(input.as_bytes(), std::time::Duration::from_secs(5))
             .await
             .ok()?;
         let rows: Vec<_> = out

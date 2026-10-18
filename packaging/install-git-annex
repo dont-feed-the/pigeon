@@ -18,7 +18,7 @@
 # release's copy); --stock installs the stock build even where pigeon's runs.
 set -euo pipefail
 
-PIGEON_VERSION=10.20261006-pigeon1
+PIGEON_VERSION=10.20261006-pigeon2
 STOCK_VERSION=10.20261006
 STOCK_URL=https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz
 STOCK_SHA256=88ea73c9bb8fb751916e0e4a0a8f489a7476f9b9e861fd2cce2601a77f4f409d
