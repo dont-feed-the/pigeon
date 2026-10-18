@@ -95,3 +95,17 @@ local error log rather than only the generic rendered page.
 After the snapshot correction, all 166 daemon-library cases pass in
 15.587 seconds. Formatting, all-target workspace Clippy with zero warnings,
 header/length, ADR index and spec references pass before commit.
+
+## Integrated release validation
+
+PR #92, head `467aa14a9ecce0e35c4c8759a3649d300c9fecd7`, integrates current main `c457f51c358f43d12cc40bac7432f46f251f0246`
+before validation. CI 39096573998, lab 39096573939 and
+bridge 39096573949 pass. Exact-head random-only slice
+profile 39096580802 passes all five Linux shards and their traces,
+covering the complete fifty schedules. Its manual event cannot satisfy
+the fresh tag's publication gate.
+
+v0.6.22 was published and independently verified before this candidate.
+Native children/content remain conservative, and actual reference/HDD and
+elapsed M7 gates remain open. A fresh v0.6.23 must pass ordinary Linux
+CI/lab/slice, both archives and independent publication/install checks.
