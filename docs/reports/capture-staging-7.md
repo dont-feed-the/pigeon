@@ -54,3 +54,36 @@ partition-law cases and 123 script contracts. Cargo-deny checks advisories,
 bans, licences and sources successfully; all-target workspace Clippy has
 zero warnings. Frozen-binary preparation is exercised on the clean committed
 source before the pull request is submitted.
+
+## Initial hosted failures and observation correction
+
+PR head `5387cbeccce6c98d79724b4c12eb590bd58b516c`, CI 39114410618,
+has two independent failures. Shard 3/job 117637164335 stops before tests
+because the pinned nextest download returns HTTP 502. Its original log has
+SHA-256 `e87b0981aaecedaa2ba088722a34ed0afd385d686c530cbd99df4e12c02a4a54`.
+The download gets bounded transient retries and timeouts; the pinned checksum
+check still precedes extraction or execution.
+
+Shard 0/job 117637164313 waits 60 seconds for two backup history versions.
+The retained source has both independently hash-valid six-byte objects, but
+only the second is catalogued; the backup has that second version alone.
+There is one capture commit in the source reflog. This is not evidence that
+an already-catalogued version was lost. Artifact 12132136358 is 7,452,259 bytes,
+SHA-256 `37684d9250112271af064c0bd9640fe799fb6d829a6407b1bc20bbaeb5da7c04`.
+The complete original job log is also retained.
+
+The observation reads an index, then asks Git for untracked names. Staging
+between those observations can remove a new file from the untracked set
+without adding it to the earlier index snapshot. Status can then incorrectly
+report an empty safe folder before that first capture commits. A deterministic
+native barrier stages a file exactly as name discovery begins: the original
+observer fails in 0.250 seconds. Listing cached and untracked names together
+keeps that newly staged path conservatively pending; the same regression
+passes in 0.244 seconds. The original backup-history case passes in 10.564
+seconds after rebuilding matching programs. No test assertion, deadline or
+portability rule is relaxed, and no unchanged-source CI retry is used.
+
+The corrected combined native run passes all 60 install, held and watcher
+cases in 44.731 seconds, plus the separately passing backup-history case.
+All 123 script contracts pass. Composite-action YAML and shell syntax pass;
+workspace/all-target Clippy has zero warnings.

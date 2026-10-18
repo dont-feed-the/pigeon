@@ -9,6 +9,9 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Status keeps a new file pending while it is being staged for capture,
+  instead of briefly reporting an empty safe folder.
+
 - Capturing many saved files uses fewer Git processes while keeping batches
   bounded, with file names, bytes and executable permissions preserved.
 

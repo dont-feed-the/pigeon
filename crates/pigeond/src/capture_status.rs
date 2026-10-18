@@ -83,11 +83,14 @@ pub(crate) async fn changes(g: &Group) -> Result<Vec<Entry>, Error> {
             path: path.clone(),
         });
     }
+    // One Git index observation lists cached and untracked names together.
+    // A concurrent stage after our earlier index read must not make a new
+    // user file vanish between those two independently timed observations.
     let names = g
         .git
         .repo
         .run(
-            &["ls-files", "--others", "-z"],
+            &["ls-files", "--cached", "--others", "-z"],
             None,
             pigeon_git::DEFAULT_TIMEOUT,
         )

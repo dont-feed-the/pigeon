@@ -18,7 +18,8 @@ runs:
           *) echo "::error::no pinned cargo-nextest for $RUNNER_OS"; exit 1 ;;
         esac
         t="$RUNNER_TEMP/cargo-nextest.tar.gz"
-        curl -fsSL -o "$t" \
+        curl -fsSL --retry 3 --retry-delay 1 --retry-max-time 60 \
+          --connect-timeout 10 --max-time 60 -o "$t" \
           "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-$VERSION/cargo-nextest-$VERSION-$asset.tar.gz"
         echo "$sum  $t" | shasum -a 256 -c - || {
           echo "::error::cargo-nextest $VERSION does not match its pinned checksum"; exit 1; }
