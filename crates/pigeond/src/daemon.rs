@@ -720,6 +720,7 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     tokio::spawn(crate::scrub::run(daemon.clone()));
     tokio::spawn(crate::resource_control::run(daemon.clone()));
     tokio::spawn(crate::resource_control::probe(daemon.clone()));
+    let listener_recovery = tokio::spawn(crate::listener_supervisor::run(daemon.clone()));
     tracing::info!(device = %device, socket = %socket.display(), "started");
     for (g, busy) in groups.iter().zip(held) {
         crate::evict::recover(g, &daemon.tracer).await;
@@ -747,6 +748,9 @@ pub async fn run(dirs: Dirs) -> Result<(), String> {
     });
     stop_signal().await;
     tracing::info!("stopping");
+    // Join recovery before intentional listener teardown can trigger it.
+    listener_recovery.abort();
+    let _ = listener_recovery.await;
     for g in daemon.groups() {
         g.stop_remotedaemon().await;
     }

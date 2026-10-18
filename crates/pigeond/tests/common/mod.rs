@@ -29,6 +29,13 @@ pub struct Daemon {
     child: Child,
 }
 
+impl Daemon {
+    /// The fixture’s disposable daemon, never a person’s installed service.
+    pub fn process_id(&self) -> u32 {
+        self.child.id()
+    }
+}
+
 impl Drop for Daemon {
     fn drop(&mut self) {
         // SIGTERM first: `pigeond` then stops remotedaemon's process group,
