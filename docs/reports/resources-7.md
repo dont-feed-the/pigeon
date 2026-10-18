@@ -928,3 +928,7 @@ their device scheduling and measured reference/HDD budgets remains open.
 The [metadata checkpoint](metadata-startup-7.md) records the failed 90-minute
 full-size diagnostic, bounded bulk queries, fresh worker-local lookups and
 native validation. It does not establish the outstanding CPU/RSS or HDD budgets.
+
+The [catalogue memory report](catalogue-memory-7.md) records controlled
+100000-file reductions in temporary comparisons and retained views, with
+unchanged file/package results. It does not close the full daemon budget.

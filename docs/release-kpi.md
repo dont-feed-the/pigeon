@@ -335,3 +335,16 @@ PR #113 validates against current main once, then waits for the preceding
 publication verification before merging. The separate 90-minute Fast
 reference diagnostic fails preparation and does not supply a budget pass.
 Its failure is retained and does not redefine publication throughput.
+
+## v0.6.45 publication observation
+
+[v0.6.45](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.45),
+source `95f2643a2fbc7aa6b9b8e15ddc6a6b5391055e97`, publishes on 18 October
+at 17:16:28 UTC. Candidate lead is **832 seconds (13m52s)**; the completed
+gap is **3307 seconds (55m07s)**. Both targets are met, with 51 lead-time
+samples and 50 completed intervals. All four tag gates pass first attempt.
+Independent verification passes six assets, four archive checksums, native
+Linux installation, pinned annex, completions and latest. The release ships
+bounded metadata startup and reusable fresh worker lookups. It supplies no
+full resource/HDD qualification. The changed-source 90-minute Fast diagnostic
+and frozen actual soak remain separate evidence.
