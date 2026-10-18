@@ -90,6 +90,14 @@ impl Repo {
         *self.control.write().unwrap_or_else(|p| p.into_inner()) = Some(control);
     }
 
+    /// Share this repository's resource policy with its own bounded reads.
+    pub fn work_control(&self) -> Option<std::sync::Arc<dyn crate::work::Control>> {
+        self.control
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone()
+    }
+
     /// A kept-folder view with independent policy storage. Existing repository
     /// clones keep their protection priority; metadata and native arguments
     /// remain unchanged. Transfer waits retain their actual deadline class.
@@ -220,7 +228,7 @@ impl Repo {
     ) -> Result<(Option<i32>, Output)> {
         let mut timer = (args.first() == Some(&"annex"))
             .then(|| pigeon_telemetry::AnnexCall::start(args.get(1).copied().unwrap_or("unknown")));
-        let progress = crate::progress::Progress::one_shot(args);
+        let progress = crate::progress::Progress::one_shot(args, input);
         let mut argv: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
         if progress.is_some() && !args.contains(&"--json-progress") {
             argv.push("--json-progress".into());

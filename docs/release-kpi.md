@@ -615,3 +615,18 @@ was **667 seconds (11 minutes 7 seconds)**; completed publication gap was
 completed-gap samples. This observation alone establishes no sustained
 rate improvement. The required tag runs passed: CI 39078073966, lab
 39078073927, slice 39078073958 and release 39078073983.
+
+## v0.6.16 observation
+
+[v0.6.16](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.16)
+published at 2026-10-18T00:04:52Z, source
+`889da1814fae629deb26ab1ac78988ed1207a291`. All six assets, four archive checksums, native Linux
+installation, pinned annex, completions and latest redirect passed independent
+verification. Candidate lead was **800 seconds (13 minutes 20 seconds)**;
+completed publication gap was **2517 seconds (41 minutes 57 seconds)**.
+The collector retains 25 lead and 24 completed-gap samples. All four tag workflows
+passed on their first attempt: CI 39080609737, lab 39080609668, slice
+39080609707 and release 39080609711. This does not erase the earlier PR
+bridge miss and bounded retake, nor establish a sustained failure rate.
+The observed Mac dependency queue, cancelled older background run and
+three-job future slice allocation are recorded in the capture report.

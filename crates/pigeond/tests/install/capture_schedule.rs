@@ -646,3 +646,56 @@ async fn actual_successful_background_captures_heat_only_the_changed_path() {
         b"eighth save waits for the hot-path interval\n"
     );
 }
+
+#[tokio::test]
+async fn capture_verification_does_not_wait_for_an_unmetered_native_hasher() {
+    use std::os::unix::fs::PermissionsExt;
+    let Some(l) = laptop().await else { return };
+    let tools = l.dir.path().join("capture-tools");
+    std::fs::create_dir(&tools).unwrap();
+    let marker = tools.join("unmetered-hasher-started");
+    let script = tools.join("git");
+    std::fs::write(
+        &script,
+        r#"#!/bin/sh
+if [ "$1" = annex ] && [ "$2" = calckey ]; then
+    printf 'started\n' > "$PIGEON_CAPTURE_HASH_MARKER"
+    sleep 300
+    exit 90
+fi
+exec /usr/bin/git "$@"
+"#,
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let env = GitEnv {
+        path_first: vec![tools],
+        extra: vec![(
+            "PIGEON_CAPTURE_HASH_MARKER".into(),
+            marker.as_os_str().to_owned(),
+        )],
+    };
+    let reopened = Group::open(&l.g.id, &l.wt, &env).await.unwrap();
+    let bytes = vec![9u8; 256 * 1024];
+    std::fs::write(l.wt.join("streamed.bin"), &bytes).unwrap();
+    let done = capture::capture(&reopened, &dev(1).0, &l.t).await.unwrap();
+    let main = done.commit.expect("the save itself is captured");
+    let cache: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(reopened.git_dir.join("pigeon/capture-verified.json")).unwrap(),
+    )
+    .unwrap();
+    if cache["paths"].get("streamed.bin").is_none() {
+        let fixture = l.dir.keep();
+        panic!(
+            "captured bytes have no verified observation after the native hasher's deadline; retained fixture {}",
+            fixture.display()
+        );
+    }
+    let tree = l.git.tree(&main).await.unwrap();
+    assert_eq!(
+        cache["paths"]["streamed.bin"][1][2],
+        tree["streamed.bin"].oid
+    );
+    assert!(!marker.exists(), "verification should stream its own reads");
+    assert_eq!(std::fs::read(l.wt.join("streamed.bin")).unwrap(), bytes);
+}

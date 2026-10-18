@@ -408,3 +408,55 @@ async fn keyed_progress_records_preserve_one_shot_copy_and_batch_get_results() {
     assert_eq!(std::fs::read(a.join("content.bin")).unwrap(), bytes);
     assert!(annex.stop(T).await);
 }
+
+/// Command/Add.hs meters hashing before a key exists: the stable identity
+/// is the planned file. Final JSON still supplies the resulting annex key.
+#[tokio::test]
+async fn nul_batch_capture_progress_preserves_native_keys_final_answers_and_bytes() {
+    if !annex_present() {
+        return;
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let repo = new_repo(temp.path(), &GitEnv::default(), "capture-progress").await;
+    let bytes = vec![5u8; 32 * 1024 * 1024];
+    std::fs::write(temp.path().join("first.bin"), &bytes).unwrap();
+    std::fs::write(temp.path().join("second\nfile.bin"), b"small exact bytes").unwrap();
+    let output = repo
+        .run(
+            &[
+                "-c",
+                "annex.thin=false",
+                "annex",
+                "add",
+                "--batch",
+                "-z",
+                "--no-check-gitignore",
+                "--json",
+            ],
+            Some(b"first.bin\0second\nfile.bin\0"),
+            T,
+        )
+        .await
+        .unwrap();
+    assert!(!output.text().contains("byte-progress"));
+    let answers: Vec<pigeon_git::annex::Answer> = output
+        .text()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(answers.len(), 2);
+    for (answer, name) in answers.iter().zip(["first.bin", "second\nfile.bin"]) {
+        assert!(answer.success);
+        assert_eq!(answer.file.as_deref(), Some(name));
+        let calculated = repo
+            .run(&["annex", "calckey", "--", name], None, T)
+            .await
+            .unwrap();
+        assert_eq!(answer.key.as_deref(), Some(calculated.text().trim()));
+    }
+    assert_eq!(std::fs::read(temp.path().join("first.bin")).unwrap(), bytes);
+    assert_eq!(
+        std::fs::read(temp.path().join("second\nfile.bin")).unwrap(),
+        b"small exact bytes"
+    );
+}

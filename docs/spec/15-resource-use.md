@@ -96,9 +96,12 @@ disk waits have no finite maximum. Pigeon's operation deadline counts active
 time and excludes its own stream waits. Keyed `get` and `copy` use active
 inactivity time: only increasing git-annex JSON byte progress for that
 command and key renews the budget. Another key, repeated counts and final
-answers cannot renew it. Capture, scrub and metadata retain their finite
-active-time budgets; success and durable custody still require their usual
-answers and verification. This also keeps transfers in the
+answers cannot renew it. NUL-batch capture renews activity only for increasing
+bytes of its planned files. Final capture verification streams bounded reads
+with cache advice and the same Capture policy, timestamp fence and unchanged
+file observations; its two-minute active inactivity budget excludes policy
+waits. Scrub and metadata retain finite active-time budgets. Success and
+durable custody still require their usual answers and verification. This also keeps transfers in the
 owned process group; explicit annex stall detection otherwise creates a
 separately grouped transferrer (`Annex/Transfer.hs`,
 `Annex/TransferrerPool.hs`, git-annex 10.20261006). Genuine active stalls

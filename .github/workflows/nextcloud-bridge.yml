@@ -145,12 +145,22 @@ jobs:
         env:
           PIGEON_TRACE: "1"
           PIGEON_TRACE_DIR: ${{ runner.temp }}/bridge-system-traces
-        run: python3 scripts/check-nextcloud-shared-storage --provider custodian
+        run: python3 scripts/check-nextcloud-shared-storage --provider custodian --out "/tmp/pgc-${{ github.run_id }}-${{ github.run_attempt }}"
       - name: check real multi-peer identity and DAV transaction observations
         if: matrix.case == 'custodian' && steps.shared-custodian.outcome == 'success'
         run: |
           python3 scripts/check-bridge-lifecycle-traces "${{ runner.temp }}/bridge-system-traces"
           python3 scripts/check-bridge-sync-traces "${{ runner.temp }}/bridge-system-traces"
+      - name: retain the failed custodian fixture and its native traces
+        if: failure() && matrix.case == 'custodian'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: failed-bridge-custodian-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/pgc-${{ github.run_id }}-${{ github.run_attempt }}
+            ${{ runner.temp }}/bridge-system-traces
+          retention-days: 14
+          if-no-files-found: warn
       - name: portal, WebDAV and real Nextcloud synchronization
         if: matrix.case == 'nextcloud'
         run: python3 scripts/check-nextcloud-bridge

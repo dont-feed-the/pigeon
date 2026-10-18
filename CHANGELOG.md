@@ -5,6 +5,12 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Large captures continue while their file bytes advance. Final byte verification shares capture’s disk backoff and cache limits, and stalled reads still time out.
+
 ## 0.6.16 — 2026-10-17
 
 ### Fixed
