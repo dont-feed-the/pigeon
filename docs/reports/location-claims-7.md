@@ -89,7 +89,7 @@ followed by workspace all-target Clippy and repository rules. The real
 build was discovered, then checks every requested UUID and 300 independent
 object hashes. Later corruption, removal and an absent key still refuse.
 Mock contracts retain old-build, unsupported-prose and failed-probe fallback.
-Exact-head network integration and CI still precede merging.
+All five exact-head real network checks pass in 41.768 seconds with pigeon2: capacity, both slice cases and both status-truth cases. Source and program hashes stay unchanged throughout. PR #120 integrates main `e8e0a213709af3e90a77b2bcce701bfa509aadbb` before validation; CI 39172556840, lab 39172556808, bridge 39172556719 and native 39172556620 pass. Fresh v0.6.51 tag gates and independent publication verification remain required.
 
 Stream-owned native lookup reuse before durability/hash barriers shipped
 separately in [v0.6.50](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.50).
