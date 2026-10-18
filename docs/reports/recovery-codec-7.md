@@ -52,6 +52,43 @@ tests. The full paper-sheet recovery takes 119.238 seconds. Program and
 runtime/test source SHA-256 hashes are unchanged throughout this final run.
 No checksum, input, disk reserve or timing requirement is relaxed.
 
+## Refounded-group materialization follow-up
+
+Review of the other joining path finds the same empty fallback in
+`join_in_place::take_tree`. The three real-object regressions from the
+previous checkpoint now exercise both production materializers: missing
+binary/pointer objects, a non-blob object and complete binary/empty/hidden
+states. Before correction, the extended suite has two failures and one
+pass in 0.175 seconds. Ordinary joining already refuses the damaged inputs;
+joining in place still reports success for missing objects and accepts the
+wrong-kind fixture. That original result is retained separately.
+
+Both paths now use one OID-bound reader that requires an actual blob and
+returns `join-files-unreadable` otherwise. The existing working file stays
+unchanged when its object is missing or wrong-kind. The combined 227-check
+daemon library suite passes in 24.069 seconds, including dirty/untracked
+working-file preservation and both materializers' complete-object cases.
+Index adoption still precedes materialization, and earlier complete entries
+can already have been written; this is not a transactional whole-folder
+rollback or the remaining ownership/path-substitution review.
+
+The follow-up is folded into PR #117 before merging, rather than opening
+another patch release for the same input/materialization review. Its initial
+CI result and the changed-source validation remain separate observations.
+The initial head `75b6301f6f4f3e2ee14fff588f944443b17b4ba4` passes CI
+39157131373 and lab 39157131529. Its Nextcloud bridge run 39157131422
+fails: Bob's suggested PUT receives HTTP 412, `The catalogue changed;
+restart the listing`, instead of the expected 204 suggestion acknowledgement.
+The completed original job log is retained. Post-save listings are deliberately
+pinned to the acknowledged revision; that safety check is unchanged. A pass
+on the combined source would not prove that this separate race is fixed.
+
+The final combined native run passes all seven invitation, join-retry and
+recovery-sheet flows in 70.974 seconds, including a complete sheet recovery
+in 68.827 seconds. No tests are skipped, and the program/source SHA-256
+fences remain unchanged. This is a compatibility check, not a performance
+comparison with the earlier recovery run.
+
 ## Case-count audit
 
 An attribute audit finds six remaining properties using 300 cases: one

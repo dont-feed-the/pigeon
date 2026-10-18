@@ -11,6 +11,8 @@ increments the second number, and every other release the third.
 
 - Reading a recovery sheet uses the last pasted code and refuses unknown
   fields or an unreadable code.
+- Joining a refounded group in its existing folder stops if a committed
+  file is missing or unreadable, keeping the working file's contents.
 
 ## 0.6.47 — 2026-10-18
 

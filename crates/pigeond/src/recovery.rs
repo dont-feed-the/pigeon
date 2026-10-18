@@ -432,15 +432,7 @@ pub(crate) async fn hide_all(g: &Group, main: &str) -> Result<(), String> {
     let files = g.git.tree_files(main).await.map_err(|e| e.to_string())?;
     let mut hidden = std::collections::BTreeSet::new();
     for f in files {
-        let objects = g
-            .git
-            .objects(std::slice::from_ref(&f.oid))
-            .await
-            .map_err(|_| "join-files-unreadable")?;
-        let blob = match objects.into_iter().next() {
-            Some(Some((kind, bytes))) if kind == "blob" => bytes,
-            _ => return Err("join-files-unreadable".into()),
-        };
+        let blob = file_blob(g, &f.oid).await?;
         if crate::git::pointer_key(&blob).is_some() {
             hidden.insert(f.path);
             continue;
@@ -459,6 +451,20 @@ pub(crate) async fn hide_all(g: &Group, main: &str) -> Result<(), String> {
     }
     let _ = g.git.run(&["update-index", "-q", "--refresh"]).await;
     Ok(())
+}
+
+/// Require the actual OID-bound blob before either joining path writes it.
+/// Missing and wrong-kind objects cannot stand in for a legitimate empty file.
+pub(crate) async fn file_blob(g: &Group, oid: &str) -> Result<Vec<u8>, String> {
+    let objects = g
+        .git
+        .objects(&[oid.to_owned()])
+        .await
+        .map_err(|_| "join-files-unreadable")?;
+    match objects.into_iter().next() {
+        Some(Some((kind, bytes))) if kind == "blob" => Ok(bytes),
+        _ => Err("join-files-unreadable".into()),
+    }
 }
 
 #[cfg(test)]

@@ -147,11 +147,7 @@ pub(crate) async fn take_tree(g: &Group, main: &str) -> Result<(), String> {
     let paths: BTreeSet<String> = files.iter().map(|f| f.path.clone()).collect();
     hidden.retain(|p| paths.contains(p));
     for f in files {
-        let blob = g
-            .git
-            .blob(&format!("{main}:{}", f.path))
-            .await
-            .unwrap_or_default();
+        let blob = crate::recovery::file_blob(g, &f.oid).await?;
         let file = wt.join(&f.path);
         if crate::git::pointer_key(&blob).is_some() {
             if std::fs::symlink_metadata(&file).is_err() {
