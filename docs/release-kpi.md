@@ -630,3 +630,29 @@ passed on their first attempt: CI 39080609737, lab 39080609668, slice
 bridge miss and bounded retake, nor establish a sustained failure rate.
 The observed Mac dependency queue, cancelled older background run and
 three-job future slice allocation are recorded in the capture report.
+
+## v0.6.17 observation
+
+[v0.6.17](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.17)
+published at 2026-10-18T00:52:12Z, source
+`ddf309744bddb89857af567ccadb7969b85a5af0`. All six assets, four archive
+checksums, native Linux installation, pinned annex, completions and latest
+redirect passed independent verification. Candidate lead was **766 seconds
+(12 minutes 46 seconds)**; completed publication gap was **2840 seconds
+(47 minutes 20 seconds)**. There are 26 lead and 25 completed-gap samples.
+Required tag workflows all passed first attempt: CI 39083564957, lab
+39083564924, slice 39083564895 and release 39083564885. This observation
+alone establishes no sustained improvement or measured M6 budget.
+
+The release process spent approximately 433 seconds after merging waiting
+for non-gating main debug-cache preparation before tagging. The next
+candidate, with an unchanged dependency lockfile, will start without that
+extra wait while preserving active main Rust cache saves. All required tag
+gates and both archives remain required. Its actual publication effect is
+measured after publication, separately from tag lead time.
+
+PR #86 merged at 00:55:31 UTC; its v0.6.18 candidate push completed at
+00:55:40 UTC, nine seconds later. The prior PR #85 merged at 00:32:02 UTC
+and its v0.6.17 candidate push completed at 00:39:25 UTC, 443 seconds later.
+This measures the removed pre-tag wait in one observation. The actual
+v0.6.18 publication effect remains pending; no gate or archive was waived.
