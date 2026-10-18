@@ -80,7 +80,7 @@ const PROBE_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Whether at least one of `ids` answers a fetch now, tried at once and
 /// once each; one that does is heard. The remotes are configured under
-/// the repository lock, the fetches run without it.
+/// the repository lock. Probes run without it and leave all refs alone.
 pub async fn any_reachable(g: &Group, me: &str, ids: &[String]) -> bool {
     {
         let _busy = g.busy.lock().await;
@@ -91,16 +91,13 @@ pub async fn any_reachable(g: &Group, me: &str, ids: &[String]) -> bool {
         }
     }
     let probes = ids.iter().map(|id| async move {
-        let spec = crate::settings::peer_refspec(id);
-        let args = [
-            "fetch",
-            "-q",
-            "--no-tags",
-            "--no-write-fetch-head",
-            id,
-            &spec,
-        ];
-        let ok = g.git.run_for(&args, PROBE_TIMEOUT).await.is_ok();
+        let ok = match probe(&g.git, id).await {
+            Ok(()) => true,
+            Err(error) => {
+                tracing::info!(group = %g.id, peer = %id, %error, "recovery-probe-failed");
+                false
+            }
+        };
         if ok {
             g.lock().heard.insert(id.clone(), crate::util::now());
         }
@@ -111,6 +108,29 @@ pub async fn any_reachable(g: &Group, me: &str, ids: &[String]) -> bool {
         .into_iter()
         .any(|ok| ok)
 }
+
+async fn probe(git: &Git, id: &str) -> Result<(), crate::git::Error> {
+    // No destination, and no opportunistic update via remote.<id>.fetch:
+    // the background fetch may own these refs. Reachability is not adoption.
+    git.run_for(
+        &[
+            "fetch",
+            "-q",
+            "--no-tags",
+            "--no-write-fetch-head",
+            "--refmap=",
+            id,
+            "refs/heads/main",
+        ],
+        PROBE_TIMEOUT,
+    )
+    .await
+    .map(drop)
+}
+
+#[cfg(test)]
+#[path = "custody_probe_tests.rs"]
+mod probe_tests;
 
 /// Configures fetch remotes under the repository lock, before network waits.
 pub async fn prepare_accept(g: &Group, me: &str) -> Vec<String> {

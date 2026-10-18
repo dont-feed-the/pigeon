@@ -34,7 +34,7 @@ pub async fn join(d: &Daemon, j: &Joining, folder: Option<String>) -> Result<Str
     let inv = &j.inv;
     let path = folder.map_or_else(|| default_path(d, j), PathBuf::from);
     crate::filesystem::check(&path, role(j))?;
-    let attempt = Attempt::begin(&path, role(j) == Role::Custodian)?;
+    let attempt = Attempt::begin(&path)?;
     crate::filesystem::check(&attempt.path, role(j))?;
     if crate::join_in_place::applies(d, j, &attempt.path).await {
         return crate::join_in_place::join(d, j, &attempt.path).await;
@@ -42,14 +42,14 @@ pub async fn join(d: &Daemon, j: &Joining, folder: Option<String>) -> Result<Str
     if unfinished(&attempt.path) != Some((role(j), inv.group.clone())) && !attempt.empty()? {
         return Err("folder-not-empty".into());
     }
-    attempt.run(d, join_in(d, j, &attempt.path)).await?;
+    attempt.run(join_in(d, j, &attempt.path)).await?;
     tracing::info!(group = %inv.group, "joined-group");
     d.wake.notify_one();
     Ok(inv.name.clone())
 }
 
-/// Completes a new or interrupted attempt, retaining the repository only
-/// across a crash; an ordinary failure is cleaned up by the caller.
+/// Completes a new or interrupted attempt. A crash or ordinary failure
+/// retains the repository; the same group can resume its joining marker.
 async fn join_in(d: &Daemon, j: &Joining, path: &Path) -> Result<(), String> {
     let g = repository(d, j, path).await?;
     let git_dir = g.git_dir.clone();
