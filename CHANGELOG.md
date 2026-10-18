@@ -5,6 +5,13 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Saving many files starts fewer Git processes when checking captured bytes,
+  while keeping the same file, content and executable-mode checks.
+
 ## 0.6.36 — 2026-10-18
 
 ### Added

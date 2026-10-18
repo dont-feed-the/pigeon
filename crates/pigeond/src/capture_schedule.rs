@@ -240,11 +240,26 @@ pub(crate) async fn checked(g: &Group, paths: &[String], index: &pigeon_core::au
         let Some(epoch) = aged_epoch(latest).await else {
             continue;
         };
-        for (path, before) in chunk.iter().zip(before) {
+        // Resolve immutable staged pointer objects together. Preserve one
+        // result slot per plan even when a file has disappeared; a missing
+        // stat must not shift another path's pointer proof.
+        let plans: Vec<_> = chunk
+            .iter()
+            .zip(before)
+            .filter_map(|(path, stat)| index.get(path).map(|entry| (path, stat, entry)))
+            .collect();
+        let names: Vec<_> = plans
+            .iter()
+            .map(|(_, _, entry)| entry.oid.clone())
+            .collect();
+        let Ok(pointers) = g.git.objects(&names).await else {
+            continue;
+        };
+        if pointers.len() != plans.len() {
+            continue;
+        }
+        for ((path, before, entry), pointer) in plans.into_iter().zip(pointers) {
             let Some(stat) = before else {
-                continue;
-            };
-            let Some(entry) = index.get(path) else {
                 continue;
             };
             if !stat.is_regular()
@@ -253,9 +268,12 @@ pub(crate) async fn checked(g: &Group, paths: &[String], index: &pigeon_core::au
             {
                 continue;
             }
-            let Ok(pointer) = g.git.object(&entry.oid).await else {
+            let Some((kind, pointer)) = pointer else {
                 continue;
             };
+            if kind != "blob" {
+                continue;
+            }
             let Some(key) = crate::git::pointer_key(&pointer) else {
                 continue;
             };
@@ -322,6 +340,10 @@ pub(crate) fn delay(groups: &[std::sync::Arc<Group>], interval: Duration) -> Dur
         })
         .fold(interval, Duration::min)
 }
+
+#[cfg(test)]
+#[path = "capture_proof_tests.rs"]
+mod proof_tests;
 
 #[cfg(test)]
 mod tests {
