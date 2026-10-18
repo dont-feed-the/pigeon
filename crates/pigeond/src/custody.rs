@@ -437,7 +437,14 @@ pub async fn present(g: &Group, key: &str) -> Option<std::path::PathBuf> {
 }
 
 async fn present_one(git: &Git, key: &str) -> Option<std::path::PathBuf> {
-    let out = git.run(&["annex", "contentlocation", key]).await.ok()?;
+    present_one_for(git, key, pigeon_git::DEFAULT_TIMEOUT).await
+}
+
+async fn present_one_for(git: &Git, key: &str, timeout: Duration) -> Option<std::path::PathBuf> {
+    let out = git
+        .run_for(&["annex", "contentlocation", key], timeout)
+        .await
+        .ok()?;
     let rel = out.trim();
     (!rel.is_empty()).then(|| git.repo.dir.join(rel))
 }
@@ -508,6 +515,15 @@ pub async fn present_for(
 /// Keep the native encoded-key fallback and require an actual regular object.
 /// The answer is only a location observation, never a hash or custody proof.
 pub(crate) async fn batch_object(git: &Git, key: &str, answer: &str) -> Option<std::path::PathBuf> {
+    batch_object_for(git, key, answer, pigeon_git::DEFAULT_TIMEOUT).await
+}
+
+pub(crate) async fn batch_object_for(
+    git: &Git,
+    key: &str,
+    answer: &str,
+    timeout: Duration,
+) -> Option<std::path::PathBuf> {
     if answer.is_empty() {
         return None;
     }
@@ -520,7 +536,7 @@ pub(crate) async fn batch_object(git: &Git, key: &str, answer: &str) -> Option<s
     {
         Some(git.repo.dir.join(path))
     } else {
-        present_one(git, key).await
+        present_one_for(git, key, timeout).await
     };
     object.filter(|path| path.is_file())
 }

@@ -62,6 +62,41 @@ Its single 4,096-key preflight pair took 3.070 seconds at 256 keys and
 full-size speedup or justify increasing production bounds. Both fixtures
 contain only synthetic claims and no content objects.
 
+## Positive-answer lookup reuse
+
+The network sync adapter previously started a separate native
+`contentlocation` query before each durability/hash barrier. A controlled
+257-object regression reaches all 257 successful hashes and then fails its
+startup bound: 257 children instead of two. That original is retained.
+
+Each incoming stream now owns its own lookup adapter. It reuses the existing
+worker's bounded 256-query/64-KiB session, serializing only metadata lookup,
+and retains the sync adapter's 60-second native-call deadline, including the
+encoded-key fallback. No path, presence, durability or hash result is cached.
+Every answer still opens and syncs the actual object and directories, then
+hashes the object when required. A repository directory identity change
+invalidates the session, and a changed identity during lookup refuses it.
+Stream cancellation drops its owned process; a weak idle timer closes a
+remaining lookup after two idle seconds. The timer cannot retain an idle
+stream's cache. Hashing and syncing are outside the lookup mutex.
+
+Four adapter checks pass: the 257-object bound plus later corruption/removal,
+independent stream helpers and idle/drop cleanup, same-path repository
+replacement, and cancellation before a reply. Private Unix datagram sockets
+observe actual helper lifetime without signaling potentially reused PIDs.
+The real annex fixture also checks 300 independent object hashes across the
+session boundary, then refuses later corruption, removal and an absent key.
+Its first corruption attempt correctly hit annex's read-only permissions;
+the corrected private fixture explicitly changes only its synthetic object's
+permissions before damaging it. An earlier fixture compile error is also
+retained. Neither is counted as a product failure or a passing regression.
+
+All 239 daemon-library checks pass in the documented lab profile in
+25.853 seconds, followed by all-target workspace Clippy and repository rules.
+The startup-count comparison uses an instrumented helper, not a native
+throughput claim. Network integration and native pigeon2 validation remain
+separate requirements before integration.
+
 ## Full reference diagnostic
 
 [Run 39157311302](https://github.com/dont-feed-the/pigeon/actions/runs/39157311302),
