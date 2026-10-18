@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Own one compressed Btrfs image for the complete 100000-file/50GB profile.
+# Its logical bytes are written, transferred and hashed; it is not an HDD.
+set -euo pipefail
+here=$(cd "$(dirname "$0")/.." && pwd)
+report=${1:?usage: check-reference-budget REPORT.json}
+bin=${PIGEON_BIN:-$here/target/release}
+for program in mkfs.btrfs findmnt blkid systemd-run compsize; do command -v "$program" >/dev/null; done
+[[ $(stat -fc %T /sys/fs/cgroup) == cgroup2fs ]] || { echo 'cgroup v2 required' >&2; exit 1; }
+[[ $(df --output=avail -B1 "${RUNNER_TEMP:-/tmp}" | tail -1) -ge 6000000000 ]] || {
+    echo 'at least 6GB free physical space required' >&2; exit 1;
+}
+root=$(mktemp -d "${RUNNER_TEMP:-/tmp}/pigeon-reference.XXXXXXXX")
+identity=
+cleanup() {
+    result=$?
+    if mountpoint -q "$root/volume"; then
+        actual=$(findmnt -rn --mountpoint "$root/volume" -o UUID)
+        if [[ -z "$identity" || "$actual" != "$identity" ]]; then
+            echo "reference mount identity changed; retained $root" >&2; exit 1
+        fi
+        if ! sudo -n umount "$root/volume"; then
+            echo "reference mount busy; retained $root" >&2; exit 1
+        fi
+    fi
+    rm -rf -- "$root"
+    echo 'reference image unmounted and removed'
+    exit "$result"
+}
+trap cleanup EXIT
+mkdir "$root/volume"
+truncate -s 256G "$root/tree.img"
+mkfs.btrfs -q -f "$root/tree.img"
+identity=$(blkid -p -s UUID -o value "$root/tree.img")
+[[ -n "$identity" ]]
+sudo -n mount -o loop,compress-force=zstd:1 "$root/tree.img" "$root/volume"
+[[ $(findmnt -rn --mountpoint "$root/volume" -o UUID) == "$identity" ]]
+sudo -n chown "$(id -u):$(id -g)" "$root/volume"
+python3 "$here/scripts/reference-budget" --bin "$bin" --root "$root/volume/run" \
+    --compressed --report "$report"
