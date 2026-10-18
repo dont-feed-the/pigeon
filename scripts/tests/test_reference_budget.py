@@ -288,3 +288,63 @@ class DiagnosticPreparation(unittest.TestCase):
     def test_native_process_state_ignores_parentheses_in_comm_and_unknown_states(self):
         self.assertEqual(MODULE.proc_state('123 (git (worker)) T 1 2 3'), 'T')
         self.assertEqual(MODULE.proc_state('123 (worker) strange 1 2 3'), 'other')
+
+
+class NativeOperationPrivacy(unittest.TestCase):
+    def test_operation_labels_do_not_export_paths_keys_or_bearer_arguments(self):
+        commands = [
+            (b'/usr/bin/git\0-c\0annex.thin=false\0annex\0add\0--batch\0', 'annex/add'),
+            (b'/usr/bin/git-annex\0whereis\0--batch\0', 'annex/whereis'),
+            (b'git\0--git-dir=/private/repository\0hash-object\0secret-path\0', 'git/hash-object'),
+            (b'git-annex-p2p-iroh\0synthetic-private-bearer\0', 'transport-helper'),
+        ]
+        for command, wanted in commands:
+            with self.subTest(wanted=wanted):
+                label = MODULE.native_operation(command)
+                self.assertEqual(label, wanted)
+                for private in ['private', 'secret', 'bearer', 'repository']:
+                    self.assertNotIn(private, label)
+
+    def test_config_values_and_directory_names_are_not_mistaken_for_commands(self):
+        for command in [b'git\0-C\0hash-object\0unknown\0',
+                        b'git\0-c\0update-index\0private-command\0',
+                        b'/private/git-like\0hash-object\0',
+                        b'git-annex\0private-subcommand\0']:
+            with self.subTest(command=command):
+                self.assertEqual(MODULE.native_operation(command), 'other')
+        self.assertEqual(MODULE.native_operation(b'git\0-C\0private\0ls-files\0'), 'git/ls-files')
+
+    def test_complete_front_tokens_survive_a_truncated_large_path_argument(self):
+        prefix = b'git\0ls-files\0--stage\0--\0' + b'private-name' * 1000
+        self.assertEqual(MODULE.native_operation(prefix[:4096]), 'git/ls-files')
+        for incomplete in [b'', b'git', b'git\0', b'git\0hash-object', b'git\0-c\0',
+                           b'git\0annex\0', b'git\0\xff\0']:
+            self.assertEqual(MODULE.native_operation(incomplete), 'other')
+
+    def test_option_scanning_stops_before_an_unbounded_command_prefix(self):
+        prefix = b'git\0' + b'-C\0private\0' * 1000 + b'ls-files\0'
+        self.assertEqual(MODULE.native_operation(prefix[:4096]), 'other')
+
+    def test_unreadable_command_lines_keep_an_unknown_operation_and_reads_are_bounded(self):
+        from unittest.mock import mock_open
+        with patch.object(MODULE.Path, 'open', side_effect=PermissionError):
+            self.assertEqual(MODULE.process_operation(123), 'other')
+        reader = mock_open(read_data=b'git\0hash-object\0private\0')
+        with patch.object(MODULE.Path, 'open', reader):
+            self.assertEqual(MODULE.process_operation(123), 'git/hash-object')
+        reader().read.assert_called_once_with(4096)
+
+    @unittest.skipUnless(Path('/proc/self/cmdline').is_file(), 'Linux native process diagnostics')
+    def test_live_git_batch_process_is_classified_without_exporting_its_arguments(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as directory:
+            subprocess.run(['git', 'init', '-q', directory], check=True, capture_output=True)
+            process = subprocess.Popen(['git', '-C', directory, 'cat-file', '--batch'],
+                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE)
+            try:
+                self.assertIsNone(process.poll())
+                self.assertEqual(MODULE.process_operation(process.pid), 'git/cat-file')
+            finally:
+                process.communicate(timeout=5)
+            self.assertEqual(process.returncode, 0)

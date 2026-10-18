@@ -79,6 +79,58 @@ def diagnostic_events(home):
     return [event for _, event in sorted(rows, key=lambda item: item[0])]
 
 
+
+def native_operation(command_line):
+    """Classify a bounded /proc cmdline prefix; export only fixed labels."""
+    # A partial last token is never a command. Later path arguments may be
+    # truncated without changing the complete command tokens at the front.
+    words = command_line.split(b'\0')[:-1]
+    if not words:
+        return 'other'
+    program = words[0].rsplit(b'/', 1)[-1]
+    if program == b'git-annex-p2p-iroh':
+        return 'transport-helper'
+    if program not in (b'git', b'git-annex'):
+        return 'other'
+    offset = 1
+    while offset < min(len(words), 16):
+        word = words[offset]
+        if program == b'git' and word in (b'-c', b'-C', b'--git-dir', b'--work-tree'):
+            offset += 2
+        elif program == b'git' and (word.startswith((b'--git-dir=', b'--work-tree='))
+                                  or word in (b'--no-pager', b'--literal-pathspecs')):
+            offset += 1
+        else:
+            break
+    if offset >= min(len(words), 16):
+        return 'other'
+    command = words[offset]
+    if program == b'git' and command == b'annex':
+        program = b'git-annex'
+        offset += 1
+        command = words[offset] if offset < len(words) else b''
+    git = ('hash-object', 'update-index', 'cat-file', 'check-attr', 'write-tree',
+           'commit-tree', 'ls-files', 'ls-tree', 'diff-index', 'diff-files', 'status',
+           'rev-parse', 'config', 'for-each-ref', 'rev-list', 'read-tree',
+           'update-ref', 'fetch', 'merge-tree', 'mktree')
+    annex = ('add', 'calckey', 'contentlocation', 'whereis', 'find', 'fsck', 'get',
+             'copy', 'drop', 'smudge', 'filter-process', 'restage', 'remotedaemon',
+             'p2p', 'examinekey', 'lookupkey', 'setkey', 'reinject', 'info', 'merge')
+    for known in git if program == b'git' else annex:
+        if command == known.encode('ascii'):
+            return ('git/' if program == b'git' else 'annex/') + known
+    return 'other'
+
+
+def process_operation(pid):
+    """An unreadable command line must not erase the process's resource row."""
+    try:
+        with Path(f'/proc/{int(pid)}/cmdline').open('rb') as command:
+            return native_operation(command.read(4096))
+    except OSError:
+        return 'other'
+
+
 def preparation_sample(report, elapsed, progress, resources):
     """Reuse existing samples, at most every 30 seconds and 256 rows total."""
     samples = report.setdefault('preparation_samples', [])
@@ -335,10 +387,11 @@ class Peer:
                     before = Path(f'/proc/{int(pid)}/stat').read_text()
                     status = Path(f'/proc/{int(pid)}/status').read_text()
                     name = Path(f'/proc/{int(pid)}/comm').read_text().strip()
+                    operation = process_operation(pid)
                     rss = re.search(r'^VmRSS:\s+(\d+) kB$', status, re.M)
                     if proc_identity(Path(f'/proc/{int(pid)}/stat').read_text()) != proc_identity(before):
                         continue
-                    processes.append(dict(pid=int(pid), cpu_ticks=proc_cpu_ticks(before), state=proc_state(before), name=name if name in (
+                    processes.append(dict(pid=int(pid), operation=operation, cpu_ticks=proc_cpu_ticks(before), state=proc_state(before), name=name if name in (
                         'pigeond', 'git', 'git-annex', 'git-annex-p2p') else 'other',
                         rss=int(rss[1]) * 1024 if rss else None))
                 except (OSError, ValueError):

@@ -957,3 +957,27 @@ pass first attempt. Candidate lead is 669 seconds and publication gap is
 1,925 seconds, meeting both targets. There are 45 lead samples and 44 completed
 intervals. Preparation observability improves diagnosis; the full resource
 and elapsed gates remain open.
+
+## v0.6.40 publication observation
+
+[v0.6.40](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.40), source
+`1dbcf729a7f33de98afbe215c309371963d676d8`, is published on 18 October at
+14:00:50 UTC. Six assets, four archive checksums, pinned annex, native Linux
+installation and completions pass independent verification. All four tag
+gates pass first attempt. Candidate lead is 689 seconds and publication gap
+is 2,919 seconds, meeting both targets, with 46 lead samples and 45 completed
+intervals. The host interruption is recorded separately and supplies no
+continuous-soak credit. Initial per-device admission isolation ships in this
+release; broader security and elapsed qualification remain separate.
+
+## v0.6.41 publication observation
+
+[v0.6.41](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.41), source
+`c08b5274cc99a5e89fee4c7bf2c952ce69f159a5`, is published on 18 October at
+14:22:03 UTC. Independent checks pass six assets, four archive checksums,
+pinned annex, native Linux installation and completions. All four tag gates
+pass first attempt. Candidate lead is 901 seconds and publication gap
+is 1,273 seconds, meeting both targets, with 47 lead samples and 46 completed
+intervals. Mode correction preserves staged pointers and avoids its clean
+filters; the full diagnostic still expires in ingestion. No full-workload
+speedup, resource-budget pass or elapsed qualification is inferred.
