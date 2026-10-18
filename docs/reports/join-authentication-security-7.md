@@ -67,3 +67,12 @@ is then retried once using both already-built archives; all tag gates and
 independent install/asset checks pass. No assertion, deadline, file/hash
 guard or published tag is changed. The original fixture/logs are retained;
 neither original can receive another retry.
+
+## Integrated release validation
+
+PR #94, head `06a78f51704f1d3c20eda63996a0d7b7b1268ad4`, integrates main `21a0037b058ba7b22c2ec707e035b08470f8a3f7` before
+validation. CI 39098880583, lab 39098880726 and bridge
+39098880582 pass. v0.6.24 was published and independently
+verified before this candidate. The complete joining/signing review and
+M6/M7 resource and elapsed gates remain open. Fresh v0.6.25 tag gates and
+independent publication/install checks are required before it is released.
