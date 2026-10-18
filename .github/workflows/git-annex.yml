@@ -24,6 +24,7 @@ on:
       - .github/actions/git-annex-pigeon/**
       - lab/git-annex/ga-e23-p2p-drop.py
       - lab/git-annex/ga-e25-relay-stress.py
+      - lab/git-annex/ga-whereis-no-urls.py
       - packaging/install-git-annex
       - packaging/check-install
   pull_request:
@@ -33,6 +34,7 @@ on:
       - .github/actions/git-annex-pigeon/**
       - lab/git-annex/ga-e23-p2p-drop.py
       - lab/git-annex/ga-e25-relay-stress.py
+      - lab/git-annex/ga-whereis-no-urls.py
       - packaging/install-git-annex
       - packaging/check-install
   workflow_call:
@@ -48,6 +50,11 @@ on:
         default: ""
         type: string
   workflow_dispatch:
+    inputs:
+      build_all_platforms:
+        description: Prepare both platform archives before changing the pinned dependency
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -73,7 +80,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(inputs.verify_macos && '["macos-latest"]' || (startsWith(github.ref, 'refs/tags/v') || inputs.source_ref != '') && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
+        os: ${{ fromJSON(inputs.verify_macos && '["macos-latest"]' || (startsWith(github.ref, 'refs/tags/v') || inputs.source_ref != '' || inputs.build_all_platforms) && '["ubuntu-24.04", "macos-latest"]' || '["ubuntu-24.04"]') }}
     # The build stays on macOS 15: on the macos-26 image, linking GHC's
     # programs failed on the SDK's .tbd files ("unknown architecture"), and
     # v0.3.4 had no release. What it builds runs on later macOS too.
@@ -95,6 +102,7 @@ jobs:
             ~/.stack
             ~/.cache/pigeon-git-annex/bin
           key: stack-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third_party/git-annex/VERSION') }}
+          restore-keys: stack-${{ runner.os }}-${{ runner.arch }}-
       - name: the C libraries GHC links (Linux)
         if: steps.dist.outputs.hit != 'true' && runner.os == 'Linux'
         run: sudo apt-get install -y -q libgmp-dev libffi-dev zlib1g-dev libnuma-dev pkg-config
@@ -109,6 +117,11 @@ jobs:
         with:
           path: ~/.cache/pigeon-git-annex-dist
           key: ${{ steps.key.outputs.key }}
+      - name: no-urls preserves location claims and trust outcomes
+        if: runner.os != 'macOS' || inputs.verify_macos
+        run: |
+          export PATH=~/.cache/pigeon-git-annex-dist/bin:$PATH
+          python3 lab/git-annex/ga-whereis-no-urls.py
       - name: what was built
         run: |
           d=~/.cache/pigeon-git-annex-dist/bin
