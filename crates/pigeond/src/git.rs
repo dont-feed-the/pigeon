@@ -18,6 +18,10 @@ use pigeon_git::{GitEnv, Repo};
 /// A git error.
 pub type Error = pigeon_git::Error;
 
+#[cfg(test)]
+#[path = "git_object_tests.rs"]
+mod object_tests;
+
 /// The zero object ID: "must not exist" as an old value.
 pub const ZERO: &str = "0000000000000000000000000000000000000000";
 
@@ -276,6 +280,15 @@ impl Git {
         if names.is_empty() {
             return Ok(Vec::new());
         }
+        if names
+            .iter()
+            .any(|name| name.is_empty() || name.contains(['\n', '\0']))
+        {
+            return Err(Error::Refused {
+                argv: vec!["cat-file".into(), "--batch".into()],
+                rule: "one nonempty object name per line",
+            });
+        }
         let mut input = names.join("\n").into_bytes();
         input.push(b'\n');
         let out = self
@@ -287,24 +300,10 @@ impl Git {
             )
             .await?
             .stdout;
-        let mut rest = out.as_slice();
-        let mut found = Vec::with_capacity(names.len());
-        while !rest.is_empty() {
-            let Some(nl) = rest.iter().position(|b| *b == b'\n') else {
-                break;
-            };
-            let header = String::from_utf8_lossy(rest.get(..nl).unwrap_or_default()).into_owned();
-            rest = rest.get(nl + 1..).unwrap_or_default();
-            match pigeon_git::catfile::parse_header(&header) {
-                Ok(Some((_, kind, size))) => {
-                    let data = rest.get(..size).unwrap_or_default().to_vec();
-                    rest = rest.get(size + 1..).unwrap_or_default();
-                    found.push(Some((kind, data)));
-                }
-                _ => found.push(None),
-            }
-        }
-        Ok(found)
+        pigeon_git::object_reply::parse(&out, names).map_err(|detail| Error::Parse {
+            argv: vec!["cat-file".into(), "--batch".into()],
+            detail: detail.to_owned(),
+        })
     }
 
     /// The bytes of `rev:path`, if it exists.
@@ -351,16 +350,30 @@ impl Git {
             .collect();
         let oids: Vec<String> = files.iter().map(|f| f.oid.clone()).collect();
         let blobs = self.objects(&oids).await?;
-        Ok(files
-            .into_iter()
-            .zip(blobs)
-            .filter_map(|(f, b)| Some((f.path, pointer_key(&b?.1)?)))
-            .collect())
+        let mut keys = BTreeMap::new();
+        for (file, object) in files.into_iter().zip(blobs) {
+            let Some((kind, bytes)) = object else {
+                return Err(Error::Parse {
+                    argv: vec!["cat-file".into()],
+                    detail: "current tree has a missing pointer object".into(),
+                });
+            };
+            if kind != "blob" {
+                return Err(Error::Parse {
+                    argv: vec!["cat-file".into()],
+                    detail: "current tree pointer has the wrong object kind".into(),
+                });
+            }
+            if let Some(key) = pointer_key(&bytes) {
+                keys.insert(file.path, key);
+            }
+        }
+        Ok(keys)
     }
 
     /// Keys reachable from every tree in `tips`' histories, including
-    /// overwritten and deleted files. No purge is implemented yet, so all
-    /// these references retain content. Inspect small blobs only: user
+    /// overwritten and deleted files. The caller supplies the retained tips;
+    /// every requested object's metadata must be present. Inspect small blobs only: user
     /// content is represented by annex pointers, never large Git blobs.
     pub async fn retained_keys(&self, tips: &[String]) -> Result<BTreeSet<String>, Error> {
         if tips.is_empty() {
@@ -386,22 +399,19 @@ impl Git {
                     input.as_bytes(),
                 )
                 .await?;
-            let mut blobs = Vec::new();
-            for line in checked.lines() {
-                let fields: Vec<&str> = line.split_whitespace().collect();
-                match fields.as_slice() {
-                    [oid, "blob", size] if size.parse::<usize>().is_ok_and(|n| n <= 2048) => {
-                        blobs.push((*oid).to_owned());
+            let metadata =
+                pigeon_git::object_reply::check(checked.as_bytes(), chunk).map_err(|detail| {
+                    Error::Parse {
+                        argv: vec!["cat-file".into()],
+                        detail: detail.to_owned(),
                     }
-                    [_, "blob" | "tree" | "commit" | "tag", _] => {}
-                    _ => {
-                        return Err(Error::Parse {
-                            argv: vec!["cat-file".to_owned()],
-                            detail: format!("retained history has an unreadable object: {line}"),
-                        });
-                    }
-                }
-            }
+                })?;
+            let blobs = chunk
+                .iter()
+                .zip(metadata)
+                .filter(|(_, (kind, size))| kind == "blob" && *size <= 2048)
+                .map(|(oid, _)| oid.clone())
+                .collect::<Vec<_>>();
             let objects = self.objects(&blobs).await?;
             if objects.len() != blobs.len() {
                 return Err(Error::Parse {
@@ -410,12 +420,18 @@ impl Git {
                 });
             }
             for object in objects {
-                let Some((_, bytes)) = object else {
+                let Some((kind, bytes)) = object else {
                     return Err(Error::Parse {
                         argv: vec!["cat-file".to_owned()],
                         detail: "retained history has a missing pointer".to_owned(),
                     });
                 };
+                if kind != "blob" {
+                    return Err(Error::Parse {
+                        argv: vec!["cat-file".to_owned()],
+                        detail: "retained pointer has the wrong object kind".to_owned(),
+                    });
+                }
                 if let Some(key) = pointer_key(&bytes) {
                     keys.insert(key);
                 }
