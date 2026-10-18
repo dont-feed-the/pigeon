@@ -29,10 +29,12 @@ class DependencyGroups(unittest.TestCase):
     def test_standalone_evidence_tools_keep_repository_contracts_without_runtime_jobs(self):
         for path in MODULE.EVIDENCE_TOOLS:
             self.assertEqual(self.groups(path), set(), path)
-        self.assertEqual(self.groups("scripts/lab-soak", "crates/pigeond/src/capture.rs"), MODULE.RUNTIME)
+            self.assertEqual(self.groups(path, "crates/pigeond/src/capture.rs"), MODULE.RUNTIME)
 
     def test_evidence_tool_names_do_not_exempt_unknown_neighbours_or_ci_policy(self):
-        for path in ["scripts/check-upgrade-extra", "scripts/tests/test_reference_unknown.py",
+        for path in ["scripts/check-upgrade-extra", "scripts/prepare-upgrade-archive-extra",
+                     "scripts/check-archive-upgrades-extra", "scripts/tests/test_upgrade_archives_extra.py",
+                     "scripts/tests/test_reference_unknown.py",
                      "scripts/select-ci", ".github/workflows/lab.yml"]:
             self.assertEqual(self.groups("scripts/check-upgrade", path), MODULE.GROUPS, path)
 

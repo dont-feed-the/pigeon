@@ -73,3 +73,10 @@ Replaying PR #104's exact four-file diff against its integrated current-main
 base with the evidence-tool allowlist selects no expensive job group. Its
 Python contracts still run in repository rules. This is a verified selection
 result; a future PR supplies any actual runner-time improvement.
+
+The exact evidence-tool list also covers the mixed-peer and original-archive
+upgrade helpers and their named contracts. A change to one of those tools
+alone retains repository contracts without starting unrelated runtime jobs;
+its native observation still has to be run and recorded explicitly. Every
+listed helper is tested mixed with a Rust change to retain runtime selection.
+The selector change itself runs the full set, as do all non-PR events.

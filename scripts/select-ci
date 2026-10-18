@@ -31,7 +31,10 @@ SCOPES = {"ci": JOBS, "lab": {"lab": "lab"},
 # These standalone evidence tools have no product/build dependency. Repository
 # rules always execute their Python contracts; native measurements are explicit.
 EVIDENCE_TOOLS = {"scripts/lab-soak", "scripts/reference-budget", "scripts/check-reference-budget",
-                  "scripts/check-upgrade", "scripts/tests/test_lab_soak.py",
+                  "scripts/check-upgrade", "scripts/check-upgrade-peers",
+                  "scripts/prepare-upgrade-archive", "scripts/check-archive-upgrades",
+                  "scripts/tests/test_check_upgrade_peers.py", "scripts/tests/test_upgrade_archives.py",
+                  "scripts/tests/test_lab_soak.py",
                   "scripts/tests/test_reference_budget.py", "scripts/tests/test_reference_mount.py",
                   "scripts/tests/test_check_upgrade.py"}
 

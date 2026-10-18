@@ -125,3 +125,9 @@ The integration tests of `pigeond` need git-annex on the `PATH`. Under
 cargo, git ignores your global and system configuration and ignore files
 ([`.cargo/config.toml`](../.cargo/config.toml)), as it does under pigeond.
 pigeon 0.9, an earlier design, is kept under the tag `v0.9.0`.
+
+
+For a larger finite metadata probe, `scripts/reference-budget --smoke
+--smoke-files 1024 --bin DIR --root NEW_ROOT --report NEW_REPORT` keeps the
+smoke verdict unmeasured. See [native metadata startup](reports/metadata-startup-7.md)
+for its bounds, original observations and remaining full-size measurements.

@@ -484,10 +484,19 @@ def scan_events(home):
                 yield row
 
 
+def profile_dimensions(smoke, smoke_files=32):
+    """Only reduced, nonqualifying probes may change their file count."""
+    if type(smoke_files) is not int or not 1 <= smoke_files <= 4096:
+        raise ValueError('smoke file count must be between 1 and 4096')
+    if not smoke and smoke_files != 32:
+        raise ValueError('a custom smoke file count requires --smoke')
+    return (smoke_files, 4096, 5) if smoke else (FILES, SIZE, WINDOW)
+
+
 def measure(args, report):
     root, binary = args.root.resolve(), args.bin.resolve()
     fast_preparation = getattr(args, 'diagnostic_fast_prepare', False)
-    count, size, seconds = (32, 4096, 5) if args.smoke else (FILES, SIZE, WINDOW)
+    count, size, seconds = profile_dimensions(args.smoke, getattr(args, 'smoke_files', 32))
     if root.exists():
         raise RuntimeError('reference root must be new')
     root.mkdir(parents=True)
@@ -629,6 +638,7 @@ def main():
     parser.add_argument('--root', required=True, type=Path)
     parser.add_argument('--report', required=True, type=Path)
     parser.add_argument('--smoke', action='store_true', help='reduced control-flow check, never a budget pass')
+    parser.add_argument('--smoke-files', type=int, default=32, help='1–4096 files for --smoke only; never qualifies budgets')
     parser.add_argument('--compressed', action='store_true')
     parser.add_argument('--diagnostic-fast-prepare', action='store_true',
                         help='Fast seeding, then Gentle sampling; never qualifies an M6 budget')

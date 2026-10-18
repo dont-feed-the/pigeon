@@ -312,3 +312,26 @@ is 1,857 seconds, meeting both targets, with 48 lead samples and 47 completed
 intervals. Four finite mixed-release lab cases support the upgrade checkpoint;
 actual old archives and final-RC coverage remain distinct. The longer Fast
 reference diagnostic and actual soak continue without an inferred pass.
+
+## v0.6.43 and v0.6.44 observations
+
+[v0.6.43](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.43),
+source `dde2472b1c2e1ccd20216943ec2931aca1b0e256`, publishes on 18 October
+at 16:03:32 UTC. Candidate-to-publication time is **657 seconds (10m57s)**;
+the completed gap from v0.6.42 is **4232 seconds (1h10m32s)**. The collector
+has 49 lead-time samples and 48 completed intervals. Both targets are met.
+
+[v0.6.44](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.44),
+source `31e86654127e9733229026d2a7b8637c1bc8eee3`, publishes at 16:21:21 UTC.
+Its lead time is **666 seconds (11m06s)** and its gap is **1069 seconds
+(17m49s)**, with 50 lead-time samples and 49 completed intervals. Both
+targets are met; earlier misses remain in the retained history.
+
+Both candidates pass ci/lab/slice/release gates on the first attempt. Each
+independent publication check verifies six assets, all four archive hashes,
+native installation, pinned annex, completions and the public latest target.
+PR #112 combines published-archive and byte-observer work in one CI batch;
+PR #113 validates against current main once, then waits for the preceding
+publication verification before merging. The separate 90-minute Fast
+reference diagnostic fails preparation and does not supply a budget pass.
+Its failure is retained and does not redefine publication throughput.

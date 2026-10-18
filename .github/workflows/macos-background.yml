@@ -14,7 +14,7 @@ on:
         type: boolean
         default: false
       capture_diagnostics_only:
-        description: Check capture preemption, native save/delete hints and the two deletion regressions
+        description: Check native capture/deletion hints, regression cases and bounded metadata queries
         type: boolean
         default: false
       native_priority_only:
@@ -110,7 +110,7 @@ jobs:
       people_only: true
 
   capture-diagnostics:
-    name: focused native capture and deletion diagnostics
+    name: focused native capture and metadata diagnostics
     needs: available
     if: needs.available.outputs.run == 'true' && inputs.capture_diagnostics_only
     runs-on: macos-latest
@@ -171,7 +171,7 @@ jobs:
           mkdir -p "$TMPDIR"
           cargo nextest run -p pigeond --features lab --locked \
             --lib --test watch_capture --test slice --test restore \
-            -E 'binary(watch_capture) | test(capture_releases_a_same_repository_transfer_lock) | test(local_published_protected_then_free_and_keep) | test(a_time_between_two_saves_restores_the_first)'
+            -E 'binary(watch_capture) | test(capture_releases_a_same_repository_transfer_lock) | test(local_published_protected_then_free_and_keep) | test(a_time_between_two_saves_restores_the_first) | test(custody::metadata_tests) | test(custody::location_tests) | test(custody_transfer::location_tests)'
       - name: retain failed native capture fixtures
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

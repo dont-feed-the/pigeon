@@ -36,6 +36,19 @@ class ReferenceMeasurement(unittest.TestCase):
         result = MODULE.verdict(self.samples(), self.scans(), 32, 5, False)
         self.assertEqual(result['budget_verdict'], 'not-measured')
 
+    def test_larger_smokes_cross_metadata_bounds_without_changing_qualification(self):
+        for count in [1, 32, 257, 1024, 4096]:
+            self.assertEqual(MODULE.profile_dimensions(True, count), (count, 4096, 5))
+            self.assertEqual(MODULE.verdict(self.samples(), self.scans(), count, 5, False)['budget_verdict'], 'not-measured')
+        self.assertEqual(MODULE.profile_dimensions(False), (100_000, 500_000, 600))
+
+    def test_smoke_dimensions_cannot_change_full_profiles_or_accept_invalid_counts(self):
+        for count in [0, -1, 4097, True, 1.5]:
+            with self.subTest(count=count), self.assertRaises(ValueError):
+                MODULE.profile_dimensions(True, count)
+        with self.assertRaises(ValueError):
+            MODULE.profile_dimensions(False, 1024)
+
     def test_native_child_cpu_is_read_from_the_cgroup_total(self):
         self.assertEqual(MODULE.counters('usage_usec 9876543\nuser_usec 8000000\nsystem_usec 1876543\n'), 9876543)
         with self.assertRaises(KeyError):
