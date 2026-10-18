@@ -198,3 +198,75 @@ async fn actual_bounded_reads_report_the_opened_device_after_policy_waits() {
     );
     assert!(readings.iter().all(|(device, _)| *device == stat.id.dev));
 }
+
+#[tokio::test]
+async fn capture_verification_uses_the_opened_device_policy() {
+    #[derive(Debug)]
+    struct DeviceGate(u64);
+    impl Control for DeviceGate {
+        fn running(&self, _: Class) -> bool {
+            false
+        }
+        fn reading(&self, device: u64) -> bool {
+            device == self.0
+        }
+        fn charging_read(&self, device: u64) -> bool {
+            device == self.0
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("actual-device");
+    let bytes = vec![19; 65_536 + 17];
+    std::fs::write(&path, &bytes).unwrap();
+    let stat = pigeon_sys::fs::lstat(&path).unwrap().unwrap();
+    let result = tokio::time::timeout(
+        Duration::from_secs(1),
+        checked(path, stat, Some(Arc::new(DeviceGate(stat.id.dev)))),
+    )
+    .await;
+    assert!(
+        result.is_ok(),
+        "capture used the generic device policy instead of its opened inode"
+    );
+    assert_eq!(
+        result.unwrap().unwrap(),
+        Some((
+            bytes.len() as u64,
+            crate::util::hex(&Sha256::digest(&bytes))
+        ))
+    );
+}
+
+#[tokio::test]
+async fn an_actual_device_pause_spends_no_capture_read_budget() {
+    #[derive(Debug, Default)]
+    struct ReadGate(AtomicBool);
+    impl Control for ReadGate {
+        fn running(&self, _: Class) -> bool {
+            true
+        }
+        fn reading(&self, _device: u64) -> bool {
+            self.0.load(Ordering::Relaxed)
+        }
+    }
+    let gate = Arc::new(ReadGate::default());
+    let task = tokio::spawn(supervise_on(
+        Some(gate.clone()),
+        Duration::from_millis(300),
+        Some(7),
+        |state| digest(&mut io::Cursor::new(b"device-specific bytes"), state),
+    ));
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    assert!(
+        !task.is_finished(),
+        "device wait spent the ordinary operation budget"
+    );
+    gate.0.store(true, Ordering::Relaxed);
+    assert_eq!(
+        task.await.unwrap().unwrap(),
+        (
+            21,
+            crate::util::hex(&Sha256::digest(b"device-specific bytes"))
+        )
+    );
+}

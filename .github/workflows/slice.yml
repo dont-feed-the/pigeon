@@ -6,7 +6,7 @@
 # the lab build of pigeond and pigeon and hands the merged trace logs to
 # TLC. Five disjoint partitions use independent Linux runners. S5 retains
 # its own disk-isolation job. The s9-random job
-# runs 50 random S9 crash schedules per runner on release tags and by hand,
+# runs 50 random S9 crash schedules per platform on release tags and by hand,
 # and models-full.yml runs 200 on tags and 1000 nightly.
 # A scenario marked blocked in pigeon-lab's slice.rs reports
 # its reason and does not fail the job, until it passes.
@@ -17,12 +17,21 @@ on:
     branches: [main]
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      s9_only:
+        description: Validate only the fifty random schedules and their traces
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       platform:
         description: macos for periodic background validation; Linux for publication
         type: string
         default: linux
+      s9_only:
+        description: Run only the random crash schedule profile
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -40,6 +49,7 @@ env:
 
 jobs:
   slice:
+    if: ${{ !inputs.s9_only }}
     name: slice (${{ matrix.os }}, ${{ matrix.scenarios }})
     strategy:
       fail-fast: false
@@ -154,24 +164,21 @@ jobs:
           path: target/lab/out
           if-no-files-found: ignore
 
-  # 13 §13.12's 50 random S9 crash schedules per release, in two shards of 25
-  # beside the slice job. One background Mac random shard leaves room for
-  # both release archives and pinned dependencies alongside two fixed jobs.
-  # Each Linux shard runs two independent processes,
-  # with separate disks, reports and seeds; macOS keeps one. Job names and
-  # case counts remain the publication gate's 50 schedules. S9-random left slice::BLOCKED once both
-  # runners passed every shard (run 38660637841, f5dddd6): a failure fails
-  # the push.
+  # The same 50 random S9 schedules use five Linux shards of ten. Each
+  # runner keeps two workers and independent disks/reports. Background Macs
+  # retain two shards of 25 and one worker, scheduled one shard at a time.
+  # Every shard and every trace verdict remains a publication requirement.
   s9-random:
-    name: S9, 25 random crash schedules (${{ matrix.os }}, shard ${{ matrix.shard }})
+    name: S9, ${{ matrix.cases }} random crash schedules (${{ matrix.os }}, shard ${{ matrix.shard }})
     # Release tags and by hand; nightly, models-full.yml runs 1000 schedules.
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' || inputs.platform == 'macos'
     strategy:
       fail-fast: false
       matrix:
         os: ${{ fromJSON(inputs.platform == 'macos' && '["macos-latest"]' || '["ubuntu-24.04"]') }}
-        shard: [0, 1]
-      max-parallel: ${{ inputs.platform == 'macos' && 1 || 2 }}
+        shard: ${{ fromJSON(inputs.platform == 'macos' && '[0,1]' || '[0,1,2,3,4]') }}
+        cases: ${{ fromJSON(inputs.platform == 'macos' && '[25]' || '[10]') }}
+      max-parallel: ${{ inputs.platform == 'macos' && 1 || 5 }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 75
     steps:
@@ -236,17 +243,19 @@ jobs:
             --features pigeond/lab,pigeond/tla-trace
           mkdir -p target/lab/bin
           cp target/release/pigeond target/release/pigeon target/release/git-annex-p2p-iroh target/lab/bin/
-      - name: 25 random S9 crash schedules
+      - name: ${{ matrix.cases }} random S9 crash schedules
         env:
           PIGEON_LAB_BIN: ${{ github.workspace }}/target/lab/bin
           S9_JOBS: ${{ runner.os == 'Linux' && '2' || '1' }}
+          S9_CASES: ${{ matrix.cases }}
+          S9_SEED_STRIDE: ${{ runner.os == 'Linux' && '10' || '4' }}
           SHARD: ${{ matrix.shard }}
           RUN_ID: ${{ github.run_id }}
         # Fresh seeds on each run, disjoint across shards and reproducible
         # from the logged seed. Retrying a run repeats its schedules.
         run: |
           rm -rf target/lab/out
-          scripts/check-s9-schedules --cases 25 --jobs "$S9_JOBS" --seed "$((RUN_ID * 4 + SHARD * 2))" --out target/lab/out
+          scripts/check-s9-schedules --cases "$S9_CASES" --jobs "$S9_JOBS" --seed "$((RUN_ID * S9_SEED_STRIDE + SHARD * 2))" --out target/lab/out
       - name: their trace logs, checked by TLC
         if: always()
         env:

@@ -5,6 +5,15 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Opening Files while a folder is being updated retries brief read conflicts
+  automatically.
+- Final checks of saved files follow the read delays of the drive containing
+  the file, while still respecting system-wide disk pressure.
+
 ## 0.6.22 — 2026-10-18
 
 ### Fixed

@@ -728,3 +728,66 @@ A local file-size inventory also finds 1,592,405,895 bytes of old workspace
 build outputs, largely repeated web bundles. Their outputs and matching
 fingerprints are excluded together. These local uncompressed bytes are not
 the hosted archive size or a measured hosted speedup.
+
+## Saved dependency archive observation
+
+On 18 October at 03:39:44 UTC, main saves native dependency cache
+9108748689: **427,538,710 bytes**, versus **8,291,805,418 bytes** for
+the former full-target cache. That is about **94.84% smaller**. The archive
+excludes workspace executables/libraries and matching workspace build outputs
+and fingerprints, while keeping third-party libraries and native builds.
+Actual warm-restore duration and full workflow effects are recorded only
+when observed; this size result is not a controlled throughput experiment.
+
+Before daemon tests, the four original PR #91 shards spend 396, 401, 254
+and 347 seconds from cache-restore start through native-test start. The
+first three observed cold preparations on the new namespace take 168, 167
+and 137 seconds (shards 0, 2, 3); shard 1 is still building at that snapshot.
+Those are preparation observations from different runners, not complete
+workflow durations or isolated causal estimates. All required PR checks and
+the separate exact-head native ZFS profile eventually pass on the rollup.
+
+## v0.6.22 publication and next critical-path target
+
+[v0.6.22](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.22),
+source `c457f51c358f43d12cc40bac7432f46f251f0246`, publishes at
+2026-10-18T03:45:18Z. All six assets, four archive checksums, native Linux
+installation, pinned annex, completions and latest redirect pass independent
+verification. Candidate lead is **679 seconds**; the completed publication
+gap from v0.6.20 is **4517 seconds**, within the two-hour target. The
+collector retains 29 lead and 28 gap samples. v0.6.21 remains immutable and
+unpublished. Tag CI 39094074063, lab 39094074084, slice 39094074030 and
+release 39094074037 all pass on their first attempt.
+
+The last S9 job, 117576720895, runs 03:34:01–03:45:12 UTC. After a
+131-second lab build, its 25 schedules take **396 seconds** and their
+TLC checks **101 seconds**. This is the measured next target. The following
+rollup distributes the same 50 Linux schedules across five runners of ten,
+with the same two workers per runner, separate state and disjoint seed
+streams. Background Mac coverage stays two runners of 25, one at a time.
+No schedule or trace check is removed. Publication requires every new Linux
+shard; legacy job families cannot conceal a partial new family. Older tags
+retain complete older-family compatibility. New hosted runtime observations
+are required before claiming that this shortens publication.
+
+An explicit s9_only manual profile runs just the fifty schedules and their
+trace checks to validate that layout on the PR head. Ordinary main/tag and
+background Mac calls keep their fixed slice partitions. The manual profile
+cannot substitute for publication: the gate requires an exact tag/source
+push event and every fixed Linux partition as well as all random shards.
+
+The first five-shard profile 39095141432 passes on PR #92 head e3b49d3.
+All fifty schedules and all trace checks pass. Job durations are 384–441
+seconds; the maximum is **7m21s**, versus **11m11s** for v0.6.22's last
+two-shard job. The first new shard spends 137 seconds building, 205 on
+its ten schedules and 41 on TLC. Different runners and random seeds make
+this a first hosted observation rather than an isolated or sustained
+publication improvement. That PR head separately fails a Files-page
+assertion in CI, with the original artifact retained in the device report.
+The source correction therefore receives fresh exact-head validation.
+
+The smaller dependency archive also has an actual warm restore: PR #92
+job 117579932868 restores in **6 seconds**, 03:52:51–03:52:57 UTC.
+Its native tests begin 03:54:23: **92 seconds** from restore start, versus
+347 seconds on the original PR #91 shard. Preparation and archive-size
+measurements remain separate from complete publication lead/gap samples.

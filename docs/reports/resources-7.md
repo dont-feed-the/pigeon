@@ -912,3 +912,10 @@ registration keeps that class visible until stop/drop, with cancellation,
 metadata availability and optional-download priority checked separately.
 This is a native lifetime correction, not completion of global key ordering
 or a causal explanation of v0.6.21's held-protection miss.
+
+## Actual-device capture verification
+
+[Device-specific verification](device-verification-7.md) separates own-read
+backoff by the opened device while retaining a global pressure override.
+The native child and content controllers remain conservative; completing
+their device scheduling and measured reference/HDD budgets remains open.

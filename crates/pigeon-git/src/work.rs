@@ -27,6 +27,17 @@ pub trait Control: std::fmt::Debug + Send + Sync {
     /// retain only bounded measurements, never content or file names.
     fn read_observed(&self, _device: u64, _elapsed: Duration) {}
 
+    /// Permission for capture verification on its actual opened device.
+    /// The default retains the ordinary Capture policy.
+    fn reading(&self, _device: u64) -> bool {
+        self.running(Class::Capture)
+    }
+
+    /// Whether that device's deliberate read waits spend active time.
+    fn charging_read(&self, _device: u64) -> bool {
+        self.charging(Class::Capture)
+    }
+
     /// Whether a new native operation may start or send its next batch key.
     /// By default admission and active scheduling have the same policy.
     fn starting(&self, class: Class) -> bool {
@@ -183,6 +194,13 @@ impl DownloadControl {
 }
 
 impl Control for DownloadControl {
+    fn reading(&self, device: u64) -> bool {
+        self.0.reading(device)
+    }
+    fn charging_read(&self, device: u64) -> bool {
+        self.0.charging_read(device)
+    }
+
     fn read_observed(&self, device: u64, elapsed: Duration) {
         self.0.read_observed(device, elapsed);
     }

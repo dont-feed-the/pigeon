@@ -46,6 +46,33 @@ class Publication(unittest.TestCase):
             "name": "slice (ubuntu-24.04, core)", "status": "completed", "conclusion": "success"
         }]), "passed")
 
+    def test_old_random_family_cannot_hide_any_new_random_shard(self):
+        jobs = [{"name": n, "status": "completed", "conclusion": "success"}
+                for n in MODULE.FIXED_SLICE | MODULE.OLD_RANDOM]
+        self.assertEqual(MODULE.linux_state("slice", jobs), "passed")
+        for name in MODULE.CURRENT_RANDOM:
+            partial = jobs + [{"name": name, "status": "completed", "conclusion": "success"}]
+            self.assertNotEqual(MODULE.linux_state("slice", partial), "passed")
+        for name in MODULE.OLD_RANDOM:
+            self.assertNotEqual(MODULE.linux_state("slice", [j for j in jobs if j["name"] != name]), "passed")
+
+    def test_random_shards_cover_fifty_cases_and_match_every_required_job(self):
+        text = (SCRIPT.parents[1] / ".github/workflows/slice.yml").read_text().split("  s9-random:", 1)[1]
+        shards = json.loads(re.search(r"shard:.*\|\| '([^']+)'", text)[1])
+        cases = json.loads(re.search(r"cases:.*\|\| '([^']+)'", text)[1])[0]
+        self.assertEqual(len(shards), len(set(shards)))
+        self.assertEqual(len(shards) * cases, 50)
+        self.assertEqual(MODULE.CURRENT_RANDOM, {
+            f"S9, {cases} random crash schedules (ubuntu-24.04, shard {n})" for n in shards})
+        self.assertEqual({shard * 2 + worker for shard in shards for worker in range(2)}, set(range(10)))
+        self.assertIn('name: S9, ${{ matrix.cases }} random crash schedules', text)
+        self.assertIn('S9_CASES: ${{ matrix.cases }}', text)
+        stride = int(re.search(r"S9_SEED_STRIDE:.*&& '([^']+)'", text)[1])
+        streams = {shard * 2 + worker for shard in shards for worker in range(2)}
+        self.assertGreaterEqual(stride, max(streams) + 1)
+        self.assertIn('--cases "$S9_CASES" --jobs "$S9_JOBS"', text)
+        self.assertIn('RUN_ID * S9_SEED_STRIDE + SHARD * 2', text)
+
     def test_old_tags_can_use_complete_linux_jobs_while_macos_is_queued_or_failed(self):
         runs = [run(n, id=i, status="queued", conclusion=None) for i, n in enumerate(sorted(MODULE.REQUIRED), 1)]
         jobs = {r["id"]: [{"name": n, "status": "completed", "conclusion": "success"}
@@ -73,7 +100,7 @@ class Publication(unittest.TestCase):
     def test_only_the_same_commit_tag_and_event_count(self):
         runs = [run(n) for n in MODULE.REQUIRED]
         self.assertTrue(MODULE.assess(runs, "abc", "v0.3.2")[0])
-        for change in ({"head_sha": "old"}, {"head_branch": "main"}, {"event": "pull_request"}):
+        for change in ({"head_sha": "old"}, {"head_branch": "main"}, {"event": "pull_request"}, {"event": "workflow_dispatch"}):
             self.assertFalse(MODULE.assess([r | change for r in runs], "abc", "v0.3.2")[0])
 
     def test_missing_and_pending_checks_wait(self):
