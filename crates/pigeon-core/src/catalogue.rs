@@ -21,10 +21,8 @@ use std::sync::Arc;
 use crate::names::{self, Stamp};
 use crate::roster::PersonId;
 
+mod memo;
 mod rename;
-
-/// The most catalogues an engine keeps computed.
-const MEMO: usize = 256;
 
 /// A tree: path → leaf (a key, or an entry of `ls-tree`).
 pub type Tree<K> = BTreeMap<String, K>;
@@ -49,18 +47,26 @@ pub struct Version<K> {
 
 /// A tree's units by slot (its folded unit path, 05 §5.1).
 pub fn units<K: Clone + Ord>(tree: &Tree<K>) -> BTreeMap<String, Version<K>> {
+    units_by(tree, K::clone)
+}
+
+// Comparisons borrow leaves; only a changed event needs owned entries.
+fn units_by<'a, K, V>(
+    tree: &'a Tree<K>,
+    value: impl Fn(&'a K) -> V,
+) -> BTreeMap<String, Version<V>> {
     // A plain file must not allocate an eleven-entry B-tree node for K.
     // Box its one leaf; only packages need the map of relative paths.
     type Group<K> = (Option<Box<K>>, BTreeMap<String, K>);
-    let mut groups: BTreeMap<&str, Group<K>> = BTreeMap::new();
+    let mut groups: BTreeMap<&str, Group<V>> = BTreeMap::new();
     for (path, k) in tree {
         let u = names::unit(path);
         let rel = path.get(u.len() + 1..).unwrap_or_default();
         let (leaf, files) = groups.entry(u).or_default();
         if rel.is_empty() {
-            *leaf = Some(Box::new(k.clone()));
+            *leaf = Some(Box::new(value(k)));
         } else {
-            files.insert(rel.to_owned(), k.clone());
+            files.insert(rel.to_owned(), value(k));
         }
     }
     groups
@@ -79,6 +85,21 @@ pub fn units<K: Clone + Ord>(tree: &Tree<K>) -> BTreeMap<String, Version<K>> {
             )
         })
         .collect()
+}
+
+fn own_version<K: Clone>(version: &Version<&K>) -> Version<K> {
+    Version {
+        path: version.path.clone(),
+        content: match &version.content {
+            Content::File(key) => Content::File(K::clone(key)),
+            Content::Package(files) => Content::Package(
+                files
+                    .iter()
+                    .map(|(path, key)| (path.clone(), K::clone(key)))
+                    .collect(),
+            ),
+        },
+    }
 }
 
 /// The tree of units placed at paths.
@@ -269,7 +290,7 @@ pub struct Engine<K> {
     keys: BTreeMap<Key<K>, usize>,
     info: BTreeMap<String, Info>,
     origins: BTreeMap<String, Origin>,
-    memo: BTreeMap<Arc<BTreeSet<usize>>, Arc<View<K>>>,
+    memo: memo::Memo<K>,
 }
 
 impl<K: Clone + Ord> Default for Engine<K> {
@@ -279,7 +300,7 @@ impl<K: Clone + Ord> Default for Engine<K> {
             keys: BTreeMap::new(),
             info: BTreeMap::new(),
             origins: BTreeMap::new(),
-            memo: BTreeMap::new(),
+            memo: memo::Memo::default(),
         }
     }
 }
@@ -411,7 +432,7 @@ impl<K: Clone + Ord> Engine<K> {
         let Some(view) = self.base(&meta.parents) else {
             return self.admit(meta, tree, Judgement::Accepted);
         };
-        let (old, new) = (units(&view.tree), units(tree));
+        let (old, new) = (units_by(&view.tree, |key| key), units_by(tree, |key| key));
         let delta = slot_delta(&old, &new);
         let mut meta = meta.clone();
         meta.resolves
@@ -471,7 +492,7 @@ impl<K: Clone + Ord> Engine<K> {
             Judgement::Refused(why) => return self.set(&meta.id, Outcome::Refused(why), state),
         }
         let view = self.present(state.clone());
-        let (old, new) = (units(&view.tree), units(tree));
+        let (old, new) = (units_by(&view.tree, |key| key), units_by(tree, |key| key));
         let delta = slot_delta(&old, &new);
         let resolves: BTreeSet<String> = meta
             .resolves
@@ -492,7 +513,7 @@ impl<K: Clone + Ord> Engine<K> {
             .map(|x| {
                 (
                     (*x).clone(),
-                    new.get(*x).map(|v| (v.clone(), meta.id.clone())),
+                    new.get(*x).map(|v| (own_version(v), meta.id.clone())),
                 )
             })
             .collect();
@@ -595,11 +616,9 @@ impl<K: Clone + Ord> Engine<K> {
         if let Some(v) = self.memo.get(&state) {
             return Arc::clone(v);
         }
+        self.memo.prepare();
         let view = Arc::new(self.compute(&state));
-        if self.memo.len() >= MEMO {
-            self.memo.clear(); // a cache: dropping it changes no result
-        }
-        self.memo.insert(Arc::new(state), Arc::clone(&view));
+        self.memo.insert(state, Arc::clone(&view));
         view
     }
 
@@ -623,7 +642,7 @@ impl<K: Clone + Ord> Engine<K> {
     fn compute(&self, state: &BTreeSet<usize>) -> View<K> {
         let mut eff = self.effective(state);
         let heads = self.heads(state, &mut eff);
-        let mut versions: Vec<(Rank, String, Version<K>, String)> = Vec::new();
+        let mut versions: Vec<(Rank, String, Version<K>, String)> = Vec::with_capacity(heads.len());
         for (x, hs) in &heads {
             let mut best: BTreeMap<&Content<K>, (Rank, &Version<K>, &str)> = BTreeMap::new();
             for &e in hs {
@@ -696,11 +715,14 @@ impl<K: Clone + Ord> Engine<K> {
                 later.push((x, v, o, path));
             } else {
                 placed.insert(x.clone());
-                shown.entry(x).or_default().push(Shown {
-                    version: v,
-                    path,
-                    origin: o,
-                });
+                shown
+                    .entry(x)
+                    .or_insert_with(|| Vec::with_capacity(1))
+                    .push(Shown {
+                        version: v,
+                        path,
+                        origin: o,
+                    });
             }
         }
         for (x, v, o, path) in later {
@@ -722,11 +744,14 @@ impl<K: Clone + Ord> Engine<K> {
                 name = names::conflict_name(&path, who, when, n);
             }
             placed.insert(names::fold(&name));
-            shown.entry(x).or_default().push(Shown {
-                version: v,
-                path: name,
-                origin: o,
-            });
+            shown
+                .entry(x)
+                .or_insert_with(|| Vec::with_capacity(1))
+                .push(Shown {
+                    version: v,
+                    path: name,
+                    origin: o,
+                });
         }
         let unsettled = shown
             .iter()

@@ -1,6 +1,6 @@
-# M6: reduce temporary catalogue grouping memory
+# M6: reduce catalogue grouping and retained-view memory
 
-> Mission: remove oversized per-file grouping allocations without changing catalogue values.
+> Mission: bound temporary comparisons and cached views without changing catalogue values.
 
 ## Allocation cause and change
 
@@ -79,3 +79,92 @@ library filter used an invalid binary identifier and started no tests;
 its original command log remains retained. The corrected `--lib` invocation
 passes with the same source. There is no CI retry or source regression in
 that command-selection mistake.
+
+## Retained historical views
+
+The initial grouping fix does not address the engine's cache: up to 256
+complete views were retained regardless of their size. A separate private
+probe using 10000 files, six accepted contributions and one-file changes
+observes additional requested live heap grow from 18897759 to 99542511
+bytes after callers drop each view. Dropping the engine releases it. This
+identifies retained views rather than live caller references as the cause
+of that growth in this fixture.
+
+The cache now limits both its 256 states and 32768 logical collection
+entries. Its weight counts state membership, visible leaves, shown versions
+and package children, writer/person sets, heads and rename bookkeeping.
+Deleted-slot metadata counts even when the visible tree is empty. This is
+a cache policy, not an allocator byte estimate or an overall memory limit.
+One oversized current view stays reusable; the next cache miss releases the
+cache's reference before computing its successor. Smaller entries are
+cleared when their combined weight would exceed the limit. Callers' owned
+immutable `Arc` snapshots remain valid after eviction. The engine's event
+history, authority decisions and externally held views are separate live
+state and are not erased to satisfy the cache limit.
+
+Per-file shown/head vectors also start with room for one item, growing for
+real conflicts instead of reserving four entries for every ordinary slot.
+The temporary version vector reserves for the known heads count. Content,
+representative order and conflict naming remain unchanged.
+
+## Borrow comparisons; own changed events
+
+Judging a contribution previously cloned each complete file entry into both
+comparison maps. A warmed-cache regression with 256 unchanged files
+observes 512 clones and fails its zero-clone target. Comparisons now borrow
+the leaves using the same grouping function; only changed event writes
+clone owned entries. Public `units` still returns the same owned values.
+A separate 1000-case law requires borrowing and then owning every unit to
+match the full owned grouping, including packages and Unicode/case collisions.
+The clone-count original is retained separately from the corrected run.
+
+## Combined validation and CI policy
+
+The two cache laws run 1000 cases each: retention stays within the entry/state
+policy (allowing one oversized current view), and eviction preserves outcomes
+and all public view fields compared with uncached judgement. Owned snapshots
+survive cache clearing. A fixed case checks deleted-slot metadata weight.
+Together with the initial grouping laws, this rollup adds five 1000-case laws.
+The existing schedule laws, full Python oracle and trace producer still run.
+
+PR #115 originally validates grouping alone: CI 39148745250 passes, while
+the bridge run is cancelled for the changed-source rollup. Its original
+head `48249301aed052f4910aa9da8c0867b6324e5b41` and controller records are
+retained. The waiting merge controller is stopped before combining the
+remaining memory work in that PR. Final source receives fresh exact-head
+validation once; no unchanged-source CI retry is used. The next release
+still requires all four tag gates and independent asset/install verification.
+
+## Full-count pure-engine comparison
+
+A second probe uses 100000 real-shaped `authority::Entry` leaves. An empty
+genesis is followed by six accepted contributions: the first adds the tree,
+and each later contribution changes one entry. After each admission it
+computes the current catalogue, compares every entry with the input and drops
+the caller's view. All variants run as separate fresh single-thread processes
+using identical synthetic inputs and probe source. The baseline already
+includes the initial ordinary-file grouping fix. Each intermediate result
+is retained; these are one run per variant, not production timing trials.
+
+| Variant | Additional live heap after sixth view | Maximum requested Rust heap, including input | Maximum observed process RSS |
+| --- | --- | --- | --- |
+| Initial PR head, 256-state cache | 995308431 B | 1030498303 B | 1201256 KiB |
+| Weighted cache | 188917079 B | 274052198 B | 353832 KiB |
+| Plus compact per-file vectors | 143317079 B | 228452198 B | 310444 KiB |
+| Plus borrowed comparison entries | 143317079 B | 206450358 B | 267304 KiB |
+
+The input alone requests 28294980 live bytes. The final variant retains
+about 86% less additional heap than the initial PR head. Its maximum observed
+RSS is 273719296 bytes, but **this is not a daemon memory-budget pass**:
+the probe has no native Git/annex children, signed histories, transfer plans,
+50 GB contents, platform services or ten-minute measured window. Original
+JSON observations, probe source, all four frozen binaries and SHA-256
+receipts remain retained. The full reference and HDD gates remain open.
+
+The combined source passes all 14 selected core checks, including the full
+Python oracle replay, the trace producer, five new 1000-case laws and the
+zero-clone regression. All 215 daemon library checks pass again after the
+borrowed comparisons. Formatting, all-target workspace Clippy with zero
+warnings, file/header limits, ADR index and spec references pass. The
+original 512-clone failure and intermediate cache-only/vector-only RSS
+observations remain retained; they are not replaced by the final result.

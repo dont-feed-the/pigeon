@@ -132,10 +132,15 @@ impl<K: Clone + Ord> Engine<K> {
         let mut raw: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
         for &e in state {
             for x in self.writes_of(eff, e).keys() {
-                writers.entry(x.clone()).or_default().push(e);
+                writers
+                    .entry(x.clone())
+                    .or_insert_with(|| Vec::with_capacity(1))
+                    .push(e);
             }
             for x in self.events[e].writes.keys() {
-                raw.entry(x.as_str()).or_default().push(e);
+                raw.entry(x.as_str())
+                    .or_insert_with(|| Vec::with_capacity(1))
+                    .push(e);
             }
         }
         // The events that wrote a slot a write of `s` may reach by renames.
@@ -166,7 +171,9 @@ impl<K: Clone + Ord> Engine<K> {
                 let s = eff.via.get(&(*e, x.to_owned())).map_or(x, |v| v.1.as_str());
                 !by(s).into_iter().any(|w| w != *e && over(w, *e, s))
             };
-            ws.iter().copied().filter(kept).collect()
+            let mut out = Vec::with_capacity(1);
+            out.extend(ws.iter().copied().filter(kept));
+            out
         };
         let mut yielded = BTreeSet::new();
         let mut heads = BTreeMap::new();

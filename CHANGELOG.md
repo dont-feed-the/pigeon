@@ -9,8 +9,8 @@ increments the second number, and every other release the third.
 
 ### Changed
 
-- Large folders use less temporary memory while grouping files and packages
-  for the catalogue.
+- Large folders use less memory when computing and caching their catalogue.
+  Comparing unchanged catalogues avoids copying every file entry.
 
 ## 0.6.45 — 2026-10-18
 
