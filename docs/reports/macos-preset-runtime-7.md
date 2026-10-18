@@ -34,12 +34,20 @@ observers and values are retained under runner.temp/pigeon-macos-priority and
 uploaded for 14 days by the failure-only packaging step. No identity, group or
 invitation is created or uploaded. There is no new user-facing behavior.
 
-## Validation in progress
+## Hosted native observation
+
+The one-runner [hosted Mac run](https://github.com/dont-feed-the/pigeon/actions/runs/39086664756)
+passes on its first attempt at source
+`5e9c2c7f082006e2b0a0ed4963a0b3dc97ac6243`. Job 117556064797 runs the
+native observation in 28.783 seconds. Background, normal and background
+processes have PIDs 3423, 3857 and 4115; their main-thread base priorities
+are 4, 20 and 4. Independently executed children match each priority. Nice
+remains zero in both modes; nice alone would miss this launchd policy.
+Equal atomic requests preserve each PID. No fixed priority value is asserted.
 
 Linux packaging discovery runs 33 checks: 32 pass and this native Mac check
-explicitly skips. This environment has no Apple SDK or launchd, so neither
-local Python checks nor code inspection are native Mac evidence. The actual
-periodic source run must supply the runtime verdict. Mac results remain
+explicitly skips. This environment has no Apple SDK or launchd, so the
+hosted observation supplies the native result. Mac results remain
 background evidence under the release policy; all required Linux publication
 gates and both release archives stay required.
 
