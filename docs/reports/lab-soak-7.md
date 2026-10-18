@@ -83,3 +83,23 @@ record the cycle deadline and the in-flight cycle before each save. The
 coverage are unchanged. A deterministic observer test reproduces the old
 300-second rejection and admits a catalogue arriving after the valid hot
 wait. A new actual observation and its final verdict remain required.
+
+## Corrected observation
+
+All 128 script checks pass, including the delayed-catalogue regression. The
+12 scheduling laws also pass 1000 generated cases each, including the
+specified ten-minute hot interval and eventual last-save readiness. The
+all-target workspace Clippy and structural/ADR/spec checks pass.
+
+Frozen lab source `265b3c34474d44c1a72774c7d30c9bfff201252c` includes
+the deadline correction and the v0.6.33 runtime. The matching native smoke
+passes two cycles and one backup restart in 56.791 seconds; every retained
+object is independently hashed on both peers. Its maximum heartbeat gap is
+1.124 seconds and its elapsed verdict is `not-measured`.
+
+A fresh actual observation on those programs begins its exercise at
+10:21:55.086777 UTC on 18 October. The harness and observer are frozen
+beside the binary snapshot, so subsequent worktree edits do not change the
+running experiment. Its earliest completion is 21 October at that time.
+The observation remains pending, with zero credit from the failed run; it
+is lab evidence on its recorded source, not current-RC qualification.

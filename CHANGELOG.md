@@ -12,6 +12,8 @@ increments the second number, and every other release the third.
 - The persistent soak runner allows the specified ten-minute hot-file wait
   before requiring matching catalogues and retained file bytes.
 
+## 0.6.34 — 2026-10-18
+
 ### Added
 
 - Resource diagnostics can seed a test dataset in Fast mode, then sample
