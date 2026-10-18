@@ -94,3 +94,18 @@ All-target workspace Clippy completes with zero warnings. Formatting,
 file/header limits, ADR index and spec references pass before the source
 commit. Main is integrated and v0.6.46 independently published and verified
 before this PR proceeds; hosted exact-head validation remains separate.
+
+## Integrated release validation
+
+PR #116, head `ec29315373419987591e3c808226afab5d01c483`, integrates main `95c30ff69ec7a815453e1358b52c75df76b45ac4` before validation.
+CI 39152633541, lab 39152633579 and bridge
+39152633599 pass. v0.6.46 is independently published
+and verified first. Local checks pass all 218 daemon library cases, five
+signature checks (four laws at 1000 cases) and 19 localization checks.
+Seven native invitation/retry/recovery flows pass with guarded disk headroom
+and unchanged program/source SHA fences. Original object-loss, missing
+Problem-table row, disk-reserve failure and interrupted setup remain retained.
+All-target workspace Clippy and repository rules pass with zero warnings.
+Fresh v0.6.47 tag gates and independent archive/install verification are
+required. The wider signing/ownership/input review and resource/HDD/elapsed
+gates remain open; this is a focused materialization correction.
