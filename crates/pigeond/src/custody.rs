@@ -382,12 +382,7 @@ pub async fn holders_for(git: &Git, keys: &BTreeSet<String>) -> BTreeMap<String,
             .map(|key| format!("{key}\n"))
             .collect::<String>();
         let output = git
-            .repo
-            .run_status(
-                &["annex", "whereis", "--batch-keys", "--json"],
-                Some(input.as_bytes()),
-                pigeon_git::DEFAULT_TIMEOUT,
-            )
+            .location_claims(input.as_bytes(), pigeon_git::DEFAULT_TIMEOUT)
             .await;
         if let Ok((Some(0 | 1), output)) = output
             && let Some(locations) = read_holders_batch(&output.stdout, batch)

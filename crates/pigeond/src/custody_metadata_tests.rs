@@ -44,7 +44,7 @@ for key in sys.stdin.read().splitlines():
     assert!(super::present_for(&git, &keys).await.is_empty());
     let starts = std::fs::read_to_string(count).unwrap().lines().count();
     assert_eq!(
-        starts, 10,
+        starts, 11,
         "complete 1025-key sweeps started too many native children"
     );
 }

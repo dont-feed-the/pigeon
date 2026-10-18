@@ -5,6 +5,9 @@ native content shaping ship incrementally in v0.6.x patches; the milestone
 release remains v0.7.0. No reference-tree or foreground HDD resource budget
 has been claimed to pass.
 
+The [location-query checkpoint](location-claims-7.md) records the next native
+metadata optimization and retains the failed full v0.6.47 reference diagnostic.
+
 ## Controller components
 
 `pigeon-core::resources` supplies the Gentle/Balanced/Fast defaults,
