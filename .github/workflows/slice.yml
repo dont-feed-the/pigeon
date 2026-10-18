@@ -18,6 +18,10 @@ on:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
+      people_only:
+        description: Run only the people scenarios for a targeted functional diagnostic
+        type: boolean
+        default: false
       s9_only:
         description: Validate only the fifty random schedules and their traces
         type: boolean
@@ -28,6 +32,10 @@ on:
         description: macos for periodic background validation; Linux for publication
         type: string
         default: linux
+      people_only:
+        description: Run only the people scenarios for a targeted functional diagnostic
+        type: boolean
+        default: false
       s9_only:
         description: Run only the random crash schedule profile
         type: boolean
@@ -49,13 +57,13 @@ env:
 
 jobs:
   slice:
-    if: ${{ !inputs.s9_only }}
+    if: ${{ inputs.people_only || !inputs.s9_only }}
     name: slice (${{ matrix.os }}, ${{ matrix.scenarios }})
     strategy:
       fail-fast: false
       matrix:
         os: ${{ fromJSON(inputs.platform == 'macos' && '["macos-latest"]' || '["ubuntu-24.04"]') }}
-        scenarios: ${{ fromJSON(inputs.platform == 'macos' && '["rest","S5"]' || '["core","crashes","recovery","people","S5"]') }}
+        scenarios: ${{ fromJSON(inputs.people_only && '["people"]' || inputs.platform == 'macos' && '["rest","S5"]' || '["core","crashes","recovery","people","S5"]') }}
       max-parallel: ${{ inputs.platform == 'macos' && 2 || 5 }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
@@ -171,7 +179,7 @@ jobs:
   s9-random:
     name: S9, ${{ matrix.cases }} random crash schedules (${{ matrix.os }}, shard ${{ matrix.shard }})
     # Release tags and by hand; nightly, models-full.yml runs 1000 schedules.
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' || inputs.platform == 'macos'
+    if: ${{ !inputs.people_only && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' || inputs.platform == 'macos') }}
     strategy:
       fail-fast: false
       matrix:

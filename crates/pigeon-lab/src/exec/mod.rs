@@ -11,6 +11,7 @@
 //! Lab devices use one-second rounds; scenario deadlines still bound waits.
 
 mod absence;
+mod bytes;
 pub mod cli;
 mod forge;
 pub mod host;
@@ -497,14 +498,7 @@ impl Exec {
                     Some(l) => yes(l == *is, format!("pigeon says {l:?}")),
                 },
             },
-            Condition::Bytes { on, file, content } => {
-                let want = self.sha(content);
-                let got = observe::sha256_settled(&self.path(*on, file, w));
-                yes(
-                    got.as_deref() == Some(want.as_str()),
-                    format!("sha256 {got:?}"),
-                )
-            }
+            Condition::Bytes { on, file, content } => bytes::condition(self, *on, file, content, w),
             Condition::Absent { on, file } => {
                 let p = self.path(*on, file, w);
                 yes(

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check actual historical data with frozen old/new lab programs.
+"""Check actual historical data with verified frozen old/new programs.
 
 Retired format 1 checks preservation and Needs you, never an automatic upgrade.
 Every fixture is new, and all binaries, original data and observations remain.
@@ -25,12 +25,26 @@ INITIAL = {'notes.txt': b'initial historical notes\n',
 MODES = {'notes.txt': 0o644, 'nested/photo.bin': 0o755}
 
 
-def frozen(binary):
+def frozen(binary, release_archives=False):
     """Bind recorded source to the exact programs supplied by the operator."""
     manifest = json.loads((binary / 'soak-build.json').read_text())
     if not re.fullmatch(r'[0-9a-f]{40}', str(manifest.get('source_revision', ''))):
         raise ValueError('missing frozen source revision')
-    if manifest.get('features') != ['pigeond/lab']:
+    if release_archives:
+        origin = manifest.get('origin', {})
+        if (manifest.get('features') != [] or origin.get('kind') != 'published-release-archives'
+                or origin.get('repository') != 'dont-feed-the/pigeon'
+                or not re.fullmatch(r'v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?', str(origin.get('tag', '')))
+                or not origin.get('published_at')
+                or any(not re.fullmatch(r'[0-9a-f]{64}', str(origin.get(key, '')))
+                       for key in ['package_sha256', 'annex_archive_sha256', 'checksums_sha256'])):
+            raise ValueError('archive fixture requires verified published provenance')
+        annex = binary.parent / 'git-annex/bin/git-annex'
+        with annex.open('rb') as source:
+            digest = hashlib.file_digest(source, 'sha256').hexdigest()
+        if manifest.get('annex', {}).get('sha256') != digest:
+            raise ValueError('published annex differs from its frozen manifest')
+    elif manifest.get('features') != ['pigeond/lab']:
         raise ValueError('upgrade fixture requires the recorded lab build')
     for name in PROGRAMS:
         with (binary / name).open('rb') as source:
@@ -105,10 +119,14 @@ def exclude_sockets(directory, names):
 
 def exercise(args, report):
     old, new = args.old_bin.resolve(), args.new_bin.resolve()
-    report.update(old_build=frozen(old), new_build=frozen(new),
+    report.update(old_build=frozen(old, args.release_archives),
+                  new_build=frozen(new, args.release_archives),
+                  program_origin='published release archives' if args.release_archives else 'rebuilt lab programs',
                   harness_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                   observer_sha256=hashlib.sha256(Path(__file__).with_name('reference-budget').read_bytes()).hexdigest(),
-                  stage='starting', qualification='finite lab fixture; elapsed and resource gates not measured')
+                  stage='starting', qualification=('finite published-archive fixture; elapsed and resource gates not measured'
+                                 if args.release_archives else
+                                 'finite lab fixture; elapsed and resource gates not measured'))
     root = args.root.resolve()
     if root.exists():
         raise ValueError('upgrade fixture root must be new')
@@ -188,6 +206,8 @@ def exercise(args, report):
                 raise RuntimeError('historical restore has incorrect working bytes')
             report['historical_restore_after_upgrade'] = True
             report['verdict'] = 'supported-format-upgrade-passed'
+        frozen(old, args.release_archives)
+        frozen(new, args.release_archives)
         report.update(stage='completed', independently_verified_retained_objects=len(history))
     except BaseException:
         failed = True
@@ -202,6 +222,8 @@ def main():
     parser.add_argument('--new-bin', required=True, type=Path)
     parser.add_argument('--root', required=True, type=Path)
     parser.add_argument('--report', required=True, type=Path)
+    parser.add_argument('--release-archives', action='store_true',
+                        help='require snapshots prepared from verified published release archives')
     parser.add_argument('--retired-format', action='store_true',
                         help='check explicitly retired format 1 preservation, never migration')
     args = parser.parse_args()

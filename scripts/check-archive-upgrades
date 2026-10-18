@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# Own one native ext4 fixture for actual published-program upgrades.
+# Sparse backing and finite byte proofs supply no resource or elapsed verdict.
+set -euo pipefail
+here=$(cd "$(dirname "$0")/.." && pwd)
+old_0513=${1:?usage: check-archive-upgrades OLD_0513_BIN OLD_061_BIN NEW_BIN REPORT_DIR}
+old_061=${2:?}
+new_bin=${3:?}
+reports=${4:?}
+mkdir -p "$reports"
+for report in volume-setup.json native-fixtures.tar.gz \
+    0513-backup.json 0513-backup.log 0513-laptop.json 0513-laptop.log \
+    061-backup.json 061-backup.log 061-laptop.json 061-laptop.log; do
+    [[ ! -e "$reports/$report" ]] || { echo 'upgrade reports must be new' >&2; exit 1; }
+done
+root=$(mktemp -d "${RUNNER_TEMP:-/tmp}/pigeon-archive-upgrades.XXXXXXXX")
+identity=$(python3 -c 'import uuid; print(uuid.uuid4())')
+phase=starting
+setup_report() {
+    python3 - "$reports/volume-setup.json" "$phase" "$1" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]);t=p.with_suffix('.pending')
+t.write_text(json.dumps(dict(phase=sys.argv[2],exit_code=int(sys.argv[3]),filesystem='ext4',qualification='not-measured'),indent=2)+'\n');t.replace(p)
+PY
+}
+mounted_uuid() {
+    local device
+    device=$(findmnt -rn --mountpoint "$root/volume" -o SOURCE)
+    [[ -b "$device" ]] || return 1
+    sudo -n blkid -p -s UUID -o value "$device"
+}
+cleanup() {
+    local cleanup_exit=$?
+    setup_report "$cleanup_exit"
+    if mountpoint -q "$root/volume"; then
+        local actual
+        if ! actual=$(mounted_uuid) || [[ "$actual" != "$identity" ]]; then
+            echo "upgrade mount identity unavailable or changed; retained $root" >&2
+            exit 1
+        fi
+        if ! sudo -n umount "$root/volume"; then
+            echo "upgrade fixture mount busy; retained $root" >&2
+            exit 1
+        fi
+    fi
+    rm -rf -- "$root"
+    exit "$cleanup_exit"
+}
+trap cleanup EXIT
+mkdir "$root/volume"
+# The backup reserve is 5GB. This sparse, owned volume supplies space for
+# that admission rule; only the small synthetic fixtures are written.
+phase=formatting-native-volume
+setup_report 0
+truncate -s 16G "$root/data.img"
+mkfs.ext4 -q -F -U "$identity" "$root/data.img"
+phase=mounting-native-volume
+setup_report 0
+sudo -n mount -o loop "$root/data.img" "$root/volume"
+phase=verifying-mounted-device-identity
+setup_report 0
+[[ $(mounted_uuid) == "$identity" ]]
+sudo -n chown "$(id -u):$(id -g)" "$root/volume"
+mkdir "$root/volume/cases"
+phase=running-upgrade-cases
+setup_report 0
+result=0
+for old in 0513 061; do
+    if [[ "$old" == 0513 ]]; then old_bin=$old_0513; else old_bin=$old_061; fi
+    for first in backup laptop; do
+        name=$old-$first
+        if ! python3 "$here/scripts/check-upgrade-peers" --release-archives \
+            --old-bin "$old_bin" --new-bin "$new_bin" --first "$first" \
+            --root "$root/volume/cases/$name" --report "$reports/$name.json" \
+            > "$reports/$name.log" 2>&1; then
+            result=1
+            break 2
+        fi
+    done
+done
+phase=retaining-native-evidence
+setup_report "$result"
+# Keep synthetic original data and logs before unmounting, including on
+# failure; ephemeral sockets are not durable repository evidence.
+tar --exclude='*.sock' --warning=no-file-ignored -czf "$reports/native-fixtures.tar.gz" \
+    -C "$root/volume/cases" .
+exit "$result"

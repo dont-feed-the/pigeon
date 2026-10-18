@@ -180,3 +180,80 @@ tag gates and independent publication verification remain required.
 A longer full-size Fast diagnostic uses the new operation labels and the
 existing 5400-second preparation bound; it remains separate from budget
 qualification. Resource, actual-archive and elapsed gates remain open.
+
+## Actual published Linux archive checks
+
+`scripts/prepare-upgrade-archive` downloads the published Linux program and
+annex archives, resolves the immutable tag to its source, and checks every
+selected asset's size, available GitHub digest and release SHA-256 entry.
+It extracts only the three regular executable program payloads, rejects
+unsafe annex links and records both archive and executable fingerprints.
+Archived installers are not executed. The v0.5.13 and v0.6.1 payloads are
+prepared locally and their program versions match. Their historical release
+workflows build with `--release --locked` and no lab feature.
+
+The existing upgrade tools accept these snapshots only with the explicit
+`--release-archives` option. Their default still requires frozen lab programs.
+Published origin metadata, every program and the prefix's own annex binary
+are checked; both snapshots are checked again after the data exercise.
+An archive descriptor cannot silently stand in for a lab manifest.
+
+The targeted `lab.yml` profile uses an owned native Linux ext4 volume and
+requires both upgrade orders from v0.5.13 and v0.6.1 to a selected published
+target. Its sparse backing supplies the backup's normal 5GB admission
+reserve; it writes only the small synthetic fixtures and measures no
+resource or HDD budget. The reports, original data snapshots and failed
+downloads are retained separately. Native results must be recorded before
+claiming that this actual-archive matrix passes. Other platforms, broader
+operations and final-RC qualification remain separate work.
+
+## Published-archive original observations
+
+The first native profile, [39138540819](https://github.com/dont-feed-the/pigeon/actions/runs/39138540819),
+prepares all three published snapshots but exits during volume setup before
+any upgrade case. Its original log does not identify the exact failing
+primitive. The fixture now supplies an explicit ext4 UUID, probes the
+mounted block device with the required privileges, verifies that UUID before
+use and unmount, and writes setup-phase receipts.
+
+Changed-source run [39139741322](https://github.com/dont-feed-the/pigeon/actions/runs/39139741322),
+source `c6d06b7f1bed8bbc4495186ba5700af2e839fa5b`, completes all four
+upgrade cases to published v0.6.42. Both upgrade orders from v0.5.13 and
+v0.6.1 preserve public device, person, role and annex identities; a save
+with mixed versions and restoration of the oldest version pass. Each final
+peer independently proves all four retained object hashes and current file
+bytes and modes. The job still fails: evidence collection tries to archive
+ext4's root-owned `lost+found` and tar exits 2 with permission denied.
+Its original reports, logs and synthetic fixture archive remain retained;
+this failed job is not called a successful profile.
+
+The fixture now keeps the synthetic cases in a dedicated directory and
+archives only that directory. Mount identity guards and the backup's normal
+reserve remain unchanged. The originals precede changed-source validation;
+neither observation is an unchanged-source CI retry.
+
+## Complete published-archive profile
+
+Changed-source [run 39140641458](https://github.com/dont-feed-the/pigeon/actions/runs/39140641458),
+source `b3961e381ff71c795d50bb3e5483cf3d3528689f`, passes the complete
+native profile, including original fixture collection and guarded cleanup.
+Both orders pass for each old release:
+
+| Published old version | First peer upgraded | Published target | Final object proofs per peer |
+| --- | --- | --- | --- |
+| v0.5.13 | backup | v0.6.42 | 4 |
+| v0.5.13 | laptop | v0.6.42 | 4 |
+| v0.6.1 | backup | v0.6.42 | 4 |
+| v0.6.1 | laptop | v0.6.42 | 4 |
+
+The common mixed-peer harness SHA-256 is
+`2e6f07b3be369e212e985a4f3bf4366afdfddd75251429d02c4d6a13a36bd222`;
+the upgrade observer is
+`7415d9d812eaa236e2f4ba70ac12363dce44b88417073d1c14e1a4df01afcb50`.
+Artifact 12142035340 is 1204268 bytes, SHA-256
+`6b423854e6e06cc72b727ffc380e55746be08308d677a55543de569ba3bedeec`.
+Every report records all three actual program hashes, each release's own
+pinned annex binary and archive checksums, public identities, original heads
+and the independent current/historical byte proofs. No fixture failure is
+erased by this result. This verifies the supported published Linux baselines;
+other platforms, broader operations and final-RC upgrades remain unqualified.

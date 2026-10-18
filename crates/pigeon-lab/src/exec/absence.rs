@@ -54,6 +54,12 @@ pub(super) fn settled(file: &Path, journal: &Path, relative: &str) -> bool {
     settled_with(file, journal, relative, || {})
 }
 
+/// A valid open transaction can explain a bounded missing-byte observation.
+/// Unknown, malformed or other-path records never extend that observation.
+pub(super) fn in_progress(journal: &Path, relative: &str) -> bool {
+    reading(journal).is_some_and(|bytes| idle(&bytes, relative) == Some(false))
+}
+
 fn settled_with(file: &Path, journal: &Path, relative: &str, after_read: impl FnOnce()) -> bool {
     let Some(before) = reading(journal) else {
         return false;
