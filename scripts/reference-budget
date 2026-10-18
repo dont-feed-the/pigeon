@@ -19,11 +19,23 @@ MEMORY = 300_000_000
 
 
 def run(args, **kwargs):
-    result = subprocess.run([str(x) for x in args], capture_output=True, **kwargs)
+    try:
+        result = subprocess.run([str(x) for x in args], capture_output=True, **kwargs)
+    except subprocess.TimeoutExpired:
+        # TimeoutExpired formats the complete command, including the pasted
+        # invitation. Suppress that exception chain as well as its message.
+        raise RuntimeError('fixture command timed out: ' + Path(str(args[0])).name) from None
     if result.returncode:
         # Arguments may contain an invitation. Never print the command/output.
         raise RuntimeError('fixture command failed: ' + Path(str(args[0])).name)
     return result.stdout
+
+
+def checkpoint(path, report):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix('.pending')
+    temporary.write_text(json.dumps(report, indent=2) + '\n')
+    temporary.replace(path)
 
 
 def counters(text):
@@ -66,7 +78,7 @@ def payload(number, size):
 
 def physical_extent_usage(text):
     # st_blocks can describe uncompressed extents on Btrfs. compsize's
-    # FIEMAP-based Disk Usage column measures their physical allocation.
+    # Btrfs extent-tree Disk Usage column measures physical allocation.
     match = re.search(r'^TOTAL\s+[0-9]+%\s+([0-9]+)\s+([0-9]+)\s+([0-9]+)\s*$', text, re.M)
     if not match:
         raise RuntimeError('unreadable physical compression measurement')
@@ -264,6 +276,9 @@ def measure(args, report):
         report['generated_files'] = count
         if physical is not None:
             report['last_physical_compression_check'] = physical
+        checkpoint(args.report, report)
+    report['stage'] = 'generating reference files'
+    checkpoint(args.report, report)
     expected = generate(root / 'files', count, size, args.compressed, generated)
     if len(set(expected.values())) != count:
         raise RuntimeError('reference files must contain unique content')
@@ -272,6 +287,8 @@ def measure(args, report):
     b = Peer(root, binary, 'backup', not args.smoke)
     started = []
     try:
+        report['stage'] = 'starting native peers'
+        checkpoint(args.report, report)
         for peer in (a, b):
             started.append(peer)
             peer.start()
@@ -283,10 +300,13 @@ def measure(args, report):
         people = next(r['people'] for r in a.cli('people') if r['type'] == 'People')
         person = next(p['name'] for p in people if p['this_person'])
         backup = root / 'backup.git'
+        report['stage'] = 'joining backup'
+        checkpoint(args.report, report)
         b.cli('join', '--backup-machine', code, str(backup), '--name', 'reference-backup',
               '--person', person, '--yes')
         source = root / 'files/.git'
         deadline = time.monotonic() + (300 if args.smoke else 5400)
+        report['stage'] = 'waiting for complete accepted trees and objects'
         while True:
             a.sample()
             b.sample()
@@ -297,6 +317,7 @@ def measure(args, report):
             except RuntimeError:
                 accepted, backup_accepted, copied = 0, 0, 0
             report['last_preparation'] = dict(accepted=accepted, backup_accepted=backup_accepted, objects=copied)
+            checkpoint(args.report, report)
             print(json.dumps(dict(stage='preparing', accepted=accepted, backup_accepted=backup_accepted, objects=copied)), flush=True)
             if accepted == backup_accepted == copied == count:
                 break
@@ -304,10 +325,14 @@ def measure(args, report):
                 raise RuntimeError('reference preparation deadline expired')
             time.sleep(5)
         for repo in (source, backup):
+            report['stage'] = 'independently hashing ' + ('source' if repo == source else 'backup')
+            checkpoint(args.report, report)
             verify_tree(repo, expected, size)
             if objects(repo, expected, size, verify=True) != count:
                 raise RuntimeError('reference objects incomplete')
         report['independent_hash_verification'] = 'both peers, every unique object'
+        report['stage'] = 'collecting complete resource window'
+        checkpoint(args.report, report)
         # No CLI/status/Git polling in the CPU window. The cgroup includes
         # every native child, including exited/reaped processes.
         start = time.monotonic()
@@ -336,6 +361,7 @@ def measure(args, report):
             report['budget_verdict'] = 'failed'
         for repo in (source, backup):
             verify_tree(repo, expected, size)
+        report['stage'] = 'measurement complete'
         if not args.smoke and report['budget_verdict'] != 'passed':
             raise RuntimeError('reference budget exceeded')
     finally:
@@ -351,15 +377,15 @@ def main():
     parser.add_argument('--smoke', action='store_true', help='reduced control-flow check, never a budget pass')
     parser.add_argument('--compressed', action='store_true')
     args = parser.parse_args()
-    report = dict(budget_verdict='not-measured', source=run(['git', 'rev-parse', 'HEAD']).decode().strip())
+    report = dict(budget_verdict='not-measured', source=run(['git', 'rev-parse', 'HEAD']).decode().strip(),
+                  dirty_worktree=bool(run(['git', 'status', '--porcelain'])))
     try:
         measure(args, report)
     except BaseException as error:
         report['error'] = str(error)
         raise
     finally:
-        args.report.parent.mkdir(parents=True, exist_ok=True)
-        args.report.write_text(json.dumps(report, indent=2) + '\n')
+        checkpoint(args.report, report)
 
 
 if __name__ == '__main__':

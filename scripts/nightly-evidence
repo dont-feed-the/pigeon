@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""Record actual scheduled Linux model nights; other release gates remain separate."""
+import argparse
+from datetime import datetime, timedelta, timezone, time
+import json
+from pathlib import Path
+import re
+import subprocess
+
+
+def instant(value):
+    result = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    if result.tzinfo is None:
+        raise ValueError('nightly timestamps require a timezone')
+    return result.astimezone(timezone.utc)
+
+
+def required_jobs():
+    return {
+        'select changed-main checks and weekly audits',
+        'proofs / TLAPS safety and proof mutations',
+        '200 runs of pigeon-core checked by TLC',
+        'blocked slice scenarios (ubuntu-24.04)',
+        *(f'TLA+ models (full set, shard {n})' for n in range(4)),
+        *(f'S9, 50 crash schedules (shard {n})' for n in range(20)),
+    }
+
+
+def assess(run, jobs):
+    reasons = []
+    if run.get('event') != 'schedule' or run.get('head_branch') != 'main':
+        reasons.append('not a scheduled main run')
+    if run.get('status') != 'completed':
+        reasons.append('run incomplete')
+    if run.get('run_attempt') != 1:
+        reasons.append('first-attempt night not established')
+    if not re.fullmatch(r'(?:[0-9a-f]{40}|[0-9a-f]{64})', run.get('head_sha', '')):
+        reasons.append('source missing or malformed')
+    by_name = {}
+    mac = []
+    for job in jobs:
+        name = job['name']
+        if 'macos' in name.lower() or any('macos' in label.lower() for label in job.get('labels', [])):
+            mac.append(dict(name=name, conclusion=job.get('conclusion')))
+            continue
+        if name in by_name:
+            reasons.append('duplicate job: ' + name)
+        by_name[name] = job
+        weekly_skip = name.startswith('independent TLC audits of proved configurations') and job.get('conclusion') == 'skipped'
+        if not weekly_skip and (job.get('status') != 'completed' or job.get('conclusion') != 'success'):
+            reasons.append('job not successful: ' + name)
+    for name in sorted(required_jobs() - by_name.keys()):
+        reasons.append('required job missing: ' + name)
+    return dict(run=run['id'], source=run.get('head_sha'), created_at=run['created_at'],
+                eligible=not reasons, reasons=reasons,
+                jobs=[dict(name=n, conclusion=j.get('conclusion')) for n, j in sorted(by_name.items())],
+                macos_background=mac)
+
+
+def report(runs, jobs, observed):
+    observed = observed.astimezone(timezone.utc)
+    # The current workflow schedules 01:17 UTC. Before that moment the
+    # latest expected night is yesterday; never invent a future missing run.
+    anchor = observed.date() - timedelta(days=observed.time().replace(tzinfo=None) < time(1, 17))
+    days = [anchor - timedelta(days=n) for n in range(7)]
+    by_day = {day: [] for day in days}
+    for run in runs:
+        if run.get('event') != 'schedule' or run.get('head_branch') != 'main':
+            continue
+        date = instant(run['created_at']).date()
+        if date in by_day:
+            by_day[date].append(assess(run, jobs.get(run['id'], [])))
+    nights = [dict(date=day.isoformat(), green=bool(by_day[day]) and all(
+        r['eligible'] for r in by_day[day]), runs=by_day[day]) for day in days]
+    streak = 0
+    for night in nights:
+        if not night['green']:
+            break
+        streak += 1
+    return dict(schema=1, observed_at=observed.isoformat(), latest_expected_night=anchor.isoformat(),
+                definition='Scheduled main runs, complete required Linux families, first attempt; one UTC creation day counts once.',
+                consecutive_green_linux_nights=streak, seven_nights_recorded=streak == 7,
+                nights=nights, other_m6_m7_gates='not established by this report')
+
+
+def api(repository, endpoint, collection):
+    raw = subprocess.check_output(['gh', 'api', '--paginate',
+        f'repos/{repository}/{endpoint}'], text=True, timeout=120)
+    result = []
+    while raw.strip():
+        page, end = json.JSONDecoder().raw_decode(raw.lstrip())
+        result.extend(page[collection])
+        raw = raw.lstrip()[end:]
+    return result
+
+
+def markdown(data, repository):
+    lines = ['# Scheduled model-night evidence', '',
+             'Observed: ' + data['observed_at'], '',
+             f"Consecutive green Linux nights: **{data['consecutive_green_linux_nights']}/7**.", '',
+             '| UTC night | Linux evidence | Scheduled runs |', '| --- | --- | --- |']
+    for night in data['nights']:
+        state = 'green' if night['green'] else ('incomplete or failed' if night['runs'] else 'missing')
+        links = ', '.join(f"[{r['run']}](https://github.com/{repository}/actions/runs/{r['run']})" for r in night['runs'])
+        lines.append(f"| {night['date']} | {state} | {links or '—'} |")
+    lines += ['', 'Each night requires all four full-model shards, twenty S9 shards (1,000 schedules),',
+              '200 core traces, Linux blocked scenarios, selection and proof jobs. Skipped work,',
+              'manual/tag runs and retries do not establish a first-attempt green night.',
+              'Mac results are retained separately. Sources can differ; current-candidate',
+              'conformance, hardware budgets, soak and dogfood still require their own evidence.', '']
+    return '\n'.join(lines)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--repository', default='dont-feed-the/pigeon')
+    parser.add_argument('--json-output', required=True, type=Path)
+    parser.add_argument('--markdown-output', required=True, type=Path)
+    args = parser.parse_args()
+    observed = datetime.now(timezone.utc)
+    runs = api(args.repository, 'actions/workflows/models-full.yml/runs?event=schedule&per_page=100', 'workflow_runs')
+    recent = [r for r in runs if instant(r['created_at']) >= observed - timedelta(days=8)]
+    jobs = {r['id']: api(args.repository, f"actions/runs/{r['id']}/jobs?per_page=100", 'jobs') for r in recent}
+    data = report(recent, jobs, observed)
+    args.json_output.write_text(json.dumps(data, indent=2) + '\n')
+    args.markdown_output.write_text(markdown(data, args.repository))
+    print(json.dumps(dict(consecutive_green_linux_nights=data['consecutive_green_linux_nights'],
+                         seven_nights_recorded=data['seven_nights_recorded'])))
+
+
+if __name__ == '__main__':
+    main()

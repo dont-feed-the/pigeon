@@ -91,3 +91,40 @@ The next head `cef31df4a8389514497f4b922361c713a0b9f92c`, run
 package index confirms the corrected name. No tree or peer starts and no
 budget is measured. Setup now writes an explicit unmeasured JSON verdict
 immediately after checkout so a tool/build failure also retains a report.
+
+## Progress retention and scheduled-night evidence
+
+The initial full-profile attempt at source
+`d017ddb25f69217a6421c4b77de25b93c47f0b2d` is manual lab run
+39097865225, job 117587943721. It remains in preparation at this checkpoint;
+no full-size budget result is claimed. It is not canceled for later tooling
+changes. Later profiler revisions atomically retain generation, join,
+accepted-tree and object-count progress before measurement. They add no
+profiler polling or checkpoint writes during the 600-second window.
+Command timeout tracebacks suppress invocation arguments, including joining
+credentials. Reports identify an uncommitted checkout explicitly.
+
+A later local smoke run independently verifies 32 accepted paths and all 32
+objects on both peers, with the same explicit `not-measured` verdict. The
+preceding smoke run stopped before complete backup content, while the host
+had less free space than the backup's 5 GB reserve. Its failed preparation
+report remains retained; removing owned obsolete build executables restores
+space before the next smoke. This is not full-scale or HDD evidence.
+
+The read-only `scripts/nightly-evidence` report records actual scheduled
+main runs, complete required Linux job families, distinct UTC nights and
+first-attempt outcomes. Tag/manual runs and retries cannot manufacture a
+scheduled first-attempt streak. Missing, skipped or failed required work
+fails closed. Mac outcomes remain separate background evidence. The current
+observation is 0/7 nights: no scheduled 18 October run is observed, and the
+17 October run 39007114840 failed before the later seed-104 refinement.
+The hourly release KPI retains both reports as artifacts.
+
+Automatic tag full-model runs share a concurrency group, so newer tags
+cancel obsolete background tag audits. Scheduled and manual main evidence
+are independent of this group. Linux CI/lab/slice release gates and both
+platform archives remain required. Full-model S9 and blocked-scenario jobs
+require the pinned patched annex, as the ordinary Linux gates already do;
+no case count or model budget is reduced. Ten nightly-report contracts and
+thirteen measurement/ownership contracts pass; the whole script suite has
+107 passing cases at this checkpoint.

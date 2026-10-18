@@ -59,6 +59,8 @@ pub mod install;
 pub mod invite;
 pub mod join;
 mod join_attempt;
+#[cfg(test)]
+mod join_auth_tests;
 pub mod join_in_place;
 mod join_stage;
 mod join_transition;

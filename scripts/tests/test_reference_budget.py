@@ -53,6 +53,28 @@ class ReferenceMeasurement(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 MODULE.physical_extent_usage(invalid)
 
+    def test_a_timed_out_command_does_not_expose_its_invitation_in_any_traceback(self):
+        import subprocess
+        import traceback
+        secret = 'synthetic-sensitive-invitation'
+        command = ['pigeon', 'join', secret]
+        with patch.object(MODULE.subprocess, 'run', side_effect=subprocess.TimeoutExpired(command, 2)):
+            try:
+                MODULE.run(command, timeout=2)
+            except RuntimeError as error:
+                self.assertEqual(str(error), 'fixture command timed out: pigeon')
+                self.assertNotIn(secret, ''.join(traceback.format_exception(error)))
+            else:
+                self.fail('unbounded or unreported timeout')
+
+    def test_partial_progress_is_explicitly_unmeasured_and_atomically_replaced(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'report.json'
+            report = dict(budget_verdict='not-measured', stage='generating', generated_files=1000)
+            MODULE.checkpoint(path, report)
+            self.assertEqual(MODULE.json.loads(path.read_text()), report)
+            self.assertFalse(path.with_suffix('.pending').exists())
+
     def test_process_name_parentheses_do_not_change_start_time_field(self):
         fields = ['S'] + [str(n) for n in range(4, 53)]
         self.assertEqual(MODULE.proc_identity('123 (worker (a) b) ' + ' '.join(fields)), 22)

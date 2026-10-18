@@ -12,6 +12,28 @@ increments the second number, and every other release the third.
 - Diagnostic logs include completed file-scan counts and durations, to help
   investigate resource use.
 
+
+## 0.6.26 — 2026-10-18
+
+### Fixed
+
+- Failed backup joins retain their unfinished repository for retry, preserving
+  files another application added during setup.
+
+## 0.6.25 — 2026-10-18
+
+### Fixed
+
+- Invalid joining requests are refused promptly while a group is busy,
+  without joining its queue of file operations.
+
+## 0.6.24 — 2026-10-18
+
+### Fixed
+
+- Joining tries another admitter when one stops replying, and stops within
+  its overall waiting limit.
+
 ## 0.6.23 — 2026-10-18
 
 ### Fixed
