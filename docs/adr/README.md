@@ -154,3 +154,5 @@ passes; 16 §16.3 lists where each rule now lives.
 | [0081](0081-completed-purge-epochs-fence-custodian-membership.md) | Completed purge epochs fence custodian membership | Proposed |
 | [0082](0082-use-the-maintained-dbus-client-for-linux-notifications.md) | Use the maintained D-Bus client for Linux notifications | Proposed |
 | [0083](0083-supervisors-apply-native-resource-preset-changes.md) | Supervisors apply native resource preset changes | Proposed |
+
+| [0084](0084-bound-incoming-peer-application-work.md) | Bound incoming peer application work | Proposed |

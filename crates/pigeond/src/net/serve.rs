@@ -14,67 +14,23 @@ use std::time::Duration;
 use iroh::endpoint::{RecvStream, SendStream};
 use pigeon_core::filter::{Action, Config, Filter};
 use pigeon_proto::join::{Join, JoinAnswer};
-use pigeon_proto::stream::{
-    ALPN_DEBUG, ALPN_JOIN, ALPN_RECOVERY, ALPN_TELEMETRY, HEADER_VERSION, Refusal, StreamAnswer,
-    StreamHeader,
-};
+use pigeon_proto::stream::{HEADER_VERSION, Refusal, StreamAnswer, StreamHeader};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 use tokio::task::JoinSet;
 
 use super::socket::Net;
-use super::{Admitted, Repository, device_id, read_line};
+use super::{Admitted, Repository, read_line};
 
 /// How long a peer has to send its header.
 const HEADER_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Accepts peers until the endpoint closes.
+#[path = "admission.rs"]
+mod admission;
+
+/// Accepts peers with bounded application connection and stream work.
 pub async fn accept_loop(net: Arc<Net>) {
-    while let Some(incoming) = net.node.endpoint().accept().await {
-        let net = net.clone();
-        tokio::spawn(async move {
-            let connection = match incoming.await {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::debug!(error = %e, "incoming-failed");
-                    return;
-                }
-            };
-            let device = device_id(&connection.remote_id());
-            if connection.alpn() == ALPN_DEBUG {
-                super::debug::serve(&net, &device, &connection).await;
-                return;
-            }
-            if connection.alpn() == ALPN_RECOVERY {
-                super::recovery::serve(&net, &device, &connection).await;
-                return;
-            }
-            if connection.alpn() == ALPN_TELEMETRY {
-                if let Ok(Ok((send, recv))) =
-                    tokio::time::timeout(HEADER_TIMEOUT, connection.accept_bi()).await
-                {
-                    super::telemetry::serve(&net, &device, send, recv).await;
-                }
-                return;
-            }
-            if connection.alpn() == ALPN_JOIN {
-                if let Ok(Ok((send, recv))) =
-                    tokio::time::timeout(HEADER_TIMEOUT, connection.accept_bi()).await
-                {
-                    join(&net, device, send, recv).await;
-                } else {
-                    connection.close(0u32.into(), b"join stream timeout");
-                }
-                return;
-            }
-            while let Ok((send, recv)) = connection.accept_bi().await {
-                let net = net.clone();
-                let device = device.clone();
-                let connection = connection.clone();
-                tokio::spawn(async move { stream(net, device, connection, send, recv).await });
-            }
-        });
-    }
+    admission::accept_loop(net).await;
 }
 
 /// One join exchange: a [`Join`] line, answered by the loops.
