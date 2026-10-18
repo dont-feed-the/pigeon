@@ -5,6 +5,9 @@ native content shaping ship incrementally in v0.6.x patches; the milestone
 release remains v0.7.0. No reference-tree or foreground HDD resource budget
 has been claimed to pass.
 
+The [positive-answer lookup checkpoint](sync-lookups-7.md) records bounded
+native process reuse while keeping every durability and required hash check.
+
 ## Controller components
 
 `pigeon-core::resources` supplies the Gentle/Balanced/Fast defaults,

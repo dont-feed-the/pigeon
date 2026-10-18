@@ -142,6 +142,7 @@ pub async fn relay(
     mut recv: RecvStream,
     server: UnixStream,
 ) {
+    let syncer = net.syncer.session().unwrap_or_else(|| net.syncer.clone());
     let config = Config {
         role: repository.role,
         auth_token: repository.auth_token.clone(),
@@ -237,7 +238,7 @@ pub async fn relay(
                     }
                 }
                 Action::Sync { ticket, key, hash } => {
-                    let sync = net.syncer.sync(repository, &key, hash);
+                    let sync = syncer.sync(repository, &key, hash);
                     syncs.spawn(async move { (ticket, sync.await) });
                 }
                 Action::Repair { key } => {
@@ -255,6 +256,7 @@ pub async fn relay(
         }
     }
     syncs.abort_all();
+    while syncs.join_next().await.is_some() {}
     seen.log(device);
     let _ = to_server.shutdown().await;
     let _ = send.finish();
