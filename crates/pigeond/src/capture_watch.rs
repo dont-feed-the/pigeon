@@ -173,6 +173,15 @@ pub(crate) fn round_started(g: &Group, interval: Duration) {
     state.observed_round = false;
 }
 
+/// An explicit capture decision can change eligibility without changing the
+/// working tree (for example sharing an already-held deletion). Its next
+/// round must observe again even when no new native event can arrive.
+pub(crate) fn invalidate(g: &Group) {
+    let mut known = g.lock();
+    known.capture_watch.clock = Schedule::default();
+    known.capture_watch.retry_after = None;
+}
+
 /// A native registration failure is informational: scans continue normally.
 pub(crate) fn scan_only(g: &Group) -> bool {
     let known = g.lock();

@@ -77,3 +77,27 @@ source remains a separate baseline. No passing 100k-file CPU/RSS window,
 physical-HDD budget, 72-hour soak, seven actual scheduled model nights or
 release-candidate dogfood is inferred from these finite tests. See
 [resources](resources-7.md) and the [roadmap](../roadmap.md).
+
+## First hosted validation: explicit held decisions
+
+Original PR head `7fb385656da6e2c37d2f3136f028d84fea42d42d`, CI
+39111806052, fails native shards 2 and 3 after a held deletion is explicitly
+shared. Folder restore waits 60 seconds for accepted deletion; the mass-delete
+case waits for the shared deletion to reach main. Both retained logs show a
+successful `held-released` Share after the last filesystem deletion event,
+with no later captured deletion. The native watcher cache had acknowledged
+that event while deletion was still held; internal approval creates no user
+filesystem event. This is a source regression, not a timing flake.
+
+The correction invalidates capture observation after successful held choices
+before waking the next round. The original assertions and deadlines remain.
+Original artifacts 12130817884 (9,968,244 bytes, SHA-256
+`dbec2f3fd546b4a548f515ede6d3537089c6bd4b1f98b3489e825198318799fa`)
+and 12130996741 (8,219,362 bytes, SHA-256
+`f7bb118a73975dfe52a49612030fa6fcfd88cb8dd7b52e265a1550fa149545dd`)
+are retained. No unchanged-source CI retry is used.
+
+Corrected local native validation passes all five held, folder-restore and
+watch cases in 24.811 seconds; the formerly failing folder-restore case passes
+in 15.234 seconds and the mass-delete case in 24.811 seconds. Workspace
+all-target Clippy again passes with zero warnings.
