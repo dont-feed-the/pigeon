@@ -45,3 +45,12 @@ Formatting, all-target workspace Clippy with zero warnings, header/length,
 ADR index and spec references pass. A separate native check restarts the backup daemon before retrying. It
 passes in 1.686 seconds with the original UUID and exact personal bytes;
 the accompanying laptop retry passes in 2.490 seconds (2.491 seconds total).
+
+## Integrated release validation
+
+PR #95, head `b502aa41254d6773c38d2ece9e65edb788a96646`, integrates main `c300bd119ae90027c1c9677bb58070998ec3ec3a` before
+validation. CI 39099831774, lab 39099831777 and bridge
+39099831844 pass. v0.6.25 was published and independently
+verified before this candidate. The complete joining/signing review and
+M6/M7 resource and elapsed gates remain open. Fresh v0.6.26 tag gates and
+independent publication/install checks are required before it is released.
