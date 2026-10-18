@@ -105,3 +105,18 @@ The full resource/HDD measurements, remaining global queue/native scheduling,
 catalogue-memory work, security/law audit and elapsed M7 gates remain open.
 A fresh full-size diagnostic must use the changed source and retain its own
 results; the failed original is not retried unchanged.
+
+## Extended native smoke
+
+Clean source `1df86d380165bcd675c39411248592fbdd56341a` is built once
+with the lab feature and all three programs frozen read-only. A 1024-file,
+4096-byte-per-file probe runs two real local peers on an ordinary filesystem.
+Both accept all 1024 names and retain all 1024 unique objects; the harness
+independently hashes both peers' complete trees and every unique object.
+All frozen program hashes match again after the run. This crosses multiple
+bulk-query batches and worker-session rotations.
+
+The report completes with `budget_verdict = not-measured`. Five seconds of
+smoke sampling, lab filesystem seams and small content do not establish the
+100000-file/50GB reference, CPU/RSS, physical-HDD or elapsed gates. The
+final report-only checkpoint does not change the runtime or probe code.
