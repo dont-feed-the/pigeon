@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""Check actual launchd preset switches and native CPU child inheritance.
+
+Run only on a disposable Mac CI host with a GUI user manager. Refuse existing
+pigeon supervision and retain logs on failure. This does not measure disk
+throughput or the foreground HDD budget.
+"""
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+import time
+
+PACKAGING = Path(__file__).resolve().parent
+PERSON_HOME = Path.home()
+AGENTS = PERSON_HOME / 'Library/LaunchAgents'
+STATE = PERSON_HOME / 'Library/Logs/pigeon'
+HINT = STATE / 'resource-priority'
+
+
+def run(*args):
+    return subprocess.check_output(args, text=True, timeout=30).strip()
+
+
+def main():
+    if os.uname().sysname != 'Darwin':
+        raise SystemExit('this native check requires macOS launchd')
+    domain = f'gui/{os.getuid()}'
+    run('launchctl', 'print', domain)
+    if any((AGENTS / f'org.pigeon.{name}.plist').exists()
+           or (AGENTS / f'org.pigeon.{name}.plist').is_symlink()
+           for name in ('pigeond', 'priority', 'update')) or HINT.exists() or HINT.is_symlink():
+        raise SystemExit('refusing to replace existing pigeon supervisor state')
+    retained = Path(os.environ.get('RUNNER_TEMP', tempfile.gettempdir())) / 'pigeon-macos-priority'
+    retained.mkdir(parents=True, exist_ok=True)
+    prefix = Path(tempfile.mkdtemp(prefix='fixture-', dir=retained))
+    binaries = prefix / 'bin'
+    binaries.mkdir()
+    observed = prefix / 'observed.json'
+    observer = prefix / 'observer'
+    library = prefix / 'observer.dylib'
+    source = str(PACKAGING / 'fixtures/macos-priority.c')
+    run('cc', '-Wall', '-Wextra', '-Werror', source, '-o', str(observer))
+    run('cc', '-Wall', '-Wextra', '-Werror', '-dynamiclib', source, '-o', str(library))
+    shutil.copy2(PACKAGING / 'pigeon-service', binaries / 'pigeon-service')
+    daemon = binaries / 'pigeond'
+    daemon.write_text('#!/usr/bin/env python3\n' + f'''import ctypes,json,os,subprocess,time
+from pathlib import Path
+library=ctypes.CDLL({str(library)!r}); sample=library.pigeon_base_priority; sample.argtypes=[]; sample.restype=ctypes.c_int
+value={{'pid':os.getpid(),'own':{{'base_priority':sample(),'nice':os.getpriority(os.PRIO_PROCESS,0)}},'child':json.loads(subprocess.check_output([{str(observer)!r}],text=True))}}
+p=Path({str(observed)!r}); t=p.with_suffix('.tmp'); t.write_text(json.dumps(value)); t.replace(p)
+while True: time.sleep(1)
+''')
+    daemon.chmod(0o755)
+    service = str(binaries / 'pigeon-service')
+    (prefix / 'auto-update-off').touch()
+    STATE.mkdir(parents=True, exist_ok=True)
+    samples = []
+    installed = False
+    passed = False
+    try:
+        # Mark before starting so partial helper failure is cleaned up too.
+        installed = True
+        run(service, '--prefix', str(prefix))
+        previous = None
+        for mode in ('background', 'normal', 'background'):
+            if previous is not None:
+                pending = HINT.with_suffix('.pending')
+                pending.write_text(f'1 {mode}\n')
+                pending.replace(HINT)
+            end = time.monotonic() + 30
+            value = None
+            while time.monotonic() < end:
+                try:
+                    candidate = json.loads(observed.read_text())
+                    if candidate['pid'] != previous:
+                        value = candidate
+                        break
+                except (FileNotFoundError, json.JSONDecodeError):
+                    pass
+                time.sleep(.05)
+            if value is None:
+                raise AssertionError(f'launchd did not replace the {mode} daemon within 30 seconds')
+            for who in ('own', 'child'):
+                assert value[who]['base_priority'] >= 0, value
+            samples.append(value)
+            previous = value['pid']
+            print(json.dumps({'mode': mode, **value}), flush=True)
+            # Equal atomic replacements must not create another daemon.
+            pending = HINT.with_suffix('.pending')
+            pending.write_text(f'1 {mode}\n')
+            pending.replace(HINT)
+            time.sleep(2)
+            assert json.loads(observed.read_text())['pid'] == previous
+        for who in ('own', 'child'):
+            low, normal, restored = [s[who]['base_priority'] for s in samples]
+            assert low == restored and low < normal, {'who': who, 'samples': samples}
+        passed = True
+        print('PASS: actual launchd mode changes, native CPU child inheritance and equal-choice stability')
+    finally:
+        if installed:
+            run(service, '--prefix', str(prefix), '--stop')
+            HINT.unlink(missing_ok=True)
+        # Keep observation/compiler products for the failed CI artifact; a
+        # successful run has no retained temporary installation.
+        if passed:
+            shutil.rmtree(prefix)
+        else:
+            print(f'Failed native fixture retained at {prefix}', flush=True)
+
+
+if __name__ == '__main__':
+    main()
