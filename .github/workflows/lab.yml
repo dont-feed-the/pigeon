@@ -169,9 +169,22 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            target
-          key: rust-lab-ubuntu-24.04-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
-          restore-keys: rust-lab-ubuntu-24.04-
+            target/debug/.fingerprint
+            target/debug/build
+            target/debug/deps/*.rlib
+            target/debug/deps/*.rmeta
+            target/debug/deps/*.so
+            target/debug/deps/*.dylib
+            target/debug/deps/*.d
+            target/.rustc_info.json
+            !target/debug/deps/libpigeon*
+            !target/debug/deps/libgit_annex_p2p_iroh*
+            !target/debug/.fingerprint/pigeon*/**
+            !target/debug/.fingerprint/git-annex-p2p-iroh*/**
+            !target/debug/build/pigeon*/**
+            !target/debug/build/git-annex-p2p-iroh*/**
+          key: rust-lab-deps-v1-ubuntu-24.04-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: rust-lab-deps-v1-ubuntu-24.04-
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: crates/pigeon-web/client/.nvmrc

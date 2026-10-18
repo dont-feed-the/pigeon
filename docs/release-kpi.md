@@ -701,3 +701,30 @@ Required tag runs: CI 39089609307,
 lab 39089609288, slice 39089609292
 and release 39089609293. These are actual publication
 observations, not a sustained throughput or isolated causal-effect claim.
+
+## Native cache transfer checkpoint
+
+PR #91 CI 39092020451 shows a concrete cost before native tests. Job
+117570622354 restores main's Rust cache from 02:59:53 through 03:04:41 UTC:
+**288 seconds**. The cache API records rust-lab Linux cache 9107831502
+as **8,291,805,418 bytes**. The full-target archive includes test executables
+and superseded workspace outputs that do not belong in a dependency cache.
+
+The next rollup changes both native CI restore/save and the isolated ZFS
+consumer to one matching dependency-only path list and a fresh namespace.
+There is no fallback to the old full-target archive. Dependency libraries,
+compiler metadata, native build outputs and proc macros remain cached;
+workspace libraries, build outputs and their fingerprints are excluded so
+old release versions do not accumulate there. Missing workspace fingerprints
+force the current source to rebuild its own artifacts together. Test binaries are built in the current job. The new namespace
+initially builds cold until a main producer saves it. Active main producers
+remain protected through their save step, and existing caches are not deleted.
+
+This is a measured old restore cost and a targeted archive-content change.
+The new archive size, cold-build cost and later restore duration require
+completed hosted observations; no speedup is claimed before those exist.
+
+A local file-size inventory also finds 1,592,405,895 bytes of old workspace
+build outputs, largely repeated web bundles. Their outputs and matching
+fingerprints are excluded together. These local uncompressed bytes are not
+the hosted archive size or a measured hosted speedup.
