@@ -58,8 +58,12 @@ pub async fn accept_loop(net: Arc<Net>) {
                 return;
             }
             if connection.alpn() == ALPN_JOIN {
-                if let Ok((send, recv)) = connection.accept_bi().await {
+                if let Ok(Ok((send, recv))) =
+                    tokio::time::timeout(HEADER_TIMEOUT, connection.accept_bi()).await
+                {
                     join(&net, device, send, recv).await;
+                } else {
+                    connection.close(0u32.into(), b"join stream timeout");
                 }
                 return;
             }

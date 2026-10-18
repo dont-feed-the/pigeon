@@ -542,41 +542,6 @@ impl Node {
         Ok((send, recv))
     }
 
-    /// Sends `join` to the inviter `device` on `pigeon/join/1` and reads its
-    /// answer, on a connection of its own.
-    pub async fn join(
-        &self,
-        device: &str,
-        addresses: Vec<SocketAddr>,
-        join: &Join,
-    ) -> Result<JoinAnswer, NetError> {
-        let key = parse_device_id(device).ok_or_else(|| NetError::Connect("device id".into()))?;
-        let mut addr = EndpointAddr::new(key);
-        for a in addresses {
-            addr = addr.with_ip_addr(a);
-        }
-        let connection = self
-            .endpoint
-            .connect(addr, ALPN_JOIN)
-            .await
-            .map_err(|e| NetError::Connect(e.to_string()))?;
-        let (mut send, mut recv) = connection
-            .open_bi()
-            .await
-            .map_err(|e| NetError::Connect(e.to_string()))?;
-        let mut join = join.clone();
-        join.traceparent = pigeon_telemetry::traceparent();
-        let mut line = serde_json::to_vec(&join).map_err(|e| NetError::Connect(e.to_string()))?;
-        line.push(b'\n');
-        send.write_all(&line)
-            .await
-            .map_err(|e| NetError::Connect(e.to_string()))?;
-        let answer = read_line(&mut recv).await?;
-        let _ = send.finish();
-        connection.close(0u32.into(), b"joined");
-        serde_json::from_slice(&answer).map_err(|e| NetError::Connect(e.to_string()))
-    }
-
     /// Ships one bounded batch to a collector on its own authenticated ALPN.
     /// It never shares an annex connection or delays an annex transfer.
     pub async fn telemetry(
@@ -721,3 +686,5 @@ pub async fn read_line<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Vec<u8>, 
 #[cfg(test)]
 #[path = "private_debug_tests.rs"]
 mod private_debug_tests;
+
+mod join;

@@ -1,0 +1,90 @@
+# Joining/signing review: exchange lifetimes
+
+This is a partial M7 review checkpoint for ADRs 0007 and 0075. It does not
+close the security-review gate, all planned-law/trace coverage, or any
+elapsed release gate. The separately recorded schema/proof checkpoint in
+[join schemas](join-schema-7.md) remains relevant.
+
+## Scope and trust
+
+The transport authenticates the remote Ed25519 device identity. Invitation
+admission separately requires the group's secret, with HMAC bound to the
+new and admitting device IDs. A transport identity alone is not group
+membership. The invitation is intentionally a bearer capability: its
+holder may join an existing person's identity, including an admin, after
+confirmation. That is ADR 0075's decision, not an authentication defect.
+A removed device cannot rejoin as that device; refounding changes the
+invitation. Stolen unlocked signing keys remain outside ADR 0007's model.
+
+The review follows `net/serve.rs`, `net/join.rs`, `invite.rs`, `join.rs`,
+`join_attempt.rs`, `verify.rs`, the recovery exchange and the signature
+adapter. `pigeon-core::sig::verify` requires one SSHSIG, the `git` namespace
+and an Ed25519 key before verifying the exact payload. Authorization is
+then judged against parent rosters. `verify::bootstrap` checks the expected
+genesis, welcome ancestry, full accepted history, and membership at both
+welcome and tip before adoption. These source observations are not a
+comprehensive independent cryptographic audit.
+
+## Concrete lifetime defect and correction
+
+The old invitation dial checks its ten-minute deadline only between
+iterations. Its individual `Node::join` awaits connection, bidirectional
+stream, write and reply without a shared deadline. A peer that receives
+the request but never replies prevents the loop reaching its deadline or
+trying the next admitter. The server also waits without a deadline for a
+join connection to open its first stream, despite bounding the subsequent
+header read to ten seconds.
+
+The real QUIC silent-admitter regression first fails after its four-second
+outer safety bound: the old exchange never returns. The corrected exchange
+uses a single 30-second production deadline across connection, stream,
+write and reply. The invitation dial separately applies its existing
+absolute ten-minute deadline to each await, and bounds its retry sleep by
+that same deadline. A slow admitter may still have signed an idempotent
+welcome before the next attempt; the existing UUID/identity replay checks
+remain unchanged.
+
+An owned connection guard closes the established QUIC connection on
+success, timeout, other error or caller cancellation. The server now bounds
+the initial stream wait by the existing ten-second header budget and closes
+an idle join connection. No join schema, proof, signing rule or refusal is
+relaxed.
+
+## Validation
+
+The silent-admitter case passes after the correction in 2.021 seconds
+using a two-second test exchange budget. It establishes a real QUIC
+connection, reads the complete request, deliberately retains the reply
+half without responding, and checks both timeout and remote closure.
+Separate native cases check closure after caller cancellation and the
+server's actual ten-second idle-stream limit. All 169 daemon-library cases
+pass in 17.941 seconds.
+
+After rebuilding the CLI, daemon and helper, all five invitation and retry
+cases pass in 4.819 seconds, including removed/refounded invitations,
+unknown versions, all altered HMAC positions, idempotent identity/UUID
+admission and failure cleanup followed by retry. An initial local invocation
+used `/tmp`, an unsupported tmpfs, and all five stopped at group creation
+before any join; correcting TMPDIR to the existing native fixture location
+gives the recorded passing run. Those creation refusals are not a network
+regression or a passing join result.
+
+## Findings still requiring work
+
+- Invitation and recovery welcome paths acquire the group busy lock before
+  rejecting an invalid proof or nonmember recovery identity. Authentication
+  should precede that wait and be rechecked under the lock, with regressions
+  that hold the group busy. The existing header bound alone does not bound
+  this application wait.
+- The accept loop spawns per-connection work without an explicit application
+  concurrency cap. Transport limits and timeouts need to be assessed together
+  before claiming resistance to an unauthenticated connection flood.
+- Failed bare-repository joins recursively remove the attempted repository's
+  contents. Concurrent external additions and path substitution require an
+  ownership/race reproduction and preservation check before review closure.
+- Invitation/default-folder validation, recovery import bounds and the full
+  signature/authority law and negative-trace inventory remain in scope.
+
+These are recorded review findings rather than claims of a reproduced
+exploit, data loss or complete remediation. The focused exchange correction
+can ship while the broader gate remains open.

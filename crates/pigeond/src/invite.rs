@@ -318,10 +318,13 @@ pub async fn dial(d: &Daemon, j: &Joining, uuid: &str) -> Result<Welcomed, Strin
         let mut offline = false;
         for admitter in &j.inv.admitters {
             let request = request(d, j, &admitter.device, uuid)?;
-            let answer = d
-                .node
-                .join(&admitter.device, parse(&admitter.addresses), &request)
-                .await;
+            let answer = tokio::time::timeout_at(
+                until,
+                d.node
+                    .join(&admitter.device, parse(&admitter.addresses), &request),
+            )
+            .await
+            .map_err(|_| "inviter-offline".to_owned())?;
             match answer {
                 Ok(JoinAnswer::Welcome {
                     commit,
@@ -346,7 +349,8 @@ pub async fn dial(d: &Daemon, j: &Joining, uuid: &str) -> Result<Welcomed, Strin
         if !offline {
             return Err("invite-not-allowed".into());
         }
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        tokio::time::sleep_until(until.min(tokio::time::Instant::now() + Duration::from_secs(2)))
+            .await;
     }
     Err("inviter-offline".into())
 }
