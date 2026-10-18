@@ -90,7 +90,10 @@ impl Progress {
         }
         let text = std::str::from_utf8(input?.strip_suffix(b"\0")?).ok()?;
         let names: Vec<_> = text.split('\0').collect();
-        if names.len() > 64 || names.iter().any(|name| name.is_empty()) {
+        if names.len() > pigeon_core::capture_batch::MAX_FILES
+            || text.len() + 1 > pigeon_core::capture_batch::MAX_INPUT_BYTES
+            || names.iter().any(|name| name.is_empty())
+        {
             return None;
         }
         let files: BTreeMap<_, _> = names.iter().map(|name| ((*name).to_owned(), 0)).collect();

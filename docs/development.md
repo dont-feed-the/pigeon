@@ -44,6 +44,8 @@ that file disables the tracked campaign. This does not create a scheduled event 
 a green night; see [the campaign policy](reports/model-night-campaign-7.md).
 The [conformance inventory](conformance.md) links accepted decisions to their
 implementation and verification entry points, with the remaining release gates.
+The [persistent native soak runner](reports/lab-soak-7.md) records actual
+elapsed evidence; its smoke mode cannot qualify the 72-hour M7 gate.
 Track actual publication, candidate lead time and blocking jobs with
 `python3 scripts/release-kpi`; its [KPI definition and targets](release-kpi.md)
 explain the hourly reports. An immutable candidate can be retried using the

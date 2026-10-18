@@ -1,0 +1,247 @@
+#!/usr/bin/env python3
+"""Exercise two persistent native lab peers for 72 real hours (M7).
+
+Keeps evidence and fixtures on every exit. Smoke runs never qualify the elapsed
+soak gate. A missing process, changed boot or failed byte proof ends the run;
+restarting the harness starts a new observation, never resumes elapsed credit.
+"""
+import argparse
+import datetime
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import runpy
+import signal
+import shutil
+import subprocess
+import time
+
+REFERENCE = runpy.run_path(str(Path(__file__).with_name('reference-budget')))
+Peer = REFERENCE['Peer']
+checkpoint = REFERENCE['checkpoint']
+SIZE = 4096
+HOURS_72 = 72 * 3600
+
+
+def utc():
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def payload(cycle, slot):
+    return cycle.to_bytes(8, 'big') + slot.to_bytes(8, 'big') + bytes(SIZE - 16)
+
+
+def wait_verified(peers, repositories, current, history, deadline, heartbeat):
+    """Independent accepted-pointer and every retained-object byte proof."""
+    while True:
+        heartbeat()
+        for peer in peers:
+            peer.sample()  # PID/start-time fence; a dead/replaced daemon fails.
+        complete = True
+        for repo in repositories:
+            try:
+                REFERENCE['verify_tree'](repo, current, SIZE)
+                complete = complete and REFERENCE['objects'](repo, history, SIZE, verify=True) == len(history)
+            except (RuntimeError, FileNotFoundError):
+                complete = False
+        if complete:
+            return
+        if time.monotonic() >= deadline:
+            raise RuntimeError('soak accepted-tree/object proof deadline expired')
+        time.sleep(.5)
+
+
+def qualified(report):
+    """A finite fixture or interrupted observation cannot supply elapsed credit."""
+    return (not report['smoke'] and report['stage'] == 'completed'
+            and report['elapsed_seconds'] >= HOURS_72
+            and report['cycles'] >= 2 and report['backup_restarts'] > 0
+            and report['max_heartbeat_gap_seconds'] <= 30 and not report.get('error'))
+
+
+def exercise(args, report):
+    root = args.root.resolve()
+    if root.exists():
+        raise RuntimeError('soak root must be new; prior evidence is never resumed')
+    root.mkdir(parents=True, mode=0o700)
+    binary = args.bin.resolve()
+    manifest = json.loads((binary / 'soak-build.json').read_text())
+    for name in ('pigeon', 'pigeond', 'git-annex-p2p-iroh'):
+        digest = hashlib.file_digest((binary / name).open('rb'), 'sha256').hexdigest()
+        if digest != manifest['sha256'][name]:
+            raise RuntimeError('soak binary differs from its build manifest')
+    report.update(harness_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                  observer_sha256=hashlib.sha256(Path(__file__).with_name('reference-budget').read_bytes()).hexdigest(),
+                  build=manifest, stage='starting', cycles=0, backup_restarts=0,
+                  elapsed_seconds=0, smoke=args.smoke, peer_count=2,
+                  scope='persistent laptop/backup; atomic saves, retained history and backup crashes',
+                  budget_verdict='not-measured', elapsed_gate='not-complete', started_at=utc())
+    checkpoint(args.report, report)
+    started = time.monotonic()
+    last_heartbeat = started
+    report['max_heartbeat_gap_seconds'] = 0
+    boot = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+    def heartbeat():
+        nonlocal last_heartbeat
+        now = time.monotonic()
+        gap = now - last_heartbeat
+        report['max_heartbeat_gap_seconds'] = max(report['max_heartbeat_gap_seconds'], gap)
+        if gap > 30:
+            raise RuntimeError('soak observation heartbeat interrupted')
+        last_heartbeat = now
+
+    peers = [Peer(root, binary, 'laptop', False), Peer(root, binary, 'backup', False)]
+    launched = []
+    failed = False
+    try:
+        for peer in peers:
+            launched.append(peer)
+            peer.start()
+        report['daemon_builds'] = {p.home.name: REFERENCE['daemon_build'](
+            p.cli('doctor', with_progress=True), False) for p in peers}
+        laptop, backup = peers
+        folder = root / 'files'
+        folder.mkdir()
+        current, history = {}, {}
+        for slot in range(16):
+            name = f'file-{slot:02}.bin'
+            data = payload(0, slot)
+            (folder / name).write_bytes(data)
+            current[name] = hashlib.sha256(data).hexdigest()
+            history[current[name]] = current[name]
+        laptop.cli('create', 'Soak', str(folder), '--k', '1', '--name', 'soak-laptop')
+        answers = laptop.cli('invite')
+        invitation = next(r['message']['args']['command'] for r in answers
+                          if r['type'] == 'Said' and r['message']['id'] == 'invitation')
+        code = re.search(r'pgn2-[A-Za-z0-9_-]+', invitation)[0]
+        people = next(r['people'] for r in laptop.cli('people') if r['type'] == 'People')
+        person = next(p['name'] for p in people if p['this_person'])
+        target = root / 'backup.git'
+        backup.cli('join', '--backup-machine', code, str(target), '--name', 'soak-backup',
+                   '--person', person, '--yes')
+        repositories = [folder / '.git', target]
+        last_heartbeat = time.monotonic()
+        wait_verified(peers, repositories, current, history, time.monotonic() + 300, heartbeat)
+        # Setup time supplies no credit to the real elapsed exercise.
+        started = time.monotonic()
+        last_heartbeat = started
+        report['max_heartbeat_gap_seconds'] = 0
+        report.update(stage='exercising', exercise_started_at=utc())
+        duration, interval = (20, 2) if args.smoke else (HOURS_72, 300)
+        while True:
+            if Path('/proc/sys/kernel/random/boot_id').read_text().strip() != boot:
+                raise RuntimeError('soak host rebooted')
+            cycle = report['cycles'] + 1
+            for slot in range(4):
+                name = f'file-{slot:02}.bin'
+                data = payload(cycle, slot)
+                temporary = folder / ('.saving-' + name)
+                with temporary.open('wb') as output:
+                    output.write(data)
+                    output.flush()
+                    os.fsync(output.fileno())
+                temporary.replace(folder / name)
+                current[name] = hashlib.sha256(data).hexdigest()
+                history[current[name]] = current[name]
+            if cycle % (2 if args.smoke else 5) == 0:
+                # Laptop remains live across the deliberate backup outage.
+                backup.sample()
+                os.killpg(backup.pid, signal.SIGKILL)
+                backup.process.wait(timeout=15)
+                if backup.socket.exists():
+                    backup.socket.unlink()
+                time.sleep(1 if args.smoke else 10)
+                backup.start()
+                report['backup_restarts'] += 1
+            wait_verified(peers, repositories, current, history, time.monotonic() + 300, heartbeat)
+            elapsed = time.monotonic() - started
+            record = dict(cycle=cycle, elapsed_seconds=elapsed, observed_at=utc(),
+                          retained_hashes=len(history), backup_restarts=report['backup_restarts'])
+            with (root / 'cycles.jsonl').open('a') as output:
+                output.write(json.dumps(record, sort_keys=True) + '\n')
+                output.flush()
+                os.fsync(output.fileno())
+            report.update(cycles=cycle, elapsed_seconds=elapsed, last_observation=record,
+                          resources={p.home.name: p.sample() for p in peers})
+            checkpoint(args.report, report)
+            if elapsed >= duration and (not args.smoke or cycle >= 2):
+                break
+            # Bounded sleeps retain frequent liveness and boot checks.
+            until = min(started + duration, time.monotonic() + interval)
+            while time.monotonic() < until:
+                heartbeat()
+                for peer in peers:
+                    peer.sample()
+                if Path('/proc/sys/kernel/random/boot_id').read_text().strip() != boot:
+                    raise RuntimeError('soak host rebooted')
+                time.sleep(min(1, max(0, until - time.monotonic())))
+        report.update(stage='completed', completed_at=utc())
+        report['elapsed_gate'] = 'passed' if qualified(report) else 'not-measured'
+    except BaseException as error:
+        failed = True
+        report.update(stage='failed', error=type(error).__name__, elapsed_gate='failed',
+                      elapsed_seconds=time.monotonic() - started)
+        raise
+    finally:
+        try:
+            REFERENCE['stop_peers'](launched, report, failed)
+        except BaseException as error:
+            report.update(stage='failed', cleanup_error=type(error).__name__, elapsed_gate='failed')
+            raise
+        finally:
+            checkpoint(args.report, report)
+
+
+def prepare(args):
+    """Build a clean source once and freeze executable identities for a run."""
+    checkout = Path(__file__).resolve().parents[1]
+    def git(*argv):
+        return subprocess.check_output(['git', *argv], cwd=checkout, text=True).strip()
+    source = git('rev-parse', 'HEAD')
+    if git('status', '--porcelain'):
+        raise RuntimeError('soak preparation requires a clean source checkout')
+    destination = args.bin.resolve()
+    if destination.exists():
+        raise RuntimeError('soak binary snapshot must be new')
+    target = Path(os.environ.get('CARGO_TARGET_DIR', checkout / 'target')).resolve()
+    subprocess.run(['cargo', 'build', '--locked', '--features', 'pigeond/lab',
+                    '-p', 'pigeon', '-p', 'pigeond', '-p', 'git-annex-p2p-iroh'],
+                   cwd=checkout, check=True)
+    if git('rev-parse', 'HEAD') != source or git('status', '--porcelain'):
+        raise RuntimeError('source changed while preparing soak binaries')
+    destination.mkdir(parents=True, mode=0o700)
+    manifest = dict(source_revision=source, features=['pigeond/lab'], sha256={})
+    for name in ('pigeon', 'pigeond', 'git-annex-p2p-iroh'):
+        output = destination / name
+        shutil.copy2(target / 'debug' / name, output)
+        with output.open('rb') as contents:
+            manifest['sha256'][name] = hashlib.file_digest(contents, 'sha256').hexdigest()
+        output.chmod(0o500)
+    checkpoint(destination / 'soak-build.json', manifest)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest='command', required=True)
+    build = commands.add_parser('prepare', help='build and freeze a clean source')
+    build.add_argument('--bin', type=Path, required=True)
+    run = commands.add_parser('run', help='exercise the frozen native lab programs')
+    run.add_argument('--bin', type=Path, required=True)
+    run.add_argument('--root', type=Path, required=True)
+    run.add_argument('--report', type=Path, required=True)
+    run.add_argument('--smoke', action='store_true')
+    args = parser.parse_args()
+    if args.command == 'prepare':
+        prepare(args)
+        return
+    report = dict(schema=1)
+    def interrupted(_number, _frame):
+        raise KeyboardInterrupt('soak interrupted')
+    signal.signal(signal.SIGTERM, interrupted)
+    exercise(args, report)
+
+
+if __name__ == '__main__':
+    main()

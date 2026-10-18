@@ -444,6 +444,7 @@ the same way: `pigeond/tests/codecs.rs` and `net_laws.rs`,
 
 | Law | Module | Test | Model mirrored |
 |---|---|---|---|
+| capture input partitions cover paths exactly once in order, bound file count and NUL-input bytes, pack greedily and progress for oversized single inputs (15 §15.5) | `capture_batch` | `tests/capture_batch.rs` (1000 cases each) | — |
 | startup, fallback and settling require observation; lost/duplicate hints cannot suppress the ten-minute observation; completion acknowledges only its starting revision; saturation stays dirty; backwards time cannot create elapsed credit (ADR 0013) | `change_scan` | `tests/change_scan.rs` (1000 cases each) | — |
 | unknown or lookalike drivers never admit; explicit remote evidence overrides listed drivers; exact platform, role and locality bound the supported set (14 §14.2) | `filesystem` | `tests/filesystem.rs` (1000 cases each) | — |
 | more presence observations never lower a state; a second entry for one custodian changes nothing; custodian order is irrelevant; protected exactly when K distinct custodians count (ADRs 0002, 0046); a new holder never lowers a state | `state` | `tests/state.rs` | — |
