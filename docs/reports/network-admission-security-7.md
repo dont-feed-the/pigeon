@@ -43,3 +43,15 @@ workspace Clippy and the structural repository checks pass.
 
 The follow-up integrates current main `c749d300798f047dfe9139fe14219edfe0dffa30` (the v0.6.32 candidate)
 before its own validation. Its preceding publication keeps separate gates.
+
+## Integrated release validation
+
+PR #102, head `03af2f07ae6bb056c7887c106e4ba02eaa744949`, integrates main `c749d300798f047dfe9139fe14219edfe0dffa30` before
+validation. CI 39116735611, lab 39116735614 and bridge
+39116735576 pass. v0.6.32 is published and independently
+verified before this candidate. Local validation on the integrated source
+passes 187 daemon library cases, including four real QUIC bounds/lifetime
+cases, and seven native invitation/retry/recovery cases, with matching rebuilt
+programs, cargo-deny, zero-warning all-target Clippy and repository checks.
+Fresh v0.6.33 tag gates and independent archive/install checks remain required.
+The wider security review and actual resource/elapsed gates stay separate.
