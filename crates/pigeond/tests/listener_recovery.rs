@@ -18,7 +18,7 @@ use pigeon_proto::{Request, Response};
 
 fn listener_children(root: u32) -> Vec<(u32, u32)> {
     let output = Command::new("ps")
-        .args(["-axo", "pid=,ppid=,args="])
+        .args(["-ww", "-axo", "pid=,ppid=,args="])
         .output()
         .unwrap();
     assert!(output.status.success());

@@ -56,3 +56,8 @@ integrated before this branch's PR validation. Its differences from the
 local native-test parent are release version/lockfile and report/changelog
 metadata; Rust sources compare equal. Final all-target Clippy and structural
 checks run again against this integrated tree before committing.
+
+The process-list fixture explicitly requests unlimited argument width on
+BSD/macOS as well as Linux, so a long helper path cannot hide its listener
+arguments. A local retake checks that fixture adjustment; a hosted Mac
+runtime verdict remains separate periodic evidence.
