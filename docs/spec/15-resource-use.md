@@ -134,6 +134,13 @@ passes with the default (§15.8).
 | on battery below 20 % | pause transfers | pause below 10 % | continue |
 | on a metered network | pause transfers | pause transfers | continue |
 
+The supplied user supervisor applies native priority changes (ADR 0083).
+A Fast/background switch briefly restarts the daemon; Gentle and Balanced
+share a native mode and do not restart one another. A validated local
+`resource-priority` hint requests the mode; it carries no authority. Invalid
+configuration keeps the previous request. A daemon started manually inherits
+its launcher's native policy; system backup services retain normal priority.
+
 **[no ADR: preset values]**. The details are `[resources]` keys of
 `config.toml` ([11 §11.2](11-local-state.md)); one set by hand overrides the
 preset; `scrub_window` defaults to 01:00–06:00. `pigeon pause [DURATION]`

@@ -117,6 +117,7 @@ pub const MESSAGES: &[Entry] = &[
     e("setting-none", &[]),
     e("web-settings-resources", &[]),
     e("web-settings-resources-help", &[]),
+    e("web-settings-resources-restart-help", &[]),
     e("setting-resources-preset", &[]),
     e("setting-resources-upload", &[]),
     e("setting-resources-download", &[]),

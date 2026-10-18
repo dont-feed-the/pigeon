@@ -359,6 +359,7 @@ pub async fn run(d: std::sync::Arc<crate::daemon::Daemon>) {
             match crate::config::load(&d.dirs.config_file()) {
                 Ok(config) => match config.resources.effective() {
                     Ok(settings) => {
+                        crate::resource_supervisor::request(&d.dirs.state, settings.preset);
                         d.node.resources.configure(settings);
                         crate::download_queue::configure(&d, &config);
                     }

@@ -102,6 +102,7 @@ pub mod resolve;
 pub mod resource_config;
 pub mod resource_control;
 pub mod resource_prefs;
+mod resource_supervisor;
 pub mod restore;
 pub mod retention;
 pub mod roster_file;

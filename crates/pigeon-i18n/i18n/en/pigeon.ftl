@@ -908,6 +908,7 @@ why-erased-restoration-missing = The earlier erasure covered these contents. You
 
 web-settings-resources = Use of this computer
 web-settings-resources-help = Gentle keeps sharing in the background. Details you set override the preset. Rates use bytes per second; full-speed windows use this computer’s local time HH:MM-HH:MM, separated by commas. Full-speed windows turn off automatic slowing; your upload and download limits still apply. Power and metered-network waits still apply during full-speed windows.
+web-settings-resources-restart-help = With pigeon’s installed service, switching to or from Fast briefly restarts pigeon. If this page disconnects, wait a moment and reload it. Switching between Gentle and Balanced does not restart pigeon.
 setting-resources-preset = Preset
 setting-resources-upload = Maximum upload (auto or 2 MB/s)
 setting-resources-download = Maximum download (auto or 2 MB/s)

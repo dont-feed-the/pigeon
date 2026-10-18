@@ -7,7 +7,9 @@
 # in the installation's directory leaves the update out.
 # A system installation creates the pigeon account and its state directories;
 # removing the service always keeps that account and all group data.
-# --update-only leaves pigeond as it runs; --print renders pigeond's unit or
+# Native preset watches apply changed CPU/I/O modes (ADR 0083, 15 §15.6).
+# --priority-only applies the request; --update-only leaves pigeond as it runs.
+# --print renders pigeond's unit or
 # agent without changing the machine, --print-update the update's.
 set -eu
 
@@ -23,6 +25,8 @@ while [ $# -gt 0 ]; do
     --print-update) print=update; shift ;;
     --no-start) start=; shift ;;
     --update-only) only=update; shift ;;
+    --priority-only) only=priority; shift ;;
+    --print-priority) print=priority; shift ;;
     *) die "unknown argument $1" ;;
   esac
 done
@@ -30,6 +34,29 @@ case $prefix in /*) ;; *) die "--prefix must name an absolute directory" ;; esac
 case $prefix in *'
 '*) die "the installation directory must fit on one line" ;; esac
 [ -z "$system" ] || [ "$os" = Linux ] || die "backup services require Linux"
+
+# This versioned local hint contains a closed enum, never a command. Refuse
+# incomplete writes and unknown versions before touching a running service.
+if [ "$os" = Darwin ]; then
+  priority_wanted="$HOME/Library/Logs/pigeon/resource-priority"
+else
+  priority_wanted="${XDG_STATE_HOME:-$HOME/.local/state}/pigeon/resource-priority"
+fi
+priority=background
+read_priority() {
+  priority=background
+  [ -z "$system" ] || return 0
+  [ -e "$priority_wanted" ] || return 0
+  [ -f "$priority_wanted" ] && [ ! -L "$priority_wanted" ] || die "invalid resource-priority file"
+  [ "$(wc -c <"$priority_wanted")" -le 16 ] || die "invalid resource-priority length"
+  for mode in background normal; do
+    if printf '1 %s\n' "$mode" | cmp -s - "$priority_wanted"; then priority=$mode; return 0; fi
+  done
+  die "invalid resource-priority request; keeping the current native policy"
+}
+if [ -z "$stop" ] && [ "$only" != update ] && [ "$print" != update ]; then read_priority; fi
+process_type=Background
+[ "$priority" != normal ] || process_type=Standard
 
 # Escape paths for the two supervisors; neither format treats a path as shell.
 unit_path() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/%/%%/g; s/\$/$$/g'; }
@@ -44,7 +71,7 @@ render() {
   <key>ProgramArguments</key><array><string>$(xml "$prefix/bin/pigeond")</string></array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>ProcessType</key><string>Background</string>
+  <key>ProcessType</key><string>$process_type</string>
 </dict></plist>
 PLIST
   elif [ -n "$system" ]; then
@@ -98,6 +125,60 @@ UNIT
   fi
 }
 
+
+# Overrides only the settings owned by pigeon, preserving other drop-ins.
+priority_policy() {
+  if [ "$priority" = normal ]; then nice=0; weight=100; io=best-effort; else nice=10; weight=20; io=idle; fi
+  cat <<UNIT
+# Written by pigeon-service (ADR 0083, spec 15 §15.6).
+[Service]
+Nice=$nice
+IOSchedulingClass=$io
+CPUWeight=$weight
+IOWeight=$weight
+UNIT
+}
+priority_unit() {
+  if [ "$1" = service ]; then
+    cat <<UNIT
+# Written by pigeon-service (ADR 0083, spec 15 §15.6).
+[Unit]
+Description=apply pigeon's choice of native resource priority
+
+[Service]
+Type=oneshot
+ExecStart="$(unit_path "$prefix/bin/pigeon-service")" --prefix "$(unit_path "$prefix")" --priority-only
+UNIT
+  else
+    cat <<UNIT
+# Written by pigeon-service (ADR 0083, spec 15 §15.6).
+[Unit]
+Description=watch pigeon's choice of native resource priority
+
+[Path]
+PathChanged=$(printf '%s' "$priority_wanted" | sed 's/%/%%/g')
+Unit=pigeon-priority.service
+
+[Install]
+WantedBy=paths.target
+UNIT
+  fi
+}
+priority_agent() {
+  cat <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>org.pigeon.priority</string>
+  <key>ProgramArguments</key><array>
+    <string>$(xml "$prefix/bin/pigeon-service")</string>
+    <string>--prefix</string><string>$(xml "$prefix")</string><string>--priority-only</string>
+  </array>
+  <key>WatchPaths</key><array><string>$(xml "$priority_wanted")</string></array>
+  <key>ProcessType</key><string>Background</string>
+</dict></plist>
+PLIST
+}
 
 # The update: the latest release's pigeon-install, downloaded whole before it
 # runs, with --unattended, which leaves a build of main and a choice of
@@ -211,6 +292,12 @@ write() {
 
 if [ "$print" = pigeond ]; then render; exit 0; fi
 if [ "$print" = update ]; then render_update; exit 0; fi
+if [ "$print" = priority ]; then
+  if [ "$os" = Darwin ]; then priority_agent; else
+    for kind in service path; do echo "# pigeon-priority.$kind"; priority_unit "$kind"; done
+  fi
+  exit 0
+fi
 uid=$(id -u)
 if [ -n "$system" ]; then
   [ "$uid" = 0 ] || die "run the system installation as root"
@@ -250,7 +337,8 @@ supervise_pigeond() {
   unit="$units/pigeond.service"
   if [ -n "$stop" ]; then
     if manager; then ctl disable --now pigeond.service; fi
-    rm -f "$unit"
+    rm -f "$unit" "$units/pigeond.service.d/40-pigeon-resources.conf"
+    rmdir "$units/pigeond.service.d" 2>/dev/null || true
     if [ -n "$system" ]; then ctl daemon-reload; fi
     return
   fi
@@ -264,6 +352,10 @@ supervise_pigeond() {
   fi
   mkdir -p "$units"
   render >"$unit"
+  if [ -z "$system" ]; then
+    mkdir -p "$units/pigeond.service.d"
+    priority_policy | write "$units/pigeond.service.d/40-pigeon-resources.conf" || true
+  fi
   [ -n "$start" ] || return 0
   if manager; then
     ctl daemon-reload
@@ -271,6 +363,57 @@ supervise_pigeond() {
     ctl restart pigeond.service
   else
     echo "pigeon-service: no systemd user session; start $prefix/bin/pigeond yourself"
+  fi
+}
+
+# Apply only a changed native mode. The manager creates the replacement
+# process at normal priority before applying its new policy; the daemon
+# never attempts an unprivileged increase of its own nice/I/O priority.
+apply_priority() {
+  [ -z "$system" ] || return 0
+  if [ "$os" = Darwin ]; then
+    plist="$HOME/Library/LaunchAgents/org.pigeon.pigeond.plist"
+    [ -f "$plist" ] || return 0
+    if render | write "$plist"; then
+      bootout org.pigeon.pigeond pigeond
+      [ -z "$start" ] || launchctl bootstrap "gui/$uid" "$plist"
+    fi
+  else
+    [ -f "$units/pigeond.service" ] || return 0
+    mkdir -p "$units/pigeond.service.d"
+    if priority_policy | write "$units/pigeond.service.d/40-pigeon-resources.conf"; then
+      if [ -n "$start" ] && manager; then ctl daemon-reload; ctl try-restart pigeond.service; fi
+    fi
+  fi
+}
+
+supervise_priority() {
+  [ -z "$system" ] || return 0
+  if [ "$os" = Darwin ]; then
+    agent="$HOME/Library/LaunchAgents/org.pigeon.priority.plist"
+    if [ -n "$stop" ]; then
+      bootout org.pigeon.priority "the priority watch"
+      rm -f "$agent"
+      return
+    fi
+    mkdir -p "${agent%/*}" "${priority_wanted%/*}"
+    if priority_agent | write "$agent"; then bootout org.pigeon.priority "the priority watch"; fi
+    if [ -n "$start" ] && ! launchctl print "gui/$uid/org.pigeon.priority" >/dev/null 2>&1; then
+      launchctl bootstrap "gui/$uid" "$agent"
+    fi
+  else
+    if [ -n "$stop" ]; then
+      if manager; then ctl disable --now pigeon-priority.path 2>/dev/null || true; fi
+      rm -f "$units/pigeon-priority.service" "$units/pigeon-priority.path"
+      if manager; then ctl daemon-reload; fi
+      return
+    fi
+    mkdir -p "$units" "${priority_wanted%/*}"
+    for kind in service path; do priority_unit "$kind" | write "$units/pigeon-priority.$kind" || true; done
+    if [ -n "$start" ] && manager; then
+      ctl daemon-reload
+      ctl enable --quiet --now pigeon-priority.path
+    fi
   fi
 }
 
@@ -311,5 +454,18 @@ supervise_update() {
   fi
 }
 
-[ -n "$only" ] || supervise_pigeond
+if [ "$only" = priority ]; then apply_priority; exit 0; fi
+if [ -z "$only" ]; then
+  # Stop the watch first so a concurrent final request cannot restart a
+  # daemon being uninstalled. Data and the hint remain for later installs.
+  if [ -n "$stop" ]; then supervise_priority; supervise_pigeond; else
+    supervise_pigeond
+    supervise_priority
+    # Reconcile a write between initial rendering and enabling the watch.
+    read_priority
+    process_type=Background
+    [ "$priority" != normal ] || process_type=Standard
+    apply_priority
+  fi
+fi
 supervise_update

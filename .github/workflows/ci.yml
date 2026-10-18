@@ -92,6 +92,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: checked archives, supervisor configuration and preserved user data
         run: python3 -B -m unittest discover -s packaging/tests -v
+      - name: native presets restart under systemd and children inherit CPU and I/O priority
+        if: runner.os == 'Linux'
+        run: |
+          set -e
+          sudo loginctl enable-linger "$(id -un)"
+          sudo systemctl start "user@$(id -u).service"
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          scripts/check-native-priority
 
   models:
     needs: [changes, proofs]

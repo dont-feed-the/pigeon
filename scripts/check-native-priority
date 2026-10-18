@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""Check real user-systemd priority transitions and native child inheritance.
+
+Run only on a disposable Linux CI host with a working user manager. Refuse
+an existing pigeon installation; this fixture never replaces user units.
+"""
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+import time
+
+ROOT = Path(__file__).resolve().parents[1]
+PERSON_HOME = Path.home()
+UNITS = Path(os.environ.get('XDG_CONFIG_HOME', PERSON_HOME / '.config')) / 'systemd/user'
+STATE = Path(os.environ.get('XDG_STATE_HOME', PERSON_HOME / '.local/state')) / 'pigeon'
+HINT = STATE / 'resource-priority'
+
+
+def run(*args):
+    return subprocess.check_output(args, text=True).strip()
+
+
+def main():
+    if os.uname().sysname != 'Linux':
+        raise SystemExit('this native check requires Linux systemd')
+    run('systemctl', '--user', 'show-environment')
+    if any((UNITS / name).exists() for name in ('pigeond.service', 'pigeond.service.d',
+                                                'pigeon-priority.service', 'pigeon-priority.path',
+                                                'pigeon-update.service', 'pigeon-update.timer',
+                                                'pigeon-update.path')) or HINT.exists() or HINT.is_symlink():
+        raise SystemExit('refusing to replace existing pigeon supervisor state')
+    # No identity or repository is created by this scheduling-only fixture.
+    with tempfile.TemporaryDirectory(prefix='pgn-priority-') as temporary:
+        prefix = Path(temporary)
+        binaries = prefix / 'bin'
+        binaries.mkdir()
+        observed = prefix / 'observed.json'
+        shutil.copy2(ROOT / 'packaging/pigeon-service', binaries / 'pigeon-service')
+        observer = "import os,subprocess,json; print(json.dumps({'nice':os.getpriority(os.PRIO_PROCESS,0),'io':subprocess.check_output(['ionice','-p',str(os.getpid())],text=True).strip()}))"
+        daemon = binaries / 'pigeond'
+        daemon.write_text('#!/usr/bin/env python3\n' + f'''import json,os,subprocess,time
+from pathlib import Path
+child=json.loads(subprocess.check_output(['python3','-c',{observer!r}],text=True))
+value={{'pid':os.getpid(),'own':{{'nice':os.getpriority(os.PRIO_PROCESS,0),'io':subprocess.check_output(['ionice','-p',str(os.getpid())],text=True).strip()}},'child':child}}
+p=Path({str(observed)!r}); t=p.with_suffix('.tmp'); t.write_text(json.dumps(value)); t.replace(p)
+while True: time.sleep(1)
+''')
+        daemon.chmod(0o755)
+        service = str(binaries / 'pigeon-service')
+        # The updater must not fetch or install anything during this fixture.
+        (prefix / 'auto-update-off').touch()
+        STATE.mkdir(parents=True, exist_ok=True)
+        try:
+            run(service, '--prefix', str(prefix))
+            previous = None
+            for mode, nice, weight, io in (('background', 10, 20, 'idle'),
+                                            ('normal', 0, 100, 'best-effort'),
+                                            ('background', 10, 20, 'idle')):
+                if previous is not None:
+                    # Exercise the actual path watch, including atomic replacement.
+                    pending = HINT.with_suffix('.pending')
+                    pending.write_text(f'1 {mode}\n')
+                    pending.replace(HINT)
+                end = time.monotonic() + 30
+                value = None
+                while time.monotonic() < end:
+                    try:
+                        candidate = json.loads(observed.read_text())
+                        if candidate['pid'] != previous and candidate['own']['nice'] == nice:
+                            value = candidate
+                            break
+                    except (FileNotFoundError, json.JSONDecodeError):
+                        pass
+                    time.sleep(.05)
+                if value is None:
+                    raise AssertionError(f'native {mode} priority did not apply within 30 seconds')
+                for who in ('own', 'child'):
+                    assert value[who]['nice'] == nice, value
+                    assert value[who]['io'].startswith(io), value
+                properties = run('systemctl', '--user', 'show', 'pigeond.service', '-p', 'CPUWeight', '-p', 'IOWeight')
+                assert f'CPUWeight={weight}' in properties and f'IOWeight={weight}' in properties, properties
+                print(json.dumps({'mode': mode, **value, 'properties': properties.splitlines()}), flush=True)
+                previous = value['pid']
+                # An equal request must not restart it again.
+                pending = HINT.with_suffix('.pending')
+                pending.write_text(f'1 {mode}\n')
+                pending.replace(HINT)
+                time.sleep(2)
+                assert int(run('systemctl', '--user', 'show', 'pigeond.service', '-p', 'MainPID', '--value')) == previous
+        finally:
+            run(service, '--prefix', str(prefix), '--stop')
+            HINT.unlink(missing_ok=True)
+        print('PASS: native background/normal/background transitions, child inheritance and equal-choice stability')
+
+
+if __name__ == '__main__':
+    main()
