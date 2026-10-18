@@ -910,3 +910,26 @@ tag gates pass on their first attempt. Candidate lead is 609 seconds; the
 publication interval is 889 seconds, with 41 lead samples and 40 completed
 intervals. Both targets are met. The new soak starts its clock from zero
 after the original harness deadline failure; 72 actual hours remain required.
+
+## v0.6.36 publication observation
+
+[v0.6.36](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.36), source
+`c298375d0dac14017dfdc2222f83539cf51137d6`, is published at 11:20:34 UTC
+on 18 October. Independent verification passes six assets, four archive
+checksums, pinned annex, native Linux installation and completions. All four
+tag workflows pass first attempt. Candidate lead is 669 seconds; the gap
+from v0.6.35 is 1,892 seconds. Both targets are met, with 42 lead samples
+and 41 completed publication intervals. Historical-data checks improve
+upgrade evidence; they do not establish the remaining M7 elapsed gates.
+
+## v0.6.37 publication observation
+
+[v0.6.37](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.37), source
+`79d290b6f3d7885f76be199630d29e6faeaba1bb`, is published at 12:08:09 UTC
+on 18 October. Six assets, four archive checksums, native Linux installation,
+pinned annex and completions are independently verified. All four tag gates
+pass on their first attempt. Candidate lead is 642 seconds; the completed
+publication interval is 2,855 seconds. Both targets are met, with 43 lead
+samples and 42 completed intervals. The bounded pointer proof reduces
+129 Git processes to three in its controlled fixture; full reference and
+foreground-HDD budgets remain separate, unproved gates.

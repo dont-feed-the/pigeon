@@ -12,6 +12,20 @@ increments the second number, and every other release the third.
 - With debug logging enabled, capture diagnostics show whether filesystem
   hints trigger a scan, without recording file names.
 
+### Fixed
+
+- An observed file deletion wakes background capture even if its filesystem
+  notification was lost. Repeated views stay quiet, and held deletions
+  still wait for a decision.
+
+
+## 0.6.37 — 2026-10-18
+
+### Fixed
+
+- Saving many files starts fewer Git processes when checking captured bytes,
+  while keeping the same file, content and executable-mode checks.
+
 ## 0.6.36 — 2026-10-18
 
 ### Added

@@ -86,6 +86,26 @@ pub fn start_with_crash(
     name: &'static str,
     crash: Option<&str>,
 ) -> Daemon {
+    start_inner(root, sockets, name, crash, &[])
+}
+
+/// Starts one fixture daemon with isolated fault-injection environment.
+pub fn start_with_env(
+    root: &Path,
+    sockets: &Path,
+    name: &'static str,
+    env: &[(&str, &str)],
+) -> Daemon {
+    start_inner(root, sockets, name, None, env)
+}
+
+fn start_inner(
+    root: &Path,
+    sockets: &Path,
+    name: &'static str,
+    crash: Option<&str>,
+    env: &[(&str, &str)],
+) -> Daemon {
     let home = root.join(name);
     std::fs::create_dir_all(home.join("config")).unwrap();
     let config = "[network]\nbind = \"127.0.0.1:0\"\nmdns = false\nrelays = \"off\"\n\n[loops]\ninterval_seconds = 1\n";
@@ -100,6 +120,7 @@ pub fn start_with_crash(
     if let Some(point) = crash {
         cmd.env("PIGEON_LAB_CRASH", format!("{point}:1"));
     }
+    cmd.envs(env.iter().copied());
     cmd.arg("--home")
         .arg(&home)
         .env("PIGEON_SOCKET", &socket)

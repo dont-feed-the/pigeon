@@ -155,7 +155,8 @@ pub(crate) async fn pending(g: &Group, prefix: &str) -> Result<BTreeSet<String>,
         return Ok(BTreeSet::new());
     };
     let table = crate::conflicts_file::read(g).unwrap_or_default();
-    Ok(crate::capture_status::changes(g)
+    let mut deletions = BTreeSet::new();
+    let pending: BTreeSet<String> = crate::capture_status::changes(g)
         .await?
         .into_iter()
         .filter_map(letters)
@@ -168,8 +169,24 @@ pub(crate) async fn pending(g: &Group, prefix: &str) -> Result<BTreeSet<String>,
                 && !crate::suggest::unchanged(g, &table, path, *y == 'D')
                 && (*y == 'D' || kind(worktree, path).is_none())
         })
-        .map(|(_, _, path)| path)
-        .collect())
+        .map(|(_, y, path)| {
+            if y == 'D' {
+                deletions.insert(path.clone());
+            }
+            path
+        })
+        .collect();
+    // Only deletions need no quiet/hot-file wait. Unchanged pending saves
+    // and held deletions must not create a self-waking scan loop.
+    if !deletions.is_empty() {
+        let held = crate::held_file::read(g);
+        let waiting = held.held();
+        deletions.retain(|path| !waiting.contains(path) || held.released.contains(path));
+    }
+    if !crate::evict::unsettled(g) {
+        crate::capture_watch::observed_deletions(g, prefix, &deletions);
+    }
+    Ok(pending)
 }
 
 /// The paths whose file differs from the index, untracked ones included:

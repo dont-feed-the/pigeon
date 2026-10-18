@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use pigeon_core::change_scan::Schedule;
+use pigeon_core::change_scan::{Deletions, Schedule};
 use pigeon_sys::change_hints::{Reading, Watch};
 
 use crate::capture::Captured;
@@ -16,6 +16,9 @@ use crate::trace::Tracer;
 #[derive(Debug, Default)]
 pub(crate) struct State {
     watch: Option<Watch>,
+    wake: Option<Arc<tokio::sync::Notify>>,
+    invalidated: bool,
+    deletions: Deletions,
     attempted: bool,
     register_after: Option<Instant>,
     retry_after: Option<Instant>,
@@ -26,6 +29,30 @@ pub(crate) struct State {
 }
 
 impl State {
+    fn invalidate(&mut self) {
+        self.clock = Schedule::default();
+        self.invalidated = true;
+        if let Some(wake) = &self.wake {
+            wake.notify_one();
+        }
+    }
+
+    fn observed_deletions(&mut self, prefix: &str, paths: &std::collections::BTreeSet<String>) {
+        if self.deletions.observe(prefix, paths)
+            && self.retry_after.is_none_or(|at| at <= Instant::now())
+        {
+            self.invalidate();
+        }
+    }
+
+    fn completed(&mut self, time: u64, revision: u64) {
+        // A pending observation discovered after this capture started still
+        // needs a new round; this completion cannot acknowledge it.
+        if !self.invalidated {
+            self.clock.completed(time, revision);
+        }
+    }
+
     fn reading(&self) -> Reading {
         self.watch.as_ref().map_or(
             Reading {
@@ -71,6 +98,7 @@ async fn register(g: &Group, wake: &Arc<tokio::sync::Notify>) {
     let (register, previous) = {
         let mut known = g.lock();
         let state = &mut known.capture_watch;
+        state.wake.get_or_insert_with(|| wake.clone());
         let reading = state.reading();
         let register = reading.rebuild
             || (!reading.healthy && state.register_after.is_none_or(|at| at <= now));
@@ -128,6 +156,16 @@ pub(crate) async fn background(
             return None;
         }
         let reading = state.reading();
+        // Fault injection is compiled out of ordinary release daemons.
+        #[cfg(feature = "lab")]
+        let reading = if std::env::var_os("PIGEON_LAB_SUPPRESS_CHANGE_HINTS").is_some() {
+            Reading {
+                revision: 0,
+                ..reading
+            }
+        } else {
+            reading
+        };
         let settling = known
             .capture_schedule
             .next_due()
@@ -147,6 +185,7 @@ pub(crate) async fn background(
             native = reading.healthy,
             settling,
             due,
+            invalidated = state.invalidated,
             clock = ?state.clock,
             "capture-observation-admission"
         );
@@ -155,6 +194,7 @@ pub(crate) async fn background(
         }
         reading
     };
+    g.lock().capture_watch.invalidated = false;
     let result = crate::capture::background(g, me, tracer).await;
     let mut known = g.lock();
     known.capture_watch.observed_round = true;
@@ -162,7 +202,10 @@ pub(crate) async fn background(
         let poll = (done.busy > 0 && known.capture_schedule.next_due().is_none())
             .then(|| Instant::now() + Duration::from_secs(30));
         let state = &mut known.capture_watch;
-        state.clock.completed(time.unwrap_or(0), reading.revision);
+        if done.removed > 0 {
+            state.deletions.consumed();
+        }
+        state.completed(time.unwrap_or(0), reading.revision);
         state.retry_after = None;
         state.poll_after = poll;
     } else {
@@ -190,8 +233,18 @@ pub(crate) fn round_started(g: &Group, interval: Duration) {
 /// round must observe again even when no new native event can arrive.
 pub(crate) fn invalidate(g: &Group) {
     let mut known = g.lock();
-    known.capture_watch.clock = Schedule::default();
     known.capture_watch.retry_after = None;
+    known.capture_watch.invalidate();
+}
+
+/// A fresh authoritative deletion observation can recover a lost native hint.
+/// Preserve the existing failure retry delay; this is no new user decision.
+pub(crate) fn observed_deletions(
+    g: &Group,
+    prefix: &str,
+    paths: &std::collections::BTreeSet<String>,
+) {
+    g.lock().capture_watch.observed_deletions(prefix, paths);
 }
 
 /// A native registration failure is informational: scans continue normally.
@@ -203,6 +256,56 @@ pub(crate) fn scan_only(g: &Group) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_dirty_observation_wakes_an_owner_waiting_for_the_periodic_scan() {
+        let wake = Arc::new(tokio::sync::Notify::new());
+        let mut state = State {
+            wake: Some(wake.clone()),
+            ..State::default()
+        };
+        state.clock.completed(10, 3);
+        assert!(!state.clock.due(11, 3, true, false));
+        state.retry_after = Some(Instant::now() + Duration::from_secs(5));
+        state.invalidate();
+        assert!(state.clock.due(11, 3, true, false));
+        assert!(state.retry_after.is_some());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), wake.notified())
+                .await
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn repeated_pending_deletions_preserve_a_quiet_clock_and_failures_keep_their_retry() {
+        let paths = std::collections::BTreeSet::from(["a.txt".to_owned()]);
+        let mut state = State::default();
+        state.observed_deletions("", &paths);
+        assert!(state.invalidated);
+        state.invalidated = false;
+        state.completed(10, 3);
+        state.observed_deletions("a.txt", &paths);
+        assert!(!state.invalidated);
+        assert!(!state.clock.due(11, 3, true, false));
+        state.retry_after = Some(Instant::now() + Duration::from_secs(5));
+        state.observed_deletions("", &std::collections::BTreeSet::from(["b.txt".to_owned()]));
+        assert!(!state.invalidated);
+        assert!(state.retry_after.is_some());
+    }
+
+    #[test]
+    fn a_later_invalidation_survives_the_current_observations_completion() {
+        let mut state = State::default();
+        state.clock.completed(10, 3);
+        state.invalidated = false; // The next observation has started.
+        state.invalidate(); // Another observer sees a pending change meanwhile.
+        state.completed(11, 3);
+        assert!(state.clock.due(11, 3, true, false));
+        state.invalidated = false;
+        state.completed(12, 3);
+        assert!(!state.clock.due(12, 3, true, false));
+    }
 
     #[test]
     fn an_unobserved_expired_timer_keeps_the_ordinary_round_cadence() {

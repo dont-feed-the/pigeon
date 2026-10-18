@@ -219,3 +219,94 @@ fn a_folder_created_after_startup_observes_later_file_saves() {
         bytes
     );
 }
+
+fn main_has_file(daemon: &common::Daemon, folder: &std::path::Path) -> bool {
+    let out = common::git_env(
+        Command::new("git")
+            .current_dir(folder)
+            .args(["ls-tree", "main", "--", "observed.txt"]),
+        &daemon.home,
+    )
+    .output()
+    .unwrap();
+    out.status.success() && !out.stdout.is_empty()
+}
+
+fn observed_deletion_admissions(home: &std::path::Path) -> usize {
+    std::fs::read_dir(home.join("state/logs"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| {
+            std::fs::read_to_string(entry.path())
+                .unwrap_or_default()
+                .lines()
+                .filter(|line| {
+                    serde_json::from_str::<serde_json::Value>(line).is_ok_and(|row| {
+                        row["message"] == "capture-observation-admission"
+                            && row["native"] == true
+                            && row["watch_revision"] == 0
+                            && row["invalidated"] == true
+                            && row["due"] == true
+                    })
+                })
+                .count()
+        })
+        .sum()
+}
+
+#[test]
+fn a_pending_observation_wakes_capture_even_when_native_hints_are_lost() {
+    let Some((_tmp, root, sockets)) = dirs() else {
+        return;
+    };
+    let config = root.join("lost/config");
+    std::fs::create_dir_all(&config).unwrap();
+    std::fs::write(config.join("config.toml"),
+        "[network]\nbind=\"127.0.0.1:0\"\nmdns=false\nrelays=\"off\"\n[loops]\ninterval_seconds=600\n").unwrap();
+    let daemon = common::start_with_env(
+        &root,
+        sockets.path(),
+        "lost",
+        &[("PIGEON_LAB_SUPPRESS_CHANGE_HINTS", "1")],
+    );
+    let folder = root.join("files");
+    std::fs::create_dir(&folder).unwrap();
+    std::fs::write(folder.join("observed.txt"), b"a retained native version\n").unwrap();
+    let created = pigeon(
+        &daemon,
+        &["create", "Lost hints", folder.to_str().unwrap(), "--k", "1"],
+    );
+    assert!(said(&created, "created", "group").is_some());
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !main_has_file(&daemon, &folder) {
+        assert!(Instant::now() < deadline, "initial capture never completed");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    std::thread::sleep(Duration::from_secs(1));
+    let before = observed_deletion_admissions(&daemon.home);
+    std::fs::remove_file(folder.join("observed.txt")).unwrap();
+    std::thread::sleep(Duration::from_secs(3));
+    // A real public observation discovers the pending deletion. It must wake
+    // capture without waiting for either the 600-second loop or fallback.
+    let history = pigeon(
+        &daemon,
+        &["history", folder.join("observed.txt").to_str().unwrap()],
+    );
+    assert!(
+        history.iter().any(|reply| matches!(reply, pigeon_proto::Response::History { versions } if !versions.is_empty()))
+    );
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while main_has_file(&daemon, &folder) {
+        assert!(
+            Instant::now() < deadline,
+            "an observed pending deletion did not wake capture\n{}",
+            common::logs(&[&daemon])
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert!(
+        observed_deletion_admissions(&daemon.home) > before,
+        "no pending observation admitted capture independently of native hints"
+    );
+}

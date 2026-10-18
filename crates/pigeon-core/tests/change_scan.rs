@@ -73,3 +73,61 @@ fn backwards_completion_cannot_create_past_due_credit(tc: TestCase) {
     assert!(!schedule.due(now, 0, true, false));
     assert!(schedule.due(now + PERIOD_MS, 0, true, false));
 }
+
+fn deletions(tc: &TestCase, prefix: &str) -> std::collections::BTreeSet<String> {
+    let bits = tc.draw(gs::integers::<u32>());
+    let salt = tc.draw(gs::integers::<u16>());
+    (0..32)
+        .filter(|n| bits & (1 << n) != 0)
+        .map(|n| format!("{prefix}/{salt}-{n}"))
+        .collect()
+}
+
+#[hegel::test(test_cases = 1000)]
+fn repeated_deletion_observations_cannot_create_a_self_waking_loop(tc: TestCase) {
+    let paths = deletions(&tc, "a");
+    let mut hints = pigeon_core::change_scan::Deletions::default();
+    assert_eq!(hints.observe("", &paths), !paths.is_empty());
+    for _ in 0..tc.draw(gs::integers::<u8>().max_value(32)) {
+        assert!(!hints.observe("", &paths));
+    }
+}
+
+#[hegel::test(test_cases = 1000)]
+fn disjoint_folder_observations_commute_and_keep_each_others_requests(tc: TestCase) {
+    let a = deletions(&tc, "a");
+    let b = deletions(&tc, "b");
+    let mut ab = pigeon_core::change_scan::Deletions::default();
+    let mut ba = ab.clone();
+    assert_eq!(ab.observe("a", &a), !a.is_empty());
+    assert_eq!(ab.observe("b", &b), !b.is_empty());
+    assert_eq!(ba.observe("b", &b), !b.is_empty());
+    assert_eq!(ba.observe("a", &a), !a.is_empty());
+    assert_eq!(ab, ba);
+    assert!(!ab.observe("a", &a));
+    assert!(!ab.observe("b", &b));
+    assert!(!ab.observe("a", &b)); // Out-of-scope paths never grant a wake.
+    assert!(!ab.observe("b", &b));
+}
+
+#[hegel::test(test_cases = 1000)]
+fn a_clean_folder_rearms_its_own_deletions_without_rearming_other_views(tc: TestCase) {
+    let a = deletions(&tc, "a");
+    let b = deletions(&tc, "b");
+    let mut hints = pigeon_core::change_scan::Deletions::default();
+    let all = a.union(&b).cloned().collect();
+    hints.observe("", &all);
+    assert!(!hints.observe("a", &Default::default()));
+    assert!(!hints.observe("b", &b));
+    assert_eq!(hints.observe("a", &a), !a.is_empty());
+}
+
+#[hegel::test(test_cases = 1000)]
+fn a_completed_deletion_rearms_an_identical_later_deletion(tc: TestCase) {
+    let paths = deletions(&tc, "a");
+    let mut hints = pigeon_core::change_scan::Deletions::default();
+    hints.observe("", &paths);
+    hints.consumed();
+    assert_eq!(hints.observe("", &paths), !paths.is_empty());
+    assert!(!hints.observe("", &paths));
+}

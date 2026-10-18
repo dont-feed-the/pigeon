@@ -41,3 +41,36 @@ impl Schedule {
         self.observed = Some((now_ms.max(previous), starting_revision));
     }
 }
+
+/// Coalesce authoritative deletion observations independently of native hints.
+/// Remembered paths are volatile scheduling requests, never deletion authority.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Deletions {
+    known: std::collections::BTreeSet<String>,
+}
+
+impl Deletions {
+    /// Observe exactly `prefix`; other views cannot erase its neighbours.
+    /// Return true only for a newly observed deletion. Repeated reads stay quiet.
+    pub fn observe(&mut self, prefix: &str, paths: &std::collections::BTreeSet<String>) -> bool {
+        let new = paths
+            .iter()
+            .filter(|p| crate::restore::under(p, prefix))
+            .any(|p| !self.known.contains(p));
+        self.known
+            .retain(|p| !crate::restore::under(p, prefix) || paths.contains(p));
+        self.known.extend(
+            paths
+                .iter()
+                .filter(|p| crate::restore::under(p, prefix))
+                .cloned(),
+        );
+        new
+    }
+
+    /// A capture which removes paths has consumed its earlier requests.
+    /// A later identical deletion, including after restoration, can wake again.
+    pub fn consumed(&mut self) {
+        self.known.clear();
+    }
+}

@@ -58,8 +58,8 @@ macOS suite, a qualification night or a resource-budget result.
 
 Local validation passes both watch cases and both original deletion
 fixtures together in 19.565 seconds. The watcher save/delete case takes
-5.115 seconds without status polling. Hosted macOS results are still pending;
-Linux success does not diagnose the original macOS deletion failures.
+5.115 seconds without status polling. The first focused macOS result is recorded below; Linux success alone
+does not diagnose the original macOS deletion failures.
 
 ## Preserve completed compilation caches
 
@@ -77,3 +77,57 @@ including main-only and native shard-0-only restrictions. Pull requests
 still restore main's caches and cannot save them. Failed builds cannot
 reach the save; failed later tests retain their original failure verdict.
 Actual warm-cache and end-to-end timing effects remain to be measured.
+
+## Focused macOS result and deletion recovery
+
+Focused run 39124778503/job 117667506936 checks exact source
+`226cd00d210a297074a71d5ddc2bede973f303dc`. Four of five cases pass:
+the native lock fixture (0.199 seconds), new-folder watching (8.036),
+save/delete watching (10.955) and time-based restore (34.743). The free/keep
+case again fails its deleted-file view after 123.842 seconds. This is not
+a full or focused passing Mac run.
+
+Its new admission diagnostics show watcher revision 14 acknowledged before
+the deletion, then remaining at 14 with `due=false` while authoritative
+candidate scans report one pending change. This identifies a skipped
+background observation after a lost hint; why the native event was lost
+remains unproved. Original artifact 12135782659 is 3116478 bytes, SHA-256
+`d6be2393b5afdbebae4107498ac8f456d608c28eb17706e7aeda42f704c72a0b`.
+The archive and complete job log are preserved before any further run.
+
+The correction reuses actual pending-deletion observations from existing
+history, file-view and telemetry reads to wake the owner. Ordinary pending
+saves retain quiet/hot scheduling. Held deletions and unsettled free/install
+journals do not request a wake. A small core algebra coalesces repeated
+observations across folder scopes, clears requests after captured removals
+and rearms paths after clean observations or restoration. Four new laws
+run 1000 cases each. Existing capture and authority checks still decide
+what is committed; these requests are never positive deletion authority.
+
+Failure retries keep their delay. A new invalidation arriving during an
+observation survives its completion. The test-only frozen-revision seam
+is compiled out of ordinary daemons. With native revision frozen, the
+read-only history case fails before the correction in 16.911 seconds;
+the public `status` command is unsuitable as a negative control because
+it already captures explicitly. The initial pilot assertion assumed one
+history response, but history may include a separate explanation; it is
+corrected before the causal RED result. A later fixture guard assumed no
+other pending observer could win; telemetry can correctly discover the
+deletion first, so the final check instead requires a new recorded
+invalidation with the native revision still frozen. All pilots are retained.
+
+Final local and hosted validation of the coalesced correction follow below;
+the earlier four passing Mac cases do not verify this new correction.
+
+## Coalesced local validation
+
+The integrated correction passes all ten change-scan laws (1000 cases
+each, including the four new coalescing laws), 194 daemon library tests
+and all eight focused native cases in 36.395 seconds. The loss-injection
+case completes in 7.708 seconds with a new authoritative invalidation
+and the native revision still frozen. A separate broader run passes
+59 install, backup-history and suggestion cases. All 139 script contracts,
+workflow actionlint, zero-warning workspace/all-target Clippy and repository
+checks pass. These checks use current main v0.6.37 integrated before
+submission. Fresh hosted Linux and corrected focused Mac results remain
+required evidence before claiming their respective passes.
