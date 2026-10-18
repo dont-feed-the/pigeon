@@ -119,9 +119,37 @@ async fn native_metadata_batches_keep_every_present_object_and_absent_answer_bou
     let present = super::present_for(&git, &keys).await;
     assert_eq!(present.len(), expected.len());
     assert!(!present.contains_key(&absent));
-    for (key, bytes) in expected {
-        assert_eq!(std::fs::read(&present[&key]).unwrap(), bytes);
+    let syncer = crate::net::sync::AnnexSyncer::new(Default::default(), git.repo.env.clone());
+    let repository = crate::net::Repository {
+        group: "native-metadata".into(),
+        git_dir: root.path().join(".git"),
+        worktree: Some(root.path().into()),
+        role: pigeon_core::filter::Role::Laptop,
+        auth_token: None,
+        checking: false,
+    };
+    use crate::net::sync::Syncer;
+    for (key, bytes) in &expected {
+        assert_eq!(
+            std::fs::read(&present[key]).unwrap().as_slice(),
+            bytes.as_slice()
+        );
+        assert!(syncer.sync(&repository, key, true).await.unwrap());
     }
+    let (key, _) = expected.first_key_value().unwrap();
+    // The private fixture deliberately damages annex's read-only object.
+    // Ordinary clients never make an object writable.
+    std::fs::set_permissions(&present[key], std::fs::Permissions::from_mode(0o600)).unwrap();
+    std::fs::write(&present[key], b"later corruption").unwrap();
+    assert!(!syncer.sync(&repository, key, true).await.unwrap());
+    std::fs::set_permissions(
+        present[key].parent().unwrap(),
+        std::fs::Permissions::from_mode(0o700),
+    )
+    .unwrap();
+    std::fs::remove_file(&present[key]).unwrap();
+    assert!(syncer.sync(&repository, key, false).await.is_err());
+    assert!(syncer.sync(&repository, &absent, false).await.is_err());
 }
 
 fn sizes(tc: &hegel::TestCase) -> Vec<String> {

@@ -43,6 +43,16 @@ impl Pool {
         git: &Git,
         key: &str,
     ) -> Option<std::path::PathBuf> {
+        self.local_object_for(git, key, pigeon_git::DEFAULT_TIMEOUT)
+            .await
+    }
+
+    pub(crate) async fn local_object_for(
+        &mut self,
+        git: &Git,
+        key: &str,
+        timeout: Duration,
+    ) -> Option<std::path::PathBuf> {
         let bytes = key.len().saturating_add(1);
         if self.locations.as_ref().is_none_or(|state| {
             state.repository != git.repo.dir
@@ -64,12 +74,8 @@ impl Pool {
         let state = self.locations.as_mut()?;
         state.queries += 1;
         state.bytes = state.bytes.saturating_add(bytes);
-        let answer = state
-            .batch
-            .call(key, pigeon_git::DEFAULT_TIMEOUT)
-            .await
-            .ok()?;
-        crate::custody::batch_object(git, key, &answer).await
+        let answer = state.batch.call(key, timeout).await.ok()?;
+        crate::custody::batch_object_for(git, key, &answer, timeout).await
     }
 
     pub(crate) async fn copy(

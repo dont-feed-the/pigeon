@@ -5,6 +5,12 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Changed
+
+- Backup copy checks start fewer helper programs.
+
 ## 0.6.48 — 2026-10-18
 
 ### Fixed

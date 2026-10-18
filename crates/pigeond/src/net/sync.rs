@@ -19,6 +19,13 @@ use sha2::{Digest, Sha256};
 
 use super::Repository;
 
+#[path = "sync_lookup.rs"]
+mod lookup;
+
+#[cfg(test)]
+#[path = "sync_lookup_tests.rs"]
+mod lookup_tests;
+
 /// A sync of one object: whether its hash matched (true if none was asked).
 pub type SyncFuture = Pin<Box<dyn Future<Output = io::Result<bool>> + Send>>;
 
@@ -27,6 +34,11 @@ pub type RepairFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
 /// Makes the object of a key durable in a repository, and checks it.
 pub trait Syncer: Send + Sync + 'static {
+    /// An optional stream-owned implementation. Its native lookup processes
+    /// must end with the stream or after bounded inactivity.
+    fn session(&self) -> Option<std::sync::Arc<dyn Syncer>> {
+        None
+    }
     /// Syncs the object of `key` and its directories to disk; if `hash`,
     /// also checks the object's SHA-256 against the key.
     fn sync(&self, repository: &Repository, key: &str, hash: bool) -> SyncFuture;
@@ -45,6 +57,7 @@ const REPAIR_ATTEMPTS: usize = 10;
 pub struct AnnexSyncer {
     resources: std::sync::Arc<crate::resource_control::Controller>,
     env: GitEnv,
+    lookup: std::sync::Arc<lookup::Lookup>,
 }
 
 impl AnnexSyncer {
@@ -53,7 +66,11 @@ impl AnnexSyncer {
         resources: std::sync::Arc<crate::resource_control::Controller>,
         env: GitEnv,
     ) -> Self {
-        Self { resources, env }
+        Self {
+            resources,
+            env,
+            lookup: Default::default(),
+        }
     }
 
     fn repository(&self, repository: &Repository) -> Repo {
@@ -92,8 +109,17 @@ fn directory(repository: &Repository) -> PathBuf {
 }
 
 impl Syncer for AnnexSyncer {
+    fn session(&self) -> Option<std::sync::Arc<dyn Syncer>> {
+        Some(std::sync::Arc::new(Self::new(
+            self.resources.clone(),
+            self.env.clone(),
+        )))
+    }
+
     fn sync(&self, repository: &Repository, key: &str, hash: bool) -> SyncFuture {
         let repo = self.repository(repository);
+        let lookup = self.lookup.clone();
+        let git_dir = repository.git_dir.clone();
         let key = key.to_owned();
         let provider = (repository.role == pigeon_core::filter::Role::Custodian)
             .then(|| (repository.git_dir.clone(), repository.group.clone()));
@@ -101,11 +127,7 @@ impl Syncer for AnnexSyncer {
             if !plausible_key(&key) {
                 return Err(io::Error::new(io::ErrorKind::InvalidInput, "key"));
             }
-            let out = repo
-                .run(&["annex", "contentlocation", &key], None, CALL_TIMEOUT)
-                .await
-                .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
-            let object = repo.dir.join(out.text().trim_end());
+            let object = lookup.object(repo, &git_dir, &key).await?;
             tokio::task::spawn_blocking(move || {
                 if let Some((git_dir, group)) = provider {
                     crate::shared_pool::received(&git_dir, &group, &key, &object)?;
