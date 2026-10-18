@@ -143,3 +143,18 @@ cases, 139 script contracts, actionlint, zero-warning Clippy and repository
 checks. Fresh v0.6.38 tag gates and independent archive/install verification
 remain required. Corrected Mac evidence is recorded separately; no full Mac
 suite, reference/HDD budget or actual elapsed gate is inferred.
+
+## Corrected hosted Mac result
+
+Run 39126618628/job 117673006519 checks integrated head
+`e5c7f7601647731c59dc374aa1610db95f535544` and passes all six selected
+cases in 39.685 seconds, without a retry. The lock fixture takes 0.089
+seconds; frozen-hint deletion recovery 8.809; time-based restore 21.248;
+save/delete watching 30.677; and the previously failing free/keep case
+39.683. The new-folder case also passes. Original failures remain retained.
+
+PR #107 merges after CI 39126619540, lab 39126619545 and bridge 39126619537
+pass, then ships in independently verified v0.6.38. The focused result is
+linked from its release notes. Full periodic Mac run 39128408817 uses source
+`24dcd39b382b7e3a961b8554c5002c6a15d04a4d`; it is pending and cannot
+be replaced by the focused pass. Resource and elapsed gates remain open.

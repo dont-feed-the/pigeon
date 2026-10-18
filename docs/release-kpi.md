@@ -933,3 +933,16 @@ publication interval is 2,855 seconds. Both targets are met, with 43 lead
 samples and 42 completed intervals. The bounded pointer proof reduces
 129 Git processes to three in its controlled fixture; full reference and
 foreground-HDD budgets remain separate, unproved gates.
+
+## v0.6.38 publication observation
+
+[v0.6.38](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.38), source
+`24dcd39b382b7e3a961b8554c5002c6a15d04a4d`, is published at 12:40:06 UTC
+on 18 October. Independent verification passes six assets, four archive
+checksums, pinned annex, native Linux installation and completions. All
+four tag gates pass first attempt. Candidate lead is 546 seconds; the
+publication gap is 1,917 seconds. Both targets are met, with 44 lead samples
+and 43 completed intervals. The corrected focused Mac run passes all six
+cases on integrated PR #107; full periodic run 39128408817 is separate,
+pending background evidence. Cache-save reordering is not assigned a
+causal end-to-end speedup from this one bundled publication.

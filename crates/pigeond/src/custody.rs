@@ -348,7 +348,9 @@ pub async fn holders_for(git: &Git, keys: &BTreeSet<String>) -> BTreeMap<String,
         .filter(|key| !key.is_empty() && !key.contains(['\n', '\r', '\0']))
         .collect();
     let mut all = BTreeMap::new();
-    for batch in keys.chunks(64) {
+    let began = std::time::Instant::now();
+    let mut reported = std::time::Instant::now();
+    for (batch_number, batch) in keys.chunks(64).enumerate() {
         let input = batch
             .iter()
             .map(|key| format!("{key}\n"))
@@ -365,6 +367,20 @@ pub async fn holders_for(git: &Git, keys: &BTreeSet<String>) -> BTreeMap<String,
             && let Some(locations) = read_holders_batch(&output.stdout, batch)
         {
             all.extend(locations);
+        }
+        let processed = batch_number
+            .saturating_add(1)
+            .saturating_mul(64)
+            .min(keys.len());
+        if reported.elapsed() >= Duration::from_secs(5) || processed == keys.len() {
+            tracing::debug!(target: "pigeond::work_phases",
+                processed,
+                total = keys.len(),
+                observed = all.len(),
+                elapsed_us = u64::try_from(began.elapsed().as_micros()).unwrap_or(u64::MAX),
+                "location-claims-progress"
+            );
+            reported = std::time::Instant::now();
         }
     }
     all
@@ -421,7 +437,9 @@ pub async fn present_for(
         .filter(|key| !key.is_empty() && !key.contains(['\n', '\r', '\0']))
         .collect();
     let mut all = BTreeMap::new();
-    for batch in keys.chunks(64) {
+    let began = std::time::Instant::now();
+    let mut reported = std::time::Instant::now();
+    for (batch_number, batch) in keys.chunks(64).enumerate() {
         let input = batch
             .iter()
             .map(|key| format!("{key}\n"))
@@ -465,6 +483,19 @@ pub async fn present_for(
             if let Some(object) = object.filter(|p| p.is_file()) {
                 all.insert((*key).clone(), object);
             }
+        }
+        let processed = batch_number
+            .saturating_add(1)
+            .saturating_mul(64)
+            .min(keys.len());
+        if reported.elapsed() >= Duration::from_secs(5) || processed == keys.len() {
+            tracing::debug!(target: "pigeond::work_phases", processed,
+                total = keys.len(),
+                observed = all.len(),
+                elapsed_us = u64::try_from(began.elapsed().as_micros()).unwrap_or(u64::MAX),
+                "content-presence-progress"
+            );
+            reported = std::time::Instant::now();
         }
     }
     all

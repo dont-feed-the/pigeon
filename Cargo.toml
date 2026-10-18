@@ -118,3 +118,11 @@ opt-level = 3
 
 [profile.dev.package.sha2]
 opt-level = 3
+
+# Development portal sign-in uses release-style code generation for the same
+# password algorithm and work factors; application code stays in debug mode.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3

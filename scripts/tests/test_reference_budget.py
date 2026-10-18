@@ -146,6 +146,45 @@ class ReferenceMeasurement(unittest.TestCase):
             self.assertEqual(events[-1]['io_pressure_avg10'], 12.5)
             self.assertNotIn(secret, MODULE.json.dumps(events))
 
+    def test_latest_phase_progress_survives_many_scans_within_the_same_private_envelope(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            logs = home / 'state/logs'
+            logs.mkdir(parents=True)
+            rows = [dict(message='capture-ingestion-started', total=100000, path='private-name'),
+                    dict(message='capture-ingestion-progress', processed=1024, total=100000),
+                    dict(message='capture-ingestion-progress', processed=2048, total=100000,
+                         error='private-native-output', observed='private-value')]
+            rows += [dict(message='candidate-scan-complete', entries=n) for n in range(100)]
+            (logs / 'pigeond.ndjson').write_text('\n'.join(MODULE.json.dumps(row) for row in rows))
+            events = MODULE.diagnostic_events(home)
+            self.assertEqual(len(events), 50)
+            phases = [event for event in events if event['message'].startswith('capture-ingestion')]
+            self.assertEqual(len(phases), 2)
+            self.assertEqual(phases[-1]['processed'], 2048)
+            self.assertNotIn('private-', MODULE.json.dumps(events))
+            self.assertEqual(events[-1]['entries'], 99)
+
+    def test_preparation_timeline_reuses_isolated_samples_at_a_bounded_cadence(self):
+        report = {}
+        progress = dict(accepted=1, backup_accepted=0, objects=0)
+        resources = dict(laptop=dict(cpu_us=10, rss=20), backup=dict(cpu_us=30, rss=40))
+        MODULE.preparation_sample(report, 0, progress, resources)
+        progress['accepted'] = 2
+        resources['laptop']['rss'] = 99
+        MODULE.preparation_sample(report, 29, progress, resources)
+        MODULE.preparation_sample(report, -1, progress, resources)
+        self.assertEqual(len(report['preparation_samples']), 1)
+        self.assertEqual(report['preparation_samples'][0]['progress']['accepted'], 1)
+        self.assertEqual(report['preparation_samples'][0]['resources']['laptop']['rss'], 20)
+        MODULE.preparation_sample(report, 30, progress, resources)
+        self.assertEqual(len(report['preparation_samples']), 2)
+        for step in range(2, 300):
+            MODULE.preparation_sample(report, step * 30, progress, resources)
+        self.assertEqual(len(report['preparation_samples']), 256)
+        self.assertEqual(report['preparation_samples'][-1]['elapsed_seconds'], 8970)
+        self.assertGreater(report['preparation_samples'][0]['elapsed_seconds'], 0)
+
     def test_failure_inventory_counts_without_claiming_hash_verification_or_live_processes(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
