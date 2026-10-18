@@ -946,3 +946,14 @@ and 43 completed intervals. The corrected focused Mac run passes all six
 cases on integrated PR #107; full periodic run 39128408817 is separate,
 pending background evidence. Cache-save reordering is not assigned a
 causal end-to-end speedup from this one bundled publication.
+
+## v0.6.39 publication observation
+
+[v0.6.39](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.39), source
+`9f8929e67e0ee8d61b0f9f04ee051a77244993f8`, is published at 13:12:11 UTC
+on 18 October. Six assets, four archive checksums, pinned annex, native Linux
+installation and completions are independently verified. All four tag gates
+pass first attempt. Candidate lead is 669 seconds and publication gap is
+1,925 seconds, meeting both targets. There are 45 lead samples and 44 completed
+intervals. Preparation observability improves diagnosis; the full resource
+and elapsed gates remain open.
