@@ -56,6 +56,7 @@ pub async fn settings(
                 h2 id="settings-resources" { (r.id("web-settings-resources")) }
                 p { (r.id("web-settings-resources-help")) }
                 p { (r.id("web-settings-resources-power-help")) }
+                p { (r.id("web-settings-resources-restart-help")) }
                 @for s in rows.iter().filter(|s| s.key.starts_with("resources.")) { (setting(&r, s, &form.0)) }
             }
         }

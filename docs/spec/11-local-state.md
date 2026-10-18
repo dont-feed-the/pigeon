@@ -26,6 +26,7 @@
 | `<state>/logs/` | JSON log lines, daily files, seven kept (ADR 0022, [12](12-observability.md)) |
 | `<state>/telemetry/` | the bounded local OTLP-JSON files (ADR 0025) |
 | `<state>/update-wanted` | the newer release a peer runs; each write asks the supervisor for the automatic update ([14 §14.5](14-platforms-and-packaging.md), ADR 0076) |
+| `<state>/resource-priority` | the last validated native scheduling request, `1 background` or `1 normal` followed by a newline; the user supervisor watches atomic replacements (ADR 0083, [15 §15.6](15-resource-use.md)) |
 | `<state>/traces/` | trace events, only with the `tla-trace` feature (ADR 0008) |
 | `<state>/joins/<group>` | the annex UUID of a join not yet done, so that a retry the inviter already welcomed resumes it; removed once the join succeeds ([09 §9.6](09-network-and-joining.md)) |
 | `<cache>/view/` | read-only copies opened by `pigeon view` (ADR 0035) |

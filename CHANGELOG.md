@@ -5,6 +5,15 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Choosing Fast now asks the installed user service for normal CPU and disk
+  priority. Returning to Gentle or Balanced restores background priority.
+  Switching between those native modes briefly restarts pigeon; switching
+  between Gentle and Balanced keeps it running.
+
 ## 0.6.17 — 2026-10-18
 
 ### Fixed

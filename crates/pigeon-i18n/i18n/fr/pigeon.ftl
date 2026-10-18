@@ -916,6 +916,7 @@ why-erased-restoration-missing = L’effacement précédent couvrait ce contenu.
 
 web-settings-resources = Utilisation de cet ordinateur
 web-settings-resources-help = Discret laisse le partage en arrière-plan. Vos réglages détaillés remplacent le préréglage. Les débits sont en octets par seconde ; séparez les plages HH:MM-HH:MM selon l’heure locale de cet ordinateur par des virgules. Les plages à pleine vitesse désactivent le ralentissement automatique ; vos limites d’envoi et de réception restent applicables. Les attentes liées à la batterie et au réseau limité restent applicables pendant ces plages.
+web-settings-resources-restart-help = Avec le service installé de pigeon, passer à Rapide ou en sortir redémarre brièvement pigeon. Si la page se déconnecte, attendez un instant puis rechargez-la. Les changements entre Discret et Équilibré ne redémarrent pas pigeon.
 setting-resources-preset = Préréglage
 setting-resources-upload = Envoi maximal (auto ou 2 MB/s)
 setting-resources-download = Réception maximale (auto ou 2 MB/s)
