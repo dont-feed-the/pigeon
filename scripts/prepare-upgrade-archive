@@ -6,6 +6,7 @@ program hashes. Extract executable payloads without running archived installers.
 This is provenance for a finite fixture, never resource or elapsed qualification.
 """
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -42,6 +43,31 @@ def source_of(tag):
             break
         obj = api(f"git/tags/{obj['sha']}")['object']
     raise ValueError('release tag does not resolve to one bounded commit')
+
+
+def annex_pin(source):
+    if not re.fullmatch(r'[0-9a-f]{40}', source):
+        raise ValueError('native pin needs an immutable source')
+    item = api(f'contents/third_party/git-annex/VERSION?ref={source}')
+    size, content = item.get('size'), item.get('content')
+    if (item.get('encoding') != 'base64' or type(size) is not int
+            or not 0 < size <= 16384 or not isinstance(content, str)
+            or len(content) > 32768):
+        raise ValueError('invalid native pin metadata')
+    body = base64.b64decode(b''.join(content.encode('ascii').split()), validate=True)
+    blob = hashlib.sha1(b'blob ' + str(len(body)).encode() + b'\0' + body).hexdigest()
+    if len(body) != size or item.get('sha') != blob:
+        raise ValueError('native pin blob differs')
+    lines = [line.strip() for line in body.decode('utf-8').splitlines()
+             if line.lstrip().startswith('PIGEON_VERSION=')]
+    if len(lines) != 1:
+        raise ValueError('native pin must name one version')
+    version = lines[0].split('=', 1)[1]
+    if version.startswith('"') and version.endswith('"'):
+        version = version[1:-1]
+    if not re.fullmatch(r'[0-9][0-9A-Za-z.+-]{0,127}', version):
+        raise ValueError('invalid native pinned version')
+    return version
 
 
 def checked_assets(release, names):
@@ -130,6 +156,7 @@ def prepare(tag, root, progress=lambda _stage, **_facts: None):
     annex = 'git-annex-pigeon-linux-x86_64.tar.gz'
     names = (package, annex, 'SHA256SUMS')
     assets = checked_assets(release, names)
+    expected_annex = annex_pin(source)
     root.mkdir(mode=0o700, parents=True)
     progress('downloading exact published assets', tag=tag, source=source,
              assets={name: dict(size=value['size'], digest=value.get('digest'))
@@ -161,7 +188,7 @@ def prepare(tag, root, progress=lambda _stage, **_facts: None):
         raise ValueError('published program version differs')
     annex_version = subprocess.run([str(annex_exe), 'version', '--raw'], cwd=root, env=env,
                                    capture_output=True, text=True, timeout=30)
-    if annex_version.returncode or not annex_version.stdout.strip().endswith('-pigeon1'):
+    if annex_version.returncode or annex_version.stdout.strip() != expected_annex:
         raise ValueError('published annex version differs')
     manifest = dict(source_revision=source, features=[],
                     origin=dict(kind='published-release-archives', repository=REPOSITORY,

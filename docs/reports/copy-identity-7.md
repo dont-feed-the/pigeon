@@ -32,3 +32,15 @@ integration, exact-head network checks and CI still precede merging.
 This strengthens the physical-copy checks beside
 [stream-owned lookups](sync-lookups-7.md). It supplies no missing reference
 budget, HDD, elapsed-night or release-candidate qualification.
+
+## Historical archive identity
+
+The archive preparer's hard-coded `-pigeon1` suffix rejects the legitimate
+pigeon2 companion while accepting a different version ending in pigeon1.
+An end-to-end executable archive fixture retains all three original misses.
+The preparer now reads VERSION at the already resolved immutable source,
+checks its bounded Git blob and single version assignment, then compares
+the executed companion's complete version. It never executes the version
+file. Correct pigeon1 and pigeon2 fixtures pass; stale companions, mismatched
+upstream versions, malformed pins and changed blob metadata are refused.
+This is source-bound archive preparation, not historical-data upgrade proof.
