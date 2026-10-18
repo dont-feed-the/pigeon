@@ -9,8 +9,8 @@ increments the second number, and every other release the third.
 
 ### Added
 
-- Upgrade guidance can distinguish checks using the original published
-  programs from checks that rebuild historical source.
+- The upgrade guide records checks of the original published Linux
+  programs, including mixed laptop and backup versions.
 
 ## 0.6.42 — 2026-10-18
 
