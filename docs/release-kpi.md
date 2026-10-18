@@ -83,844 +83,163 @@ the release comparison still needs the next candidate's CI evidence.
 
 ## v0.5.13 observation
 
-[v0.5.13](https://github.com/dont-feed-the/pigeon/releases/tag/v0.5.13)
-was published on 16 October at 21:09:26 UTC. Its candidate took **30 minutes
-1 second** to publish, meeting the 60-minute target; v0.5.12 took 35 minutes
-42 seconds. The completed publication gap was **2 hours 44 minutes 18 seconds**,
-missing the two-hour target. That miss remains in the interval history.
-
-The complete Linux slice runs are
-[v0.5.12](https://github.com/dont-feed-the/pigeon/actions/runs/38942631283)
-and [v0.5.13](https://github.com/dont-feed-the/pigeon/actions/runs/38963802150).
-Their trace-checking steps took:
-
-| Partition | v0.5.12, one worker | v0.5.13, two workers |
-| --- | --- | --- |
-| Remaining slice scenarios | 3m 15s | 1m 18s |
-| S9 random shard 0 | 19m 21s | 16m 24s |
-| S9 random shard 1 | 17m 49s | 1m 19s |
-| S5 | 5s | 5s |
-
-Both shard-1 logs retain 52 accepted filesystem checks and 26 accepted
-roster checks. Each random shard still runs 25 schedules and its retained
-regression. These are observations from two releases, with different event
-histories, other code changes and runner conditions; they do not isolate
-the workers' contribution. The controlled replay above supplies the separate
-local comparison. There are now six candidate lead-time samples and five
-completed publication intervals, too few for a reliable percentile claim.
-
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0513-observation).
 
 ## v0.5.14 observation
 
-[v0.5.14](https://github.com/dont-feed-the/pigeon/releases/tag/v0.5.14)
-was published on 16 October at 23:26:42 UTC, with all six required assets,
-verified checksums and the public latest-release redirect. Its candidate
-lead time was **16 minutes 33 seconds**, meeting the 60-minute target.
-The completed publication gap was **2 hours 17 minutes 16 seconds**,
-missing the two-hour target. That miss stays in the interval history.
-There are seven candidate lead-time samples and six completed publication
-intervals; these still do not establish a reliable percentile.
-
-The source was the validated stable main before the file-manager rollup;
-this release does not contain the file manager. Independent Linux gates
-and both platforms' archives completed without waiting for the non-gating
-full-model background run. Compared with v0.5.13's 30 minutes 1 second,
-this is an observed improvement, not a controlled attribution to one change.
-
-The user reported a GitHub Teams capacity of **60 concurrent runners** on
-16 October. Independent validation and release jobs can use that capacity;
-combined PR validation and cancellation of superseded runs still avoid
-waste. The publication-gap and candidate-lead targets stay unchanged.
-
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0514-observation).
 
 ## v0.5.15 observation
 
-[v0.5.15](https://github.com/dont-feed-the/pigeon/releases/tag/v0.5.15)
-was published on 17 October at 00:27:06 UTC with all six required assets.
-Its candidate took **18 minutes 31 seconds** to publish, meeting the
-60-minute target. The completed publication interval from v0.5.14 was
-**1 hour 24 seconds**, meeting the two-hour target. Prior missed intervals
-remain in the history. The collector retained eight lead-time samples and
-seven completed publication intervals; these are still not a reliable
-percentile estimate.
-
-Linux CI and lab completed before slice, which finished at 00:26:53 UTC.
-Publication followed 13 seconds later. The increased runner allowance did
-not waive any release check or the macOS archive requirement.
-
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0515-observation).
 
 ## v0.5.16 observation
 
-[v0.5.16](https://github.com/dont-feed-the/pigeon/releases/tag/v0.5.16)
-was published on 17 October at 01:48:22 UTC. All six assets, archive
-checksums, small downloads and the public latest-release redirect were
-verified. Candidate lead time was **20 minutes 45 seconds**; the completed
-publication interval was **1 hour 21 minutes 16 seconds**. Both targets
-were met. Nine lead-time samples and eight completed intervals still do
-not establish a reliable percentile; earlier misses remain recorded.
-
-The first tag CI attempt hit an `index.lock` race in the old-roster leave
-fixture beyond its existing bounded retry. Only that failed shard and its
-dependent selection check were rerun. The publication job was retried
-afterward with the successful archives retained. Final Linux CI, lab,
-slice and release checks all passed. The next rollup removes the fixture's
-unnecessary working-index mutation rather than extending the retry or
-removing a lock. Full-model background checks remain separate evidence.
-
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0516-observation).
 
 ## Additional runner capacity: 17 October
 
-The user reports a GitHub Teams limit of 60 concurrent runners. In the
-successful v0.5.16 slice run (38990943017), the serial non-S5 scenarios ran
-from 01:34:08 to 01:46:07 UTC: 11 minutes 59 seconds. The same partition
-blocked v0.6.0 while its other required Linux groups had finished; its
-failed S12/S13 diagnostic checks are recorded in the M5 report.
-
-The slice now divides the live lab catalogue into five disjoint partitions:
-core, crash fixtures, recovery, people and S5. Each partition still runs
-its scenario laws, model, isolation check, real executor and TLC traces.
-The selector checks complete coverage of the live manifest, rejects malformed
-or duplicate IDs, and includes new scenarios automatically. Linux can run all
-five independently; periodic macOS validation retains its serial limit.
-This is a targeted change to a measured serial step, not a measured speedup
-claim. The next actual publication will supply the before/after observation.
-The failed v0.6.0 candidate and the interruption remain in the KPI history.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#additional-runner-capacity-17-october).
 
 ## v0.6.1 observation
 
-[v0.6.1](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.1)
-published at 09:07:42 UTC on 17 October with all six assets. Archive
-checksums, asset digests, the native Linux installer, completions, pinned
-annex and public latest redirect were verified. Candidate lead time was
-**15 minutes 49 seconds**, meeting the one-hour target. The interval from
-v0.5.16 was **7 hours 19 minutes 20 seconds**, missing the two-hour target;
-the failed v0.6.0 candidate and interruption remain visible. The two-day
-collection has ten lead-time samples and nine completed intervals, still
-insufficient for a reliable percentile.
-
-All five Linux slice partitions and both random crash shards passed.
-Their total job durations, including setup/build/trace checking, were
-10m24s (core), 9m06s (crashes), 9m38s (recovery), 8m18s (people) and 6m55s
-(S5). Random shard 1 was the final release gate at 09:07:27; publication
-followed 15 seconds later. These measurements show the new partitions
-completed independently; differing histories and runner conditions prevent
-attributing the whole candidate improvement to partitioning.
-
-Completed workflow elapsed time now stops at completion. Its separate
-candidate age and the actual publication gap continue to grow. Previously
-the readable report mislabeled a completed candidate's growing age as its
-elapsed execution, even though its publication lead-time measure was right.
-
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v061-observation).
 
 ## Bridge integration baseline: 17 October
 
-The successful PR #69 bridge job
-[117352256007](https://github.com/dont-feed-the/pigeon/actions/runs/39017382261/job/117352256007)
-ran from 08:27:07 to 08:51:06 UTC: **23 minutes 59 seconds**. Its serial
-phases included 2m15s restoring the Rust cache, 35s building the native
-programs, 3m12s checking laptop storage, 33s checking delayed decisions,
-3m48s checking custodian storage, 2m37s checking native traces and 10m23s
-exercising the portal and real Nextcloud client. Full CI and lab were
-already green while this final PR check continued.
-
-The next rollup builds and tests the matching programs once, then gives
-laptop, custodian and real-client execution independent runners. Programs
-travel as a compressed, checksummed archive with the immutable workflow
-source recorded and verified before extraction. Executable permissions
-survive the archive; execution jobs do not restore the large Rust cache or
-rebuild the programs. Every selected build, execution and trace check still
-must succeed. The real laptop-storage check passed locally using an
-extracted bundle. This is preparation for a measured improvement, not a
-reported reduction in CI or publication time.
-
-The first actual parallel workflow,
-[39029050268](https://github.com/dont-feed-the/pigeon/actions/runs/39029050268),
-passed all selected checks on `879fad0`. It ran from 11:31:54 to 11:43:25
-UTC: **11 minutes 31 seconds**, including selection. The shared build took
-4m33s; the laptop, custodian and real-client jobs then took 2m04s, 4m37s and
-6m40s respectively, starting together. This is an observed reduction from
-the prior 23m59s serial bridge job, with different cache/build conditions
-and content-controller changes; it is not a controlled attribution or an
-actual publication. Other PR CI exposed two failures, recorded in the M6
-report, so this head was not merged or tagged.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#bridge-integration-baseline-17-october).
 
 ## PR #70 follow-up observations
 
-The subsequent `47974c5` head passed lab and the whole bridge workflow, but
-again failed the 102-file protection deadline. Its retained fixture holds
-102 verified laptop objects and 80 backup objects; transfer-lock conflicts
-and per-key process launches are recorded in the M6 report. Placement now
-reuses controlled batches, and local-content observations use bounded batches.
-The rolled-up native run passes 65 checks, with that lifecycle taking 30.5 s.
-CI and an actual publication are still required; this is no published result.
-
-The preceding bridge build job 117396374972 restored an 8,463,386,667-byte
-Rust cache from 12:30:01 to 12:34:30 UTC on 17 October: about 4m29s before
-building. Download completed at 12:30:58; unpacking accounts for most of the
-remaining time. Reducing cached build contents is the next measured CI target,
-with first-build and warm-cache times to compare before claiming an improvement.
-
+See [the retained observation](reports/release-kpi-history-through-v0636.md#pr-70-follow-up-observations).
 
 ## v0.6.2 observation
 
-[v0.6.2](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.2)
-was published on 17 October at 13:42:34 UTC from
-`3439d9d67fc8b1a6368f4eb15e2633a28a2ee6dd`. All six assets, four archive
-checksums, the native Linux install, pinned annex, shell completions and
-public latest-release redirect were verified. Candidate lead time was
-**26 minutes 29 seconds**, meeting the one-hour target. The publication gap
-was **4 hours 34 minutes 52 seconds**, missing the two-hour target. Eleven
-lead-time samples and ten completed intervals still do not support a
-reliable percentile claim.
-
-PR #70's final head passed CI, lab and all three parallel bridge cases.
-The tag's first CI attempt hit a competing peer metadata-ref lock during
-backup rejoin. Its first core-slice attempt passed all S3 byte/status checks
-and TLC, but the scenario expected a new restore install when a normal
-round had already installed the retained request. S2 passed all eleven
-checks in 40 seconds and its trace passed TLC. Each failed partition was
-retried once, retaining all other results. Publication alone was then
-retried with both successful platform archives retained. Exact-source
-Linux CI, lab, slice and publication all finished successfully.
-
-The follow-up removes the redundant remote-ref write during welcome import:
-annex already merges the imported private metadata ref. A regression holds
-the competing lock across all four recovery crash points without removing
-or changing it. Restore traces now observe the actual requested bytes at
-completion, including an already completed request, instead of requiring
-an extra install. A native S3 run passes fourteen checks and fifty
-filesystem observations; recorded no-op snapshots are accepted by TLC,
-while different requested or visible bytes must produce counterexamples.
-
-The measured 8.46 GB Rust-cache restore above motivates retaining compiled
-dependencies while excluding old test executables in the Rust workspace
-and shared bridge build. A new cache namespace avoids restoring the old
-archive. Only main writes caches; its first successful warm-up must be
-retained. Cold and warm runner measurements are still required before
-claiming a speedup. None of these follow-up changes is part of v0.6.2.
-
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v062-observation).
 
 ## First dependency-cache observations after PR #71
 
-PR #71's bridge build, job 117411641261, had a cold namespace and passed
-in 2m39s (13:47:29–13:50:08 UTC). Main's matching build then saved a
-459,746,369-byte dependency cache in job 117414069081 at 14:02:49–14:02:55.
-The v0.6.3 tag's Rust-workspace job 117414959357 restored it successfully
-at 14:04:40–14:04:47: **7 seconds** for that step. The earlier observed
-bridge restore was 8,463,386,667 bytes and about 4m29s. These observations
-use different build/feature contexts and runner conditions; the cache
-excludes old test executables in both producers. Actual publication lead
-time still depends on every required gate and both platform archives.
-
+See [the retained observation](reports/release-kpi-history-through-v0636.md#first-dependency-cache-observations-after-pr-71).
 
 ## v0.6.3 observation
 
-[v0.6.3](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.3)
-was published on 17 October at 14:19:57 UTC from
-`3f5e5efd554dc9421d488e5d8e453552a79492cc`. All six assets, archive
-checksums, native Linux installation, pinned annex, completions and the
-public latest-release redirect were verified. Candidate lead time was
-**16 minutes**, and the publication gap was **37 minutes 23 seconds**.
-Both targets were met. Twelve lead-time samples and eleven publication
-intervals still do not support a reliable percentile claim; previous
-misses remain in the history.
-
-CI, lab, slice and publication passed on their first attempts. The recovery
-lock and completed-restore trace failures from v0.6.2 did not recur. Lead
-time fell from 26m29s to 16m, with different event histories, cache conditions
-and no retry; this does not isolate the contribution of the cache change.
-The first warm restore's seven seconds is the separate step observation.
-
-The core slice had no cache to restore and spent 4m57s building its matching
-release programs (14:05:53–14:10:50 UTC, job 117414939258). Earlier main
-slice runs had been canceled before saving that cache. One core job from
-validated main merge eaef33a was restarted specifically to prime it; current
-main differs from that source only in its release version, lock and changelog.
-The canceled current-version run had created no jobs to rerun. This primer
-is separate from publication. Job 117417325666 saved a 488,810,880-byte
-slice cache at 14:22:53–14:23:00 UTC; the cache API confirms it is present
-on main. Its native scenario/trace check continues, and the future warm-slice
-comparison is still pending.
-
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v063-observation).
 
 ## v0.6.4 observation
 
-[v0.6.4](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.4)
-published on 17 October at 16:58:43 UTC from
-`fa00dcc013e98f98a6a0dcdd36949fe109e13d5b`. Its six assets, four archive
-checksums/API digests, Linux install, pinned annex version, three shell
-completions and public latest redirect were verified. A transient HTTP 503
-interrupted the first download verification; the next completed successfully.
-
-Candidate lead time was **24 minutes 29 seconds**, meeting the one-hour
-target. The completed gap from v0.6.3 was **2 hours 38 minutes 46 seconds**,
-missing the two-hour target. The collector retains 13 lead-time and 12
-publication-interval samples; no reliable percentile is inferred. Publication
-resets the current clock, without hiding this missed interval.
-
-PR #72's preparation found a status request bypassing file settling, a real
-clock-fence race, and historical protection stranded by equivalent sibling
-merges. Review also caught an erasure acknowledgement that needed to stay
-conservative. These were fixed before merging, with native regressions; no
-assertion timeout or release gate was relaxed. The final source passed all
-730 local checks, all 13 driver/model scenarios and negative checks, S2/S3
-with TLC, and exact-head PR CI. Main cache producers completed before tagging.
-
-Tag CI, lab, both platform builds and native install checks passed first time.
-S9 shard 0 passed its 25 native schedules but rejected one unstable filesystem
-observation at clock 49. One targeted retry repeated seed 156199965296 and
-the identical schedules; every required trace then passed. Only the failed
-publish job was rerun, retaining the successful archives. The
-[original failed trace](reports/evidence/v064-s9-observation-failure.ndjson)
-is retained, together with its artifact digest in the M6 report. This miss
-and retry remain part of the candidate's observed lead time.
-
-The next follow-up preserves the three-attempt observation bound and full
-stat/hash checks, but yields between unstable observations. The failing
-schedule is a named native regression. Its actual publication will supply
-the next observation; no measured reduction in failure rate is claimed now.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v064-observation).
 
 ## v0.6.5 observation
 
-[v0.6.5](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.5)
-published at 2026-10-17T17:33:03Z from
-`987941a93ea0ba47ca74b88fe68fa4e87bc9c94f`. All six assets, four archive
-checksums, Linux installation, pinned annex, shell completions and latest
-redirect were independently verified. Candidate lead time was **666 seconds**
-(target 3600); the completed publication gap was **2060 seconds**
-(target 7200). The collector retains
-14 lead-time and 13 completed-gap samples.
-No percentile or measured reduction in S9 failure rate is inferred.
-
-PR #73 passed all 737 parallel local checks and exact-head CI before merge.
-Its restore-lock and bounded trace-retry changes ship in this publication.
-The original S9 failed observation remains retained. Duplicate queued main
-workflows were canceled in favor of the tag gates; active main cache producers
-were preserved through their completed save steps.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v065-observation).
 
 ## v0.6.6 observation
 
-[v0.6.6](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.6)
-published at 2026-10-17T18:06:25Z from
-`152d2a7d6da3b483f4a3e73f3ff14be6b344dde3`. All six assets, four archive
-checksums, Linux installation, pinned annex, shell completions and latest
-redirect were independently verified. Candidate lead was **764 seconds**
-and the completed publication gap was **2002 seconds**, meeting
-the one-hour and two-hour targets. There are 15
-lead-time and 14 completed-gap samples;
-no percentile or sustained failure-rate improvement is inferred.
-
-Filesystem admission ships with native ext4/btrfs/xfs evidence and accepted
-English/French usability retakes. The original five local fixture failures,
-their focused retake and the final exact-head CI remain separate records.
-All Linux release gates and both platform builds passed. Duplicate queued
-main runs were canceled; active main cache producers were preserved.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v066-observation).
 
 ## v0.6.7 observation
 
-[v0.6.7](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.7)
-published at 2026-10-17T18:57:37Z from
-`eb3065b2730c4a7d5b0bac77a78220f349f8478c`. All six assets, four archive
-checksums, Linux install, pinned annex, completions and latest redirect
-were independently verified. Candidate lead was **1711 seconds**
-(met the one-hour target); publication gap was
-**3072 seconds** (met the two-hour target).
-There are 16 lead and
-15 completed-gap samples; no
-percentile or sustained failure-rate improvement is inferred.
-
-The original CI shard 3 had 10 passes and two timeouts: held-file protection
-reported disk busy; a capacity fixture did not finish its initial install.
-The bounded retake passed all 12 daemon checks and its storage-boundary
-trace checks. Original artifact 12110980651 is 15121562 bytes, SHA-256
-`d49c99a41b5ff8fef4012064564fee1d0ee8740065d933ae0d5a57998637b505`.
-Its held fixture retained 102 laptop objects and 21 backup objects, all
-matching their sizes and SHA-256 keys; incomplete transfer was not silently
-counted as protection. One bounded failed-shard retry and publication-only
-retry kept the original tag and source. No deadline, safety verdict or gate
-was waived. Both archives and the other Linux gates were retained.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v067-observation).
 
 ## v0.6.8 observation
 
-[v0.6.8](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.8)
-published at 2026-10-17T19:33:28Z from `67db09aaa00eeef134d053b7b762fb5bf50071d1`. Independent
-verification passed all six assets, four archive checksums, Linux installation,
-the pinned annex, completions and latest redirect. Candidate lead was
-**1080 seconds** and publication gap **2151 seconds**, meeting the one-hour
-and two-hour targets. The collector retains 17 lead
-and 16 completed-gap samples;
-no percentile or sustained failure-rate improvement is inferred.
-
-The original CI shard 3 passed 10 tests and timed out in held-file protection
-and replacement installation. The held fixture's disk-wait headline and 102
-valid laptop objects versus 36 backup objects show incomplete transfer, not
-protection. The original artifact 12112021417 is 15261155 bytes, SHA-256
-`73aae0e2ff0f8a6ff293a854cefe0ca118fef63d3397f40d49ace97c3960c73d`.
-All present annex objects matched their sizes and SHA-256 keys. The original
-logs do not contain pressure readings, so they do not establish the cause.
-
-One bounded failed-shard retry passed all 12 daemon checks and the positive
-and negative storage-trace checks. A publication-only retry reused both green
-archives; the tag and source stayed immutable. No deadline, safety verdict or
-required gate was waived. This repeats the same two fixture families that
-blocked v0.6.7's first run. Pressure diagnostics in the next M6 follow-up target
-that evidence gap; a reduction in failures remains unmeasured.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v068-observation).
 
 ## v0.6.9 observation
 
-[v0.6.9](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.9)
-published at 2026-10-17T20:18:40Z from `cca9f52c289528fb83f256e4a0b2e6314d7b5482`. Six assets,
-four archive checksums, native Linux installation, pinned annex, completions
-and latest redirect passed independent verification. Candidate lead was
-**1388 seconds**, publication gap **2712 seconds**; both targets were met.
-There are 18 lead and
-17 completed-gap samples. No
-percentile or sustained failure-rate reduction is inferred.
-
-All daemon CI shards passed their first attempt. The first core slice passed
-S1/S2/S3/S4/S6/S7 but failed S8's absence assertion after a disk-full refusal.
-Artifact 12113236151 is 79430 bytes, SHA-256
-`70b7cb6fb96d511addba00899ddb73eec286a08ce7db0ab0e0e9e00032de4418`.
-The retained stream shows a thinning move-aside and rename-in rather than
-completed freeing. One bounded core-slice retry passed all seven scenarios,
-including 15 S8 checks, and all filesystem/roster traces. A publication-only
-retry reused both archives. No tag, deadline, model verdict or gate changed.
-The next follow-up strengthens absence observations using journal boundaries;
-its effect on recurrence remains unmeasured.
-
-The actual v0.6.4 macOS background run 39051800511 completed successfully;
-one v0.6.9 background run, 39066233321, is queued for the combined native
-priority/repair changes. Neither is a measured resource budget or a seven-night
-streak. The remaining four old v0.6.8 background S9 shards were canceled in
-favor of v0.6.9; nine completed jobs were retained, not represented as a
-completed full v0.6.8 model run. Active main cache producers saved before
-obsolete main workflows were canceled.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v069-observation).
 
 ## v0.6.10 observation
 
-[v0.6.10](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.10)
-published at 2026-10-17T21:10:31Z from
-`510146fce732cbcd1dd3a35e4bb5f8ed3ea52319`. Independent verification
-passed all six assets, four archive checksums, native Linux installation,
-pinned annex, completions and latest redirect. Candidate lead was
-**1200 seconds** and publication gap **3111 seconds**; both targets were met.
-There are 19 lead and 18 completed-gap samples. No percentile or sustained
-failure-rate improvement is inferred.
-
-Original daemon shard 3 passed 11 of 12 tests; the initial capacity
-assertion saw zero instead of 13 bytes. Artifact 12113894459 is 9641122
-bytes, SHA-256
-`b3a2359940016fd47319d71b7560102a87adef8d1c931e728203caedd0fe6d20`.
-The one bounded original-shard retake passed all 12 checks in 203.441
-seconds and the positive/negative storage-boundary trace checks. The
-publish job had stopped at that failed CI gate after its installation
-and real backup-service checks passed. One publication-job-only retry
-reused both green archives. Source, tag, assertions, deadlines and gates
-stayed unchanged. The next fixture checkpoint requires its actual named
-paths before capacity observation; it does not infer the zero snapshot's
-precise interleaving.
-
-Main's stricter S8 observer passed all 15 checks in Linux namespaces, with
-accepted filesystem and roster traces. The tag's complete slice also passed.
-This is finite validation of the observation change, not a failure-rate
-measurement or a real resource budget. The v0.6.9 Mac workspace separately
-passed 690 of 692 checks: two telemetry fixtures correctly encountered
-normal-build Mac backup refusal. They are corrected into the lab tier in
-the next checkpoint; that run is not a passing Mac suite.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0610-observation).
 
 ## v0.6.11 observation
 
-[v0.6.11](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.11)
-published at 2026-10-17T21:32:54Z from
-`412accd7e0d0efe227ab4b5e452c07eb483ca454`. Independent verification
-passed all six assets, four archive checksums, native Linux installation,
-pinned annex, completions and latest redirect. Candidate lead was
-**722 seconds** (12m02s); publication gap was **1343 seconds** (22m23s).
-Both targets were met, with 20 lead and 19 completed-gap samples.
-All required Linux gates and publication passed on their first attempt.
-This single candidate does not establish a sustained failure-rate change.
-
-The older v0.6.9 full-model run 39064536212 completed successfully. Its
-periodic macOS run 39066233321 passed all four daemon shards and installation,
-but failed the workspace on two telemetry fixtures requiring lab roles;
-downstream lab and slice were skipped. The fixture-tier correction ships
-in v0.6.11; one new background run 39071444656 is pending at this checkpoint.
-These results do not establish elapsed nights or hardware budgets.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0611-observation).
 
 ## v0.6.12 observation
 
-[v0.6.12](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.12)
-published at 2026-10-17T22:03:35Z from
-`11375509a7266e05e136a75631ce3e6a3614d697`. All six assets, four archive
-checksums, native Linux installation, pinned annex, completions and latest
-redirect passed independent verification. Candidate lead was
-**1257 seconds**; completed gap was **1841 seconds**.
-The collector retains 21 lead and
-20 completed-gap samples.
-No percentile or sustained failure-rate improvement is inferred.
-
-The original native shard passed 12/13 and failed the backup-rejoin setup
-when aggregate Protected described empty accepted history. Its artifact
-12115173627 is 7,247,737 bytes, SHA-256
-`63a2aa7d9c6f6fc73c7d1fcd6d86b93539112b1503e60bbd9ad34bd6999b8287`.
-One bounded failed-shard retake and a publication-job-only retry retained
-the tag and successful matching archives. No safety verdict or deadline was
-waived. The next checkpoint waits for the actual named file before taking
-its preservation snapshot; effect on recurrence remains unmeasured.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0612-observation).
 
 ## v0.6.13 observation
 
-[v0.6.13](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.13)
-published at 2026-10-17T22:24:57Z, source
-`a9f8447d09af85a9c5938554038e65346c6e62c6`. All six assets, four archive
-checksums, native Linux installation, pinned annex, completions and latest
-redirect passed independent verification. Candidate lead was
-**720 seconds**; completed gap was **1282 seconds**.
-The collector retains 22 lead and 21 completed-gap samples.
-Linux CI 39074142625, lab 39074142576, slice 39074142516 and release
-39074142604 all succeeded on attempt one. This is one candidate, not a
-sustained failure-rate or percentile claim.
-
-The bridge producer already saved the identical dependency-cache key used
-by the workspace job; the candidate need not wait for a second save of
-that key. Active main producers remain protected before cancellation.
-Subsequent periodic Mac matrices use two jobs each, bounded at four
-background jobs in CI/slice; publication remains Linux-gated with both
-platform archives. Actual background-time savings await a completed run.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0613-observation).
 
 ## v0.6.14 observation
 
-[v0.6.14](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.14)
-published at 2026-10-17T22:55:55Z, source
-`5fc77893e687d30efe6fcb855535b2b0701dcbc9`. All six assets, four archive
-checksums, native Linux installation, pinned annex, completions and latest
-redirect passed independent verification. Candidate lead was
-**743 seconds**; completed gap was **1858 seconds**.
-The collector retains 23 lead and 22 completed-gap samples.
-No percentile or sustained failure-rate claim is inferred. Its four
-required workflow runs succeeded without a retry: CI 39076223796,
-lab 39076223634, slice 39076223643 and release 39076223660.
-The original PR workspace miss was the obsolete removal sentence, fixed
-and revalidated before merging; it is separate from these candidate gates.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0614-observation).
 
 ## v0.6.15 observation
 
-[v0.6.15](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.15)
-published on 17 October at 23:22:55 UTC, source
-`c51af44c4e80fad8fd1a89e8ea8185b775028428`. Independent verification
-checks all six assets, four archive checksums, native Linux installation,
-pinned annex, completions and the latest-release redirect. Candidate lead
-was **667 seconds (11 minutes 7 seconds)**; completed publication gap was
-**1620 seconds (27 minutes)**. The collector retains 24 lead and 23
-completed-gap samples. This observation alone establishes no sustained
-rate improvement. The required tag runs passed: CI 39078073966, lab
-39078073927, slice 39078073958 and release 39078073983.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0615-observation).
 
 ## v0.6.16 observation
 
-[v0.6.16](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.16)
-published at 2026-10-18T00:04:52Z, source
-`889da1814fae629deb26ab1ac78988ed1207a291`. All six assets, four archive checksums, native Linux
-installation, pinned annex, completions and latest redirect passed independent
-verification. Candidate lead was **800 seconds (13 minutes 20 seconds)**;
-completed publication gap was **2517 seconds (41 minutes 57 seconds)**.
-The collector retains 25 lead and 24 completed-gap samples. All four tag workflows
-passed on their first attempt: CI 39080609737, lab 39080609668, slice
-39080609707 and release 39080609711. This does not erase the earlier PR
-bridge miss and bounded retake, nor establish a sustained failure rate.
-The observed Mac dependency queue, cancelled older background run and
-three-job future slice allocation are recorded in the capture report.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0616-observation).
 
 ## v0.6.17 observation
 
-[v0.6.17](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.17)
-published at 2026-10-18T00:52:12Z, source
-`ddf309744bddb89857af567ccadb7969b85a5af0`. All six assets, four archive
-checksums, native Linux installation, pinned annex, completions and latest
-redirect passed independent verification. Candidate lead was **766 seconds
-(12 minutes 46 seconds)**; completed publication gap was **2840 seconds
-(47 minutes 20 seconds)**. There are 26 lead and 25 completed-gap samples.
-Required tag workflows all passed first attempt: CI 39083564957, lab
-39083564924, slice 39083564895 and release 39083564885. This observation
-alone establishes no sustained improvement or measured M6 budget.
-
-The release process spent approximately 433 seconds after merging waiting
-for non-gating main debug-cache preparation before tagging. The next
-candidate, with an unchanged dependency lockfile, will start without that
-extra wait while preserving active main Rust cache saves. All required tag
-gates and both archives remain required. Its actual publication effect is
-measured after publication, separately from tag lead time.
-
-PR #86 merged at 00:55:31 UTC; its v0.6.18 candidate push completed at
-00:55:40 UTC, nine seconds later. The prior PR #85 merged at 00:32:02 UTC
-and its v0.6.17 candidate push completed at 00:39:25 UTC, 443 seconds later.
-This measures the removed pre-tag wait in one observation. The actual
-v0.6.18 publication effect remains pending; no gate or archive was waived.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0617-observation).
 
 ## v0.6.18 observation
 
-[v0.6.18](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.18)
-published at 2026-10-18T01:07:52Z, source
-`40bdaf1c1f75258fd2181bd49b6b65e1483cf3f9`. All six assets, four archive checksums, native Linux installation,
-pinned annex, completions and latest redirect passed independent verification.
-Candidate lead was **730 seconds**; completed publication gap was
-**940 seconds**. The collector retains 27
-lead and 26 completed-gap samples.
-All required tag workflows passed: CI 39084576157,
-lab 39084576152, slice 39084576042
-and release 39084576200. The removed pre-tag wait
-is recorded above; this one publication establishes no sustained improvement
-or isolated causal effect. No required gate or platform archive was waived.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0618-observation).
 
 ## v0.6.19 blocked candidate
 
-The latest verified publication remains v0.6.18 at 01:07:52 UTC on
-18 October. Candidate v0.6.19 does not publish: CI 39086343038 fails
-initial-copy waits in native shards 0 and 3. One bounded retake passes
-shard 0 but repeats shard 3's initial-protection timeout. Lab and slice
-pass and both archives build; publication correctly refuses the failed
-Linux gate. The second shard artifact and distinct local passing
-observations are recorded in the [own-read report](reports/read-latency-7.md).
-No third retry, moved tag or missing-copy waiver resets the publication
-clock. The 01:59:24 UTC KPI snapshot records 51 minutes since the last
-publication, 27 lead-time samples, 26 completed-gap samples and one
-unpublished candidate. The two-hour publication and one-hour lead targets
-remain unchanged; a failed workflow's duration is not publication lead.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0619-blocked-candidate).
 
 ## v0.6.20 observation
 
-[v0.6.20](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.20)
-published at 2026-10-18T02:30:01Z, source
-`2d670e88ae1b5402472d659da33c51612b7f59ad`. All six assets, four archive checksums, native Linux installation,
-pinned annex, completions and latest redirect passed independent verification.
-Candidate lead was **699 seconds**; completed publication gap was
-**4929 seconds**, measured from v0.6.18. The failed v0.6.19 tag remains
-immutable and unpublished. The collector retains 28
-lead samples and 27 completed gaps.
-Required tag runs: CI 39089609307,
-lab 39089609288, slice 39089609292
-and release 39089609293. These are actual publication
-observations, not a sustained throughput or isolated causal-effect claim.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0620-observation).
 
 ## Native cache transfer checkpoint
 
-PR #91 CI 39092020451 shows a concrete cost before native tests. Job
-117570622354 restores main's Rust cache from 02:59:53 through 03:04:41 UTC:
-**288 seconds**. The cache API records rust-lab Linux cache 9107831502
-as **8,291,805,418 bytes**. The full-target archive includes test executables
-and superseded workspace outputs that do not belong in a dependency cache.
-
-The next rollup changes both native CI restore/save and the isolated ZFS
-consumer to one matching dependency-only path list and a fresh namespace.
-There is no fallback to the old full-target archive. Dependency libraries,
-compiler metadata, native build outputs and proc macros remain cached;
-workspace libraries, build outputs and their fingerprints are excluded so
-old release versions do not accumulate there. Missing workspace fingerprints
-force the current source to rebuild its own artifacts together. Test binaries are built in the current job. The new namespace
-initially builds cold until a main producer saves it. Active main producers
-remain protected through their save step, and existing caches are not deleted.
-
-This is a measured old restore cost and a targeted archive-content change.
-The new archive size, cold-build cost and later restore duration require
-completed hosted observations; no speedup is claimed before those exist.
-
-A local file-size inventory also finds 1,592,405,895 bytes of old workspace
-build outputs, largely repeated web bundles. Their outputs and matching
-fingerprints are excluded together. These local uncompressed bytes are not
-the hosted archive size or a measured hosted speedup.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#native-cache-transfer-checkpoint).
 
 ## Saved dependency archive observation
 
-On 18 October at 03:39:44 UTC, main saves native dependency cache
-9108748689: **427,538,710 bytes**, versus **8,291,805,418 bytes** for
-the former full-target cache. That is about **94.84% smaller**. The archive
-excludes workspace executables/libraries and matching workspace build outputs
-and fingerprints, while keeping third-party libraries and native builds.
-Actual warm-restore duration and full workflow effects are recorded only
-when observed; this size result is not a controlled throughput experiment.
-
-Before daemon tests, the four original PR #91 shards spend 396, 401, 254
-and 347 seconds from cache-restore start through native-test start. The
-first three observed cold preparations on the new namespace take 168, 167
-and 137 seconds (shards 0, 2, 3); shard 1 is still building at that snapshot.
-Those are preparation observations from different runners, not complete
-workflow durations or isolated causal estimates. All required PR checks and
-the separate exact-head native ZFS profile eventually pass on the rollup.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#saved-dependency-archive-observation).
 
 ## v0.6.22 publication and next critical-path target
 
-[v0.6.22](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.22),
-source `c457f51c358f43d12cc40bac7432f46f251f0246`, publishes at
-2026-10-18T03:45:18Z. All six assets, four archive checksums, native Linux
-installation, pinned annex, completions and latest redirect pass independent
-verification. Candidate lead is **679 seconds**; the completed publication
-gap from v0.6.20 is **4517 seconds**, within the two-hour target. The
-collector retains 29 lead and 28 gap samples. v0.6.21 remains immutable and
-unpublished. Tag CI 39094074063, lab 39094074084, slice 39094074030 and
-release 39094074037 all pass on their first attempt.
-
-The last S9 job, 117576720895, runs 03:34:01–03:45:12 UTC. After a
-131-second lab build, its 25 schedules take **396 seconds** and their
-TLC checks **101 seconds**. This is the measured next target. The following
-rollup distributes the same 50 Linux schedules across five runners of ten,
-with the same two workers per runner, separate state and disjoint seed
-streams. Background Mac coverage stays two runners of 25, one at a time.
-No schedule or trace check is removed. Publication requires every new Linux
-shard; legacy job families cannot conceal a partial new family. Older tags
-retain complete older-family compatibility. New hosted runtime observations
-are required before claiming that this shortens publication.
-
-An explicit s9_only manual profile runs just the fifty schedules and their
-trace checks to validate that layout on the PR head. Ordinary main/tag and
-background Mac calls keep their fixed slice partitions. The manual profile
-cannot substitute for publication: the gate requires an exact tag/source
-push event and every fixed Linux partition as well as all random shards.
-
-The first five-shard profile 39095141432 passes on PR #92 head e3b49d3.
-All fifty schedules and all trace checks pass. Job durations are 384–441
-seconds; the maximum is **7m21s**, versus **11m11s** for v0.6.22's last
-two-shard job. The first new shard spends 137 seconds building, 205 on
-its ten schedules and 41 on TLC. Different runners and random seeds make
-this a first hosted observation rather than an isolated or sustained
-publication improvement. That PR head separately fails a Files-page
-assertion in CI, with the original artifact retained in the device report.
-The source correction therefore receives fresh exact-head validation.
-
-The smaller dependency archive also has an actual warm restore: PR #92
-job 117579932868 restores in **6 seconds**, 03:52:51–03:52:57 UTC.
-Its native tests begin 03:54:23: **92 seconds** from restore start, versus
-347 seconds on the original PR #91 shard. Preparation and archive-size
-measurements remain separate from complete publication lead/gap samples.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0622-publication-and-next-critical-path-target).
 
 ## Verified publications at 05:01 UTC, 18 October
 
-Both publications have six assets, all four archive checksums and independently
-verified Linux installation, completions and the pinned annex build.
-
-| Publication | Published UTC | Lead | Gap from prior publication |
-| --- | --- | --- | --- |
-| [v0.6.23](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.23) | 04:48:41 | 803 s | 3,803 s |
-| [v0.6.24](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.24) | 05:00:55 | 584 s | 734 s |
-
-The latter checkpoint has 31 lead samples and 30 completed publication
-intervals. Its tag gates all pass on the first attempt. v0.6.23 needs one
-preserved/classified native health-shard retake under sustained I/O pressure,
-then publication alone reuses both archives after the upstream gate passes.
-No failed assertion is waived. Both intervals and leads meet the defined
-targets; these observations do not establish a sustained causal speedup.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#verified-publications-at-0501-utc-18-october).
 
 ## v0.6.27 publication observation
 
-[v0.6.27](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.27), source
-`2b9670765248e56274d7e569e9f93145c9468f5c`, is published at 06:19:39 UTC
-on 18 October. Six assets, four archive checksums, pinned annex and native
-Linux installation are independently verified. Candidate lead time is
-19 minutes; the publication interval from v0.6.25 is 59 minutes 50 seconds.
-The report has 33 completed lead-time samples and 32 publication intervals.
-
-Its first native shard misses initial protection in the mass-deletion
-fixture: 102 valid source objects and 78 valid backup objects are retained
-with repeated I/O-pressure pauses and closed-handle fetch errors. One
-bounded native-shard retake passes, followed by one publication-only retake;
-the successful archive producers are reused. The exact original mechanism
-is unproved and no source correction is claimed for that miss. All original
-artifacts remain retained; v0.6.26 stays immutable and unpublished.
-
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0627-publication-observation).
 
 ## v0.6.29 publication observation
 
-[v0.6.29](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.29), source
-`47dc25a07b21c83b43505e63ac8f99f51db91b9a`, is published on 18 October at
-07:42:30 UTC. All six assets, four archive checksums, pinned annex, Linux
-installation and shell completions are independently verified. Candidate
-lead is 10 minutes 20 seconds; the publication gap from v0.6.28 is
-1 hour 11 minutes 23 seconds. Both targets are met. The report has 35 lead
-samples and 34 completed intervals; earlier misses remain in the history.
-
-All tag gates pass on the first attempt. PR #98's final native shard needs
-one retained/classified retake before merge; its original backup has 26
-valid objects against 102 source objects during repeated disk-pressure
-waits. The separate earlier bridge stall has a reproduced same-repository
-lock/preemption correction and passes corrected hosted validation. The
-full v0.6.28 background model run 39103734428 also passes; a tag audit does
-not count as an actual scheduled qualification night.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0629-publication-observation).
 
 ## v0.6.30 publication observation
 
-[v0.6.30](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.30), source
-`97e6fc81a318a01d05f17eddeb4c3529efa042f3`, is published on 18 October at
-08:09:10 UTC. Six assets, four archive checksums, pinned annex, Linux
-installation and shell completions are independently verified. Candidate
-lead is 11 minutes 16 seconds; the publication gap from v0.6.29 is
-26 minutes 40 seconds. Both targets are met, with 36 lead samples and 35
-completed publication intervals. All four tag workflows pass on their first
-attempt. This ships the shared Linux writer inventory and finite scheduled
-model campaign; actual elapsed nights and resource budgets remain unproved.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0630-publication-observation).
 
 ## v0.6.31 publication observation
 
-[v0.6.31](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.31), source
-`cefa9cfc0702cbf088fae90ad6e3beceb7e7f6f3`, is published on 18 October at
-09:14:10 UTC. All six assets, four archive checksums, pinned annex, Linux
-installation and shell completions are independently verified. Candidate
-lead is 9 minutes 19 seconds, with 37 lead samples and 36 completed publication
-intervals. The publication gap from v0.6.30 is 1 hour 5 minutes; both targets
-are met. All four tag gates pass on their first attempt. PR #100's earlier
-held-decision regression and notify license-policy failure are corrected in
-source before its green validation; neither receives an unchanged-source
-retry. The long native soak and resource profile remain separate observations.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0631-publication-observation).
 
 ## v0.6.32 and v0.6.33 publication observations
 
-[v0.6.32](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.32), source
-`c749d300798f047dfe9139fe14219edfe0dffa30`, is published at 09:53:32 UTC
-on 18 October. Six assets, all four archive checksums, pinned annex, Linux
-installation and completions are independently verified. Candidate lead is
-9 minutes 44 seconds; the gap from v0.6.31 is 39 minutes 22 seconds. The
-report has 38 lead samples and 37 completed intervals. All tag gates pass
-on their first attempt; PR #101's earlier observation race and HTTP 502 are
-retained and corrected before the green source validation.
-
-[v0.6.33](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.33), source
-`470f744f3ec62a958240ff184af06ae4300a4965`, is published at 10:09:49 UTC.
-The same six-asset/checksum/install/completion verification passes. Candidate
-lead is 661 seconds; its publication interval is 977 seconds. The
-report has 39 lead samples and 38 completed intervals. All tag gates pass
-without a retry. Both releases meet both KPI targets; no sustained causal
-speedup, resource budget or actual scheduled model night is inferred.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0632-and-v0633-publication-observations).
 
 ## v0.6.34 publication observation
 
-[v0.6.34](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.34), source
-`c10e42bbc3853b750bd8f3406654e9c2c8a7facb`, is published on 18 October at
-10:34:13 UTC. Six assets, four archive checksums, native Linux installation,
-completions and pinned annex are independently verified. All tag gates pass
-on their first attempt. Candidate lead is 628 seconds and the publication
-interval is 1,464 seconds, with 40 lead samples and 39 completed intervals.
-Both targets are met. The diagnostic preparation capability does not qualify
-a default reference budget; actual resource and elapsed gates remain open.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0634-publication-observation).
 
 ## v0.6.35 publication observation
 
-[v0.6.35](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.35), source
-`080a1b78274de8a9f6c99bc6ade5f564bd228b0d`, is published at 10:49:02 UTC
-on 18 October. Independent verification again passes all six assets, four
-archive checksums, pinned annex, native installation and completions. All
-tag gates pass on their first attempt. Candidate lead is 609 seconds; the
-publication interval is 889 seconds, with 41 lead samples and 40 completed
-intervals. Both targets are met. The new soak starts its clock from zero
-after the original harness deadline failure; 72 actual hours remain required.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0635-publication-observation).
 
 ## v0.6.36 publication observation
 
-[v0.6.36](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.36), source
-`c298375d0dac14017dfdc2222f83539cf51137d6`, is published at 11:20:34 UTC
-on 18 October. Independent verification passes six assets, four archive
-checksums, pinned annex, native Linux installation and completions. All four
-tag workflows pass first attempt. Candidate lead is 669 seconds; the gap
-from v0.6.35 is 1,892 seconds. Both targets are met, with 42 lead samples
-and 41 completed publication intervals. Historical-data checks improve
-upgrade evidence; they do not establish the remaining M7 elapsed gates.
+See [the retained observation](reports/release-kpi-history-through-v0636.md#v0636-publication-observation).
 
 ## v0.6.37 publication observation
 
@@ -957,3 +276,27 @@ pass first attempt. Candidate lead is 669 seconds and publication gap is
 1,925 seconds, meeting both targets. There are 45 lead samples and 44 completed
 intervals. Preparation observability improves diagnosis; the full resource
 and elapsed gates remain open.
+
+## v0.6.40 publication observation
+
+[v0.6.40](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.40), source
+`1dbcf729a7f33de98afbe215c309371963d676d8`, is published on 18 October at
+14:00:50 UTC. Six assets, four archive checksums, pinned annex, native Linux
+installation and completions pass independent verification. All four tag
+gates pass first attempt. Candidate lead is 689 seconds and publication gap
+is 2,919 seconds, meeting both targets, with 46 lead samples and 45 completed
+intervals. The host interruption is recorded separately and supplies no
+continuous-soak credit. Initial per-device admission isolation ships in this
+release; broader security and elapsed qualification remain separate.
+
+## v0.6.41 publication observation
+
+[v0.6.41](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.41), source
+`c08b5274cc99a5e89fee4c7bf2c952ce69f159a5`, is published on 18 October at
+14:22:03 UTC. Independent checks pass six assets, four archive checksums,
+pinned annex, native Linux installation and completions. All four tag gates
+pass first attempt. Candidate lead is 901 seconds and publication gap
+is 1,273 seconds, meeting both targets, with 47 lead samples and 46 completed
+intervals. Mode correction preserves staged pointers and avoids its clean
+filters; the full diagnostic still expires in ingestion. No full-workload
+speedup, resource-budget pass or elapsed qualification is inferred.

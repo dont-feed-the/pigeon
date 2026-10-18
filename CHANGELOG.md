@@ -5,6 +5,15 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Added
+
+- The upgrade guide distinguishes supported groups from retired early
+  formats, whose original files stay available.
+- Reference diagnostics identify native Git and annex operations without
+  including their file names, keys or other arguments.
+
 ## 0.6.41 — 2026-10-18
 
 ### Fixed

@@ -84,3 +84,36 @@ Clippy and repository checks pass. Fresh v0.6.41 tag gates and independent
 publication verification remain required. The changed-source full reference
 diagnostic is separate and cannot certify an M6 budget. Actual elapsed
 qualification remains open after the host interruption.
+
+## Changed-source full-size diagnostic
+
+Run [39133641982](https://github.com/dont-feed-the/pigeon/actions/runs/39133641982)
+uses clean head `893769af541c018b61473ec45b7f995e948d26e7`, production
+programs, all 100,000 files and 50 GB logical content, with diagnostic Fast
+preparation and a 600-second bound. It expires during ingestion. The last
+completed batch reports 20,480 paths at 579,242,976 microseconds. The final
+source index has 20,482 entries including metadata, with 21,262 unverified
+object files; an in-progress batch is not a completed or accepted capture.
+Independent proof and backup planning have not started. Accepted paths and
+backup object files remain zero. Twenty preparation snapshots are retained.
+
+The earlier `b41ee1` diagnostic completed 24,576 paths around its deadline.
+These separate hosted observations demonstrate no full-workload speedup;
+the local mode-only timings above are not an end-to-end claim. The source's
+new last cgroup CPU total is 300,228,739 microseconds and RSS high water is
+156,524,544 bytes, versus 400,841,378 and 133,808,128 in the earlier last
+sample. Different runs, policy waits and runner conditions prevent assigning
+those changes to mode correction alone. Neither run reaches the resource
+measurement window or qualifies M6.
+
+The completed original job log and artifact 12139641787 are retained before
+another experiment. The 3,555-byte archive has SHA-256
+`811a84b9708fe17572b5eb204c93c25f887b367585966fa0a9157ec200809477`.
+No unchanged-source retry is used. The next diagnostic adds fixed operation
+labels to the existing end-state native process snapshot. It reads at most
+4096 command-line bytes per already-sampled process, within the existing
+64-process bound and PID identity fences, exporting only recognized labels
+such as `git/update-index` or `annex/add`. Unknown or unreadable input remains
+`other` and does not erase the resource row. No argument, path, key or token
+is exported. This is one snapshot, not attribution of the whole workload;
+it adds no resource polling and changes no dataset, bound or budget.

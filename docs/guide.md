@@ -145,6 +145,22 @@ macOS: `"$HOME/Library/Application Support/pigeon/bin/pigeon-install"
 --system --uninstall`. This stops the service and removes the programs;
 shared folders, repositories, configuration and the device key stay.
 
+## Updating an existing group
+
+Use `pigeon update` on each computer. Its shared folders, saved history,
+configuration and device key stay in place. You can update a laptop and its
+Linux backup machine one at a time; keep checking the Home page until it
+shows the files are safe again.
+
+Very early groups from before the shared invitation format are retired
+([ADR 0075](adr/0075-one-invitation-per-group-shared-as-a-line.md)). Their
+files are preserved, but an update does not convert those groups: pigeon
+shows **Needs you**. Keep the original files and repository; do not change
+a format number to make the warning disappear. Retired-group preservation
+and supported-group upgrades are different outcomes. The
+[upgrade evidence](reports/upgrade-data-7.md) lists the releases checked
+and the remaining limits, including the finite mixed-release checks.
+
 ## Open pigeon
 
 Home separates **Current files** from **Other versions being kept**.

@@ -4,9 +4,10 @@
 
 This checkpoint does not close the complete upgrade matrix. It exercises one
 Linux laboratory laptop, two paths of different sizes, retained historical
-objects, subsequent capture and historical restore. Mixed-release peers,
-backup-role upgrades, every published minor and final release-candidate
-qualification remain separate work.
+objects, subsequent capture and historical restore. The mixed-release
+checkpoint below extends this to a laptop and backup machine; every published
+minor, original release archives and final release-candidate qualification
+remain separate work.
 
 ## Format retirement is explicit
 
@@ -128,3 +129,41 @@ all-target workspace Clippy and repository checks. The final preparer returns
 byte-identical target programs using Cargo-reported artifact paths. Fresh
 v0.6.36 tag gates and independent archive/install checks remain required.
 The broader upgrade/security audit and actual resource/elapsed gates stay open.
+
+## Mixed-release laptop and backup checkpoint
+
+Frozen v0.6.41 lab source `c08b5274cc99a5e89fee4c7bf2c952ce69f159a5`
+adds two-peer checks against old supported-format sources. Four initial
+controlled probes pass: v0.5.13 and v0.6.1, with either the laptop or the
+backup machine upgraded first. The reusable `scripts/check-upgrade-peers`
+then runs the same matrix with explicit identity validation and recorded
+harness/observer hashes. All four matching native cases pass, each proving
+four retained objects on both peers. All 153 script contracts pass, including
+identity ambiguity, invitation omission, optimized-Python safety checks,
+original-report preservation and cleanup-failure verdicts.
+
+Each case creates its group with the old programs, joins an old backup and
+proves two different-sized files, executable modes and a second notes
+version on both peers. It stops just one peer, keeps a durable original
+repository snapshot, starts the new program on its existing home/data,
+and checks the original accepted head, public device/person/role bindings
+and annex UUID. A new save must cross the mixed-release pair before the
+remaining peer upgrades. Both upgraded peers then retain all four unique
+objects and restore the oldest notes version through the normal CLI.
+Every current pointer, retained object and working byte/mode is independently
+checked; no custody claim is substituted for those proofs.
+
+```sh
+scripts/check-upgrade-peers --old-bin /absolute/old-bin --new-bin /absolute/new-bin \
+  --root /absolute/new-fixture --report /absolute/new-report.json --first backup
+```
+
+Use `--first laptop` for the opposite order. Both binary directories require
+unchanged frozen lab manifests. Existing roots/reports are refused. Retired
+format 1 is not reinterpreted as supported. Public identity receipts omit
+the invitation. Interrupted runs and cleanup failures cannot leave a passing
+verdict. Each fixture has two files and four retained versions, using rebuilt
+historical programs with the current pinned annex. These results do not cover
+every published patch, actual old release archives, status-quorum semantics,
+all mixed-version operations, other platforms or the final RC. Resource and
+real elapsed gates remain open.
