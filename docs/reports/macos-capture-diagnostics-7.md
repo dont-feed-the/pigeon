@@ -158,3 +158,9 @@ pass, then ships in independently verified v0.6.38. The focused result is
 linked from its release notes. Full periodic Mac run 39128408817 uses source
 `24dcd39b382b7e3a961b8554c5002c6a15d04a4d`; it is pending and cannot
 be replaced by the focused pass. Resource and elapsed gates remain open.
+
+The same periodic run subsequently passes 846 workspace tests (one skipped)
+in 347.641 seconds, its doctests, all four native daemon shards and all four
+lab groups. Its slice stage remains in progress at this checkpoint. These
+completed jobs are first-attempt successes; they do not claim the unfinished
+whole Mac workflow has passed.
