@@ -895,3 +895,11 @@ medians from full-size native capture reads, connected to the existing
 back-off and progress floors. It retains the previous candidate's second
 initial-copy failure separately. Independent device scheduling, other read
 boundaries and measured hardware budgets remain open.
+
+## Native ZFS and release-fixture observations
+
+[Native ZFS](zfs-runtime-7.md) now has an actual Linux backup runtime
+observation, including restart and filesystem primitives. The [release-fixture
+report](release-fixtures-7.md) retains all three v0.6.21 native failures and
+distinguishes named-path test corrections from incomplete protection with
+unproved transport cause. Neither supplies the reference/HDD budgets.

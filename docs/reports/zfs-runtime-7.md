@@ -48,8 +48,7 @@ sha2 version's byte array; formatting individual bytes corrects it without
 a lint exception. The later all-target workspace Clippy and repository rules
 pass. Current v0.6.21 main is integrated before the first hosted dispatch;
 its intervening changes are version/lockfile and release evidence, with Rust
-sources equal to the preceding runtime parent. The hosted verdict remains
-pending and no ZFS runtime success is claimed here.
+sources equal to the preceding runtime parent. The initial hosted observation and corrected runtime verdict follow below.
 
 GitHub rejects the first dispatch before allocating a runner: runner.temp
 is not available in job-level env. Temporary-directory setup moves into
@@ -73,3 +72,14 @@ within the same original 120-second protection-observation budget. Byte,
 key, role, restart and native-volume assertions are unchanged. This is a
 fixture contract correction, not a passing full profile or an unchanged
 source retry. The original observation and artifact remain retained.
+
+## Corrected native runtime
+
+Run 39091429406, source `b533e33bea3dd325181282b47d593a8f56212979`,
+job 117568838120 passes on the actual kernel/module combination above.
+The backup admission, two named protected files, independent exact-byte/key
+checks and restart identity case passes in 5.453 seconds. All eight native
+filesystem primitive cases pass on the ZFS volume. Both workflow jobs finish
+successfully; the ordinary lab matrix and aggregate are deliberately skipped.
+This is native ZFS conformance evidence, with the reference/HDD and crash
+budgets still open. The original failed fixture is retained above.

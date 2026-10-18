@@ -354,8 +354,11 @@ fn a_change_its_person_may_not_make_becomes_a_relayed_suggestion() {
     assert!(said(&joined, "joined", "group").is_some(), "{joined:?}");
     eventually_within(
         WAIT,
-        || text(&second_folder, "a.txt") == "cid's second edit\n",
-        "fresh join after decline",
+        || {
+            text(&second_folder, "a.txt") == "cid's second edit\n"
+                && text(&second_folder, "c.txt") == "cid's own edit\n"
+        },
+        "both exact files arrive after fresh join following decline",
         &[&a1, &b1, &c1, &a2],
     );
     assert_eq!(text(&second_folder, "c.txt"), "cid's own edit\n");

@@ -270,7 +270,24 @@ fn refounding_archives_a_pending_request_and_requires_fresh_preparation_after_re
     );
     assert!(said(&created, "created", "group").is_some(), "{created:?}");
     join(&alice, &vault, &all);
-    until(&alice, State::Protected, &all);
+    // Empty catalogues are also Protected. Require both named versions
+    // before preparing erasure; retain the original 120-second budget.
+    eventually_within(
+        120,
+        || {
+            [&file, &keep].iter().all(|path| {
+                pigeon(&alice, &["status", path.to_str().unwrap()])
+                    .into_iter()
+                    .any(|r| {
+                        matches!(r, Response::Status(s) if s.versions.iter().any(|v|
+                        v.path == path.file_name().unwrap().to_str().unwrap()
+                            && v.state == State::Protected))
+                    })
+            })
+        },
+        "both original files are captured and protected before erasure",
+        &all,
+    );
     let path = file.to_str().unwrap();
     assert!(matches!(
         answer(pigeon(&alice, &["erase", path, "--prepare", "--yes"])),
