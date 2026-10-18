@@ -7,6 +7,11 @@ increments the second number, and every other release the third.
 
 ## Unreleased
 
+### Fixed
+
+- A hash-checked copy must match both the file size and checksum named by
+  its content key before pigeon allows another copy to be dropped.
+
 ### Changed
 
 - Checking which machines hold files skips unused download URL lookups

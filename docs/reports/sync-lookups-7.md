@@ -88,3 +88,6 @@ The corrected native health case passes locally in 13.592 seconds, with
 both exact-byte waits and the retained-publication assertions intact.
 Workspace Cargo check, all-target Clippy, formatting and repository rules
 also pass. This is a changed fixture, not an unchanged-source CI retry.
+
+The [complete-key identity follow-up](copy-identity-7.md) records a separate
+size/digest regression at the same physical-copy boundary.
