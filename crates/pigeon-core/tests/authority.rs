@@ -503,7 +503,7 @@ fn a_decision_is_accepted_iff_its_signer_may_make_it(tc: TestCase) {
     }
 }
 
-#[hegel::test(test_cases = 300)]
+#[hegel::test(test_cases = 1000)]
 fn only_files_and_pointers_are_well_formed(tc: TestCase) {
     let p: &str = pick(&tc, &["r", "new", "S/new"]);
     let (mode, kind) = pick(

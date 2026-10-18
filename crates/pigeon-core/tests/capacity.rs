@@ -1,6 +1,11 @@
 //! Laws of capacity (08 §8.9; pigeon-core `capacity`): admission, the
 //! reserve and the need in parts.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "generated custody capacity law fixtures"
+)]
 mod common;
 
 use common::{flag, int, pick};
@@ -184,7 +189,7 @@ fn the_parts_of_the_need_sum_to_k_times_each_distinct_key(tc: TestCase) {
     }
 }
 
-#[hegel::test(test_cases = 300)]
+#[hegel::test(test_cases = 1000)]
 fn capacity_counts_at_most_one_copy_per_custodian(tc: TestCase) {
     let cs: Vec<(Option<u64>, u64)> = (0..int(&tc, 0, 4))
         .map(|_| {

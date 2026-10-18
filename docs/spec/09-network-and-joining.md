@@ -341,7 +341,10 @@ tools are those of ADR 0047, which fixes their formats:
   sheet's device is named `YYYY-MM-DD-xxxxxx` after the day it was printed
   and 6 hex digits of its ID; the sheet prints that name (`label` in its
   code) and the People page lists it as a paper recovery sheet printed on
-  that day **[no ADR]**.
+  that day **[no ADR]**. Recovery-sheet schemas are closed under ADR 0048;
+  an absent legacy label stays supported. Input uses the last `pgr`-prefixed
+  token, without falling back past an unreadable or unsupported candidate,
+  and stays within the existing one-MiB IPC-frame bound.
 - **Refounding:** `pigeon refound [REPOSITORY]` signs a new genesis with the
   last accepted tree and the refounder as only admin, keeping the old
   history replicated and its keys in `keys()`; existing folders join the new

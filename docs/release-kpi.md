@@ -363,3 +363,19 @@ validation and publication. Its initial grouping-only CI also passed;
 that head's unfinished bridge run was cancelled for the changed-source rollup.
 No unchanged-source CI retry is used. The pure-engine allocation improvement
 is separate from the still-open full resource/HDD budgets and real elapsed gates.
+
+## v0.6.47 publication observation
+
+[v0.6.47](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.47),
+source `16f0bfac5a2b84f020a0f26f782ec21d8e698c45`, publishes on 18 October
+at 18:32:05 UTC. Its release workflow starts at 18:21:20 UTC: candidate lead
+is **645 seconds (10m45s)**, and the completed gap is **2118 seconds (35m18s)**.
+Both targets are met. All four tag gates pass on their first attempt. Six
+assets, four archive checksums, native Linux installation, pinned annex,
+completions and latest are independently verified. The CLI credential expires
+during publication; the connected GitHub app confirms the completed gates,
+and public HTTPS supplies the release assets for the same verification.
+The aggregate collector cannot refresh while its CLI authentication fails;
+the previous snapshot has 52 lead samples and 51 completed intervals, and
+this publication adds one of each. The release ships refusal of unreadable
+joined/recovered file objects; full resource/HDD and elapsed gates remain open.
