@@ -671,3 +671,18 @@ lab 39084576152, slice 39084576042
 and release 39084576200. The removed pre-tag wait
 is recorded above; this one publication establishes no sustained improvement
 or isolated causal effect. No required gate or platform archive was waived.
+
+## v0.6.19 blocked candidate
+
+The latest verified publication remains v0.6.18 at 01:07:52 UTC on
+18 October. Candidate v0.6.19 does not publish: CI 39086343038 fails
+initial-copy waits in native shards 0 and 3. One bounded retake passes
+shard 0 but repeats shard 3's initial-protection timeout. Lab and slice
+pass and both archives build; publication correctly refuses the failed
+Linux gate. The second shard artifact and distinct local passing
+observations are recorded in the [own-read report](reports/read-latency-7.md).
+No third retry, moved tag or missing-copy waiver resets the publication
+clock. The 01:59:24 UTC KPI snapshot records 51 minutes since the last
+publication, 27 lead-time samples, 26 completed-gap samples and one
+unpublished candidate. The two-hour publication and one-hour lead targets
+remain unchanged; a failed workflow's duration is not publication lead.

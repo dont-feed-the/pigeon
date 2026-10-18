@@ -93,3 +93,22 @@ integrated before PR validation. That integration adds CI/runtime evidence
 and replay checks; it changes no Rust source from the preceding runtime
 parent. Final formatting, all-target workspace Clippy and file/header,
 ADR-index and spec-reference checks run again before committing.
+
+## Release validation
+
+PR #89, head `dab49b0a1fd73c257f2455586886ee1bc7bfb78b`, integrates current main
+`8434c4f8549db0f88410a4c30dd7140c3274cc3b` before validation and passes CI 39088860699,
+lab 39088860805 and bridge 39088860705.
+The local proof, earlier quiet-window regression and cache-artifact rebuild
+remain distinct above. M6 is still incomplete; this checkpoint does not
+claim the reference/HDD budgets or the full global queue. The actual
+Mac supervisor/CPU result is documented in the native preset runtime report.
+
+This candidate also carries the invitation-paste and idle-supervisor fixes
+from unpublished v0.6.19 and PR #88's verified CI/runtime improvements.
+The failed v0.6.19 tag is immutable, with both original and bounded-retake
+fixtures retained; no third retry or gate waiver is applied to it.
+The latest independently verified publication preceding this candidate is
+v0.6.18. The new tag must pass fresh Linux CI/lab/slice gates, both archives
+and installation/publication verification. Main cache warming is not an
+extra pre-tag gate, and active main Rust cache producers remain protected.
