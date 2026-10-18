@@ -50,3 +50,8 @@ pass. Current v0.6.21 main is integrated before the first hosted dispatch;
 its intervening changes are version/lockfile and release evidence, with Rust
 sources equal to the preceding runtime parent. The hosted verdict remains
 pending and no ZFS runtime success is claimed here.
+
+GitHub rejects the first dispatch before allocating a runner: runner.temp
+is not available in job-level env. Temporary-directory setup moves into
+the execution step using RUNNER_TEMP; no native execution or filesystem
+verdict is attributed to that rejected definition.

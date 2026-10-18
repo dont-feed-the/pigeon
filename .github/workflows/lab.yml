@@ -146,7 +146,6 @@ jobs:
     timeout-minutes: 30
     env:
       PIGEON_REQUIRE_GIT_ANNEX: 1
-      TMPDIR: ${{ runner.temp }}/pigeon-zfs-tests
       CARGO_INCREMENTAL: "0"
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
       CARGO_PROFILE_TEST_DEBUG: line-tables-only
@@ -184,6 +183,7 @@ jobs:
       - name: native programs and explicit ZFS fixture
         run: |
           set -e
+          export TMPDIR="$RUNNER_TEMP/pigeon-zfs-tests"
           mkdir -p "$TMPDIR"
           cargo build --locked -p pigeon -p pigeond -p git-annex-p2p-iroh --features pigeond/lab
           scripts/check-zfs
