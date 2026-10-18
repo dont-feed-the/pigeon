@@ -119,3 +119,27 @@ concurrent client saves, offline regular-peer capture and bidirectional
 convergence, then provider removal and bridge restart with stable identities.
 All-target Clippy has zero warnings; formatting and repository checks pass.
 Hosted validation still runs on the final exact source head before merge.
+
+## Integrated release validation
+
+PR #98, head `8881da11da4088ef8c2181e3e02c1173703cf847`, integrates main `d4e4e7ff65a6cc0e6b8dcb310c3406aac859a51c` before
+validation. CI 39106911822, lab 39106911787 and bridge
+39106911796 pass. v0.6.28 was published and independently
+verified before this candidate. The complete joining/signing review and
+M6/M7 resource and elapsed gates remain open. Fresh v0.6.29 tag gates and
+independent publication/install checks are required before it is released.
+
+The integrated rollup passes 181 daemon-library cases, 19 Git-driver library cases, eight native
+invitation/retry/crash-resume cases and 118 script contracts. The short lab
+diagnostic stops unmeasured and retains both live-peer snapshots. The full
+native reference result remains independent evidence, not a passing budget.
+
+The original final-head native shard 3 miss is retained from CI 39106911822,
+job 117614668013, artifact 12129121185, SHA-256
+`0e4445f2ffdccac74471a81659966e385e5b7d1d841f43308d5f331b79287d6b`. Its initial Protected wait expires before deletion,
+with all 102 source objects and only 26 backup objects independently
+hash-verified; both peers accepted the same captured main. Logs record
+repeated I/O-pressure waits and continued placement. The exact live transfer
+state is unproved. One unchanged-source retry of only that shard and its
+selection aggregate passes; no assertion, wait budget or source changes.
+This original receives no further retries.

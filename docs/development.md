@@ -108,6 +108,11 @@ look at the pages with sample data, `PIGEON_WEB_DEMO=8123 cargo test -p
 pigeon-web --lib serve_the_demo -- --ignored --nocapture` serves them on
 127.0.0.1:8123 and prints login links.
 
+Functional native protection waits allow 120 seconds of active work, excluding
+only a declared disk-pressure wait after capture is complete, with a five-minute
+wall bound. The actual Protected predicate is unchanged. Capture waits and the
+separate measured resource budgets do not receive this exemption.
+
 The integration tests of `pigeond` need git-annex on the `PATH`. Under
 cargo, git ignores your global and system configuration and ignore files
 ([`.cargo/config.toml`](../.cargo/config.toml)), as it does under pigeond.

@@ -98,3 +98,36 @@ formatting and repository checks pass. A stale local shared-target system
 metadata artifact initially caused missing-export compilation errors;
 rebuilding that package resolves them without changing source.
 A clean pushed source head is required for the next full-size measurement.
+
+
+## Functional protection waits under native I/O pressure
+
+The final PR #98 head's original held-deletion fixture expires its initial
+Protected wait with 102 valid source objects, only 26 valid backup objects
+and both peers on the same captured main. Source artifact 12129121185,
+SHA-256 `0e4445f2ffdccac74471a81659966e385e5b7d1d841f43308d5f331b79287d6b`,
+retains repeated native I/O-pressure pauses and continued placement. One
+unchanged-source shard retry passes. No source/timeout change is made to
+that release candidate, and no further retry of the original is allowed.
+
+This follow-up gives functional Protected waits their existing 120 seconds
+of active work rather than charging the declared disk-pressure waits that
+spec 15 §15.4 deliberately permits. A five-minute wall bound remains.
+Only the known disk-wait headline, while no capture is pending, stops this
+test clock. Capture and other waits retain their original elapsed budget;
+missing copies, wrong states and absent captures still fail. Native default
+resource limits remain unchanged. Existing ActiveClock laws cover clock
+accounting; the native functional suites validate the real protection
+predicate. The separate reference/E17 performance requirements are unchanged.
+
+
+Main v0.6.29 candidate `47dc25a07b21c83b43505e63ac8f99f51db91b9a` is
+integrated before the next hosted PR validation, with no PR version change.
+All 234 combined library cases pass again in 18.123 seconds and all 120
+script contracts pass. Both held-name native cases and all 16 native capture
+scheduling cases pass together in 22.188 seconds. All-target workspace
+Clippy has zero warnings; formatting and repository checks pass. The
+clean-source full-size diagnostic remains pinned to
+`589fdbd19c8a4d6ccac62d433a05bcf0916a3e14`; subsequent changes here are
+release-version integration, documentation and functional-test waiting.
+No production Rust source differs from that measured feature head.

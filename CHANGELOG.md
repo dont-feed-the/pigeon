@@ -9,14 +9,18 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Linux capture checks open writers together, reducing repeated process
+  scanning when many files are saved at once.
+
+## 0.6.29 — 2026-10-18
+
+### Fixed
+
 - Saving a file can interrupt a background transfer that holds repository
   locks, allowing the save to finish instead of waiting on suspended work.
 - Failed laptop joins preserve their unfinished folder and files added during
   setup. Retrying the same group keeps the original repository and identity.
 
-
-- Linux capture checks open writers together, reducing repeated process
-  scanning when many files are saved at once.
 
 ## 0.6.28 — 2026-10-18
 
