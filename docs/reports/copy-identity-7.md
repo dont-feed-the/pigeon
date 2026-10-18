@@ -26,8 +26,7 @@ location, then requires the wrong-size key to fail and the correct key to
 pass for both laptop and ordinary custodian roles. All 240 daemon-library
 checks pass, including later corruption/removal, native batch boundaries,
 helper lifecycle and the actual pinned native capability. Workspace
-all-target Clippy, formatting and repository rules pass. Current-main
-integration, exact-head network checks and CI still precede merging.
+all-target Clippy, formatting and repository rules pass. Current main `1cdf1cc8ae12463c530c365e6ae92dca355c960c` is integrated before validation. The exact-head native regression and existing 1000-case matching law pass. All seven native capacity, slice, health and status checks pass in 57.636 seconds with pigeon2, with unchanged source and program hashes. PR #121 passes CI 39174375525, lab 39174375537 and bridge 39174375559. All 164 script contracts also pass, including source-bound companion versions. Fresh v0.6.52 tag gates and independent publication verification remain required.
 
 This strengthens the physical-copy checks beside
 [stream-owned lookups](sync-lookups-7.md). It supplies no missing reference
