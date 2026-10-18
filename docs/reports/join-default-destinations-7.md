@@ -47,3 +47,23 @@ and the complete joining/signing review remain separate work. Current main
 is integrated after that run. Its tree is identical to the earlier native
 base, and the final runtime/test source hashes still match. Fresh PR
 validation and publication are required; M6/M7 and v1.1 remain open.
+
+## Integrated release validation
+
+PR #117, head `c80b1008c9d513f2eff1518eb909b00776ba4c85`, passes
+CI 39158514453, lab 39158514481 and bridge 39158514420. PR #118,
+head `fd5f7baeda4f91c74043500d8238f362b448a169`, passes CI 39159723258,
+lab 39159723296 and bridge 39159723288 on its first attempt. Current main
+`a2af21b9da5fcfa0040cdb509e073be4645e323f` is integrated before the
+combined v0.6.48 release commit. Its tree equals the tested PR #118 head.
+
+Local checks pass all 234 daemon library cases, 19 localization cases and
+the seven actual invitation/retry/recovery flows with unchanged source and
+program SHA fences. Workspace checking updates the release lockfile;
+all-target workspace Clippy, formatting and repository rules pass. The
+original input/materialization and destination failures, Nextcloud HTTP 412,
+Git exec-readiness failure and corrected attribute inventory remain recorded
+separately. No unchanged-source CI retry supplies a pass. Fresh v0.6.48 tag
+gates, both platform archives and independent asset/install verification
+remain required. Resource/HDD qualification, full security/trace review and
+real elapsed gates remain open.

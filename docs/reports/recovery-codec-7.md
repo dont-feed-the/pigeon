@@ -104,8 +104,16 @@ the earlier performance experiment's runtime or measurement criteria.
 An attribute audit finds six remaining properties using 300 cases: one
 file/pointer authority law, one per-custodian capacity law, and four pure
 scenario/model-interpreter laws. All now use 1000. The previously corrected
-signature laws remain at 1000. In this snapshot, all 277 explicit
-`hegel::test` attributes specify at least 1000 cases, and none relies on an
-implicit count. The before/after inventory is retained. This is a count
+signature laws remain at 1000. PR #117 has 277 attributes with an explicit
+case count, all at least 1000. The initial inventory misses the native S9
+executor's nested health-check attribute and incorrectly reports that no
+attribute lacks an explicit count. The corrected inventory retains that
+exception: `pigeon-lab/tests/s9_exec.rs` receives `HEGEL_TEST_CASES` from
+`scripts/check-s9-schedules`, with the mandatory 1000 actual schedules
+distributed across nightly shards. Returning without native programs earns
+no executed-schedule credit. This correction changes no CI workload.
+The default-destination follow-up adds two explicit 1000-case laws, giving
+279 explicitly counted attributes plus the profile-controlled S9 executor.
+The original and corrected inventories remain retained. This is a count
 audit, not proof that every planned law exists or that every trace/refinement
 obligation is complete; the broader M7 audit and elapsed gates remain open.
