@@ -76,3 +76,38 @@ The next full-size diagnostic uses a clean integrated source and a bounded
 artifacts before any further experiment. It remains diagnostic and cannot
 qualify M6, regardless of a passing numeric result. Physical-HDD and actual
 elapsed qualification gates remain separate.
+
+## Integrated release validation
+
+PR #108, head `b41ee1b0b7bbe67507416a9f31f04b32bbaf4b9c`, integrates main `24dcd39b382b7e3a961b8554c5002c6a15d04a4d` before validation.
+CI 39128854663, lab 39128854642 and bridge
+39128854695 pass. v0.6.38 is independently published
+and verified first. Local validation passes 141 script contracts,
+26 bridge library cases, 28 selected daemon/installation cases, and the
+32-file two-peer Fast-to-Gentle smoke with all twelve phase kinds and
+independent object hashes. All-target Clippy and repository checks pass.
+Fresh v0.6.39 tag gates and independent publication verification remain
+required. The full-size diagnostic and periodic Mac suite stay separate;
+no resource or actual elapsed gate is inferred from these finite checks.
+
+## Full-size bounded observation
+
+The exact integrated source `b41ee1b0b7bbe67507416a9f31f04b32bbaf4b9c`
+runs in diagnostic Fast preparation using production `--release` programs
+on all 100,000 files and 50 GB of logical content. Run
+[39128852965](https://github.com/dont-feed-the/pigeon/actions/runs/39128852965)
+expires its 600-second preparation bound. The source reports ingestion
+started at 12:56:45 UTC and 24,576 processed files at 13:06:46, with
+600,866,209 elapsed microseconds. Neither independent proof nor backup
+planning has started. Backup accepted paths and object files remain zero.
+Twenty bounded preparation snapshots are retained. This isolates ingestion
+as the immediate preparation bottleneck; it does not qualify any budget.
+
+The original completed job log and artifact 12136838833 are preserved before
+further experiments. The archive is 3,582 bytes with SHA-256
+`e0b78cd41987e9e70f1f3c9ecc8abca0833ced80545b6f20ce9b2665290f3e97`.
+The diagnostic is not retried unchanged. A separate local native Git trace
+on 128 synthetic 500,000-byte files observes two annex clean-filter children
+when capture corrects staged executable modes with `update-index --chmod`.
+That narrow observation motivates an index-only mode experiment; it does
+not establish the cause of the whole large-tree preparation duration.

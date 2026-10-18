@@ -7,6 +7,14 @@ increments the second number, and every other release the third.
 
 ## Unreleased
 
+### Fixed
+
+- A device opening incomplete peer requests leaves initial connection and
+  header capacity available for other devices. Accepted transfers keep
+  their existing limits.
+
+## 0.6.39 — 2026-10-18
+
 ### Added
 
 - Debug diagnostics show file-ingestion, byte-check and backup-planning

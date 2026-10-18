@@ -5,9 +5,9 @@
 The historical snapshot below is retained for context. The user has since
 authorized the whole roadmap through v1.1, pushes, green non-draft PR merges,
 and publication. M0–M5 are released. The independently verified publication
-checkpoint recorded here is [v0.6.38](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.38),
-source `24dcd39b382b7e3a961b8554c5002c6a15d04a4d`, published on 18 October at
-12:40:06 UTC. Check [live releases](https://github.com/dont-feed-the/pigeon/releases)
+checkpoint recorded here is [v0.6.39](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.39),
+source `9f8929e67e0ee8d61b0f9f04ee051a77244993f8`, published on 18 October at
+13:12:11 UTC. Check [live releases](https://github.com/dont-feed-the/pigeon/releases)
 and [the KPI](docs/release-kpi.md) for newer completed publications.
 The failed v0.6.0 tag remains
 immutable and unpublished. See [M5 evidence](docs/reports/deletion-6.md).

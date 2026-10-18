@@ -73,6 +73,7 @@ async fn stream(
     connection: iroh::endpoint::Connection,
     send: SendStream,
     mut recv: RecvStream,
+    header_slot: admission::Header,
 ) {
     let header = match tokio::time::timeout(HEADER_TIMEOUT, read_line(&mut recv)).await {
         Ok(Ok(line)) => serde_json::from_slice::<StreamHeader>(&line).ok(),
@@ -90,6 +91,10 @@ async fn stream(
     let Some(admitted) = net.directory.admit(&header.group, &device) else {
         return refuse(send, &device, Refusal::NotInRoster).await;
     };
+    // Initial quotas protect other identities while a peer is unadmitted.
+    // Keep only global limits once roster membership has been established;
+    // accepted long transfers and their metadata dependencies stay unchanged.
+    header_slot.admitted();
     let Some(socket) = net.listeners.get(&header.group) else {
         return refuse(send, &device, Refusal::NotListening).await;
     };
