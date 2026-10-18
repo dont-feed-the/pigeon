@@ -42,3 +42,15 @@ This is initial admission isolation by transport identity. Already-admitted
 members, multiple identities and transport-owned resources can still exhaust
 global capacity. It does not complete the broader M7 security review, resource
 qualification, real elapsed nights or the actual 72-hour soak.
+
+## Integrated release validation
+
+PR #109, head `4d6c812b2beb5ce3d62b007b69f95d55d6d6f4bc`, integrates main `9f8929e67e0ee8d61b0f9f04ee051a77244993f8` before validation.
+CI 39132057049, lab 39132057116 and bridge
+39132057031 pass. v0.6.39 is independently published
+and verified first. Local validation passes all eight focused admission
+checks, 198 daemon library cases and eight native join/recovery cases.
+All-target workspace Clippy and repository checks pass. Fresh v0.6.40
+tag gates and independent publication verification remain required.
+The full reference diagnostic and periodic Mac suite stay separate;
+no resource or actual elapsed gate is inferred from finite checks.
