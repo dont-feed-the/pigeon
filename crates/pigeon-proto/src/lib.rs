@@ -12,6 +12,7 @@ pub mod capacity;
 pub mod erase;
 pub mod health;
 pub mod join;
+mod join_paste;
 pub mod policy;
 pub mod stream;
 pub mod time;

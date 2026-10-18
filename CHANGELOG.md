@@ -5,6 +5,13 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Pasting an invitation with a long message no longer stalls while pigeon looks for the invitation.
+- Background resource checks avoid repeated uncached disk reads when the preset’s native priority stays the same.
+
 ## 0.6.18 — 2026-10-18
 
 ### Fixed

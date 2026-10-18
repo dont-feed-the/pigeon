@@ -3,7 +3,7 @@
 //! This hint grants no content authority and contains no paths or commands.
 
 use pigeon_core::resources::Preset;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn desired(preset: Preset) -> &'static [u8] {
     match preset {
@@ -12,13 +12,37 @@ fn desired(preset: Preset) -> &'static [u8] {
     }
 }
 
-/// A complete valid resource reading requests the matching native mode.
-/// Identical readings never rewrite: both supervisors watch file changes.
-/// Invalid configuration never reaches this function; retries after an I/O
-/// failure leave the prior supervisor policy in force until a full write.
-pub(crate) fn request(state: &Path, preset: Preset) {
-    if let Err(error) = write(state, preset) {
-        tracing::warn!(%error, "resource-supervisor-request-failed");
+/// One resource loop's last successfully reconciled native mode. Repeated
+/// complete configuration polls must not reopen an uncached control file.
+pub(crate) struct Requester {
+    state: PathBuf,
+    known: Option<&'static [u8]>,
+}
+
+impl Requester {
+    pub(crate) fn new(state: PathBuf) -> Self {
+        Self { state, known: None }
+    }
+
+    /// Invalid configuration never calls this; failed I/O stays retryable.
+    pub(crate) fn request(&mut self, preset: Preset) {
+        if let Err(error) = self.reconcile(preset) {
+            tracing::warn!(%error, "resource-supervisor-request-failed");
+        }
+    }
+
+    fn reconcile(&mut self, preset: Preset) -> std::io::Result<bool> {
+        let wanted = desired(preset);
+        if self.known == Some(wanted) {
+            return Ok(false);
+        }
+        // A failed durable write may already have renamed its file before
+        // the directory fsync failed. Forget the old mode before any I/O,
+        // so even reverting the preset reconciles the actual file again.
+        self.known = None;
+        let changed = write(&self.state, preset)?;
+        self.known = Some(wanted);
+        Ok(changed)
     }
 }
 
@@ -74,6 +98,87 @@ mod tests {
             );
             previous = Some(next);
         }
+    }
+
+    /// Law: an unchanged native mode never reconciles a missing hint again;
+    /// crossing the mode boundary reconciles to the final preset exactly.
+    #[hegel::test(test_cases = 1000)]
+    #[allow(
+        clippy::unwrap_used,
+        reason = "isolated per-loop reconciliation fixture"
+    )]
+    fn each_loop_reconciles_only_mode_changes(tc: TestCase) {
+        let temp = tempfile::tempdir().unwrap();
+        let state = temp.path().join("state");
+        let mut requester = Requester::new(state.clone());
+        let mut previous = None;
+        for _ in 0..tc.draw(gs::integers::<u8>().min_value(1).max_value(16)) {
+            let preset = match tc.draw(gs::integers::<u8>().max_value(2)) {
+                0 => Preset::Gentle,
+                1 => Preset::Balanced,
+                _ => Preset::Fast,
+            };
+            let next = desired(preset);
+            let hint = state.join("resource-priority");
+            let parked = temp.path().join("parked");
+            if previous == Some(next) {
+                std::fs::rename(&hint, &parked).unwrap();
+                assert!(!requester.reconcile(preset).unwrap());
+                assert!(!hint.exists());
+                std::fs::rename(&parked, &hint).unwrap();
+            } else {
+                assert!(requester.reconcile(preset).unwrap());
+                assert_eq!(std::fs::read(&hint).unwrap(), next);
+            }
+            previous = Some(next);
+        }
+    }
+
+    #[test]
+    #[allow(
+        clippy::unwrap_used,
+        reason = "isolated failed-request recovery fixture"
+    )]
+    fn failed_io_does_not_cache_a_mode_or_hide_a_later_revert() {
+        let temp = tempfile::tempdir().unwrap();
+        let state = temp.path().join("state");
+        let mut requester = Requester::new(state.clone());
+        requester.reconcile(Preset::Fast).unwrap();
+        let hint = state.join("resource-priority");
+        std::fs::remove_file(&hint).unwrap();
+        std::fs::create_dir(&hint).unwrap();
+        assert!(requester.reconcile(Preset::Gentle).is_err());
+        std::fs::remove_dir(&hint).unwrap();
+        // Conservatively cover a failed write having changed the observed
+        // bytes already. Returning to Fast must not trust its old memo.
+        std::fs::write(&hint, desired(Preset::Gentle)).unwrap();
+        assert!(requester.reconcile(Preset::Fast).unwrap());
+        assert_eq!(std::fs::read(&hint).unwrap(), desired(Preset::Fast));
+        let before = std::fs::metadata(&hint).unwrap().modified().unwrap();
+        assert!(!Requester::new(state).reconcile(Preset::Fast).unwrap());
+        assert_eq!(
+            std::fs::metadata(&hint).unwrap().modified().unwrap(),
+            before
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::unwrap_used,
+        reason = "isolated idle-reload filesystem fixture"
+    )]
+    fn equal_native_modes_do_not_reopen_or_recreate_the_hint() {
+        let temp = tempfile::tempdir().unwrap();
+        let state = temp.path().join("state");
+        let mut requester = Requester::new(state.clone());
+        requester.request(Preset::Gentle);
+        let parked = temp.path().join("parked");
+        std::fs::rename(&state, &parked).unwrap();
+        requester.request(Preset::Balanced);
+        assert!(
+            !state.exists(),
+            "an unchanged native mode touched missing state"
+        );
     }
 
     #[test]

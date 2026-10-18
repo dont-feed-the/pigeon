@@ -349,6 +349,7 @@ pub async fn run(d: std::sync::Arc<crate::daemon::Daemon>) {
     let mut tick = tokio::time::interval(Duration::from_millis(200));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut reload = Instant::now() - Duration::from_secs(2);
+    let mut native_priority = crate::resource_supervisor::Requester::new(d.dirs.state.clone());
     loop {
         tick.tick().await;
         if reload.elapsed() >= Duration::from_secs(2) {
@@ -359,7 +360,7 @@ pub async fn run(d: std::sync::Arc<crate::daemon::Daemon>) {
             match crate::config::load(&d.dirs.config_file()) {
                 Ok(config) => match config.resources.effective() {
                     Ok(settings) => {
-                        crate::resource_supervisor::request(&d.dirs.state, settings.preset);
+                        native_priority.request(settings.preset);
                         d.node.resources.configure(settings);
                         crate::download_queue::configure(&d, &config);
                     }

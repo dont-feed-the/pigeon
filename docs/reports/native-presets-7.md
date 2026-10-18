@@ -108,3 +108,42 @@ v0.6.17 was published and independently verified before this candidate.
 Mac dynamic supervisor behavior, the complete global queue, own-read
 latency feedback, measured reference/HDD budgets and actual elapsed M7
 gates remain open.
+
+## Per-loop idle reconciliation follow-up
+
+The initial adapter re-opened the native-priority hint for every valid
+two-second configuration reload. Its observed-inode reader deliberately
+requests uncached I/O, which is appropriate for large content but unnecessary
+for an unchanged scheduling hint. A native filesystem fixture reproduces the
+extra work: after the first request its state directory is moved away, and an
+equal background-mode request unexpectedly recreates it. The original
+assertion fails; after the correction it passes.
+
+Each running resource loop now remembers its last successfully reconciled
+mode, bound to its immutable state path. Equal modes return before filesystem
+access. Gentle/Balanced changes share that entry. A new loop reconciles the
+existing hint once; actual mode changes retain the bounded observed-inode
+check and atomic durable write. Failed I/O clears the memo before any side
+effect, because an atomic replacement may succeed before its directory fsync
+fails. Retrying or reverting the preset therefore reconciles the real file.
+The hint remains a local scheduling request, never authority.
+
+A second 1000-case mode law checks per-loop idempotence against a temporarily
+absent hint and exact bytes after every mode boundary. Concrete fixtures
+cover unchanged reloads, failed requests, a later revert and fresh-loop
+startup without rewriting matching bytes. All 24 affected daemon checks pass
+in 10.999 seconds on integrated v0.6.18 main; all 35 protocol checks pass
+in the same combined source, with all-target Clippy and no warnings. These
+finite fixtures do not measure a device’s idle or foreground HDD budget.
+
+## Periodic Mac maintenance runtime observation
+
+Mac background run 39081473616 uses v0.6.16 source
+`889da1814fae629deb26ab1ac78988ed1207a291`, before native presets. Workspace
+job 117540787525 passes 749 checks (one skip) in 200.525 seconds. Its actual
+Apple child-priority inheritance fixture passes, and
+`scrub_checks_real_objects_at_idle_priority_and_keeps_a_durable_result`
+passes in 4.343 seconds. All four native daemon shards pass their 53 checks
+and subsequent trace validation. This is newer runtime evidence for the
+maintenance fix; it is not Mac dynamic preset-switching or measured-budget
+evidence. The workflow’s slice stage is in progress at this observation.

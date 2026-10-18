@@ -212,12 +212,7 @@ pub fn invitation(pasted: &str) -> String {
     let Some(start) = pasted.find("pgn2-") else {
         return pasted.trim().to_owned();
     };
-    let words: Vec<&str> = pasted[start + 5..].split_whitespace().collect();
-    (1..=words.len())
-        .rev()
-        .map(|n| format!("pgn2-{}", words[..n].concat()))
-        .find(|code| decode(code).is_some())
-        .unwrap_or_else(|| pasted.trim().to_owned())
+    crate::join_paste::find(&pasted[start + 5..]).unwrap_or_else(|| pasted.trim().to_owned())
 }
 
 #[cfg(test)]
@@ -250,6 +245,13 @@ mod tests {
             invitation(&format!("{} --backup-machine", command(&code))),
             code
         );
+    }
+
+    #[test]
+    fn a_long_message_after_a_valid_invitation_does_not_hide_it() {
+        let code = code();
+        let pasted = format!("{code} {}", "a ".repeat(100_000));
+        assert_eq!(invitation(&pasted), code);
     }
 
     #[test]
