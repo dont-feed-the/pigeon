@@ -3,7 +3,11 @@
 //! operation renew inactivity time; progress never supplies a success or
 //! durability verdict. Final output stays byte-for-byte unchanged.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::collections::BTreeMap;
+use std::sync::{
+    Mutex,
+    atomic::{AtomicU64, Ordering},
+};
 use tokio::io::{AsyncRead, AsyncReadExt};
 
 /// Maximum additional buffered line: oversized output passes through.
@@ -12,8 +16,27 @@ const MAX_LINE: usize = 16_384;
 #[derive(Debug)]
 pub(crate) struct Progress {
     command: &'static str,
-    key: String,
+    subject: Subject,
     bytes: AtomicU64,
+}
+
+enum Subject {
+    Key(String),
+    Files(Mutex<BTreeMap<String, u64>>),
+}
+impl std::fmt::Debug for Subject {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Key(_) => f.write_str("Key([redacted])"),
+            Self::Files(files) => f
+                .debug_struct("Files")
+                .field(
+                    "count",
+                    &files.lock().unwrap_or_else(|p| p.into_inner()).len(),
+                )
+                .finish(),
+        }
+    }
 }
 
 fn transfer(args: &[&str]) -> Option<&'static str> {
@@ -42,14 +65,43 @@ pub(crate) fn instrument_batch(args: &mut Vec<String>) {
 }
 
 impl Progress {
-    pub(crate) fn one_shot(args: &[&str]) -> Option<Self> {
-        let command = transfer(args)?;
+    pub(crate) fn one_shot(args: &[&str], input: Option<&[u8]>) -> Option<Self> {
+        let Some(command) = transfer(args) else {
+            return Self::capture(args, input);
+        };
         let key = args
             .windows(2)
             .find(|pair| pair[0] == "--key")
             .map(|pair| pair[1])
             .or_else(|| args.iter().find_map(|arg| arg.strip_prefix("--key=")))?;
         Some(Self::new(command, key))
+    }
+
+    fn capture(mut args: &[&str], input: Option<&[u8]>) -> Option<Self> {
+        while args.first() == Some(&"-c") {
+            args = args.get(2..)?;
+        }
+        if !matches!(args, ["annex", "add", ..])
+            || !["--json", "--batch", "-z"]
+                .iter()
+                .all(|option| args.contains(option))
+        {
+            return None;
+        }
+        let text = std::str::from_utf8(input?.strip_suffix(b"\0")?).ok()?;
+        let names: Vec<_> = text.split('\0').collect();
+        if names.len() > 64 || names.iter().any(|name| name.is_empty()) {
+            return None;
+        }
+        let files: BTreeMap<_, _> = names.iter().map(|name| ((*name).to_owned(), 0)).collect();
+        if files.len() != names.len() {
+            return None;
+        }
+        Some(Self {
+            command: "add",
+            subject: Subject::Files(Mutex::new(files)),
+            bytes: AtomicU64::new(0),
+        })
     }
 
     pub(crate) fn batch(args: &[&str], key: &str) -> Option<Self> {
@@ -62,7 +114,7 @@ impl Progress {
     fn new(command: &'static str, key: &str) -> Self {
         Self {
             command,
-            key: key.to_owned(),
+            subject: Subject::Key(key.to_owned()),
             bytes: AtomicU64::new(0),
         }
     }
@@ -87,17 +139,43 @@ impl Progress {
             return false;
         }
         let action = value.get("action");
-        let key = action
-            .and_then(|a| a.get("key"))
-            .and_then(serde_json::Value::as_str);
         let command = action
             .and_then(|a| a.get("command"))
             .and_then(serde_json::Value::as_str);
         let within_size = value
             .get("total-size")
             .is_none_or(|total| total.as_u64().is_some_and(|total| bytes <= total));
-        if key == Some(self.key.as_str()) && command == Some(self.command) && within_size {
-            self.bytes.fetch_max(bytes, Ordering::Relaxed);
+        if command == Some(self.command) && within_size {
+            match &self.subject {
+                Subject::Key(key) => {
+                    if action
+                        .and_then(|a| a.get("key"))
+                        .and_then(serde_json::Value::as_str)
+                        == Some(key.as_str())
+                    {
+                        self.bytes.fetch_max(bytes, Ordering::Relaxed);
+                    }
+                }
+                Subject::Files(files) => {
+                    if let Some(file) = action
+                        .and_then(|a| a.get("file"))
+                        .and_then(serde_json::Value::as_str)
+                        && let Some(previous) = files
+                            .lock()
+                            .unwrap_or_else(|p| p.into_inner())
+                            .get_mut(file)
+                        && bytes > *previous
+                    {
+                        let advance = bytes - *previous;
+                        *previous = bytes;
+                        let _ =
+                            self.bytes
+                                .try_update(Ordering::Relaxed, Ordering::Relaxed, |total| {
+                                    Some(total.saturating_add(advance))
+                                });
+                    }
+                }
+            }
         }
         true
     }

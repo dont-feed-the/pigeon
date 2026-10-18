@@ -1,6 +1,6 @@
-# macOS validation is periodic evidence, not a release gate. Workflow stages
-# stay sequential; two-wide matrices permit at most four background Mac jobs
-# in CI or slice, with room for archive builds under the account's allocation.
+# macOS validation is periodic evidence, not a release gate. Stages stay
+# sequential. CI peaks at four jobs; slice uses at most three (two fixed,
+# one random), leaving room for release archives and pinned dependencies.
 # An active release defers a new background run.
 name: macos-background
 

@@ -20,6 +20,7 @@ pub mod bridge;
 mod capacity_view;
 pub mod capture;
 pub mod capture_file;
+mod capture_read;
 pub mod capture_schedule;
 mod capture_status;
 pub mod change;

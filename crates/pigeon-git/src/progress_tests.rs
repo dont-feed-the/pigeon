@@ -83,3 +83,89 @@ fn matching_progress_is_an_order_independent_maximum(tc: TestCase) {
         assert_eq!(progress.bytes(), expected);
     }
 }
+
+fn capture_record(file: &str, count: u64) -> Vec<u8> {
+    let mut bytes = serde_json::to_vec(
+        &serde_json::json!({"byte-progress":count,"action":{"command":"add","file":file}}),
+    )
+    .unwrap();
+    bytes.push(b'\n');
+    bytes
+}
+fn capture() -> Progress {
+    Progress::capture(
+        &["annex", "add", "--json", "--batch", "-z"],
+        Some(b"a\nfile\0b\0"),
+    )
+    .unwrap()
+}
+
+#[hegel::test(test_cases = 1000)]
+fn capture_progress_is_the_saturating_sum_of_each_planned_files_maximum(tc: TestCase) {
+    let counts: [u64; 12] = std::array::from_fn(|_| tc.draw(gs::integers::<u64>()));
+    let expected = counts
+        .iter()
+        .step_by(2)
+        .copied()
+        .max()
+        .unwrap()
+        .saturating_add(counts.iter().skip(1).step_by(2).copied().max().unwrap());
+    for reverse in [false, true] {
+        let progress = capture();
+        for index in 0..counts.len() {
+            let at = if reverse {
+                counts.len() - 1 - index
+            } else {
+                index
+            };
+            assert!(progress.consume(&capture_record(
+                if at % 2 == 0 { "a\nfile" } else { "b" },
+                counts[at]
+            )));
+            assert!(progress.consume(&capture_record("unplanned", u64::MAX)));
+        }
+        assert_eq!(progress.bytes(), expected);
+    }
+}
+
+#[hegel::test(test_cases = 1000)]
+fn capture_read_boundaries_preserve_all_final_answers(tc: TestCase) {
+    let step = usize::from(tc.draw(gs::integers::<u8>().min_value(1)));
+    let progress = capture();
+    let first = b"{\"command\":\"add\",\"file\":\"a\\nfile\",\"success\":true}\n";
+    let second = b"{\"command\":\"add\",\"file\":\"b\",\"success\":true}\n";
+    let mut stream = capture_record("a\nfile", 7);
+    stream.extend(first);
+    stream.extend(capture_record("b", 11));
+    stream.extend(capture_record("a\nfile", 3));
+    stream.extend(second);
+    let mut expected = first.to_vec();
+    expected.extend(second);
+    let mut lines = Lines::default();
+    let mut output = Vec::new();
+    for chunk in stream.chunks(step) {
+        lines.feed(chunk, &progress, &mut output);
+    }
+    output.append(&mut lines.pending);
+    assert_eq!(output, expected);
+    assert_eq!(progress.bytes(), 18);
+}
+
+#[test]
+fn only_bounded_complete_capture_batches_enable_file_progress() {
+    let args = ["annex", "add", "--json", "--batch", "-z"];
+    for input in [
+        b"".as_slice(),
+        b"unterminated",
+        b"same\0same\0",
+        b"\xff\0",
+        b"a\0\0",
+    ] {
+        assert!(Progress::capture(&args, Some(input)).is_none());
+    }
+    let oversized: Vec<u8> = (0..65)
+        .flat_map(|n| format!("file{n}\0").into_bytes())
+        .collect();
+    assert!(Progress::capture(&args, Some(&oversized)).is_none());
+    assert!(Progress::capture(&args, Some(b"a\nfile\0")).is_some());
+}

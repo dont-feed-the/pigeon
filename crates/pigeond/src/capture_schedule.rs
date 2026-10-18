@@ -211,11 +211,9 @@ async fn aged_epoch(latest: i64) -> Option<i64> {
     }
 }
 
-/// Bind the actual bytes after ingestion to their exact staged pointer.
-/// Annex may change ctime while adding/removing its temporary hardlink, so
-/// an unchanged pre-ingestion stat cannot prove this observation. CalcKey
-/// hashes the working file afresh (Command/CalcKey.hs run -> Backend.genKey),
-/// under capture's native resource control, never during a status request.
+/// Bind actual streamed bytes after ingestion to their exact staged pointer.
+/// Keep the native timestamp fence and descriptor/path observations; this
+/// cache authorizes no overwrite, transfer, erasure or custody claim.
 pub(crate) async fn checked(g: &Group, paths: &[String], index: &pigeon_core::authority::Tree) {
     if paths.is_empty() {
         return;
@@ -227,47 +225,43 @@ pub(crate) async fn checked(g: &Group, paths: &[String], index: &pigeon_core::au
             .iter()
             .map(|path| pigeon_sys::fs::lstat(&wt.join(path)).ok().flatten())
             .collect();
-        // The observed ctime must already be older than a kernel tick
-        // before hashing, so a write during the read cannot reuse that tick.
         let Some(latest) = before.iter().flatten().map(|stat| stat.ctime_ns).max() else {
             continue;
         };
         let Some(epoch) = aged_epoch(latest).await else {
             continue;
         };
-        let files: Vec<_> = chunk.iter().map(|path| wt.join(path)).collect();
-        let mut args = vec!["annex", "calckey", "--"];
-        let Some(names) = files
-            .iter()
-            .map(|file| file.to_str())
-            .collect::<Option<Vec<_>>>()
-        else {
-            continue;
-        };
-        args.extend(names);
-        let Ok(keys) = g.git.run(&args).await else {
-            continue;
-        };
-        let keys: Vec<_> = keys.lines().collect();
-        if keys.len() != chunk.len() {
-            continue;
-        }
-        for ((path, before), key) in chunk.iter().zip(before).zip(keys) {
-            let Some(stat) = before else { continue };
+        for (path, before) in chunk.iter().zip(before) {
+            let Some(stat) = before else {
+                continue;
+            };
             let Some(entry) = index.get(path) else {
                 continue;
             };
             if !stat.is_regular()
                 || stat.ctime_ns >= epoch
                 || (stat.mode & 0o111 != 0) != (entry.mode == "100755")
-                || pigeon_sys::fs::lstat(&wt.join(path)).ok().flatten() != Some(stat)
             {
                 continue;
             }
             let Ok(pointer) = g.git.object(&entry.oid).await else {
                 continue;
             };
-            if crate::git::pointer_key(&pointer).as_deref() != Some(key) {
+            let Some(key) = crate::git::pointer_key(&pointer) else {
+                continue;
+            };
+            if pigeon_core::export::key_sha256(&key).is_none() {
+                continue;
+            }
+            let Ok(Some((size, digest))) =
+                crate::capture_read::checked(wt.join(path), stat, g.git.repo.work_control()).await
+            else {
+                continue;
+            };
+            if size != stat.size
+                || !pigeon_core::export::matches(&key, size, &digest)
+                || pigeon_sys::fs::lstat(&wt.join(path)).ok().flatten() != Some(stat)
+            {
                 continue;
             }
             g.lock().capture_schedule.verified.insert(

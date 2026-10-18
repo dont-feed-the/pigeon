@@ -4,7 +4,7 @@
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
-use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
 use rustix::fs::{CWD, RenameFlags, renameat_with};
@@ -256,7 +256,29 @@ pub struct StreamingRead {
 
 /// Open an ordinary streaming read with native page-cache advice (ADR 0037).
 pub fn streaming_read(path: &Path) -> Result<StreamingRead> {
-    let file = open_uncached(path)?;
+    streaming_file(open_uncached(path)?)
+}
+
+/// Open only the expected regular inode. A replacement pipe cannot wait for
+/// a writer, and a replacement final symlink is never followed (07 §7.2).
+pub fn streaming_read_exact(path: &Path, expected: Stat) -> Result<Option<StreamingRead>> {
+    if !expected.is_regular() {
+        return Ok(None);
+    }
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK | libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(|e| Error::path("open-observed", path, e))?;
+    if fstat(&file)? != expected {
+        return Ok(None);
+    }
+    #[cfg(target_vendor = "apple")]
+    rustix::fs::fcntl_nocache(&file, true).map_err(|e| Error::path("nocache", path, e.into()))?;
+    streaming_file(file).map(Some)
+}
+
+fn streaming_file(file: File) -> Result<StreamingRead> {
     #[cfg(target_os = "linux")]
     let page = {
         // SAFETY: sysconf reads a scalar system parameter and takes no pointer.
@@ -305,6 +327,13 @@ impl Read for StreamingRead {
     }
 }
 
+impl StreamingRead {
+    /// Observe the opened inode, independently of subsequent path changes.
+    pub fn stat(&self) -> Result<Stat> {
+        fstat(&self.file)
+    }
+}
+
 /// Tells the kernel that pigeon will not read this file's pages again:
 /// `posix_fadvise(POSIX_FADV_DONTNEED)` on Linux; nothing on macOS, where
 /// [`open_uncached`] already kept them out (ADR 0037).
@@ -320,6 +349,60 @@ pub fn forget_pages(file: &File) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_observed_file_replaced_by_a_pipe_does_not_wait_for_a_writer() {
+        use std::os::unix::ffi::OsStrExt;
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("observed");
+        std::fs::write(&path, b"original").unwrap();
+        let expected = lstat(&path).unwrap().unwrap();
+        std::fs::remove_file(&path).unwrap();
+        let name = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+        // SAFETY: live NUL-terminated path in an isolated fixture and valid mode.
+        assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+        let (send, receive) = std::sync::mpsc::channel();
+        let worker_path = path.clone();
+        let worker = std::thread::spawn(move || {
+            let result = streaming_read_exact(&worker_path, expected)
+                .map(|file| file.is_none())
+                .map_err(|error| error.to_string());
+            send.send(result).unwrap();
+        });
+        let result = receive.recv_timeout(std::time::Duration::from_secs(2));
+        // Release a regressed blocking open before asserting, so a failing
+        // test does not leave an immortal read worker or hang runtime shutdown.
+        let writer = if matches!(result, Err(std::sync::mpsc::RecvTimeoutError::Timeout)) {
+            Some(
+                OpenOptions::new()
+                    .write(true)
+                    .custom_flags(libc::O_NONBLOCK)
+                    .open(&path)
+                    .unwrap(),
+            )
+        } else {
+            None
+        };
+        worker.join().unwrap();
+        drop(writer);
+        assert!(
+            result.unwrap().unwrap(),
+            "replacement pipe must be refused without a writer"
+        );
+    }
+
+    #[test]
+    fn an_observed_file_replaced_by_a_final_symlink_is_not_followed() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("observed");
+        std::fs::write(&path, b"original").unwrap();
+        let expected = lstat(&path).unwrap().unwrap();
+        let target = temp.path().join("other");
+        std::fs::write(&target, b"unrelated").unwrap();
+        std::fs::remove_file(&path).unwrap();
+        std::os::unix::fs::symlink(&target, &path).unwrap();
+        assert!(streaming_read_exact(&path, expected).is_err());
+    }
 
     #[test]
     fn short_streaming_reads_preserve_every_byte_and_advise_completed_pages() {
