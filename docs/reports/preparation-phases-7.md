@@ -76,3 +76,16 @@ The next full-size diagnostic uses a clean integrated source and a bounded
 artifacts before any further experiment. It remains diagnostic and cannot
 qualify M6, regardless of a passing numeric result. Physical-HDD and actual
 elapsed qualification gates remain separate.
+
+## Integrated release validation
+
+PR #108, head `b41ee1b0b7bbe67507416a9f31f04b32bbaf4b9c`, integrates main `24dcd39b382b7e3a961b8554c5002c6a15d04a4d` before validation.
+CI 39128854663, lab 39128854642 and bridge
+39128854695 pass. v0.6.38 is independently published
+and verified first. Local validation passes 141 script contracts,
+26 bridge library cases, 28 selected daemon/installation cases, and the
+32-file two-peer Fast-to-Gentle smoke with all twelve phase kinds and
+independent object hashes. All-target Clippy and repository checks pass.
+Fresh v0.6.39 tag gates and independent publication verification remain
+required. The full-size diagnostic and periodic Mac suite stay separate;
+no resource or actual elapsed gate is inferred from these finite checks.
