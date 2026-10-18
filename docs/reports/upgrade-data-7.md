@@ -167,3 +167,42 @@ historical programs with the current pinned annex. These results do not cover
 every published patch, actual old release archives, status-quorum semantics,
 all mixed-version operations, other platforms or the final RC. Resource and
 real elapsed gates remain open.
+
+## Mixed-peer integrated release validation
+
+PR #111, head `e5f0b1bd57079daa03f0f7cc76664fa40af90c31`, integrates main `c08b5274cc99a5e89fee4c7bf2c952ce69f159a5` before validation.
+CI 39136117224, lab 39136117367 and bridge
+39136117309 pass. v0.6.41 is independently published
+and verified first. Local validation passes 153 script contracts and four
+native two-peer upgrade cases on one finalized harness/observer snapshot.
+All-target workspace Clippy and repository checks pass. Fresh v0.6.42
+tag gates and independent publication verification remain required.
+A longer full-size Fast diagnostic uses the new operation labels and the
+existing 5400-second preparation bound; it remains separate from budget
+qualification. Resource, actual-archive and elapsed gates remain open.
+
+## Actual published Linux archive checks
+
+`scripts/prepare-upgrade-archive` downloads the published Linux program and
+annex archives, resolves the immutable tag to its source, and checks every
+selected asset's size, available GitHub digest and release SHA-256 entry.
+It extracts only the three regular executable program payloads, rejects
+unsafe annex links and records both archive and executable fingerprints.
+Archived installers are not executed. The v0.5.13 and v0.6.1 payloads are
+prepared locally and their program versions match. Their historical release
+workflows build with `--release --locked` and no lab feature.
+
+The existing upgrade tools accept these snapshots only with the explicit
+`--release-archives` option. Their default still requires frozen lab programs.
+Published origin metadata, every program and the prefix's own annex binary
+are checked; both snapshots are checked again after the data exercise.
+An archive descriptor cannot silently stand in for a lab manifest.
+
+The targeted `lab.yml` profile uses an owned native Linux ext4 volume and
+requires both upgrade orders from v0.5.13 and v0.6.1 to a selected published
+target. Its sparse backing supplies the backup's normal 5GB admission
+reserve; it writes only the small synthetic fixtures and measures no
+resource or HDD budget. The reports, original data snapshots and failed
+downloads are retained separately. Native results must be recorded before
+claiming that this actual-archive matrix passes. Other platforms, broader
+operations and final-RC qualification remain separate work.

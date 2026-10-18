@@ -40,6 +40,14 @@ on:
         description: Fast seeding then Gentle sampling, diagnostic only and never a budget pass
         type: boolean
         default: false
+      native_archive_upgrades_only:
+        description: Check mixed-release upgrades with actual published Linux programs
+        type: boolean
+        default: false
+      archive_new_tag:
+        description: Published target tag for actual-archive upgrade checks
+        type: string
+        default: v0.6.42
       native_zfs_only:
         description: Run only the disposable native Linux ZFS backup fixture
         type: boolean
@@ -67,7 +75,7 @@ jobs:
 
   lab:
     needs: changes
-    if: needs.changes.outputs.lab == 'true' && !inputs.native_zfs_only && !inputs.native_reference_only
+    if: needs.changes.outputs.lab == 'true' && !inputs.native_zfs_only && !inputs.native_reference_only && !inputs.native_archive_upgrades_only
     name: ${{ matrix.group }} (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -274,3 +282,46 @@ jobs:
           path: ${{ runner.temp }}/reference-budget.json
           if-no-files-found: error
           retention-days: 30
+
+  release-archive-upgrades:
+    name: actual published Linux laptop and backup upgrades
+    if: inputs.native_archive_upgrades_only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NEW_TAG: ${{ inputs.archive_new_tag || 'v0.6.42' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/bridge-annex
+      - name: verified published payloads and immutable source manifests
+        run: |
+          set -e
+          python3 scripts/prepare-upgrade-archive --tag v0.5.13 --root "$RUNNER_TEMP/upgrade-archive-0513" --report "$RUNNER_TEMP/archive-upgrade-reports/prepare-0513.json"
+          python3 scripts/prepare-upgrade-archive --tag v0.6.1 --root "$RUNNER_TEMP/upgrade-archive-061" --report "$RUNNER_TEMP/archive-upgrade-reports/prepare-061.json"
+          python3 scripts/prepare-upgrade-archive --tag "$NEW_TAG" --root "$RUNNER_TEMP/upgrade-archive-new" --report "$RUNNER_TEMP/archive-upgrade-reports/prepare-new.json"
+      - name: both upgrade orders on a real native ext4 fixture
+        run: |
+          set -e
+          scripts/check-archive-upgrades "$RUNNER_TEMP/upgrade-archive-0513/installed/bin" \
+            "$RUNNER_TEMP/upgrade-archive-061/installed/bin" \
+            "$RUNNER_TEMP/upgrade-archive-new/installed/bin" "$RUNNER_TEMP/archive-upgrade-reports"
+      - name: retain original reports, program receipts and synthetic data
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-archive-upgrades-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/archive-upgrade-reports
+            ${{ runner.temp }}/upgrade-archive-*/installed/bin/soak-build.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30
+      - name: retain original failed published payload downloads
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: failed-archive-downloads-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/upgrade-archive-*/download-*/*
+          if-no-files-found: ignore
+          retention-days: 14

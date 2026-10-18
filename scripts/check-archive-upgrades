@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Own one native ext4 fixture for actual published-program upgrades.
+# Sparse backing and finite byte proofs supply no resource or elapsed verdict.
+set -euo pipefail
+here=$(cd "$(dirname "$0")/.." && pwd)
+old_0513=${1:?usage: check-archive-upgrades OLD_0513_BIN OLD_061_BIN NEW_BIN REPORT_DIR}
+old_061=${2:?}
+new_bin=${3:?}
+reports=${4:?}
+mkdir -p "$reports"
+root=$(mktemp -d "${RUNNER_TEMP:-/tmp}/pigeon-archive-upgrades.XXXXXXXX")
+identity=
+cleanup() {
+    result=$?
+    if mountpoint -q "$root/volume"; then
+        actual=$(findmnt -rn --mountpoint "$root/volume" -o UUID)
+        if [[ -z "$identity" || "$actual" != "$identity" ]]; then
+            echo "upgrade mount identity changed; retained $root" >&2
+            exit 1
+        fi
+        if ! sudo -n umount "$root/volume"; then
+            echo "upgrade fixture mount busy; retained $root" >&2
+            exit 1
+        fi
+    fi
+    rm -rf -- "$root"
+    exit "$result"
+}
+trap cleanup EXIT
+mkdir "$root/volume"
+# The backup reserve is 5GB. This sparse, owned volume supplies space for
+# that admission rule; only the small synthetic fixtures are written.
+truncate -s 16G "$root/data.img"
+mkfs.ext4 -q -F "$root/data.img"
+identity=$(blkid -p -s UUID -o value "$root/data.img")
+[[ -n "$identity" ]]
+sudo -n mount -o loop "$root/data.img" "$root/volume"
+[[ $(findmnt -rn --mountpoint "$root/volume" -o UUID) == "$identity" ]]
+sudo -n chown "$(id -u):$(id -g)" "$root/volume"
+result=0
+for old in 0513 061; do
+    if [[ "$old" == 0513 ]]; then old_bin=$old_0513; else old_bin=$old_061; fi
+    for first in backup laptop; do
+        name=$old-$first
+        if ! python3 "$here/scripts/check-upgrade-peers" --release-archives \
+            --old-bin "$old_bin" --new-bin "$new_bin" --first "$first" \
+            --root "$root/volume/$name" --report "$reports/$name.json" \
+            > "$reports/$name.log" 2>&1; then
+            result=1
+            break 2
+        fi
+    done
+done
+# Keep the synthetic original data and logs before unmounting, including
+# on failure; ephemeral sockets are not durable repository evidence.
+tar --exclude='*.sock' --warning=no-file-ignored -czf "$reports/native-fixtures.tar.gz" \
+    -C "$root/volume" .
+exit "$result"

@@ -1,0 +1,204 @@
+#!/usr/bin/env python3
+"""Prepare exact published Linux programs for a native historical-data check.
+
+Bind the immutable tag, GitHub asset metadata, release checksums and extracted
+program hashes. Extract executable payloads without running archived installers.
+This is provenance for a finite fixture, never resource or elapsed qualification.
+"""
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import tarfile
+import time
+
+REPOSITORY = 'dont-feed-the/pigeon'
+PROGRAMS = ('pigeon', 'pigeond', 'git-annex-p2p-iroh')
+TAG = r'v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?'
+
+
+def sha(path):
+    with path.open('rb') as source:
+        return hashlib.file_digest(source, 'sha256').hexdigest()
+
+
+def api(path):
+    result = subprocess.run(['gh', 'api', f'repos/{REPOSITORY}/{path}'],
+                            capture_output=True, text=True, timeout=60)
+    if result.returncode:
+        raise RuntimeError('release metadata collection failed')
+    return json.loads(result.stdout)
+
+
+def source_of(tag):
+    obj = api(f'git/ref/tags/{tag}')['object']
+    for _ in range(5):
+        if obj['type'] == 'commit' and re.fullmatch(r'[0-9a-f]{40}', obj['sha']):
+            return obj['sha']
+        if obj['type'] != 'tag':
+            break
+        obj = api(f"git/tags/{obj['sha']}")['object']
+    raise ValueError('release tag does not resolve to one bounded commit')
+
+
+def checked_assets(release, names):
+    if release.get('draft') or not release.get('published_at'):
+        raise ValueError('release is not published')
+    assets = {}
+    for asset in release['assets']:
+        if asset['name'] in names:
+            if asset['name'] in assets:
+                raise ValueError('duplicate release asset')
+            assets[asset['name']] = asset
+    if set(assets) != set(names):
+        raise ValueError('required Linux release assets are missing')
+    return assets
+
+
+def checksums(path):
+    result = {}
+    for line in path.read_text().splitlines():
+        digest, name = line.split(maxsplit=1)
+        name = name.removeprefix('*')
+        if (not re.fullmatch(r'[0-9a-f]{64}', digest) or Path(name).name != name
+                or name in result):
+            raise ValueError('invalid release checksum entry')
+        result[name] = digest
+    return result
+
+
+def verify_download(directory, assets):
+    sums = checksums(directory / 'SHA256SUMS')
+    for name, metadata in assets.items():
+        path = directory / name
+        digest = sha(path)
+        if path.stat().st_size != metadata['size']:
+            raise ValueError('release asset size differs')
+        if metadata.get('digest') and metadata['digest'] != 'sha256:' + digest:
+            raise ValueError('GitHub asset digest differs')
+        if name != 'SHA256SUMS' and sums.get(name) != digest:
+            raise ValueError('release archive checksum differs')
+    return sums
+
+
+def extract_programs(archive, binary):
+    binary.mkdir(parents=True, mode=0o700)
+    with tarfile.open(archive) as stream:
+        entries = {}
+        for member in stream.getmembers():
+            name = member.name.removeprefix('./')
+            if name in entries:
+                raise ValueError('duplicate archive member')
+            entries[name] = member
+        for name in PROGRAMS:
+            member = entries.get('bin/' + name)
+            if (member is None or not member.isfile() or not member.mode & 0o111
+                    or not 0 < member.size <= 300_000_000):
+                raise ValueError('archive lacks a regular executable payload')
+            with stream.extractfile(member) as source, (binary / name).open('xb') as output:
+                while data := source.read(1024 * 1024):
+                    output.write(data)
+            (binary / name).chmod(0o500)
+
+
+def extract_annex(archive, destination):
+    destination.mkdir(mode=0o700)
+    with tarfile.open(archive) as stream:
+        if sum(member.size for member in stream.getmembers()) > 1_000_000_000:
+            raise ValueError('annex archive exceeds the fixture bound')
+        stream.extractall(destination, filter='data')
+    executable = destination / 'bin/git-annex'
+    if not executable.is_file() or not executable.resolve().is_relative_to(destination.resolve()):
+        raise ValueError('annex executable leaves its verified prefix')
+    return executable
+
+
+def prepare(tag, root, progress=lambda _stage, **_facts: None):
+    if not re.fullmatch(TAG, tag):
+        raise ValueError('invalid release tag')
+    if root.exists():
+        raise ValueError('archive snapshot root must be new')
+    progress('collecting published metadata', tag=tag)
+    release = api(f'releases/tags/{tag}')
+    if release['tag_name'] != tag:
+        raise ValueError('release tag differs')
+    source = source_of(tag)
+    package = f'pigeon-{tag}-linux-x86_64.tar.gz'
+    annex = 'git-annex-pigeon-linux-x86_64.tar.gz'
+    names = (package, annex, 'SHA256SUMS')
+    assets = checked_assets(release, names)
+    root.mkdir(mode=0o700, parents=True)
+    progress('downloading exact published assets', tag=tag, source=source,
+             assets={name: dict(size=value['size'], digest=value.get('digest'))
+                     for name, value in assets.items()})
+    for attempt in range(3):
+        download = root / f'download-{attempt + 1}'
+        download.mkdir(mode=0o700)
+        args = ['gh', 'release', 'download', tag, '--repo', REPOSITORY, '--dir', str(download)]
+        for name in names:
+            args += ['--pattern', name]
+        result = subprocess.run(args, capture_output=True, text=True, timeout=180)
+        if result.returncode == 0:
+            break
+        if attempt == 2 or not re.search(r'HTTP (429|500|502|503|504)\b', result.stderr):
+            raise RuntimeError('release asset download failed')
+        time.sleep(2 ** attempt)
+    verify_download(download, assets)
+    progress('extracting verified executable payloads', tag=tag, source=source)
+    prefix = root / 'installed'
+    binary = prefix / 'bin'
+    extract_programs(download / package, binary)
+    annex_exe = extract_annex(download / annex, prefix / 'git-annex')
+    env = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
+    env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL='/dev/null')
+    progress('checking published program versions', tag=tag, source=source)
+    version = subprocess.run([str(binary / 'pigeon'), '--version'], cwd=root, env=env,
+                             capture_output=True, text=True, timeout=30)
+    if version.returncode or version.stdout.strip() != 'pigeon ' + tag[1:]:
+        raise ValueError('published program version differs')
+    annex_version = subprocess.run([str(annex_exe), 'version', '--raw'], cwd=root, env=env,
+                                   capture_output=True, text=True, timeout=30)
+    if annex_version.returncode or not annex_version.stdout.strip().endswith('-pigeon1'):
+        raise ValueError('published annex version differs')
+    manifest = dict(source_revision=source, features=[],
+                    origin=dict(kind='published-release-archives', repository=REPOSITORY,
+                                tag=tag, published_at=release['published_at'],
+                                package_sha256=sha(download / package),
+                                annex_archive_sha256=sha(download / annex),
+                                checksums_sha256=sha(download / 'SHA256SUMS')),
+                    annex=dict(version=annex_version.stdout.strip(), sha256=sha(annex_exe)),
+                    sha256={name: sha(binary / name) for name in PROGRAMS})
+    (binary / 'soak-build.json').write_text(json.dumps(manifest, indent=2) + '\n')
+    return dict(tag=tag, source=source, binary=str(binary), origin=manifest['origin'])
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--tag', required=True)
+    parser.add_argument('--root', type=Path, required=True)
+    parser.add_argument('--report', type=Path)
+    args = parser.parse_args()
+    if args.report is not None and args.report.exists():
+        parser.error('report must be new; previous evidence is never overwritten')
+    proof = dict(schema=1, stage='starting', qualification='not-measured')
+    def progress(stage, **facts):
+        proof.update(stage=stage, **facts)
+        if args.report is not None:
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            pending = args.report.with_suffix('.pending')
+            pending.write_text(json.dumps(proof, indent=2) + '\n')
+            pending.replace(args.report)
+    try:
+        result = prepare(args.tag, args.root.resolve(), progress)
+        progress('completed', result=result)
+        print(json.dumps(result, indent=2))
+    except Exception as error:
+        progress('failed', error=type(error).__name__)
+        raise SystemExit('published archive preparation failed; original root retained') from None
+
+
+if __name__ == '__main__':
+    main()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise both roles through a mixed-release upgrade using frozen lab programs.
+"""Exercise both roles through a mixed-release upgrade using verified frozen programs.
 
 Independently prove current pointers, working modes and all retained bytes.
 Keep original repositories and public identities. This finite fixture never
@@ -47,13 +47,16 @@ def identity_snapshot(roster, uuids):
 
 
 def exercise(args, report):
-    report.update(old_build=UPGRADE['frozen'](args.old_bin),
-                  new_build=UPGRADE['frozen'](args.new_bin),
+    report.update(old_build=UPGRADE['frozen'](args.old_bin, args.release_archives),
+                  new_build=UPGRADE['frozen'](args.new_bin, args.release_archives),
+                  program_origin='published release archives' if args.release_archives else 'rebuilt lab programs',
                   harness_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                   upgrade_observer_sha256=hashlib.sha256((SOURCE / 'check-upgrade').read_bytes()).hexdigest(),
                   reference_observer_sha256=hashlib.sha256((SOURCE / 'reference-budget').read_bytes()).hexdigest(),
                   elapsed_gate='not-measured', first_upgraded=args.first,
-                  qualification='finite lab two-peer upgrade; no elapsed/resource verdict',
+                  qualification=('finite published-archive two-peer upgrade; no elapsed/resource verdict'
+                                 if args.release_archives else
+                                 'finite lab two-peer upgrade; no elapsed/resource verdict'),
                   stage='starting', stages=[])
     root = args.root.resolve()
     require(not root.exists(), 'fixture root must be new')
@@ -145,6 +148,8 @@ def exercise(args, report):
         peers['laptop'].cli('restore', str(folder / 'notes.txt'), '--version', '1', '--yes')
         current['notes.txt'] = UPGRADE['fingerprint'](UPGRADE['INITIAL']['notes.txt'])
         prove_both()
+        UPGRADE['frozen'](args.old_bin, args.release_archives)
+        UPGRADE['frozen'](args.new_bin, args.release_archives)
         report.update(stage='completed', verdict='two-peer-upgrade-passed',
                       independently_verified_retained_objects=len(history))
         failed = False
@@ -156,6 +161,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ['old-bin', 'new-bin', 'root', 'report']:
         parser.add_argument('--' + name, type=Path, required=True)
+    parser.add_argument('--release-archives', action='store_true',
+                        help='require snapshots prepared from verified published release archives')
     parser.add_argument('--first', choices=['laptop', 'backup'], required=True)
     args = parser.parse_args()
     if args.report.exists():

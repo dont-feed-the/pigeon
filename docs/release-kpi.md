@@ -300,3 +300,15 @@ is 1,273 seconds, meeting both targets, with 47 lead samples and 46 completed
 intervals. Mode correction preserves staged pointers and avoids its clean
 filters; the full diagnostic still expires in ingestion. No full-workload
 speedup, resource-budget pass or elapsed qualification is inferred.
+
+## v0.6.42 publication observation
+
+[v0.6.42](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.42), source
+`9b5588ff669dc1f889d43ff8be870164758a99bb`, is published on 18 October at
+14:53:00 UTC. Independent verification passes six assets, four archive
+checksums, pinned annex, native Linux installation and completions. All four
+tag gates pass first attempt. Candidate lead is 625 seconds and publication gap
+is 1,857 seconds, meeting both targets, with 48 lead samples and 47 completed
+intervals. Four finite mixed-release lab cases support the upgrade checkpoint;
+actual old archives and final-RC coverage remain distinct. The longer Fast
+reference diagnostic and actual soak continue without an inferred pass.

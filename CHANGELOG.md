@@ -9,6 +9,13 @@ increments the second number, and every other release the third.
 
 ### Added
 
+- Upgrade guidance can distinguish checks using the original published
+  programs from checks that rebuild historical source.
+
+## 0.6.42 — 2026-10-18
+
+### Added
+
 - The upgrade guide distinguishes supported groups from retired early
   formats, whose original files stay available.
 - Reference diagnostics identify native Git and annex operations without
