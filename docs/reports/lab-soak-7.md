@@ -103,3 +103,14 @@ beside the binary snapshot, so subsequent worktree edits do not change the
 running experiment. Its earliest completion is 21 October at that time.
 The observation remains pending, with zero credit from the failed run; it
 is lab evidence on its recorded source, not current-RC qualification.
+
+## Integrated release validation
+
+PR #104, head `0670e80ee70e30ae982a6e29126fa86b6162501c`, integrates main `c10e42bbc3853b750bd8f3406654e9c2c8a7facb` before
+validation. CI 39119129039, lab 39119129076 and bridge
+39119129087 pass. v0.6.34 is published and independently
+verified before this candidate. Local validation passes 128 script contracts,
+12 scheduling laws of 1000 cases each, a matching native restart smoke,
+zero-warning all-target Clippy and repository checks. Fresh v0.6.35 tag gates
+and independent archive/install checks remain required. The fresh actual
+72-hour observation remains pending; none of the failed run is resumed.
