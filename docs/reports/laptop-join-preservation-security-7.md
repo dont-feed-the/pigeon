@@ -56,3 +56,27 @@ seconds. All-target Clippy, formatting and repository rules pass. The
 measurement diagnostics and expiring scheduled-night policy share this
 rollup's single hosted validation; no extra native performance pass or
 elapsed-night result is claimed.
+
+## Original PR S2 observation and corrected precondition
+
+PR #98's first head `8a7ed457be15a0d3af38160a1edb509b69a6e64b` fails
+native S2's later file-page assertion, after Free, in 85.935 seconds.
+Original CI 39104328355/job 117606870220 retains artifact 12127718640,
+14,906,511 bytes, SHA-256
+`925dfa1dcb1a518a54dd5dfd527a7e30b6011a0690eef3aa6324ada113d9bc15`.
+The working name is absent, but the actual local annex still contains both
+the valid 300,000-byte big file and the valid six-byte text file. The page
+says Safe, correctly reflecting local cached content. Hiding the working
+name does not prove the later annex drop completed.
+
+The fixture now uses its original 60-second Free wait to require both the
+missing working name and the file page's fully freed state. It logs in
+before requesting Free and keeps all subsequent folder/file assertions and
+the same wait budget. No production status code or timing policy changes.
+The original head is preserved without an unchanged-source retake; corrected
+source receives a fresh combined PR validation. This is separate from the
+earlier captured-path and concurrent-index observation corrections.
+
+The corrected native S2 fixture passes in 19.773 seconds, with the original
+60-second completed-eviction wait and every subsequent file/folder assertion
+intact. Final all-target Clippy and repository checks pass.
