@@ -36,14 +36,25 @@ struct State {
     settings: Effective,
     conditions: Conditions,
     disk: Disk,
+    pressure: Disk,
     io_pressure: bool,
-    reads: BTreeMap<u64, (u64, pigeon_core::read_latency::Window)>,
+    reads: BTreeMap<u64, (u64, pigeon_core::read_latency::Window, Disk)>,
     samples: BTreeMap<(usize, String), (u64, Delay)>,
     rate: [u64; 2],
     buckets: [Bucket; 2],
     last_tick: u64,
     pending: usize,
     group_waits: BTreeMap<String, usize>,
+}
+
+impl State {
+    fn read_share(&self, now: u64, device: u64) -> u8 {
+        let pressure = self.pressure.share(now, self.settings.preset, true);
+        let own = self.reads.get(&device).map_or(100, |(_, _, disk)| {
+            disk.share(now, self.settings.preset, true)
+        });
+        pressure.min(own)
+    }
 }
 
 /// Shared across every group and content stream, never one bucket per peer.
@@ -79,6 +90,7 @@ impl Controller {
                 settings,
                 conditions: Conditions::default(),
                 disk: Disk::default(),
+                pressure: Disk::default(),
                 io_pressure: false,
                 reads: BTreeMap::new(),
                 samples: BTreeMap::new(),
@@ -122,8 +134,13 @@ impl Controller {
         let now = self.now();
         s.io_pressure = io_pressure
             && (s.pending > 0 || self.children.iter().any(|n| n.load(Ordering::Relaxed) > 0));
-        let busy = s.io_pressure || s.reads.values().any(|(_, w)| w.busy(now));
+        let busy = s.io_pressure || s.reads.values().any(|(_, w, _)| w.busy(now));
         s.disk.observe(now, busy);
+        let pressure = s.io_pressure;
+        s.pressure.observe(now, pressure);
+        for (_, window, disk) in s.reads.values_mut() {
+            disk.observe(now, window.busy(now));
+        }
     }
 
     fn read_observed(&self, device: u64, elapsed: Duration) {
@@ -133,22 +150,27 @@ impl Controller {
     fn read_at(&self, now: u64, device: u64, elapsed: Duration) {
         let mut s = self.lock();
         s.reads
-            .retain(|_, (seen, _)| now.saturating_sub(*seen) < 600_000);
+            .retain(|_, (seen, _, _)| now.saturating_sub(*seen) < 600_000);
         // A bound on devices as well as samples; overflow falls back to
         // native pressure. Do not evict an active device's learned baseline.
         if !s.reads.contains_key(&device) && s.reads.len() >= 32 {
             return;
         }
         let quiet = !s.io_pressure;
-        let (seen, window) = s.reads.entry(device).or_default();
+        let (seen, window, _) = s.reads.entry(device).or_default();
         *seen = now.max(*seen);
         window.observe(
             now,
             elapsed.as_nanos().min(u128::from(u64::MAX)) as u64,
             quiet,
         );
-        let busy = s.io_pressure || s.reads.values().any(|(_, w)| w.busy(now));
+        let busy = s.io_pressure || s.reads.values().any(|(_, w, _)| w.busy(now));
         s.disk.observe(now, busy);
+        let pressure = s.io_pressure;
+        s.pressure.observe(now, pressure);
+        for (_, window, disk) in s.reads.values_mut() {
+            disk.observe(now, window.busy(now));
+        }
     }
 
     /// Visible reason content or maintenance cannot run now.
@@ -327,6 +349,14 @@ impl ChildControl {
 }
 
 impl pigeon_git::work::Control for ChildControl {
+    fn reading(&self, device: u64) -> bool {
+        let state = self.controller.lock();
+        let now = self.controller.now();
+        let share = state.read_share(now, device);
+        let window = (u64::from(share) * 10 + pigeon_git::work::POLL_MS).min(1_000);
+        now % 1_000 < window
+    }
+
     fn read_observed(&self, device: u64, elapsed: Duration) {
         self.controller.read_observed(device, elapsed);
     }

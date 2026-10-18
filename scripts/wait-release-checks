@@ -25,8 +25,12 @@ LINUX_JOBS = {
     "lab": {f"{group} (ubuntu-24.04)" for group in
             ("E20 E21 E22", "E12-E13 E14 E23", "E15 E15b E18 E24", "E19")},
     "slice": {f"slice (ubuntu-24.04, {part})" for part in ("core", "crashes", "recovery", "people", "S5")}
-             | {f"S9, 25 random crash schedules (ubuntu-24.04, shard {n})" for n in range(2)},
+             | {f"S9, 10 random crash schedules (ubuntu-24.04, shard {n})" for n in range(5)},
 }
+
+CURRENT_RANDOM = {f"S9, 10 random crash schedules (ubuntu-24.04, shard {n})" for n in range(5)}
+OLD_RANDOM = {f"S9, 25 random crash schedules (ubuntu-24.04, shard {n})" for n in range(2)}
+FIXED_SLICE = LINUX_JOBS["slice"] - CURRENT_RANDOM
 
 LEGACY_SLICE = ({"slice (ubuntu-24.04, rest)", "slice (ubuntu-24.04, S5)"}
                 | {f"S9, 25 random crash schedules (ubuntu-24.04, shard {n})" for n in range(2)})
@@ -36,9 +40,12 @@ def linux_state(name, jobs):
     relevant = [j for j in jobs if "macos" not in j["name"].lower()]
     names = {j["name"].split(" / ")[-1] for j in relevant}
     required_names = LINUX_JOBS[name]
-    if (name == "slice" and "slice (ubuntu-24.04, rest)" in names
-            and not (names & (LINUX_JOBS["slice"] - LEGACY_SLICE))):
-        required_names = LEGACY_SLICE
+    if name == "slice" and not (names & CURRENT_RANDOM):
+        if ("slice (ubuntu-24.04, rest)" in names
+                and not (names & (FIXED_SLICE - LEGACY_SLICE))):
+            required_names = LEGACY_SLICE
+        elif names & OLD_RANDOM:
+            required_names = FIXED_SLICE | OLD_RANDOM
     for job in relevant:
         if job["status"] != "completed":
             continue

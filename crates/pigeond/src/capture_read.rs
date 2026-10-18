@@ -37,6 +37,7 @@ struct State {
     canceled: Arc<AtomicBool>,
     bytes: Arc<AtomicU64>,
     control: Option<Arc<dyn Control>>,
+    device: Option<u64>,
 }
 
 impl State {
@@ -45,26 +46,38 @@ impl State {
             if self.canceled.load(Ordering::Relaxed) {
                 return Err(io::ErrorKind::Interrupted.into());
             }
-            if self
-                .control
-                .as_ref()
-                .is_none_or(|c| c.running(Class::Capture))
-            {
+            if self.control.as_ref().is_none_or(|c| {
+                self.device
+                    .map_or_else(|| c.running(Class::Capture), |device| c.reading(device))
+            }) {
                 return Ok(());
             }
             std::thread::sleep(Duration::from_millis(POLL_MS));
         }
     }
     fn charging(&self) -> bool {
-        self.control
-            .as_ref()
-            .is_none_or(|c| c.running(Class::Capture) && c.charging(Class::Capture))
+        self.control.as_ref().is_none_or(|c| {
+            self.device.map_or_else(
+                || c.running(Class::Capture) && c.charging(Class::Capture),
+                |device| c.reading(device) && c.charging_read(device),
+            )
+        })
     }
 }
 
+#[cfg(test)]
 async fn supervise<T: Send + 'static>(
     control: Option<Arc<dyn Control>>,
     timeout: Duration,
+    work: impl FnOnce(&State) -> io::Result<T> + Send + 'static,
+) -> io::Result<T> {
+    supervise_on(control, timeout, None, work).await
+}
+
+async fn supervise_on<T: Send + 'static>(
+    control: Option<Arc<dyn Control>>,
+    timeout: Duration,
+    device: Option<u64>,
     work: impl FnOnce(&State) -> io::Result<T> + Send + 'static,
 ) -> io::Result<T> {
     if let Some(c) = &control {
@@ -73,6 +86,7 @@ async fn supervise<T: Send + 'static>(
     let _pending = Pending(control.clone());
     let state = State {
         control,
+        device,
         canceled: Arc::new(AtomicBool::new(false)),
         bytes: Arc::new(AtomicU64::new(0)),
     };
@@ -151,7 +165,7 @@ pub(crate) async fn checked(
     expected: Stat,
     control: Option<Arc<dyn Control>>,
 ) -> io::Result<Option<(u64, String)>> {
-    supervise(control, INACTIVITY, move |state| {
+    supervise_on(control, INACTIVITY, Some(expected.id.dev), move |state| {
         let Some(file) =
             pigeon_sys::fs::streaming_read_exact(&path, expected).map_err(io::Error::other)?
         else {

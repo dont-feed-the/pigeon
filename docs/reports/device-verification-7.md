@@ -1,0 +1,56 @@
+# Device-specific capture verification
+
+> Mission: use the actual opened device for final capture-read permission
+> and active time, preserving exact inode, hash and cancellation checks.
+
+The prior adapter trains each device separately but combines every busy
+reading into one native policy. Its independent capture verification also
+used that combined permission, so a different device's read delay could
+pause verification of an otherwise quiet device.
+
+A real bounded-read regression fails against that behavior in 1.013 seconds:
+the generic policy is closed while the opened inode's policy permits reads.
+The supervisor ignores the actual device and the outer fixture deadline
+cancels it. The corrected read path uses its expected native device only
+after streaming_read_exact validates the opened inode against that complete
+stat. Its post-read stat, digest and expected-file checks remain unchanged.
+Read timing still excludes policy waits, hashing, short tails and EOF.
+
+Each bounded device window now owns a Disk controller. System pressure has
+a separate Disk controller; a device's read share is their minimum. Unknown
+devices inherit system pressure without inheriting another device's read
+median. Each source retains the original capture floor, five-second quiet
+period and thirty-second recovery. Existing native children and content
+streams still conservatively use the combined controller. This checkpoint
+improves capture verification, not all native or network device scheduling.
+The existing 32-device/sample and inactive-retention bounds remain.
+
+Eleven focused checks pass in 1.608 seconds. They cover independent device
+shares, global pressure overriding both devices, Gentle/Fast floors, stale
+recovery, exact real bytes, opened-device selection and a pause longer than
+the normal read budget. The pause uses an open generic policy and a closed
+actual-device policy; it resumes exact bytes without spending the pause.
+Default driver controls retain their old Capture policy; scoped download
+views forward both device permission and active charging.
+
+A further 1000-case adapter law varies device identities and quiet latencies,
+including wide integer ranges: one slow median cannot reduce another or an
+unknown device's capture-read share. The underlying latency and Disk algebras
+retain their existing laws. Final broader verdicts follow when complete.
+Neither synthetic latency samples nor these finite native reads establish
+foreground HDD, reference-tree idle/scan/memory or elapsed soak budgets.
+
+## Broader local validation
+
+All 163 daemon-library cases pass in 15.655 seconds before adding the
+separate 1000-case adapter law. All nine selected real-peer cases pass in
+111.333 seconds, covering erasure/refounding, held changes, fresh join after
+a decline, capacity, returning backups, free and keep. The CLI, daemon and
+transport helper are rebuilt before native validation. The focused group
+overlaps the library run, so those counts are not summed.
+
+The separate adapter law passes all 1000 cases. All 50 Git-driver tests
+pass in 6.463 seconds, including existing pause/deadline/cancellation
+contracts; all-target Clippy and repository checks pass. The release-gate
+and script suite separately validate the S9/KPI rollup without changing
+this runtime's byte-verification or policy boundaries.
