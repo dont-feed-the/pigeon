@@ -84,6 +84,15 @@ beside it **[no ADR]**. `pigeond` creates the socket's directory (0700)
 only if absent and refuses a second instance; clients check that the peer
 is the same user.
 
+A helper's confirmed listener loss is remembered by registration generation.
+A supervisor checks these events independently of peer-fetch rounds, once
+per second when the group's lock is available. It restarts the owned native
+backend only after rechecking current group identity and leaving state.
+An older helper cannot withdraw a newer registration, initial startup is
+not a loss, and retired groups' loss events expire. The supervisor is aborted
+and joined before intentional shutdown tears down the native children.
+This changes no roster admission or positive-custody proof.
+
 ## 9.4 Serving peers: pull only, append-only on custodians (ADR 0014)
 
 `remotedaemon` serves P2P read-write whatever the environment, and any peer

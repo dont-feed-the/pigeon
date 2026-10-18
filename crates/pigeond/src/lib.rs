@@ -65,6 +65,7 @@ mod join_transition;
 pub mod journal_file;
 mod keep_targets;
 pub mod leave;
+mod listener_supervisor;
 pub mod locks;
 pub mod logs;
 pub mod membership;

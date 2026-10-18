@@ -5,6 +5,13 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Incoming connections recover if a background network helper stops
+  unexpectedly, without restarting pigeon.
+
 ## 0.6.20 — 2026-10-18
 
 ### Added

@@ -8,7 +8,7 @@
 //! without them are answered `not-in-this-build` (13 §13.12). Only the same
 //! user may connect.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -23,27 +23,53 @@ use super::{Directory, Loops, NetError, Node, sync::Syncer};
 /// remotedaemon's sockets, by group, as the helper registered them.
 #[derive(Debug, Default)]
 pub struct Listeners {
-    inner: Mutex<HashMap<String, (u64, PathBuf)>>,
+    inner: Mutex<HashMap<String, (u64, Option<PathBuf>)>>,
     next: Mutex<u64>,
 }
 
 impl Listeners {
     /// The socket registered for `group`.
     pub fn get(&self, group: &str) -> Option<PathBuf> {
-        lock(&self.inner).get(group).map(|(_, p)| p.clone())
+        lock(&self.inner).get(group).and_then(|(_, p)| p.clone())
+    }
+
+    pub(crate) fn lost(&self, group: &str) -> bool {
+        lock(&self.inner)
+            .get(group)
+            .is_some_and(|(_, p)| p.is_none())
+    }
+
+    /// Claim only an actual loss, never an initial not-yet-listening state.
+    /// A concurrent replacement clears the event before this claim.
+    pub(crate) fn take_lost(&self, group: &str) -> bool {
+        let mut inner = lock(&self.inner);
+        if inner.get(group).is_some_and(|(_, p)| p.is_none()) {
+            inner.remove(group);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Retired groups cannot accumulate unclaimed tombstones. Active
+    /// registrations remain owned by their helpers until their own EOF.
+    pub(crate) fn forget_unmanaged_losses(&self, live: &BTreeSet<String>) {
+        lock(&self.inner).retain(|id, (_, socket)| socket.is_some() || live.contains(id));
     }
 
     fn register(&self, group: &str, socket: PathBuf) -> u64 {
         let mut next = lock(&self.next);
         *next += 1;
-        lock(&self.inner).insert(group.to_owned(), (*next, socket));
+        lock(&self.inner).insert(group.to_owned(), (*next, Some(socket)));
         *next
     }
 
     fn unregister(&self, group: &str, id: u64) {
         let mut inner = lock(&self.inner);
         if inner.get(group).is_some_and(|(i, _)| *i == id) {
-            inner.remove(group);
+            // Keep one loss event until recovery claims it. A stale helper
+            // cannot withdraw a newer registration or create a false loss.
+            inner.insert(group.to_owned(), (id, None));
         }
     }
 }
@@ -318,5 +344,44 @@ mod tests {
         let path = second.path.clone();
         drop(second);
         assert!(!path.exists());
+    }
+}
+
+#[cfg(test)]
+mod listener_laws {
+    #![allow(clippy::unwrap_used, reason = "owned native registration fixtures")]
+    use super::*;
+    use hegel::{TestCase, generators as gs};
+
+    /// Law: arbitrary obsolete registrations cannot withdraw a newer one,
+    /// and one actual current loss can be claimed only once.
+    #[hegel::test(test_cases = 1000)]
+    fn only_the_current_helper_can_create_one_recovery_event(tc: TestCase) {
+        let registry = Listeners::default();
+        let count = tc.draw(gs::integers::<u8>().min_value(1).max_value(32));
+        let mut retired = Vec::new();
+        for n in 0..count {
+            retired.push(registry.register("group", PathBuf::from(n.to_string())));
+        }
+        let current = registry.register("group", PathBuf::from("current"));
+        for id in retired.into_iter().rev() {
+            registry.unregister("group", id);
+            assert_eq!(registry.get("group"), Some(PathBuf::from("current")));
+            assert!(!registry.lost("group"));
+            assert!(!registry.take_lost("group"));
+        }
+        registry.unregister("group", current);
+        assert!(registry.lost("group"));
+        assert_eq!(registry.get("group"), None);
+        assert!(registry.take_lost("group"));
+        assert!(!registry.take_lost("group"));
+        registry.unregister("group", current);
+        assert!(!registry.lost("group"));
+        let new = registry.register("group", PathBuf::from("new"));
+        registry.unregister("group", current);
+        assert_eq!(registry.get("group"), Some(PathBuf::from("new")));
+        registry.unregister("group", new);
+        registry.forget_unmanaged_losses(&BTreeSet::new());
+        assert!(!registry.lost("group"));
     }
 }
