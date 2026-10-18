@@ -162,3 +162,17 @@ each peer, no error and a null CPU measurement. Its verdict remains
 repository rules pass. The integrated daemon library also passes all 178
 cases in 17.420 seconds. None of these reduced observations certifies the
 full reference or E17 budgets.
+
+## Integrated release validation
+
+PR #97, head `24fe01c4b0e62a3fe0cf89102c32f60f8521a80c`, integrates main `2b9670765248e56274d7e569e9f93145c9468f5c` before
+validation. CI 39102976445, lab 39102976458 and bridge
+39102976420 pass. v0.6.27 was published and independently
+verified before this candidate. The complete joining/signing review and
+M6/M7 resource and elapsed gates remain open. Fresh v0.6.28 tag gates and
+independent publication/install checks are required before it is released.
+
+The integrated rollup passes 178 daemon-library cases, 110 script contracts
+and the reduced smoke 008 with both daemon build labels explicitly lab.
+The ordinary overlay refusal and the earlier incomplete build labels stay
+retained; the full native reference result is independent evidence.
