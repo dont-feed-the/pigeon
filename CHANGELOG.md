@@ -5,6 +5,13 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Failed backup joins retain their unfinished repository for retry, preserving
+  files another application added during setup.
+
 ## 0.6.25 — 2026-10-18
 
 ### Fixed

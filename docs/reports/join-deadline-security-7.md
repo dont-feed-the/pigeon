@@ -79,9 +79,10 @@ review remains open:
 - The accept loop spawns per-connection work without an explicit application
   concurrency cap. Transport limits and timeouts need to be assessed together
   before claiming resistance to an unauthenticated connection flood.
-- Failed bare-repository joins recursively remove the attempted repository's
-  contents. Concurrent external additions and path substitution require an
-  ownership/race reproduction and preservation check before review closure.
+- The [backup cleanup checkpoint](backup-join-preservation-security-7.md)
+  reproduces deletion of concurrent additions and retains incomplete backup
+  repositories for retry. Laptop rollback ownership and path substitution
+  still require preservation review before the wider gate closes.
 - Invitation/default-folder validation, recovery import bounds and the full
   signature/authority law and negative-trace inventory remain in scope.
 
