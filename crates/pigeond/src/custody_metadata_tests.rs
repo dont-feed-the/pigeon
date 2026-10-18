@@ -53,10 +53,10 @@ for key in sys.stdin.read().splitlines():
 async fn native_metadata_batches_keep_every_present_object_and_absent_answer_bound() {
     let root = tempfile::tempdir().unwrap();
     let git = crate::git::Git::new(root.path(), pigeon_git::GitEnv::default());
-    if git.run(&["annex", "version", "--raw"]).await.is_err() {
+    let Ok(version) = git.run(&["annex", "version", "--raw"]).await else {
         assert!(std::env::var_os("PIGEON_REQUIRE_GIT_ANNEX").is_none());
         return;
-    }
+    };
     git.run(&["init", "-q"]).await.unwrap();
     git.run(&["config", "user.name", "metadata fixture"])
         .await
@@ -108,6 +108,18 @@ async fn native_metadata_batches_keep_every_present_object_and_absent_answer_bou
     keys.insert(absent.clone());
     let holders = super::holders_for(&git, &keys).await;
     assert_eq!(holders.len(), keys.len());
+    let pinned = include_str!("../../../third_party/git-annex/VERSION")
+        .lines()
+        .find_map(|line| line.strip_prefix("PIGEON_VERSION="))
+        .unwrap()
+        .trim_matches('"');
+    if version.trim() == pinned {
+        assert_eq!(
+            git.whereis_no_urls.get(),
+            Some(&true),
+            "bundled native optimization was not discovered"
+        );
+    }
     assert!(holders[&absent].is_empty());
     let uuid = git
         .run(&["config", "annex.uuid"])

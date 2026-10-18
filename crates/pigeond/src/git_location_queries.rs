@@ -27,8 +27,8 @@ impl Git {
                     .await
                     .is_ok_and(|out| {
                         out.text()
-                            .split_ascii_whitespace()
-                            .any(|s| s == "--no-urls")
+                            .lines()
+                            .any(|line| line.split_ascii_whitespace().next() == Some("--no-urls"))
                     })
             })
             .await;
@@ -56,6 +56,7 @@ mod tests {
             ("  --no-urls  omit URLs", 0, true),
             ("  --json  JSON output", 0, false),
             ("  --no-urls-extra  unrelated option", 0, false),
+            ("This build does not offer --no-urls", 0, false),
             ("  --no-urls  omit URLs", 1, false),
         ] {
             let root = tempfile::tempdir().unwrap();

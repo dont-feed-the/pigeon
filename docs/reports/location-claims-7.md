@@ -1,101 +1,101 @@
 # Location-query cost checkpoint
 
-M6 remains incomplete. This work targets location-log reads, not transfers
-or physical-copy verification. The full reference and HDD budgets still
-need measured results.
+M6 remains incomplete. These measurements cover synthetic location-log
+claims, not transfers or physical-copy verification. The reference-tree and
+foreground HDD budgets remain unproved.
 
 ## Native boundary
 
 In git-annex 10.20261006, `Command/Whereis.hs`'s `perform` calls
-`keyLocations`, then `getUUIDUrls`, then `trustPartition`. URL collection
-reads web and claimed-URL logs even when the caller consumes only UUIDs.
-Pigeon uses the UUIDs in `whereis` and `untrusted`; it does not use these
-URLs. `Remote/Git.hs`'s standard Git remote has no `whereisKey` callback,
-but claimed-URL lookup still happens. `--fast` does not select a different
-path in this command.
+`keyLocations`, then `getUUIDUrls`, then `trustPartition`. `getUUIDUrls`
+queries URLs only for UUIDs found in its remote map. Unknown UUIDs skip
+that branch. The web remote reads its URL logs; a configured standard Git
+remote has no `whereisKey` callback (`Remote/Git.hs`) but still reads the
+claimed-URL log. Pigeon consumes UUIDs from `whereis` and `untrusted`, not
+these download URLs. `--fast` does not bypass this code.
 
-The optional patched `--no-urls` skips URL lookup. It retains an empty URL
+The optional patched `--no-urls` omits URL lookup. It retains an empty URL
 list for each recorded UUID, because the upstream JSON formatter derives
-its location entries from those associations. Returning an empty
-association list would incorrectly hide all locations. Normal queries keep
-the upstream behavior. The new build is `10.20261006-pigeon2`; the two P2P
-fixes from pigeon1 remain applied.
+its location entries from those associations. Normal queries retain their
+upstream behavior. The pinned build becomes `10.20261006-pigeon2`, keeping
+both P2P fixes from pigeon1.
 
-Pigeon's custody and capacity reads share capability detection: one bounded
-`whereis --help` probe per repository view family, including concurrent
-clones and download views. Only a successful probe advertising the exact
-option enables it. Stock builds and failed probes retain ordinary queries.
-Query exit status, input identities, existing completeness checks, trust
-classes and physical-presence checks retain their previous meaning.
+Custody and capacity reads share one five-second capability probe per
+repository view family, including concurrent clones and download views.
+Only a successful help reply with the option as the first token of an
+option line enables it. A prose-only mention, similarly named option or
+failed help reply selects the ordinary query, as do stock builds without
+the feature. An initial prototype incorrectly recognized a prose mention;
+its failing fixture is retained before correction. Query statuses, input
+identities, completeness checks and trust handling retain their meanings.
 Custody batches remain bounded to 256 keys and 64 KiB of input.
 
-## Evidence and limits
+## Native build and contract evidence
 
 All four patches apply with zero fuzz to the checksum-verified upstream
-tarball. The new native contract uses synthetic web and ordinary UUID
-claims plus an absent key, checking both trusted and untrusted web states,
-complete ordered replies, equal UUID sets and success bits, omitted URLs,
-and zero content objects. It fails against pigeon1 because the option is
-absent. The Linux producer must pass that contract and the existing P2P
-and installer checks. Both platform archives are prepared before the pin
-change is integrated; macOS runtime checks remain periodic background work.
+source. [Producer 39165272575](https://github.com/dont-feed-the/pigeon/actions/runs/39165272575),
+source `9bb6b8313b3d1964dda5cda284aea91bb9330fd6`, passes on its first
+attempt: Linux and Apple Silicon archives, the consumer's PATH/version
+checks, and installation with the actual daemon children. Both archive ZIP
+digests, native archive hashes and ELF64 x86_64/Mach-O64 arm64 headers are
+independently checked. Completed build/installer logs and archives remain
+retained. Native inputs remain identical after integrating current main.
 
-Eight focused caller/batching checks pass locally with pigeon1, including
-the real 301-key present/absent fixture and concurrent capability discovery
-with supported, absent, similarly named and failed-help outcomes. Workspace
-all-target Clippy passes. Native pigeon2 results and timing comparisons
-remain pending; no speedup is inferred from source inspection.
+The Linux producer and the isolated local Linux artifact pass the native
+contract: complete ordered web/ordinary/absent-key replies, equal UUID sets
+and success bits, trusted/untrusted web states, omitted URLs and zero
+content objects. The option is absent in pigeon1, whose original negative
+control is retained. Linux also passes the existing P2P E23/E25 checks.
+Mac runtime checks remain periodic background evidence; this producer proves
+its archive build and version, not a new passing Mac runtime suite.
 
-The documented lab-feature profile passes all 235 daemon-library checks
-in 24.478 seconds, followed by Clippy and repository rules. An earlier run
-omitted that feature: 234 passed, while the explicit-destination fixture
-correctly encountered production's unsupported-overlay refusal before
-creating its repository. That original is retained; the lab profile does
-not waive release-build filesystem admission.
+## Controlled metadata measurements
 
-A prior 100,000-key synthetic fixture used the reserved web UUID by
-mistake. Its complete 256/4096-key trials and original partial follow-up
-remain retained, but they are not ordinary-repository measurements. A
-corrected ordinary-UUID fixture has a separate original setup receipt.
-Its single 4,096-key preflight pair took 3.070 seconds at 256 keys and
-2.415 seconds at 4,096 keys per process. That pair does not establish a
-full-size speedup or justify increasing production bounds. Both fixtures
-contain only synthetic claims and no content objects.
+One Linux host queries 100,000 unique synthetic keys per fixture, with zero
+content objects. Each mode uses the same pigeon2 binary and fixed production
+bounds: 391 processes, at most 256 keys and 64 KiB per process. Three paired
+trials alternate mode order. Every reply is bound to its requested key;
+UUIDs, trust lists and success bits must have equal semantic digests between
+modes. Metadata tips stay unchanged. Workers serialize with other local
+validation; background soak and publication verification remain separate.
 
-## Positive-answer lookup reuse
+Medians in seconds:
 
-The network sync adapter previously started a separate native
-`contentlocation` query before each durability/hash barrier. A controlled
-257-object regression reaches all 257 successful hashes and then fails its
-startup bound: 257 children instead of two. That original is retained.
+| Fixture | Normal wall | No-URLs wall | Normal child CPU | No-URLs child CPU |
+|---|---:|---:|---:|---:|
+| Unregistered UUID, negative control | 71.613 | 71.523 | 68.673 | 68.389 |
+| Reserved web UUID, URL-lookup control | 226.786 | 68.940 | 219.344 | 66.323 |
+| Configured standard Git peer | 250.200 | 74.693 | 242.720 | 71.910 |
 
-Each incoming stream now owns its own lookup adapter. It reuses the existing
-worker's bounded 256-query/64-KiB session, serializing only metadata lookup,
-and retains the sync adapter's 60-second native-call deadline, including the
-encoded-key fallback. No path, presence, durability or hash result is cached.
-Every answer still opens and syncs the actual object and directories, then
-hashes the object when required. A repository directory identity change
-invalidates the session, and a changed identity during lookup refuses it.
-Stream cancellation drops its owned process; a weak idle timer closes a
-remaining lookup after two idle seconds. The timer cannot retain an idle
-stream's cache. Hashing and syncing are outside the lookup mutex.
+The configured-peer median is about 3.35 times faster for this metadata
+sweep. Both modes retain the same bounded input and process counts; this is
+not a daemon throughput, complete backup, memory-budget or HDD result.
+The absence of a gain for unknown UUIDs agrees with the upstream branch.
+A separate 4,096-key configured-peer preflight took 10.363 versus 3.073
+seconds; it is distinct from the full-size three-pair result.
 
-Four adapter checks pass: the 257-object bound plus later corruption/removal,
-independent stream helpers and idle/drop cleanup, same-path repository
-replacement, and cancellation before a reply. Private Unix datagram sockets
-observe actual helper lifetime without signaling potentially reused PIDs.
-The real annex fixture also checks 300 independent object hashes across the
-session boundary, then refuses later corruption, removal and an absent key.
-Its first corruption attempt correctly hit annex's read-only permissions;
-the corrected private fixture explicitly changes only its synthetic object's
-permissions before damaging it. An earlier fixture compile error is also
-retained. Neither is counted as a product failure or a passing regression.
+The first earlier fixture intended for ordinary UUIDs accidentally used the
+reserved web UUID. Its original complete and partial larger-batch trials
+remain retained; they earn no ordinary-peer tuning credit. That fixture is
+now an explicit web control. The unregistered UUID and configured Git peer
+have independent roots and setup receipts. A prior single 4,096-key pair
+comparing 256/4,096-key batches does not justify increasing production bounds.
 
-All 239 daemon-library checks pass in the documented lab profile in
-25.853 seconds, followed by all-target workspace Clippy and repository rules.
-The startup-count comparison uses an instrumented helper, not a native
-throughput claim. Network integration and native pigeon2 validation remain
-separate requirements before integration.
+## Caller validation and adjacent work
+
+All 239 daemon-library checks pass with the actual pigeon2 artifact,
+followed by workspace all-target Clippy and repository rules. The real
+301-key fixture additionally requires that the currently pinned native
+build was discovered, then checks every requested UUID and 300 independent
+object hashes. Later corruption, removal and an absent key still refuse.
+Mock contracts retain old-build, unsupported-prose and failed-probe fallback.
+Exact-head network integration and CI still precede merging.
+
+Stream-owned native lookup reuse before durability/hash barriers shipped
+separately in [v0.6.50](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.50).
+Its [report](sync-lookups-7.md) retains the unpublished v0.6.49 health-fixture
+failure and the corrected wait; this native URL change does not alter those
+barriers or supply any missing physical-storage evidence.
 
 ## Full reference diagnostic
 
