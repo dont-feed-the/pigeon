@@ -12,6 +12,8 @@ increments the second number, and every other release the third.
 - A hash-checked copy must match both the file size and checksum named by
   its content key before pigeon allows another copy to be dropped.
 
+## 0.6.51 — 2026-10-18
+
 ### Changed
 
 - Checking which machines hold files skips unused download URL lookups
