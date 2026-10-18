@@ -149,7 +149,7 @@ jobs:
 
   selected-checks:
     name: Lab selection verified
-    if: ${{ !cancelled() && !inputs.native_zfs_only && !inputs.native_reference_only }}
+    if: ${{ !cancelled() && !inputs.native_zfs_only && !inputs.native_reference_only && !inputs.native_archive_upgrades_only }}
     needs: [changes, lab]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
