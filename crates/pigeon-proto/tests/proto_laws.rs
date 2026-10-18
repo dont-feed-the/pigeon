@@ -301,6 +301,7 @@ fn response(tc: &TestCase) -> Response {
                 .collect(),
             not_shared: Vec::new(),
             paused: flag(tc).then(|| message(tc)),
+            scan_only: flag(tc).then(|| message(tc)),
         }),
         6 => Response::Machines {
             machines: (0..tc.draw(gs::integers::<u8>().max_value(3)))

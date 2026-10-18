@@ -244,6 +244,9 @@ impl Renderer {
     /// The lines of a status report: the headline, then each version waiting.
     pub fn status(&self, r: &StatusReport) -> Vec<String> {
         let mut out = vec![self.text(&r.headline)];
+        if let Some(notice) = &r.scan_only {
+            out.push(self.text(notice));
+        }
         for v in &r.versions {
             out.push(format!("  {}", self.waiting(v)));
             if let Some(reason) = &v.reason {

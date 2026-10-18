@@ -276,6 +276,7 @@ fn responses_render_without_placeholders() {
             versions: vec![version(State::Published), version(State::Missing)],
             not_shared: Vec::new(),
             paused: None,
+            scan_only: None,
         }),
         Response::Machines {
             machines: vec![

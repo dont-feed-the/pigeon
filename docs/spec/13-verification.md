@@ -444,6 +444,7 @@ the same way: `pigeond/tests/codecs.rs` and `net_laws.rs`,
 
 | Law | Module | Test | Model mirrored |
 |---|---|---|---|
+| startup, fallback and settling require observation; lost/duplicate hints cannot suppress the ten-minute observation; completion acknowledges only its starting revision; saturation stays dirty; backwards time cannot create elapsed credit (ADR 0013) | `change_scan` | `tests/change_scan.rs` (1000 cases each) | — |
 | unknown or lookalike drivers never admit; explicit remote evidence overrides listed drivers; exact platform, role and locality bound the supported set (14 §14.2) | `filesystem` | `tests/filesystem.rs` (1000 cases each) | — |
 | more presence observations never lower a state; a second entry for one custodian changes nothing; custodian order is irrelevant; protected exactly when K distinct custodians count (ADRs 0002, 0046); a new holder never lowers a state | `state` | `tests/state.rs` | — |
 | the join is a semilattice with *Safe* as identity and *Needs you* absorbing; the headline of a union is the join; adding an item never lowers it; a version only this computer holds is *Not safe yet* after the grace period, even unreachable | `headline` | `tests/headline.rs` | — |

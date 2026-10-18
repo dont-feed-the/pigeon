@@ -28,7 +28,7 @@ def preparation_seconds(value):
 
 def diagnostic_events(home):
     allowed = {'resource-io-pressure', 'captured', 'capture-failed', 'capture-recovery-failed',
-               'candidate-scan-complete', 'writer-inventory-complete', 'accepted', 'placed', 'copy-failed', 'get-failed',
+               'candidate-scan-complete', 'writer-inventory-complete', 'capture-watch-registered', 'accepted', 'placed', 'copy-failed', 'get-failed',
                'admission-waits', 'keep-waits', 'fetch-failed'}
     events = deque(maxlen=50)
     for path in sorted((home / 'state/logs').glob('*.ndjson')):
@@ -44,7 +44,7 @@ def diagnostic_events(home):
                 if re.fullmatch(r'\d{4}-\d\d-\d\dT[\d:.]+Z', str(row.get('time', ''))):
                     event['time'] = row['time']
                 for key in ['added', 'removed', 'renamed', 'copies', 'entries', 'pending',
-                            'elapsed_us', 'pressure_high', 'pending_content']:
+                            'elapsed_us', 'pressure_high', 'pending_content', 'native']:
                     if isinstance(row.get(key), (int, float, bool)):
                         event[key] = row[key]
                 pressure = re.fullmatch(r'Some\((\d+(?:\.\d+)?)\)', str(row.get('avg10', '')))

@@ -939,3 +939,5 @@ setting-none = Aucune
 
 web-settings-resources-power-help = Avec Attendre, les transferts de fichiers attendent sous le seuil de batterie ou en mode économie d’énergie, puis reprennent automatiquement quand les conditions s’améliorent. Les attentes liées au réseau limité prennent aussi fin automatiquement. Reprendre le partage met fin à une pause que vous avez choisie.
 web-resource-value-invalid = « { $value } » ne convient pas pour { $key }. Rien n’a changé. Revenez en arrière et utilisez un choix proposé ou le format indiqué pour ce réglage.
+
+status-scan-only = Pigeon ne peut pas surveiller ce dossier pour le moment. Il vérifie régulièrement si des fichiers ont changé et réessaie automatiquement.

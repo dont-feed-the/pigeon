@@ -931,3 +931,5 @@ setting-none = None
 
 web-settings-resources-power-help = When set to Wait, file transfers wait below the battery threshold or in low-power mode, then resume automatically when conditions improve. Metered-network waits also end automatically. Share again resumes a pause you chose.
 web-resource-value-invalid = “{ $value }” is not valid for { $key }. Nothing changed. Go back and use a listed choice or the format shown for that setting.
+
+status-scan-only = Pigeon can’t watch this folder for changes right now. It checks periodically and retries automatically.

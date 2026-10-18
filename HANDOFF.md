@@ -5,14 +5,16 @@
 The historical snapshot below is retained for context. The user has since
 authorized the whole roadmap through v1.1, pushes, green non-draft PR merges,
 and publication. M0–M5 are released. The independently verified publication
-checkpoint recorded here is [v0.6.29](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.29),
-source `47dc25a07b21c83b43505e63ac8f99f51db91b9a`, published on 18 October at
-07:42:30 UTC. Check [live releases](https://github.com/dont-feed-the/pigeon/releases)
+checkpoint recorded here is [v0.6.30](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.30),
+source `97e6fc81a318a01d05f17eddeb4c3529efa042f3`, published on 18 October at
+08:09:10 UTC. Check [live releases](https://github.com/dont-feed-the/pigeon/releases)
 and [the KPI](docs/release-kpi.md) for newer completed publications.
 The failed v0.6.0 tag remains
 immutable and unpublished. See [M5 evidence](docs/reports/deletion-6.md).
 
-M6 is in progress; [its report](docs/reports/resources-7.md) distinguishes
+M6 is in progress; [native event hints](docs/reports/change-hints-7.md)
+now gate background capture observations, with scan-only fallback.
+The full resource/HDD budgets remain unproved; [its report](docs/reports/resources-7.md) distinguishes
 implemented controllers and settings from outstanding native scheduling,
 filesystem checks and measured reference/HDD budgets. M7 still needs its
 real elapsed gates and the broader law/trace audit. The seed-104 concrete-name

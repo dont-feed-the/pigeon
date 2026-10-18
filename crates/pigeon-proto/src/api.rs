@@ -616,6 +616,9 @@ pub struct StatusReport {
     /// else (15 §15.6).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub paused: Option<Message>,
+    /// Native change watching is unavailable; periodic scans remain active.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scan_only: Option<Message>,
 }
 
 /// A path that is not shared, and why.

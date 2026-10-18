@@ -323,6 +323,7 @@ fn status_says_the_pause_when_the_headline_is_about_something_else() {
         versions: Vec::new(),
         not_shared: Vec::new(),
         paused: Some(paused.clone()),
+        scan_only: None,
     };
     let (lines, _) = r.response(&pigeon_proto::Response::Status(report.clone()));
     assert!(lines[0].starts_with("Your disk is full"), "{lines:?}");
@@ -379,4 +380,35 @@ fn deadlines_ages_and_freed_files_read_as_words() {
             "“Keep on this computer” brings them back whenever you want.",
         ]
     );
+}
+
+#[test]
+fn scan_only_notice_is_secondary_and_localized_in_status_and_health() {
+    for (lang, expected) in [
+        (
+            "en",
+            "Pigeon can’t watch this folder for changes right now. It checks periodically and retries automatically.",
+        ),
+        (
+            "fr",
+            "Pigeon ne peut pas surveiller ce dossier pour le moment. Il vérifie régulièrement si des fichiers ont changé et réessaie automatiquement.",
+        ),
+    ] {
+        let r = render::Renderer::new(Catalogue::new(&lang.parse().unwrap(), false), 0);
+        let report = pigeon_proto::api::StatusReport {
+            headline: proto("headline-disk-full", &[]),
+            level: pigeon_proto::api::Level::NeedsYou,
+            state: pigeon_proto::api::State::Local,
+            versions: Vec::new(),
+            not_shared: Vec::new(),
+            paused: None,
+            scan_only: Some(proto("status-scan-only", &[])),
+        };
+        let headline = r.text(&report.headline);
+        assert_eq!(r.status(&report), [headline.clone(), expected.to_owned()]);
+        assert_eq!(
+            r.response(&pigeon_proto::Response::Status(report)).0,
+            [headline, expected.to_owned()]
+        );
+    }
 }

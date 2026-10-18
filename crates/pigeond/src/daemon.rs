@@ -172,6 +172,10 @@ impl Daemon {
 
     /// One round of the loops for `g`.
     pub async fn round(self: &Arc<Self>, g: &Arc<Group>) {
+        crate::capture_watch::round_started(
+            g,
+            Duration::from_secs(self.config.loops.interval_seconds.max(1)),
+        );
         // One trace per round, a span per step (12 §12.2).
         let mut round = pigeon_telemetry::span("round");
         round
@@ -230,11 +234,18 @@ impl Daemon {
                 }
             }
             let mut step = round.child("capture");
-            let captured = crate::capture::background(g, &self.device, &self.tracer).await;
-            crate::status_why::note_capture(g, captured.as_ref().err());
-            if let Err(e) = captured {
-                tracing::warn!(group = %g.id, error = %e, "capture-failed");
-                step.fail(&e.to_string());
+            if let Some(captured) =
+                crate::capture_watch::background(g, &self.device, &self.tracer, &self.wake).await
+            {
+                crate::status_why::note_capture(g, captured.as_ref().err());
+                if let Err(e) = captured {
+                    tracing::warn!(group = %g.id, error = %e, "capture-failed");
+                    step.fail(&e.to_string());
+                    settled = false;
+                }
+            } else if g.lock().capture_failed.is_some() {
+                // A skipped scan cannot clear an unobserved failure or admit
+                // installation through its unfinished capture state.
                 settled = false;
             }
             if settled && let Err(e) = crate::shared::compact(g).await {
