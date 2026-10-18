@@ -22,6 +22,11 @@ pub trait Control: std::fmt::Debug + Send + Sync {
     /// Release that record on success, failure or cancellation.
     fn ended(&self, _class: Class) {}
 
+    /// A completed comparable own read on the opened inode’s device. Duration
+    /// excludes deliberate policy waits and hashing; implementations must
+    /// retain only bounded measurements, never content or file names.
+    fn read_observed(&self, _device: u64, _elapsed: Duration) {}
+
     /// Whether a new native operation may start or send its next batch key.
     /// By default admission and active scheduling have the same policy.
     fn starting(&self, class: Class) -> bool {
@@ -178,6 +183,10 @@ impl DownloadControl {
 }
 
 impl Control for DownloadControl {
+    fn read_observed(&self, device: u64, elapsed: Duration) {
+        self.0.read_observed(device, elapsed);
+    }
+
     fn began(&self, class: Class) {
         self.0.began(Self::priority(class));
     }

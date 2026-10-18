@@ -30,6 +30,7 @@ pub mod notify;
 pub mod proposal;
 pub mod purge;
 pub mod queue;
+pub mod read_latency;
 pub mod refound;
 pub mod report;
 pub mod resources;

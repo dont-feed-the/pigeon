@@ -157,3 +157,44 @@ async fn the_opened_inode_must_match_the_expected_native_observation() {
     wrong.id.ino = stat.id.ino.wrapping_add(1);
     assert_eq!(checked(path, wrong, None).await.unwrap(), None);
 }
+
+#[tokio::test]
+async fn actual_bounded_reads_report_the_opened_device_after_policy_waits() {
+    #[derive(Debug, Default)]
+    struct Observations {
+        ready: AtomicBool,
+        reads: std::sync::Mutex<Vec<(u64, Duration)>>,
+    }
+    impl Control for Observations {
+        fn running(&self, _: Class) -> bool {
+            self.ready.load(Ordering::Relaxed)
+        }
+        fn read_observed(&self, device: u64, elapsed: Duration) {
+            self.reads.lock().unwrap().push((device, elapsed));
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("observed");
+    let bytes = vec![42; 2 * 65_536 + 33];
+    std::fs::write(&path, &bytes).unwrap();
+    let stat = pigeon_sys::fs::lstat(&path).unwrap().unwrap();
+    let observations = Arc::new(Observations::default());
+    let reader = tokio::spawn(checked(path, stat, Some(observations.clone())));
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    assert!(observations.reads.lock().unwrap().is_empty());
+    observations.ready.store(true, Ordering::Relaxed);
+    assert_eq!(
+        reader.await.unwrap().unwrap(),
+        Some((
+            bytes.len() as u64,
+            crate::util::hex(&Sha256::digest(&bytes))
+        ))
+    );
+    let readings = observations.reads.lock().unwrap();
+    assert_eq!(
+        readings.len(),
+        2,
+        "short tails and EOF are not comparable full reads"
+    );
+    assert!(readings.iter().all(|(device, _)| *device == stat.id.dev));
+}

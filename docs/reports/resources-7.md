@@ -65,8 +65,9 @@ Linux probes reuse D-Bus for UPower, power profiles and NetworkManager,
 with a two-second sampling deadline. Unknown observations use ADR 0037's
 fallback. Linux I/O pressure pauses pending content and subsequent scrub
 slices, with quiet recovery. The later native scheduling checkpoint adds mid-file child pausing.
-Own-read latency measurement remains outstanding; this is not the full disk
-controller.
+Large-file capture now supplies [bounded own-read latency feedback](read-latency-7.md).
+Other read boundaries and independent per-device scheduling remain open;
+this is not the full disk controller.
 
 137 selected law/native/UI/configuration tests passed locally, including a real
 QUIC regression that queues bytes waiting for power, then erases their key:
@@ -886,3 +887,11 @@ The [download admission checkpoint](resources-7-download-priority.md) gives
 optional kept-folder retrieval a lower admission class than protection,
 while allowing the active key to finish before yielding. It does not close
 the complete global queue, native preset/read-latency or measured-budget gaps.
+
+## Own-read latency checkpoint
+
+The [own-read report](read-latency-7.md) records bounded per-device sampled
+medians from full-size native capture reads, connected to the existing
+back-off and progress floors. It retains the previous candidate's second
+initial-copy failure separately. Independent device scheduling, other read
+boundaries and measured hardware budgets remain open.
