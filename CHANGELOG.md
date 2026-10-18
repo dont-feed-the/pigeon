@@ -11,6 +11,11 @@ increments the second number, and every other release the third.
 
 - Checking which machines hold files skips unused download URL lookups
   when the installed git-annex supports it.
+
+## 0.6.50 — 2026-10-18
+
+### Changed
+
 - Backup copy checks start fewer helper programs.
 
 ## 0.6.48 — 2026-10-18

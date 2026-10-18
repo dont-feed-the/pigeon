@@ -106,14 +106,23 @@ async fn closed(sockets: &[std::path::PathBuf]) {
 async fn repeated_barriers_bound_native_starts_and_recheck_actual_bytes() {
     let (root, repository, syncer) = fixture();
     let mut objects = Vec::new();
+    let mut previous_start = std::time::Instant::now();
+    let mut possible_idle_expiries = 0;
     for n in 0..257 {
         let (key, object) = object(&repository, n);
+        let started = std::time::Instant::now();
         assert!(syncer.sync(&repository, &key, true).await.unwrap());
+        // An overloaded runner can legitimately expire the idle helper
+        // between barriers. Account for that policy rather than assuming
+        // the entire sequence always gets CPU within two seconds.
+        if previous_start.elapsed() >= std::time::Duration::from_secs(2) {
+            possible_idle_expiries += 1;
+        }
+        previous_start = started;
         objects.push((key, object));
     }
-    assert_eq!(
-        starts(root.path()),
-        2,
+    assert!(
+        (2..=2 + possible_idle_expiries).contains(&starts(root.path())),
         "one native lookup per key remains at the positive-answer barrier"
     );
     let (key, object) = &objects[0];

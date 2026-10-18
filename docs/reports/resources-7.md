@@ -5,8 +5,10 @@ native content shaping ship incrementally in v0.6.x patches; the milestone
 release remains v0.7.0. No reference-tree or foreground HDD resource budget
 has been claimed to pass.
 
-The [location-query checkpoint](location-claims-7.md) records the next native
-metadata optimization and retains the failed full v0.6.47 reference diagnostic.
+The [positive-answer lookup checkpoint](sync-lookups-7.md) records bounded
+native process reuse while keeping every durability and required hash check.
+The [location-query checkpoint](location-claims-7.md) records the optional
+native URL optimization and retained full-reference diagnostic failure.
 
 ## Controller components
 
