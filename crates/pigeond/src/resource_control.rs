@@ -36,6 +36,8 @@ struct State {
     settings: Effective,
     conditions: Conditions,
     disk: Disk,
+    io_pressure: bool,
+    reads: BTreeMap<u64, (u64, pigeon_core::read_latency::Window)>,
     samples: BTreeMap<(usize, String), (u64, Delay)>,
     rate: [u64; 2],
     buckets: [Bucket; 2],
@@ -77,6 +79,8 @@ impl Controller {
                 settings,
                 conditions: Conditions::default(),
                 disk: Disk::default(),
+                io_pressure: false,
+                reads: BTreeMap::new(),
                 samples: BTreeMap::new(),
                 rate: [16_384; 2],
                 buckets: [Bucket::new(0, CHUNK as u64, 16_384); 2],
@@ -115,9 +119,36 @@ impl Controller {
     pub fn observe(&self, conditions: Conditions, io_pressure: bool) {
         let mut s = self.lock();
         s.conditions = conditions;
-        let busy = io_pressure
+        let now = self.now();
+        s.io_pressure = io_pressure
             && (s.pending > 0 || self.children.iter().any(|n| n.load(Ordering::Relaxed) > 0));
-        s.disk.observe(self.now(), busy);
+        let busy = s.io_pressure || s.reads.values().any(|(_, w)| w.busy(now));
+        s.disk.observe(now, busy);
+    }
+
+    fn read_observed(&self, device: u64, elapsed: Duration) {
+        self.read_at(self.now(), device, elapsed);
+    }
+
+    fn read_at(&self, now: u64, device: u64, elapsed: Duration) {
+        let mut s = self.lock();
+        s.reads
+            .retain(|_, (seen, _)| now.saturating_sub(*seen) < 600_000);
+        // A bound on devices as well as samples; overflow falls back to
+        // native pressure. Do not evict an active device's learned baseline.
+        if !s.reads.contains_key(&device) && s.reads.len() >= 32 {
+            return;
+        }
+        let quiet = !s.io_pressure;
+        let (seen, window) = s.reads.entry(device).or_default();
+        *seen = now.max(*seen);
+        window.observe(
+            now,
+            elapsed.as_nanos().min(u128::from(u64::MAX)) as u64,
+            quiet,
+        );
+        let busy = s.io_pressure || s.reads.values().any(|(_, w)| w.busy(now));
+        s.disk.observe(now, busy);
     }
 
     /// Visible reason content or maintenance cannot run now.
@@ -274,6 +305,10 @@ impl Controller {
     }
 }
 
+#[cfg(test)]
+#[path = "resource_read_tests.rs"]
+mod read_tests;
+
 #[derive(Debug)]
 struct ChildControl {
     controller: std::sync::Arc<Controller>,
@@ -292,6 +327,10 @@ impl ChildControl {
 }
 
 impl pigeon_git::work::Control for ChildControl {
+    fn read_observed(&self, device: u64, elapsed: Duration) {
+        self.controller.read_observed(device, elapsed);
+    }
+
     fn began(&self, class: pigeon_git::work::Class) {
         self.controller.children[self.priority(class) as usize].fetch_add(1, Ordering::Relaxed);
     }

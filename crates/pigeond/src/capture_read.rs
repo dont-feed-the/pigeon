@@ -124,19 +124,46 @@ fn digest(reader: &mut impl Read, state: &State) -> io::Result<(u64, String)> {
     Ok((size, crate::util::hex(&hash.finalize())))
 }
 
+struct ObservedRead<'a> {
+    file: pigeon_sys::fs::StreamingRead,
+    device: u64,
+    control: Option<&'a dyn Control>,
+}
+
+impl Read for ObservedRead<'_> {
+    fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+        let started = Instant::now();
+        let n = self.file.read(bytes)?;
+        let elapsed = started.elapsed();
+        // Compare equal-sized operations: short tails and tiny files must
+        // not establish an unrealistically cheap baseline for full chunks.
+        if n == 65_536
+            && let Some(control) = self.control
+        {
+            control.read_observed(self.device, elapsed);
+        }
+        Ok(n)
+    }
+}
+
 pub(crate) async fn checked(
     path: PathBuf,
     expected: Stat,
     control: Option<Arc<dyn Control>>,
 ) -> io::Result<Option<(u64, String)>> {
     supervise(control, INACTIVITY, move |state| {
-        let Some(mut file) =
+        let Some(file) =
             pigeon_sys::fs::streaming_read_exact(&path, expected).map_err(io::Error::other)?
         else {
             return Ok(None);
         };
-        let observation = digest(&mut file, state)?;
-        if file.stat().map_err(io::Error::other)? != expected {
+        let mut observed = ObservedRead {
+            file,
+            device: expected.id.dev,
+            control: state.control.as_deref(),
+        };
+        let observation = digest(&mut observed, state)?;
+        if observed.file.stat().map_err(io::Error::other)? != expected {
             return Ok(None);
         }
         Ok(Some(observation))
