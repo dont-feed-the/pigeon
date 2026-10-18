@@ -72,3 +72,17 @@ committing and PR validation, including the v0.6.43 version-only release
 changes. The one local pre-commit Clippy miss is an unnecessary clone in
 the native fixture; it is replaced by a borrowed one-element slice.
 The original failed check remains retained. No CI retry is used.
+
+## Integrated release validation
+
+PR #113, head `32b12b82e1f5a469e51df1b47c48573869ea7c64`, integrates main `dde2472b1c2e1ccd20216943ec2931aca1b0e256` before validation.
+CI 39142743079, lab 39142743025 and bridge
+39142743074 pass. v0.6.43 is independently published
+and verified first. Local validation passes 40 driver/native contracts,
+207 daemon library checks and nine native history/health/format checks;
+four new framing/order laws run 1000 cases each. After version-only main
+integration, all 30 driver library checks and four affected native checks
+pass again. All-target workspace Clippy and repository rules pass.
+Original parser and native pipe-fault failures remain retained. Fresh
+v0.6.44 tag gates and independent publication verification remain required.
+The resource, full security, elapsed and final-RC gates remain separate.
