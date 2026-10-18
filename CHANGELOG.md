@@ -5,6 +5,13 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Printing a recovery sheet no longer reports an online backup as offline
+  because a background fetch holds its cached history lock.
+
 ## 0.6.26 — 2026-10-18
 
 ### Fixed
