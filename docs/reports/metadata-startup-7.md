@@ -120,3 +120,20 @@ The report completes with `budget_verdict = not-measured`. Five seconds of
 smoke sampling, lab filesystem seams and small content do not establish the
 100000-file/50GB reference, CPU/RSS, physical-HDD or elapsed gates. The
 final report-only checkpoint does not change the runtime or probe code.
+
+## Integrated release validation
+
+PR #114, head `474fa4b11ece1904f21615ce78a4ca1dfdc5a8e8`, integrates main `31e86654127e9733229026d2a7b8637c1bc8eee3` before validation.
+CI 39146844152, lab 39146844129 and bridge
+39146844237 pass. v0.6.44 is independently published
+and verified first. Local validation passes 215 daemon library checks,
+eleven native history/health/slice cases and 162 script contracts. Four new
+metadata partition laws run 1000 cases each. Frozen lab source
+`1df86d380165bcd675c39411248592fbdd56341a` independently verifies both peers'
+complete 1024-file trees and objects; final head changes only report text
+after that smoke. All-target workspace Clippy, actionlint and repository
+rules pass. Original native regressions and fixture refusal remain retained.
+Fresh v0.6.45 tag gates and independent publication verification are required.
+The changed-source full-size Fast diagnostic and focused Mac check have
+separate background results; no resource, HDD, elapsed or final-RC gate is
+closed by the finite local checks or by this patch publication.
