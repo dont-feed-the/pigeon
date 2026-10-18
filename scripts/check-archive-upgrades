@@ -61,6 +61,7 @@ phase=verifying-mounted-device-identity
 setup_report 0
 [[ $(mounted_uuid) == "$identity" ]]
 sudo -n chown "$(id -u):$(id -g)" "$root/volume"
+mkdir "$root/volume/cases"
 phase=running-upgrade-cases
 setup_report 0
 result=0
@@ -70,7 +71,7 @@ for old in 0513 061; do
         name=$old-$first
         if ! python3 "$here/scripts/check-upgrade-peers" --release-archives \
             --old-bin "$old_bin" --new-bin "$new_bin" --first "$first" \
-            --root "$root/volume/$name" --report "$reports/$name.json" \
+            --root "$root/volume/cases/$name" --report "$reports/$name.json" \
             > "$reports/$name.log" 2>&1; then
             result=1
             break 2
@@ -82,5 +83,5 @@ setup_report "$result"
 # Keep synthetic original data and logs before unmounting, including on
 # failure; ephemeral sockets are not durable repository evidence.
 tar --exclude='*.sock' --warning=no-file-ignored -czf "$reports/native-fixtures.tar.gz" \
-    -C "$root/volume" .
+    -C "$root/volume/cases" .
 exit "$result"
