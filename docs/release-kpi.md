@@ -856,3 +856,16 @@ lead is 11 minutes 16 seconds; the publication gap from v0.6.29 is
 completed publication intervals. All four tag workflows pass on their first
 attempt. This ships the shared Linux writer inventory and finite scheduled
 model campaign; actual elapsed nights and resource budgets remain unproved.
+
+## v0.6.31 publication observation
+
+[v0.6.31](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.31), source
+`cefa9cfc0702cbf088fae90ad6e3beceb7e7f6f3`, is published on 18 October at
+09:14:10 UTC. All six assets, four archive checksums, pinned annex, Linux
+installation and shell completions are independently verified. Candidate
+lead is 9 minutes 19 seconds, with 37 lead samples and 36 completed publication
+intervals. The publication gap from v0.6.30 is 1 hour 5 minutes; both targets
+are met. All four tag gates pass on their first attempt. PR #100's earlier
+held-decision regression and notify license-policy failure are corrected in
+source before its green validation; neither receives an unchanged-source
+retry. The long native soak and resource profile remain separate observations.
