@@ -5,6 +5,13 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Incomplete or missing Git object metadata causes a read error instead
+  of making files disappear from the current or retained inventory.
+
 ## 0.6.43 — 2026-10-18
 
 ### Added

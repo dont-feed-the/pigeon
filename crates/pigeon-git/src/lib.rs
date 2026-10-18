@@ -5,6 +5,7 @@
 //! - [`run`]: one-shot calls with a deadline;
 //! - [`batch`]: long-running `--batch` processes, restarted after a failure;
 //! - [`catfile`]: `git cat-file --batch`;
+//! - [`object_reply`]: complete ordered one-shot object and size replies;
 //! - [`annex`]: the JSON answers of git-annex and its batch processes;
 //! - [`status`]: `git status --porcelain=v2 -z`;
 //! - [`version`]: the minimum versions of 14 §14.3.
@@ -15,6 +16,7 @@ pub mod batch;
 pub mod catfile;
 pub mod env;
 pub mod error;
+pub mod object_reply;
 mod progress;
 pub mod run;
 pub mod status;
