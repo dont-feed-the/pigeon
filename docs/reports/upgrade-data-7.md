@@ -257,3 +257,19 @@ pinned annex binary and archive checksums, public identities, original heads
 and the independent current/historical byte proofs. No fixture failure is
 erased by this result. This verifies the supported published Linux baselines;
 other platforms, broader operations and final-RC upgrades remain unqualified.
+
+## Published-archive integrated release validation
+
+PR #112, head `fecb04ca66d1cefc3d81facfac39486f5815fcaf`, integrates main `9b5588ff669dc1f889d43ff8be870164758a99bb` before validation.
+CI 39141399797, lab 39141399812 and bridge
+39141399885 pass. v0.6.42 is independently published
+and verified first. Local validation passes 160 script contracts, ten focused native observer
+checks, actionlint,
+all-target workspace Clippy and repository checks. The four actual Linux
+archive upgrade cases and retained fixture collection pass on changed source
+after the two original fixture failures recorded above. The bounded byte
+observer and targeted macOS people profile are included in the same rollup.
+Changed-source native macOS validation remains separate background evidence. Fresh v0.6.43 tag
+gates and independent publication verification remain required.
+This finite upgrade evidence does not close resource, broader security,
+other-platform, elapsed or final release-candidate qualification gates.
