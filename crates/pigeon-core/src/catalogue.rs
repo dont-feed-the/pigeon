@@ -49,20 +49,25 @@ pub struct Version<K> {
 
 /// A tree's units by slot (its folded unit path, 05 §5.1).
 pub fn units<K: Clone + Ord>(tree: &Tree<K>) -> BTreeMap<String, Version<K>> {
-    let mut groups: BTreeMap<&str, BTreeMap<String, K>> = BTreeMap::new();
+    // A plain file must not allocate an eleven-entry B-tree node for K.
+    // Box its one leaf; only packages need the map of relative paths.
+    type Group<K> = (Option<Box<K>>, BTreeMap<String, K>);
+    let mut groups: BTreeMap<&str, Group<K>> = BTreeMap::new();
     for (path, k) in tree {
         let u = names::unit(path);
         let rel = path.get(u.len() + 1..).unwrap_or_default();
-        groups
-            .entry(u)
-            .or_default()
-            .insert(rel.to_owned(), k.clone());
+        let (leaf, files) = groups.entry(u).or_default();
+        if rel.is_empty() {
+            *leaf = Some(Box::new(k.clone()));
+        } else {
+            files.insert(rel.to_owned(), k.clone());
+        }
     }
     groups
         .into_iter()
-        .map(|(u, mut files)| {
-            let content = match files.remove("") {
-                Some(k) if files.is_empty() => Content::File(k),
+        .map(|(u, (leaf, files))| {
+            let content = match leaf {
+                Some(k) if files.is_empty() => Content::File(*k),
                 _ => Content::Package(files),
             };
             (

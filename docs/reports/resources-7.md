@@ -928,3 +928,7 @@ their device scheduling and measured reference/HDD budgets remains open.
 The [metadata checkpoint](metadata-startup-7.md) records the failed 90-minute
 full-size diagnostic, bounded bulk queries, fresh worker-local lookups and
 native validation. It does not establish the outstanding CPU/RSS or HDD budgets.
+
+The [catalogue grouping allocation report](catalogue-memory-7.md) records
+a controlled 100000-file reduction in temporary Rust heap, with unchanged
+file/package results. It does not close the full daemon memory budget.

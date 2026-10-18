@@ -91,9 +91,16 @@ attempt omits the driver's required `--no-check-gitignore` flag and is
 refused before adding files; the corrected fixture passes. The original
 212-pass/one-setup-failure log remains retained, not called a complete pass.
 
-The focused macOS capture profile also selects these metadata regressions,
-without starting the full background suite. Its new result remains to be
-recorded. The previously successful APFS people profile stays separate.
+The focused macOS capture profile also selects these metadata regressions.
+[Run 39146843909](https://github.com/dont-feed-the/pigeon/actions/runs/39146843909),
+job 117732323777 at source
+`474fa4b11ece1904f21615ce78a4ca1dfdc5a8e8`, passes all 15 selected native
+checks in 88.002 seconds. The other 202 checks are filtered out, not executed.
+The original finished log is retained with SHA-256
+`f61ee58b31d7cafa19ae8a3a9d750b3c2245fa84a4e82471b44b17ddaf0aaba5`.
+This includes native metadata freshness/rotation and capture/free/restore
+checks, not the full macOS suite or production backup/resource qualification.
+The previously successful APFS people profile stays separate.
 
 `reference-budget --smoke --smoke-files N` accepts 1–4096 files for a larger
 reduced fixture crossing metadata boundaries. It never certifies budgets;
