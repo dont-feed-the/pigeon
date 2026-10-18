@@ -463,7 +463,8 @@ async fn commit_batch(g: &Group, b: Batch<'_>, mut done: Captured) -> Result<Cap
     let remove = hold_mass_deletions(g, &mut held, &before, &add, remove).await?;
     let mut queue =
         crate::telemetry::Queue::start(&g.id, "capture", "batch", all.len() + remove.len());
-    for chunk in all.chunks(64) {
+    for range in pigeon_core::capture_batch::ranges(&all) {
+        let chunk = &all[range];
         // Command/Add.hs's batch path goes straight to start/ingestAdd;
         // the ordinary path's withFilesMaybeModified can skip a save whose
         // application preserved size and mtime. NUL input retains literal

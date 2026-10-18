@@ -10,6 +10,8 @@
 pub mod admission;
 pub mod authority;
 pub mod capacity;
+/// Bounded native capture input partitions.
+pub mod capture_batch;
 pub mod capture_schedule;
 pub mod catalogue;
 pub mod commit;

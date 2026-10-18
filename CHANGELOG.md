@@ -5,6 +5,16 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Status keeps a new file pending while it is being staged for capture,
+  instead of briefly reporting an empty safe folder.
+
+- Capturing many saved files uses fewer Git processes while keeping batches
+  bounded, with file names, bytes and executable permissions preserved.
+
 ## 0.6.31 — 2026-10-18
 
 ### Added

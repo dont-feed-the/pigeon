@@ -36,8 +36,12 @@ use pigeond::roster_file::{self, RosterDoc};
 use pigeond::trace::Tracer;
 use pigeond::{capture, install, merge};
 
+#[path = "install/capture_batch.rs"]
+mod capture_batch;
 #[path = "install/capture_immutability.rs"]
 mod capture_immutability;
+#[path = "install/capture_observation.rs"]
+mod capture_observation;
 #[path = "install/capture_schedule.rs"]
 mod capture_schedule;
 #[path = "install/download_order.rs"]

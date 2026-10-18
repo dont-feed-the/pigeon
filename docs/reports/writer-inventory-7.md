@@ -172,3 +172,27 @@ The full reference/HDD budgets, native watcher and real elapsed M7 gates
 remain separate; no passing resource budget is inferred from the primitive
 timing or the incomplete preparation diagnostic. Fresh v0.6.30 tag gates
 and independent archive/install checks are required before publication.
+
+## Full preparation observation on the shared-inventory source
+
+Run 39108857452/job 117620451589 uses clean ordinary source
+`0e345d81ea6c114e7405a29f8f2a24e935b97ca0` with the full 5400-second
+preparation allowance. It fails preparation at 09:21:48 UTC on 18 October.
+No complete accepted capture or backup tree is established, so the idle CPU,
+reference RSS and ten-minute scan budgets remain `not-measured`.
+
+Pre-cleanup diagnostics retain 65,602 source index paths and 65,600 unverified
+source annex objects, with zero backup objects. Source daemon RSS high-water
+is 232,411,136 bytes during preparation, not a qualified reference-window
+memory result. The source cgroup accumulates 1205.616549 CPU seconds; the live
+daemon reports 15,084 ticks at 100 Hz. These differ because cgroup accounting
+includes native descendants. They do not identify every reaped command.
+Metadata observations continue with 100k pending paths and repeated declared
+I/O-pressure waits; the last source scan takes 543,410 microseconds. No exact
+causal whole-workload speedup is inferred from the isolated batching trial.
+
+Artifact 12131978069 is 2355 bytes, SHA-256
+`9b400bd4b4643fefe9722fab30dbaa3edebf5ae8221e5b3e0d5a1e4fd4187131`.
+The original remains retained without an unchanged-source retry. The native
+watcher and larger bounded batches are newer source changes; their next
+profile must establish its own complete preparation and measured window.

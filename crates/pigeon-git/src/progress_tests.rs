@@ -163,9 +163,16 @@ fn only_bounded_complete_capture_batches_enable_file_progress() {
     ] {
         assert!(Progress::capture(&args, Some(input)).is_none());
     }
-    let oversized: Vec<u8> = (0..65)
+    let oversized: Vec<u8> = (0..=pigeon_core::capture_batch::MAX_FILES)
         .flat_map(|n| format!("file{n}\0").into_bytes())
         .collect();
     assert!(Progress::capture(&args, Some(&oversized)).is_none());
+    let mut over_bytes = vec![b'x'; pigeon_core::capture_batch::MAX_INPUT_BYTES];
+    over_bytes.push(0);
+    assert!(Progress::capture(&args, Some(&over_bytes)).is_none());
+    let full: Vec<_> = (0..pigeon_core::capture_batch::MAX_FILES)
+        .flat_map(|n| format!("file{n}\0").into_bytes())
+        .collect();
+    assert!(Progress::capture(&args, Some(&full)).is_some());
     assert!(Progress::capture(&args, Some(b"a\nfile\0")).is_some());
 }
