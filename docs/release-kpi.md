@@ -910,3 +910,14 @@ tag gates pass on their first attempt. Candidate lead is 609 seconds; the
 publication interval is 889 seconds, with 41 lead samples and 40 completed
 intervals. Both targets are met. The new soak starts its clock from zero
 after the original harness deadline failure; 72 actual hours remain required.
+
+## v0.6.36 publication observation
+
+[v0.6.36](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.36), source
+`c298375d0dac14017dfdc2222f83539cf51137d6`, is published at 11:20:34 UTC
+on 18 October. Independent verification passes six assets, four archive
+checksums, pinned annex, native Linux installation and completions. All four
+tag workflows pass first attempt. Candidate lead is 669 seconds; the gap
+from v0.6.35 is 1,892 seconds. Both targets are met, with 42 lead samples
+and 41 completed publication intervals. Historical-data checks improve
+upgrade evidence; they do not establish the remaining M7 elapsed gates.
