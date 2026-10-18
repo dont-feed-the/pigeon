@@ -9,6 +9,8 @@
 # new upstream release fails here until the pin is moved deliberately (spec 14
 # §14.3); macOS uses Homebrew's current git-annex, whose version the log
 # records.
+# This diagnostic-only branch runs one nonqualifying 5400-second Fast
+# reference attempt on the v0.6.47 runtime; it is not intended for main.
 # The optional native_zfs_only dispatch builds one real filesystem fixture;
 # ordinary publication/PR lab groups stay Rust-free and unchanged.
 name: lab
@@ -16,7 +18,7 @@ name: lab
 on:
   # Quick and Rust-free: part of the pull-request tier.
   push:
-    branches: [main]
+    branches: [main, codex/diagnostic-reference-v47]
     tags: ["v*"]
   pull_request:
   workflow_call:
@@ -75,7 +77,7 @@ jobs:
 
   lab:
     needs: changes
-    if: needs.changes.outputs.lab == 'true' && !inputs.native_zfs_only && !inputs.native_reference_only && !inputs.native_archive_upgrades_only
+    if: github.ref != 'refs/heads/codex/diagnostic-reference-v47' && needs.changes.outputs.lab == 'true' && !inputs.native_zfs_only && !inputs.native_reference_only && !inputs.native_archive_upgrades_only
     name: ${{ matrix.group }} (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -149,7 +151,7 @@ jobs:
 
   selected-checks:
     name: Lab selection verified
-    if: ${{ !cancelled() && !inputs.native_zfs_only && !inputs.native_reference_only && !inputs.native_archive_upgrades_only }}
+    if: ${{ github.ref != 'refs/heads/codex/diagnostic-reference-v47' && !cancelled() && !inputs.native_zfs_only && !inputs.native_reference_only && !inputs.native_archive_upgrades_only }}
     needs: [changes, lab]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -234,8 +236,8 @@ jobs:
           retention-days: 14
 
   native-reference:
-    name: ${{ inputs.reference_fast_preparation && 'diagnostic Fast preparation, Gentle window (not qualification)' || '100000 files, 50GB, two real peers, ten-minute resource window' }}
-    if: inputs.native_reference_only
+    name: ${{ (inputs.reference_fast_preparation || github.ref == 'refs/heads/codex/diagnostic-reference-v47') && 'diagnostic Fast preparation, Gentle window (not qualification)' || '100000 files, 50GB, two real peers, ten-minute resource window' }}
+    if: inputs.native_reference_only || github.ref == 'refs/heads/codex/diagnostic-reference-v47'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
@@ -268,7 +270,7 @@ jobs:
       - name: real reference preparation and measured resource budgets
         env:
           PREPARE_SECONDS: ${{ inputs.reference_prepare_seconds || '5400' }}
-          FAST_PREPARATION: ${{ inputs.reference_fast_preparation || 'false' }}
+          FAST_PREPARATION: ${{ (inputs.reference_fast_preparation || github.ref == 'refs/heads/codex/diagnostic-reference-v47') && 'true' || 'false' }}
         run: |
           extra=()
           if [[ "$FAST_PREPARATION" == true ]]; then extra+=(--diagnostic-fast-prepare); fi
