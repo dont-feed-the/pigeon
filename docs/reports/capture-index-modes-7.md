@@ -71,3 +71,16 @@ smoke and independently hash every unique object on both peers. Its budget
 verdict is `not-measured`. Post-restart evidence is stored under the
 persistent workspace. Repository checks precede submission; actual release
 validation and the fresh full-size diagnostic remain separate.
+
+## Integrated release validation
+
+PR #110, head `893769af541c018b61473ec45b7f995e948d26e7`, integrates main `1dbcf729a7f33de98afbe215c309371963d676d8` before validation.
+CI 39133597398, lab 39133597486 and bridge
+39133597341 pass. v0.6.40 is independently published
+and verified first. Local validation includes 203 daemon library and
+56 capture/install cases, five focused and three native integrated checks,
+and a rebuilt two-peer smoke with independent object hashes. All-target
+Clippy and repository checks pass. Fresh v0.6.41 tag gates and independent
+publication verification remain required. The changed-source full reference
+diagnostic is separate and cannot certify an M6 budget. Actual elapsed
+qualification remains open after the host interruption.
