@@ -3,7 +3,7 @@
 //! git-annex never syncs, so the filter holds a custodian's positive answer
 //! for a key until its object file and the directories above it, up to
 //! `annex/objects`, are synced. A lock that proves another custodian's drop
-//! also waits for the object's SHA-256 to match its key (spec 09 §9.4); a
+//! also waits for the object's size and SHA-256 to match its key (09 §9.4); a
 //! mismatch queues `git annex fsck --key`. git-annex runs through
 //! `pigeon-git`, with pigeon's environment. On macOS, `sync_all` is
 //! `F_FULLFSYNC`.
@@ -26,6 +26,10 @@ mod lookup;
 #[path = "sync_lookup_tests.rs"]
 mod lookup_tests;
 
+#[cfg(test)]
+#[path = "sync_identity_tests.rs"]
+mod identity_tests;
+
 /// A sync of one object: whether its hash matched (true if none was asked).
 pub type SyncFuture = Pin<Box<dyn Future<Output = io::Result<bool>> + Send>>;
 
@@ -40,7 +44,7 @@ pub trait Syncer: Send + Sync + 'static {
         None
     }
     /// Syncs the object of `key` and its directories to disk; if `hash`,
-    /// also checks the object's SHA-256 against the key.
+    /// also checks the object's size and SHA-256 against the key.
     fn sync(&self, repository: &Repository, key: &str, hash: bool) -> SyncFuture;
     /// Moves a rotten object out, so that repair starts (08 §8.4).
     fn repair(&self, repository: &Repository, key: &str) -> RepairFuture;
@@ -136,10 +140,8 @@ impl Syncer for AnnexSyncer {
                 if !hash {
                     return Ok(true);
                 }
-                let Some(expected) = key_sha256(&key) else {
-                    return Ok(false);
-                };
-                Ok(sha256_file(&object)? == expected.to_ascii_lowercase())
+                let (size, digest) = file_identity(&object)?;
+                Ok(pigeon_core::export::matches(&key, size, &digest))
             })
             .await
             .map_err(io::Error::other)?
@@ -192,21 +194,32 @@ pub fn sync_object(object: &Path) -> io::Result<()> {
 
 /// The SHA-256 of a file, in lowercase hex.
 pub fn sha256_file(path: &Path) -> io::Result<String> {
+    file_identity(path).map(|(_, digest)| digest)
+}
+
+/// Count the same streamed bytes that supply the digest, rather than a
+/// separate metadata observation of a potentially changing file.
+fn file_identity(path: &Path) -> io::Result<(u64, String)> {
     let mut file = pigeon_sys::fs::streaming_read(path).map_err(native_io)?;
     let mut hasher = Sha256::new();
+    let mut size = 0;
     let mut buf = vec![0u8; 1 << 16];
     loop {
         let n = file.read(&mut buf)?;
         if n == 0 {
             break;
         }
+        size += n as u64;
         hasher.update(&buf[..n]);
     }
-    Ok(hasher
-        .finalize()
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect())
+    Ok((
+        size,
+        hasher
+            .finalize()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect(),
+    ))
 }
 
 fn native_io(error: pigeon_sys::Error) -> io::Error {

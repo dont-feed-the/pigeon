@@ -1,10 +1,13 @@
 """Published snapshots reject metadata drift, unsafe payloads and implicit lab conversion."""
 import copy
+import base64
 import hashlib
 import io
 import json
 from pathlib import Path
 import runpy
+import shutil
+import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -16,6 +19,82 @@ UPGRADE = runpy.run_path(str(SCRIPTS / 'check-upgrade'))
 
 
 class PublishedArchiveContracts(unittest.TestCase):
+    def test_native_pin_is_bounded_unique_and_bound_to_its_source_blob(self):
+        body = b'PIGEON_VERSION="10.20261006-pigeon2"\n'
+        def metadata(body):
+            return dict(encoding='base64', size=len(body),
+                        content=base64.b64encode(body).decode(),
+                        sha=hashlib.sha1(b'blob ' + str(len(body)).encode() + b'\0' + body).hexdigest())
+        valid = metadata(body)
+        def read(item):
+            with patch.dict(ARCHIVE['annex_pin'].__globals__, api=lambda _path: item):
+                return ARCHIVE['annex_pin']('a' * 40)
+        self.assertEqual(read(valid), '10.20261006-pigeon2')
+        for invalid in [dict(valid, sha='0' * 40), dict(valid, size=len(body) + 1),
+                        dict(valid, size=16385), dict(valid, encoding='raw'),
+                        dict(valid, content='a' * 32769), dict(valid, content='!'),
+                        metadata(body + body), metadata(b'OTHER_VERSION=10.0\n'),
+                        metadata(b'PIGEON_VERSION=10.0;exit\n')]:
+            with self.subTest(metadata=invalid), self.assertRaises(ValueError):
+                read(invalid)
+        with patch.dict(ARCHIVE['annex_pin'].__globals__, api=lambda _: self.fail('network called')):
+            with self.assertRaises(ValueError):
+                ARCHIVE['annex_pin']('main')
+
+    def test_each_release_requires_its_own_pinned_native_version(self):
+        for expected, actual, accepted in [
+            ('10.20261006-pigeon1', '10.20261006-pigeon1', True),
+            ('10.20261006-pigeon2', '10.20261006-pigeon2', True),
+            ('10.20261006-pigeon2', '10.20261006-pigeon1', False),
+            ('10.20261006-pigeon1', '9.0-pigeon1', False),
+        ]:
+            with self.subTest(expected=expected, actual=actual), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                tag, source = 'v0.6.51', 'a' * 40
+                package = f'pigeon-{tag}-linux-x86_64.tar.gz'
+                native = 'git-annex-pigeon-linux-x86_64.tar.gz'
+                for name, programs in [(package, ARCHIVE['PROGRAMS']), (native, ['git-annex'])]:
+                    with tarfile.open(root / name, 'w:gz') as stream:
+                        for program in programs:
+                            value = actual if program == 'git-annex' else 'pigeon ' + tag[1:]
+                            body = ('#!/usr/bin/env python3\nprint(' + repr(value) + ')\n').encode()
+                            entry = tarfile.TarInfo('bin/' + program)
+                            entry.mode, entry.size = 0o500, len(body)
+                            stream.addfile(entry, io.BytesIO(body))
+                (root / 'SHA256SUMS').write_text(''.join(
+                    ARCHIVE['sha'](root / name) + '  ' + name + '\n' for name in [package, native]))
+                assets = [dict(name=name, size=(root / name).stat().st_size,
+                               digest='sha256:' + ARCHIVE['sha'](root / name))
+                          for name in [package, native, 'SHA256SUMS']]
+                pin = ('PIGEON_VERSION=' + expected + '\n').encode()
+                metadata = dict(encoding='base64', size=len(pin),
+                                content=base64.b64encode(pin).decode(),
+                                sha=hashlib.sha1(b'blob ' + str(len(pin)).encode() + b'\0' + pin).hexdigest())
+                def api(path):
+                    replies = {f'releases/tags/{tag}': dict(tag_name=tag, draft=False,
+                               published_at='2026-10-18T00:00:00Z', assets=assets),
+                               f'git/ref/tags/{tag}': dict(object=dict(type='commit', sha=source)),
+                               f'contents/third_party/git-annex/VERSION?ref={source}': metadata}
+                    self.assertIn(path, replies)
+                    return replies[path]
+                real_run = subprocess.run
+                def run(args, **kwargs):
+                    if args[:3] == ['gh', 'release', 'download']:
+                        destination = Path(args[args.index('--dir') + 1])
+                        for asset in assets:
+                            shutil.copyfile(root / asset['name'], destination / asset['name'])
+                        return subprocess.CompletedProcess(args, 0, '', '')
+                    return real_run(args, **kwargs)
+                with patch.dict(ARCHIVE['prepare'].__globals__, api=api), patch('subprocess.run', side_effect=run):
+                    if accepted:
+                        result = ARCHIVE['prepare'](tag, root / 'snapshot')
+                        manifest = json.loads((Path(result['binary']) / 'soak-build.json').read_text())
+                        self.assertEqual(manifest['annex']['version'], expected)
+                        self.assertEqual(result['source'], source)
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'annex version differs'):
+                            ARCHIVE['prepare'](tag, root / 'snapshot')
+
     def test_extra_packaging_assets_are_allowed_but_missing_or_duplicate_payloads_are_not(self):
         release = dict(draft=False, published_at='2026-10-16T21:09:26Z',
                        assets=[dict(name=n) for n in ['linux.tar.gz', 'SHA256SUMS', 'pigeon.rb']])

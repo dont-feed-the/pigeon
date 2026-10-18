@@ -5,6 +5,15 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- A hash-checked copy must match both the file size and checksum named by
+  its content key before pigeon allows another copy to be dropped.
+- Historical-data checks verify bundled git-annex against each release's
+  own version pin.
+
 ## 0.6.51 — 2026-10-18
 
 ### Changed
