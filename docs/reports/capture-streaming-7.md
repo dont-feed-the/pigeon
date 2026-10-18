@@ -145,3 +145,19 @@ Rust source hashes then pass all 54 install checks and S2/S3 with required
 CaptureInstall/Roster TLC. CI selection/partition checks, all-target Clippy
 and structural checks pass before the integration commit. The already
 passing other current-main selections are retained rather than repeated.
+
+## Release validation
+
+PR #85, head `d4c92346351b462d75051127f89f5cd2585ab3dc`, passed exact-head CI
+39082262079, lab 39082262119 and bridge
+39082262128. Current independently verified v0.6.16
+main was integrated before validation. The original 120-second verification
+miss, controlled moving-Add timeout and initial fixture/hex build mistakes
+remain separate evidence above. The full workspace precedes final open-race
+hardening; affected native checks, required S2/S3 traces and Apple platform
+compile checks follow it. No complete native Mac or hardware-budget pass
+is inferred. Dependency/core-slice cache preparations complete before this
+candidate; active main Rust producers remain protected from cancellation.
+v0.6.16 was published and independently verified before this candidate.
+The global queue, native preset/supervisor and own-read-latency feedback,
+measured reference/HDD budgets and actual elapsed M7 gates remain open.
