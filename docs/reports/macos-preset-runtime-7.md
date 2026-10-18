@@ -26,7 +26,7 @@ types DARWIN_BG. Private task-policy-state inspection requires root and is not
 used. The test changes priority only through the provided supervisor; its native
 observer only reads its own thread and process scheduling information.
 
-The fixture refuses pre-existing pigeon supervisor state and runs only when
+The fixture refuses pre-existing pigeon supervisor files and loaded jobs and runs only when
 GitHub Actions and Darwin are both detected. Ordinary local tests skip it,
 so they cannot replace a person's installed service. The automatic updater is
 disabled in the fixture. Cleanup removes only its supervision; failed synthetic
