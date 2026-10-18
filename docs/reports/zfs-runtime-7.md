@@ -55,3 +55,21 @@ GitHub rejects the first dispatch before allocating a runner: runner.temp
 is not available in job-level env. Temporary-directory setup moves into
 the execution step using RUNNER_TEMP; no native execution or filesystem
 verdict is attributed to that rejected definition.
+
+## Original hosted observation
+
+The first allocated hosted run 39091064985, source
+`3003b24885303fb233b64cbfcf2c26b02dc0dad1`, loads kernel
+6.17.0-1022-azure and ZFS module 2.3.4-1ubuntu2. The pool is real ZFS.
+Job 117567739008 fails the fixture's protected-entry assertion in 5.751
+seconds. Artifact 12122897319 is 6,310,859 bytes, SHA-256
+`b9f35963d31a522613c2e1e98172b62cc3de6cb028bf85f016af19ca8abec09f`.
+It retains both accepted paths and both exact, independently hash-valid
+backup objects, including the ordinary repositories' hidden metadata.
+
+The fixture queried the general status report, which deliberately omits
+already-protected entries. It now queries each named path explicitly,
+within the same original 120-second protection-observation budget. Byte,
+key, role, restart and native-volume assertions are unchanged. This is a
+fixture contract correction, not a passing full profile or an unchanged
+source retry. The original observation and artifact remain retained.

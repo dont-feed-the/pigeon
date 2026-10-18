@@ -12,7 +12,7 @@ mod common;
 use std::path::Path;
 use std::process::Command;
 
-use common::{dirs, invitation, person, pigeon, said, start, until};
+use common::{dirs, eventually_within, invitation, person, pigeon, said, start, until};
 use pigeon_proto::Response;
 use sha2::{Digest, Sha256};
 
@@ -105,15 +105,23 @@ fn a_native_zfs_backup_keeps_exact_objects_and_reopens_without_rejoining() {
         ],
     );
     assert!(said(&joined, "joined", "group").is_some(), "{joined:?}");
-    let protected = until(&a, pigeon_proto::api::State::Protected, &[&a, &c]);
-    for path in ["alpha.txt", "nested/beta.bin"] {
-        assert!(
-            protected
-                .versions
-                .iter()
-                .any(|v| v.path == path && v.state == pigeon_proto::api::State::Protected)
-        );
-    }
+    // The general report omits already-protected entries. Ask each real
+    // path, preserving the original protection observation's 120s budget.
+    eventually_within(
+        120,
+        || {
+            ["alpha.txt", "nested/beta.bin"].iter().all(|path| {
+                pigeon(&a, &["status", folder.join(path).to_str().unwrap()])
+                    .iter()
+                    .any(|r| {
+                        matches!(r, Response::Status(s) if s.versions.iter().any(|v|
+                    v.path == *path && v.state == pigeon_proto::api::State::Protected))
+                    })
+            })
+        },
+        "both named ZFS-backed versions protected",
+        &[&a, &c],
+    );
     assert_eq!(pigeon_sys::volume::inspect(&repo).unwrap().name, "zfs");
     exact(&repo, "alpha.txt", alpha);
     exact(&repo, "nested/beta.bin", &beta);
