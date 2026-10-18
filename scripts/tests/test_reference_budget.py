@@ -350,12 +350,21 @@ class NativeOperationPrivacy(unittest.TestCase):
     @unittest.skipUnless(Path('/proc/self/cmdline').is_file(), 'Linux native process diagnostics')
     def test_live_git_batch_process_is_classified_without_exporting_its_arguments(self):
         import subprocess
+        import select
         with tempfile.TemporaryDirectory() as directory:
             subprocess.run(['git', 'init', '-q', directory], check=True, capture_output=True)
             process = subprocess.Popen(['git', '-C', directory, 'cat-file', '--batch'],
                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                        stderr=subprocess.PIPE)
             try:
+                # Popen can return while /proc still exposes the exec transition.
+                # A real reply establishes this same PID is running cat-file.
+                oid = b'0' * 40
+                process.stdin.write(oid + b'\n')
+                process.stdin.flush()
+                ready, _, _ = select.select([process.stdout], [], [], 5)
+                self.assertTrue(ready, 'git cat-file did not answer the readiness query')
+                self.assertEqual(process.stdout.readline(), oid + b' missing\n')
                 self.assertIsNone(process.poll())
                 self.assertEqual(MODULE.process_operation(process.pid), 'git/cat-file')
             finally:

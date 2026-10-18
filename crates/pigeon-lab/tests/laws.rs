@@ -1,5 +1,10 @@
 //! Laws of the scenario algebra and of the model interpreter (pigeon-lab).
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "generated scenario and model law fixtures"
+)]
 mod common;
 
 use common::{actions, int, schedule, steps, world};
@@ -43,7 +48,7 @@ fn projection_is_a_homomorphism(tc: TestCase) {
     assert!(project(&Steps::empty()).is_empty());
 }
 
-#[hegel::test(test_cases = 300)]
+#[hegel::test(test_cases = 1000)]
 fn scenarios_round_trip_through_json(tc: TestCase) {
     let s = common::scenario(&tc, 8);
     let back: Scenario = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
@@ -51,7 +56,7 @@ fn scenarios_round_trip_through_json(tc: TestCase) {
     assert_eq!(back.to_string(), s.to_string());
 }
 
-#[hegel::test(test_cases = 300)]
+#[hegel::test(test_cases = 1000)]
 fn a_prefix_runs_the_same_whatever_follows(tc: TestCase) {
     let mut s = common::scenario(&tc, 6);
     if validate(&s).is_err() {
@@ -71,7 +76,7 @@ fn a_prefix_runs_the_same_whatever_follows(tc: TestCase) {
     assert_eq!(steps(&whole), steps(&prefix));
 }
 
-#[hegel::test(test_cases = 300)]
+#[hegel::test(test_cases = 1000)]
 fn settling_is_idempotent(tc: TestCase) {
     let g = world();
     let mut m: Model = model_after(&g.world, &actions(&tc, &g, 10));
@@ -81,7 +86,7 @@ fn settling_is_idempotent(tc: TestCase) {
     assert_eq!(m, once);
 }
 
-#[hegel::test(test_cases = 300)]
+#[hegel::test(test_cases = 1000)]
 fn the_model_logs_what_the_steps_project(tc: TestCase) {
     let g = world();
     let mut m = Model::new(&g.world);

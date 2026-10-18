@@ -32,6 +32,7 @@ use crate::util::{hex, random, sha256_hex, unhex};
 
 /// What a sheet carries.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Sheet {
     /// Its version, 1.
     pub v: u32,
@@ -70,6 +71,7 @@ impl std::fmt::Debug for Sheet {
 
 /// A backup machine named on a sheet.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SheetCustodian {
     /// Its device ID.
     pub device: String,
@@ -87,9 +89,22 @@ pub fn encode(sheet: &Sheet) -> String {
     format!("pgr1-{body}-{}", sum.get(..8).unwrap_or_default())
 }
 
-/// Reads the last valid `pgr1-…` code, after any user-supplied labels.
+/// Reads the last token in the recovery-code namespace after labels. An
+/// unsupported or damaged candidate never selects an earlier authority.
 pub fn decode(text: &str) -> Option<Sheet> {
-    text.split_whitespace().rev().find_map(decode_code)
+    // Recovery already travels inside one bounded IPC frame. Apply that
+    // same bound to standalone callers before hashing or copying input.
+    if text.len() > pigeon_proto::wire::MAX_LINE {
+        return None;
+    }
+    text.split_whitespace()
+        .rev()
+        .find(|word| {
+            word.as_bytes()
+                .get(..3)
+                .is_some_and(|prefix| prefix.eq_ignore_ascii_case(b"pgr"))
+        })
+        .and_then(decode_code)
 }
 
 fn decode_code(code: &str) -> Option<Sheet> {
@@ -417,15 +432,7 @@ pub(crate) async fn hide_all(g: &Group, main: &str) -> Result<(), String> {
     let files = g.git.tree_files(main).await.map_err(|e| e.to_string())?;
     let mut hidden = std::collections::BTreeSet::new();
     for f in files {
-        let objects = g
-            .git
-            .objects(std::slice::from_ref(&f.oid))
-            .await
-            .map_err(|_| "join-files-unreadable")?;
-        let blob = match objects.into_iter().next() {
-            Some(Some((kind, bytes))) if kind == "blob" => bytes,
-            _ => return Err("join-files-unreadable".into()),
-        };
+        let blob = file_blob(g, &f.oid).await?;
         if crate::git::pointer_key(&blob).is_some() {
             hidden.insert(f.path);
             continue;
@@ -444,6 +451,20 @@ pub(crate) async fn hide_all(g: &Group, main: &str) -> Result<(), String> {
     }
     let _ = g.git.run(&["update-index", "-q", "--refresh"]).await;
     Ok(())
+}
+
+/// Require the actual OID-bound blob before either joining path writes it.
+/// Missing and wrong-kind objects cannot stand in for a legitimate empty file.
+pub(crate) async fn file_blob(g: &Group, oid: &str) -> Result<Vec<u8>, String> {
+    let objects = g
+        .git
+        .objects(&[oid.to_owned()])
+        .await
+        .map_err(|_| "join-files-unreadable")?;
+    match objects.into_iter().next() {
+        Some(Some((kind, bytes))) if kind == "blob" => Ok(bytes),
+        _ => Err("join-files-unreadable".into()),
+    }
 }
 
 #[cfg(test)]
@@ -483,3 +504,7 @@ mod tests {
 #[cfg(test)]
 #[path = "recovery_object_tests.rs"]
 mod object_tests;
+
+#[cfg(test)]
+#[path = "recovery_codec_tests.rs"]
+mod codec_tests;
