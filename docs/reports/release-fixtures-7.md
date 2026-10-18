@@ -60,3 +60,33 @@ case. The held lifecycle itself passes in 43.810 seconds without a source or
 deadline change; that does not establish its hosted failure's cause. All-target
 workspace Clippy and repository structural checks pass. Native ZFS's separate
 hosted verdict remains the source-specific evidence described in its report.
+
+## Original PR #91 health observation
+
+CI 39092020451, head ce6536762c39b6170b5fcaeaeb565c53811cdbdd,
+fails job 117570622342: second bytes do not reach Bob's working file
+within its 60-second observation. The shard passes 13/14 cases in
+194.110 seconds; the health case fails in 87.348 seconds. Artifact
+12123004278 is 12,321,615 bytes, SHA-256
+`90d8c3378c3d6d312256da0a41ca6702282d74aa90a50a56e92819cbb09af0e6`.
+Source and Bob have both independently hash-valid objects. Both accepted
+main refs name the second version; Bob's working file remains the first.
+Logs record high I/O pressure from 03:06:46 through 03:08:01 UTC, reaching
+34.94%, and slow annex merge/location operations. This snapshot does not
+establish the exact internal reason installation had not finished.
+
+The case's aggregate Protected wait can accept the preceding version. It
+now uses the exact-pointer-and-named-path helper already used by the other
+health case, for both saves. Each protection wait retains its original
+120-second budget; each following Bob byte wait remains 60 seconds. No
+pressure threshold, native deadline or installation assertion is relaxed.
+The earlier source is not retried unchanged. The pending-protection and
+dependency-cache improvements join the next PR #91 head so one validation
+run covers the rollup. The separate native ZFS profile runs again on it.
+
+The original head's bridge 39092020444 and lab 39092020454 both finish
+successfully. The corrected two-case health run passes locally in 33.744
+seconds; the formerly failing case passes in 20.595 seconds. All-target
+workspace Clippy and structural checks pass after rebuilding the CLI,
+network helper and daemon. This is distinct from the original pressure
+observation and does not establish an internal installation-cause fix.
