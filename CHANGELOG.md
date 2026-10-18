@@ -9,6 +9,8 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Saving a file can interrupt a background transfer that holds repository
+  locks, allowing the save to finish instead of waiting on suspended work.
 - Failed laptop joins preserve their unfinished folder and files added during
   setup. Retrying the same group keeps the original repository and identity.
 

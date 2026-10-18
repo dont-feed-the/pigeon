@@ -555,3 +555,88 @@ async fn a_pending_batch_uses_its_download_view_and_releases_on_stop() {
             .all(|n| n.load(Ordering::Relaxed) == 0)
     );
 }
+
+#[tokio::test]
+async fn capture_releases_a_same_repository_transfer_lock() {
+    let controller = Arc::new(Controller::default());
+    let (dir, repo) = fixture(&controller, "same-repository");
+    std::fs::write(
+        dir.path().join("git"),
+        r#"#!/bin/sh
+if [ "$2" = get ]; then
+    exec 9>repository.lock
+    flock -x 9
+    touch locked
+    trap 'exit 0' TERM
+    while :; do sleep 0.01; done
+else
+    exec 9>repository.lock
+    flock -x 9
+    printf captured
+fi
+"#,
+    )
+    .unwrap();
+    let lower_repo = repo.for_download();
+    let lower = tokio::spawn(async move {
+        lower_repo
+            .run(
+                &["annex", "get", "--key", "fixture-key"],
+                None,
+                Duration::from_secs(10),
+            )
+            .await
+    });
+    eventually(|| dir.path().join("locked").exists()).await;
+    let result = repo
+        .run(
+            &[
+                "annex",
+                "add",
+                "--no-check-gitignore",
+                "--json",
+                "--",
+                "file",
+            ],
+            None,
+            Duration::from_secs(1),
+        )
+        .await;
+    if !matches!(&result, Ok(out) if out.stdout == b"captured") {
+        lower.abort();
+        let _ = lower.await;
+        panic!("capture was blocked by a suspended lock owner: {result:?}");
+    }
+    let lower = tokio::time::timeout(Duration::from_secs(2), lower)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(lower, Err(pigeon_git::Error::Pipe { source, .. })
+        if source.kind() == std::io::ErrorKind::Interrupted));
+    assert!(controller.lock().captures.is_empty());
+    assert!(
+        controller
+            .children
+            .iter()
+            .all(|n| n.load(Ordering::Relaxed) == 0)
+    );
+}
+
+#[test]
+fn capture_cancels_only_its_repository_until_the_last_claim_ends() {
+    let controller = Arc::new(Controller::default());
+    let same = controller.for_group("same".into());
+    let other = controller.for_group("other".into());
+    same.began(Class::Capture);
+    same.began(Class::Capture);
+    for class in [Class::Transfer, Class::Download, Class::Scrub] {
+        assert!(same.cancel_requested(class));
+        assert!(!other.cancel_requested(class));
+    }
+    assert!(!same.cancel_requested(Class::Capture));
+    same.ended(Class::Capture);
+    assert!(same.cancel_requested(Class::Transfer));
+    same.ended(Class::Capture);
+    assert!(!same.cancel_requested(Class::Transfer));
+    assert!(controller.lock().captures.is_empty());
+}

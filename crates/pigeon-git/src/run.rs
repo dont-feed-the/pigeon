@@ -312,11 +312,17 @@ impl Repo {
             SLOW,
             &shown(&argv),
         )
-        .await
-        .map_err(|source| Error::Pipe {
-            argv: argv.clone(),
-            source,
-        })?;
+        .await;
+        let done = match done {
+            Ok(done) => done,
+            Err(source) => {
+                // A suspended native child may own annex/index locks. Resume,
+                // TERM, drain and reap it before releasing its registration.
+                group.terminate();
+                let _ = tokio::time::timeout(GRACE, &mut work).await;
+                return Err(Error::Pipe { argv, source });
+            }
+        };
         let out = match done {
             None => {
                 // Not yet waited for, so the pid is still the child's.

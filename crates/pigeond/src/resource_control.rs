@@ -45,6 +45,7 @@ struct State {
     last_tick: u64,
     pending: usize,
     group_waits: BTreeMap<String, usize>,
+    captures: BTreeMap<String, usize>,
 }
 
 impl State {
@@ -99,6 +100,7 @@ impl Controller {
                 last_tick: 0,
                 pending: 0,
                 group_waits: BTreeMap::new(),
+                captures: BTreeMap::new(),
             }),
         }
     }
@@ -362,11 +364,33 @@ impl pigeon_git::work::Control for ChildControl {
     }
 
     fn began(&self, class: pigeon_git::work::Class) {
+        if class == pigeon_git::work::Class::Capture {
+            *self
+                .controller
+                .lock()
+                .captures
+                .entry(self.group.clone())
+                .or_default() += 1;
+        }
         self.controller.children[self.priority(class) as usize].fetch_add(1, Ordering::Relaxed);
     }
 
     fn ended(&self, class: pigeon_git::work::Class) {
+        if class == pigeon_git::work::Class::Capture {
+            let mut state = self.controller.lock();
+            if let Some(count) = state.captures.get_mut(&self.group) {
+                *count -= 1;
+                if *count == 0 {
+                    state.captures.remove(&self.group);
+                }
+            }
+        }
         self.controller.children[self.priority(class) as usize].fetch_sub(1, Ordering::Relaxed);
+    }
+
+    fn cancel_requested(&self, class: pigeon_git::work::Class) -> bool {
+        class != pigeon_git::work::Class::Capture
+            && self.controller.lock().captures.contains_key(&self.group)
     }
 
     fn running(&self, class: pigeon_git::work::Class) -> bool {
