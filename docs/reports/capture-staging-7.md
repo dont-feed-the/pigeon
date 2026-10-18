@@ -87,3 +87,15 @@ The corrected combined native run passes all 60 install, held and watcher
 cases in 44.731 seconds, plus the separately passing backup-history case.
 All 123 script contracts pass. Composite-action YAML and shell syntax pass;
 workspace/all-target Clippy has zero warnings.
+
+## Integrated release validation
+
+PR #101, head `9ad54f6a1be11d979ccac876865c18bb7bac6413`, integrates main `cefa9cfc0702cbf088fae90ad6e3beceb7e7f6f3` before
+validation. CI 39115591825, lab 39115591780 and bridge
+39115591772 pass. v0.6.31 is published and independently
+verified before this candidate. Local validation passes 202 daemon/Git library
+cases, 60 corrected native install/held/watch cases and the backup-history case, four thousand batch-law cases, 123 script
+contracts, cargo-deny and zero-warning all-target Clippy. Clean-source binary
+preparation and the two-cycle/restart smoke pass on this exact feature head.
+Fresh v0.6.32 tag gates and independent archive/install verification remain
+required; full reference/HDD and actual elapsed M7 gates are separate.
