@@ -168,3 +168,18 @@ borrowed comparisons. Formatting, all-target workspace Clippy with zero
 warnings, file/header limits, ADR index and spec references pass. The
 original 512-clone failure and intermediate cache-only/vector-only RSS
 observations remain retained; they are not replaced by the final result.
+
+## Integrated release validation
+
+PR #115, head `d201f1696b5cb7313bd12e23a46d9acde5b6ce42`, integrates main `95f2643a2fbc7aa6b9b8e15ddc6a6b5391055e97` before validation.
+CI 39150066046, lab 39150066111 and bridge
+39150066015 pass. v0.6.45 is independently published
+and verified first. Local checks pass all fourteen selected core laws/oracle/trace
+cases and 215 daemon library checks. Five new laws use 1000 generated cases
+each. All-target workspace Clippy and repository rules pass with no warnings.
+The retained command-selection error starts no tests; the corrected library
+invocation passes without changing source. The initial native allocation
+baseline and all six alternating comparison trials remain retained.
+Fresh v0.6.46 tag gates and independent archive/install verification are
+required. No daemon memory, HDD, security or elapsed release gate is closed
+by this operation-level change.
