@@ -85,3 +85,26 @@ and the preceding capture report. On that source, all 21 affected daemon
 checks pass again, and all 99 selected web/i18n checks pass (one skip). These
 include final bilingual restart text. Full workspace CI and the new actual
 systemd priority fixture still precede merging.
+
+## Release validation
+
+PR #86, head `746e59f464e54820b14eed3b858e248e64faeac7`, passed exact-head CI
+39083857077, lab 39083857124 and bridge
+39083857192. Current v0.6.17 main was integrated
+before validation. The local 21 daemon, 99 web/i18n and 32 packaging
+checks, 1000-case mode law, all-target Clippy and repository checks remain
+separate from hosted native systemd validation. PR packaging job
+117546237019 passes actual user-systemd mode transitions: daemon and
+child nice 10/idle I/O, then nice 0/best-effort priority 4, then back to
+10/idle; CPUWeight/IOWeight 20, 100, 20. Atomic path replacements trigger
+these changes, and equal replacements preserve MainPID. This is Linux
+runtime evidence, not a Mac or hardware-budget result. The original missing-helper,
+path-parser and draft-ADR formatting misses remain recorded above.
+Main cache preparation is no longer an extra pre-tag gate for this
+unchanged dependency lockfile. Active main Rust cache producers remain
+protected from cancellation; all required tag CI/lab/slice gates and both
+platform archives still precede publication.
+v0.6.17 was published and independently verified before this candidate.
+Mac dynamic supervisor behavior, the complete global queue, own-read
+latency feedback, measured reference/HDD budgets and actual elapsed M7
+gates remain open.
