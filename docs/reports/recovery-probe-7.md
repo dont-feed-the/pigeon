@@ -56,3 +56,17 @@ The first additional local S10 run passes all eight functional checks in
 the instrumented daemon binary with a lab-only one. The retained report
 explicitly skips its ninth, no-trace check. This is functional evidence only;
 a correctly ordered tracing build and fresh trace validation are required.
+
+## Integrated release validation
+
+PR #96, head `3c637b3cd7ffb219826fad8381b79ca84a93fe5b`, integrates main `3ae371976726199d72f31d9e122eeb6d961b66a8` before
+validation. CI 39101792504, lab 39101792517 and bridge
+39101792560 pass. v0.6.25 was published and independently
+verified before this candidate. The complete joining/signing review and
+M6/M7 resource and elapsed gates remain open. Fresh v0.6.27 tag gates and
+independent publication/install checks are required before it is released.
+
+The corrected instrumented local S10 run passes all nine checks in 63
+seconds, without a skipped trace. Its four filesystem sequences and roster
+sequence pass model validation in 5 seconds. This follows the retained
+lab-only binary run and does not erase its missing-trace observation.
