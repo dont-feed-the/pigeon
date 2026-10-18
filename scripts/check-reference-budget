@@ -4,6 +4,7 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
 report=${1:?usage: check-reference-budget REPORT.json}
+shift
 bin=${PIGEON_BIN:-$here/target/release}
 for program in mkfs.btrfs findmnt blkid systemd-run compsize; do command -v "$program" >/dev/null; done
 [[ $(stat -fc %T /sys/fs/cgroup) == cgroup2fs ]] || { echo 'cgroup v2 required' >&2; exit 1; }
@@ -37,4 +38,4 @@ sudo -n mount -o loop,compress-force=zstd:1 "$root/tree.img" "$root/volume"
 [[ $(findmnt -rn --mountpoint "$root/volume" -o UUID) == "$identity" ]]
 sudo -n chown "$(id -u):$(id -g)" "$root/volume"
 python3 "$here/scripts/reference-budget" --bin "$bin" --root "$root/volume/run" \
-    --compressed --report "$report"
+    --compressed --report "$report" "$@"

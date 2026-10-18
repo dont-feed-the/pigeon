@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""Select nightly model work, including a qualification campaign with an expiry date."""
+import argparse
+from datetime import datetime, timezone, date, time
+
+
+def select(event, source_epoch, observed, campaign_until=''):
+    observed = observed.astimezone(timezone.utc)
+    campaign = False
+    if campaign_until:
+        expiry = date.fromisoformat(campaign_until)
+        if expiry.isoformat() != campaign_until:
+            raise ValueError('model-night campaign expiry must be YYYY-MM-DD')
+        campaign = observed < datetime.combine(expiry, time(), timezone.utc)
+    return dict(run=event != 'schedule' or observed.timestamp() - source_epoch < 90_000 or campaign,
+                audit=event == 'workflow_dispatch' or (event == 'schedule' and observed.weekday() == 0))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--event', required=True, choices=['schedule', 'workflow_dispatch', 'push'])
+    parser.add_argument('--source-epoch', required=True, type=int)
+    parser.add_argument('--campaign-until', default='')
+    parser.add_argument('--now-epoch', type=float)
+    args = parser.parse_args()
+    observed = datetime.now(timezone.utc) if args.now_epoch is None else datetime.fromtimestamp(args.now_epoch, timezone.utc)
+    result = select(args.event, args.source_epoch, observed, args.campaign_until)
+    for name, enabled in result.items():
+        if enabled:
+            print(name + '=true')
+
+
+if __name__ == '__main__':
+    main()

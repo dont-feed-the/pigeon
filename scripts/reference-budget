@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Measure a real two-peer reference tree; compressed storage is not E17 HDD evidence."""
 import argparse
+from collections import deque
 import datetime
 import hashlib
 import json
@@ -16,6 +17,62 @@ FILES = 100_000
 SIZE = 500_000
 WINDOW = 600
 MEMORY = 300_000_000
+
+
+def preparation_seconds(value):
+    seconds = int(value)
+    if not 1 <= seconds <= 5400:
+        raise argparse.ArgumentTypeError('preparation must be between 1 and 5400 seconds')
+    return seconds
+
+
+def diagnostic_events(home):
+    allowed = {'resource-io-pressure', 'captured', 'capture-failed', 'capture-recovery-failed',
+               'candidate-scan-complete', 'accepted', 'placed', 'copy-failed', 'get-failed',
+               'admission-waits', 'keep-waits', 'fetch-failed'}
+    events = deque(maxlen=50)
+    for path in sorted((home / 'state/logs').glob('*.ndjson')):
+        with path.open() as stream:
+            for line in stream:
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if not isinstance(row, dict) or not isinstance(row.get('message'), str) or row['message'] not in allowed:
+                    continue
+                event = dict(message=row['message'])
+                if re.fullmatch(r'\d{4}-\d\d-\d\dT[\d:.]+Z', str(row.get('time', ''))):
+                    event['time'] = row['time']
+                for key in ['added', 'removed', 'renamed', 'copies', 'entries', 'pending',
+                            'elapsed_us', 'pressure_high', 'pending_content']:
+                    if isinstance(row.get(key), (int, float, bool)):
+                        event[key] = row[key]
+                pressure = re.fullmatch(r'Some\((\d+(?:\.\d+)?)\)', str(row.get('avg10', '')))
+                if pressure:
+                    event['io_pressure_avg10'] = float(pressure[1])
+                # Keep a failure class, never native argv, tokens, paths or raw output.
+                error = str(row.get('error', ''))
+                for needle, kind in [('index.lock', 'index-lock'), ('cannot lock ref', 'ref-lock'),
+                                     ('hPutBuf', 'closed-handle'), ('not-listening', 'not-listening'),
+                                     ('No space left', 'disk-full'), ('timed out', 'timeout')]:
+                    if needle in error:
+                        event['error_kind'] = kind
+                        break
+                events.append(event)
+    return list(events)
+
+
+def stop_peers(peers, report, already_failed):
+    failures = []
+    for peer in reversed(peers):
+        try:
+            peer.stop()
+        except Exception as error:
+            failures.append(type(error).__name__)
+    if failures:
+        report['cleanup_failures'] = failures
+        if not already_failed:
+            raise RuntimeError('reference peer cleanup failed')
 
 
 def run(args, include_stderr=False, **kwargs):
@@ -189,6 +246,39 @@ class Peer:
         cpu = counters((self.cgroup / 'cpu.stat').read_text()) if self.managed else 0
         return dict(time=time.monotonic(), cpu_us=cpu, rss=rss, rss_high_water=high_water)
 
+    def diagnostics(self, repo):
+        result = {}
+        try:
+            result['resources'] = self.sample()
+        except Exception as error:
+            result['resources_unavailable'] = type(error).__name__
+        try:
+            index = run(['git', '-C', repo, 'ls-files', '--cached', '-z'], env=self.env, timeout=10)
+            result['index_paths'] = index.count(b'\0')
+            result['unverified_object_files'] = sum(
+                1 for p in (repo / 'annex/objects').rglob('SHA256E-*')
+                if not p.is_symlink() and p.is_file())
+        except Exception as error:
+            result['inventory_unavailable'] = type(error).__name__
+        try:
+            result['events'] = diagnostic_events(self.home)
+            pids = (self.cgroup / 'cgroup.procs').read_text().split() if self.managed else [str(self.pid)]
+            processes = []
+            for pid in pids[:64]:
+                try:
+                    status = Path(f'/proc/{int(pid)}/status').read_text()
+                    name = Path(f'/proc/{int(pid)}/comm').read_text().strip()
+                    rss = re.search(r'^VmRSS:\s+(\d+) kB$', status, re.M)
+                    processes.append(dict(pid=int(pid), name=name if name in (
+                        'pigeond', 'git', 'git-annex', 'git-annex-p2p') else 'other',
+                        rss=int(rss[1]) * 1024 if rss else None))
+                except (OSError, ValueError):
+                    continue
+            result['native_processes'] = processes
+        except Exception as error:
+            result['events_unavailable'] = type(error).__name__
+        return result
+
     def stop(self):
         if self.managed:
             run(['sudo', '-n', 'systemctl', 'stop', self.unit])
@@ -283,6 +373,7 @@ def measure(args, report):
                       'defaults; Linux laptop service presets' if not args.smoke
                       else 'default daemon; smoke has no service presets or CPU measurement'),
                   samples=[], backup_samples=[])
+    report['preparation_deadline_seconds'] = min(300, args.prepare_seconds) if args.smoke else args.prepare_seconds
     report['kernel'] = os.uname().release
     report['filesystem'] = run(['findmnt', '-T', str(root), '-n', '-o', 'FSTYPE,OPTIONS'], text=True).strip()
     def generated(count, physical):
@@ -299,6 +390,7 @@ def measure(args, report):
     a = Peer(root, binary, 'laptop', not args.smoke)
     b = Peer(root, binary, 'backup', not args.smoke)
     started = []
+    failed = False
     try:
         report['stage'] = 'starting native peers'
         checkpoint(args.report, report)
@@ -321,11 +413,12 @@ def measure(args, report):
         b.cli('join', '--backup-machine', code, str(backup), '--name', 'reference-backup',
               '--person', person, '--yes')
         source = root / 'files/.git'
-        deadline = time.monotonic() + (300 if args.smoke else 5400)
+        deadline = time.monotonic() + report['preparation_deadline_seconds']
         report['stage'] = 'waiting for complete accepted trees and objects'
         while True:
-            a.sample()
-            b.sample()
+            if time.monotonic() >= deadline:
+                raise RuntimeError('reference preparation deadline expired')
+            report['last_preparation_resources'] = dict(laptop=a.sample(), backup=b.sample())
             try:
                 accepted = len(tree(source, expected))
                 backup_accepted = len(tree(backup, expected))
@@ -339,7 +432,7 @@ def measure(args, report):
                 break
             if time.monotonic() >= deadline:
                 raise RuntimeError('reference preparation deadline expired')
-            time.sleep(5)
+            time.sleep(min(5, max(0, deadline - time.monotonic())))
         for repo in (source, backup):
             report['stage'] = 'independently hashing ' + ('source' if repo == source else 'backup')
             checkpoint(args.report, report)
@@ -380,9 +473,13 @@ def measure(args, report):
         report['stage'] = 'measurement complete'
         if not args.smoke and report['budget_verdict'] != 'passed':
             raise RuntimeError('reference budget exceeded')
+    except BaseException:
+        failed = True
+        report['failure_diagnostics'] = dict(laptop=a.diagnostics(root / 'files/.git'),
+                                            backup=b.diagnostics(root / 'backup.git'))
+        raise
     finally:
-        for peer in reversed(started):
-            peer.stop()
+        stop_peers(started, report, failed)
 
 
 def main():
@@ -392,6 +489,7 @@ def main():
     parser.add_argument('--report', required=True, type=Path)
     parser.add_argument('--smoke', action='store_true', help='reduced control-flow check, never a budget pass')
     parser.add_argument('--compressed', action='store_true')
+    parser.add_argument('--prepare-seconds', type=preparation_seconds, default=5400)
     args = parser.parse_args()
     report = dict(budget_verdict='not-measured', source=run(['git', 'rev-parse', 'HEAD']).decode().strip(),
                   dirty_worktree=bool(run(['git', 'status', '--porcelain'])))

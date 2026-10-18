@@ -44,6 +44,12 @@ pub trait Control: std::fmt::Debug + Send + Sync {
         self.running(class)
     }
 
+    /// Cancel a lock-owning child so a higher-priority operation can proceed.
+    /// Suspension alone is unsafe when both operations use one repository.
+    fn cancel_requested(&self, _class: Class) -> bool {
+        false
+    }
+
     /// Whether the child's process group may run in this scheduling slice.
     fn running(&self, class: Class) -> bool;
 
@@ -147,6 +153,12 @@ pub(crate) async fn deadline<F: std::future::Future + Unpin>(
     let mut named = false;
     let mut last_progress = progress.map_or(0, crate::progress::Progress::bytes);
     loop {
+        if control.is_some_and(|(c, k)| c.cancel_requested(k)) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "native work yielded its repository locks to capture",
+            ));
+        }
         let running = control.is_none_or(|(c, k)| c.running(k));
         group.running(running)?;
         budget.observe(
@@ -213,6 +225,9 @@ impl Control for DownloadControl {
     }
     fn starting(&self, class: Class) -> bool {
         self.0.starting(Self::priority(class))
+    }
+    fn cancel_requested(&self, class: Class) -> bool {
+        self.0.cancel_requested(class)
     }
     fn running(&self, class: Class) -> bool {
         // Finish this key before yielding to protection: stopping it here

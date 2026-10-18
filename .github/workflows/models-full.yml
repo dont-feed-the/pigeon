@@ -38,15 +38,16 @@ jobs:
       - id: fresh
         env:
           EVENT: ${{ github.event_name }}
+          CAMPAIGN_UNTIL: ${{ vars.PIGEON_MODEL_NIGHTS_UNTIL }}
         run: |
-          age=$(( $(date +%s) - $(git log -1 --format=%ct) ))
-          if [ "$EVENT" != schedule ] || [ "$age" -lt 90000 ]; then
-            echo run=true >> "$GITHUB_OUTPUT"
-          else
-            echo "main has not moved since the last nightly run." >> "$GITHUB_STEP_SUMMARY"
+          selection=$(python3 scripts/ci-model-night --event "$EVENT" \
+            --source-epoch "$(git log -1 --format=%ct)" --now-epoch "$(date +%s)" \
+            --campaign-until "${CAMPAIGN_UNTIL:-}")
+          if [ -n "$selection" ]; then
+            printf '%s\n' "$selection" >> "$GITHUB_OUTPUT"
           fi
-          if [ "$EVENT" = workflow_dispatch ] || { [ "$EVENT" = schedule ] && [ "$(date -u +%u)" = 1 ]; }; then
-            echo audit=true >> "$GITHUB_OUTPUT"
+          if [[ "$selection" != *run=true* ]]; then
+            echo "main has not moved and no qualification campaign is active." >> "$GITHUB_STEP_SUMMARY"
           fi
 
   proofs:

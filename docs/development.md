@@ -35,6 +35,11 @@ Linux CI, lab and slice checks gate publication. macOS tests run periodically
 through `macos-background`; both platforms' release archives still build.
 Pull requests [select relevant checks from their changed files](ci-selection.md).
 Main, release-tag and periodic runs retain full validation.
+For M7 qualification on stable main, the repository Actions variable
+`PIGEON_MODEL_NIGHTS_UNTIL=YYYY-MM-DD` keeps full scheduled model work enabled
+until that date's exclusive UTC midnight. Empty or expired values restore
+the routine 25-hour policy. This does not create a scheduled event or supply
+a green night; see [the campaign policy](reports/model-night-campaign-7.md).
 The [conformance inventory](conformance.md) links accepted decisions to their
 implementation and verification entry points, with the remaining release gates.
 Track actual publication, candidate lead time and blocking jobs with

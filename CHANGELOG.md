@@ -5,6 +5,16 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Saving a file can interrupt a background transfer that holds repository
+  locks, allowing the save to finish instead of waiting on suspended work.
+- Failed laptop joins preserve their unfinished folder and files added during
+  setup. Retrying the same group keeps the original repository and identity.
+
+
 ## 0.6.28 — 2026-10-18
 
 ### Added

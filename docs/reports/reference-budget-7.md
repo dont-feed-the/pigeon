@@ -176,3 +176,44 @@ The integrated rollup passes 178 daemon-library cases, 110 script contracts
 and the reduced smoke 008 with both daemon build labels explicitly lab.
 The ordinary overlay refusal and the earlier incomplete build labels stay
 retained; the full native reference result is independent evidence.
+
+## Original full-size preparation timeout
+
+The immutable ordinary-build run at
+`d017ddb25f69217a6421c4b77de25b93c47f0b2d`, 39097865225/job 117587943721,
+ends after the 90-minute preparation limit, before any measurement window.
+It generates all 100,000 distinct 500,000-byte regular files and verifies
+physical Btrfs compression. Its last preparation observation reports zero
+accepted source/backup paths and zero copied objects. Those aggregate
+observations do not establish how far capture or staging progressed.
+No full idle CPU, resident-memory, scan or E17 pass is claimed.
+
+Original artifact 12127755479 is 588 bytes, SHA-256
+`8f9ed8bbdc4ede16ca92d51579a33f9f7028e9d1985dfc3c084176a184e669d6`.
+Its `not-measured` verdict, zero samples and preparation error remain
+retained. The old cleanup removed the volume without retaining daemon
+state, so the exact capture bottleneck cannot be inferred from this result.
+The failed source is not blindly rerun for another 90 minutes.
+
+The follow-up retains the last preparation CPU/RSS/high-water samples and,
+on failure before peer shutdown, index counts, unverified object-entry
+counts, bounded native-process RSS and selected resource/capture events.
+Diagnostics retain failure classes, not raw commands, credentials, paths or
+unrestricted log fields. Missing diagnostics never replace the primary
+failure. Object counts here do not establish hash validity or protection.
+The manual profile offers a 600-second preparation limit for diagnosis;
+the original 5,400-second limit remains the default. Every passing full
+profile still requires both complete exact trees/objects and the full
+600-second resource window. Shorter preparation does not waive any budget.
+
+A deliberately short reduced smoke verifies the live failure collector.
+The first attempt exposes an observation-order defect: a poll can accept
+completion after its preparation deadline. The loop now checks expiry
+before another observation and bounds its sleep by the remaining time.
+A fresh one-second smoke stops unmeasured with the original preparation
+error and retains both peers' CPU/RSS, index/object counts, selected events
+and process snapshots before shutdown. These tiny counts are diagnostics,
+not evidence of the full-size bottleneck. Cleanup attempts every started
+peer; cleanup failures cannot replace an existing primary failure or turn
+a successful resource run with failed cleanup into a successful fixture.
+The integrated script suite has 118 passing contracts.
