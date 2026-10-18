@@ -7,6 +7,11 @@ increments the second number, and every other release the third.
 
 ## Unreleased
 
+### Added
+
+- Diagnostic logs include completed file-scan counts and durations, to help
+  investigate resource use.
+
 ### Fixed
 
 - Opening Files while a folder is being updated retries brief read conflicts
