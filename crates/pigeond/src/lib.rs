@@ -23,6 +23,7 @@ pub mod capture_file;
 mod capture_read;
 pub mod capture_schedule;
 mod capture_status;
+mod capture_writers;
 pub mod change;
 pub mod clock_file;
 pub mod config;

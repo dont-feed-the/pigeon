@@ -7,6 +7,10 @@
 
 use crate::fs::{FileId, Stat};
 
+#[path = "writer_set.rs"]
+mod set;
+pub use set::{Snapshot, snapshot};
+
 /// What a scan found.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Scan {
