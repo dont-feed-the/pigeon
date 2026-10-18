@@ -825,3 +825,22 @@ bounded native-shard retake passes, followed by one publication-only retake;
 the successful archive producers are reused. The exact original mechanism
 is unproved and no source correction is claimed for that miss. All original
 artifacts remain retained; v0.6.26 stays immutable and unpublished.
+
+
+## v0.6.29 publication observation
+
+[v0.6.29](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.29), source
+`47dc25a07b21c83b43505e63ac8f99f51db91b9a`, is published on 18 October at
+07:42:30 UTC. All six assets, four archive checksums, pinned annex, Linux
+installation and shell completions are independently verified. Candidate
+lead is 10 minutes 20 seconds; the publication gap from v0.6.28 is
+1 hour 11 minutes 23 seconds. Both targets are met. The report has 35 lead
+samples and 34 completed intervals; earlier misses remain in the history.
+
+All tag gates pass on the first attempt. PR #98's final native shard needs
+one retained/classified retake before merge; its original backup has 26
+valid objects against 102 source objects during repeated disk-pressure
+waits. The separate earlier bridge stall has a reproduced same-repository
+lock/preemption correction and passes corrected hosted validation. The
+full v0.6.28 background model run 39103734428 also passes; a tag audit does
+not count as an actual scheduled qualification night.

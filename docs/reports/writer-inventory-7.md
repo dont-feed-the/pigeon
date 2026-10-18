@@ -131,3 +131,31 @@ clean-source full-size diagnostic remains pinned to
 `589fdbd19c8a4d6ccac62d433a05bcf0916a3e14`; subsequent changes here are
 release-version integration, documentation and functional-test waiting.
 No production Rust source differs from that measured feature head.
+
+
+## Clean-source full-size observation after inventory batching
+
+Run 39107288813/job 117615795367 uses ordinary-build source
+`589fdbd19c8a4d6ccac62d433a05bcf0916a3e14` with a clean worktree and the
+600-second preparation limit. It generates all 100,000 real 500,000-byte
+files. Writer inventories for those candidates finish in 293–605 ms.
+Before the limit, the source reaches 23,170 index entries and 23,257
+unverified annex object files, rather than the previous diagnostic's two
+metadata entries and zero object files. The accepted complete source and
+backup trees and backup objects remain zero: no capture commit is complete
+and no independently hash-verified measurement window starts.
+
+The source cgroup uses about 435 seconds of CPU including exited children;
+the live daemon has 24.63 CPU seconds and a 179,355,648-byte resident
+high-water mark. These preparation observations locate most CPU outside
+the daemon; they are not a passing CPU or memory budget or an attribution
+to a specific reaped native command. The scanner comparison independently
+establishes its own repeated-work cost, without a full-workload speedup claim.
+
+Original artifact 12129780898 is 1,758 bytes, SHA-256
+`15b68665f2ce2fe79d321a2c780aeede0b1fd7a1aec5851db66f801cfb1eb66d`.
+The failed diagnostic is retained without a retry. The full preparation
+option and every complete-tree/object/window requirement remain unchanged.
+Native watcher/overflow behavior and ten-minute scan scheduling are also
+still open in the conformance inventory; this optimization does not claim
+complete ADR 0013 implementation or close M6.
