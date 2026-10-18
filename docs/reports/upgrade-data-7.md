@@ -116,3 +116,15 @@ Python contracts always run in repository rules. Mixed Rust changes retain
 runtime jobs; workflow/selector changes and all non-PR events remain full.
 The selector change itself requires full PR validation. This does not count
 as a native measurement or complete the every-minor upgrade gate.
+
+## Integrated release validation
+
+PR #105, head `16ca8204b0ae3bc7cb54cdb52771b2594078af3d`, integrates current main `080a1b78274de8a9f6c99bc6ade5f564bd228b0d`
+before validation. CI 39121096409, lab 39121096339 and bridge
+39121096388 pass. v0.6.35 is published and independently
+verified before this candidate. Local validation passes 139 script contracts,
+seven native historical-data checks with exact frozen programs, zero-warning
+all-target workspace Clippy and repository checks. The final preparer returns
+byte-identical target programs using Cargo-reported artifact paths. Fresh
+v0.6.36 tag gates and independent archive/install checks remain required.
+The broader upgrade/security audit and actual resource/elapsed gates stay open.
