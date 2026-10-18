@@ -686,3 +686,18 @@ clock. The 01:59:24 UTC KPI snapshot records 51 minutes since the last
 publication, 27 lead-time samples, 26 completed-gap samples and one
 unpublished candidate. The two-hour publication and one-hour lead targets
 remain unchanged; a failed workflow's duration is not publication lead.
+
+## v0.6.20 observation
+
+[v0.6.20](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.20)
+published at 2026-10-18T02:30:01Z, source
+`2d670e88ae1b5402472d659da33c51612b7f59ad`. All six assets, four archive checksums, native Linux installation,
+pinned annex, completions and latest redirect passed independent verification.
+Candidate lead was **699 seconds**; completed publication gap was
+**4929 seconds**, measured from v0.6.18. The failed v0.6.19 tag remains
+immutable and unpublished. The collector retains 28
+lead samples and 27 completed gaps.
+Required tag runs: CI 39089609307,
+lab 39089609288, slice 39089609292
+and release 39089609293. These are actual publication
+observations, not a sustained throughput or isolated causal-effect claim.

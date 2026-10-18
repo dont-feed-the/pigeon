@@ -61,3 +61,19 @@ The process-list fixture explicitly requests unlimited argument width on
 BSD/macOS as well as Linux, so a long helper path cannot hide its listener
 arguments. A local retake checks that fixture adjustment; a hosted Mac
 runtime verdict remains separate periodic evidence.
+
+## Release validation
+
+PR #90, head `03a8f1d46178cc65e239ba96512439da2f76705a`, integrates current main
+`2d670e88ae1b5402472d659da33c51612b7f59ad` before validation and passes CI 39090022476,
+lab 39090022517 and bridge 39090022485.
+The original native helper-loss failures, recorded live parent, registration
+law and broader local lifetime checks remain distinct above. The unlimited
+process-width fixture retake passes against rebuilt v0.6.20 binaries in
+6.316 seconds; old-head PR checks were superseded before validation.
+M6 hardware/global-queue and actual elapsed M7 gates remain open.
+
+v0.6.20 was published and independently verified before this candidate.
+Main cache warming is not an extra pre-tag gate; active main Rust cache
+producers remain protected. Fresh tag CI/lab/slice gates, both archives
+and native installation/publication verification remain required.
