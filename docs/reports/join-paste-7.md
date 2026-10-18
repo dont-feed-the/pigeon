@@ -50,3 +50,35 @@ recorded in [the native preset report](native-presets-7.md).
 Current-main integration and exact-head CI still precede merging. This pure
 input-adapter change does not close the wider joining/signing security review,
 native resource queue, measured M6 budgets or actual elapsed M7 gates.
+
+## Release validation
+
+PR #87, head `4788c78c5ce0373539e51b8912615b00389613f2`, passed exact-head CI
+39084909214, lab 39084909025 and bridge
+39084909218. Current v0.6.18 main was integrated
+before validation. The local 35 protocol and 24 affected daemon checks,
+four 1000-case parser/mode laws, original controlled parser cutoff, idle
+assertion and fixture-lint misses remain separate evidence above.
+The original bridge custodian job 117549755010 timed out waiting for
+the regular peer’s offline save. Fixture artifact 12119963498 is
+12906833 bytes, SHA-256
+`52012fcf23419fc0aad84e15a66211d6e888bb96a03e22912be4095d0b5ac36a`.
+It retains the bare provider, working bytes and 206 native-path DAV 404s,
+but ordinary .git directories were excluded by the upload default.
+Repeated metadata-fetch timeouts and slow native Add/whereis are observed;
+the exact CI interleaving is not established. Matching binary artifact
+12120019675 is 50003892 bytes, SHA-256
+`f9a1edc85d2ded7b9e71a8d54534a064e9dfb6e30259df6769be345476f863f0`;
+its synthetic merge tree equals the PR head. The fully traced local retake
+passes four behavioral checkpoints, TLC accepts one lifecycle and all37 DAV
+transactions. Earlier local trace-configuration mistakes are excluded from
+that validation. One bounded same-head CI retake, job 117552306313,
+passes on workflow attempt2. No deadline, assertion or release gate changes.
+
+Main cache preparation is not an extra pre-tag gate for the unchanged
+dependency lockfile; active main Rust producers remain protected. All
+required tag CI/lab/slice gates and both archives precede publication.
+v0.6.18 was published and independently verified before this candidate.
+The full security review, complete global queue, Mac dynamic presets,
+own-read latency feedback, measured reference/HDD budgets and actual
+elapsed M7 gates remain open.

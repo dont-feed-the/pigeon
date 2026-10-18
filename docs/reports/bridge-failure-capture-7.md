@@ -32,3 +32,16 @@ used the wrong trace environment name. A second local execution set the
 trace directory but omitted the explicit enable flag. Their subsequent
 no-lifecycle-traces failures are not model validation. The traced retake and any bounded CI retake
 remain distinct evidence; the original CI miss is retained.
+
+With both PIGEON_TRACE=1 and the actual trace-directory setting enabled, the
+matching-binary local retake passes all four behavioral checkpoints. TLC
+accepts one lifecycle stream and every one of its 37 recorded DAV
+transactions. The one bounded unchanged-head CI retake, job 117552306313,
+also passes, including its lifecycle/DAV replay. No deadline or assertion is
+changed; this does not identify the original concurrent interleaving.
+
+Current v0.6.19 main 2083d0d908cc5f2181745da2e699b37433b71358 is
+integrated before this branch’s PR validation. Its differences from the
+previously tested runtime parent are version/lockfile, changelog and release
+report/KPI/handoff metadata. Native source and the public observer remain
+separate from those publication records.

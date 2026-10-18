@@ -8,6 +8,11 @@ on:
   schedule:
     - cron: '31 3 * * *'
   workflow_dispatch:
+    inputs:
+      native_priority_only:
+        description: Check only actual launchd preset switching and native CPU inheritance
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -29,6 +34,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # The targeted profile occupies just one Mac runner and skips the
+          # Rust/lab/slice stages; it leaves room for both release builds.
+          if [ "${{ inputs.native_priority_only || false }}" = true ]; then
+            echo run=true >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           active=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/release.yml/runs?per_page=100" \
             --jq '[.workflow_runs[] | select(.status != "completed")] | length')
           if [ "$active" = 0 ]; then
@@ -37,9 +48,28 @@ jobs:
             echo 'Background macOS checks deferred while a release is active.' >> "$GITHUB_STEP_SUMMARY"
           fi
 
+  native-priority:
+    name: actual launchd preset switches and native CPU inheritance
+    needs: available
+    if: needs.available.outputs.run == 'true' && inputs.native_priority_only
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: the supplied supervisor restarts only for native priority changes
+        run: python3 -B -m unittest discover -s packaging/tests -p test_native_macos_priority.py -v
+      - name: retain failed native Mac supervisor observations
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: failed-native-macos-priority-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pigeon-macos-priority
+          if-no-files-found: ignore
+          retention-days: 14
+
   annex:
     needs: available
-    if: needs.available.outputs.run == 'true'
+    if: needs.available.outputs.run == 'true' && !inputs.native_priority_only
     uses: ./.github/workflows/git-annex.yml
     with:
       verify_macos: true

@@ -42,3 +42,10 @@ local Python checks nor code inspection are native Mac evidence. The actual
 periodic source run must supply the runtime verdict. Mac results remain
 background evidence under the release policy; all required Linux publication
 gates and both release archives stay required.
+
+The manual macos-background workflow also accepts native_priority_only=true.
+That profile uses one Mac job for this observer and skips annex, Rust, lab
+and slice stages. It remains serialized with other Mac background runs and
+leaves room for both release builds, so an active release does not defer the
+one-runner profile. The ordinary periodic profile retains its release guard.
+This is targeted runtime evidence, not a complete Mac suite.
