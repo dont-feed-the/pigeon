@@ -656,3 +656,18 @@ PR #86 merged at 00:55:31 UTC; its v0.6.18 candidate push completed at
 and its v0.6.17 candidate push completed at 00:39:25 UTC, 443 seconds later.
 This measures the removed pre-tag wait in one observation. The actual
 v0.6.18 publication effect remains pending; no gate or archive was waived.
+
+## v0.6.18 observation
+
+[v0.6.18](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.18)
+published at 2026-10-18T01:07:52Z, source
+`40bdaf1c1f75258fd2181bd49b6b65e1483cf3f9`. All six assets, four archive checksums, native Linux installation,
+pinned annex, completions and latest redirect passed independent verification.
+Candidate lead was **730 seconds**; completed publication gap was
+**940 seconds**. The collector retains 27
+lead and 26 completed-gap samples.
+All required tag workflows passed: CI 39084576157,
+lab 39084576152, slice 39084576042
+and release 39084576200. The removed pre-tag wait
+is recorded above; this one publication establishes no sustained improvement
+or isolated causal effect. No required gate or platform archive was waived.
