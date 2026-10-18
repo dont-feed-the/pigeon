@@ -60,8 +60,27 @@ scan markers before its five-second observation. Its verdict is
 processes without cgroup accounting or service presets. Neither its RSS
 nor its duration establishes the full reference budget.
 
-Ten measurement and ownership contracts pass, including exact pointer
+Eleven measurement and ownership contracts pass, including exact pointer
 size/digest checks, corrupt/symlink object refusal, native-child cgroup
 accounting, CPU/window/memory/scan failure conditions, process-name parsing,
 and busy/changed-mount image preservation. Command doubles establish only
 control flow. Native hosted Btrfs/systemd behavior still needs the full run.
+
+## First native preparation observation
+
+Source `4342e9b56f459a9831d3b8b899462487fe0a6566`, manual lab run
+39097165434, job 117585905429 builds the production programs and mounts
+native Btrfs, then stops during the first compression check. No peer or
+measurement window starts. Artifact 12124948513 is 507 bytes, SHA-256
+`e4317cf828d1d3658601164e7095fb2a2b8f48f2d525c1d61346cc3dea9ed3ca`;
+its verdict is `not-measured` with zero samples. It remains retained.
+
+The original guard uses `st_blocks`, which can describe uncompressed
+extents on Btrfs and cannot establish physical compression. The corrected
+guard reads `compsize -b`'s physical Disk Usage column and records all three
+byte counts, together with the actual generated file count. Its byte-only
+parser rejects unreadable output. `compsize.c`'s `human_bytes` and
+`print_table` confirm that `-b` emits raw decimal bytes. The original
+observation does not itself prove compressed allocation; the next native
+run must record that evidence. The whole profile is revalidated on current
+main before another dispatch; no failed immutable tag is retried or moved.

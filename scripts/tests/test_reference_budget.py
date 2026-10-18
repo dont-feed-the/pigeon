@@ -42,6 +42,17 @@ class ReferenceMeasurement(unittest.TestCase):
         with self.assertRaises(ValueError):
             MODULE.verdict(self.samples(cpu=-1), [], 100_000, 600, True)
 
+    def test_compression_guard_uses_physical_extent_usage_in_bytes(self):
+        output = ('Processed 1 file, 4 regular extents (4 refs), 0 inline.\n'
+                  'Type       Perc     Disk Usage   Uncompressed Referenced\n'
+                  'TOTAL        3%      16384        507904       500000\n'
+                  'zstd         3%      16384        507904       500000\n')
+        self.assertEqual(MODULE.physical_extent_usage(output), dict(
+            disk_bytes=16384, uncompressed_bytes=507904, referenced_bytes=500000))
+        for invalid in ['', 'TOTAL 3% 16K 496K 488K', 'TOTAL 3% 0 -1 500000']:
+            with self.assertRaises(RuntimeError):
+                MODULE.physical_extent_usage(invalid)
+
     def test_process_name_parentheses_do_not_change_start_time_field(self):
         fields = ['S'] + [str(n) for n in range(4, 53)]
         self.assertEqual(MODULE.proc_identity('123 (worker (a) b) ' + ' '.join(fields)), 22)

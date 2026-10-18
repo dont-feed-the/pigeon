@@ -64,7 +64,17 @@ def payload(number, size):
     return number.to_bytes(8, 'big') + bytes(size - 8)
 
 
-def generate(folder, count, size, compressed):
+def physical_extent_usage(text):
+    # st_blocks can describe uncompressed extents on Btrfs. compsize's
+    # FIEMAP-based Disk Usage column measures their physical allocation.
+    match = re.search(r'^TOTAL\s+[0-9]+%\s+([0-9]+)\s+([0-9]+)\s+([0-9]+)\s*$', text, re.M)
+    if not match:
+        raise RuntimeError('unreadable physical compression measurement')
+    return dict(disk_bytes=int(match[1]), uncompressed_bytes=int(match[2]),
+                referenced_bytes=int(match[3]))
+
+
+def generate(folder, count, size, compressed, progress=lambda *_: None):
     expected = {}
     for number in range(count):
         relative = f'{number // 1000:03d}/{number:06d}.bin'
@@ -75,9 +85,13 @@ def generate(folder, count, size, compressed):
         expected[relative] = hashlib.sha256(data).hexdigest()
         if number % 1000 == 999:
             os.sync()
-            if compressed and file.stat().st_blocks * 512 > 65_536:
-                raise RuntimeError('reference compression absent; abort before filling host')
+            if compressed:
+                physical = physical_extent_usage(run(['sudo', '-n', 'compsize', '-b', file], text=True))
+                progress(number + 1, physical)
+                if physical['disk_bytes'] > 65_536 or physical['referenced_bytes'] < size:
+                    raise RuntimeError('reference compression absent; abort before filling host')
             print(json.dumps(dict(stage='generating', files=number + 1)), flush=True)
+    progress(count, None)
     return expected
 
 
@@ -246,7 +260,11 @@ def measure(args, report):
                   samples=[], backup_samples=[])
     report['kernel'] = os.uname().release
     report['filesystem'] = run(['findmnt', '-T', str(root), '-n', '-o', 'FSTYPE,OPTIONS'], text=True).strip()
-    expected = generate(root / 'files', count, size, args.compressed)
+    def generated(count, physical):
+        report['generated_files'] = count
+        if physical is not None:
+            report['last_physical_compression_check'] = physical
+    expected = generate(root / 'files', count, size, args.compressed, generated)
     if len(set(expected.values())) != count:
         raise RuntimeError('reference files must contain unique content')
     (root / 'manifest.json').write_text(json.dumps(expected))

@@ -12,6 +12,8 @@ increments the second number, and every other release the third.
 - Diagnostic logs include completed file-scan counts and durations, to help
   investigate resource use.
 
+## 0.6.23 — 2026-10-18
+
 ### Fixed
 
 - Opening Files while a folder is being updated retries brief read conflicts

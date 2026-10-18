@@ -238,7 +238,7 @@ jobs:
         run: |
           set -e
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends btrfs-progs
+          sudo apt-get install -y -qq --no-install-recommends btrfs-progs compsize
           rustup toolchain install
           cargo build --release --locked -p pigeon -p pigeond -p git-annex-p2p-iroh
           uname -a

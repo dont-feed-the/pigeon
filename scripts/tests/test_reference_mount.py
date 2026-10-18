@@ -25,6 +25,7 @@ class MountOwnership(unittest.TestCase):
             'mkfs.btrfs': 'exit 0',
             'blkid': 'echo owned-uuid',
             'systemd-run': 'exit 0',
+            'compsize': 'exit 0',
             'python3': '[ "$REFERENCE_CASE" != profile-fails ]',
         }.items():
             self.executable(name, '#!/bin/sh\n' + body + '\n')
