@@ -617,6 +617,7 @@ view-name-suggested = suggested version
 setting-telemetry-device = Share diagnostics with
 setting-off = Keep diagnostics on each computer
 problem-join-history-unverified = Pigeon could not verify this group's history. Ask the person who invited you to update pigeon, then try again.
+problem-join-files-unreadable = Setup stopped because some group files could not be read. Ask an admin for help; keep this folder until the problem is resolved.
 problem-export-history-unverified = Pigeon could not verify the archived history. Keep this repository and ask another member for a complete copy before exporting deleted files.
 
 problem-recovery-not-allowed = This recovery sheet can no longer add computers. Use a current sheet, or ask an admin for an invitation.

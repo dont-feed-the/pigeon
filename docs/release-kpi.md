@@ -348,3 +348,18 @@ Linux installation, pinned annex, completions and latest. The release ships
 bounded metadata startup and reusable fresh worker lookups. It supplies no
 full resource/HDD qualification. The changed-source 90-minute Fast diagnostic
 and frozen actual soak remain separate evidence.
+
+## v0.6.46 publication observation
+
+[v0.6.46](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.46),
+source `95c30ff69ec7a815453e1358b52c75df76b45ac4`, publishes on 18 October
+at 17:56:47 UTC. Candidate lead is **653 seconds (10m53s)**; its completed
+gap is **2419 seconds (40m19s)**. Both targets are met, with 52 lead-time
+samples and 51 completed intervals. All four tag gates pass first attempt;
+independent checks verify six assets, four archive checksums, native Linux
+installation, pinned annex, completions and latest. PR #115 folds temporary
+grouping, weighted cached views and borrowed comparisons into one final
+validation and publication. Its initial grouping-only CI also passed;
+that head's unfinished bridge run was cancelled for the changed-source rollup.
+No unchanged-source CI retry is used. The pure-engine allocation improvement
+is separate from the still-open full resource/HDD budgets and real elapsed gates.

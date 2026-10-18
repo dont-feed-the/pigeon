@@ -5,6 +5,13 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Joining or recovering stops if a committed file cannot be read, instead
+  of creating an empty file in its place.
+
 ## 0.6.46 — 2026-10-18
 
 ### Changed
