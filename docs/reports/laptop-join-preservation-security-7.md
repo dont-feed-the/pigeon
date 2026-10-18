@@ -80,3 +80,42 @@ earlier captured-path and concurrent-index observation corrections.
 The corrected native S2 fixture passes in 19.773 seconds, with the original
 60-second completed-eviction wait and every subsequent file/folder assertion
 intact. Final all-target Clippy and repository checks pass.
+
+
+## Corrected-head bridge observation and native cancellation
+
+Corrected head `e7fcf78faa9f9e7d09273ba6c3f4cae4a018d352` passes CI
+39105236302 and lab 39105236312. Its bridge run 39105236313 fails the
+custodian shared-storage fixture at the offline regular-peer save. Original
+job 117609883335 retains artifact 12128501718, 13,645,289 bytes, SHA-256
+`221eda02a0ad471adc37b7e794b283efa2b9f562d79de84903909e2eea03c151`.
+The working bytes survive, capture.json names the new file, and annex add
+logs a slow operation without completing a capture. The retained annex
+index.lock alone cannot identify its live owner after fixture shutdown.
+There is no unchanged-source retry of this observation.
+
+A separate deterministic native regression reproduces a scheduler deadlock:
+a transfer in the same repository holds a real flock, capture registers,
+and the controller suspends that transfer while capture waits for its lock.
+Capture fails its original one-second active deadline in 1.016 seconds.
+With cancellation, capture completes in 0.031 seconds. This proves the
+mechanism; the hosted artifact does not prove the exact original lock owner.
+
+Pending capture now cancels lower native work in its own repository rather
+than leaving a suspended lock owner. One-shot children resume, receive TERM,
+then drain and reap through the existing cleanup grace. Batched children use
+their existing cancellation cleanup. Interrupted operations return an error
+and retry from their normal authority checks; no receipt or completion is
+invented. Metadata remains available, environmental waits keep their prior
+policy, and priority suspension across different repositories is unchanged.
+Capture claims are counted and removed when the last operation exits.
+No new persistent format or accepted ADR is introduced.
+
+
+The final local correction passes all 181 daemon-library cases in 17.640
+seconds and all 19 Git-driver library cases in 0.429 seconds. The native
+custodian shared-storage fixture passes inode reuse, retained versions,
+concurrent client saves, offline regular-peer capture and bidirectional
+convergence, then provider removal and bridge restart with stable identities.
+All-target Clippy has zero warnings; formatting and repository checks pass.
+Hosted validation still runs on the final exact source head before merge.

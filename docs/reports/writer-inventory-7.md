@@ -86,3 +86,15 @@ contracts in 3.429 seconds and all 16 native capture-scheduling cases in
 18.508 seconds. All-target Clippy and repository checks pass. The subsequent
 same-repository native cancellation correction and latest main must still
 be integrated before the writer optimization's PR is validated.
+
+
+After integrating native cancellation head
+`8881da11da4088ef8c2181e3e02c1173703cf847`, all 234 combined system,
+Git-driver and daemon library cases pass in 17.886 seconds. The system/native
+suite passes 37 cases in 0.193 seconds (the manual timing case stays ignored),
+120 script contracts pass in 3.219 seconds and all 54 non-trace native
+install/capture cases pass in 22.187 seconds. All-target workspace Clippy,
+formatting and repository checks pass. A stale local shared-target system
+metadata artifact initially caused missing-export compilation errors;
+rebuilding that package resolves them without changing source.
+A clean pushed source head is required for the next full-size measurement.
