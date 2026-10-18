@@ -53,7 +53,7 @@ annex proof. It does not repeat unrelated workspace, lab or random-crash
 jobs. The default periodic run and all release-tag Linux coverage remain
 full. Both paths use the existing scenario partitioner and live catalogue.
 
-A changed-source macOS result must still be recorded. The finite local
+The changed-source macOS result is recorded below. The finite local
 observer checks do not establish that platform's end-to-end S14 result,
 the complete M7 audit, a 72-hour soak or final-RC qualification.
 
@@ -67,5 +67,22 @@ frozen programs have the lab feature without trace emission. Running the
 trace collector on that output also fails for lack of traces; no local TLC
 pass is claimed. The full tag slice still requires emitted traces and TLC.
 This is neither APFS evidence nor a resource measurement.
-The original changed-source macOS scenario remains to be validated through
-the targeted background profile.
+The following macOS checkpoint provides separate platform validation.
+
+## Changed-source macOS checkpoint
+
+Targeted [run 39141412086](https://github.com/dont-feed-the/pigeon/actions/runs/39141412086),
+source `fecb04ca66d1cefc3d81facfac39486f5815fcaf`, passes on native APFS
+images. S14 and S15 each pass 23 checks in 334 seconds; S16 passes 23 in
+260 seconds. There are no native failures or skips. All required filesystem
+and roster trace projections are accepted by TLC. Dependency and installed
+annex proofs pass first; unrelated workspace, lab and random S9 jobs are
+correctly excluded from this explicitly selected diagnostic profile.
+
+Artifact 12142573346 is 252780 bytes, SHA-256
+`132764772fe800030fa0acf544f40e6ddd5564ae15c5f62129f28f6ce6528981`.
+Its original reports/traces and complete finished-job log are retained.
+This is one changed-source first-attempt result; the older full background
+run remains failed with its original S14 observation. The lab's simulated
+Mac custodians do not supply production macOS backup support. This profile
+is neither a whole-platform sweep nor resource, elapsed or final-RC evidence.

@@ -921,3 +921,10 @@ or a causal explanation of v0.6.21's held-protection miss.
 backoff by the opened device while retaining a global pressure override.
 The native child and content controllers remain conservative; completing
 their device scheduling and measured reference/HDD budgets remains open.
+
+
+## Native metadata startup
+
+The [metadata checkpoint](metadata-startup-7.md) records the failed 90-minute
+full-size diagnostic, bounded bulk queries, fresh worker-local lookups and
+native validation. It does not establish the outstanding CPU/RSS or HDD budgets.

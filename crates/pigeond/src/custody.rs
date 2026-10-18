@@ -339,6 +339,30 @@ pub async fn holders(git: &Git, key: &str) -> BTreeSet<String> {
         .unwrap_or_default()
 }
 
+// Bound both process startup work and each command's buffered input.
+pub(crate) const METADATA_KEYS: usize = 256;
+pub(crate) const METADATA_INPUT_BYTES: usize = 64 * 1024;
+
+fn metadata_batches<'a>(keys: &'a [&'a String]) -> impl Iterator<Item = &'a [&'a String]> + 'a {
+    let mut at = 0;
+    std::iter::from_fn(move || {
+        if at == keys.len() {
+            return None;
+        }
+        let start = at;
+        let mut bytes = 0usize;
+        while at < keys.len() && at - start < METADATA_KEYS {
+            let next = bytes.saturating_add(keys[at].len()).saturating_add(1);
+            if at > start && next > METADATA_INPUT_BYTES {
+                break;
+            }
+            bytes = next;
+            at += 1;
+        }
+        Some(&keys[start..at])
+    })
+}
+
 /// Read location-log claims in bounded native batches. Starting one annex
 /// and external helper per key makes a small-file round needlessly slow.
 /// These remain claims, not positive storage proofs or deletion authority.
@@ -350,7 +374,9 @@ pub async fn holders_for(git: &Git, keys: &BTreeSet<String>) -> BTreeMap<String,
     let mut all = BTreeMap::new();
     let began = std::time::Instant::now();
     let mut reported = std::time::Instant::now();
-    for (batch_number, batch) in keys.chunks(64).enumerate() {
+    let mut processed = 0usize;
+    for batch in metadata_batches(&keys) {
+        processed += batch.len();
         let input = batch
             .iter()
             .map(|key| format!("{key}\n"))
@@ -368,10 +394,6 @@ pub async fn holders_for(git: &Git, keys: &BTreeSet<String>) -> BTreeMap<String,
         {
             all.extend(locations);
         }
-        let processed = batch_number
-            .saturating_add(1)
-            .saturating_mul(64)
-            .min(keys.len());
         if reported.elapsed() >= Duration::from_secs(5) || processed == keys.len() {
             tracing::debug!(target: "pigeond::work_phases",
                 processed,
@@ -439,7 +461,9 @@ pub async fn present_for(
     let mut all = BTreeMap::new();
     let began = std::time::Instant::now();
     let mut reported = std::time::Instant::now();
-    for (batch_number, batch) in keys.chunks(64).enumerate() {
+    let mut processed = 0usize;
+    for batch in metadata_batches(&keys) {
+        processed += batch.len();
         let input = batch
             .iter()
             .map(|key| format!("{key}\n"))
@@ -469,25 +493,10 @@ pub async fn present_for(
             let Ok(path) = std::str::from_utf8(line) else {
                 continue;
             };
-            let path = std::path::Path::new(path);
-            let object = if path.file_name().is_some_and(|name| name == key.as_str())
-                && path
-                    .parent()
-                    .and_then(std::path::Path::file_name)
-                    .is_some_and(|name| name == key.as_str())
-            {
-                Some(git.repo.dir.join(path))
-            } else {
-                present_one(git, key).await
-            };
-            if let Some(object) = object.filter(|p| p.is_file()) {
+            if let Some(object) = batch_object(git, key, path).await {
                 all.insert((*key).clone(), object);
             }
         }
-        let processed = batch_number
-            .saturating_add(1)
-            .saturating_mul(64)
-            .min(keys.len());
         if reported.elapsed() >= Duration::from_secs(5) || processed == keys.len() {
             tracing::debug!(target: "pigeond::work_phases", processed,
                 total = keys.len(),
@@ -499,6 +508,26 @@ pub async fn present_for(
         }
     }
     all
+}
+
+/// Keep the native encoded-key fallback and require an actual regular object.
+/// The answer is only a location observation, never a hash or custody proof.
+pub(crate) async fn batch_object(git: &Git, key: &str, answer: &str) -> Option<std::path::PathBuf> {
+    if answer.is_empty() {
+        return None;
+    }
+    let path = std::path::Path::new(answer);
+    let object = if path.file_name().is_some_and(|name| name == key)
+        && path
+            .parent()
+            .and_then(std::path::Path::file_name)
+            .is_some_and(|name| name == key)
+    {
+        Some(git.repo.dir.join(path))
+    } else {
+        present_one(git, key).await
+    };
+    object.filter(|path| path.is_file())
 }
 
 /// One round of place, in queue order (15 §15.2): answers how many copies
@@ -622,7 +651,7 @@ async fn place_inner(
                 if crate::shared::provider_hydrate(g, &key)
                     .await
                     .is_ok_and(|here| here)
-                    && let Some(object) = present(g, &key).await
+                    && let Some(object) = transfers.local_object(&g.git, &key).await
                     && crate::net::sync::sync_object(&object).is_ok()
                 {
                     made += 1;
@@ -630,7 +659,7 @@ async fn place_inner(
                 }
                 match transfers.get(&g.git, &key, TRANSFER_TIMEOUT).await {
                     Ok(_) => {
-                        if let Some(object) = present(g, &key).await {
+                        if let Some(object) = transfers.local_object(&g.git, &key).await {
                             let _ = crate::net::sync::sync_object(&object);
                         }
                         made += 1;
@@ -676,3 +705,7 @@ mod location_tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "custody_metadata_tests.rs"]
+mod metadata_tests;

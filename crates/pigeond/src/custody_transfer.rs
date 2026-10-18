@@ -16,7 +16,17 @@ use crate::git::Git;
 #[derive(Default)]
 pub(crate) struct Pool {
     batches: BTreeMap<String, Batch>,
+    locations: Option<Locations>,
     pending: Option<Pending>,
+}
+
+// One worker owns this process. Results are never cached, and the native
+// session is rotated before it exceeds the same metadata input bounds.
+struct Locations {
+    repository: std::path::PathBuf,
+    batch: Batch,
+    queries: usize,
+    bytes: usize,
 }
 
 struct Pending(Arc<dyn Control>);
@@ -28,6 +38,40 @@ impl Drop for Pending {
 }
 
 impl Pool {
+    pub(crate) async fn local_object(
+        &mut self,
+        git: &Git,
+        key: &str,
+    ) -> Option<std::path::PathBuf> {
+        let bytes = key.len().saturating_add(1);
+        if self.locations.as_ref().is_none_or(|state| {
+            state.repository != git.repo.dir
+                || state.queries >= crate::custody::METADATA_KEYS
+                || (state.queries > 0
+                    && state.bytes.saturating_add(bytes) > crate::custody::METADATA_INPUT_BYTES)
+        }) {
+            self.locations = None;
+            self.locations = Some(Locations {
+                repository: git.repo.dir.clone(),
+                batch: git
+                    .repo
+                    .batch(&["annex", "contentlocation", "--batch"])
+                    .ok()?,
+                queries: 0,
+                bytes: 0,
+            });
+        }
+        let state = self.locations.as_mut()?;
+        state.queries += 1;
+        state.bytes = state.bytes.saturating_add(bytes);
+        let answer = state
+            .batch
+            .call(key, pigeon_git::DEFAULT_TIMEOUT)
+            .await
+            .ok()?;
+        crate::custody::batch_object(git, key, &answer).await
+    }
+
     pub(crate) async fn copy(
         &mut self,
         git: &Git,
@@ -104,6 +148,14 @@ impl Pool {
         for batch in self.batches.values_mut() {
             batch.stop(Duration::from_secs(5)).await;
         }
+        if let Some(locations) = &mut self.locations {
+            locations.batch.stop(Duration::from_secs(5)).await;
+        }
+        self.locations = None;
         self.pending = None;
     }
 }
+
+#[cfg(test)]
+#[path = "custody_location_tests.rs"]
+mod location_tests;
