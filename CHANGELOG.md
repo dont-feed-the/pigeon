@@ -5,9 +5,13 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
-## Unreleased
+## 0.6.22 — 2026-10-18
 
 ### Fixed
+
+- Incoming connections recover automatically if their network helper exits,
+  without restarting pigeon. This carries forward the fix from the unpublished
+  0.6.21 candidate.
 
 - Protection work keeps its priority between files, so background scrubbing
   waits while the remaining files are being checked. Finishing or cancelling

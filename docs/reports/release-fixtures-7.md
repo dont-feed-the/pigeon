@@ -90,3 +90,14 @@ seconds; the formerly failing case passes in 20.595 seconds. All-target
 workspace Clippy and structural checks pass after rebuilding the CLI,
 network helper and daemon. This is distinct from the original pressure
 observation and does not establish an internal installation-cause fix.
+
+## Integrated validation
+
+PR #91, head `62f769b69558c09181933ee6083b4fcd14985f0a`, integrates main `5239dafbe27044d00347e95983a9d280c27c2e7d`
+before validation. CI 39093045726, lab 39093045782 and
+bridge 39093047956 pass. Exact-head native ZFS profile
+39093043405 also passes. Native ZFS conformance remains
+linked separately; no passing rerun establishes the cause of the original
+held-protection failure. v0.6.21 stays immutable and unpublished.
+A fresh v0.6.22 tag must pass all ordinary Linux release gates and both
+platform archive builds before publication and independent install checks.
