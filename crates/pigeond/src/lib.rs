@@ -64,6 +64,7 @@ pub mod join;
 mod join_attempt;
 #[cfg(test)]
 mod join_auth_tests;
+mod join_destination;
 pub mod join_in_place;
 mod join_stage;
 mod join_transition;

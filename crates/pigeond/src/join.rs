@@ -32,7 +32,13 @@ use crate::settings::{ensure_remote, init_annex};
 /// machine: answers the group's name.
 pub async fn join(d: &Daemon, j: &Joining, folder: Option<String>) -> Result<String, String> {
     let inv = &j.inv;
-    let path = folder.map_or_else(|| default_path(d, j), PathBuf::from);
+    if !crate::purge_file::commit_id(&inv.group) {
+        return Err("invite-unknown".into());
+    }
+    let path = match folder {
+        Some(folder) => PathBuf::from(folder),
+        None => default_path(d, j)?,
+    };
     crate::filesystem::check(&path, role(j))?;
     let attempt = Attempt::begin(&path)?;
     crate::filesystem::check(&attempt.path, role(j))?;
@@ -58,12 +64,13 @@ async fn join_in(d: &Daemon, j: &Joining, path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn default_path(d: &Daemon, j: &Joining) -> PathBuf {
+fn default_path(d: &Daemon, j: &Joining) -> Result<PathBuf, String> {
     match role(j) {
-        Role::Laptop => std::env::var_os("HOME")
-            .map_or_else(|| PathBuf::from("."), PathBuf::from)
-            .join(&j.inv.name),
-        Role::Custodian => d.dirs.config.join(format!("{}.git", j.inv.group)),
+        Role::Laptop => {
+            let home = std::env::var_os("HOME").map_or_else(|| PathBuf::from("."), PathBuf::from);
+            crate::join_destination::default_folder(&home, &j.inv.name)
+        }
+        Role::Custodian => Ok(d.dirs.config.join(format!("{}.git", j.inv.group))),
     }
 }
 

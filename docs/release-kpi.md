@@ -375,7 +375,10 @@ assets, four archive checksums, native Linux installation, pinned annex,
 completions and latest are independently verified. The CLI credential expires
 during publication; the connected GitHub app confirms the completed gates,
 and public HTTPS supplies the release assets for the same verification.
-The aggregate collector cannot refresh while its CLI authentication fails;
-the previous snapshot has 52 lead samples and 51 completed intervals, and
-this publication adds one of each. The release ships refusal of unreadable
+The [server-side collector](https://github.com/dont-feed-the/pigeon/actions/runs/39154595575)
+succeeds at 18:32:25 UTC. Its retained artifact confirms **53 lead samples**,
+**52 completed intervals**, and a median candidate lead of **730 seconds
+(12m10s)**. Its ZIP checksum is verified before reading the reports. This
+supplies the aggregate observation despite the workspace CLI failure; future
+annotated-tag creation still needs refreshed CLI authentication. The release ships refusal of unreadable
 joined/recovered file objects; full resource/HDD and elapsed gates remain open.

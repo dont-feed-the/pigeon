@@ -343,6 +343,9 @@ async fn recover_inner(
     from: Option<String>,
 ) -> Result<String, String> {
     let s = decode(sheet).ok_or("sheet-unreadable")?;
+    if !crate::purge_file::commit_id(&s.group) {
+        return Err("sheet-unreadable".into());
+    }
     let secret: [u8; 32] = unhex(&s.key)
         .and_then(|k| k.try_into().ok())
         .ok_or("sheet-unreadable")?;
@@ -350,7 +353,10 @@ async fn recover_inner(
         return Err("already-in-group".into());
     }
     let home = std::env::var_os("HOME").map_or_else(|| PathBuf::from("."), PathBuf::from);
-    let path = folder.map_or_else(|| home.join(&s.name), PathBuf::from);
+    let path = match folder {
+        Some(folder) => PathBuf::from(folder),
+        None => crate::join_destination::default_folder(&home, &s.name)?,
+    };
     std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
     let path = std::fs::canonicalize(&path).map_err(|e| e.to_string())?;
     if std::fs::read_dir(&path)
