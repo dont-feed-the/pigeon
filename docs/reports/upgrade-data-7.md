@@ -167,3 +167,16 @@ historical programs with the current pinned annex. These results do not cover
 every published patch, actual old release archives, status-quorum semantics,
 all mixed-version operations, other platforms or the final RC. Resource and
 real elapsed gates remain open.
+
+## Mixed-peer integrated release validation
+
+PR #111, head `e5f0b1bd57079daa03f0f7cc76664fa40af90c31`, integrates main `c08b5274cc99a5e89fee4c7bf2c952ce69f159a5` before validation.
+CI 39136117224, lab 39136117367 and bridge
+39136117309 pass. v0.6.41 is independently published
+and verified first. Local validation passes 153 script contracts and four
+native two-peer upgrade cases on one finalized harness/observer snapshot.
+All-target workspace Clippy and repository checks pass. Fresh v0.6.42
+tag gates and independent publication verification remain required.
+A longer full-size Fast diagnostic uses the new operation labels and the
+existing 5400-second preparation bound; it remains separate from budget
+qualification. Resource, actual-archive and elapsed gates remain open.
