@@ -46,6 +46,8 @@ The [conformance inventory](conformance.md) links accepted decisions to their
 implementation and verification entry points, with the remaining release gates.
 The [persistent native soak runner](reports/lab-soak-7.md) records actual
 elapsed evidence; its smoke mode cannot qualify the 72-hour M7 gate.
+The [historical-data upgrade check](reports/upgrade-data-7.md) verifies frozen
+old/new programs, retained bytes and restoration, with retired formats separate.
 The [reference diagnostic mode](reports/reference-diagnostic-7.md) can seed
 in Fast mode before Gentle sampling; it never qualifies the M6 budgets.
 Track actual publication, candidate lead time and blocking jobs with

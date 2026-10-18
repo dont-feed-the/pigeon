@@ -5,6 +5,14 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Added
+
+- `scripts/check-upgrade` checks historical data with frozen old and new
+  builds, including new saves and restores. Retired-format preservation has
+  a separate result from a supported upgrade.
+
 ## 0.6.35 — 2026-10-18
 
 ### Fixed

@@ -16,6 +16,7 @@ none of its required checks was weakened or made optional.
 | PR changes | Checks selected, in addition to repository rules |
 | --- | --- |
 | Root README, handoff, changelog or Markdown under `docs/` | No expensive jobs |
+| Standalone reference, soak and upgrade evidence tools and their listed Python contracts | Repository script contracts; native observations remain explicit |
 | Installer, service scripts, packaging tests or Homebrew formula | Packaging |
 | Formal models, configurations or proof tooling | Proofs, fast models and core/daemon/bridge trace validation |
 | Bridge protocol models or their trace checkers | Their formal/trace checks and the real multi-peer Nextcloud integration |
@@ -29,6 +30,9 @@ Mixed changes select the union of their dependent groups. Specific check
 scripts select their own groups; unrecognized tooling conservatively runs
 everything. This table describes the current groups in `scripts/select-ci`;
 new crates and paths remain full until their dependencies are classified.
+The evidence-tool exemption is an exact filename list. A mixed Rust change
+still selects runtime consumers; workflow or selector changes still select
+everything. This exemption does not supply a measured resource or elapsed pass.
 
 ## Version metadata
 
@@ -64,3 +68,8 @@ Replaying PR #57's exact diff against `d441344` selects packaging alone,
 after independently verifying its version-only bump. This is a checked
 selection result, not yet a measured wall-time improvement. The initial
 selector rollup itself changes CI policy and therefore runs the full set.
+
+Replaying PR #104's exact four-file diff against its integrated current-main
+base with the evidence-tool allowlist selects no expensive job group. Its
+Python contracts still run in repository rules. This is a verified selection
+result; a future PR supplies any actual runner-time improvement.
