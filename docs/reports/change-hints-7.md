@@ -118,3 +118,14 @@ before the next commit and fresh hosted validation.
 Local cargo-deny 0.20.2 passes advisories, bans, licences and sources with
 the notify-specific exception. All corrected-head native shards finish green;
 the remaining workspace failure is the dependency policy alone.
+
+## Integrated release validation
+
+PR #100, head `07b93b5d3de99a3b88664104dff40b6c1042b6c8`, integrates main `97e6fc81a318a01d05f17eddeb4c3529efa042f3` before
+validation. CI 39113050443, lab 39113050439 and bridge
+39113050532 pass. v0.6.30 is published and independently
+verified before this candidate. Local checks pass 46 system/native, 183 daemon
+library, 56 native install/watch and 135 UI/protocol cases, six thousand scan-law
+cases and zero-warning workspace/all-target Clippy. Fresh v0.6.31 tag gates
+and independent archive/install checks are required before publication.
+The resource budgets and actual elapsed M7 gates remain open.
