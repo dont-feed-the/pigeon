@@ -66,6 +66,8 @@ real ext4/btrfs/xfs evidence from unmeasured ZFS and Mac runtime combinations.
 
 M7 still needs the complete law/trace audit, exact-head refinement validation,
 joining/signing security review and every new-design v0.N upgrade matrix.
+The [join lifetime review](reports/join-deadline-security-7.md) reproduces
+and bounds a silent admitter; it records the remaining review findings.
 It also requires seven actual green nights, a continuous 72-hour soak, and
 two weeks of release-candidate dogfood. No fixture dates, repeated quick runs
 or prior M3 dogfood substitute for those elapsed intervals.
