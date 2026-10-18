@@ -142,3 +142,11 @@ background Mac jobs, while lab permits two. Linux limits, selected checks,
 per-job case counts and every publication gate remain unchanged. This uses
 the user's increased runner capacity without a second overlapping Mac
 background workflow. Actual time savings await a new completed run.
+
+## Native ZFS checkpoint
+
+The [separate backup-only native profile](zfs-runtime-7.md) passes actual ZFS
+admission, two exact hash-valid objects, restart identity and eight filesystem
+primitive cases in run 39091429406. It retains the first fixture-observation
+failure separately. This closes that native ZFS conformance observation; pool
+crash/import, reference-tree and foreground HDD budgets remain open.

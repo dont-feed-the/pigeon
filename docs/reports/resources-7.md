@@ -895,3 +895,20 @@ medians from full-size native capture reads, connected to the existing
 back-off and progress floors. It retains the previous candidate's second
 initial-copy failure separately. Independent device scheduling, other read
 boundaries and measured hardware budgets remain open.
+
+## Native ZFS and release-fixture observations
+
+[Native ZFS](zfs-runtime-7.md) now has an actual Linux backup runtime
+observation, including restart and filesystem primitives. The [release-fixture
+report](release-fixtures-7.md) retains all three v0.6.21 native failures and
+distinguishes named-path test corrections from incomplete protection with
+unproved transport cause. Neither supplies the reference/HDD budgets.
+
+## Pending protection between batch keys
+
+The [pending-protection checkpoint](pending-protection-7.md) reproduces scrub
+running while a protection batch still has keys to revalidate. Owned queue
+registration keeps that class visible until stop/drop, with cancellation,
+metadata availability and optional-download priority checked separately.
+This is a native lifetime correction, not completion of global key ordering
+or a causal explanation of v0.6.21's held-protection miss.

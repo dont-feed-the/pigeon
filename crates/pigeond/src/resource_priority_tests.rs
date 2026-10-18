@@ -433,3 +433,125 @@ async fn a_scoped_download_batch_waits_before_starting_its_key() {
             .all(|n| n.load(Ordering::Relaxed) == 0)
     );
 }
+
+async fn pending_batch_keeps_priority(cancel: bool) {
+    let controller = Arc::new(Controller::default());
+    let (low_dir, low_repo) = fixture(&controller, "scrubbing-between-keys");
+    let (high_dir, high_repo) = fixture(&controller, "pending-protection");
+    std::fs::write(
+        high_dir.path().join("git"),
+        "#!/bin/sh\nwhile IFS= read -r key; do\n printf '{\"command\":\"copy\",\"success\":true,\"key\":\"%s\"}\\n' \"$key\"\ndone\n",
+    )
+    .unwrap();
+    let git = crate::git::Git {
+        repo: high_repo,
+        purge_gate: Arc::new(crate::purge_gate::Gate::default()),
+    };
+    let mut pool = crate::custody_transfer::Pool::default();
+    pool.copy(&git, "fixture-peer", "first", Duration::from_secs(3))
+        .await
+        .unwrap();
+    // The first response is complete; the same protection queue still has
+    // another key to revalidate. Scrub must not run in this gap.
+    let low = operation(low_repo.clone(), "fsck", Duration::from_secs(2));
+    tokio::time::sleep(Duration::from_millis(2200)).await;
+    assert_eq!(
+        beats(low_dir.path()),
+        0,
+        "scrub ran between protection keys"
+    );
+    assert!(
+        !low.is_finished(),
+        "pending protection spent scrub's deadline"
+    );
+    assert_eq!(
+        low_repo
+            .run(&["--version"], None, Duration::from_secs(2))
+            .await
+            .unwrap()
+            .stdout,
+        b"metadata"
+    );
+    pool.copy(&git, "fixture-peer", "second", Duration::from_secs(3))
+        .await
+        .unwrap();
+    if cancel {
+        drop(pool);
+    } else {
+        pool.stop().await;
+        // A stopped, still-live pool must release the completed queue too.
+        eventually(|| beats(low_dir.path()) >= 2).await;
+        drop(pool);
+    }
+    eventually(|| beats(low_dir.path()) >= 2).await;
+    std::fs::write(low_dir.path().join("finish"), b"done").unwrap();
+    assert_eq!(low.await.unwrap().unwrap().stdout, b"exact output");
+    assert!(
+        controller
+            .children
+            .iter()
+            .all(|n| n.load(Ordering::Relaxed) == 0)
+    );
+}
+
+#[tokio::test]
+async fn pending_protection_between_batch_keys_keeps_scrub_waiting_until_stop() {
+    pending_batch_keeps_priority(false).await;
+}
+
+#[tokio::test]
+async fn canceling_pending_protection_between_batch_keys_releases_scrub() {
+    pending_batch_keeps_priority(true).await;
+}
+
+#[tokio::test]
+async fn a_pending_batch_uses_its_download_view_and_releases_on_stop() {
+    let controller = Arc::new(Controller::default());
+    let (dir, repo) = fixture(&controller, "optional-between-keys");
+    std::fs::write(
+        dir.path().join("git"),
+        "#!/bin/sh\nwhile IFS= read -r key; do\n printf '{\"success\":true,\"key\":\"%s\"}\\n' \"$key\"\ndone\n",
+    ).unwrap();
+    let git = crate::git::Git {
+        repo: repo.for_download(),
+        purge_gate: Arc::new(crate::purge_gate::Gate::default()),
+    };
+    let mut pool = crate::custody_transfer::Pool::default();
+    pool.get(&git, "kept", Duration::from_secs(3))
+        .await
+        .unwrap();
+    let other = controller.for_group("protection".into());
+    assert_eq!(
+        controller.children[Class::Transfer as usize].load(Ordering::Relaxed),
+        0
+    );
+    assert_eq!(
+        controller.children[Class::Download as usize].load(Ordering::Relaxed),
+        1
+    );
+    assert!(other.running(Class::Transfer));
+    assert!(!other.running(Class::Scrub));
+    pool.stop().await;
+    assert!(other.running(Class::Scrub));
+    assert!(
+        controller
+            .children
+            .iter()
+            .all(|n| n.load(Ordering::Relaxed) == 0)
+    );
+    // Reusing the stopped pool starts a fresh, independently scoped queue.
+    pool.get(&git, "later", Duration::from_secs(3))
+        .await
+        .unwrap();
+    assert_eq!(
+        controller.children[Class::Download as usize].load(Ordering::Relaxed),
+        1
+    );
+    drop(pool);
+    assert!(
+        controller
+            .children
+            .iter()
+            .all(|n| n.load(Ordering::Relaxed) == 0)
+    );
+}

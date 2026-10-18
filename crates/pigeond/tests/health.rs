@@ -245,7 +245,7 @@ fn another_laptop_proves_retained_publication_after_backup_removal() {
     assert!(said(&joined, "joined", "group").is_some(), "{joined:?}");
     join(&lap, &vault, &[&lap, &bob, &vault]);
     std::fs::write(folder.join("note.txt"), b"first bytes\n").unwrap();
-    until(&lap, State::Protected, &[&lap, &bob, &vault]);
+    protected_note(&lap, &folder, b"first bytes\n", &[&lap, &bob, &vault]);
     eventually_within(
         60,
         || std::fs::read(other.join("note.txt")).is_ok_and(|b| b == b"first bytes\n"),
@@ -253,7 +253,7 @@ fn another_laptop_proves_retained_publication_after_backup_removal() {
         &[&lap, &bob, &vault],
     );
     std::fs::write(folder.join("note.txt"), b"second bytes\n").unwrap();
-    until(&lap, State::Protected, &[&lap, &bob, &vault]);
+    protected_note(&lap, &folder, b"second bytes\n", &[&lap, &bob, &vault]);
     eventually_within(
         60,
         || std::fs::read(other.join("note.txt")).is_ok_and(|b| b == b"second bytes\n"),

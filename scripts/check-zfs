@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# A disposable native ZFS pool checks backup admission and durable objects.
+# Sparse fixture capacity meets the reserve; this is not HDD/resource data.
+set -euo pipefail
+[[ $(uname -s) == Linux ]] || { echo 'check-zfs requires Linux' >&2; exit 1; }
+for program in zpool zfs truncate cargo; do
+    command -v "$program" >/dev/null || { echo "missing native tool: $program" >&2; exit 1; }
+done
+sudo modprobe zfs
+fixture_root=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/pigeon-zfs.XXXXXX")
+pool_name="pigeon_ci_${GITHUB_RUN_ID:-local}_${BASHPID}"
+[[ $pool_name =~ ^pigeon_ci_[A-Za-z0-9_]+$ ]] || exit 1
+pool_guid=''
+pool_created=0
+cleanup() {
+    result=$?
+    trap - EXIT INT TERM
+    if actual=$(sudo zpool get -H -o value guid "$pool_name" 2>/dev/null); then
+        [[ -n $pool_guid && $actual == "$pool_guid" ]] || {
+            echo "unrecorded or changed pool identity; retained $fixture_root" >&2; exit 1;
+        }
+        if [[ $result != 0 ]]; then
+            evidence="${RUNNER_TEMP:-/tmp}/pigeon-zfs-failure-${BASHPID}"
+            if ! python3 - "$fixture_root/volume" "$evidence" "$pool_guid" <<'EVIDENCE'
+from pathlib import Path
+import os,shutil,stat,sys
+source,destination,guid=sys.argv[1:]
+root=Path(destination);root.mkdir(mode=0o700)
+(root/'pool-guid').write_text(guid+'\n')
+def special(directory,names):
+    omitted=[]
+    for name in names:
+        mode=os.lstat(Path(directory)/name).st_mode
+        if not (stat.S_ISREG(mode) or stat.S_ISDIR(mode) or stat.S_ISLNK(mode)):
+            omitted.append(name)
+    return omitted
+shutil.copytree(source,root/'volume',symlinks=True,ignore=special)
+EVIDENCE
+            then
+                echo "cannot retain failed fixture; leaving pool and $fixture_root" >&2; exit 1
+            fi
+        fi
+        sudo zpool destroy "$pool_name" || {
+            echo "cannot destroy fixture pool; retained $fixture_root" >&2; exit 1;
+        }
+    elif [[ $pool_created == 1 ]]; then
+        echo "fixture pool state is unknown; retained $fixture_root" >&2; exit 1
+    fi
+    rm -rf -- "$fixture_root"
+    exit "$result"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+if sudo zpool list -H "$pool_name" >/dev/null 2>&1; then
+    echo 'refusing a pre-existing fixture pool name' >&2; exit 1
+fi
+mkdir "$fixture_root/volume"
+truncate -s 8G "$fixture_root/vdev.img"
+pool_created=1
+sudo zpool create -o cachefile=none -o ashift=12 \
+    -O mountpoint="$fixture_root/volume" -O compression=off \
+    -O primarycache=metadata -O sync=standard \
+    "$pool_name" "$fixture_root/vdev.img"
+pool_guid=$(sudo zpool get -H -o value guid "$pool_name")
+[[ $pool_guid =~ ^[0-9]+$ ]] || { pool_guid=''; exit 1; }
+sudo chown "$(id -u):$(id -g)" "$fixture_root/volume"
+[[ $(stat -f -c %T "$fixture_root/volume") == zfs ]]
+printf 'native ZFS fixture: kernel %s; module %s\n' "$(uname -r)" "$(modinfo -F version zfs)"
+sudo zfs get -H -o property,value casesensitivity,checksum,sync "$pool_name"
+PIGEON_TEST_ZFS_ROOT="$fixture_root/volume" PIGEON_REQUIRE_GIT_ANNEX=1 \
+    cargo nextest run -p pigeond --features lab --locked --test zfs --run-ignored only
+TMPDIR="$fixture_root/volume" PIGEON_REQUIRE_GIT_ANNEX=1 \
+    cargo nextest run -p pigeon-sys --lib --features lab --locked -E 'test(/^fs::tests::/)'
