@@ -5,6 +5,13 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Added
+
+- With debug logging enabled, capture diagnostics show whether filesystem
+  hints trigger a scan, without recording file names.
+
 ## 0.6.36 — 2026-10-18
 
 ### Added

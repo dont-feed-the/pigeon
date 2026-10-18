@@ -30,7 +30,7 @@ fn empty_scan_completed(home: &std::path::Path) -> bool {
 }
 
 #[test]
-fn a_save_wakes_background_capture_without_status_polling() {
+fn a_save_and_deletion_wake_background_capture_without_status_polling() {
     let Some((_tmp, root, sockets)) = dirs() else {
         return;
     };
@@ -94,6 +94,29 @@ fn a_save_wakes_background_capture_without_status_polling() {
     assert!(location.status.success());
     let path = folder.join(String::from_utf8(location.stdout).unwrap().trim());
     assert_eq!(std::fs::read(path).unwrap(), bytes);
+    // Drain the save's notifications before testing a new deletion hint.
+    std::thread::sleep(Duration::from_secs(1));
+    std::fs::remove_file(folder.join("watched.txt")).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let result = common::git_env(
+            Command::new("git")
+                .current_dir(&folder)
+                .args(["ls-tree", "main", "--", "watched.txt"]),
+            &daemon.home,
+        )
+        .output()
+        .unwrap();
+        if result.status.success() && result.stdout.is_empty() {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "background capture did not observe the deletion without status polling\n{}",
+            common::logs(&[&daemon])
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
 }
 
 fn native_registrations(home: &std::path::Path) -> usize {

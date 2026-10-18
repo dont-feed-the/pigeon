@@ -560,20 +560,30 @@ async fn a_pending_batch_uses_its_download_view_and_releases_on_stop() {
 async fn capture_releases_a_same_repository_transfer_lock() {
     let controller = Arc::new(Controller::default());
     let (dir, repo) = fixture(&controller, "same-repository");
+    // Keep the lock in the long-lived process. The external `flock` command
+    // is not supplied by macOS; an unchecked failed invocation used to make
+    // the capture succeed without ever contending with the transfer.
     std::fs::write(
         dir.path().join("git"),
-        r#"#!/bin/sh
-if [ "$2" = get ]; then
-    exec 9>repository.lock
-    flock -x 9
-    touch locked
-    trap 'exit 0' TERM
-    while :; do sleep 0.01; done
-else
-    exec 9>repository.lock
-    flock -x 9
-    printf captured
-fi
+        "#!/bin/sh\nexec python3 native-lock.py \"$@\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("native-lock.py"),
+        r#"import fcntl, pathlib, signal, sys
+
+def end(_signal, _frame):
+    raise SystemExit(0)
+
+signal.signal(signal.SIGTERM, end)
+with open('repository.lock', 'w') as lock:
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    if sys.argv[2] == 'get':
+        pathlib.Path('locked').touch()
+        while True:
+            signal.pause()
+    else:
+        sys.stdout.write('captured')
 "#,
     )
     .unwrap();

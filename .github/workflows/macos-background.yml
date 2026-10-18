@@ -9,6 +9,10 @@ on:
     - cron: '31 3 * * *'
   workflow_dispatch:
     inputs:
+      capture_diagnostics_only:
+        description: Check capture preemption, native save/delete hints and the two deletion regressions
+        type: boolean
+        default: false
       native_priority_only:
         description: Check only actual launchd preset switching and native CPU inheritance
         type: boolean
@@ -36,7 +40,7 @@ jobs:
         run: |
           # The targeted profile occupies just one Mac runner and skips the
           # Rust/lab/slice stages; it leaves room for both release builds.
-          if [ "${{ inputs.native_priority_only || false }}" = true ]; then
+          if [ "${{ inputs.native_priority_only || inputs.capture_diagnostics_only || false }}" = true ]; then
             echo run=true >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -51,7 +55,7 @@ jobs:
   native-priority:
     name: actual launchd preset switches and native CPU inheritance
     needs: available
-    if: needs.available.outputs.run == 'true' && inputs.native_priority_only
+    if: needs.available.outputs.run == 'true' && inputs.native_priority_only && !inputs.capture_diagnostics_only
     runs-on: macos-latest
     timeout-minutes: 10
     steps:
@@ -69,7 +73,7 @@ jobs:
 
   annex:
     needs: available
-    if: needs.available.outputs.run == 'true' && !inputs.native_priority_only
+    if: needs.available.outputs.run == 'true' && !inputs.native_priority_only && !inputs.capture_diagnostics_only
     uses: ./.github/workflows/git-annex.yml
     with:
       verify_macos: true
@@ -91,3 +95,76 @@ jobs:
     uses: ./.github/workflows/slice.yml
     with:
       platform: macos
+
+  capture-diagnostics:
+    name: focused native capture and deletion diagnostics
+    needs: available
+    if: needs.available.outputs.run == 'true' && inputs.capture_diagnostics_only
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      PIGEON_REQUIRE_GIT_ANNEX: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: git-annex from Homebrew
+        run: brew install git-annex
+      - name: required verified patched git-annex
+        uses: ./.github/actions/git-annex-pigeon
+        with:
+          required: "true"
+      - name: restore main's native Rust dependencies
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target/debug/.fingerprint
+            target/debug/build
+            target/debug/deps/*.rlib
+            target/debug/deps/*.rmeta
+            target/debug/deps/*.so
+            target/debug/deps/*.dylib
+            target/debug/deps/*.d
+            target/.rustc_info.json
+            !target/debug/deps/libpigeon*
+            !target/debug/deps/libgit_annex_p2p_iroh*
+            !target/debug/.fingerprint/pigeon*/**
+            !target/debug/.fingerprint/git-annex-p2p-iroh*/**
+            !target/debug/build/pigeon*/**
+            !target/debug/build/git-annex-p2p-iroh*/**
+          key: rust-lab-deps-v1-macos-latest-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: rust-lab-deps-v1-macos-latest-
+      - name: Node for the web interface build
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: crates/pigeon-web/client/.nvmrc
+          cache: npm
+          cache-dependency-path: crates/pigeon-web/client/package-lock.json
+      - name: the pinned Rust toolchain
+        run: (rustup toolchain install || cargo --version) && rustup show active-toolchain
+      - uses: ./.github/actions/nextest
+      - name: matching native programs
+        run: cargo build -p pigeon -p pigeond -p git-annex-p2p-iroh --features pigeond/lab --locked
+      - name: native preemption and save/delete observations
+        env:
+          TMPDIR: ${{ runner.temp }}/pigeon-tests
+        run: |
+          mkdir -p "$TMPDIR"
+          cargo nextest run -p pigeond --features lab --locked \
+            --lib --test watch_capture --test slice --test restore \
+            -E 'binary(watch_capture) | test(capture_releases_a_same_repository_transfer_lock) | test(local_published_protected_then_free_and_keep) | test(a_time_between_two_saves_restores_the_first)'
+      - name: retain failed native capture fixtures
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: failed-macos-capture-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pigeon-tests
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14

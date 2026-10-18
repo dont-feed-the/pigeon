@@ -133,12 +133,24 @@ pub(crate) async fn background(
             .next_due()
             .is_some_and(|at| at <= now)
             || state.poll_after.is_some_and(|at| at <= now);
-        if !state.clock.due(
+        let due = state.clock.due(
             time.unwrap_or(0),
             reading.revision,
             reading.healthy && time.is_some(),
             settling,
-        ) {
+        );
+        // Counts and monotonic clocks only: diagnose missing native hints
+        // independently of candidate scans without logging user paths.
+        tracing::debug!(
+            group = %g.id,
+            watch_revision = reading.revision,
+            native = reading.healthy,
+            settling,
+            due,
+            clock = ?state.clock,
+            "capture-observation-admission"
+        );
+        if !due {
             return None;
         }
         reading
