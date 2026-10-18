@@ -84,3 +84,28 @@ verified before this candidate. Local validation passes 126 script contracts,
 default and diagnostic lab smokes, zero-warning all-target Clippy and repository
 checks. Fresh v0.6.34 tag gates and independent archive/install checks remain
 required. Diagnostic preparation cannot qualify M6; elapsed gates stay open.
+
+## Full Fast preparation observation
+
+Run 39118609862/job 117649414054, exact source
+`89c6e8528be96c0dce8fe4cd899e7c0a845292f8`, expires its 5400-second
+preparation bound on 18 October at 11:54:40 UTC. It generates all 100,000
+500,000-byte files. Source capture completes at 11:45:38; the backup
+accepts the full catalogue at 11:46:07. At the deadline, both catalogue
+counts are 100,000, but the backup has zero object files and no complete
+byte proof. No Gentle measurement window starts and no budget passes.
+
+The source has 100,002 index paths and 100,000 unverified object files.
+Daemon RSS high-water observations are 435,503,104 bytes on the laptop
+and 486,965,248 on the backup. These setup values are not a passed memory
+budget. Cgroup CPU readings include children; a single final process state
+cannot establish duty cycle or the original bottleneck. The backup's final
+snapshot has active Git/annex descendants. Pressure transitions and native
+process snapshots are retained, without attributing the whole delay to
+one mechanism or extending the bound blindly.
+
+Artifact 12136125940 is 2458 bytes, SHA-256
+`a6349ae46c823f64e28304bc82166723ef8352548e9dae0623ff11dd87676b71`.
+The original JSON, archive and complete job log are retained without an
+unchanged-source retry. The next diagnosis must distinguish ingestion,
+pointer proof and cold backup planning before repeating a full profile.

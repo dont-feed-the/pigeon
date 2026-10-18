@@ -213,6 +213,24 @@ jobs:
         run: cargo fmt --all --check
       - name: clippy without warnings
         run: cargo clippy --workspace --all-targets --features pigeond/tokio-console --locked -- -D warnings
+      - name: save the Rust cache (main only)
+        if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target/debug/.fingerprint
+            target/debug/build
+            target/debug/deps/*.rlib
+            target/debug/deps/*.rmeta
+            target/debug/deps/*.so
+            target/debug/deps/*.dylib
+            target/debug/deps/*.d
+            target/.rustc_info.json
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
       - name: tests, laws and the git-annex contract tests (13 §13.6)
         run: cargo nextest run --workspace --locked
       - name: doc tests, which nextest does not run
@@ -242,23 +260,6 @@ jobs:
           cargo test -p pigeon-core --features tla-trace --locked \
             --test trace --test roster_trace --test admit_trace \
             --test authority_trace --test catalogue_trace
-      - name: save the Rust cache (main only)
-        if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            target/debug/.fingerprint
-            target/debug/build
-            target/debug/deps/*.rlib
-            target/debug/deps/*.rmeta
-            target/debug/deps/*.so
-            target/debug/deps/*.dylib
-            target/debug/deps/*.d
-            target/.rustc_info.json
-          key: ${{ steps.cache.outputs.cache-primary-key }}
 
   # pigeond's daemons-on-one-host tests (feature lab, 13 §13.12) took 24 of
   # the Rust job's 35 minutes when cargo ran them one binary after another.
@@ -350,6 +351,30 @@ jobs:
           cargo build -p pigeon -p git-annex-p2p-iroh --locked
           cargo test -p pigeond --features lab --locked --tests --no-run
           cargo test -p pigeon-sys --features lab --locked
+      - name: save the Rust cache (main only)
+        if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true' && matrix.shard == 0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target/debug/.fingerprint
+            target/debug/build
+            target/debug/deps/*.rlib
+            target/debug/deps/*.rmeta
+            target/debug/deps/*.so
+            target/debug/deps/*.dylib
+            target/debug/deps/*.d
+            target/.rustc_info.json
+            !target/debug/deps/libpigeon*
+            !target/debug/deps/libgit_annex_p2p_iroh*
+            !target/debug/.fingerprint/pigeon*/**
+            !target/debug/.fingerprint/git-annex-p2p-iroh*/**
+            !target/debug/build/pigeon*/**
+            !target/debug/build/git-annex-p2p-iroh*/**
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
       - name: this shard's daemons-on-one-host tests
         env:
           SHARD: ${{ matrix.shard }}
@@ -393,29 +418,6 @@ jobs:
       - name: real storage boundaries pass TLC and every corrupted observation fails
         if: matrix.shard == 3
         run: python3 scripts/check-storage-traces
-      - name: save the Rust cache (main only)
-        if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true' && matrix.shard == 0
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            target/debug/.fingerprint
-            target/debug/build
-            target/debug/deps/*.rlib
-            target/debug/deps/*.rmeta
-            target/debug/deps/*.so
-            target/debug/deps/*.dylib
-            target/debug/deps/*.d
-            target/.rustc_info.json
-            !target/debug/deps/libpigeon*
-            !target/debug/deps/libgit_annex_p2p_iroh*
-            !target/debug/.fingerprint/pigeon*/**
-            !target/debug/.fingerprint/git-annex-p2p-iroh*/**
-            !target/debug/build/pigeon*/**
-            !target/debug/build/git-annex-p2p-iroh*/**
-          key: ${{ steps.cache.outputs.cache-primary-key }}
 
   code-traces:
     needs: changes
