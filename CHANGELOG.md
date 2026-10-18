@@ -13,6 +13,14 @@ increments the second number, and every other release the third.
   investigate resource use.
 
 
+
+## 0.6.27 — 2026-10-18
+
+### Fixed
+
+- Printing a recovery sheet no longer reports an online backup as offline
+  because a background fetch holds its cached history lock.
+
 ## 0.6.26 — 2026-10-18
 
 ### Fixed

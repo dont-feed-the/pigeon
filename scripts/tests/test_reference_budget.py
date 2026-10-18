@@ -2,6 +2,7 @@
 import importlib.machinery
 import importlib.util
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -74,6 +75,41 @@ class ReferenceMeasurement(unittest.TestCase):
             MODULE.checkpoint(path, report)
             self.assertEqual(MODULE.json.loads(path.read_text()), report)
             self.assertFalse(path.with_suffix('.pending').exists())
+
+    def test_full_profiles_refuse_lab_daemons_and_incomplete_build_diagnostics(self):
+        terminal = [{'type': 'Said', 'message': {'id': 'doctor-ok'}}]
+        ordinary = terminal + [{'type': 'Progress', 'message': {
+            'id': 'doctor-version', 'args': {'program': name}}} for name in ['git', 'git-annex']]
+        lab = ordinary + [{'type': 'Progress', 'message': {'id': 'doctor-lab-build'}}]
+        self.assertEqual(MODULE.daemon_build(ordinary, True), 'ordinary')
+        self.assertEqual(MODULE.daemon_build(lab, False), 'lab')
+        for replies in [[], terminal, lab]:
+            with self.subTest(replies=replies), self.assertRaises(RuntimeError):
+                MODULE.daemon_build(replies, True)
+
+    def test_doctor_reads_progress_from_stderr_before_classifying_the_build(self):
+        import subprocess
+        result = subprocess.CompletedProcess(['pigeon'], 0,
+            stdout=b'{"type":"Said","message":{"id":"doctor-ok"}}\n',
+            stderr=b'{"type":"Progress","message":{"id":"doctor-lab-build"}}\n')
+        with patch.object(MODULE.subprocess, 'run', return_value=result):
+            output = MODULE.run(['pigeon', '--json', 'doctor'], include_stderr=True)
+        self.assertIn(b'doctor-lab-build', output)
+        self.assertIn(b'doctor-ok', output)
+
+    def test_dirty_full_profiles_stop_before_starting_native_fixtures(self):
+        with tempfile.TemporaryDirectory() as temp:
+            report = Path(temp) / 'report.json'
+            argv = ['reference-budget', '--bin', temp, '--root', temp + '/new', '--report', str(report)]
+            with patch.object(sys, 'argv', argv), \
+                    patch.object(MODULE, 'run', side_effect=[b'a' * 40, b' M Cargo.toml']), \
+                    patch.object(MODULE, 'measure') as measure:
+                with self.assertRaisesRegex(RuntimeError, 'clean source checkout'):
+                    MODULE.main()
+                measure.assert_not_called()
+            result = MODULE.json.loads(report.read_text())
+            self.assertTrue(result['dirty_worktree'])
+            self.assertEqual(result['budget_verdict'], 'not-measured')
 
     def test_process_name_parentheses_do_not_change_start_time_field(self):
         fields = ['S'] + [str(n) for n in range(4, 53)]

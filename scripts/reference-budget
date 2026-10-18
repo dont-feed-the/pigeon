@@ -18,7 +18,7 @@ WINDOW = 600
 MEMORY = 300_000_000
 
 
-def run(args, **kwargs):
+def run(args, include_stderr=False, **kwargs):
     try:
         result = subprocess.run([str(x) for x in args], capture_output=True, **kwargs)
     except subprocess.TimeoutExpired:
@@ -28,7 +28,7 @@ def run(args, **kwargs):
     if result.returncode:
         # Arguments may contain an invitation. Never print the command/output.
         raise RuntimeError('fixture command failed: ' + Path(str(args[0])).name)
-    return result.stdout
+    return result.stdout + result.stderr if include_stderr else result.stdout
 
 
 def checkpoint(path, report):
@@ -36,6 +36,18 @@ def checkpoint(path, report):
     temporary = path.with_suffix('.pending')
     temporary.write_text(json.dumps(report, indent=2) + '\n')
     temporary.replace(path)
+
+
+def daemon_build(diagnostics, full):
+    ids = {r.get('message', {}).get('id') for r in diagnostics}
+    versions = {r.get('message', {}).get('args', {}).get('program')
+                for r in diagnostics if r.get('message', {}).get('id') == 'doctor-version'}
+    if 'doctor-ok' not in ids or not {'git', 'git-annex'} <= versions:
+        raise RuntimeError('daemon build diagnostics incomplete')
+    kind = 'lab' if 'doctor-lab-build' in ids else 'ordinary'
+    if full and kind != 'ordinary':
+        raise RuntimeError('full reference profile requires ordinary daemons')
+    return kind
 
 
 def counters(text):
@@ -160,8 +172,9 @@ class Peer:
                 raise RuntimeError('daemon startup timed out')
             time.sleep(.1)
 
-    def cli(self, *args):
-        output = run([self.binary / 'pigeon', '--json', *args], env=self.env, timeout=180)
+    def cli(self, *args, with_progress=False):
+        output = run([self.binary / 'pigeon', '--json', *args], env=self.env, timeout=180,
+                     include_stderr=with_progress)
         replies = [json.loads(line) for line in output.splitlines()]
         if any(r['type'] == 'Problem' for r in replies):
             raise RuntimeError('CLI returned a problem')
@@ -292,6 +305,9 @@ def measure(args, report):
         for peer in (a, b):
             started.append(peer)
             peer.start()
+        report['daemon_builds'] = {peer.home.name: daemon_build(peer.cli('doctor', with_progress=True), not args.smoke)
+                                  for peer in (a, b)}
+        checkpoint(args.report, report)
         a.cli('create', 'Reference', str(root / 'files'), '--k', '1', '--name', 'reference-laptop')
         answer = a.cli('invite')
         command = next(r['message']['args']['command'] for r in answer
@@ -380,6 +396,8 @@ def main():
     report = dict(budget_verdict='not-measured', source=run(['git', 'rev-parse', 'HEAD']).decode().strip(),
                   dirty_worktree=bool(run(['git', 'status', '--porcelain'])))
     try:
+        if not args.smoke and report['dirty_worktree']:
+            raise RuntimeError('full reference profile requires a clean source checkout')
         measure(args, report)
     except BaseException as error:
         report['error'] = str(error)

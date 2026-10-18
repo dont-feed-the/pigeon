@@ -128,3 +128,37 @@ require the pinned patched annex, as the ordinary Linux gates already do;
 no case count or model budget is reduced. Ten nightly-report contracts and
 thirteen measurement/ownership contracts pass; the whole script suite has
 107 passing cases at this checkpoint.
+
+## Rollup base and local validation
+
+The rollup integrates main `2b9670765248e56274d7e569e9f93145c9468f5c` (the v0.6.27 candidate)
+before its PR validation. The older native reference run retains its own
+source and outcome; neither its source nor any failed tag is rewritten.
+
+The integrated ordinary-build local smoke (006) is correctly refused before
+creating a group on this workspace's unsupported overlay filesystem. Its
+report retains `not-measured`, zero samples and the startup-stage failure;
+the daemon logs identify `filesystem-unsupported`. This is not retried as
+an ordinary-build success. Earlier local smoke runs used the lab filesystem
+seam; their small fixture results are not production filesystem evidence.
+A fresh reduced lab smoke explicitly records both daemons' doctor build
+markers. Full profiles now require complete doctor diagnostics with no lab
+marker, and refuse an uncommitted source checkout before native setup.
+The original hosted Btrfs profile still uses its immutable ordinary-build
+workflow. Two new guard contracts bring the script suite to 109 cases.
+
+The first doctor guard in smoke 007 incorrectly read only stdout: JSON
+progress, including the lab marker, is on stderr (spec 10 §10.2). That run's
+small content checks passed, but its `ordinary` build labels are invalid.
+The guard now includes the JSON progress stream and requires both program
+version observations before classifying a build. A missing progress stream
+fails closed. The corrected stream contract brings the suite to 110 cases;
+a fresh smoke must actually report `lab` before this guard is accepted.
+
+The corrected smoke 008 completes with both daemon build labels `lab`, both
+32-path accepted trees, all 32 distinct objects independently verified on
+each peer, no error and a null CPU measurement. Its verdict remains
+`not-measured`. All 110 script contracts and final all-target Clippy and
+repository rules pass. The integrated daemon library also passes all 178
+cases in 17.420 seconds. None of these reduced observations certifies the
+full reference or E17 budgets.
