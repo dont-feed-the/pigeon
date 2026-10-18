@@ -202,9 +202,32 @@ def exercise(args, report):
             checkpoint(args.report, report)
 
 
+def built_programs(output, checkout):
+    """Use Cargo's actual executable paths, including configured target dirs."""
+    wanted = {'pigeon', 'pigeond', 'git-annex-p2p-iroh'}
+    programs = {}
+    for line in output.splitlines():
+        message = json.loads(line)
+        target = message.get('target', {})
+        name = target.get('name')
+        if (message.get('reason') == 'compiler-artifact' and name in wanted
+                and 'bin' in target.get('kind', []) and message.get('executable')):
+            manifest = Path(message['manifest_path']).resolve()
+            if not manifest.is_relative_to(checkout):
+                raise RuntimeError('program artifact is outside the selected checkout')
+            executable = Path(message['executable'])
+            if name in programs and programs[name] != executable:
+                raise RuntimeError('ambiguous program artifact')
+            programs[name] = executable
+    if set(programs) != wanted:
+        raise RuntimeError('Cargo did not identify every frozen program')
+    return programs
+
+
 def prepare(args):
     """Build a clean source once and freeze executable identities for a run."""
-    checkout = Path(__file__).resolve().parents[1]
+    checkout = (args.checkout.resolve() if args.checkout is not None
+                else Path(__file__).resolve().parents[1])
     def git(*argv):
         return subprocess.check_output(['git', *argv], cwd=checkout, text=True).strip()
     source = git('rev-parse', 'HEAD')
@@ -213,17 +236,23 @@ def prepare(args):
     destination = args.bin.resolve()
     if destination.exists():
         raise RuntimeError('soak binary snapshot must be new')
-    target = Path(os.environ.get('CARGO_TARGET_DIR', checkout / 'target')).resolve()
-    subprocess.run(['cargo', 'build', '--locked', '--features', 'pigeond/lab',
-                    '-p', 'pigeon', '-p', 'pigeond', '-p', 'git-annex-p2p-iroh'],
-                   cwd=checkout, check=True)
+    target = Path(os.environ.get('CARGO_TARGET_DIR', checkout / 'target'))
+    if not target.is_absolute():
+        target = checkout / target
+    target = target.resolve()
+    built = subprocess.run(['cargo', 'build', '--locked', '--message-format=json',
+                            '--features', 'pigeond/lab', '-p', 'pigeon', '-p', 'pigeond',
+                            '-p', 'git-annex-p2p-iroh'],
+                           cwd=checkout, env=dict(os.environ, CARGO_TARGET_DIR=str(target)),
+                           stdout=subprocess.PIPE, text=True, check=True)
+    programs = built_programs(built.stdout, checkout)
     if git('rev-parse', 'HEAD') != source or git('status', '--porcelain'):
         raise RuntimeError('source changed while preparing soak binaries')
     destination.mkdir(parents=True, mode=0o700)
     manifest = dict(source_revision=source, features=['pigeond/lab'], sha256={})
     for name in ('pigeon', 'pigeond', 'git-annex-p2p-iroh'):
         output = destination / name
-        shutil.copy2(target / 'debug' / name, output)
+        shutil.copy2(programs[name], output)
         with output.open('rb') as contents:
             manifest['sha256'][name] = hashlib.file_digest(contents, 'sha256').hexdigest()
         output.chmod(0o500)
@@ -235,6 +264,8 @@ def main():
     commands = parser.add_subparsers(dest='command', required=True)
     build = commands.add_parser('prepare', help='build and freeze a clean source')
     build.add_argument('--bin', type=Path, required=True)
+    build.add_argument('--checkout', type=Path,
+                       help='clean historical checkout to build for an upgrade check')
     run = commands.add_parser('run', help='exercise the frozen native lab programs')
     run.add_argument('--bin', type=Path, required=True)
     run.add_argument('--root', type=Path, required=True)

@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+"""Check actual historical data with frozen old/new lab programs.
+
+Retired format 1 checks preservation and Needs you, never an automatic upgrade.
+Every fixture is new, and all binaries, original data and observations remain.
+This finite check supplies no resource, soak, nightly or dogfood qualification.
+"""
+import argparse
+from collections import defaultdict
+import hashlib
+import json
+from pathlib import Path
+import re
+import runpy
+import shutil
+import signal
+import stat
+import time
+import tomllib
+
+REFERENCE = runpy.run_path(str(Path(__file__).with_name('reference-budget')))
+PROGRAMS = ('pigeon', 'pigeond', 'git-annex-p2p-iroh')
+INITIAL = {'notes.txt': b'initial historical notes\n',
+           'nested/photo.bin': bytes(range(256)) * 4}
+MODES = {'notes.txt': 0o644, 'nested/photo.bin': 0o755}
+
+
+def frozen(binary):
+    """Bind recorded source to the exact programs supplied by the operator."""
+    manifest = json.loads((binary / 'soak-build.json').read_text())
+    if not re.fullmatch(r'[0-9a-f]{40}', str(manifest.get('source_revision', ''))):
+        raise ValueError('missing frozen source revision')
+    if manifest.get('features') != ['pigeond/lab']:
+        raise ValueError('upgrade fixture requires the recorded lab build')
+    for name in PROGRAMS:
+        with (binary / name).open('rb') as source:
+            actual = hashlib.file_digest(source, 'sha256').hexdigest()
+        if manifest.get('sha256', {}).get(name) != actual:
+            raise ValueError('program differs from frozen manifest')
+    return manifest
+
+
+def fingerprint(data):
+    return len(data), hashlib.sha256(data).hexdigest()
+
+
+def prove(repo, current, history, modes=None):
+    """Independent pointer and every retained-object hash, grouped by size."""
+    pointers, objects = defaultdict(dict), defaultdict(dict)
+    for path, (size, digest) in current.items():
+        pointers[size][path] = digest
+    for size, digest in history:
+        objects[size][digest] = digest
+    for size, paths in pointers.items():
+        REFERENCE['verify_tree'](repo, paths, size)
+    if modes is not None:
+        observed = {}
+        for entry in REFERENCE['git'](repo, 'ls-tree', '-r', '-z', 'main', '--', *current).split(b'\0'):
+            if entry:
+                fields, path = entry.split(b'\t', 1)
+                observed[path.decode()] = fields.split()[0].decode()
+        wanted = {path: '100755' if modes[path] & 0o111 else '100644' for path in current}
+        if observed != wanted:
+            raise RuntimeError('catalogue executable modes differ')
+    for size, wanted in objects.items():
+        if REFERENCE['objects'](repo, wanted, size, verify=True) != len(wanted):
+            raise RuntimeError('retained historical object missing')
+
+
+def wait_proved(peer, repo, current, history, modes):
+    deadline = time.monotonic() + 120
+    while True:
+        peer.sample()
+        try:
+            prove(repo, current, history, modes)
+            return
+        except (RuntimeError, FileNotFoundError):
+            if time.monotonic() >= deadline:
+                raise RuntimeError('upgrade byte proof deadline expired') from None
+        time.sleep(.5)
+
+
+def head(repo):
+    return REFERENCE['git'](repo, 'rev-parse', 'main').decode().strip()
+
+
+def atomic_save(folder, data):
+    temporary = folder / '.saving-notes'
+    temporary.write_bytes(data)
+    temporary.chmod(MODES['notes.txt'])
+    temporary.replace(folder / 'notes.txt')
+
+
+def working_bytes(folder, expected, modes):
+    return all(fingerprint((folder / path).read_bytes()) == wanted
+               and stat.S_IMODE((folder / path).stat().st_mode) == modes[path]
+               for path, wanted in expected.items())
+
+
+def exclude_sockets(directory, names):
+    # Native sockets are ephemeral endpoints, not durable repository data.
+    return [name for name in names
+            if stat.S_ISSOCK((Path(directory) / name).lstat().st_mode)]
+
+
+def exercise(args, report):
+    old, new = args.old_bin.resolve(), args.new_bin.resolve()
+    report.update(old_build=frozen(old), new_build=frozen(new),
+                  harness_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                  observer_sha256=hashlib.sha256(Path(__file__).with_name('reference-budget').read_bytes()).hexdigest(),
+                  stage='starting', qualification='finite lab fixture; elapsed and resource gates not measured')
+    root = args.root.resolve()
+    if root.exists():
+        raise ValueError('upgrade fixture root must be new')
+    root.mkdir(parents=True, mode=0o700)
+    peer = REFERENCE['Peer'](root, old, 'laptop', False)
+    folder = root / 'files'
+    folder.mkdir()
+    repo = folder / '.git'
+    current = {path: fingerprint(data) for path, data in INITIAL.items()}
+    history = set(current.values())
+    modes = dict(MODES)
+    if args.retired_format:
+        # v0.1 did not retain executable bits in its catalogue. Give its
+        # preservation check a baseline that release can actually capture.
+        modes['nested/photo.bin'] = 0o644
+    for path, data in INITIAL.items():
+        target = folder / path
+        target.parent.mkdir(exist_ok=True)
+        target.write_bytes(data)
+        target.chmod(modes[path])
+    launched = []
+    failed = False
+    try:
+        launched.append(peer)
+        peer.start()
+        report['stage'] = 'seeding historical data'
+        REFERENCE['checkpoint'](args.report, report)
+        peer.cli('create', 'Historical', str(folder), '--k', '1', '--name', 'historical-laptop')
+        wait_proved(peer, repo, current, history, modes)
+        atomic_save(folder, b'second historical notes\n')
+        current['notes.txt'] = fingerprint(b'second historical notes\n')
+        history.add(current['notes.txt'])
+        wait_proved(peer, repo, current, history, modes)
+        if not working_bytes(folder, current, modes):
+            raise RuntimeError('historical baseline has incorrect working bytes or modes')
+        original = head(repo)
+        roster = REFERENCE['git'](repo, 'show', 'main:.pigeon/roster.toml').decode()
+        roster_format = tomllib.loads(roster)['format']
+        expected_format = 1 if args.retired_format else 2
+        if roster_format != expected_format:
+            raise RuntimeError('historical format differs from requested check')
+        report.update(old_roster_format=roster_format, original_head=original,
+                      seeded_objects=len(history))
+        peer.stop()
+        launched.clear()
+        shutil.copy2(peer.home / 'daemon.out', root / 'historical-daemon.out')
+        shutil.copytree(repo, root / 'original.git', symlinks=True, ignore=exclude_sockets)
+        report['snapshot_exclusion'] = 'ephemeral Unix sockets only'
+        peer.binary = new
+        launched.append(peer)
+        peer.start()
+        time.sleep(3)
+        report['stage'] = 'checking upgraded data'
+        replies = peer.cli('status')
+        status = next(row for row in replies if row['type'] == 'Status')
+        report.update(status_level=status['level'], headline=status['headline']['id'])
+        if head(repo) != original or not working_bytes(folder, current, modes):
+            raise RuntimeError('upgrade changed original catalogue or working bytes')
+        prove(repo, current, history, modes)
+        report['original_data_preserved'] = True
+        if args.retired_format:
+            if status['level'] != 'needs-you':
+                raise RuntimeError('retired format must not appear safe')
+            report['verdict'] = 'retired-format-preserved; not an automatic upgrade'
+        else:
+            if status['level'] == 'needs-you':
+                raise RuntimeError('supported upgrade needs unresolved attention')
+            atomic_save(folder, b'new notes after upgrading\n')
+            current['notes.txt'] = fingerprint(b'new notes after upgrading\n')
+            history.add(current['notes.txt'])
+            wait_proved(peer, repo, current, history, modes)
+            report['new_save_after_upgrade'] = True
+            peer.cli('restore', str(folder / 'notes.txt'), '--version', '1', '--yes')
+            current['notes.txt'] = fingerprint(INITIAL['notes.txt'])
+            wait_proved(peer, repo, current, history, modes)
+            if not working_bytes(folder, current, modes):
+                raise RuntimeError('historical restore has incorrect working bytes')
+            report['historical_restore_after_upgrade'] = True
+            report['verdict'] = 'supported-format-upgrade-passed'
+        report.update(stage='completed', independently_verified_retained_objects=len(history))
+    except BaseException:
+        failed = True
+        raise
+    finally:
+        REFERENCE['stop_peers'](launched, report, failed)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--old-bin', required=True, type=Path)
+    parser.add_argument('--new-bin', required=True, type=Path)
+    parser.add_argument('--root', required=True, type=Path)
+    parser.add_argument('--report', required=True, type=Path)
+    parser.add_argument('--retired-format', action='store_true',
+                        help='check explicitly retired format 1 preservation, never migration')
+    args = parser.parse_args()
+    if args.report.exists():
+        parser.error('report must be new; previous evidence is never overwritten')
+    def interrupted(_number, _frame):
+        raise KeyboardInterrupt('upgrade observation interrupted')
+    signal.signal(signal.SIGTERM, interrupted)
+    report = {'schema': 1}
+    try:
+        exercise(args, report)
+    except BaseException as error:
+        report.update(stage='failed', error=type(error).__name__)
+        raise SystemExit(1) from None
+    finally:
+        REFERENCE['checkpoint'](args.report, report)
+
+
+if __name__ == '__main__':
+    main()

@@ -888,3 +888,25 @@ lead is 661 seconds; its publication interval is 977 seconds. The
 report has 39 lead samples and 38 completed intervals. All tag gates pass
 without a retry. Both releases meet both KPI targets; no sustained causal
 speedup, resource budget or actual scheduled model night is inferred.
+
+## v0.6.34 publication observation
+
+[v0.6.34](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.34), source
+`c10e42bbc3853b750bd8f3406654e9c2c8a7facb`, is published on 18 October at
+10:34:13 UTC. Six assets, four archive checksums, native Linux installation,
+completions and pinned annex are independently verified. All tag gates pass
+on their first attempt. Candidate lead is 628 seconds and the publication
+interval is 1,464 seconds, with 40 lead samples and 39 completed intervals.
+Both targets are met. The diagnostic preparation capability does not qualify
+a default reference budget; actual resource and elapsed gates remain open.
+
+## v0.6.35 publication observation
+
+[v0.6.35](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.35), source
+`080a1b78274de8a9f6c99bc6ade5f564bd228b0d`, is published at 10:49:02 UTC
+on 18 October. Independent verification again passes all six assets, four
+archive checksums, pinned annex, native installation and completions. All
+tag gates pass on their first attempt. Candidate lead is 609 seconds; the
+publication interval is 889 seconds, with 41 lead samples and 40 completed
+intervals. Both targets are met. The new soak starts its clock from zero
+after the original harness deadline failure; 72 actual hours remain required.

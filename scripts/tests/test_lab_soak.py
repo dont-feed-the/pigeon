@@ -1,10 +1,40 @@
 """Elapsed-soak evidence rejects smoke, interruptions and absent fault coverage."""
 from pathlib import Path
+import json
 import runpy
 import unittest
 from unittest.mock import patch
 
 SOAK = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'lab-soak'))
+
+
+class ProgramProvenance(unittest.TestCase):
+    def artifacts(self):
+        return [dict(reason='compiler-artifact', target=dict(name=name, kind=['bin']),
+                     manifest_path=f'/selected/crates/{name}/Cargo.toml',
+                     executable=f'/custom/target/triple/debug/{name}')
+                for name in ('pigeon', 'pigeond', 'git-annex-p2p-iroh')]
+
+    def parse(self, artifacts):
+        return SOAK['built_programs']('\n'.join(json.dumps(row) for row in artifacts), Path('/selected'))
+
+    def test_actual_cargo_paths_win_over_a_stale_default_debug_directory(self):
+        programs = self.parse(self.artifacts())
+        self.assertEqual(programs['pigeon'], Path('/custom/target/triple/debug/pigeon'))
+
+    def test_incomplete_or_foreign_program_artifacts_cannot_get_source_credit(self):
+        artifacts = self.artifacts()
+        with self.assertRaisesRegex(RuntimeError, 'every frozen program'):
+            self.parse(artifacts[:-1])
+        artifacts[0]['manifest_path'] = '/other/crates/pigeon/Cargo.toml'
+        with self.assertRaisesRegex(RuntimeError, 'outside the selected checkout'):
+            self.parse(artifacts)
+
+    def test_two_different_executables_with_the_same_name_are_ambiguous(self):
+        artifacts = self.artifacts()
+        other = dict(artifacts[0], executable='/another/pigeon')
+        with self.assertRaisesRegex(RuntimeError, 'ambiguous'):
+            self.parse(artifacts + [other])
 
 
 class ProofDeadline(unittest.TestCase):

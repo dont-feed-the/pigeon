@@ -26,6 +26,16 @@ class DependencyGroups(unittest.TestCase):
     def test_documents_do_not_start_rust_models_or_nextcloud(self):
         self.assertEqual(self.groups("README.md", "CHANGELOG.md", "docs/spec/06-status.md"), set())
 
+    def test_standalone_evidence_tools_keep_repository_contracts_without_runtime_jobs(self):
+        for path in MODULE.EVIDENCE_TOOLS:
+            self.assertEqual(self.groups(path), set(), path)
+        self.assertEqual(self.groups("scripts/lab-soak", "crates/pigeond/src/capture.rs"), MODULE.RUNTIME)
+
+    def test_evidence_tool_names_do_not_exempt_unknown_neighbours_or_ci_policy(self):
+        for path in ["scripts/check-upgrade-extra", "scripts/tests/test_reference_unknown.py",
+                     "scripts/select-ci", ".github/workflows/lab.yml"]:
+            self.assertEqual(self.groups("scripts/check-upgrade", path), MODULE.GROUPS, path)
+
     def test_packaging_and_bridge_have_distinct_dependents(self):
         self.assertEqual(self.groups("packaging/pigeon-service", "packaging/tests/test_install.py"), {"packaging"})
         self.assertEqual(self.groups("crates/pigeon-bridge/src/dav.rs"), {"rust", "bridge", "bridge_traces"})

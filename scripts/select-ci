@@ -28,6 +28,12 @@ JOBS = {"proofs": "proofs", "catalogue": "catalogue", "packaging": "packaging", 
         "rust": "rust", "daemons": "daemons", "code-traces": "code_traces", "driver-traces": "driver_traces"}
 SCOPES = {"ci": JOBS, "lab": {"lab": "lab"},
           "bridge": {"bridge-build": "bridge", "bridge": "bridge", "catalogue-traces": "bridge_traces"}}
+# These standalone evidence tools have no product/build dependency. Repository
+# rules always execute their Python contracts; native measurements are explicit.
+EVIDENCE_TOOLS = {"scripts/lab-soak", "scripts/reference-budget", "scripts/check-reference-budget",
+                  "scripts/check-upgrade", "scripts/tests/test_lab_soak.py",
+                  "scripts/tests/test_reference_budget.py", "scripts/tests/test_reference_mount.py",
+                  "scripts/tests/test_check_upgrade.py"}
 
 
 def git(*args):
@@ -92,6 +98,8 @@ def classify(paths, ignored=()):
         if path in {"README.md", "HANDOFF.md", "CHANGELOG.md"} or (
                 path.startswith("docs/") and path.endswith(".md")):
             continue
+        if path in EVIDENCE_TOOLS:
+            continue
         if path.startswith(("packaging/", "Formula/")):
             groups = {"packaging"}
         elif path.startswith(("third_party/git-annex/", "lab/git-annex/")):
@@ -125,7 +133,7 @@ def classify(paths, ignored=()):
         selected |= groups
     if ignored:
         reasons.append("Workspace version-only metadata verified separately")
-    reasons.append("Relevant dependency groups selected" if selected else "Documentation or version-only changes")
+    reasons.append("Relevant dependency groups selected" if selected else "No expensive job groups selected")
     return selected, reasons
 
 
