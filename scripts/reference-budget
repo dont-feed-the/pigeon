@@ -118,6 +118,36 @@ def proc_identity(text):
     return int(fields[19])
 
 
+def proc_state(text):
+    fields = text[text.rfind(')') + 2:].split()
+    return fields[0] if len(fields[0]) == 1 and fields[0] in 'RSDTtXZPI' else 'other'
+
+
+def restore_measurement_preset(peers):
+    """Confirm Gentle through the public CLI before diagnostic sampling."""
+    for peer in peers:
+        peer.cli('settings', 'resources.preset', 'gentle')
+        replies = peer.cli('settings', 'resources.preset')
+        rows = [row for reply in replies if reply.get('type') == 'Settings'
+                for row in reply.get('settings', [])]
+        selected = [row for row in rows if row.get('key') == 'resources.preset']
+        if len(selected) != 1 or selected[0].get('value') != 'gentle':
+            raise RuntimeError('reference measurement preset was not restored')
+    # The independent controller reloads configuration at least once a second.
+    time.sleep(3)
+
+
+def diagnostic_verdict(report):
+    """Faster preparation never supplies a default-preparation qualification."""
+    report['diagnostic_budget_verdict'] = report['budget_verdict']
+    report['budget_verdict'] = 'not-measured'
+    report['qualification'] = 'diagnostic-fast-preparation; not an M6 budget pass'
+    backup = report.get('backup_resources')
+    if backup is not None:
+        backup['diagnostic_budget_verdict'] = backup['budget_verdict']
+        backup['budget_verdict'] = 'not-measured'
+
+
 def proc_cpu_ticks(text):
     fields = text[text.rfind(')') + 2:].split()
     return int(fields[11]) + int(fields[12])
@@ -182,7 +212,7 @@ def generate(folder, count, size, compressed, progress=lambda *_: None):
 
 
 class Peer:
-    def __init__(self, root, binary, name, managed):
+    def __init__(self, root, binary, name, managed, initial_preset=None):
         self.home = root / name
         (self.home / 'config').mkdir(parents=True)
         self.socket = root / (name + '.sock')
@@ -196,9 +226,13 @@ class Peer:
                         PIGEON_SOCKET=str(self.socket), GIT_CONFIG_GLOBAL='/dev/null',
                         GIT_CONFIG_NOSYSTEM='1',
                         PIGEON_LOG='info,pigeond::capture_status=debug')
-        # Keep the default resource settings and default round interval.
-        (self.home / 'config/config.toml').write_text(
-            '[network]\nbind = "127.0.0.1:0"\nmdns = false\nrelays = "off"\n')
+        # Ordinary qualification retains defaults throughout preparation.
+        config = '[network]\nbind = "127.0.0.1:0"\nmdns = false\nrelays = "off"\n'
+        if initial_preset is not None:
+            if initial_preset != 'fast':
+                raise ValueError('unsupported diagnostic preparation preset')
+            config += '[resources]\npreset = "fast"\n'
+        (self.home / 'config/config.toml').write_text(config)
 
     def start(self):
         command = [str(self.binary / 'pigeond'), '--home', str(self.home)]
@@ -277,7 +311,7 @@ class Peer:
                     rss = re.search(r'^VmRSS:\s+(\d+) kB$', status, re.M)
                     if proc_identity(Path(f'/proc/{int(pid)}/stat').read_text()) != proc_identity(before):
                         continue
-                    processes.append(dict(pid=int(pid), cpu_ticks=proc_cpu_ticks(before), name=name if name in (
+                    processes.append(dict(pid=int(pid), cpu_ticks=proc_cpu_ticks(before), state=proc_state(before), name=name if name in (
                         'pigeond', 'git', 'git-annex', 'git-annex-p2p') else 'other',
                         rss=int(rss[1]) * 1024 if rss else None))
                 except (OSError, ValueError):
@@ -372,6 +406,7 @@ def scan_events(home):
 
 def measure(args, report):
     root, binary = args.root.resolve(), args.bin.resolve()
+    fast_preparation = getattr(args, 'diagnostic_fast_prepare', False)
     count, size, seconds = (32, 4096, 5) if args.smoke else (FILES, SIZE, WINDOW)
     if root.exists():
         raise RuntimeError('reference root must be new')
@@ -396,8 +431,13 @@ def measure(args, report):
     if len(set(expected.values())) != count:
         raise RuntimeError('reference files must contain unique content')
     (root / 'manifest.json').write_text(json.dumps(expected))
-    a = Peer(root, binary, 'laptop', not args.smoke)
-    b = Peer(root, binary, 'backup', not args.smoke)
+    preparation = dict(initial_preset='fast') if fast_preparation else {}
+    if fast_preparation:
+        report.update(preparation_preset='fast', measurement_preset='gentle',
+                      qualification='diagnostic-fast-preparation; not an M6 budget pass',
+                      settings='Fast preparation; Gentle sampling with unchanged Linux service presets')
+    a = Peer(root, binary, 'laptop', not args.smoke, **preparation)
+    b = Peer(root, binary, 'backup', not args.smoke, **preparation)
     started = []
     failed = False
     try:
@@ -449,6 +489,12 @@ def measure(args, report):
             if objects(repo, expected, size, verify=True) != count:
                 raise RuntimeError('reference objects incomplete')
         report['independent_hash_verification'] = 'both peers, every unique object'
+        if fast_preparation:
+            report['stage'] = 'restoring Gentle before diagnostic sampling'
+            checkpoint(args.report, report)
+            restore_measurement_preset((a, b))
+            report['measurement_preset_confirmed'] = 'gentle'
+        # Keep both PIDs: their RSS high-water includes all preparation peaks.
         report['stage'] = 'collecting complete resource window'
         checkpoint(args.report, report)
         # No CLI/status/Git polling in the CPU window. The cgroup includes
@@ -480,7 +526,11 @@ def measure(args, report):
         for repo in (source, backup):
             verify_tree(repo, expected, size)
         report['stage'] = 'measurement complete'
-        if not args.smoke and report['budget_verdict'] != 'passed':
+        if fast_preparation:
+            report['diagnostic_end_state'] = dict(laptop=a.diagnostics(source),
+                                                   backup=b.diagnostics(backup))
+            diagnostic_verdict(report)
+        elif not args.smoke and report['budget_verdict'] != 'passed':
             raise RuntimeError('reference budget exceeded')
     except BaseException:
         failed = True
@@ -498,6 +548,8 @@ def main():
     parser.add_argument('--report', required=True, type=Path)
     parser.add_argument('--smoke', action='store_true', help='reduced control-flow check, never a budget pass')
     parser.add_argument('--compressed', action='store_true')
+    parser.add_argument('--diagnostic-fast-prepare', action='store_true',
+                        help='Fast seeding, then Gentle sampling; never qualifies an M6 budget')
     parser.add_argument('--prepare-seconds', type=preparation_seconds, default=5400)
     args = parser.parse_args()
     report = dict(budget_verdict='not-measured', source=run(['git', 'rev-parse', 'HEAD']).decode().strip(),

@@ -869,3 +869,22 @@ are met. All four tag gates pass on their first attempt. PR #100's earlier
 held-decision regression and notify license-policy failure are corrected in
 source before its green validation; neither receives an unchanged-source
 retry. The long native soak and resource profile remain separate observations.
+
+## v0.6.32 and v0.6.33 publication observations
+
+[v0.6.32](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.32), source
+`c749d300798f047dfe9139fe14219edfe0dffa30`, is published at 09:53:32 UTC
+on 18 October. Six assets, all four archive checksums, pinned annex, Linux
+installation and completions are independently verified. Candidate lead is
+9 minutes 44 seconds; the gap from v0.6.31 is 39 minutes 22 seconds. The
+report has 38 lead samples and 37 completed intervals. All tag gates pass
+on their first attempt; PR #101's earlier observation race and HTTP 502 are
+retained and corrected before the green source validation.
+
+[v0.6.33](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.33), source
+`470f744f3ec62a958240ff184af06ae4300a4965`, is published at 10:09:49 UTC.
+The same six-asset/checksum/install/completion verification passes. Candidate
+lead is 661 seconds; its publication interval is 977 seconds. The
+report has 39 lead samples and 38 completed intervals. All tag gates pass
+without a retry. Both releases meet both KPI targets; no sustained causal
+speedup, resource budget or actual scheduled model night is inferred.

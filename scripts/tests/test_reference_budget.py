@@ -216,3 +216,36 @@ class ReferenceMeasurement(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class DiagnosticPreparation(unittest.TestCase):
+    def test_fast_preparation_cannot_certify_even_passing_cpu_and_backup_numbers(self):
+        for verdict in ['passed', 'failed', 'not-measured']:
+            report = dict(budget_verdict=verdict, backup_resources=dict(budget_verdict='passed'))
+            MODULE.diagnostic_verdict(report)
+            self.assertEqual(report['budget_verdict'], 'not-measured')
+            self.assertEqual(report['diagnostic_budget_verdict'], verdict)
+            self.assertEqual(report['backup_resources']['budget_verdict'], 'not-measured')
+            self.assertEqual(report['backup_resources']['diagnostic_budget_verdict'], 'passed')
+
+    def test_readback_must_confirm_one_gentle_setting_before_sampling(self):
+        class Peer:
+            def __init__(self, rows):
+                self.rows, self.calls = rows, []
+            def cli(self, *args):
+                self.calls.append(args)
+                return [dict(type='Settings', settings=self.rows)]
+        correct = dict(key='resources.preset', value='gentle')
+        for rows in [[], [dict(key='resources.preset', value='fast')],
+                     [dict(key='other.preset', value='gentle')], [correct, correct]]:
+            with self.subTest(rows=rows), self.assertRaises(RuntimeError):
+                MODULE.restore_measurement_preset([Peer(rows)])
+        peer = Peer([correct])
+        with patch.object(MODULE.time, 'sleep'):
+            MODULE.restore_measurement_preset([peer])
+        self.assertEqual(peer.calls, [('settings', 'resources.preset', 'gentle'),
+                                      ('settings', 'resources.preset')])
+
+    def test_native_process_state_ignores_parentheses_in_comm_and_unknown_states(self):
+        self.assertEqual(MODULE.proc_state('123 (git (worker)) T 1 2 3'), 'T')
+        self.assertEqual(MODULE.proc_state('123 (worker) strange 1 2 3'), 'other')

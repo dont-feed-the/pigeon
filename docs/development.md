@@ -46,6 +46,8 @@ The [conformance inventory](conformance.md) links accepted decisions to their
 implementation and verification entry points, with the remaining release gates.
 The [persistent native soak runner](reports/lab-soak-7.md) records actual
 elapsed evidence; its smoke mode cannot qualify the 72-hour M7 gate.
+The [reference diagnostic mode](reports/reference-diagnostic-7.md) can seed
+in Fast mode before Gentle sampling; it never qualifies the M6 budgets.
 Track actual publication, candidate lead time and blocking jobs with
 `python3 scripts/release-kpi`; its [KPI definition and targets](release-kpi.md)
 explain the hourly reports. An immutable candidate can be retried using the
