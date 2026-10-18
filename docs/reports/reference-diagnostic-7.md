@@ -74,3 +74,13 @@ separate default reduced run also completes without enabling diagnostic mode.
 Workspace/all-target Clippy and all 126 script contracts pass. Older released
 changelog sections move to a linked archive when the file-length check reaches
 1002 lines; their text is retained and relative report links are rebased.
+
+## Integrated release validation
+
+PR #103, head `89c6e8528be96c0dce8fe4cd899e7c0a845292f8`, integrates main `470f744f3ec62a958240ff184af06ae4300a4965` before
+validation. CI 39118381050, lab 39118380801 and bridge
+39118380890 pass. v0.6.33 is published and independently
+verified before this candidate. Local validation passes 126 script contracts,
+default and diagnostic lab smokes, zero-warning all-target Clippy and repository
+checks. Fresh v0.6.34 tag gates and independent archive/install checks remain
+required. Diagnostic preparation cannot qualify M6; elapsed gates stay open.
