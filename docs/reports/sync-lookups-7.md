@@ -48,3 +48,14 @@ seconds. Its focused check passes in 0.084 seconds. Idle expiry itself is
 checked separately using the helpers' actual private socket lifetimes.
 Current-source end-to-end validation and exact-head CI precede merging.
 
+
+## Integrated validation
+
+PR [#119](https://github.com/dont-feed-the/pigeon/pull/119), head
+`7b3d9b56255a256d0b30f7fe2c14c253d74e3b67`, integrates current main
+before validation. CI 39167282406, lab 39167282534 and bridge 39167282487
+pass on their first attempts. Five current-source real network checks pass
+in 42.932 seconds with unchanged programs and source: capacity accounting,
+honest status, a returning backup and Free/Keep. The merge has the same tree
+as that validated head. The release retains pigeon1; resource/HDD budgets,
+the broader law/trace audit and elapsed M7 gates remain open.
