@@ -11,6 +11,10 @@ increments the second number, and every other release the third.
 
 - Large captures continue while their file bytes advance. Final byte verification shares capture’s disk backoff and cache limits, and stalled reads still time out.
 
+## 0.6.16 — 2026-10-17
+
+### Fixed
+
 - Large file transfers keep running while their bytes advance; transfers that stop making progress still time out.
 - On macOS, scheduled integrity checks start with throttled disk priority instead of failing before checking any files.
 

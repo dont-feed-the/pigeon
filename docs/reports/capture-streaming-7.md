@@ -116,3 +116,32 @@ new complete native Mac run or the unavailable broader daemon cross-check.
 Logs: `/tmp/pigeon-capture-workspace.log` and
 `/tmp/pigeon-capture-open-hardening.log`. No stack, assertion, production
 reserve or existing stalled-operation budget was relaxed.
+
+## Current-main validation
+
+Independently verified v0.6.16 main `889da1814fae629deb26ab1ac78988ed1207a291` is integrated
+before PR validation. Incoming differences from the validated feature base
+are only workspace versions, the lockfile, changelog and preceding report
+footer; every validated Rust source hash is unchanged. The new capture entry
+alone remains Unreleased. All affected checks and required native traces
+are repeated after that metadata integration.
+
+The first current-main retake passes all 50 Git, 32 platform, five export and
+146 daemon-library checks, but only 52 of 54 install checks. Recompilation
+left the host below the unchanged five-billion-byte reserve: placement
+reports room=0, and scrub explicitly returns without starting below that
+reserve (`scrub.rs`'s space guard). The corrupt object consequently remains.
+The original log and capacity observation are retained at
+`/tmp/pigeon-capture-current-capacity-original.log` and
+`/tmp/pigeon-capture-current-capacity-observation.json`. This is distinct
+from the original code regressions and the earlier bridge timeout.
+
+Only inactive generated test executables and verified release download/
+install scratch were removed; current selected binaries, active/normal
+inodes, source, compiler libraries, shared objects, proofs and failure
+fixtures remain. A six-billion-byte harness preflight now precedes the
+native retake; production limits and assertions are unchanged. The same
+Rust source hashes then pass all 54 install checks and S2/S3 with required
+CaptureInstall/Roster TLC. CI selection/partition checks, all-target Clippy
+and structural checks pass before the integration commit. The already
+passing other current-main selections are retained rather than repeated.

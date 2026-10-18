@@ -1,13 +1,13 @@
 # pigeon v2: handoff
 
-## Continuation on 17 October 2026
+## Continuation on 18 October 2026
 
 The historical snapshot below is retained for context. The user has since
 authorized the whole roadmap through v1.1, pushes, green non-draft PR merges,
 and publication. M0–M5 are released. The independently verified publication
-checkpoint recorded here is [v0.6.15](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.15),
-source `c51af44c4e80fad8fd1a89e8ea8185b775028428`, published on 17 October at
-23:22:55 UTC. Check [live releases](https://github.com/dont-feed-the/pigeon/releases)
+checkpoint recorded here is [v0.6.16](https://github.com/dont-feed-the/pigeon/releases/tag/v0.6.16),
+source `889da1814fae629deb26ab1ac78988ed1207a291`, published on 18 October at
+00:04:52 UTC. Check [live releases](https://github.com/dont-feed-the/pigeon/releases)
 and [the KPI](docs/release-kpi.md) for newer completed publications.
 The failed v0.6.0 tag remains
 immutable and unpublished. See [M5 evidence](docs/reports/deletion-6.md).

@@ -91,3 +91,31 @@ format fixtures, real annex transfer and S2/S3 pass on current main. TLC
 requires and accepts CaptureInstall and Roster coverage. All-target Clippy,
 formatting and structural/ADR/spec checks pass before the integration commit.
 Exact-head PR CI and publication remain separate.
+
+## Release validation
+
+PR #84, head `e250c57b919d4d2edc99bfd2c3ee707ba4674c8c`, passed exact-head CI
+39079064463, lab 39079064432 and bridge
+39079064434. Current main was integrated before validation.
+The two parser laws, controlled moving/stalled/key-isolation tests, actual
+pinned-annex format/bytes contracts and full-workspace observations remain
+distinct from the original two moving-transfer timeouts and five stack
+regressions retained above. Normal-stack retakes and required S2/S3
+filesystem/roster traces precede this validation. Dependency and core
+slice caches saved; active main producers remain protected from cancellation.
+v0.6.15 was published and independently verified before this candidate.
+M6 capture/native-preset/read-latency and measured hardware budgets, the
+wider security audit and actual elapsed M7 gates remain open.
+
+The original bridge custodian job 117532501244 in run 39079064434
+failed when a regular peer offline save did not reach a client within the
+existing wait, amid repeated 30-second metadata-fetch timeouts. Its original
+logs are retained on GitHub; original CI discarded its temporary fixture.
+Artifact 12118386718 (49,963,986 bytes, SHA-256
+`ce011d5318e1c6a04d0606be14c1753a4474f2542d82804c19bfbe0da55ac4ef`)
+contains the matching binaries; its source tree equals this PR head.
+The retained local retake passes all four behavioral groups, and TLC accepts
+one lifecycle stream and 40 DAV transactions. This does not reproduce or
+explain the original interleaving. One bounded original-job CI retake
+117534558589 passed at the same head; no wait, assertion or gate
+was relaxed. Full final CI/lab/bridge checks are green before merging.
