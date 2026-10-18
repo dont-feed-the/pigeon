@@ -1,7 +1,12 @@
 //! Laws of commit signatures (ADR 0007, 04 §4.4; pigeon-core `sig`): a
 //! signed commit verifies to its signer, cutting the signature off gives
 //! the commit back, and no change of one byte forges a signature.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "generated commit and signature fixtures"
+)]
 mod common;
 
 use common::{flag, index, int};
@@ -34,7 +39,7 @@ fn secret(tc: &TestCase) -> [u8; 32] {
     k
 }
 
-#[hegel::test(test_cases = 200)]
+#[hegel::test(test_cases = 1000)]
 fn a_signed_commit_verifies_to_its_signer(tc: TestCase) {
     let (raw, key) = (commit(&tc), secret(&tc));
     let signed = sig::sign(&raw, &key).unwrap();
@@ -48,7 +53,7 @@ fn a_signed_commit_verifies_to_its_signer(tc: TestCase) {
     assert_eq!(sig::sign(&signed, &key), Err(SigError::AlreadySigned));
 }
 
-#[hegel::test(test_cases = 300)]
+#[hegel::test(test_cases = 1000)]
 fn no_change_of_one_byte_forges_a_signature(tc: TestCase) {
     let (raw, key) = (commit(&tc), secret(&tc));
     let signed = sig::sign(&raw, &key).unwrap();
@@ -63,7 +68,7 @@ fn no_change_of_one_byte_forges_a_signature(tc: TestCase) {
     }
 }
 
-#[hegel::test(test_cases = 100)]
+#[hegel::test(test_cases = 1000)]
 fn a_signature_does_not_move_to_another_commit(tc: TestCase) {
     let (a, b, key) = (commit(&tc), commit(&tc), secret(&tc));
     let sa = sig::sign(&a, &key).unwrap();
@@ -108,4 +113,32 @@ fn two_signatures_and_other_namespaces_are_refused() {
         .unwrap()
         .replace("SSH SIGNATURE", "PGP SIGNATURE");
     assert_eq!(sig::verify(garbled.as_bytes()), Err(SigError::Unreadable));
+}
+
+/// A valid SSH signature for another application never authorizes a Git commit.
+#[hegel::test(test_cases = 1000)]
+fn only_the_git_namespace_authorizes_a_commit(tc: TestCase) {
+    use ssh_key::{HashAlg, LineEnding, PrivateKey, SshSig};
+    let raw = commit(&tc);
+    let key = ssh_key::private::Ed25519Keypair::from(
+        ssh_key::private::Ed25519PrivateKey::from_bytes(&secret(&tc)),
+    );
+    let key = PrivateKey::from(key);
+    let namespace = format!("other-application-{}", int(&tc, 0, 1 << 40));
+    let signature = SshSig::sign(&key, &namespace, HashAlg::Sha512, &raw).unwrap();
+    key.public_key()
+        .verify(&namespace, &raw, &signature)
+        .unwrap();
+    let pem = signature.to_pem(LineEnding::LF).unwrap();
+    let end = raw
+        .windows(2)
+        .position(|w| w == b"\n\n")
+        .map_or(raw.len(), |i| i + 1);
+    let mut signed = raw[..end].to_vec();
+    for (i, line) in pem.split_inclusive('\n').enumerate() {
+        signed.extend_from_slice(if i == 0 { b"gpgsig " } else { b" " });
+        signed.extend_from_slice(line.as_bytes());
+    }
+    signed.extend_from_slice(&raw[end..]);
+    assert_eq!(sig::verify(&signed), Err(SigError::Namespace(namespace)));
 }

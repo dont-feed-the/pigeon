@@ -625,6 +625,7 @@ view-name-suggested = version suggérée
 setting-telemetry-device = Partager les diagnostics avec
 setting-off = Garder les diagnostics sur chaque ordinateur
 problem-join-history-unverified = Pigeon n’a pas pu vérifier l’historique de ce groupe. Demandez à la personne qui vous a invité de mettre pigeon à jour, puis réessayez.
+problem-join-files-unreadable = La préparation s’est arrêtée car certains fichiers du groupe n’ont pas pu être lus. Demandez de l’aide à un administrateur ; conservez ce dossier jusqu’à la résolution du problème.
 problem-export-history-unverified = Pigeon n’a pas pu vérifier l’historique archivé. Conservez ce dépôt et demandez une copie complète à un autre membre avant d’exporter les fichiers supprimés.
 
 problem-recovery-not-allowed = Cette fiche de récupération ne peut plus ajouter d’ordinateurs. Utilisez une fiche actuelle ou demandez une invitation à un administrateur.

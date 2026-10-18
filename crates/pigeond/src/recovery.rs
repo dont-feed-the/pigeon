@@ -417,11 +417,15 @@ pub(crate) async fn hide_all(g: &Group, main: &str) -> Result<(), String> {
     let files = g.git.tree_files(main).await.map_err(|e| e.to_string())?;
     let mut hidden = std::collections::BTreeSet::new();
     for f in files {
-        let blob = g
+        let objects = g
             .git
-            .blob(&format!("{main}:{}", f.path))
+            .objects(std::slice::from_ref(&f.oid))
             .await
-            .unwrap_or_default();
+            .map_err(|_| "join-files-unreadable")?;
+        let blob = match objects.into_iter().next() {
+            Some(Some((kind, bytes))) if kind == "blob" => bytes,
+            _ => return Err("join-files-unreadable".into()),
+        };
         if crate::git::pointer_key(&blob).is_some() {
             hidden.insert(f.path);
             continue;
@@ -475,3 +479,7 @@ mod tests {
         assert_eq!(decode(&typo), None);
     }
 }
+
+#[cfg(test)]
+#[path = "recovery_object_tests.rs"]
+mod object_tests;
