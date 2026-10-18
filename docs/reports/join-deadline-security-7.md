@@ -88,3 +88,12 @@ regression or a passing join result.
 These are recorded review findings rather than claims of a reproduced
 exploit, data loss or complete remediation. The focused exchange correction
 can ship while the broader gate remains open.
+
+## Integrated release validation
+
+PR #93, head `1dceda17f7d922bca957825c7558408ce15069e8`, integrates main `4ed9591db9b26337a80461b90eb884fddd9163b3` before
+validation. CI 39097819823, lab 39097819810 and bridge
+39097819829 pass. v0.6.23 was published and independently
+verified before this candidate. The complete joining/signing review and
+M6/M7 resource and elapsed gates remain open. Fresh v0.6.24 tag gates and
+independent publication/install checks are required before it is released.
