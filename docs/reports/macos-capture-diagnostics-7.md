@@ -60,3 +60,20 @@ Local validation passes both watch cases and both original deletion
 fixtures together in 19.565 seconds. The watcher save/delete case takes
 5.115 seconds without status polling. Hosted macOS results are still pending;
 Linux success does not diagnose the original macOS deletion failures.
+
+## Preserve completed compilation caches
+
+The original workspace job reports no matching Mac Rust dependency cache.
+Clippy takes 2 minutes 28 seconds and test compilation another 3 minutes
+6 seconds before 835 tests start. The main-only cache save is skipped
+when the later runtime assertion fails, so that completed compilation
+cannot warm the next background run.
+
+The existing workspace cache save now follows successful Clippy and
+precedes runtime tests. The native cache save follows the existing seam
+build and precedes that shard's native fixtures. These are pure step
+reorders: every job, step, save condition, cache path and key is preserved,
+including main-only and native shard-0-only restrictions. Pull requests
+still restore main's caches and cannot save them. Failed builds cannot
+reach the save; failed later tests retain their original failure verdict.
+Actual warm-cache and end-to-end timing effects remain to be measured.
