@@ -111,6 +111,63 @@ class ReferenceMeasurement(unittest.TestCase):
             self.assertTrue(result['dirty_worktree'])
             self.assertEqual(result['budget_verdict'], 'not-measured')
 
+    def test_preparation_deadlines_only_shorten_the_existing_bound(self):
+        self.assertEqual(MODULE.preparation_seconds('600'), 600)
+        self.assertEqual(MODULE.preparation_seconds('5400'), 5400)
+        for value in ['0', '-1', '5401']:
+            with self.subTest(value=value), self.assertRaises(MODULE.argparse.ArgumentTypeError):
+                MODULE.preparation_seconds(value)
+
+    def test_cleanup_attempts_every_peer_without_replacing_the_primary_failure(self):
+        from unittest.mock import Mock
+        peers = [Mock(), Mock()]
+        peers[0].stop.side_effect = RuntimeError('private command output')
+        report = {}
+        MODULE.stop_peers(peers, report, True)
+        for peer in peers:
+            peer.stop.assert_called_once()
+        self.assertEqual(report, {'cleanup_failures': ['RuntimeError']})
+        with self.assertRaisesRegex(RuntimeError, 'reference peer cleanup failed'):
+            MODULE.stop_peers(peers, {}, False)
+
+    def test_failure_events_are_bounded_and_never_retain_raw_private_output(self):
+        secret = 'synthetic-sensitive-invitation'
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            logs = home / 'state/logs'
+            logs.mkdir(parents=True)
+            rows = [MODULE.json.dumps(dict(message='capture-failed', error='index.lock ' + secret,
+                    added=secret, avg10='Some(12.5)', time='2026-10-18T06:00:00Z')) for _ in range(60)]
+            rows += [MODULE.json.dumps(dict(message=secret)), '[]', '{malformed']
+            (logs / 'pigeond.ndjson').write_text('\n'.join(rows))
+            events = MODULE.diagnostic_events(home)
+            self.assertEqual(len(events), 50)
+            self.assertEqual(events[-1]['error_kind'], 'index-lock')
+            self.assertEqual(events[-1]['io_pressure_avg10'], 12.5)
+            self.assertNotIn(secret, MODULE.json.dumps(events))
+
+    def test_failure_inventory_counts_without_claiming_hash_verification_or_live_processes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            peer = MODULE.Peer(root, root / 'bin', 'laptop', False)
+            repo = root / 'repo'
+            objects = repo / 'annex/objects'
+            objects.mkdir(parents=True)
+            (objects / 'SHA256E-fixture').write_bytes(b'generated fixture')
+            (objects / 'SHA256E-link').symlink_to(objects / 'SHA256E-fixture')
+            with patch.object(peer, 'sample', side_effect=RuntimeError('private state')), \
+                    patch.object(MODULE, 'run', return_value=b'a\0b\0'):
+                report = peer.diagnostics(repo)
+            self.assertEqual(report['index_paths'], 2)
+            self.assertEqual(report['unverified_object_files'], 1)
+            self.assertEqual(report['resources_unavailable'], 'RuntimeError')
+            self.assertNotIn('private state', MODULE.json.dumps(report))
+            self.assertEqual(report['native_processes'], [])
+
+    def test_process_name_parentheses_do_not_change_cpu_counters(self):
+        fields = ['S'] + [str(n) for n in range(4, 53)]
+        self.assertEqual(MODULE.proc_cpu_ticks('123 (worker (a) b) ' + ' '.join(fields)), 29)
+
     def test_process_name_parentheses_do_not_change_start_time_field(self):
         fields = ['S'] + [str(n) for n in range(4, 53)]
         self.assertEqual(MODULE.proc_identity('123 (worker (a) b) ' + ' '.join(fields)), 22)

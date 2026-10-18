@@ -47,3 +47,42 @@ and crash replay. All-target workspace Clippy has zero warnings.
 This initial validation is on the v0.6.28 base. Current main is integrated
 before hosted PR validation. Both full reference/HDD budgets and the elapsed
 M7 gates remain open.
+
+## Full-size diagnostic before this correction
+
+Run 39104345692/job 117606899294 on ordinary-build source
+`8a7ed457be15a0d3af38160a1edb509b69a6e64b` reaches its shorter 600-second
+preparation limit, with no measurement window. The source's scan markers
+report 100,000 pending paths in 92–141 milliseconds. At failure its index
+still has two metadata entries and its diagnostic object count is zero;
+the backup also has zero entries/objects. Source cgroup CPU totals about
+602 seconds, including native descendants, while backup CPU totals about
+3.4 seconds. The source daemon is about 112 MB resident. These are active
+preparation observations, not an idle-CPU budget failure or pass.
+
+Original artifact 12127863489 is 1,201 bytes, SHA-256
+`ea2a68397bc031055781f194e8f1898af97de749ead9589711b95fe13a3558fb`.
+It is retained without retry. The observation locates a CPU-heavy interval
+before user files are staged; it does not identify a sampled stack. The
+process-enumeration comparison above independently reproduces one repeated
+cost in that interval. A new-source full-size run is needed before claiming
+its measured end-to-end effect. New diagnostics also retain live-process CPU
+ticks and identity fences; completed writer inventories log only counts and
+duration.
+
+The repository app cannot manage Actions variables. The follow-up therefore
+also supplies a tracked nightly-campaign expiry, 26 October exclusive at UTC
+midnight, which the existing policy uses when no variable override is set.
+It expires automatically and does not manufacture a scheduled run or a
+green night. Expired overrides preserve the routine policy. Complete actual
+Linux evidence is still required. The campaign's source and expiry are
+reviewable through the normal PR without additional administration access.
+
+
+The combined diagnostic/policy follow-up integrates the corrected S2 and
+join-preservation source before its next hosted validation. At this local
+checkpoint, 179 daemon-library cases pass in 17.650 seconds, 120 script
+contracts in 3.429 seconds and all 16 native capture-scheduling cases in
+18.508 seconds. All-target Clippy and repository checks pass. The subsequent
+same-repository native cancellation correction and latest main must still
+be integrated before the writer optimization's PR is validated.

@@ -31,6 +31,11 @@ on:
         description: Measure the actual 100000-file, 50GB, two-peer reference budgets
         type: boolean
         default: false
+      reference_prepare_seconds:
+        description: "Reference preparation limit: 600 for diagnosis, 5400 for the complete attempt"
+        type: choice
+        options: ["5400", "600"]
+        default: "5400"
       native_zfs_only:
         description: Run only the disposable native Linux ZFS backup fixture
         type: boolean
@@ -249,7 +254,9 @@ jobs:
           git annex version --raw
           systemd --version | head -1
       - name: real reference preparation and measured resource budgets
-        run: scripts/check-reference-budget "$RUNNER_TEMP/reference-budget.json"
+        env:
+          PREPARE_SECONDS: ${{ inputs.reference_prepare_seconds || '5400' }}
+        run: scripts/check-reference-budget "$RUNNER_TEMP/reference-budget.json" --prepare-seconds "$PREPARE_SECONDS"
       - name: retain measurement, including failed and unmeasured verdicts
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

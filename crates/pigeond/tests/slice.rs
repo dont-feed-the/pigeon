@@ -96,20 +96,26 @@ fn local_published_protected_then_free_and_keep() {
     }
 
     let sub = folder.join("sub/2019");
+    let web = common::web::login(&lap);
+    let file_page = format!("/file?path={}", sub.join("big.bin").display());
     let freed = pigeon(&lap, &["free", sub.to_str().unwrap()]);
     assert_eq!(
         said(&freed, "free-result", "safe").as_deref(),
         Some("1"),
         "{freed:?}"
     );
-    // The request records the target; the loops hide the file.
+    // Hiding the working name precedes dropping its cached annex object.
+    // Keep the original wait budget, but observe completed eviction before
+    // expecting the web's "not on this computer" state.
     eventually(
-        || !sub.join("big.bin").exists(),
-        "big.bin is still here",
+        || {
+            !sub.join("big.bin").exists()
+                && common::web::page(&web, &file_page).contains("Safe, not on this computer")
+        },
+        "big.bin still has local working or cached content",
         &all,
     );
     // The web's Files page says so, and offers to keep it (10 §10.3).
-    let web = common::web::login(&lap);
     let files = common::web::page(&web, "/files");
     assert!(
         files.contains("data-name=\"sub\"")

@@ -1,22 +1,13 @@
-//! A laptop join that fails takes back what it made, so a retry in the same
-//! folder works (09 §9.6): Carol's first two tries are refused, with an
-//! invitation whose secret is not the group's, and neither leaves a
-//! repository, a group or, for a folder the join made, the folder; the
-//! third, with the real invitation, joins, and is told that the computer
-//! name she asked for was taken. Ana created the group under the name she
-//! gave, not `$USER`'s.
+//! Failed joins retain files and the original annex UUID for retry (09 §9.6).
+//! Carol's first two tries are refused without configuring a group; the
+//! third, with the real invitation, joins and resolves a taken machine name.
+//! Both laptop and backup retries preserve newly added personal bytes.
 //!
-//! A failed backup join retains its unfinished repository and original UUID;
-//! a later retry preserves files added while setup was interrupted.
-//!
-//! Needs what `tests/slice.rs` needs: git-annex, and `pigeon` and
-//! `git-annex-p2p-iroh` built next to `pigeond`.
+//! Needs git-annex, pigeon and git-annex-p2p-iroh beside pigeond.
 #![cfg(feature = "lab")]
 #![allow(clippy::unwrap_used, clippy::panic, reason = "tests")]
 
 mod common;
-
-use std::path::Path;
 
 use common::{SERIAL, dirs, invitation, logs, pigeon, said, start};
 use pigeon_proto::Response;
@@ -26,11 +17,6 @@ fn problem(rs: &[Response]) -> Option<String> {
         Response::Problem(p) => Some(p.code.clone()),
         _ => None,
     })
-}
-
-/// Whether `folder` holds anything.
-fn has_files(folder: &Path) -> bool {
-    std::fs::read_dir(folder).is_ok_and(|mut d| d.next().is_some())
 }
 
 #[test]
@@ -113,7 +99,7 @@ fn a_failed_backup_join_keeps_new_files_and_retries_with_its_original_uuid() {
 }
 
 #[test]
-fn a_failed_join_leaves_nothing_and_a_retry_in_the_same_folder_joins() {
+fn a_failed_laptop_join_retains_files_and_uuid_for_a_successful_retry() {
     let _one = SERIAL
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -157,7 +143,7 @@ fn a_failed_join_leaves_nothing_and_a_retry_in_the_same_folder_joins() {
         assert!(problem(rs).is_some(), "{rs:?}\n{}", logs(&all));
     };
 
-    // Refused, in a folder the join makes: the folder goes.
+    // Refused in a folder the join makes: retain the unfinished repository.
     let first = pigeon(
         &carol,
         &[
@@ -169,10 +155,34 @@ fn a_failed_join_leaves_nothing_and_a_retry_in_the_same_folder_joins() {
         ],
     );
     refused(&first);
-    assert!(!folder.exists(), "the folder the join made stays");
+    let marker = folder.join(".git/pigeon/joining");
+    assert!(marker.is_file());
+    let uuid = || {
+        let result = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&folder)
+            .args(["config", "annex.uuid"])
+            .output()
+            .unwrap();
+        assert!(result.status.success());
+        result.stdout
+    };
+    let before = uuid();
+    let notes = [
+        (
+            folder.join("personal-note.txt"),
+            b"personal working bytes".as_slice(),
+        ),
+        (
+            folder.join(".git/personal-note.txt"),
+            b"personal metadata bytes".as_slice(),
+        ),
+    ];
+    for (path, bytes) in &notes {
+        std::fs::write(path, bytes).unwrap();
+    }
 
-    // Refused again, in a folder that existed, empty: it stays, empty.
-    std::fs::create_dir_all(&folder).unwrap();
+    // Another ordinary refusal must preserve the original UUID and bytes.
     let second = pigeon(
         &carol,
         &[
@@ -184,10 +194,11 @@ fn a_failed_join_leaves_nothing_and_a_retry_in_the_same_folder_joins() {
         ],
     );
     refused(&second);
-    assert!(
-        folder.is_dir() && !has_files(&folder),
-        "the join left files"
-    );
+    assert!(marker.is_file());
+    assert_eq!(uuid(), before);
+    for (path, bytes) in &notes {
+        assert_eq!(std::fs::read(path).unwrap(), *bytes);
+    }
     let machines = pigeon(&carol, &["machines"]);
     assert_eq!(
         problem(&machines).as_deref(),
@@ -217,6 +228,11 @@ fn a_failed_join_leaves_nothing_and_a_retry_in_the_same_folder_joins() {
         Some("ana-laptop")
     );
     assert!(folder.join(".pigeon/roster.toml").exists());
+    assert!(!marker.exists());
+    assert_eq!(uuid(), before);
+    for (path, bytes) in &notes {
+        assert_eq!(std::fs::read(path).unwrap(), *bytes);
+    }
     let kept = carol.home.join("state/joins").join(&real.group);
     assert!(!kept.exists(), "the join's annex UUID is kept after it");
 }

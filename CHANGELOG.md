@@ -9,6 +9,10 @@ increments the second number, and every other release the third.
 
 ### Fixed
 
+- Failed laptop joins preserve their unfinished folder and files added during
+  setup. Retrying the same group keeps the original repository and identity.
+
+
 - Linux capture checks open writers together, reducing repeated process
   scanning when many files are saved at once.
 
