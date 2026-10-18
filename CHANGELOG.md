@@ -5,6 +5,13 @@ not yet released are under *Unreleased*. While the version is 0.x, a
 release that completes a milestone of the [roadmap](docs/roadmap.md)
 increments the second number, and every other release the third.
 
+## Unreleased
+
+### Fixed
+
+- Invalid joining requests are refused promptly while a group is busy,
+  without joining its queue of file operations.
+
 ## 0.6.24 — 2026-10-18
 
 ### Fixed
